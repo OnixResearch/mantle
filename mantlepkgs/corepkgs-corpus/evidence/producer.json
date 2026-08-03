@@ -1,0 +1,71 @@
+{
+  "schema": "mantlepkgs-producer-receipt-v1",
+  "command_class": "nix-eval-drv-path-derivation-show-recursive-and-build-fixed-output-seeds-v1",
+  "implementation_id": "/nix/store/2x1gaar1s91fg29iky9xx97k28pc360j-nix-2.35.0/bin/nix",
+  "version": "nix (Nix) 2.35.0",
+  "executable_digest_blake3": "21f23076871987c41c76f10c62de02236d0651ea1e5b912d800b0644956e57fc",
+  "source_lock": {
+    "reference": "github:ekala-project/corepkgs/a9a1af8abbf08b972dbce7bb9c2643c7d76d140d",
+    "revision": "a9a1af8abbf08b972dbce7bb9c2643c7d76d140d",
+    "lock_digest_blake3": "e12571f07be5bb6b747d0012f78621bd4376fdbb99917f5a2a65e1fd68b81088"
+  },
+  "systems": [
+    "x86_64-linux"
+  ],
+  "selections": [
+    {
+      "name": "corepkgs-libpng",
+      "attribute": "legacyPackages.x86_64-linux.libpng",
+      "system": "x86_64-linux",
+      "root_derivation": "/nix/store/d73sdlhjiq257pqi28dpy0iklap9d7mp-libpng-apng-1.6.50.drv",
+      "graph_digest_blake3": "37154ae8172bb0b3b04cf8a3dc179812e265fa03cdfa09a0ebcd4e0efe6b8441",
+      "index_digest_blake3": "8f635022ccc554ab404c1e039565a8d1b0916820f139d8de2dda1bd52244f822"
+    },
+    {
+      "name": "corepkgs-zlib",
+      "attribute": "legacyPackages.x86_64-linux.zlib",
+      "system": "x86_64-linux",
+      "root_derivation": "/nix/store/n5rkxkhjgfmhj0yfh2ysl2kbs0x79abs-zlib-1.3.2.drv",
+      "graph_digest_blake3": "235d3b0784c580ffa7e6160cdd4d2dea8eef1f0ec97c7e28e3882e4ad6ae0a47",
+      "index_digest_blake3": "dc69fef898a736474a21f37d8dcf9f80dd33bf7a6820c1f296315e9978cb80e0"
+    }
+  ],
+  "artifacts": [
+    {
+      "role": "execution-profile",
+      "path": "policies/execution-profile.json",
+      "digest_blake3": "054ec6754f08d60088cf3388f43295ad37621e5115e979f702a2a5c5d0eefcb8",
+      "bytes": 674
+    },
+    {
+      "role": "package-index",
+      "path": "artifacts/packages.index.json",
+      "digest_blake3": "d3f79a852e9d45cf7745293597afd717487698bc72e3dedac6b721ba5f946213",
+      "bytes": 1010
+    },
+    {
+      "role": "shared-foreign-graph",
+      "path": "artifacts/shared.graph.json",
+      "digest_blake3": "54ef6a4809fc4151fc000d5be77ab653958837332d507d635f873abd17a3d964",
+      "bytes": 1028237
+    },
+    {
+      "role": "source-requirement-inventory",
+      "path": "artifacts/source-requirements.json",
+      "digest_blake3": "dc0cc334cf763ab2262f93c813e032557bd039e9116aa588868340937f1fb28b",
+      "bytes": 41766
+    },
+    {
+      "role": "translation-policy",
+      "path": "policies/translation.json",
+      "digest_blake3": "18eaa36031cfa19529089febc9439dc4c540f27f279be21b5d8f10fef618e415",
+      "bytes": 552
+    }
+  ],
+  "non_claims": [
+    "producer-receipt-is-not-build-success",
+    "producer-receipt-is-not-package-correctness",
+    "producer-receipt-is-not-reproducibility",
+    "producer-receipt-is-not-release-eligibility"
+  ]
+}

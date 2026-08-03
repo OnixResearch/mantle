@@ -1,0 +1,1257 @@
+{
+  "schema": "mantlepkgs-source-requirements-v1",
+  "requirements": [
+    {
+      "identity": "nix-fixed-output-seed:00a50901f0bf7fe748659cda1aade03a",
+      "descriptor_digest_blake3": "f0d9e2387019b1e971132882d9e36ea19cde9820f3a130c5a708e23d65143923",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:0256f52210a3053767f349abb26dd991",
+      "descriptor_digest_blake3": "cf1ff2f1889eefe9eef981fa4b3deb682455c761994aa944c60a0f26a04c742e",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:0a7885319ab54fa319086743e2f680e7",
+      "descriptor_digest_blake3": "bcb69849318bbb2a71684407dc85bd69f74f45329d9e082ec798671668cb76fd",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:0b1bf9be44a4cdc4959eb6833628857c",
+      "descriptor_digest_blake3": "93defe6433e3e3a9b9fefadaa546da25de529651d9535b004ca243c708e4ca7b",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:0ce292be74830bc9b7aaa3c4ac63a648",
+      "descriptor_digest_blake3": "0321f0883f7a46e06c597ab90e028fcdb4da6caa0c6e44958560d2f5c77f13ba",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:0ced8d851022a0664b674ead9cefe365",
+      "descriptor_digest_blake3": "d5cbc906c2ed93170cb242c135a229a1588dfc76667b4c43a3101b40c962b74d",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:0f1b775bcdbfc7331add24f77a016949",
+      "descriptor_digest_blake3": "6f950c9505ca415f11d654537a66689001c56a7e812cd661eb6d462afe29b8d6",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:0feb8e25d91a09441e4774705ff1738c",
+      "descriptor_digest_blake3": "e0073cf80bf12f28aae4f0d112570d8869d68eb7c055052f012e899fd71350df",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:14eb6920ece0650bb27f5c17ea19ddde",
+      "descriptor_digest_blake3": "2dd45c12fc2f70f8a60e0528818878018328944e08c3e21aba4476d8a9e24f8d",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:190507ff69d5203bc21fbbefb9391df1",
+      "descriptor_digest_blake3": "0b21e6aa7a1635810c9b32184ee26e64b862722142637334b098bbd5f7dbfc1e",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:1bb9e0adbf21efc88d25ce873f2609fb",
+      "descriptor_digest_blake3": "21de25a9a41ef1f994393fbd3f63b28b7ef982dc6c5a8cdbdaf004f000776e3e",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:2c1cd03d873c832335e194ea6b6a3035",
+      "descriptor_digest_blake3": "0b87e8d7785c54e041f14bc3e8c504c07583bda5c6115553eafccf82d2550850",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:2c56365f14cd8e90198d2b3195aebd98",
+      "descriptor_digest_blake3": "3e3b7460146d6f27212fcfb0815c9708c09fb111dcad72001f1a1002acd6907d",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:30a8481a6e5a1934f9cdcd1ddae3c0e6",
+      "descriptor_digest_blake3": "fe5e8e29dfc2cf6d30237f890fd9c19263f9a1eccba8efa45b72ada0ad55427c",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:3125522570a841625e8ad57c5042b09f",
+      "descriptor_digest_blake3": "9ca3a303de7f0bd550710fb00a57c5dedfc31a77234367bb360e2f15ebcddde5",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:312b8d4c1f8198206c09fdf2d7c075a3",
+      "descriptor_digest_blake3": "2cb50862851e567ede3a5b85b00e3c6fd40ebda943723809269b8ff4db549178",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:325b6e56a6901a0ee8a21e4c90fc0942",
+      "descriptor_digest_blake3": "b588009c4d789ec86cfe24967451df6436353b0357f31148196fbd0fcb3d6911",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:33b32f98d295fbfae1f2ac689c766192",
+      "descriptor_digest_blake3": "c02b939c4b18711a4bf74a90fc457c33c85fe8bea22fa92daf5c99af8eb46d3d",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:397610a65ae00a40929d39e75008d22e",
+      "descriptor_digest_blake3": "bd481a67e7b09751e64929f98a24d4a3cffbdecb59cf73cc79fa0e82e8056c1e",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:42cb5260a52a1e00d4d9537a078fee4e",
+      "descriptor_digest_blake3": "8da4ac95777bae2534219c2c931e82a62acbec6e41f1f387e881cf4dd5bf7e6b",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:4aa9af50bbe8d2165657fcfc7e639686",
+      "descriptor_digest_blake3": "e842d8471020eb1e8d88a0a8238ad1a524a6981513e412ea42712d49c5cdf1f0",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:4b0c23a8b7d9f477dd2db7315d218270",
+      "descriptor_digest_blake3": "9e8f22fa63ea7c1e22489a9aaaa419d75462f5d9f13062381e6e1d0967b341e0",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:4d2b1950fbba6cb373d509bc2a540af8",
+      "descriptor_digest_blake3": "7a9bd5664d1ff57abcf67dee5be92bbaa2a97254c265884137a1329b3cba6d2e",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:50e4f5980deb15fa4b2ef893c5addf87",
+      "descriptor_digest_blake3": "7a9a32d972bd2472c1bf2e5383006973eab7d8a228622ffd86f4b5c4759e779b",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:5ada72a30a39c2dd852b40038783780e",
+      "descriptor_digest_blake3": "c9fe2afa832f44647588ab0ace6b4dc585c1f4ca51c9f62486303873d88b16b0",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:5cfa1946fa968a0a07c6419088c28191",
+      "descriptor_digest_blake3": "2c901ce079a7e00444f41c6a7c34b48490228d65eb7b38abff1d0ef32ed76d6c",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:60bcdec36d3b07f7e2bacd279d209286",
+      "descriptor_digest_blake3": "01e2c200fcf73eb3b0e3506eda84467f491116a75bc6c798e842869fa8630f03",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:61393518c53b634de879c6311b065317",
+      "descriptor_digest_blake3": "42ec1d15426daae36778857774fb748cebf15cf374a659a7dab15faa59c76e06",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:66443e265aa07a09835857eaffd149a0",
+      "descriptor_digest_blake3": "86e42ad8b8b0d9c3192b5abec191bad16281c2cc5c20112781cfe79fc8cd9e69",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:7320b5c5d8b87176632b00cc64743ec0",
+      "descriptor_digest_blake3": "1e5f146eb175f0050a5da76f1da9acd2b8280460c555e7f63fecd3fe46bf3d6c",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:77e0906207cd7e737d3a7c6d6ee1bf3b",
+      "descriptor_digest_blake3": "1d5acf066659ff957ac55da2241b76d9c9355c52760310e1e1ae724a43049c61",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:7ac130f378dddb44f1db8dbd314de27c",
+      "descriptor_digest_blake3": "e2fb9c7b5bb0de463e2af80a7f08182b4565ac0c8968586a368dd62d4bebf8af",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:7b2d3207ef03574a7ce1b00808bdfec2",
+      "descriptor_digest_blake3": "f7cfafddf610cba1ae213519fee2e214c8bba9012c80643e6d89d20209401ecc",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:7e0018636ee56a7e708106815f1cbc11",
+      "descriptor_digest_blake3": "0bcc5e3be90026270281d127a09cbd29945c578d0a59ff0a50941f2f0878ffda",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:887284cbbf89f42b40d851a7418f04bd",
+      "descriptor_digest_blake3": "79ec760c60e8ebc1d50417668f9cc59ff293b106ec75184c0d43528ac43181d3",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:8baec01f14d31abf91bfe1192d7ba878",
+      "descriptor_digest_blake3": "f4f50fcc27712df07fffd7785d67660f9a7c9677126ad4ed9946f120c7c68970",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:8ce4523cc6a24a44bf876fe647a8a4e1",
+      "descriptor_digest_blake3": "4c6de99c32de83bf31f4dcf48e5c74256168f416b4d006d8ad71bd6aad3c2623",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:94b09a55ee68fda016aed8222d2c6c0d",
+      "descriptor_digest_blake3": "44005bcf755d6e5b5bfa8843ed1316adeefa0f22e8dfcf5afb1c38d54b1d9b21",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:9d902e40e2610ca1107592c602bf4f8d",
+      "descriptor_digest_blake3": "910eed47796c987f16cf0c9495ce79d9f8c28310a28508e835877d7624bdcc1d",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:a21316539f45235e52d26fc1c950e2cf",
+      "descriptor_digest_blake3": "345deed8964ff9fea5f516e937c23ba7e58af10dc8fb1d9915fc6691e4e93384",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:ac9ff6d7f9c7c79ebee9ebc047a67609",
+      "descriptor_digest_blake3": "a8232d55d53fe095efd402f919aaaa4756e44a8bfc864ffbdc3a63f1a32f17be",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:b23fdffdca0c3c3b6aa13461c99b2541",
+      "descriptor_digest_blake3": "b699c4d7db65d95b4d32149a3666bc70278b5b3b61cf567ec803102ef30443a0",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:c235f5e2dd5d16b989127ef4478e8f59",
+      "descriptor_digest_blake3": "8491a1c50cf1b18b94783ef69c63019d771f2c6a04ad59965e627de2b8c5c1b0",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:c5c86d0150cd3754e7d82dfa6f084ea0",
+      "descriptor_digest_blake3": "e5df1d428b560fd865027276855ff47c4a0dcbcc438e23ed3e60719a7581723a",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:cb42f56c0e0ab57ce580e87e670ca133",
+      "descriptor_digest_blake3": "9f338b1b79dde70274827a6aff44f65c1e982199cc5a292378ec5b9702b49856",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:d548a540fb5c6bf6bcf5af6aaf001ec7",
+      "descriptor_digest_blake3": "b32e514e83446167624878e43b4e48d3164891a391058d9ca5d892ee1dca299f",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:deb2979fe256bf1635a67bb5b69cbfd4",
+      "descriptor_digest_blake3": "ccf780e03f56c2374863bfd7e33fbeef03267ed3377fe0809894684747f9b154",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:e6d46f0570e3a3e1d962bce248ddda57",
+      "descriptor_digest_blake3": "ec62fda7951da592f3d5412ee1687a541a9b385dfc29afecd591664762739ee2",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:eb65595857baef1b8193a52ffdf14166",
+      "descriptor_digest_blake3": "e0b99ade680e4b653b1dede7ee2c07783be88f7e15fd06bb6df0e0c6edd99a7b",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:ec648bfceebce2cd8874190e8516362d",
+      "descriptor_digest_blake3": "a2eaeafac38fbe87c94fce036182d47118107a53c367469c78b88f192500b8e5",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:eca684ab3d328f8a516adddecb6b6c95",
+      "descriptor_digest_blake3": "6dab3575dd496a5696abbfe7a031957b8f49e6aa01f669ddcae5a83f2ffb79f3",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:facc583e5a2754c771653b0a7a270e15",
+      "descriptor_digest_blake3": "d1886ba444c411bcc62991e97e64424bbd6db1edcebbe227a034f89dd644401f",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:fc1ade258942a3f03edafa0277c0c6f5",
+      "descriptor_digest_blake3": "7a70d5a50a47cae7cb0bd9855f2f56bba9cc759905e2e275c2502947f69e7472",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:fd24d73b7676886629eeb812d34bd763",
+      "descriptor_digest_blake3": "8d8f2fa71d8b4980bb025e14191c2388515b98a5876d488fc3aff2a91ca6ea05",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:fe7177d465eb7472e76467cf35303032",
+      "descriptor_digest_blake3": "1eb658d4465d1837f0dc9007311b14181187469bf4bb8baff97df54de48dabac",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-fixed-output-seed:ff2b606008a882f5ef2f64bd571fd6fa",
+      "descriptor_digest_blake3": "958ff8d0b4ed026272f4abf630ce5db4adddd3ac2ab6a5fc7311c199c05a2cb6",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:033a5ba7793b344f4ccb5e661c493a70",
+      "descriptor_digest_blake3": "369b1eae24a78bb38fa74ba45b8a44919101b3de9895b60fb285c8484bfe427f",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:03bf9220f420142bd1afba497a5729b7",
+      "descriptor_digest_blake3": "8052d8c8aa3e0c0b324f2da425e23bc00403a68e87d9df90703bd5c395e66bd9",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:06b59c0d79e2c517ce6183a774cd23bb",
+      "descriptor_digest_blake3": "9c7df77820efd05748115f687e3e870d355f281791618c98ff07a6ccf1133e95",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:06c90bb3bc81edbda85b8f6b634030d0",
+      "descriptor_digest_blake3": "4d671f0b22a9d94347da02561e6662153d8a2db6c0b3d70d9995522474f324cf",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:07ee2a95355ba1d8d8e56273d76b5d7e",
+      "descriptor_digest_blake3": "85838b4bb029671b1901bc43b851eff0eb9060492368be6faf255c504e44fe60",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:098ef9ccbc3b459a06c36bb6ca5ef755",
+      "descriptor_digest_blake3": "5b54c068eb2f768ad121dda6c846e046c261d3cd460e528bc346ee55c3b13fb7",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:0a080f154cd76b0c8a042f39eef4f02f",
+      "descriptor_digest_blake3": "72315bee15fa546aa58068a10982304cb6b1b3b0495c16e06dcdba25a73713b7",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:0f3c2b43ce31702e337149a99871fa1c",
+      "descriptor_digest_blake3": "36d4f6b73423245ec86a302ab0e0072588c868f85fbc8332c6ab4daf687f5aca",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:0fd3eeec9bb0c302b23fc1d5a92a6506",
+      "descriptor_digest_blake3": "f5b63607ead9084e460b43d9a3a634950963d66ec2d6fbac3456dbb3e7e1d376",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:110becdc8ad946a1018165eba83bb133",
+      "descriptor_digest_blake3": "93b7eb9b49071614c484cfc8e55bd1093a93f7c09b732b2559504536ad56d1f7",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:17966f310e77db497b43ca8005901c7d",
+      "descriptor_digest_blake3": "e8985a70e1d5f554dcc44d1fcd18bd71b5499d68141de21a479adf5d941a2a53",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:1c71890b742ba144512c564418ae252d",
+      "descriptor_digest_blake3": "74d9f9a1a3558adbe450d5b2861b60a2d1b08365334fa66b1bdec7c2abe1d240",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:1d7443ccd6a61e8a0d5054fafaec29cc",
+      "descriptor_digest_blake3": "ad1198998e7b718b1cf57d55c55c31e5afc748cf620b60350872c7ccbc278a8b",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:227f93bde45154f49861de61be072b0e",
+      "descriptor_digest_blake3": "916111e64355b046fe76e0e75a231508170279cdcf8b889a1296aa402d2940ae",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:2282562b181c7abcc4dddd5e26a2f3d6",
+      "descriptor_digest_blake3": "a09d6a972f2497630fb384b8a4ea42a551eb50225b2c1475343c147079fbc63a",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:23377e0ccbf7faa175fe522c727bc45a",
+      "descriptor_digest_blake3": "2d5abc257985eff78e222170934defdd385773332053a132c6780dad88f4ba1e",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:27e57b9ca1b808e6b673f4280481570d",
+      "descriptor_digest_blake3": "7cd6f1d17ab0f076a003ff4a3c1e8323948c05f84d2ac7d7c6f5aeff44ec2f17",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:29eb88ebcfaf586a75c7e06fc50a9bb9",
+      "descriptor_digest_blake3": "5d2b3fa5cf3015de561bf6c9b0e5cdc2de9fcc8396fc58a1f8d17708c06f06dc",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:2b34666932c604a134a756f37e31293a",
+      "descriptor_digest_blake3": "c955245a3e04e97fcdb8114f1ecca59909d33b1821732c380ab8321ed546ed03",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:2ca0eefe7af310fb6f0cb0bd5d409ceb",
+      "descriptor_digest_blake3": "2b2122e3e3f73ee03e5bded9702c1e86de9b2ada72c3a1fa139198661ccad1ad",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:2d827fca2dda6a9db5f843515ed6ef5b",
+      "descriptor_digest_blake3": "a89bf6751059cb3edec59a1f88ceef4d45849e0b9870868b207e4f517222dbaa",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:2e399b7c92e93fe70cfe595b41b494e4",
+      "descriptor_digest_blake3": "85977aef54561cffb59e88dfdba209cd1e8c6bc5c777254d0c3348cf3861ab51",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:3770c77f08a7a18669d56531552f2a8f",
+      "descriptor_digest_blake3": "b44b85b885915b3d79040a769a8aaca84d8a89ba8fe72af27742fedf04ffb161",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:41db4b0646fc65ac674ba9431b5d7f84",
+      "descriptor_digest_blake3": "ce9b22927a3597dffd504b58aa5b1d4af1c31d8fd7ccf3aa50eae8b6383be6ee",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:42179c3cf783c9ef9f87158ed6b1461d",
+      "descriptor_digest_blake3": "412bcff96adde0276902c7830c5692c3475888bf1db43c867c6c886004d9024d",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:49ff683f173cdc1790e213917970e2f2",
+      "descriptor_digest_blake3": "b084d7d15d3c16459e7589aff633d815e0cde2c42504d2f28e959a0fce9a7558",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:4e9a7d1a458df886d557110b385d7d59",
+      "descriptor_digest_blake3": "70bd41ef134880f9b22c006b8d6c0f22d9add858ae45420a10713075f479c5cc",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:4ef785fb49d5741ff0f405750117f98a",
+      "descriptor_digest_blake3": "79b8758b5af44028b8e1b76192863c9b755d5b9db576cadedfcfcf12d8bf0e3f",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:4f1c679865a7ee9ea655062b863c449b",
+      "descriptor_digest_blake3": "da5d0ac22819796f3f68d3d4ea6a57bf867ea550be2c00a94674f205fe3b7220",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:4f2ca30fd79edb5266841c44c5c863ae",
+      "descriptor_digest_blake3": "e678c1bd223d5add2bbd15e4809765568585016110026f4dd2ae46370a31d79a",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:50769b5c9668063a540ccb5af4d21366",
+      "descriptor_digest_blake3": "3edb0aba24312d5030a4abf16e3cbc6ed19e2be4790b7a1bddbf85393495c121",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:508971c847efb4d080ea78e75c56fba6",
+      "descriptor_digest_blake3": "2c827f4e0d83ae44e0aa344b06903f1f469d4788929e047723ae7f1c9ee237ca",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:525efff0e6b96c474753ae868dd71247",
+      "descriptor_digest_blake3": "f0b0057137553ffe5c0d5e39cc91e8061768931876546f34807c762f955b7224",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:54af56bf7a271d62a71db8c8a426fb00",
+      "descriptor_digest_blake3": "385befe1c25414729b84470e0e02e2811cd7e871471328aca2fce0d0928fa7df",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:5853fbec5650850aff6dbcee69084d65",
+      "descriptor_digest_blake3": "497f4bc6dc09fbe386761ec1adae6ed9980f6afcc58f6aa42dfd4bfb5044f429",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:586ad574e0274ea629a4fcc087a257a3",
+      "descriptor_digest_blake3": "fa94e54dadf5faab531095e6036ef6389128c0b3a1724d5b8158b843ee3150d2",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:5a09c19065b228c936671b782c84236c",
+      "descriptor_digest_blake3": "e0f9f8977a2c76846237473ee4f5ac3bd4ff1fb5f4c8772b136dd514ee07f89f",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:5d548ecb0c534826289818ff70f0a5f4",
+      "descriptor_digest_blake3": "711e4ea60ac0386b1969ea2ed9929ff4e51b732b4815d5cf75f3a983e417323c",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:5e8a7ed7560b0b1fc83a1f6a28aa32ba",
+      "descriptor_digest_blake3": "1429d03b7b3717a704dc7aebae8686c87003a0d271f60cf898ce8f363f02f552",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:5f0441358dca82f2e17dea77803df363",
+      "descriptor_digest_blake3": "085cef3a3b4e81b34651dda804458ae3d7d4f65cb107f08bbab061d3bedae069",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:60db52fd3fd7f2cad5f25c9e93b6613b",
+      "descriptor_digest_blake3": "c28126be3ac22dc702cd95f06e22af9d1ceb52d2902ab8db9e846fb910849a6f",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:61eced8e74962245e11daa466d95b5d3",
+      "descriptor_digest_blake3": "71de1aa5f5764065161300cbdbdbf375923313c1a4d8ce60a2d132776b2a5c6b",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:6213464926705f0c3b7f8cb1ba518fdb",
+      "descriptor_digest_blake3": "2b5df39b669dc26856956bf137aa4e696d4a939696bebbae534b12e15d6c4b35",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:6359a2a99b883259b09562ba61ba8cff",
+      "descriptor_digest_blake3": "ea5e28c4451ac77ed4926cfaf3eca9e4acf2dd19a25e62641026eaa4c5e74754",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:671cc0334249b05345e072f1057eb904",
+      "descriptor_digest_blake3": "3f4b4d628ae65fb54a152b4bb857ad407065ded5c9ca7438408ee6cf125023d1",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:69534b945db1f5e9641a682052b5db39",
+      "descriptor_digest_blake3": "6cbb23033aa7a708bb4085ad8e1dfc247cd8f51231e26a57a6fa9402a0d043be",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:72d52953ba110da60750ac14468795a4",
+      "descriptor_digest_blake3": "fc71089bfb001d0b9dc08da27b6d62ddfc8e2991e4c53d5af3a3d89224943be0",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:72fb22bc79e3e81f39ac29f9b673ca1f",
+      "descriptor_digest_blake3": "132782ef51a1ea1c4dd0e20f95e47834e44175f526f8d49ee19a0b58956415b8",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:73508496287adaa0120d93070ed4f453",
+      "descriptor_digest_blake3": "0d8d1ff3c415c52a60ef439962de518a123d39b041f45a5f52c36e855a07cacb",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:73a0d8c2ac3ec801d76313c8f67d03c0",
+      "descriptor_digest_blake3": "10eb9a83640c35366206963c8eba4f368d3a17b81c1015316fc8e58d14b978c5",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:780544f6087e8bab2653bf5a0d3da036",
+      "descriptor_digest_blake3": "b473a261a9fc474e45fc3c1f51b405ab0db3ea8872dd36d99b0d6c9f23fa398f",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:7d7125b5fc0b4e8b388ef25dbe71dc76",
+      "descriptor_digest_blake3": "dbb3a5a03cb033839d215ab219a80cbd590fc8e1ebc8ec0609fbd4d04ce9eea5",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:7ea30b4d589c3a163077f141406d99ef",
+      "descriptor_digest_blake3": "d2f840cbfb52f7ce20abf1d60625e812c908a7fc954b1a4b10298ee6e0893daa",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:80b83f702c7b644cf789138feff82810",
+      "descriptor_digest_blake3": "7cc21fc6f72e997c9c69042bfd96c9ae3d208762ddaf38eb96a33aca46de7cb2",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:8483c848ed428550a8727316a40a390d",
+      "descriptor_digest_blake3": "cbb407ddd8c11c886a8e3c69e391f03d336d77782e7e4867a33567b692fb058b",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:892c962d510381673ba47b3e08f9c658",
+      "descriptor_digest_blake3": "15be9b2b137d76e2885a5eeda8721a5d69327cbbe4139edc2badcefb85423312",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:8a92ed0fa3583fe2701b40d1829704c4",
+      "descriptor_digest_blake3": "5fff8b4438445d0c35d034c802a5a1fa8cd4128f98d1a0878995f86d345dd55c",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:8af950a68bc2dc6354f3eb3c4892dd33",
+      "descriptor_digest_blake3": "c196d236054f0560a1cbf5c37dde4d0cd030fcf3b8a8a81e6dd906a463a2908c",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:8daead2527964dd4b097734a50bc8da1",
+      "descriptor_digest_blake3": "5fa374fcca6ca9602c80cb54535498fad978d977afc72b152b411f19914c445f",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:90cf4169844142d82787936c7485c4cd",
+      "descriptor_digest_blake3": "685713dc878ec1593b4704fc7e2cf3f8f6454e0433f74676be075bfda0d26fef",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:943a725874f551ac399ac239e66cea16",
+      "descriptor_digest_blake3": "a47bf467e31adcf052b97f8231438dfff96210a4d6a60d4f2bcbcc284c52e9da",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:95530fcfdc12469c473a1685f62df588",
+      "descriptor_digest_blake3": "f14d060c8eef809cc24eda551657a3f4394ed6190270cd6161690eb76e25f1f1",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:956c1b99dfb42a5323816027565fefc8",
+      "descriptor_digest_blake3": "78e3ca32d43f1273a92f24369bfe11d011616ad44d56d442b412b69117c662dc",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:95d99b181d0bb9bfcf78d7822dda34b1",
+      "descriptor_digest_blake3": "4b587a51b280610a0944986715a1e2897e06d156ea721a1ad8e27f980f6ba21d",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:9b543d0b5194ef218bbcf7956127a7fd",
+      "descriptor_digest_blake3": "005bfac64c690397f8a47c181c3258d660f5223cb0fc5b45f21f9b4b3ec05e35",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:9b75c75b4d57878a91ab126885602746",
+      "descriptor_digest_blake3": "88e6dc60d69b10f675060376044312917bbac0301525aff9a949595fb72073e4",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:9c759abd036ee83e7ab887b5be4fa03e",
+      "descriptor_digest_blake3": "ab75464aa7248c9ca674865eede0ef4a8386a014bfc02f4678623425d033b5f4",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:9ea7a3d23e7276f00b230dd0a4fd7675",
+      "descriptor_digest_blake3": "2554f30a7a7e3f2448a51052c3ff89518bcaf21fd260d8c5a8e6be448e2fba63",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:a1a54a0ec36035ed594775e6c0ff8ef1",
+      "descriptor_digest_blake3": "d1f27079843533df6d2738a73f28fda34eaf9ca70c8e9411c8ac2a48df5fa239",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:a20629b39fc7e8d741526beca3a04aa1",
+      "descriptor_digest_blake3": "b1a37da704cc51c36ebe95fe120c52245c9a8d4706b21d63278108a6844d3af4",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:a376accf4c1d134b224683ef3ea79fec",
+      "descriptor_digest_blake3": "2ab11f35f2684ebd3ed752dc301c1b34b15a8b45d364acc2e860268479332294",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:a415ef1ebcae518bc4299b4a9eb071a0",
+      "descriptor_digest_blake3": "f97444e42f8715c96154b78b849cfd73b69d85bf101f459a48f4a2204f268932",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:a89add6660249873c9ad54ffb764d53d",
+      "descriptor_digest_blake3": "8d64cbc693e5351bc829590a911985774db93c9633b85eaa60171151c4d0c9d7",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:a8f07236a63493a3fb382621cafb6e36",
+      "descriptor_digest_blake3": "eb26a4b40dc656a9e2b9db088ca68d9960d6c10996bd087c8f3c6bc3818305db",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:a927a92d81aa0251e5dacebe835dea22",
+      "descriptor_digest_blake3": "650e0edf8a3d91ff9a20591438b8358e84d7242dc997403292f44d9a984f17e8",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:ae669c19eb6534b4198ed37c70864660",
+      "descriptor_digest_blake3": "3a437800287f9d4d5f5a1da683a44dbf7240a599314b6000cd20c338fb62e818",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:ae715bbdc445122ef601a3e9f521fadf",
+      "descriptor_digest_blake3": "2ca4db12edd688a40d326e02626d7c17fafd0602a6564ec2421095ac909e73d4",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:ae759d3956708c6f4977c13ecbb5f7d6",
+      "descriptor_digest_blake3": "6db997fcf4153a63908eb75bc74f05a627d0d4c05666e448e4fa1d0ed24598a2",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:ae7e8c3ff608c6eee7cccfc026e5c4cf",
+      "descriptor_digest_blake3": "db16415c4a3bf0c8513bdc2b9897aceac4a12f7659f84e034f603103e64bd766",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:b4f3dbea402e0556efd15d5c471ba6ab",
+      "descriptor_digest_blake3": "10be339c279b29479136639f1d8cd79948ed9ff3ddc1ec395403c141a123b877",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:b8621395790e2917bede188def239e89",
+      "descriptor_digest_blake3": "d7b6af9f0dae26c4b5a50f102096ca9dbb21d30c2701eb793c4b09b17bfd8b26",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:bcdbd8eec1d6448c8480a27fea709fab",
+      "descriptor_digest_blake3": "d3c695740ce2d0bfea097a70a803d62cfda7153c3a115395654066cfd06f6102",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:be0bd3d2b5f48ebe8e7102fa292439df",
+      "descriptor_digest_blake3": "eba52bd6ec2cf997ee89efb7f792365dcd131f85d7acc03440487d425ecfb322",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:bfbb51809b7c12cc4bb3974f2b807055",
+      "descriptor_digest_blake3": "5ea404f4bcdb478af1a3b7bdb19e1d693136f1d5d5fe80d4317aef1d51cf091e",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:c02543800f549cbdd9e930cf1f80feb3",
+      "descriptor_digest_blake3": "809194e039caf0003d8da6b0c1ad899d0f68db24dee94c134b3774424cbdb6d5",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:c41170b2508319e389e22bd6a1bdc611",
+      "descriptor_digest_blake3": "a62d81de9acd1931a262de467fb563c247c9cd9724d388034f2f258f15ff35f3",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:c70dabdecd74c7b204c5c26d8093e3ee",
+      "descriptor_digest_blake3": "bd737700b8ec2ef82355b530d987ae069a5eda3c2efbf92035540f29ad094b96",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:c7141d1c1ce1e753203f372d87afcd72",
+      "descriptor_digest_blake3": "78ec9a84ca572be92244aeea23a34b8a170c6e1627d41738b8120e7292d31d1f",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:cad4a168a5181b49180ef76e42f755de",
+      "descriptor_digest_blake3": "aba98912b2c2b61000d772a8aa9256539066006721538af0a49e3fdf1607d13b",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:cd5a664eee81b539244092d40be5c8d9",
+      "descriptor_digest_blake3": "c99ffc4807430c82029cbfdd58bfba8f861ad5861596a8fbecf82259164bf429",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:ce45b2ba6ace354c60733c3ff418e416",
+      "descriptor_digest_blake3": "a043950f0fbfea587568f42b27162f3a35347c01142b05ec9fe1c643d9f373c7",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:d218f366cb2d7456b96309d5762780df",
+      "descriptor_digest_blake3": "9c8c52fb4390d210e7f044bf0e3f39da354ed1e79f3c38c5b2ddef0bc01bc2be",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:d35290d2961302db43af0f4ae75dc948",
+      "descriptor_digest_blake3": "7c7da4cb14f358af261fecaf945f331ee2c9ed307d573b20f45e2686c9dc95d7",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:d447252963fed519c5d40b5b1320d838",
+      "descriptor_digest_blake3": "a03015c89003ed6caf4d322d47b58a478d04286d14e38527d71503f5ef9544b6",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:d4aa57a95ad1fdd9b77e0bb29577daa7",
+      "descriptor_digest_blake3": "2a913f906145a5c00ca88cd3fbd3ba607f86764e43d07531a2d3283fad09b85c",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:d71900710d9968d5e6ac5a8e6225268f",
+      "descriptor_digest_blake3": "bf33a8c465d62ff9bdac3860d823136ba70f565cfaf7385bf72abb8653d13188",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:dbf8d7a08665a98a183268f90c73a88d",
+      "descriptor_digest_blake3": "a9b3faa21b1620b63cbfddba2f56db57307e58e809b9de57ca4f13bc58b00e65",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:dcb79d2fba117aedf2a6c77c80ec4c05",
+      "descriptor_digest_blake3": "2756eaf567ddf16c3bb7ea42112bb52fe0baae5743d44ec049a1f2635a3f38e0",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:df7114d58e36aae6a49849a7732473ef",
+      "descriptor_digest_blake3": "894b9a86ef5058953471f68ccd754e0c1a204d2a75832392cd516ff80f1cb7cf",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:e1ce177b6ffe4765f8b5c2c496291359",
+      "descriptor_digest_blake3": "5a6fd0f28600f585bcbafae3a3602723acbe447751bcc615796918cddf3b5e77",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:e23dc676badbea78b20144744d2b8364",
+      "descriptor_digest_blake3": "fc81e537fb181cf633a0039429323d3f3ea44b04683a7b98f4d58b07ab237de4",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:e4c7151c372bf59d7953373cc6719834",
+      "descriptor_digest_blake3": "f4ca9cc7a4091f443e1dea9d1ffef60805c5d12eb9c5483883d68676e4b7e8d0",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:e56ba8eb0530fa3ce82115d372541614",
+      "descriptor_digest_blake3": "cbb383985e19dc019a6968b37d514776ee1c70f4adb0440339ae9f5d80adf452",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:f0296109fbf957931201b5d4d779f19c",
+      "descriptor_digest_blake3": "7740074b11235364ff9a392ac22dfc6aa416854e301f1f3d29abf5e4689c32c7",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    },
+    {
+      "identity": "nix-source:fa5b485bb4aeee9e306e1a42df0576d7",
+      "descriptor_digest_blake3": "61ef45c2d87070ff90e8c1b0d9007f64fc24381883d7cd7b7afc45c9916688ba",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:fb007e8325edfc107b88cb5e48c0a5a5",
+      "descriptor_digest_blake3": "83f1d4407b92dc85b48f03f93057f9d1d818473242a749bdd03ccfec07af22ea",
+      "selectors": [
+        "corepkgs-libpng",
+        "corepkgs-zlib"
+      ]
+    },
+    {
+      "identity": "nix-source:fdfe446384b5b6cec39c565cc3e85aa6",
+      "descriptor_digest_blake3": "139d2b3ea24c8bbfa12975b919d717c9e2bba7c7f8cc7ddde10eb2433e90f979",
+      "selectors": [
+        "corepkgs-libpng"
+      ]
+    }
+  ],
+  "optional_transports": [
+    "nario-v2"
+  ],
+  "non_claims": [
+    "source-inventory-is-not-source-availability",
+    "transport-identity-is-not-recipe-identity"
+  ]
+}

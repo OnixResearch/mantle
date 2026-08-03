@@ -112,6 +112,82 @@ Foreign Nix sandboxes expose normal `/proc` metadata and real random devices. Ot
 
 The command uses the existing foreign graph compiler, scheduler, worker, store, and realization receipt.
 
+## Compose package domains
+
+`domains/contracts.ncl` defines typed shards, variants, validation roots, and limits.
+
+Adapt a verified v1 generation into one domain shard:
+
+```console
+mantle mantlepkgs domain-adapt \
+  --generation target/mantlepkgs-live/mantlepkgs/live-generations/<catalog-blake3> \
+  --name reviewed-core \
+  --class core \
+  --owner-label mantle-reviewers \
+  --source-repository https://github.com/NixOS/nixpkgs \
+  --out target/reviewed-core.shard.json
+```
+
+Compose typed shards without Nix:
+
+```console
+mantle mantlepkgs domain-compose \
+  --manifest mantlepkgs/corepkgs-corpus/domain.ncl \
+  --sealed-manifest-out target/domain.sealed.json \
+  --out target/domain.catalog.json
+```
+
+The command seals zero identity placeholders. It rejects any different nonzero identity.
+
+Composition rejects duplicate shards, selectors, package identities, stale variants, cycles, and exceeded limits. Input order does not select a winner.
+
+Aliases remain public index entries. Variants retain their base package, policy, root, and provenance facts.
+
+## Run a separate validation root
+
+A validation root names one package output and one separate validation package. Its test sources and tools do not change the package identity.
+
+```console
+mantle mantlepkgs validation-build \
+  --domain-catalog target/domain.catalog.json \
+  --validation-root <validation-root-blake3> \
+  --generation target/mantlepkgs-live/mantlepkgs/live-generations/<catalog-blake3> \
+  --source-bundle target/validation.sources.json \
+  --source-bundle-blake3 <manifest-blake3> \
+  --validation-plan-out target/validation.plan.json \
+  --plan-out target/validation.foreign-plan.json \
+  --import-receipt-out target/validation.import-receipt.json \
+  --realization-receipt-out target/validation.realization-receipt.json \
+  --validation-receipt-out target/validation.receipt.json \
+  --offline
+```
+
+The shell uses the ordinary foreign compiler, scheduler, store, and receipt path. It records failed and timed-out validation separately from package output facts.
+
+## External corpus evidence
+
+`corepkgs-corpus/` pins Ekala `corepkgs` revision `a9a1af8abbf08b972dbce7bb9c2643c7d76d140d`.
+
+The record binds its MIT license observation, two selected packages, producer policy, graph, sources, catalog, blockers, and producer receipt.
+
+The durable corpus directory contains:
+
+- `domain-shard.json`: the v1 catalog adapter result;
+- `domain-sealed.json` and `domain-catalog.json`: the sealed domain input and composed public index;
+- `evidence.json`: the sealed corpus provenance record;
+- `evidence/`: the complete graph, source inventory, catalog, blocker, and producer artifacts.
+
+Verify the saved artifacts without Nix:
+
+```console
+mantle mantlepkgs corpus-verify \
+  --evidence mantlepkgs/corepkgs-corpus/evidence.json \
+  --artifact-root mantlepkgs/corepkgs-corpus/evidence \
+  --sealed-evidence-out target/corepkgs-corpus-evidence.verified.json
+```
+
+This evidence covers only the recorded corpus, revision, packages, policy, and artifacts.
+
 ## Package dispositions
 
 Each selected package has one disposition:

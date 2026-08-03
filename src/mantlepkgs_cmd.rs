@@ -1,9 +1,13 @@
+// machine-artifact-public: mantlepkgs.catalog-domain-reports
 // r[impl mantlepkgs.producer_boundary]
 // r[impl mantlepkgs.catalog_generation]
 // r[impl mantlepkgs.recomputed_rebuild]
 // r[verify mantlepkgs.producer_boundary]
 // r[verify mantlepkgs.recomputed_rebuild]
 // r[verify mantlepkgs.validation]
+// r[impl mantlepkgs_domains.separate_validation_roots]
+// r[impl mantlepkgs_domains.reference_corpus]
+// r[verify mantlepkgs_domains.functional_core]
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -29,10 +33,17 @@ use mantlepkgs_core::ArtifactBinding;
 use mantlepkgs_core::ArtifactObservation;
 use mantlepkgs_core::CATALOG_JSON_PATH;
 use mantlepkgs_core::CATALOG_NICKEL_PATH;
+use mantlepkgs_core::CORPUS_ROLE_CATALOG;
 use mantlepkgs_core::CatalogBlocker;
 use mantlepkgs_core::CatalogPlan;
 use mantlepkgs_core::CoreFailure;
+use mantlepkgs_core::CorpusArtifactObservation;
+use mantlepkgs_core::DOMAIN_CLASS_CORE;
+use mantlepkgs_core::DomainCatalog;
+use mantlepkgs_core::DomainCatalogManifest;
+use mantlepkgs_core::DomainShardLimits;
 use mantlepkgs_core::EXECUTION_PROFILE_PATH;
+use mantlepkgs_core::ExternalCorpusEvidence;
 use mantlepkgs_core::MantlepkgsCatalog;
 use mantlepkgs_core::MantlepkgsManifest;
 use mantlepkgs_core::PACKAGE_INDEX_PATH;
@@ -54,16 +65,28 @@ use mantlepkgs_core::SHARED_GRAPH_PATH;
 use mantlepkgs_core::SOURCE_INVENTORY_PATH;
 use mantlepkgs_core::SourceRequirementInventory;
 use mantlepkgs_core::TRANSLATION_POLICY_PATH;
+use mantlepkgs_core::V1DomainShardInput;
+use mantlepkgs_core::VALIDATION_OBSERVATION_SCHEMA;
+use mantlepkgs_core::ValidationObservation;
+use mantlepkgs_core::ValidationRootPlan;
+use mantlepkgs_core::adapt_v1_catalog_to_domain_shard;
 use mantlepkgs_core::build_producer_receipt;
+use mantlepkgs_core::compose_domain_catalog;
 use mantlepkgs_core::finalize_catalog;
 use mantlepkgs_core::lookup_catalog_package;
 use mantlepkgs_core::manifest_digest_blake3;
 use mantlepkgs_core::normalize_manifest;
 use mantlepkgs_core::plan_catalog;
+use mantlepkgs_core::plan_validation_root;
 use mantlepkgs_core::producer_receipt_digest_blake3;
+use mantlepkgs_core::record_validation_observation;
 use mantlepkgs_core::render_catalog_nickel;
+use mantlepkgs_core::seal_domain_manifest;
+use mantlepkgs_core::seal_external_corpus_evidence;
 use mantlepkgs_core::source_requirement_inventory;
 use mantlepkgs_core::validate_catalog_artifacts;
+use mantlepkgs_core::validate_catalog_identity;
+use mantlepkgs_core::validate_external_corpus_evidence;
 use serde::Deserialize;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -85,6 +108,7 @@ use crate::foreign_graph_compiler::compile_foreign_graph_with_profile_and_output
 use crate::foreign_import_cmd::ForeignImportAction;
 use crate::foreign_import_cmd::ForeignImportContext;
 use crate::foreign_import_cmd::cmd_foreign_import;
+use crate::foreign_realization_receipt::ForeignRealizationReceipt;
 use crate::linux_rename::rename_path_no_replace;
 use crate::mantlepkgs_adapter::MergedForeignArtifacts;
 use crate::mantlepkgs_adapter::ProducedPackageFacts;
@@ -109,11 +133,17 @@ const SEED_PATHS_STDOUT_MAX_BYTES: usize = 1_048_576;
 const PRODUCER_STDERR_MAX_BYTES: usize = 16_384;
 const PRODUCER_COMMAND_TIMEOUT_SECS: u64 = 900;
 const PRODUCER_COMMAND_POLL_MILLIS: u64 = 100;
+const MILLISECONDS_PER_SECOND: u64 = 1_000;
 const CAPTURE_OVERFLOW_SENTINEL_BYTES: u64 = 1;
 const KIBIBYTE_BYTES: u64 = 1_024;
 const GIBIBYTE_BYTES: u64 = KIBIBYTE_BYTES * KIBIBYTE_BYTES * KIBIBYTE_BYTES;
 const MANTLEPKGS_SOURCE_BUNDLE_GIBIBYTES_MAX: u64 = 4;
 const MANTLEPKGS_SOURCE_BUNDLE_BYTES_MAX: u64 = MANTLEPKGS_SOURCE_BUNDLE_GIBIBYTES_MAX * GIBIBYTE_BYTES;
+const DOMAIN_ARTIFACT_GIBIBYTES_MAX: u64 = 1;
+const DOMAIN_ARTIFACT_BYTES_MAX: u64 = DOMAIN_ARTIFACT_GIBIBYTES_MAX * GIBIBYTE_BYTES;
+const DOMAIN_SHARD_PACKAGE_LIMIT: u32 = 65_536;
+const DOMAIN_SHARD_ALIAS_LIMIT: u32 = 65_536;
+const DOMAIN_SHARD_ARTIFACT_LIMIT: u32 = 65_536;
 const NIX_EXPERIMENTAL_FEATURES: &str = "nix-command flakes";
 const FAILURE_EXIT_CODE: u8 = 1;
 
@@ -226,6 +256,93 @@ pub(crate) enum MantlepkgsAction {
         /// Reject network source retrieval as well as cache substitution
         #[arg(long)]
         offline: bool,
+    },
+
+    /// Adapt one verified v1 generation into one explicit domain shard
+    DomainAdapt {
+        #[arg(long)]
+        generation: PathBuf,
+
+        #[arg(long)]
+        name: String,
+
+        #[arg(long, default_value = DOMAIN_CLASS_CORE)]
+        class: String,
+
+        #[arg(long = "owner-label")]
+        owner_label: String,
+
+        #[arg(long = "source-repository")]
+        source_repository: String,
+
+        #[arg(long)]
+        out: PathBuf,
+    },
+
+    /// Seal typed domain identities and compose one deterministic public catalog
+    DomainCompose {
+        #[arg(long)]
+        manifest: PathBuf,
+
+        #[arg(long = "sealed-manifest-out")]
+        sealed_manifest_out: PathBuf,
+
+        #[arg(long)]
+        out: PathBuf,
+    },
+
+    /// Realize one separate validation root through the ordinary foreign build boundary
+    ValidationBuild {
+        #[arg(long = "domain-catalog")]
+        domain_catalog: PathBuf,
+
+        #[arg(long = "validation-root")]
+        validation_root: String,
+
+        #[arg(long)]
+        generation: PathBuf,
+
+        #[arg(long = "source-bundle")]
+        source_bundle: PathBuf,
+
+        #[arg(long = "source-bundle-blake3")]
+        source_bundle_blake3: String,
+
+        #[arg(long = "validation-plan-out")]
+        validation_plan_out: PathBuf,
+
+        #[arg(long = "plan-out")]
+        plan_out: PathBuf,
+
+        #[arg(long = "import-receipt-out")]
+        import_receipt_out: PathBuf,
+
+        #[arg(long = "realization-receipt-out")]
+        realization_receipt_out: PathBuf,
+
+        #[arg(long = "validation-receipt-out")]
+        validation_receipt_out: PathBuf,
+
+        #[arg(short = 'j', long = "jobs")]
+        jobs: Option<u32>,
+
+        #[arg(long = "signing-key")]
+        signing_key: Option<PathBuf>,
+
+        #[arg(long)]
+        offline: bool,
+    },
+
+    /// Seal and verify one pinned external-corpus evidence record
+    CorpusVerify {
+        #[arg(long)]
+        evidence: PathBuf,
+
+        #[arg(long = "artifact-root")]
+        artifact_root: PathBuf,
+
+        #[arg(long = "sealed-evidence-out")]
+        sealed_evidence_out: PathBuf,
     },
 }
 
@@ -341,6 +458,56 @@ pub(crate) fn cmd_mantlepkgs(action: MantlepkgsAction, context: MantlepkgsContex
             },
             &context,
         ),
+        MantlepkgsAction::DomainAdapt {
+            generation,
+            name,
+            class,
+            owner_label,
+            source_repository,
+            out,
+        } => run_domain_adapt(&generation, &name, &class, &owner_label, &source_repository, &out, context.json),
+        MantlepkgsAction::DomainCompose {
+            manifest,
+            sealed_manifest_out,
+            out,
+        } => run_domain_compose(&manifest, &sealed_manifest_out, &out, context.json),
+        MantlepkgsAction::ValidationBuild {
+            domain_catalog,
+            validation_root,
+            generation,
+            source_bundle,
+            source_bundle_blake3,
+            validation_plan_out,
+            plan_out,
+            import_receipt_out,
+            realization_receipt_out,
+            validation_receipt_out,
+            jobs,
+            signing_key,
+            offline,
+        } => run_validation_build(
+            ValidationBuildRequest {
+                domain_catalog: &domain_catalog,
+                validation_root: &validation_root,
+                generation: &generation,
+                source_bundle: &source_bundle,
+                source_bundle_blake3: &source_bundle_blake3,
+                validation_plan_out: &validation_plan_out,
+                plan_out: &plan_out,
+                import_receipt_out: &import_receipt_out,
+                realization_receipt_out: &realization_receipt_out,
+                validation_receipt_out: &validation_receipt_out,
+                jobs,
+                signing_key: signing_key.as_deref(),
+                offline,
+            },
+            &context,
+        ),
+        MantlepkgsAction::CorpusVerify {
+            evidence,
+            artifact_root,
+            sealed_evidence_out,
+        } => run_corpus_verify(&evidence, &artifact_root, &sealed_evidence_out, context.json),
     }
 }
 
@@ -353,6 +520,22 @@ struct BuildRequest<'a> {
     plan_out: &'a Path,
     import_receipt_out: &'a Path,
     receipt_out: &'a Path,
+    jobs: Option<u32>,
+    signing_key: Option<&'a Path>,
+    offline: bool,
+}
+
+struct ValidationBuildRequest<'a> {
+    domain_catalog: &'a Path,
+    validation_root: &'a str,
+    generation: &'a Path,
+    source_bundle: &'a Path,
+    source_bundle_blake3: &'a str,
+    validation_plan_out: &'a Path,
+    plan_out: &'a Path,
+    import_receipt_out: &'a Path,
+    realization_receipt_out: &'a Path,
+    validation_receipt_out: &'a Path,
     jobs: Option<u32>,
     signing_key: Option<&'a Path>,
     offline: bool,
@@ -376,6 +559,297 @@ fn run_validate(manifest_path: &Path, json: bool) -> Result<(), RunError> {
         );
     }
     Ok(())
+}
+
+fn run_domain_adapt(
+    generation: &Path,
+    name: &str,
+    class: &str,
+    owner_label: &str,
+    source_repository: &str,
+    output: &Path,
+    json: bool,
+) -> Result<(), RunError> {
+    if output.starts_with(generation) {
+        return Err(RunError::Eval("domain shard output must remain outside the immutable source generation".into()));
+    }
+    let verified = verify_generation(generation)?;
+    let shard = adapt_v1_catalog_to_domain_shard(V1DomainShardInput {
+        catalog: &verified.catalog,
+        name,
+        class,
+        owner_label,
+        source_repository,
+        limits: DomainShardLimits {
+            max_packages: DOMAIN_SHARD_PACKAGE_LIMIT,
+            max_aliases: DOMAIN_SHARD_ALIAS_LIMIT,
+            max_artifacts: DOMAIN_SHARD_ARTIFACT_LIMIT,
+        },
+    })
+    .map_err(core_eval_error)?;
+    write_json_atomically(output, &shard, "Mantlepkgs domain shard")?;
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string(&shard)
+                .map_err(|error| RunError::Internal(format!("serializing Mantlepkgs domain shard: {error}")))?
+        );
+    } else {
+        println!(
+            "mantlepkgs domain shard adapted: identity={} packages={} path={}",
+            shard.shard_identity_blake3,
+            shard.packages.len(),
+            output.display()
+        );
+    }
+    Ok(())
+}
+
+fn run_domain_compose(
+    manifest_path: &Path,
+    sealed_manifest_out: &Path,
+    output: &Path,
+    json: bool,
+) -> Result<(), RunError> {
+    reject_output_path_collisions(&[sealed_manifest_out, output])?;
+    let manifest = evaluate_domain_manifest(manifest_path)?;
+    let sealed = seal_domain_manifest(&manifest).map_err(core_eval_error)?;
+    let catalog = compose_domain_catalog(&sealed).map_err(core_eval_error)?;
+    write_json_atomically(sealed_manifest_out, &sealed, "sealed Mantlepkgs domain manifest")?;
+    write_json_atomically(output, &catalog, "Mantlepkgs domain catalog")?;
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string(&catalog)
+                .map_err(|error| RunError::Internal(format!("serializing Mantlepkgs domain catalog: {error}")))?
+        );
+    } else {
+        println!(
+            "mantlepkgs domain catalog composed: identity={} packages={} variants={} validations={} path={}",
+            catalog.catalog_identity_blake3,
+            catalog.packages.len(),
+            catalog.variants.len(),
+            catalog.validation_roots.len(),
+            output.display()
+        );
+    }
+    Ok(())
+}
+
+fn run_validation_build(request: ValidationBuildRequest<'_>, context: &MantlepkgsContext<'_>) -> Result<(), RunError> {
+    reject_output_path_collisions(&[
+        request.validation_plan_out,
+        request.plan_out,
+        request.import_receipt_out,
+        request.realization_receipt_out,
+        request.validation_receipt_out,
+    ])?;
+    let domain_catalog = read_json_bounded::<DomainCatalog>(request.domain_catalog, DOMAIN_ARTIFACT_BYTES_MAX)?;
+    let validation_plan = plan_validation_root(&domain_catalog, request.validation_root).map_err(core_eval_error)?;
+    let verified_generation = verify_generation(request.generation)?;
+    require_validation_generation_binding(&domain_catalog, &validation_plan, &verified_generation.catalog)?;
+    write_json_atomically(request.validation_plan_out, &validation_plan, "Mantlepkgs validation-root plan")?;
+    let build_started = Instant::now();
+    let build_result = run_build(
+        BuildRequest {
+            generation: request.generation,
+            package: &validation_plan.validation_selector,
+            system: validation_system(&domain_catalog, request.validation_root)?,
+            source_bundle: request.source_bundle,
+            source_bundle_blake3: request.source_bundle_blake3,
+            plan_out: request.plan_out,
+            import_receipt_out: request.import_receipt_out,
+            receipt_out: request.realization_receipt_out,
+            jobs: request.jobs,
+            signing_key: request.signing_key,
+            offline: request.offline,
+        },
+        context,
+    );
+    if !request.realization_receipt_out.is_file() {
+        return build_result;
+    }
+    let realization =
+        read_json_bounded::<ForeignRealizationReceipt>(request.realization_receipt_out, DOMAIN_ARTIFACT_BYTES_MAX)?;
+    let elapsed_milliseconds = u64::try_from(build_started.elapsed().as_millis())
+        .map_err(|_| RunError::Internal("validation elapsed milliseconds overflow".into()))?;
+    let observation = validation_observation(&validation_plan, &realization, elapsed_milliseconds)?;
+    let receipt = record_validation_observation(&validation_plan, &observation).map_err(core_eval_error)?;
+    write_json_atomically(request.validation_receipt_out, &receipt, "Mantlepkgs validation-root receipt")?;
+    if context.json {
+        println!(
+            "{}",
+            serde_json::to_string(&receipt)
+                .map_err(|error| RunError::Internal(format!("serializing validation-root receipt: {error}")))?
+        );
+    } else {
+        println!(
+            "mantlepkgs validation recorded: root={} outcome={} accepted={} receipt={}",
+            receipt.validation_root_identity_blake3, receipt.outcome, receipt.accepted, receipt.receipt_identity_blake3
+        );
+    }
+    match build_result {
+        Ok(()) => {}
+        Err(error) => return Err(error),
+    }
+    if !receipt.accepted {
+        return Err(RunError::Reported(FAILURE_EXIT_CODE));
+    }
+    Ok(())
+}
+
+fn run_corpus_verify(
+    evidence_path: &Path,
+    artifact_root: &Path,
+    sealed_evidence_out: &Path,
+    json: bool,
+) -> Result<(), RunError> {
+    let evidence = read_json_bounded::<ExternalCorpusEvidence>(evidence_path, DOMAIN_ARTIFACT_BYTES_MAX)?;
+    let sealed = seal_external_corpus_evidence(&evidence).map_err(core_eval_error)?;
+    let mut observations = Vec::with_capacity(sealed.artifacts.len());
+    for artifact in &sealed.artifacts {
+        let path = confined_file(artifact_root, &artifact.path)?;
+        let bytes = read_bounded(&path, DOMAIN_ARTIFACT_BYTES_MAX)?;
+        let digest_blake3 = blake3_hex(&bytes);
+        let byte_count =
+            u64::try_from(bytes.len()).map_err(|_| RunError::Internal("corpus artifact byte count overflow".into()))?;
+        let catalog_packages = if digest_blake3 == artifact.digest_blake3 && byte_count == artifact.bytes {
+            observed_corpus_catalog_packages(&artifact.role, &bytes)?
+        } else {
+            Vec::new()
+        };
+        observations.push(CorpusArtifactObservation {
+            path: artifact.path.clone(),
+            digest_blake3,
+            bytes: byte_count,
+            catalog_packages,
+        });
+    }
+    validate_external_corpus_evidence(&sealed, &observations).map_err(core_eval_error)?;
+    write_json_atomically(sealed_evidence_out, &sealed, "sealed Mantlepkgs external-corpus evidence")?;
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string(&sealed)
+                .map_err(|error| RunError::Internal(format!("serializing corpus evidence: {error}")))?
+        );
+    } else {
+        println!(
+            "mantlepkgs corpus evidence verified: identity={} packages={} artifacts={}",
+            sealed.evidence_identity_blake3,
+            sealed.selected_packages.len(),
+            sealed.artifacts.len()
+        );
+    }
+    Ok(())
+}
+
+fn observed_corpus_catalog_packages(role: &str, bytes: &[u8]) -> Result<Vec<String>, RunError> {
+    if role != CORPUS_ROLE_CATALOG {
+        return Ok(Vec::new());
+    }
+    let catalog = serde_json::from_slice::<MantlepkgsCatalog>(bytes)
+        .map_err(|error| RunError::Eval(format!("parsing bound corpus catalog: {error}")))?;
+    validate_catalog_identity(&catalog).map_err(core_eval_error)?;
+    let mut packages = catalog.packages.iter().map(|package| package.name.clone()).collect::<Vec<_>>();
+    packages.sort();
+    packages.dedup();
+    Ok(packages)
+}
+
+fn validation_observation(
+    plan: &ValidationRootPlan,
+    realization: &ForeignRealizationReceipt,
+    elapsed_milliseconds: u64,
+) -> Result<ValidationObservation, RunError> {
+    let timeout_milliseconds = plan
+        .timeout_seconds
+        .checked_mul(MILLISECONDS_PER_SECOND)
+        .ok_or_else(|| RunError::Internal("validation timeout milliseconds overflow".into()))?;
+    let outcome = if elapsed_milliseconds > timeout_milliseconds {
+        mantlepkgs_core::OBSERVED_VALIDATION_TIMEOUT
+    } else if realization.failure.is_some() {
+        mantlepkgs_core::OBSERVED_VALIDATION_FAIL
+    } else {
+        mantlepkgs_core::OBSERVED_VALIDATION_PASS
+    };
+    let observed_output_bytes = realization.units.iter().try_fold(0u64, |total, unit| {
+        unit.outputs.iter().try_fold(total, |unit_total, output| {
+            unit_total
+                .checked_add(output.nar_size)
+                .ok_or_else(|| RunError::Internal("validation output byte count overflow".into()))
+        })
+    })?;
+    if observed_output_bytes > plan.max_output_bytes {
+        return Err(RunError::Eval(format!(
+            "validation output bytes {observed_output_bytes} exceed plan limit {}",
+            plan.max_output_bytes
+        )));
+    }
+    let diagnostic_digest_blake3 = realization
+        .failure
+        .as_ref()
+        .map(|failure| {
+            serde_json::to_vec(failure)
+                .map(|bytes| blake3_hex(&bytes))
+                .map_err(|error| RunError::Internal(format!("serializing validation failure: {error}")))
+        })
+        .transpose()?;
+    Ok(ValidationObservation {
+        schema: VALIDATION_OBSERVATION_SCHEMA.into(),
+        validation_root_identity_blake3: plan.validation_root_identity_blake3.clone(),
+        outcome: outcome.into(),
+        realization_receipt_blake3: realization.receipt_blake3.clone(),
+        observed_output_bytes,
+        elapsed_milliseconds,
+        diagnostic_digest_blake3,
+    })
+}
+
+fn validation_system<'a>(catalog: &'a DomainCatalog, identity: &str) -> Result<&'a str, RunError> {
+    catalog
+        .validation_roots
+        .iter()
+        .find(|root| root.validation_root_identity_blake3 == identity)
+        .map(|root| root.system.as_str())
+        .ok_or_else(|| RunError::Eval("validation root disappeared after planning".into()))
+}
+
+fn require_validation_generation_binding(
+    domain_catalog: &DomainCatalog,
+    plan: &ValidationRootPlan,
+    generation: &MantlepkgsCatalog,
+) -> Result<(), RunError> {
+    let system = validation_system(domain_catalog, &plan.validation_root_identity_blake3)?;
+    let validation_package = domain_catalog
+        .packages
+        .iter()
+        .find(|package| package.system == system && package.public_selector == plan.validation_selector)
+        .ok_or_else(|| RunError::Eval("validation package is absent from the domain catalog".into()))?;
+    let shard = domain_catalog
+        .shards
+        .iter()
+        .find(|shard| shard.shard_identity_blake3 == validation_package.shard_identity_blake3)
+        .ok_or_else(|| RunError::Eval("validation package has no source shard".into()))?;
+    if shard.source_catalog_identity_blake3 != generation.catalog_identity_blake3 {
+        return Err(RunError::Eval("validation package source catalog differs from the selected generation".into()));
+    }
+    Ok(())
+}
+
+fn reject_output_path_collisions(paths: &[&Path]) -> Result<(), RunError> {
+    let unique = paths.iter().copied().collect::<BTreeSet<_>>();
+    if unique.len() != paths.len() {
+        return Err(RunError::Eval("Mantlepkgs output paths must be distinct".into()));
+    }
+    Ok(())
+}
+
+fn evaluate_domain_manifest(path: &Path) -> Result<DomainCatalogManifest, RunError> {
+    let import_paths = path.parent().map(|parent| vec![OsString::from(parent)]).unwrap_or_default();
+    crunch_eval::evaluate_and_deserialize(path, &import_paths).map_err(|error| {
+        RunError::Eval(format!("evaluating typed Mantlepkgs domain manifest {}: {error}", path.display()))
+    })
 }
 
 fn run_generate(manifest_path: &Path, nix_program: &Path, output_root: &Path, json: bool) -> Result<(), RunError> {
@@ -1573,12 +2047,96 @@ mod tests {
     const GRAPH_LIMIT: u64 = 16_777_216;
     const SOURCE_LIMIT: u32 = 1_024;
     const ARTIFACT_LIMIT: u64 = 33_554_432;
+    const COMPOSED_PUBLIC_PACKAGE_COUNT: usize = 6;
     const NO_NIX_GENERATION_ENV: &str = "MANTLEPKGS_TEST_GENERATION";
     const NO_NIX_CHILD_TEST: &str = "mantlepkgs_cmd::tests::no_nix_child_verifies_and_plans_catalog";
     const CAPTURE_CHILD_TEST: &str = "mantlepkgs_cmd::tests::producer_capture_child";
     const TINY_CAPTURE_LIMIT: usize = 1;
     #[cfg(unix)]
     const NON_UTF8_PATH_BYTE: u8 = 0xff;
+
+    #[test]
+    fn domain_manifest_composes_without_nix() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let fixture = root.join("mantlepkgs/domains/fixtures/valid-domain.ncl");
+        let sealed = temp.path().join("sealed.json");
+        let catalog = temp.path().join("catalog.json");
+
+        run_domain_compose(&fixture, &sealed, &catalog, false).unwrap();
+
+        let composed = read_json_bounded::<DomainCatalog>(&catalog, DOMAIN_ARTIFACT_BYTES_MAX).unwrap();
+        assert_eq!(composed.packages.len(), COMPOSED_PUBLIC_PACKAGE_COUNT);
+        assert_eq!(composed.variants.len(), 1);
+        assert_eq!(composed.validation_roots.len(), 1);
+        assert!(Command::new("nix").env("PATH", temp.path().join("no-nix")).status().is_err());
+    }
+
+    #[test]
+    fn domain_contract_rejects_unknown_class() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let fixture = root.join("mantlepkgs/domains/fixtures/invalid-domain-class.ncl");
+
+        let error = evaluate_domain_manifest(&fixture).expect_err("unknown domain class must fail");
+
+        assert!(error.message().contains("contract"));
+    }
+
+    #[test]
+    fn domain_contract_rejects_missing_fields_and_nonpositive_limits() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let fixtures = ["invalid-missing-owner.ncl", "invalid-limit.ncl"];
+
+        for fixture_name in fixtures {
+            let fixture = root.join("mantlepkgs/domains/fixtures").join(fixture_name);
+            let error = evaluate_domain_manifest(&fixture).expect_err("invalid typed domain fixture must fail");
+            assert!(error.message().contains("contract"), "fixture {fixture_name}: {}", error.message());
+        }
+    }
+
+    #[test]
+    fn domain_composition_rejects_duplicate_shard_identity() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let fixture = root.join("mantlepkgs/domains/fixtures/invalid-duplicate-shard-identity.ncl");
+        let sealed = temp.path().join("sealed.json");
+        let catalog = temp.path().join("catalog.json");
+
+        let error =
+            run_domain_compose(&fixture, &sealed, &catalog, false).expect_err("duplicate shard identity must fail");
+
+        assert!(error.message().contains("duplicate-shard-identity"));
+        assert!(!sealed.exists());
+        assert!(!catalog.exists());
+    }
+
+    #[test]
+    fn corpus_verification_rejects_artifact_tampering() {
+        let temp = tempfile::tempdir().unwrap();
+        let fixture_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("mantlepkgs/corepkgs-corpus");
+        let evidence_path = fixture_root.join("evidence.json");
+        let evidence = read_json_bounded::<ExternalCorpusEvidence>(&evidence_path, DOMAIN_ARTIFACT_BYTES_MAX).unwrap();
+        let artifact_root = temp.path().join("artifacts");
+        fs::create_dir(&artifact_root).unwrap();
+        for artifact in &evidence.artifacts {
+            fs::copy(fixture_root.join("evidence").join(&artifact.path), artifact_root.join(&artifact.path)).unwrap();
+        }
+        let sealed_path = temp.path().join("sealed-evidence.json");
+        run_corpus_verify(&evidence_path, &artifact_root, &sealed_path, false).unwrap();
+        fs::write(artifact_root.join("catalog.json"), b"tampered").unwrap();
+
+        let error = run_corpus_verify(&evidence_path, &artifact_root, &sealed_path, false)
+            .expect_err("artifact tampering must fail");
+
+        assert!(error.message().contains("corpus-artifact-mismatch"));
+    }
+
+    #[test]
+    fn validation_output_paths_must_be_distinct() {
+        let path = Path::new("same.json");
+        let error = reject_output_path_collisions(&[path, path]).expect_err("duplicate outputs must fail");
+        assert!(error.message().contains("must be distinct"));
+    }
 
     #[test]
     fn fixture_batch_publishes_and_verifies_without_nix_in_path() {

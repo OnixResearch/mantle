@@ -1,0 +1,55 @@
+{
+  "schema": "mantlepkgs-corpus-evidence-v1",
+  "evidence_identity_blake3": "0000000000000000000000000000000000000000000000000000000000000000",
+  "repository": "https://github.com/ekala-project/corepkgs",
+  "source_reference": "github:ekala-project/corepkgs/a9a1af8abbf08b972dbce7bb9c2643c7d76d140d",
+  "revision": "a9a1af8abbf08b972dbce7bb9c2643c7d76d140d",
+  "source_digest_blake3": "710e5e165cd3e6d7a42db6afb98ce2297eeae1e9f2f67a299660b17a67e75e59",
+  "observed_license": "MIT",
+  "license_path": "LICENSE",
+  "license_digest_blake3": "7623f5f7c85df04887e6cca0107d62bba3c8af902be7983630962aafd2ed0e3d",
+  "selected_packages": [
+    "corepkgs-zlib",
+    "corepkgs-libpng"
+  ],
+  "producer_policy_digest_blake3": "e6ac8f9419a90e75ea7d3318a8cf8fa52be91bc8f8364320d0d676bda3a6d91d",
+  "artifacts": [
+    {
+      "role": "graph",
+      "path": "graph.json",
+      "digest_blake3": "54ef6a4809fc4151fc000d5be77ab653958837332d507d635f873abd17a3d964",
+      "bytes": 1028237
+    },
+    {
+      "role": "sources",
+      "path": "sources.json",
+      "digest_blake3": "dc0cc334cf763ab2262f93c813e032557bd039e9116aa588868340937f1fb28b",
+      "bytes": 41766
+    },
+    {
+      "role": "catalog",
+      "path": "catalog.json",
+      "digest_blake3": "47f4d6fffbc4937e63b570f38cfd71e49b0bf2e2480d84b86a6b43d6dbf6effc",
+      "bytes": 3437
+    },
+    {
+      "role": "blockers",
+      "path": "blockers.json",
+      "digest_blake3": "c656af77ac86ca0d02b6d0daf96bc8041e10fab501dc7bf632bc6cd4b9207101",
+      "bytes": 322
+    },
+    {
+      "role": "producer",
+      "path": "producer.json",
+      "digest_blake3": "da055133ae016423baca182d93da940bb03172df1f8388a8465199dedc02276d",
+      "bytes": 2811
+    }
+  ],
+  "non_claims": [
+    "package-correctness-not-proven",
+    "broad-compatibility-not-proven",
+    "evaluator-parity-not-proven",
+    "reproducibility-not-proven",
+    "release-eligibility-not-proven"
+  ]
+}

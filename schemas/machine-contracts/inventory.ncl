@@ -1335,6 +1335,62 @@ let Registry = {
       "rationale"= "Existing machine errors are public but unversioned and must not be silently frozen."
     },
     {
+      "id"= "mantlepkgs.catalog-domain-reports",
+      "class"= "compatibility",
+      "rust_owner"= "src/mantlepkgs_cmd.rs::public_json_family",
+      "producer"= {
+        "command_or_api"= "mantle --json mantlepkgs",
+        "marker"= "mantlepkgs.catalog-domain-reports",
+        "source_paths"= [
+          "src/mantlepkgs_adapter.rs",
+          "src/mantlepkgs_cmd.rs"
+        ]
+      },
+      "consumers"= [
+        "Mantlepkgs producers",
+        "no-Nix catalog consumers",
+        "Cairn evidence"
+      ],
+      "artifacts"= {
+        "schema"= "",
+        "generated_contract"= "",
+        "positive_fixtures"= [],
+        "negative_fixture_set"= ""
+      },
+      "version_policy"= {
+        "current"= "mantlepkgs-v1-family",
+        "supported"= [
+          "mantlepkgs-v1-family"
+        ],
+        "unknown_version_behavior"= "reject unknown member schemas before planning, publication, or evidence admission",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "cargo test -p mantlepkgs-core",
+        "cargo test --bin mantle mantlepkgs_cmd::tests"
+      ],
+      "fixture_coverage"= [
+        "version",
+        "identity",
+        "tamper",
+        "no-Nix"
+      ],
+      "freshness_strategy"= "classification only until the versioned Mantlepkgs artifact families receive generated contracts",
+      "freshness"= {
+        "schema_blake3"= "",
+        "contract_blake3"= "",
+        "prelude_blake3"= "",
+        "fixture_set_blake3"= "",
+        "producer_identity_blake3"= "",
+        "consumer_policy_blake3"= ""
+      },
+      "non_claims"= [
+        "compatibility classification does not prove package correctness, reproducibility, evaluator parity, or release eligibility"
+      ],
+      "rationale"= "Mantlepkgs emits several explicit v1 artifacts; this family records the public boundary until each artifact receives a generated contract."
+    },
+    {
       "id"= "eval.raw-json-output",
       "class"= "external",
       "rust_owner"= "src/main.rs::Eval",

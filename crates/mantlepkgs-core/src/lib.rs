@@ -11,11 +11,13 @@
 extern crate alloc;
 
 mod catalog;
+mod domains;
 mod error;
 mod manifest;
 mod render;
 
 pub use catalog::*;
+pub use domains::*;
 pub use error::*;
 pub use manifest::*;
 pub use render::*;
