@@ -4,6 +4,7 @@ members = [
   "crates/crunch-action-result-core",
   "crates/crunch-rust-cache-core",
   "crates/crunch-rust-cache",
+  "crates/crunch-rustc-wrapper",
   "crates/mantlepkgs-core",
   "crates/crunch-eval",
   "crates/crunch-glue",
@@ -69,6 +70,7 @@ default_scope = [
   "-p", "crunch-release-core",
   "-p", "crunch-rust-cache-core",
   "-p", "crunch-rust-cache",
+  "-p", "crunch-rustc-wrapper",
   "-p", "crunch-shell",
   "-p", "crunch-shell-core",
   "-p", "crunch-store",
@@ -140,6 +142,7 @@ crunch-glue = { path = "crates/crunch-glue" }
 crunch-action-result-core = { path = "crates/crunch-action-result-core" }
 crunch-rust-cache-core = { path = "crates/crunch-rust-cache-core" }
 crunch-rust-cache = { path = "crates/crunch-rust-cache" }
+crunch-rustc-wrapper = { path = "crates/crunch-rustc-wrapper" }
 mantlepkgs-core = { path = "crates/mantlepkgs-core" }
 crunch-build = { path = "crates/crunch-build" }
 crunch-store = { path = "crates/crunch-store" }

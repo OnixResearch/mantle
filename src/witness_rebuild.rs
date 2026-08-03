@@ -103,7 +103,12 @@ const WORKFLOW_ENV_REMOVE: &[&str] = &[
     "CRUNCH_PROOF_STATIC_BUSYBOX_CANDIDATE",
     "CRUNCH_SELF_HOSTING_LATER_STAGE_HERMETICITY_MODE",
     "CRUNCH_SELF_HOSTING_PROOF_BUNDLE_DIR",
+    "MANTLE_RUST_CACHE_POLICY",
+    "MANTLE_RUSTC_MANIFEST",
+    "MANTLE_RUSTC_MANIFEST_DIR",
+    "MANTLE_RUSTC_MANIFEST_REF",
     "RUSTC",
+    "RUSTC_WORKSPACE_WRAPPER",
     "RUSTC_WRAPPER",
     "RUSTFLAGS",
     "SCCACHE_DIR",
@@ -1954,6 +1959,27 @@ mod tests {
     const TEST_DURATION_SECONDS: u64 = 1;
     const TEST_DURATION_NANOSECONDS: u32 = 234_000_000;
     const TEST_DURATION_MILLISECONDS: u64 = 1_234;
+
+    #[test]
+    fn strict_witness_environment_removes_compiler_wrapper_authority() {
+        let mut command = Command::new("witness-driver");
+        sanitize_workflow_environment(&mut command);
+        let removed = command
+            .get_envs()
+            .filter_map(|(name, value)| value.is_none().then_some(name.to_string_lossy().into_owned()))
+            .collect::<Vec<_>>();
+        for name in [
+            "CARGO_BUILD_RUSTC_WRAPPER",
+            "MANTLE_RUST_CACHE_POLICY",
+            "MANTLE_RUSTC_MANIFEST",
+            "MANTLE_RUSTC_MANIFEST_DIR",
+            "MANTLE_RUSTC_MANIFEST_REF",
+            "RUSTC_WORKSPACE_WRAPPER",
+            "RUSTC_WRAPPER",
+        ] {
+            assert!(removed.iter().any(|removed_name| removed_name == name), "missing environment scrub for {name}");
+        }
+    }
 
     #[test]
     fn duration_to_unix_time_ms_preserves_millisecond_precision() {

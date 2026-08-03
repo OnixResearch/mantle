@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 pub mod shared;
+pub mod wrapper;
 
 pub const RUST_ACTION_SCHEMA: &str = "mantle-rust-unit-action-v1";
 pub const RUST_RESULT_SCHEMA: &str = "mantle-rust-unit-result-v1";
@@ -546,12 +547,24 @@ fn validate_result_input(input: &RustUnitResultInput) -> Result<(), String> {
     if total_bytes > MAX_TREE_BYTES {
         return Err("rust-result-artifact-bytes-limit-exceeded".to_string());
     }
-    validate_typed_ref(&input.producer_receipt_ref, TypedRefRule {
-        prefix: "mantle-rust-receipt://blake3/",
-        code: ValidationCode("rust-result-receipt-ref-invalid"),
-    })?;
+    validate_result_receipt_ref(&input.producer_receipt_ref)?;
     assert!(!input.artifacts.is_empty());
     assert!(total_bytes <= MAX_TREE_BYTES);
+    Ok(())
+}
+
+fn validate_result_receipt_ref(receipt_ref: &str) -> Result<(), String> {
+    let prefix = if receipt_ref.starts_with(wrapper::WRAPPER_RECEIPT_REF_PREFIX) {
+        wrapper::WRAPPER_RECEIPT_REF_PREFIX
+    } else {
+        "mantle-rust-receipt://blake3/"
+    };
+    validate_typed_ref(receipt_ref, TypedRefRule {
+        prefix,
+        code: ValidationCode("rust-result-receipt-ref-invalid"),
+    })?;
+    assert!(receipt_ref.starts_with(prefix));
+    assert!(!receipt_ref.is_empty());
     Ok(())
 }
 

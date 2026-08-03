@@ -799,6 +799,9 @@ let rust = (import "bootstrap/rust.ncl") in
     "-c",
     m%"
       set -e
+      unset CARGO_BUILD_RUSTC_WRAPPER
+      unset MANTLE_RUST_CACHE_POLICY MANTLE_RUSTC_MANIFEST MANTLE_RUSTC_MANIFEST_DIR MANTLE_RUSTC_MANIFEST_REF
+      unset RUSTC_WORKSPACE_WRAPPER RUSTC_WRAPPER
       BB=/bin/busybox
       TMP_ROOT=/tmp
       TOOLS_DIR="$TMP_ROOT/tools"
@@ -3665,6 +3668,11 @@ mod tests {
 
         assert!(ncl.contains(&format!("linker = \"{SELF_BUILD_BOOTSTRAP_ALIAS_ROOT}/gcc/bin/gcc\"")));
         assert!(ncl.contains(&format!("export RUSTC_WRAPPER={SELF_BUILD_RUSTC_WRAPPER_PATH}")));
+        assert!(ncl.contains("unset CARGO_BUILD_RUSTC_WRAPPER"));
+        assert!(ncl.contains(
+            "unset MANTLE_RUST_CACHE_POLICY MANTLE_RUSTC_MANIFEST MANTLE_RUSTC_MANIFEST_DIR MANTLE_RUSTC_MANIFEST_REF"
+        ));
+        assert!(ncl.contains("unset RUSTC_WORKSPACE_WRAPPER RUSTC_WRAPPER"));
         assert!(ncl.contains("CARGO_TARGET_DIR_REAL=\"$TMP_ROOT/cargo-target\""));
         assert!(ncl.contains("export CARGO_TARGET_DIR=\"$CARGO_TARGET_DIR_REAL\""));
         assert!(ncl.contains("BINUTILS_AR_ALIAS=\"$TOOLS_DIR/ar\""));

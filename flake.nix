@@ -696,6 +696,19 @@
           nativeCheckInputs = [ pkgs.git ];
         };
 
+        rustcWrapper = craneLib.buildPackage {
+          pname = "mantle-rustc-wrapper";
+          inherit
+            src
+            cargoArtifacts
+            cargoVendorDir
+            nativeBuildInputs
+            buildInputs
+            ;
+          cargoExtraArgs = "--locked -p crunch-rustc-wrapper --bins";
+          doCheck = false;
+        };
+
         kernelscriptCoreAdapter = craneLib.buildPackage {
           pname = "crunch-kernelscript-adapter";
           inherit
@@ -942,6 +955,7 @@
         }
         // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
           oci-distribution-registry = pkgs.distribution;
+          rustc-wrapper = rustcWrapper;
           kernelscript-compiler = kernelscriptExperiment.compiler;
           kernelscript-core-adapter = kernelscriptCoreAdapter;
           kernelscript-production = kernelscriptExperiment.artifacts;

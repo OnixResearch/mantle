@@ -395,6 +395,10 @@ const FIRST_STAGE_ENV_SCRUB_VARS: &[&str] = &[
     "CARGO_TARGET_DIR",
     "DEBUG",
     "HOST",
+    "MANTLE_RUST_CACHE_POLICY",
+    "MANTLE_RUSTC_MANIFEST",
+    "MANTLE_RUSTC_MANIFEST_DIR",
+    "MANTLE_RUSTC_MANIFEST_REF",
     "MRUSTC_LIBDIR",
     "NUM_JOBS",
     "OPT_LEVEL",
@@ -9913,6 +9917,10 @@ mod tests {
         assert!(script.contains("target rustlib build did not produce libstd.rlib"));
         assert!(script.contains("unset CARGO_PKG_VERSION"));
         assert!(script.contains("unset CARGO_BUILD_RUSTC_WRAPPER"));
+        assert!(script.contains("unset MANTLE_RUST_CACHE_POLICY"));
+        assert!(script.contains("unset MANTLE_RUSTC_MANIFEST"));
+        assert!(script.contains("unset MANTLE_RUSTC_MANIFEST_DIR"));
+        assert!(script.contains("unset MANTLE_RUSTC_MANIFEST_REF"));
         assert!(script.contains("unset CARGO_MANIFEST_DIR"));
         assert!(script.contains("unset OUT_DIR"));
         assert!(script.contains("unset TARGET"));

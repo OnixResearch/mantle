@@ -352,6 +352,24 @@ enum RustSharedCacheMode {
     ReadWrite,
 }
 
+#[derive(Subcommand, Debug)]
+enum RustCacheAction {
+    /// Serve bounded rustc wrapper requests from one user-owned cache daemon.
+    Serve {
+        /// Exported and reviewed daemon policy JSON.
+        #[arg(long)]
+        policy: PathBuf,
+
+        /// Directory for content-addressed wrapper receipts.
+        #[arg(long)]
+        receipt_dir: PathBuf,
+
+        /// Stop after one accepted connection. Intended for tests.
+        #[arg(long)]
+        once: bool,
+    },
+}
+
 // CLI variants retain their complete clap payloads to preserve flag and help compatibility.
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand, Debug)]
@@ -879,6 +897,12 @@ enum Command {
         /// Target triple for --cargo-free rust-plan execution; repeatable.
         #[arg(long = "target", requires = "cargo_free")]
         targets: Vec<String>,
+    },
+
+    /// Operate the daemon-backed Rust compiler cache.
+    RustCache {
+        #[command(subcommand)]
+        action: RustCacheAction,
     },
 
     /// Capture Cargo oracle metadata and unit graph as a normalized Rust package plan receipt
@@ -3124,6 +3148,7 @@ fn command_label(command: &Command) -> &'static str {
         Command::ListStale { .. } => "list-stale",
         Command::Upgrade => "upgrade",
         Command::SelfBuild { .. } => "self-build",
+        Command::RustCache { .. } => "rust-cache",
         Command::RustPlan { .. } => "rust-plan",
         Command::Shell { .. } => "shell",
         Command::Develop { .. } => "develop",
@@ -3550,10 +3575,28 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         | Command::ListStale { .. }
         | Command::Upgrade => run_project_command(ctx, &args.command),
         Command::SelfBuild { .. } => run_self_build_from_command(ctx, &args.command),
+        Command::RustCache { action } => run_rust_cache_command(ctx, action),
         Command::RustPlan { .. } => run_rust_plan_command(ctx, &args.command),
         Command::Shell { .. } => run_shell_from_command(ctx, &args.command),
         Command::Develop { .. } => run_develop_from_command(ctx, &args.command),
         Command::Run { .. } => run_run_from_command(ctx, &args.command),
+    }
+}
+
+fn run_rust_cache_command(ctx: &RunContext, action: &RustCacheAction) -> Result<(), RunError> {
+    match action {
+        RustCacheAction::Serve {
+            policy,
+            receipt_dir,
+            once,
+        } => crunch_rustc_wrapper::run_daemon(crunch_rustc_wrapper::DaemonOptions {
+            policy_path: policy.clone(),
+            state_dir: ctx.resolved_state_dir.clone(),
+            store_output_dir: ctx.store.clone(),
+            receipt_dir: receipt_dir.clone(),
+            run_once: *once,
+        })
+        .map_err(|error| RunError::Internal(format!("serving Rust compiler cache requests: {error}"))),
     }
 }
 
@@ -8631,6 +8674,46 @@ mod tests {
     fn default_store_prefix_is_mantle() {
         let args = parse_args_with_cli_test_stack(Vec::from(["mantle", "doctor"])).expect("CLI parser test");
         assert_eq!(resolve_store_prefix(&args), "/mantle/store");
+    }
+
+    #[test]
+    fn rust_cache_serve_cli_binds_global_store_and_state() {
+        let args = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "--store",
+            "/tmp/mantle-store",
+            "--state-dir",
+            "/tmp/mantle-state",
+            "rust-cache",
+            "serve",
+            "--policy",
+            "/tmp/policy.json",
+            "--receipt-dir",
+            "/tmp/receipts",
+            "--once",
+        ]))
+        .expect("rust-cache serve CLI should parse");
+        assert_eq!(args.store, PathBuf::from("/tmp/mantle-store"));
+        assert_eq!(args.state_dir, Some(PathBuf::from("/tmp/mantle-state")));
+        assert!(matches!(
+            args.command,
+            Command::RustCache {
+                action: RustCacheAction::Serve {
+                    policy,
+                    receipt_dir,
+                    once: true,
+                },
+            } if policy == PathBuf::from("/tmp/policy.json")
+                && receipt_dir == PathBuf::from("/tmp/receipts")
+        ));
+    }
+
+    #[test]
+    fn rust_cache_serve_cli_requires_policy_and_receipt_directory() {
+        let error = parse_args_with_cli_test_stack(Vec::from(["mantle", "rust-cache", "serve"]))
+            .expect_err("rust-cache serve must reject missing required paths");
+        assert!(error.contains("--policy"));
+        assert!(error.contains("--receipt-dir"));
     }
 
     #[test]

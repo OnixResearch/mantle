@@ -1622,6 +1622,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-rustc-wrapper"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "crunch-rust-cache",
+ "crunch-rust-cache-core",
+ "crunch-store",
+ "data-encoding",
+ "ed25519-dalek",
+ "libc",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "crunch-shell"
 version = "0.1.0"
 dependencies = [
@@ -4712,6 +4728,7 @@ dependencies = [
  "crunch-release-core",
  "crunch-rust-cache",
  "crunch-rust-cache-core",
+ "crunch-rustc-wrapper",
  "crunch-shell",
  "crunch-store",
  "crunch-wasm-component",
