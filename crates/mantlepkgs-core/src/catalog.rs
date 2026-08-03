@@ -271,6 +271,11 @@ pub fn plan_catalog(
         .iter()
         .map(|selector| (selector_key(selector), Vec::new()))
         .collect::<BTreeMap<_, _>>();
+    for diagnostic in &diagnostics {
+        for package_blockers in blockers.values_mut() {
+            package_blockers.push(CatalogBlocker::new(&diagnostic.code, &diagnostic.path, &diagnostic.message));
+        }
+    }
     let mut nodes = BTreeMap::<String, MergedNodeState>::new();
     let mut sources = BTreeMap::<String, MergedSourceState>::new();
     for selector in &normalized.selectors {
@@ -1403,6 +1408,24 @@ mod tests {
         observations[0].digest_blake3 = DIGEST_C.into();
         let failure = validate_catalog_artifacts(&catalog, &observations).expect_err("tampering fails");
         assert!(failure.diagnostics.iter().any(|item| item.code == "catalog-artifact-mismatch"));
+    }
+
+    #[test]
+    fn stale_producer_lock_blocks_the_complete_selection() {
+        let app = observation("app", "app", alloc::vec![node("/nix/store/app.drv", "app", DIGEST_A)]);
+        let library = observation("lib", "lib", alloc::vec![node("/nix/store/lib.drv", "lib", DIGEST_B)]);
+        let mut stale = producer();
+        stale.source_lock.revision = "1111111111111111111111111111111111111111".into();
+        stale.source_lock.reference = "github:NixOS/nixpkgs/1111111111111111111111111111111111111111".into();
+
+        let plan = plan_catalog(&manifest(), &stale, &[app, library]).expect("stale lock plans as failure");
+        assert!(!plan.batch_complete);
+        assert!(plan.diagnostics.iter().any(|item| item.code == "producer-source-lock-mismatch"));
+        assert!(
+            plan.packages
+                .iter()
+                .all(|package| matches!(package.disposition, PackageDisposition::Blocked { .. }))
+        );
     }
 
     #[test]

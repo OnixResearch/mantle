@@ -63,6 +63,9 @@ mod linux_rename;
 mod log_cmd;
 #[cfg(test)]
 mod machine_contract_producer_tests;
+mod mantlepkgs_adapter;
+#[allow(clippy::large_enum_variant, clippy::too_many_arguments)]
+mod mantlepkgs_cmd;
 mod native_toolchain_closure;
 mod nickel_export;
 mod nickel_export_core_adapter;
@@ -274,6 +277,7 @@ use clap::Subcommand;
 use clap::ValueEnum;
 use errors::RunError;
 use foreign_import_cmd::ForeignImportAction;
+use mantlepkgs_cmd::MantlepkgsAction;
 use nix_free_demo_cmd::NixFreeDemoAction;
 use operator_diagnostics::DoctorProfile;
 use operator_diagnostics::RuntimeFingerprintModeFields;
@@ -512,6 +516,12 @@ enum Command {
     ForeignImport {
         #[command(subcommand)]
         action: ForeignImportAction,
+    },
+
+    /// Generate, verify, plan, and build locked Mantlepkgs catalogs.
+    Mantlepkgs {
+        #[command(subcommand)]
+        action: MantlepkgsAction,
     },
 
     /// Evaluate a .ncl file and print the derivation JSON (no build)
@@ -2948,6 +2958,7 @@ fn command_label(command: &Command) -> &'static str {
         Command::Stage0Inventory { .. } => "stage0-inventory",
         Command::NixFreeDemo { .. } => "nix-free-demo",
         Command::ForeignImport { .. } => "foreign-import",
+        Command::Mantlepkgs { .. } => "mantlepkgs",
         Command::Eval { .. } => "eval",
         Command::Export { .. } => "export",
         Command::Bootstrap { action, .. } => bootstrap_command_label(action.as_ref()),
@@ -3335,6 +3346,15 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::NixFreeDemo { action } => nix_free_demo_cmd::cmd_nix_free_demo(action.clone(), ctx.json),
         Command::ForeignImport { action } => {
             foreign_import_cmd::cmd_foreign_import(action.clone(), foreign_import_cmd::ForeignImportContext {
+                output_dir: &ctx.store,
+                state_dir: &ctx.resolved_state_dir,
+                base_state_dirs: &ctx.base_state_dirs,
+                verbose: ctx.verbose,
+                json: ctx.json,
+            })
+        }
+        Command::Mantlepkgs { action } => {
+            mantlepkgs_cmd::cmd_mantlepkgs(action.clone(), mantlepkgs_cmd::MantlepkgsContext {
                 output_dir: &ctx.store,
                 state_dir: &ctx.resolved_state_dir,
                 base_state_dirs: &ctx.base_state_dirs,
