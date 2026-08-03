@@ -1,0 +1,10 @@
+{
+  "canonicalization_profile": "valence.preserves-integrity.corrected.v1",
+  "claim_scope": "function_address.v1.lifecycle_policy_conformance",
+  "evidence_kind": "function-address",
+  "non_claims": [
+    "Authenticated function-address evidence does not prove Rust semantics or release eligibility."
+  ],
+  "schema_version": "cairn.authenticated-evidence-profile.v1",
+  "signature_purpose": "onix.function-address.release-evidence.v1"
+}
