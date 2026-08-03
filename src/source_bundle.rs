@@ -633,7 +633,7 @@ pub(crate) fn validate_empty_source_bundle(manifest: &SourceBundleManifest) -> R
 }
 
 pub(crate) fn digest_bound_foreign_source_path(payload_id: &str, path: &Path) -> Result<String, RunError> {
-    let records = canonicalize_source_specs(
+    let records = canonicalize_bound_foreign_source_specs(
         &[SourceSpec {
             kind: SourceRecordKind::LocalPath,
             identity: payload_id.to_string(),
@@ -687,7 +687,8 @@ pub(crate) fn plan_bound_foreign_source_bundle(
     }
     let binding_by_payload =
         bindings.iter().map(|binding| (binding.payload_id.as_str(), binding)).collect::<BTreeMap<_, _>>();
-    let mut manifest = plan_source_bundle(&specs, store_prefix)?;
+    let records = canonicalize_bound_foreign_source_specs(&specs, store_prefix)?;
+    let mut manifest = assemble_source_bundle(records, store_prefix)?;
     for record in &mut manifest.records {
         let requirement = requirements_by_payload.get(record.identity.as_str()).copied().ok_or_else(|| {
             RunError::Internal(format!("planned foreign source record has no requirement: {}", record.identity))
@@ -1122,6 +1123,30 @@ fn canonicalize_source_specs(specs: &[SourceSpec], store_prefix: &str) -> Result
     let mut records = Vec::with_capacity(specs.len());
     for spec in specs {
         records.push(canonicalize_source_spec(spec, store_prefix)?);
+    }
+    Ok(records)
+}
+
+fn canonicalize_bound_foreign_source_specs(
+    specs: &[SourceSpec],
+    store_prefix: &str,
+) -> Result<Vec<SourceRecord>, RunError> {
+    if specs.len() > MAX_SOURCE_RECORDS {
+        return Err(RunError::Internal(format!("source record count exceeds {MAX_SOURCE_RECORDS}")));
+    }
+    let mut records = Vec::with_capacity(specs.len());
+    for spec in specs {
+        records.push(source_record_from_path(SourceRecordPathRequest {
+            kind: spec.kind.clone(),
+            identity: spec.identity.clone(),
+            path: &spec.path,
+            store_prefix,
+            metadata: BTreeMap::new(),
+            adapter: spec.adapter.clone(),
+            is_skipping_git_dir: false,
+            allow_large_file_chunks: true,
+            root_entry_allowlist: None,
+        })?);
     }
     Ok(records)
 }

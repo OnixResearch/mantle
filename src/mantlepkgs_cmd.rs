@@ -98,6 +98,8 @@ use crate::source_bundle::write_json_atomically;
 const PRODUCER_BATCH_SCHEMA: &str = "mantlepkgs-producer-batch-v1";
 const GENERATION_FAILURE_SCHEMA: &str = "mantlepkgs-generation-failure-v1";
 const FAILURE_DIRECTORY: &str = "failures";
+const PRODUCER_SEED_ROOT_DIRECTORY: &str = ".mantlepkgs-producer-seed-roots";
+const PRODUCER_SEED_RETENTION_SCHEMA: &str = "mantlepkgs-producer-seed-retention-v1";
 const STAGE_PREFIX: &str = ".stage-";
 const CATALOG_MAX_BYTES: u64 = 16_777_216;
 const NIX_EXECUTABLE_MAX_BYTES: u64 = 268_435_456;
@@ -108,6 +110,10 @@ const PRODUCER_STDERR_MAX_BYTES: usize = 16_384;
 const PRODUCER_COMMAND_TIMEOUT_SECS: u64 = 900;
 const PRODUCER_COMMAND_POLL_MILLIS: u64 = 100;
 const CAPTURE_OVERFLOW_SENTINEL_BYTES: u64 = 1;
+const KIBIBYTE_BYTES: u64 = 1_024;
+const GIBIBYTE_BYTES: u64 = KIBIBYTE_BYTES * KIBIBYTE_BYTES * KIBIBYTE_BYTES;
+const MANTLEPKGS_SOURCE_BUNDLE_GIBIBYTES_MAX: u64 = 4;
+const MANTLEPKGS_SOURCE_BUNDLE_BYTES_MAX: u64 = MANTLEPKGS_SOURCE_BUNDLE_GIBIBYTES_MAX * GIBIBYTE_BYTES;
 const NIX_EXPERIMENTAL_FEATURES: &str = "nix-command flakes";
 const FAILURE_EXIT_CODE: u8 = 1;
 
@@ -375,8 +381,22 @@ fn run_validate(manifest_path: &Path, json: bool) -> Result<(), RunError> {
 fn run_generate(manifest_path: &Path, nix_program: &Path, output_root: &Path, json: bool) -> Result<(), RunError> {
     let manifest = normalize_manifest(&evaluate_manifest(manifest_path)?).map_err(core_eval_error)?;
     let _ = load_policy_artifacts(manifest_path, &manifest)?;
-    let batch = produce_locked_batch(&manifest, nix_program)?;
+    let seed_retention_root = prepare_seed_retention_root(output_root)?;
+    let batch = produce_locked_batch(&manifest, nix_program, &seed_retention_root)?;
     publish_batch(manifest_path, &manifest, &batch, output_root, json)
+}
+
+fn prepare_seed_retention_root(output_root: &Path) -> Result<PathBuf, RunError> {
+    let root = output_root.join(PRODUCER_SEED_ROOT_DIRECTORY);
+    fs::create_dir_all(&root).map_err(|error| {
+        RunError::Internal(format!("creating producer seed retention root {}: {error}", root.display()))
+    })?;
+    let canonical = fs::canonicalize(&root).map_err(|error| {
+        RunError::Internal(format!("resolving producer seed retention root {}: {error}", root.display()))
+    })?;
+    debug_assert!(canonical.is_absolute());
+    debug_assert!(canonical.is_dir());
+    Ok(canonical)
 }
 
 fn run_publish(
@@ -502,6 +522,7 @@ fn run_build(request: BuildRequest<'_>, context: &MantlepkgsContext<'_>) -> Resu
             output_dir: context.output_dir,
             state_dir: context.state_dir,
             base_state_dirs: context.base_state_dirs,
+            source_bundle_bytes_max: MANTLEPKGS_SOURCE_BUNDLE_BYTES_MAX,
             verbose: context.verbose,
             json: context.json,
         },
@@ -733,7 +754,11 @@ fn compile_catalog_selection(
     })
 }
 
-fn produce_locked_batch(manifest: &MantlepkgsManifest, nix_program: &Path) -> Result<ProducerBatch, RunError> {
+fn produce_locked_batch(
+    manifest: &MantlepkgsManifest,
+    nix_program: &Path,
+    seed_retention_root: &Path,
+) -> Result<ProducerBatch, RunError> {
     if !nix_program.is_absolute() {
         return Err(RunError::Eval("--nix-program must be one exact absolute executable path".into()));
     }
@@ -758,7 +783,7 @@ fn produce_locked_batch(manifest: &MantlepkgsManifest, nix_program: &Path) -> Re
     let packages = manifest
         .selectors
         .iter()
-        .map(|selector| produce_selector(manifest, selector, nix_program))
+        .map(|selector| produce_selector(manifest, selector, nix_program, &producer, seed_retention_root))
         .collect::<Vec<_>>();
     Ok(ProducerBatch {
         schema: PRODUCER_BATCH_SCHEMA.into(),
@@ -771,8 +796,10 @@ fn produce_selector(
     manifest: &MantlepkgsManifest,
     selector: &mantlepkgs_core::PackageSelector,
     nix_program: &Path,
+    producer: &ProducerObservation,
+    seed_retention_root: &Path,
 ) -> ProducedPackageRecord {
-    match produce_selector_result(manifest, selector, nix_program) {
+    match produce_selector_result(manifest, selector, nix_program, producer, seed_retention_root) {
         Ok(record) => record,
         Err(blocker) => ProducedPackageRecord {
             selector_name: selector.name.clone(),
@@ -790,6 +817,8 @@ fn produce_selector_result(
     manifest: &MantlepkgsManifest,
     selector: &mantlepkgs_core::PackageSelector,
     nix_program: &Path,
+    producer: &ProducerObservation,
+    seed_retention_root: &Path,
 ) -> Result<ProducedPackageRecord, CatalogBlocker> {
     let installable = format!("{}#{}", manifest.source.reference, selector.attribute);
     let root_output = run_nix(
@@ -837,7 +866,9 @@ fn produce_selector_result(
         unsupported_metadata_classes: Vec::new(),
     })
     .map_err(|diagnostic| producer_blocker(&diagnostic.class, selector, &diagnostic.message))?;
-    bind_fixed_output_seeds(&mut artifacts.graph, nix_program, selector)?;
+    let seed_retention_link = fixed_output_seed_retention_link(seed_retention_root, producer, selector)
+        .map_err(|error| producer_blocker("fixed-output-seed-retention-invalid", selector, &error.to_string()))?;
+    bind_fixed_output_seeds(&mut artifacts.graph, nix_program, selector, &seed_retention_link)?;
     Ok(ProducedPackageRecord {
         selector_name: selector.name.clone(),
         system: selector.system.clone(),
@@ -856,16 +887,8 @@ fn fixed_output_seed_candidates(graph: &ForeignDerivationGraph) -> Result<Vec<Fi
         if node.fixed_output.is_none() {
             continue;
         }
-        let has_url_candidate = node.env.get("url").is_some_and(|value| !value.is_empty())
-            || node.env.get("urls").is_some_and(|value| !value.is_empty());
-        if has_url_candidate {
-            continue;
-        }
         if node.outputs.len() != 1 {
-            return Err(format!(
-                "fixed-output derivation {} without URL candidates must have one output",
-                node.node_id
-            ));
+            return Err(format!("fixed-output derivation {} must have one output", node.node_id));
         }
         let (output_name, output) = node
             .outputs
@@ -889,29 +912,58 @@ fn fixed_output_seed_candidates(graph: &ForeignDerivationGraph) -> Result<Vec<Fi
     Ok(candidates)
 }
 
+fn fixed_output_seed_retention_link(
+    seed_retention_root: &Path,
+    producer: &ProducerObservation,
+    selector: &mantlepkgs_core::PackageSelector,
+) -> Result<PathBuf, RunError> {
+    let identity = canonical_digest(&(PRODUCER_SEED_RETENTION_SCHEMA, producer, selector))?;
+    let link = seed_retention_root.join(identity);
+    debug_assert!(seed_retention_root.is_absolute());
+    debug_assert!(link.starts_with(seed_retention_root));
+    Ok(link)
+}
+
+fn fixed_output_seed_realization_args(
+    candidates: &[FixedOutputSeedCandidate],
+    seed_retention_link: &Path,
+) -> Result<Vec<String>, String> {
+    let retention_link = seed_retention_link
+        .to_str()
+        .ok_or_else(|| "producer seed retention link is not valid UTF-8".to_string())?;
+    let mut args = vec![
+        "--extra-experimental-features".to_string(),
+        NIX_EXPERIMENTAL_FEATURES.to_string(),
+        "build".to_string(),
+        "--out-link".to_string(),
+        retention_link.to_string(),
+        "--print-out-paths".to_string(),
+    ];
+    args.extend(
+        candidates
+            .iter()
+            .map(|candidate| format!("{}^{}", candidate.derivation_path, candidate.output_name)),
+    );
+    debug_assert!(args.iter().any(|arg| arg == "--out-link"));
+    debug_assert!(!args.iter().any(|arg| arg == "--no-link"));
+    Ok(args)
+}
+
 fn bind_fixed_output_seeds(
     graph: &mut ForeignDerivationGraph,
     nix_program: &Path,
     selector: &mantlepkgs_core::PackageSelector,
+    seed_retention_link: &Path,
 ) -> Result<(), CatalogBlocker> {
     let candidates = fixed_output_seed_candidates(graph)
         .map_err(|message| producer_blocker("fixed-output-seed-invalid", selector, &message))?;
     if candidates.is_empty() {
         return Ok(());
     }
-    let installables = candidates
-        .iter()
-        .map(|candidate| format!("{}^{}", candidate.derivation_path, candidate.output_name))
-        .collect::<Vec<_>>();
-    let mut args = vec![
-        "--extra-experimental-features",
-        NIX_EXPERIMENTAL_FEATURES,
-        "build",
-        "--no-link",
-        "--print-out-paths",
-    ];
-    args.extend(installables.iter().map(String::as_str));
-    let output = run_nix(nix_program, &args, SEED_PATHS_STDOUT_MAX_BYTES)
+    let args = fixed_output_seed_realization_args(&candidates, seed_retention_link)
+        .map_err(|message| producer_blocker("fixed-output-seed-retention-invalid", selector, &message))?;
+    let borrowed_args = args.iter().map(String::as_str).collect::<Vec<_>>();
+    let output = run_nix(nix_program, &borrowed_args, SEED_PATHS_STDOUT_MAX_BYTES)
         .map_err(|error| producer_blocker("fixed-output-seed-realization-failed", selector, &error.to_string()))?;
     require_success(&output, "fixed-output-seed-realization-failed", selector)?;
     let observed_paths = String::from_utf8_lossy(&output.stdout)
@@ -1500,6 +1552,9 @@ fn import_diagnostic_error(diagnostic: crate::foreign_derivation_import::ImportD
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use std::os::unix::ffi::OsStringExt as _;
+
     use crunch_build::foreign_profile_for_producer;
     use mantlepkgs_core::ConversionPolicy;
     use mantlepkgs_core::ManifestArtifact;
@@ -1522,6 +1577,8 @@ mod tests {
     const NO_NIX_CHILD_TEST: &str = "mantlepkgs_cmd::tests::no_nix_child_verifies_and_plans_catalog";
     const CAPTURE_CHILD_TEST: &str = "mantlepkgs_cmd::tests::producer_capture_child";
     const TINY_CAPTURE_LIMIT: usize = 1;
+    #[cfg(unix)]
+    const NON_UTF8_PATH_BYTE: u8 = 0xff;
 
     #[test]
     fn fixture_batch_publishes_and_verifies_without_nix_in_path() {
@@ -1615,11 +1672,39 @@ mod tests {
     }
 
     #[test]
-    fn fixed_output_with_a_url_is_not_a_seed_candidate() {
+    fn fixed_output_with_a_url_becomes_a_bound_seed_candidate() {
         let (mut graph, _) = crate::foreign_derivation_import::nix_like_hello_fixture();
         let fixed = graph.nodes.iter_mut().find(|node| node.fixed_output.is_some()).unwrap();
         fixed.env.insert("url".into(), "https://example.invalid/source".into());
-        assert!(fixed_output_seed_candidates(&graph).unwrap().is_empty());
+
+        let candidates = fixed_output_seed_candidates(&graph).unwrap();
+        assert_eq!(candidates.len(), 1);
+        assert!(candidates[0].output_path.starts_with("/nix/store/"));
+    }
+
+    #[test]
+    fn fixed_output_seed_realization_creates_a_durable_out_link() {
+        let (graph, _) = crate::foreign_derivation_import::nix_like_hello_fixture();
+        let candidates = fixed_output_seed_candidates(&graph).unwrap();
+        let seed_retention_link = Path::new("/tmp/mantlepkgs-seed-root");
+
+        let args = fixed_output_seed_realization_args(&candidates, seed_retention_link).unwrap();
+
+        assert!(args.windows(2).any(|pair| pair == ["--out-link", "/tmp/mantlepkgs-seed-root"]));
+        assert!(!args.iter().any(|arg| arg == "--no-link"));
+        assert!(args.iter().any(|arg| arg.ends_with("^out")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fixed_output_seed_realization_rejects_non_utf8_out_link() {
+        let (graph, _) = crate::foreign_derivation_import::nix_like_hello_fixture();
+        let candidates = fixed_output_seed_candidates(&graph).unwrap();
+        let invalid_link = PathBuf::from(OsString::from_vec(vec![NON_UTF8_PATH_BYTE]));
+
+        let error = fixed_output_seed_realization_args(&candidates, &invalid_link).unwrap_err();
+
+        assert!(error.contains("retention link is not valid UTF-8"));
     }
 
     #[test]

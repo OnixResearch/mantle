@@ -44,7 +44,11 @@ mantle mantlepkgs generate \
 
 The command stages all files in the generation directory. It validates the staged catalog before one atomic, no-replace rename.
 
-During production, the command can realize a fixed-output dependency that has no URL. It binds the exact Nix output path and canonical content BLAKE3.
+During production, the command realizes each selected fixed-output dependency. It binds the exact Nix output path and canonical content BLAKE3.
+
+The producer creates Nix GC roots under `<output-root>/.mantlepkgs-producer-seed-roots/`. Each root identity binds the source lock, producer, and package selector.
+
+Keep this root directory until you prepare all required source bundles. External Nix garbage collection cannot remove the bound seed paths while these roots exist.
 
 If one package fails, the command writes a failure report under `failures/`. It does not publish a success catalog.
 
@@ -69,6 +73,8 @@ Package selection accepts an exact package name or one unambiguous alias. A bloc
 ## Prepare sources and build
 
 Source preparation stays explicit. On the producer host, bind all recorded foreign source paths into one source bundle.
+
+Do not remove `<output-root>/.mantlepkgs-producer-seed-roots/` before this step completes. The consumer does not use this producer-only root directory.
 
 The command rejects content that differs from a producer-bound fixed-output seed:
 

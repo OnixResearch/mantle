@@ -334,6 +334,8 @@ where
 
         let build_name = Uuid::new_v4();
         let build_name_str = build_name.to_string();
+        let debug_failure_workspace_root = std::env::var_os("CRUNCH_DEBUG_FAILURE_WORKSPACE_ROOT").map(PathBuf::from);
+        let failure_workspace_root = self.failure_workspace_root.as_deref().or(debug_failure_workspace_root.as_deref());
         let sandbox_dir = create_ephemeral_dir(&self.workdir, &format!("{build_name_str}-"))?;
         info!(build_name = %build_name_str, sandbox_path = %sandbox_dir.path().display(), "Starting bwrap build");
 
@@ -415,14 +417,14 @@ where
             } else {
                 format!("nonzero exit code: {}\n{}", outcome.output().status, log)
             };
-            retain_failed_sandbox(sandbox_dir, self.failure_workspace_root.as_deref(), &build_name_str);
+            retain_failed_sandbox(sandbox_dir, failure_workspace_root, &build_name_str);
             return Err(std::io::Error::other(msg));
         }
 
         let outputs: Vec<_> = request.outputs.iter().filter_map(|o| outcome.find_path(o)).collect();
         if outputs.len() != request.outputs.len() {
             warn!("Not all outputs produced");
-            retain_failed_sandbox(sandbox_dir, self.failure_workspace_root.as_deref(), &build_name_str);
+            retain_failed_sandbox(sandbox_dir, failure_workspace_root, &build_name_str);
             return Err(std::io::Error::other("Not all outputs produced".to_string()));
         }
         let patterns = ReferencePattern::new(request.refscan_needles);

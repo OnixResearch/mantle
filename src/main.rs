@@ -3349,6 +3349,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
                 output_dir: &ctx.store,
                 state_dir: &ctx.resolved_state_dir,
                 base_state_dirs: &ctx.base_state_dirs,
+                source_bundle_bytes_max: foreign_import_cmd::DEFAULT_FOREIGN_JSON_ARTIFACT_BYTES_MAX,
                 verbose: ctx.verbose,
                 json: ctx.json,
             })

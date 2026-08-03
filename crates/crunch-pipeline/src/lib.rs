@@ -522,6 +522,7 @@ fn finish_pipeline_result(
             drv_key: eval_failure_key(&eval_failure.label),
             origin_drv_key: eval_failure_key(&eval_failure.label),
             error: eval_failure.error.clone(),
+            origin_error: eval_failure.error.clone(),
             build_log: None,
         });
     }
@@ -749,6 +750,7 @@ fn build_preflight_failure(
             drv_key: drv_path.to_absolute_path_with_prefix(&config.store_dir),
             origin_drv_key: drv_path.to_absolute_path_with_prefix(&config.store_dir),
             error: error.clone(),
+            origin_error: error.clone(),
             build_log: None,
         })
         .collect();
@@ -920,6 +922,7 @@ mod tests {
             drv_key: drv_path.to_absolute_path(),
             origin_drv_key: drv_path.to_absolute_path(),
             error: "boom".to_string(),
+            origin_error: "boom".to_string(),
             build_log: None,
         }];
 
