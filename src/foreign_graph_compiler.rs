@@ -576,7 +576,8 @@ fn compile_node(
     let outputs = compile_outputs(node)?;
     let input_derivations = compile_input_derivations(node, identities, target_store_prefix)?;
     let input_sources = compile_input_sources(node, payloads, path_maps, target_store_prefix)?;
-    let environment = compile_environment(node, graph, &exact_map, &builder, &system, &builtin.environment)?;
+    let environment =
+        compile_environment(node, graph, target_store_prefix, &exact_map, &builder, &system, &builtin.environment)?;
     let mut derivation = Derivation {
         arguments,
         builder,
@@ -1177,6 +1178,7 @@ fn validate_unique_source_ref<'a>(
 fn compile_environment(
     node: &ForeignDerivationNode,
     graph: &ForeignDerivationGraph,
+    target_store_prefix: &str,
     exact_map: &BTreeMap<String, String>,
     builder: &str,
     system: &str,
@@ -1191,11 +1193,23 @@ fn compile_environment(
         if matches!(key.as_str(), "builder" | "name" | "outputs" | "system") {
             continue;
         }
-        let rewritten = rewrite_store_objects(value, exact_map, &graph.source_store_prefixes, Some(&node.node_id))?;
+        let rewritten = rewrite_environment_value(
+            value,
+            exact_map,
+            &graph.source_store_prefixes,
+            target_store_prefix,
+            Some(&node.node_id),
+        )?;
         environment.insert(key.clone(), rewritten.into_bytes().into());
     }
     for (key, value) in builtin_environment {
-        let rewritten = rewrite_store_objects(value, exact_map, &graph.source_store_prefixes, Some(&node.node_id))?;
+        let rewritten = rewrite_environment_value(
+            value,
+            exact_map,
+            &graph.source_store_prefixes,
+            target_store_prefix,
+            Some(&node.node_id),
+        )?;
         environment.insert(key.clone(), rewritten.into_bytes().into());
     }
     environment.insert("system".to_string(), system.as_bytes().into());
@@ -1315,6 +1329,96 @@ fn rewrite_values(
         .iter()
         .map(|value| rewrite_store_objects(value, exact_map, source_prefixes, node_id))
         .collect()
+}
+
+fn rewrite_environment_value(
+    value: &str,
+    exact_map: &BTreeMap<String, String>,
+    source_prefixes: &[String],
+    target_store_prefix: &str,
+    node_id: Option<&str>,
+) -> Result<String, ImportDiagnostic> {
+    let rewritten = rewrite_store_objects(value, exact_map, source_prefixes, node_id)?;
+    Ok(rewrite_known_store_dir_placeholders(&rewritten, source_prefixes, target_store_prefix))
+}
+
+fn rewrite_known_store_dir_placeholders(value: &str, source_prefixes: &[String], target_store_prefix: &str) -> String {
+    const STORE_DIR_PLACEHOLDER: &str = "@storeDir@";
+
+    let mut rewritten = value.to_string();
+    for source_prefix in source_prefixes {
+        rewritten = rewrite_store_dir_placeholder_for_prefix(
+            &rewritten,
+            STORE_DIR_PLACEHOLDER,
+            source_prefix,
+            target_store_prefix,
+        );
+    }
+    rewritten
+}
+
+fn rewrite_store_dir_placeholder_for_prefix(
+    value: &str,
+    placeholder: &str,
+    source_prefix: &str,
+    target_store_prefix: &str,
+) -> String {
+    let mut rewritten = String::with_capacity(value.len());
+    let mut copied_through = 0usize;
+    let mut search_from = 0usize;
+    while let Some(relative_start) = value[search_from..].find(placeholder) {
+        let placeholder_start = search_from + relative_start;
+        let placeholder_end = placeholder_start + placeholder.len();
+        let Some(prefix_start) = store_dir_placeholder_value_start(value, placeholder_end) else {
+            search_from = placeholder_end;
+            continue;
+        };
+        if !value[prefix_start..].starts_with(source_prefix) {
+            search_from = placeholder_end;
+            continue;
+        }
+        let prefix_end = prefix_start + source_prefix.len();
+        if !store_dir_placeholder_has_token_boundary(value, prefix_start, prefix_end) {
+            search_from = placeholder_end;
+            continue;
+        }
+        rewritten.push_str(&value[copied_through..prefix_start]);
+        rewritten.push_str(target_store_prefix);
+        copied_through = prefix_end;
+        search_from = prefix_end;
+    }
+    rewritten.push_str(&value[copied_through..]);
+    rewritten
+}
+
+fn store_dir_placeholder_value_start(value: &str, placeholder_end: usize) -> Option<usize> {
+    let suffix = value.get(placeholder_end..)?;
+    let whitespace_bytes = suffix.bytes().take_while(u8::is_ascii_whitespace).count();
+    if whitespace_bytes == 0 {
+        return None;
+    }
+    let token_start = placeholder_end.checked_add(whitespace_bytes)?;
+    match value.as_bytes().get(token_start) {
+        Some(b'\'') | Some(b'"') => token_start.checked_add(1),
+        Some(_) => Some(token_start),
+        None => None,
+    }
+}
+
+fn store_dir_placeholder_has_token_boundary(value: &str, prefix_start: usize, prefix_end: usize) -> bool {
+    let quote = prefix_start
+        .checked_sub(1)
+        .and_then(|index| value.as_bytes().get(index))
+        .copied()
+        .filter(|byte| matches!(byte, b'\'' | b'"'));
+    match (quote, value.as_bytes().get(prefix_end).copied()) {
+        (Some(b'\''), Some(b'\'')) | (Some(b'"'), Some(b'"')) => true,
+        (Some(_), _) => false,
+        (None, None) => true,
+        (None, Some(byte)) => {
+            byte.is_ascii_whitespace() || matches!(byte, b';' | b'|' | b'&' | b'(' | b')' | b'<' | b'>')
+        }
+    }
 }
 
 fn rewrite_store_objects(
@@ -1532,6 +1636,36 @@ mod tests {
     const TARGET_PREFIX: &str = "/mantle/store";
     const OTHER_TARGET_PREFIX: &str = "/alt/store";
     const EMPTY_HASH: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+    #[test]
+    fn known_store_dir_placeholders_use_the_active_store_prefix() {
+        let input = concat!(
+            "substitute source target --replace-fail @storeDir@ /nix/store\n",
+            "substitute source target --replace-fail @storeDir@ '/nix/store'\n",
+            "substitute source target --replace-fail @storeDir@ \"/nix/store\"\n",
+            "literal=/nix/store\n",
+        );
+
+        let rewritten = rewrite_known_store_dir_placeholders(input, &[SOURCE_PREFIX.to_string()], TARGET_PREFIX);
+
+        assert!(rewritten.contains("@storeDir@ /mantle/store\n"));
+        assert!(rewritten.contains("@storeDir@ '/mantle/store'\n"));
+        assert!(rewritten.contains("@storeDir@ \"/mantle/store\"\n"));
+        assert!(rewritten.contains("literal=/nix/store\n"));
+    }
+
+    #[test]
+    fn unrelated_or_non_token_store_text_is_not_rewritten() {
+        let input = concat!(
+            "--replace-fail @other@ /nix/store\n",
+            "--replace-fail @storeDir@ /nix/store-suffix\n",
+            "--replace-fail @storeDir@/nix/store\n",
+        );
+
+        let rewritten = rewrite_known_store_dir_placeholders(input, &[SOURCE_PREFIX.to_string()], TARGET_PREFIX);
+
+        assert_eq!(rewritten, input);
+    }
 
     #[test]
     fn dependency_compiler_is_exact_deterministic_and_prefix_sensitive() {

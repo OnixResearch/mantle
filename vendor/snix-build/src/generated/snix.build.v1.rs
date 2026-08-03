@@ -37,6 +37,10 @@ pub mod build_request {
         pub available_ro_paths: Vec<String>,
         pub network_access: bool,
         pub provide_bin_sh: bool,
+        #[serde(default)]
+        pub provide_proc_metadata: bool,
+        #[serde(default)]
+        pub provide_random_devices: bool,
     }
 
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

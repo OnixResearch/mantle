@@ -237,6 +237,8 @@ impl From<crate::buildservice::BuildRequest> for BuildRequest {
                         constraints.available_ro_paths.push(path_to_string(&path))
                     }
                     BuildConstraints::ProvideBinSh => constraints.provide_bin_sh = true,
+                    BuildConstraints::ProvideProcMetadata => constraints.provide_proc_metadata = true,
+                    BuildConstraints::ProvideRandomDevices => constraints.provide_random_devices = true,
                     BuildConstraints::NetworkAccess => constraints.network_access = true,
                 }
             }
@@ -481,6 +483,12 @@ impl TryFrom<build_request::BuildConstraints> for HashSet<crate::buildservice::B
         }
         if value.provide_bin_sh {
             build_constraints.insert(BuildConstraints::ProvideBinSh);
+        }
+        if value.provide_proc_metadata {
+            build_constraints.insert(BuildConstraints::ProvideProcMetadata);
+        }
+        if value.provide_random_devices {
+            build_constraints.insert(BuildConstraints::ProvideRandomDevices);
         }
 
         Ok(build_constraints)

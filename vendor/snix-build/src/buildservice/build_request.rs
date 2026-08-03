@@ -176,6 +176,13 @@ pub enum BuildConstraints {
     NetworkAccess,
     /// Whether to provide a /bin/sh inside the build environment, usually a static bash.
     ProvideBinSh,
+    /// Whether normal kernel `/proc` metadata files must remain visible.
+    ///
+    /// This exposes host-kernel observations such as `/proc/cpuinfo`. Callers
+    /// must request it explicitly for foreign build protocols that require it.
+    ProvideProcMetadata,
+    /// Whether real `/dev/random` and `/dev/urandom` devices must remain visible.
+    ProvideRandomDevices,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

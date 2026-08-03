@@ -102,6 +102,14 @@ pub struct SandboxSpec {
     /// Whether to allow network access inside the sandbox.
     #[builder(default)]
     allow_network: bool,
+
+    /// Whether normal kernel `/proc` metadata files must remain visible.
+    #[builder(default)]
+    provide_proc_metadata: bool,
+
+    /// Whether real kernel random devices must remain visible.
+    #[builder(default)]
+    provide_random_devices: bool,
 }
 
 impl SandboxSpec {
@@ -135,6 +143,14 @@ impl SandboxSpec {
 
     pub fn allow_network(&self) -> bool {
         self.allow_network
+    }
+
+    pub fn provide_proc_metadata(&self) -> bool {
+        self.provide_proc_metadata
+    }
+
+    pub fn provide_random_devices(&self) -> bool {
+        self.provide_random_devices
     }
 
     pub fn mounts(&self) -> impl IntoIterator<Item = &SandboxMount> {

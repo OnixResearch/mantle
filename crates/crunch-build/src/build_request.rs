@@ -1087,6 +1087,10 @@ fn build_constraints(
     if execution_profile.provide_bin_sh {
         constraints.insert(BuildConstraints::ProvideBinSh);
     }
+    if execution_profile.profile_id == NIX_FOREIGN_PROFILE_ID {
+        constraints.insert(BuildConstraints::ProvideProcMetadata);
+        constraints.insert(BuildConstraints::ProvideRandomDevices);
+    }
     if execution_profile.resource_limits.min_memory_bytes > 0 {
         constraints.insert(BuildConstraints::MinMemory(execution_profile.resource_limits.min_memory_bytes));
     }
@@ -1605,6 +1609,8 @@ mod tests {
         .build_request;
 
         assert!(!request.constraints.contains(&BuildConstraints::ProvideBinSh));
+        assert!(!request.constraints.contains(&BuildConstraints::ProvideProcMetadata));
+        assert!(!request.constraints.contains(&BuildConstraints::ProvideRandomDevices));
         assert!(!request.constraints.contains(&BuildConstraints::NetworkAccess));
         assert_eq!(request.working_dir, PathBuf::from("build"));
         assert_eq!(request.scratch_paths, vec![PathBuf::from("build"), PathBuf::from("mantle/store")]);
@@ -1638,6 +1644,8 @@ mod tests {
         assert_eq!(environment.get("PWD"), Some(&b"/build".as_slice()));
         assert_eq!(environment.get("NIX_STORE"), Some(&ACTIVE_STORE_DIR.as_bytes()));
         assert_eq!(environment.get("NIX_LOG_FD"), Some(&b"2".as_slice()));
+        assert!(request.constraints.contains(&BuildConstraints::ProvideProcMetadata));
+        assert!(request.constraints.contains(&BuildConstraints::ProvideRandomDevices));
     }
 
     #[test]

@@ -387,6 +387,8 @@ where
                 }
             })
             .allow_network(request.constraints.contains(&BuildConstraints::NetworkAccess))
+            .provide_proc_metadata(request.constraints.contains(&BuildConstraints::ProvideProcMetadata))
+            .provide_random_devices(request.constraints.contains(&BuildConstraints::ProvideRandomDevices))
             .provide_shell(
                 request.constraints.contains(&BuildConstraints::ProvideBinSh).then_some(sandbox_shell().into()),
             )
