@@ -442,3 +442,6 @@ notices.
 - [fzakaria/guixpkgs](https://github.com/fzakaria/guixpkgs) provides the checked-in translated Guix package graph used by the live GuixPkgs export proof. Mantle trusts the proof exporter's separate cache key.
 - [adeci/guix-by-nix](https://github.com/adeci/guix-by-nix) provides a system-level reference for consuming translated Guix packages without Guix in the target environment.
 - `durable-file-publication` at `rad:z3tAR4For7qw8ZirkJzoDw1VNDDLM` provides the reviewed capability-relative one-file publication mechanism.
+- [ekala-project/corepkgs](https://github.com/ekala-project/corepkgs) provides package-domain, explicit-variant, deterministic-index, and separate-test design references. Mantle retains package identity, build, validation, and evidence authority.
+- [ekala-project/eka-ci](https://github.com/ekala-project/eka-ci) provides base-to-head package-impact and closure-diff design references. Forge credentials and CI presentation remain outside Mantle.
+- [ekala-project/ekapkgs-update](https://github.com/ekala-project/ekapkgs-update) provides source-adapter, version-policy, OSV, and Repology design references. Mantle preserves explicit unavailable states and reimplements policy in its functional core.

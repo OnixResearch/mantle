@@ -64,3 +64,4 @@ compatibility surface, crate name, or historical decision.
 | [0055](0055-plan-http-cache-closures-before-root-admission.md) | Plan HTTP cache closures before root admission | Accepted |
 | [0056](0056-generate-mantlepkgs-from-concrete-package-graphs.md) | Generate Mantlepkgs from concrete package graphs | Proposed |
 | [0057](0057-keep-remote-bearers-out-of-durable-state.md) | Keep remote bearers out of durable state | Accepted |
+| [0058](0058-adapt-ekala-package-maintenance-patterns-without-transferring-authority.md) | Adapt Ekala package-maintenance patterns without transferring authority | Proposed |
