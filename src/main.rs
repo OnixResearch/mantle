@@ -116,6 +116,9 @@ mod release_source;
 mod release_tree_copy;
 #[allow(dead_code)]
 mod remote_attempt_log_store;
+mod remote_credential_state;
+mod remote_credentials;
+mod remote_service_secrets;
 // Remote build messages retain complete protocol payloads; boxing would change established internal
 // handoff shapes.
 #[allow(dead_code, clippy::large_enum_variant)]
@@ -398,9 +401,9 @@ enum Command {
         #[arg(long)]
         builder: Option<String>,
 
-        /// Bearer ticket as <ticket-id>:<secret> for remote-build dispatch.
-        #[arg(long)]
-        ticket: Option<String>,
+        /// Caller-owned non-terminal descriptor that provides one bearer credential
+        #[arg(long, requires = "builder")]
+        ticket_fd: Option<i32>,
 
         /// Program to spawn for stdio remote-build dispatch. Defaults to this mantle binary.
         #[arg(long)]
@@ -413,6 +416,26 @@ enum Command {
         /// Trusted remote builder signing key name; repeat for multiple keys.
         #[arg(long = "trusted-builder-key")]
         trusted_builder_keys: Vec<String>,
+
+        /// SecretSpec metadata manifest for the local remote service
+        #[arg(long, default_value = "secretspec.toml", requires = "builder")]
+        remote_secret_manifest: PathBuf,
+
+        /// Explicit SecretSpec profile for the local remote service
+        #[arg(
+            long,
+            default_value = remote_service_secrets::REMOTE_SECRET_PRODUCTION_PROFILE,
+            requires = "builder"
+        )]
+        remote_secret_profile: String,
+
+        /// Explicit bounded SecretSpec provider for the local remote service
+        #[arg(
+            long,
+            default_value = remote_service_secrets::REMOTE_SYSTEMD_CREDENTIAL_PROVIDER,
+            requires = "builder"
+        )]
+        remote_secret_provider: String,
 
         /// Remote request build-time limit in seconds.
         #[arg(long, default_value_t = remote_build::DEFAULT_TICKET_BUILD_TIME_SECS)]
@@ -628,6 +651,17 @@ enum Command {
     Remote {
         #[command(subcommand)]
         action: RemoteAction,
+    },
+
+    /// Internal bounded SecretSpec worker
+    #[command(hide = true)]
+    RemoteSecretWorker {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        profile: String,
+        #[arg(long)]
+        provider: String,
     },
 
     /// Frontend-neutral admitted artifact commands
@@ -2283,6 +2317,18 @@ pub enum RemoteAction {
         /// Separate worker execution/CAS state; defaults to the global state directory.
         #[arg(long, hide = true)]
         execution_state_dir: Option<PathBuf>,
+
+        /// SecretSpec metadata manifest
+        #[arg(long, default_value = "secretspec.toml")]
+        secret_manifest: PathBuf,
+
+        /// Explicit SecretSpec profile
+        #[arg(long, default_value = remote_service_secrets::REMOTE_SECRET_PRODUCTION_PROFILE)]
+        secret_profile: String,
+
+        /// Explicit bounded SecretSpec provider
+        #[arg(long, default_value = remote_service_secrets::REMOTE_SYSTEMD_CREDENTIAL_PROVIDER)]
+        secret_provider: String,
     },
 }
 
@@ -2305,9 +2351,9 @@ pub enum RemoteFailureDebugAction {
         /// Remote builder endpoint id
         #[arg(long)]
         builder: String,
-        /// Bearer ticket as <ticket-id>:<secret>
+        /// Caller-owned non-terminal descriptor that provides one bearer credential
         #[arg(long)]
-        ticket: String,
+        ticket_fd: i32,
         /// Program to spawn for stdio dispatch; defaults to this Mantle binary
         #[arg(long)]
         builder_program: Option<PathBuf>,
@@ -2320,6 +2366,15 @@ pub enum RemoteFailureDebugAction {
         /// Replay build-time limit in seconds
         #[arg(long, default_value_t = remote_build::DEFAULT_TICKET_BUILD_TIME_SECS)]
         remote_build_time_secs: u64,
+        /// SecretSpec metadata manifest for the local remote service
+        #[arg(long, default_value = "secretspec.toml")]
+        remote_secret_manifest: PathBuf,
+        /// Explicit SecretSpec profile for the local remote service
+        #[arg(long, default_value = remote_service_secrets::REMOTE_SECRET_PRODUCTION_PROFILE)]
+        remote_secret_profile: String,
+        /// Explicit bounded SecretSpec provider for the local remote service
+        #[arg(long, default_value = remote_service_secrets::REMOTE_SYSTEMD_CREDENTIAL_PROVIDER)]
+        remote_secret_provider: String,
     },
     /// Delete only expired unleased remote failure debug roots
     Gc {
@@ -2348,9 +2403,6 @@ pub enum RemoteTicketAction {
         #[arg(long, default_value = "ticket")]
         display_name: String,
 
-        #[arg(long, default_value_t = 1)]
-        now_unix_s: u64,
-
         #[arg(long, default_value_t = remote_build::DEFAULT_TICKET_TTL_SECS)]
         ttl_secs: u64,
 
@@ -2365,15 +2417,54 @@ pub enum RemoteTicketAction {
 
         #[arg(long)]
         bound_client_endpoint: Option<String>,
+
+        /// Caller-owned file descriptor that receives the bearer credential once
+        #[arg(long, conflicts_with = "interactive_operator_terminal_reveal")]
+        ticket_fd: Option<i32>,
+
+        /// Reveal the new bearer once through the controlling terminal
+        #[arg(long, conflicts_with = "ticket_fd", required_unless_present = "ticket_fd")]
+        interactive_operator_terminal_reveal: bool,
+
+        /// SecretSpec metadata manifest
+        #[arg(long, default_value = "secretspec.toml")]
+        secret_manifest: PathBuf,
+
+        /// Explicit SecretSpec profile
+        #[arg(long, default_value = remote_service_secrets::REMOTE_SECRET_PRODUCTION_PROFILE)]
+        secret_profile: String,
+
+        /// Explicit bounded SecretSpec provider
+        #[arg(long, default_value = remote_service_secrets::REMOTE_SYSTEMD_CREDENTIAL_PROVIDER)]
+        secret_provider: String,
     },
-    /// List tickets with bearer secrets redacted
+    /// List verifier-only ticket records
     List,
-    /// Inspect one ticket with bearer secret redacted
+    /// Inspect one verifier-only ticket record
     Inspect { id: String },
-    /// Reveal one ticket bearer secret explicitly
-    Reveal { id: String },
     /// Revoke one ticket
     Revoke { id: String },
+    /// Invalidate every plaintext-era ticket and upgrade state to verifier-only schema
+    MigrateLegacy {
+        /// Confirm that all legacy ticket credentials become invalid
+        #[arg(long)]
+        invalidate_legacy_tickets: bool,
+        /// Report the migration without changing state
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Rotate service keys and invalidate tickets tied to older verifier key ids
+    RotateKeys {
+        /// SecretSpec metadata manifest
+        #[arg(long, default_value = "secretspec.toml")]
+        secret_manifest: PathBuf,
+        /// Explicit SecretSpec rotation profile
+        #[arg(long, default_value = remote_service_secrets::REMOTE_SECRET_ROTATION_PROFILE)]
+        secret_profile: String,
+        /// Explicit bounded SecretSpec provider
+        #[arg(long)]
+        secret_provider: String,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -2879,6 +2970,14 @@ impl RunContext {
 }
 
 fn run(args: Args) -> Result<(), RunError> {
+    if let Command::RemoteSecretWorker {
+        manifest,
+        profile,
+        provider,
+    } = &args.command
+    {
+        return remote_service_secrets::run_remote_secret_worker(manifest, profile, provider);
+    }
     apply_state_dir_override(&args);
     let ctx = build_run_context(&args);
     emit_runtime_fingerprint(&args, &ctx)?;
@@ -2956,6 +3055,7 @@ fn command_label(command: &Command) -> &'static str {
         Command::Source { action } => source_command_label(action),
         Command::Receipt { action } => receipt_command_label(action),
         Command::Remote { action } => remote_command_label(action),
+        Command::RemoteSecretWorker { .. } => "remote-secret-worker",
         Command::Artifact { .. } => "artifact",
         Command::Attest { .. } => "attest",
         Command::Release { .. } => "release",
@@ -3012,8 +3112,9 @@ fn remote_ticket_command_label(action: &RemoteTicketAction) -> &'static str {
         RemoteTicketAction::Create { .. } => "remote.ticket.create",
         RemoteTicketAction::List => "remote.ticket.list",
         RemoteTicketAction::Inspect { .. } => "remote.ticket.inspect",
-        RemoteTicketAction::Reveal { .. } => "remote.ticket.reveal",
         RemoteTicketAction::Revoke { .. } => "remote.ticket.revoke",
+        RemoteTicketAction::MigrateLegacy { .. } => "remote.ticket.migrate-legacy",
+        RemoteTicketAction::RotateKeys { .. } => "remote.ticket.rotate-keys",
     }
 }
 
@@ -3126,7 +3227,7 @@ fn apply_primary_build_fingerprint_fields(modes: &mut RuntimeFingerprintModeFiel
             strict_hermetic,
             impure,
             builder,
-            ticket,
+            ticket_fd,
             ..
         } => {
             apply_build_mode_fields(modes, RuntimeBuildModeInput {
@@ -3140,9 +3241,9 @@ fn apply_primary_build_fingerprint_fields(modes: &mut RuntimeFingerprintModeFiel
                 trusted_public_key_count: trusted_public_keys.len(),
                 trust_unsigned: *trust_unsigned,
             });
-            if builder.is_some() || ticket.is_some() {
+            if builder.is_some() || ticket_fd.is_some() {
                 modes.bearer_ticket_count =
-                    Some(operator_diagnostics::bounded_runtime_count(usize::from(ticket.is_some())));
+                    Some(operator_diagnostics::bounded_runtime_count(usize::from(ticket_fd.is_some())));
             }
             true
         }
@@ -3363,6 +3464,11 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
             unix_time_now_s()?,
         ),
         Command::Remote { action } => run_remote_command(ctx, action.clone()),
+        Command::RemoteSecretWorker {
+            manifest,
+            profile,
+            provider,
+        } => remote_service_secrets::run_remote_secret_worker(manifest, profile, provider),
         Command::Artifact { action } => {
             artifact_cmd::cmd_artifact(action.clone(), &current_dir_or_error()?, &ctx.resolved_state_dir, ctx.json)
         }
@@ -3390,20 +3496,28 @@ fn run_remote_command(ctx: &RunContext, action: RemoteAction) -> Result<(), RunE
                 RemoteFailureDebugAction::Replay {
                     bundle,
                     builder,
-                    ticket,
+                    ticket_fd,
                     builder_program,
                     builder_args,
                     trusted_builder_keys,
                     remote_build_time_secs,
+                    remote_secret_manifest,
+                    remote_secret_profile,
+                    remote_secret_provider,
                 },
         } => cmd_remote_failure_debug_replay(
             RemoteFailureReplayCommandInput {
                 bundle_selector: &bundle,
                 builder: &builder,
-                ticket: &ticket,
+                ticket_fd,
                 builder_program: builder_program.as_deref(),
                 builder_args: &builder_args,
                 trusted_builder_keys: &trusted_builder_keys,
+                secret_request: remote_service_secrets::RemoteServiceSecretRequest {
+                    manifest_path: remote_secret_manifest,
+                    profile: remote_secret_profile,
+                    provider: remote_secret_provider,
+                },
                 build_time_limit_secs: remote_build_time_secs,
             },
             ctx,
@@ -3961,7 +4075,7 @@ fn run_nickel_export_command(ctx: &RunContext, input: NickelExportCommandInput<'
     })
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct BuildCommandInput<'a> {
     file: Option<&'a Path>,
     import_paths: &'a [PathBuf],
@@ -3976,10 +4090,11 @@ struct BuildCommandInput<'a> {
     trust_unsigned: bool,
     hermeticity: HermeticitySelection,
     remote_builder: Option<&'a str>,
-    remote_ticket: Option<&'a str>,
+    remote_ticket_fd: Option<i32>,
     remote_builder_program: Option<&'a Path>,
     remote_builder_args: &'a [String],
     trusted_builder_keys: &'a [String],
+    remote_secret_request: remote_service_secrets::RemoteServiceSecretRequest,
     remote_build_time_secs: u64,
     remote_delta: bool,
     remote_observability_config: Option<&'a Path>,
@@ -4003,10 +4118,13 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
         strict_hermetic,
         impure,
         builder,
-        ticket,
+        ticket_fd,
         builder_program,
         builder_args,
         trusted_builder_keys,
+        remote_secret_manifest,
+        remote_secret_profile,
+        remote_secret_provider,
         remote_build_time_secs,
         remote_delta,
         remote_observability_config,
@@ -4031,10 +4149,15 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
             impure: *impure,
         },
         remote_builder: builder.as_deref(),
-        remote_ticket: ticket.as_deref(),
+        remote_ticket_fd: *ticket_fd,
         remote_builder_program: builder_program.as_deref(),
         remote_builder_args: builder_args,
         trusted_builder_keys,
+        remote_secret_request: remote_service_secrets::RemoteServiceSecretRequest {
+            manifest_path: remote_secret_manifest.clone(),
+            profile: remote_secret_profile.clone(),
+            provider: remote_secret_provider.clone(),
+        },
         remote_build_time_secs: *remote_build_time_secs,
         remote_delta: *remote_delta,
         remote_observability_config: remote_observability_config.as_deref(),
@@ -4091,17 +4214,18 @@ fn prepare_build_command<'a>(
         cache_substitution::split_substituter_urls(input.substituters)
     };
     let remote_plan_facts =
-        remote_plan_facts_for_cli(input.remote_builder, input.remote_ticket, input.trusted_builder_keys)?;
+        remote_plan_facts_for_cli(input.remote_builder, input.remote_ticket_fd.is_some(), input.trusted_builder_keys)?;
     let remote_selection = if input.plan {
         None
     } else {
         remote_build_selection(
             RemoteBuildSelectionInput {
                 builder: input.remote_builder,
-                ticket: input.remote_ticket,
+                ticket_fd: input.remote_ticket_fd,
                 builder_program: input.remote_builder_program,
                 builder_args: input.remote_builder_args,
                 trusted_builder_keys: input.trusted_builder_keys,
+                secret_request: &input.remote_secret_request,
                 build_time_limit_secs: input.remote_build_time_secs,
                 remote_delta: input.remote_delta,
                 observability_config_path: input.remote_observability_config,
@@ -4296,7 +4420,7 @@ struct RemoteBuildSelection {
 
 fn remote_plan_facts_for_cli(
     builder: Option<&str>,
-    ticket: Option<&str>,
+    is_ticket_fd_present: bool,
     trusted_builder_keys: &[String],
 ) -> Result<Option<realization_routing::RemoteBuilderPlanFacts>, RunError> {
     let trusted_output_key_count = u32::try_from(trusted_builder_keys.len()).map_err(|_| {
@@ -4307,7 +4431,7 @@ fn remote_plan_facts_for_cli(
     })?;
     Ok(realization_routing::RemoteBuilderPlanFacts::cli_configured(
         builder,
-        ticket.is_some(),
+        is_ticket_fd_present,
         trusted_output_key_count,
     ))
 }
@@ -4315,10 +4439,11 @@ fn remote_plan_facts_for_cli(
 #[derive(Debug, Clone, Copy)]
 struct RemoteBuildSelectionInput<'a> {
     builder: Option<&'a str>,
-    ticket: Option<&'a str>,
+    ticket_fd: Option<i32>,
     builder_program: Option<&'a Path>,
     builder_args: &'a [String],
     trusted_builder_keys: &'a [String],
+    secret_request: &'a remote_service_secrets::RemoteServiceSecretRequest,
     build_time_limit_secs: u64,
     remote_delta: bool,
     observability_config_path: Option<&'a Path>,
@@ -4328,7 +4453,7 @@ impl RemoteBuildSelectionInput<'_> {
     fn is_disabled(self) -> bool {
         [
             self.builder.is_none(),
-            self.ticket.is_none(),
+            self.ticket_fd.is_none(),
             self.builder_program.is_none(),
             self.builder_args.is_empty(),
         ]
@@ -4349,13 +4474,14 @@ fn remote_build_selection(
     let builder = input
         .builder
         .ok_or_else(|| RunError::Internal("remote build dispatch requires --builder".to_string()))?;
-    let ticket = input
-        .ticket
-        .ok_or_else(|| RunError::Internal("remote build dispatch requires --ticket".to_string()))?;
-    let ticket = remote_build::parse_remote_ticket_credential(ticket).map_err(RunError::Internal)?;
-    let (program, args) = remote_stdio_builder_command(builder, input.builder_program, input.builder_args, ctx)?;
+    let ticket_fd = input
+        .ticket_fd
+        .ok_or_else(|| RunError::Internal("remote build dispatch requires --ticket-fd".to_string()))?;
+    let ticket = remote_build::read_remote_ticket_credential_from_owned_fd(ticket_fd).map_err(RunError::Internal)?;
+    let (program, args) =
+        remote_stdio_builder_command(builder, input.builder_program, input.builder_args, input.secret_request, ctx)?;
     let trusted_output_keys =
-        remote_trusted_builder_keys(input.trusted_builder_keys, input.builder_program, builder, ctx)?;
+        remote_trusted_builder_keys(input.trusted_builder_keys, input.builder_program, input.secret_request)?;
     let transfer_capabilities = if input.remote_delta {
         remote_build::RemoteTransferCapabilities::delta_and_full().with_streaming()
     } else {
@@ -4429,6 +4555,7 @@ fn remote_stdio_builder_command(
     builder: &str,
     builder_program: Option<&Path>,
     builder_args: &[String],
+    secret_request: &remote_service_secrets::RemoteServiceSecretRequest,
     ctx: &RunContext,
 ) -> Result<(PathBuf, Vec<String>), RunError> {
     if builder.is_empty() {
@@ -4467,6 +4594,12 @@ fn remote_stdio_builder_command(
         "local-build".to_string(),
         "--execution-state-dir".to_string(),
         worker_state_dir.display().to_string(),
+        "--secret-manifest".to_string(),
+        secret_request.manifest_path.display().to_string(),
+        "--secret-profile".to_string(),
+        secret_request.profile.clone(),
+        "--secret-provider".to_string(),
+        secret_request.provider.clone(),
     ];
     Ok((program, args))
 }
@@ -4479,8 +4612,7 @@ fn local_remote_worker_root(ctx: &RunContext, builder: &str) -> PathBuf {
 fn remote_trusted_builder_keys(
     trusted_builder_keys: &[String],
     builder_program: Option<&Path>,
-    builder: &str,
-    ctx: &RunContext,
+    secret_request: &remote_service_secrets::RemoteServiceSecretRequest,
 ) -> Result<Vec<String>, RunError> {
     if !trusted_builder_keys.is_empty() {
         return Ok(trusted_builder_keys.to_vec());
@@ -4490,9 +4622,8 @@ fn remote_trusted_builder_keys(
             "remote build dispatch with --builder-program requires --trusted-builder-key".to_string(),
         ));
     }
-    let worker_state_dir = local_remote_worker_root(ctx, builder).join("state");
-    let keypair = build_cmd::load_or_generate_signing_keypair(None, &worker_state_dir, false)?;
-    Ok(vec![keypair.verifying_key.name().to_string()])
+    let service_keys = remote_service_secrets::resolve_remote_service_keys_bounded(secret_request)?;
+    Ok(vec![service_keys.result_signing_key.verifying_key.name().to_string()])
 }
 
 #[allow(
@@ -4592,14 +4723,15 @@ fn run_remote_build_dispatches(
     rt.block_on(run_remote_build_dispatches_async(selection, inputs, output_dir, state_dir, store_prefix))
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct RemoteFailureReplayCommandInput<'a> {
     bundle_selector: &'a str,
     builder: &'a str,
-    ticket: &'a str,
+    ticket_fd: i32,
     builder_program: Option<&'a Path>,
     builder_args: &'a [String],
     trusted_builder_keys: &'a [String],
+    secret_request: remote_service_secrets::RemoteServiceSecretRequest,
     build_time_limit_secs: u64,
 }
 
@@ -4631,10 +4763,17 @@ fn cmd_remote_failure_debug_replay(
         source_bundle_blake3: bundle.bundle_blake3.clone(),
         execution_blake3: new_remote_failure_replay_execution_identity(&bundle.bundle_blake3)?,
     });
-    let parsed_ticket = remote_build::parse_remote_ticket_credential(input.ticket).map_err(RunError::Internal)?;
-    let (program, args) = remote_stdio_builder_command(input.builder, input.builder_program, input.builder_args, ctx)?;
+    let parsed_ticket =
+        remote_build::read_remote_ticket_credential_from_owned_fd(input.ticket_fd).map_err(RunError::Internal)?;
+    let (program, args) = remote_stdio_builder_command(
+        input.builder,
+        input.builder_program,
+        input.builder_args,
+        &input.secret_request,
+        ctx,
+    )?;
     let trusted_output_keys =
-        remote_trusted_builder_keys(input.trusted_builder_keys, input.builder_program, input.builder, ctx)?;
+        remote_trusted_builder_keys(input.trusted_builder_keys, input.builder_program, &input.secret_request)?;
     let options = remote_build::RemoteClientBuildOptions {
         store_prefix: ctx.store_prefix.clone(),
         ticket: parsed_ticket,
@@ -8008,6 +8147,8 @@ mod tests {
     const TEST_REMOTE_REUSED_BYTES: u64 = 0;
     const TEST_REMOTE_STATUS_CONCURRENCY: u32 = 2;
     const TEST_REMOTE_STATUS_CONCURRENCY_TEXT: &str = "2";
+    const TEST_REMOTE_TICKET_FD: i32 = 9;
+    const TEST_REMOTE_TICKET_FD_TEXT: &str = "9";
     const CLI_PARSE_TEST_STACK_BYTES: usize = 8_388_608;
     const _: () = assert!(CLI_PARSE_TEST_STACK_BYTES > 0);
 
@@ -8242,15 +8383,15 @@ mod tests {
     }
 
     #[test]
-    fn build_cli_accepts_remote_builder_ticket_dispatch_flags() {
+    fn build_cli_accepts_remote_builder_ticket_fd_dispatch_flags() {
         let args = parse_args_with_cli_test_stack(vec![
             "mantle",
             "build",
             "demo.ncl",
             "--builder",
             "builder-1",
-            "--ticket",
-            "ticket-1:secret-1",
+            "--ticket-fd",
+            TEST_REMOTE_TICKET_FD_TEXT,
             "--builder-program",
             "/bin/remote-builder",
             "--builder-arg",
@@ -8262,7 +8403,7 @@ mod tests {
         .expect("remote builder CLI flags parse");
         let Command::Build {
             builder,
-            ticket,
+            ticket_fd,
             builder_program,
             builder_args,
             trusted_builder_keys,
@@ -8274,19 +8415,29 @@ mod tests {
         };
 
         assert_eq!(builder.as_deref(), Some("builder-1"));
-        assert_eq!(ticket.as_deref(), Some("ticket-1:secret-1"));
+        assert_eq!(ticket_fd, Some(TEST_REMOTE_TICKET_FD));
         assert_eq!(builder_program.as_deref(), Some(Path::new("/bin/remote-builder")));
         assert_eq!(builder_args, vec!["serve".to_string()]);
         assert_eq!(trusted_builder_keys, vec!["builder-key".to_string()]);
         assert!(remote_delta);
+
+        let insecure_argv = parse_args_with_cli_test_stack(vec![
+            "mantle",
+            "build",
+            "demo.ncl",
+            "--builder",
+            "builder-1",
+            "--ticket",
+            "ticket-1:plaintext",
+        ]);
+        assert!(insecure_argv.is_err());
     }
 
     #[test]
     fn build_plan_remote_facts_are_pure_and_redacted() {
-        let facts =
-            remote_plan_facts_for_cli(Some("builder-1"), Some("ticket-1:super-secret"), &["builder-key".to_string()])
-                .expect("remote plan facts construct")
-                .expect("remote plan facts present");
+        let facts = remote_plan_facts_for_cli(Some("builder-1"), true, &["builder-key".to_string()])
+            .expect("remote plan facts construct")
+            .expect("remote plan facts present");
         let candidate = realization_routing::remote_builder_candidate_from_facts(&facts);
         let detail = candidate.detail.as_deref().unwrap_or_default();
 

@@ -414,7 +414,9 @@ Useful documentation:
 - [Operator proof guide](docs/operator-proof-guide.md)
 - [Machine artifact contracts](docs/machine-artifact-contracts.md)
 - [Build correctness primitives](docs/build-correctness-primitives.md)
+- [Remote credential operations](docs/remote-credentials.md)
 - [Mantle naming rules](docs/mantle-naming.md)
+- [Durable file publication adoption](docs/durable-file-publication-adoption.md)
 
 ## Requirements
 
@@ -441,3 +443,7 @@ notices.
 - [adeci/guix-by-nix](https://github.com/adeci/guix-by-nix) provides a system-level reference for consuming translated Guix packages without Guix in the target environment.
 - [OnixResearch/trellis](https://github.com/OnixResearch/trellis) provides reusable verified logic and proof evidence for selected bounded models. Mantle retains runtime, adapter, and release authority.
 - [Atom Reforged](https://nrd.sh/blog/atom-reforged.html) provides architecture references for narrow store authority, source observations, monotonic ingest, and small formal protocol models. Mantle does not adopt its package registry or ownership protocol.
+- `durable-file-publication` at `rad:z3tAR4For7qw8ZirkJzoDw1VNDDLM` provides the reviewed capability-relative one-file publication mechanism.
+- [ekala-project/corepkgs](https://github.com/ekala-project/corepkgs) provides package-domain, explicit-variant, deterministic-index, and separate-test design references. Mantle retains package identity, build, validation, and evidence authority.
+- [ekala-project/eka-ci](https://github.com/ekala-project/eka-ci) provides base-to-head package-impact and closure-diff design references. Forge credentials and CI presentation remain outside Mantle.
+- [ekala-project/ekapkgs-update](https://github.com/ekala-project/ekapkgs-update) provides source-adapter, version-policy, OSV, and Repology design references. Mantle preserves explicit unavailable states and reimplements policy in its functional core.

@@ -67,3 +67,5 @@ compatibility surface, crate name, or historical decision.
 | [0058](0058-limit-store-access-with-concrete-capability-views.md) | Limit store access with concrete capability views | Proposed |
 | [0059](0059-bind-source-observations-without-new-signature-authority.md) | Bind source observations without new signature authority | Proposed |
 | [0060](0060-verify-remote-admission-with-a-trellis-model.md) | Verify remote admission with a Trellis model | Proposed |
+| [0061](0061-keep-remote-bearers-out-of-durable-state.md) | Keep remote bearers out of durable state | Accepted |
+| [0062](0062-adapt-ekala-package-maintenance-patterns-without-transferring-authority.md) | Adapt Ekala package-maintenance patterns without transferring authority | Proposed |

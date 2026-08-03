@@ -140,6 +140,7 @@ crunch-attestation = { path = "crates/crunch-attestation" }
 crunch-shell = { path = "crates/crunch-shell" }
 crunch-bootstrap-core = { path = "crates/crunch-bootstrap-core" }
 crunch-release-core = { path = "crates/crunch-release-core" }
+durable-file-publication = { git = "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git", rev = "951c27f59003cea9bfdb40ed4d89653d50fada1f" }
 crunch-delta = { path = "crates/crunch-delta" }
 nix-compat = { path = "vendor/nix-compat" }
 snix-build = { path = "vendor/snix-build" }
@@ -157,9 +158,13 @@ data-encoding = "2.6"
 ed25519-dalek = "2.1.1"
 tempfile = "3"
 bstr = "=1.12.1"
+base64 = "0.22"
 blake3 = "=1.8.2"
 rand = "0.8"
 digest = "=0.10.7"
+secretspec = { version = "=0.17.0", default-features = false, features = ["sops"] }
+subtle = "2.6.1"
+zeroize = "1"
 sha2 = "0.10.8"
 ureq = { version = "3.0", default-features = false, features = ["rustls"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -187,5 +192,4 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 futures = "0.3"
 sha2 = "0.10.8"
-base64 = "0.22"
 tar = "0.4"
