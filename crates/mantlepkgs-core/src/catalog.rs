@@ -472,8 +472,7 @@ pub fn validate_catalog_artifacts(
 ) -> Result<(), CoreFailure> {
     validate_catalog_identity(catalog)?;
     let observed = observations.iter().map(|item| (item.path.as_str(), item)).collect::<BTreeMap<_, _>>();
-    let diagnostic_capacity_items = catalog.artifacts.len().saturating_add(1);
-    let mut diagnostics = Vec::with_capacity(diagnostic_capacity_items);
+    let mut diagnostics = Vec::with_capacity(catalog.artifacts.len().saturating_add(1));
     for artifact in &catalog.artifacts {
         validate_relative_artifact_path(&artifact.path, &artifact.role, &mut diagnostics);
         match observed.get(artifact.path.as_str()) {
@@ -872,8 +871,7 @@ fn normalize_artifacts(
 ) -> Result<Vec<ArtifactBinding>, CoreFailure> {
     let mut normalized = artifacts.to_vec();
     normalized.sort();
-    let diagnostic_capacity_items = normalized.len().saturating_add(1);
-    let mut diagnostics = Vec::with_capacity(diagnostic_capacity_items);
+    let mut diagnostics = Vec::with_capacity(normalized.len().saturating_add(1));
     let mut roles = BTreeSet::new();
     let mut paths = BTreeSet::new();
     for artifact in &normalized {
@@ -934,8 +932,7 @@ fn validate_selection_receipts(plan: &CatalogPlan, selections: &[ProducerSelecti
         .iter()
         .map(|selection| (selection.system.as_str(), selection.name.as_str(), selection.attribute.as_str()))
         .collect::<BTreeSet<_>>();
-    let diagnostic_capacity_items = selections.len().saturating_add(1);
-    let mut diagnostics = Vec::with_capacity(diagnostic_capacity_items);
+    let mut diagnostics = Vec::with_capacity(selections.len().saturating_add(1));
     if planned != observed || observed.len() != selections.len() {
         diagnostics.push(Diagnostic::new(
             "producer-selection-set-mismatch",

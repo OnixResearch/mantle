@@ -326,7 +326,7 @@ fn validate_source_policy(policy: &SourcePolicy, diagnostics: &mut Vec<Diagnosti
         "unsupported-source-policy",
         diagnostics,
     );
-    let mut transport_name_items = BTreeSet::new();
+    let mut seen = BTreeSet::new();
     for (index, transport) in policy.optional_transports.iter().enumerate() {
         let path = format!("source_policy.optional_transports[{index}]");
         if transport != NARIO_V2_TRANSPORT {
@@ -336,7 +336,7 @@ fn validate_source_policy(policy: &SourcePolicy, diagnostics: &mut Vec<Diagnosti
                 "the optional source transport is not supported",
             ));
         }
-        if !transport_name_items.insert(transport) {
+        if !seen.insert(transport) {
             diagnostics.push(Diagnostic::new(
                 "duplicate-source-transport",
                 &path,
@@ -345,7 +345,7 @@ fn validate_source_policy(policy: &SourcePolicy, diagnostics: &mut Vec<Diagnosti
         }
     }
     debug_assert!(diagnostics.len() >= initial_diagnostic_count);
-    debug_assert!(transport_name_items.len() <= policy.optional_transports.len());
+    debug_assert!(seen.len() <= policy.optional_transports.len());
 }
 
 fn validate_limits(limits: &ManifestLimits, diagnostics: &mut Vec<Diagnostic>) {

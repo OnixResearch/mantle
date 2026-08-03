@@ -44,6 +44,9 @@ const NIX_HELLO_NODE_ID: &str = "nix:hello";
 const NIXPKGS_PRODUCER_KIND: &str = "nixpkgs";
 const NIX_DERIVATION_BUILTIN: &str = "nix.derivation";
 const FIXED_OUTPUT_FETCH_BUILTIN: &str = "fixed-output-fetch";
+const OUTPUT_HASH_MODE_ENV: &str = "outputHashMode";
+const RECURSIVE_OUTPUT_HASH_MODE: &str = "recursive";
+const FLAT_OUTPUT_HASH_MODE: &str = "flat";
 const CHMOD_SETUID_CAPABILITY: &str = "chmod-setuid";
 const TRUSTED_CACHE_SCOPE: &str = "trusted-binary-cache";
 const CACHE_NIXOS_ORG_URL: &str = "https://cache.nixos.org";
@@ -1613,7 +1616,7 @@ fn lower_aterm_derivation_node(
     })?;
     let derivation = request.derivation;
     let outputs = lower_aterm_outputs(&derivation.outputs, &context.config.source_prefix)?;
-    let fixed_output = nix_fixed_output_metadata(&derivation.outputs)?;
+    let fixed_output = nix_fixed_output_metadata(&derivation.outputs, &derivation.env)?;
     let input_derivations = lower_nix_input_derivations(&derivation.input_drvs, context.path_to_node_id)?;
     let source_refs = lower_aterm_source_refs(&derivation.input_srcs, source_payloads, context.config)?;
     let declared_references = nix_declared_references(&derivation.input_drvs, &derivation.input_srcs, context.closure)?;
@@ -1740,14 +1743,16 @@ fn lower_aterm_source_refs(
 
 fn nix_fixed_output_metadata(
     outputs: &BTreeMap<String, NixDerivationJsonOutput>,
+    env: &BTreeMap<String, String>,
 ) -> Result<Option<FixedOutputMetadata>, ImportDiagnostic> {
+    let output_hash_mode = env.get(OUTPUT_HASH_MODE_ENV).map(String::as_str).filter(|mode| !mode.is_empty());
     let mut metadata: Option<FixedOutputMetadata> = None;
     for output in outputs.values() {
         let Some(digest) = output.hash.as_ref() else {
             continue;
         };
         let hash_algo = output.hash_algo.as_deref().unwrap_or(SHA256_ALGORITHM);
-        let (algorithm, recursive) = parse_nix_hash_algorithm(hash_algo);
+        let (algorithm, recursive) = parse_nix_fixed_output_hash(hash_algo, output_hash_mode)?;
         let candidate = FixedOutputMetadata {
             algorithm,
             digest: digest.clone(),
@@ -1768,6 +1773,33 @@ fn nix_fixed_output_metadata(
     debug_assert!(metadata.is_none() || !outputs.is_empty());
     debug_assert!(metadata.as_ref().is_none_or(|value| !value.digest.is_empty()));
     Ok(metadata)
+}
+
+fn parse_nix_fixed_output_hash(
+    hash_algo: &str,
+    output_hash_mode: Option<&str>,
+) -> Result<(String, bool), ImportDiagnostic> {
+    let (algorithm, algorithm_marks_recursive) = parse_nix_hash_algorithm(hash_algo);
+    let mode_marks_recursive = match output_hash_mode {
+        None => None,
+        Some(RECURSIVE_OUTPUT_HASH_MODE) => Some(true),
+        Some(FLAT_OUTPUT_HASH_MODE) => Some(false),
+        Some(_) => {
+            return Err(diagnostic(
+                "unsupported-fixed-output-hash-mode",
+                None,
+                "Nix derivation declares an unsupported fixed-output hash mode",
+            ));
+        }
+    };
+    if algorithm_marks_recursive && mode_marks_recursive == Some(false) {
+        return Err(diagnostic(
+            "conflicting-fixed-output-hash-mode",
+            None,
+            "Nix derivation hash algorithm and outputHashMode declare conflicting fixed-output modes",
+        ));
+    }
+    Ok((algorithm, mode_marks_recursive.unwrap_or(algorithm_marks_recursive)))
 }
 
 fn parse_nix_hash_algorithm(hash_algo: &str) -> (String, bool) {
@@ -2548,6 +2580,29 @@ mod tests {
         assert!(artifacts.graph.hash_domains.iter().any(|record| record.value == NIXPKGS_HELLO_DRV));
         assert_eq!(translated.nodes.len(), NIXPKGS_DERIVATION_COUNT);
         assert!(receipt.hash_domains.iter().any(|record| record.domain == MANTLE_RECEIPT_HASH_DOMAIN));
+    }
+
+    #[test]
+    fn fixed_output_hash_mode_preserves_modern_and_legacy_recursive_facts() {
+        let modern = parse_nix_fixed_output_hash(SHA256_ALGORITHM, Some(RECURSIVE_OUTPUT_HASH_MODE)).unwrap();
+        let legacy = parse_nix_fixed_output_hash("r:sha256", None).unwrap();
+        let flat = parse_nix_fixed_output_hash(SHA256_ALGORITHM, Some(FLAT_OUTPUT_HASH_MODE)).unwrap();
+
+        assert_eq!(modern, (SHA256_ALGORITHM.to_string(), true));
+        assert_eq!(legacy, modern);
+        assert_eq!(flat, (SHA256_ALGORITHM.to_string(), false));
+    }
+
+    #[test]
+    fn fixed_output_hash_mode_rejects_unknown_and_conflicting_facts() {
+        assert_error_class(
+            parse_nix_fixed_output_hash(SHA256_ALGORITHM, Some("unknown")),
+            "unsupported-fixed-output-hash-mode",
+        );
+        assert_error_class(
+            parse_nix_fixed_output_hash("r:sha256", Some(FLAT_OUTPUT_HASH_MODE)),
+            "conflicting-fixed-output-hash-mode",
+        );
     }
 
     #[test]
