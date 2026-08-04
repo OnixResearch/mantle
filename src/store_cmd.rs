@@ -486,7 +486,8 @@ async fn cmd_store_gc(
 ) -> Result<(), RunError> {
     debug_assert!(!store.store_dir().is_empty());
     debug_assert!(Path::new(store.store_dir()).is_absolute());
-    let gc_evidence = store
+    let mut store_admin = store.store_admin();
+    let gc_evidence = store_admin
         .garbage_collect_with_castore_roots(is_dry_run, rust_retention.live_nodes())
         .await
         .map_err(|e| RunError::Build(format!("{e}")))?;

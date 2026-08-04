@@ -179,10 +179,11 @@ pub(crate) async fn realize_foreign_plan(
             _scratch_directories: Vec::new(),
         }
     } else {
+        let mut source_admission = store.source_admission();
         ingest_admitted_foreign_sources(
             &admitted_sources,
             request.source_bundle,
-            &mut store,
+            &mut source_admission,
             &request.keypair.signing_key,
         )
         .await?
@@ -635,7 +636,7 @@ fn selected_root_output_paths(
 async fn ingest_admitted_foreign_sources(
     admitted_sources: &[AdmittedForeignSource],
     source_bundle: &SourceBundleManifest,
-    store: &mut StoreHandle,
+    source_admission: &mut crunch_store::SourceAdmission<'_>,
     signing_key: &SigningKey<ed25519_dalek::SigningKey>,
 ) -> Result<IngestedForeignSources, RunError> {
     let mut prepared = Vec::with_capacity(admitted_sources.len());
@@ -658,8 +659,8 @@ async fn ingest_admitted_foreign_sources(
         prepared.push((admitted, payload_path, scratch));
     }
     for (admitted, payload_path, _) in &prepared {
-        store
-            .preflight_verified_source(VerifiedSourceIngestRequest {
+        source_admission
+            .preflight(VerifiedSourceIngestRequest {
                 source_path: payload_path,
                 logical_store_path: &admitted.target_path,
                 source_name: &admitted.payload_id,
@@ -678,8 +679,8 @@ async fn ingest_admitted_foreign_sources(
     let mut payload_paths = BTreeMap::new();
     let mut scratch_directories = Vec::with_capacity(prepared.len());
     for (admitted, payload_path, scratch) in prepared {
-        let path_info = store
-            .ingest_verified_source(VerifiedSourceIngestRequest {
+        let path_info = source_admission
+            .ingest(VerifiedSourceIngestRequest {
                 source_path: &payload_path,
                 logical_store_path: &admitted.target_path,
                 source_name: &admitted.payload_id,
@@ -692,7 +693,7 @@ async fn ingest_admitted_foreign_sources(
                     admitted.payload_id, admitted.target_path
                 ))
             })?;
-        if path_info.store_path.to_absolute_path_with_prefix(store.store_dir()) != admitted.target_path {
+        if path_info.store_path.to_absolute_path_with_prefix(source_admission.store_dir()) != admitted.target_path {
             return Err(RunError::Internal(format!(
                 "foreign source store path changed during ingestion: {}",
                 admitted.payload_id

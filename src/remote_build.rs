@@ -2520,7 +2520,6 @@ async fn execute_remote_local_build_linux(
     executor: &RemoteLocalBuildExecutor,
     input: RemoteLocalBuildExecutionInput<'_>,
 ) -> Result<RemoteExecutionOutcome, String> {
-    use snix_build::buildservice::BubblewrapBuildService;
     let RemoteLocalBuildExecutionInput {
         request,
         plan,
@@ -2535,30 +2534,33 @@ async fn execute_remote_local_build_linux(
         .await
         .map_err(|err| format!("remote-local-executor-open-store: {err}"))?;
     materialize_remote_input_upload(&store, request, input_upload).await?;
-    let blob_service = store.blob_service();
-    let directory_service = store.directory_service();
-    let pathinfo_service = store.pathinfo_service();
     let workdir = std::env::temp_dir().join(REMOTE_LOCAL_BUILD_WORKDIR_NAME);
     std::fs::create_dir_all(&workdir).map_err(|err| format!("remote-local-executor-workdir: {err}"))?;
     let failure_workspace_root = remote_failure_workspace_root(executor, request)?;
-    let mut bwrap_service = BubblewrapBuildService::new(workdir, blob_service.clone(), directory_service.clone());
-    if request.failure_debug_policy.capture.enabled {
-        bwrap_service = bwrap_service.with_failure_workspace_root(failure_workspace_root.clone());
-    }
-    let fetch_service = crunch_build::FetchBuildService::new(blob_service.clone(), directory_service.clone());
+    let configured_failure_workspace_root = if request.failure_debug_policy.capture.enabled {
+        Some(failure_workspace_root.clone())
+    } else {
+        None
+    };
+    let crunch_store::PipelineStoreParts {
+        build_store,
+        action_results,
+        build_service_store,
+        output_lookup: _output_lookup,
+        root_registry: _root_registry,
+    } = store.into_pipeline_store_parts();
+    let bwrap_service = build_service_store.bubblewrap_build_service(workdir, configured_failure_workspace_root);
+    let fetch_service = crunch_build::FetchBuildService::new(build_service_store);
     let dispatch = crunch_build::DispatchBuildService::new(fetch_service, bwrap_service);
     let workspace_evidence_collector = new_remote_workspace_report_collector();
     let build_service =
         crunch_build::StatefulWorkspaceBuildService::new(dispatch, &executor.state_dir, workspace_evidence_collector);
-    let mut builder = crunch_build::Builder::with_state_dir(
-        blob_service,
-        directory_service,
+    let mut builder = crunch_build::Builder::from_store_parts(
+        crunch_store::BuilderStoreParts {
+            build_store,
+            action_results,
+        },
         build_service,
-        pathinfo_service,
-        executor.output_dir.clone(),
-        Some(store.state_dir().to_path_buf()),
-        store.remote_pathinfo(),
-        &executor.store_prefix,
         executor.keypair.clone(),
         executor.trusted_keys.clone(),
         executor.trust_unsigned,

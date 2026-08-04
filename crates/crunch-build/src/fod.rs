@@ -3,12 +3,8 @@
 use nix_compat::nixhash::CAHash;
 use nix_compat::nixhash::NixHash;
 use snix_castore::Node;
-use snix_castore::blobservice::BlobService;
-use snix_castore::directoryservice::DirectoryService;
 
 use crate::Error;
-use crate::hash::hash_blob;
-use crate::hash::nar_hash;
 
 /// Verify that a fixed-output derivation produced the expected hash.
 ///
@@ -16,7 +12,7 @@ use crate::hash::nar_hash;
 /// NAR mode: hash the NAR serialization with the declared algorithm.
 /// Text mode: equivalent to NAR sha256 for verification purposes.
 #[allow(tigerstyle::ambiguous_params)] // drv_name vs output_name: distinct derivation fields
-#[allow(tigerstyle::too_many_parameters)] // FOD verification requires hash context + derivation context + castore services
+#[allow(tigerstyle::too_many_parameters)] // FOD verification requires hash context and derivation context
 pub(crate) async fn verify_fod_hash(
     drv_name: &str,
     _output_name: &str,
@@ -24,8 +20,7 @@ pub(crate) async fn verify_fod_hash(
     _nar_size: u64,
     nar_sha256: &[u8; 32],
     node: &Node,
-    blob_service: &(impl BlobService + Clone),
-    directory_service: &(impl DirectoryService + Clone),
+    store: &crunch_store::BuildStore,
 ) -> Result<(), Error> {
     // Tiger Style: assert preconditions.
     debug_assert!(!drv_name.is_empty(), "drv_name must not be empty for FOD verification");
@@ -42,7 +37,10 @@ pub(crate) async fn verify_fod_hash(
                 }
             };
 
-            let actual = hash_blob(blob_service, digest, expected_hash.algo()).await?;
+            let actual = store
+                .hash_blob(digest, expected_hash.algo())
+                .await
+                .map_err(|error| Error::Store(format!("hashing fixed-output blob: {error}")))?;
             if actual.digest_as_bytes() != expected_hash.digest_as_bytes() {
                 return Err(Error::FodHashMismatch {
                     name: drv_name.to_string(),
@@ -63,7 +61,10 @@ pub(crate) async fn verify_fod_hash(
             }
         }
         CAHash::Nar(expected_hash) => {
-            let actual = nar_hash(node, expected_hash.algo(), blob_service.clone(), directory_service.clone()).await?;
+            let actual = store
+                .nar_hash(node, expected_hash.algo())
+                .await
+                .map_err(|error| Error::Store(format!("hashing fixed-output NAR: {error}")))?;
             if actual.digest_as_bytes() != expected_hash.digest_as_bytes() {
                 return Err(Error::FodHashMismatch {
                     name: drv_name.to_string(),
@@ -140,6 +141,35 @@ mod tests {
 
     fn tmp_ds() -> RedbDirectoryService {
         RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default()).unwrap()
+    }
+
+    #[allow(tigerstyle::too_many_parameters)]
+    async fn verify_fod_hash(
+        drv_name: &str,
+        output_name: &str,
+        expected_ca: &CAHash,
+        nar_size: u64,
+        nar_sha256: &[u8; 32],
+        node: &Node,
+        blob_service: &MemoryBlobService,
+        directory_service: &RedbDirectoryService,
+    ) -> Result<(), Error> {
+        let parts = crate::test_support::pipeline_store_parts(blob_service.clone(), directory_service.clone());
+        super::verify_fod_hash(drv_name, output_name, expected_ca, nar_size, nar_sha256, node, &parts.build_store).await
+    }
+
+    async fn nar_hash(
+        node: &Node,
+        algorithm: HashAlgo,
+        blob_service: MemoryBlobService,
+        directory_service: RedbDirectoryService,
+    ) -> Result<NixHash, Error> {
+        let parts = crate::test_support::pipeline_store_parts(blob_service, directory_service);
+        parts
+            .build_store
+            .nar_hash(node, algorithm)
+            .await
+            .map_err(|error| Error::Store(format!("test NAR hash: {error}")))
     }
 
     fn dummy_b3() -> snix_castore::B3Digest {

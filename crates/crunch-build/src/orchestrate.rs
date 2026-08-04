@@ -20,12 +20,12 @@ use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
 use snix_build::buildservice::BuildService;
 use snix_castore::Node;
+#[cfg(test)]
 use snix_castore::blobservice::BlobService;
+#[cfg(test)]
 use snix_castore::directoryservice::DirectoryService;
-use snix_castore::import::fs::ingest_path;
-use snix_store::nar::NarCalculationService;
-use snix_store::nar::SimpleRenderer;
 use snix_store::path_info::PathInfo;
+#[cfg(test)]
 use snix_store::pathinfoservice::PathInfoService;
 use tracing::debug;
 use tracing::info;
@@ -59,22 +59,12 @@ use crate::signing::{self};
 async fn apply_input_rewrites(
     node: &Node,
     rewrites: &[(String, String)],
-    blob_service: &(impl BlobService + Clone),
-    directory_service: &(impl DirectoryService + Clone),
+    store: &crunch_store::BuildStore,
 ) -> Result<Node, Error> {
-    let mut current = node.clone();
-    for (old_placeholder, new_path) in rewrites {
-        let (rewritten, _) = crate::rewrite::rewrite_node(
-            &current,
-            old_placeholder.as_bytes(),
-            new_path.as_bytes(),
-            blob_service,
-            directory_service,
-        )
-        .await?;
-        current = rewritten;
-    }
-    Ok(current)
+    store
+        .apply_rewrites(node, rewrites)
+        .await
+        .map_err(|error| Error::Store(format!("rewriting build input paths: {error}")))
 }
 
 const DERIVATION_SUFFIX: &str = ".drv";
@@ -271,13 +261,10 @@ pub(crate) enum PrepareResult {
 /// cache, running builds, persisting results.
 ///
 /// `BServ` is the only remaining generic: the sandbox dispatch point.
-/// All store operations (blob, directory, pathinfo) go through
-/// `Arc<dyn ...>` services extracted from constructor args or a
-/// `StoreHandle`.
+/// Build storage and action-result operations use concrete capability values.
 pub struct Builder<BServ> {
-    /// All store operations (blob, directory, pathinfo, cache, export,
-    /// session caches, CA mappings) go through the StoreHandle.
-    pub(crate) store: crunch_store::StoreHandle,
+    pub(crate) store: crunch_store::BuildStore,
+    action_results: crunch_store::ActionResultPort,
     build_service: Arc<BServ>,
     /// Signing keypair — every PathInfo gets signed before persistence.
     keypair: KeyPair,
@@ -298,11 +285,9 @@ pub struct Builder<BServ> {
 impl<BServ> Builder<BServ>
 where BServ: BuildService + 'static
 {
-    /// Create a Builder from individual services.
-    ///
-    /// Accepts any types that implement the service traits. Internally
-    /// wraps them in `Arc<dyn ...>` and constructs a StoreHandle.
-    #[allow(tigerstyle::too_many_parameters)] // constructor: services + config; already groups services into StoreHandleServices internally
+    /// Create a builder from individual services for focused compatibility tests.
+    #[cfg(test)]
+    #[allow(tigerstyle::too_many_parameters)]
     pub fn new<BS, DS, PIS>(
         blob_service: BS,
         directory_service: DS,
@@ -333,29 +318,20 @@ where BServ: BuildService + 'static
             },
             store_dir.to_string(),
         );
-        Self {
-            store,
-            build_service: Arc::new(build_service),
+        Self::from_store_parts(
+            store.into_builder_store_parts(),
+            build_service,
             keypair,
             trusted_keys,
             trust_unsigned,
             verbose,
-            hermeticity_mode: HermeticityMode::Practical,
-            hermeticity_audit_events: Vec::new(),
-            build_environment_reports: Vec::new(),
-            network_policy_reports: Vec::new(),
-            action_result_reports: Vec::new(),
-            source_closure_cache: HashMap::new(),
-            root_retention_source: None,
-        }
+        )
     }
 
-    /// Create a Builder with a state directory for persistent CA mappings
-    /// and an optional remote PathInfoService for binary cache substitution.
-    ///
-    /// Accepts pre-wrapped `Arc<dyn ...>` services (e.g., from a StoreHandle).
+    /// Create a builder from explicit services for focused compatibility tests.
+    #[cfg(test)]
     #[allow(clippy::too_many_arguments)]
-    #[allow(tigerstyle::too_many_parameters)] // constructor: services + config; already groups services into StoreHandleServices internally
+    #[allow(tigerstyle::too_many_parameters)]
     pub fn with_state_dir(
         blob_service: Arc<dyn BlobService>,
         directory_service: Arc<dyn DirectoryService>,
@@ -371,39 +347,32 @@ where BServ: BuildService + 'static
         verbose: bool,
     ) -> Self {
         let output_dir_str = output_dir.to_str().unwrap_or(store_dir).to_string();
-        let sd = state_dir.unwrap_or_else(|| PathBuf::from("/tmp/crunch-no-state"));
+        let state_dir = state_dir.unwrap_or_else(|| PathBuf::from("/tmp/crunch-no-state"));
         let store = crunch_store::StoreHandle::from_services_with_store_dir(
             crunch_store::StoreHandleServices {
                 blob_service,
                 directory_service,
                 pathinfo_service,
                 remote_pathinfo,
-                state_dir: sd,
+                state_dir,
                 output_dir_str,
                 publishers: Vec::new(),
             },
             store_dir.to_string(),
         );
-        Self {
-            store,
-            build_service: Arc::new(build_service),
+        Self::from_store_parts(
+            store.into_builder_store_parts(),
+            build_service,
             keypair,
             trusted_keys,
             trust_unsigned,
             verbose,
-            hermeticity_mode: HermeticityMode::Practical,
-            hermeticity_audit_events: Vec::new(),
-            build_environment_reports: Vec::new(),
-            network_policy_reports: Vec::new(),
-            action_result_reports: Vec::new(),
-            source_closure_cache: HashMap::new(),
-            root_retention_source: None,
-        }
+        )
     }
 
     #[allow(tigerstyle::too_many_parameters)]
-    pub fn from_store(
-        store: crunch_store::StoreHandle,
+    pub fn from_store_parts(
+        store_parts: crunch_store::BuilderStoreParts,
         build_service: BServ,
         keypair: KeyPair,
         trusted_keys: Vec<VerifyingKey>,
@@ -411,7 +380,8 @@ where BServ: BuildService + 'static
         verbose: bool,
     ) -> Self {
         Self {
-            store,
+            store: store_parts.build_store,
+            action_results: store_parts.action_results,
             build_service: Arc::new(build_service),
             keypair,
             trusted_keys,
@@ -438,10 +408,6 @@ where BServ: BuildService + 'static
     /// The logical store directory prefix.
     pub fn store_dir(&self) -> &str {
         self.store.store_dir()
-    }
-
-    pub fn store_handle(&self) -> &crunch_store::StoreHandle {
-        &self.store
     }
 
     pub fn set_hermeticity_mode(&mut self, hermeticity_mode: HermeticityMode) {
@@ -481,39 +447,11 @@ where BServ: BuildService + 'static
     /// Used by the Worker to read `.drv` files from build outputs
     /// (dynamic derivation detection).
     pub(crate) async fn read_blob(&self, node: &snix_castore::Node) -> Result<Vec<u8>, Error> {
-        use tokio::io::AsyncReadExt;
-
-        let digest = match node {
-            snix_castore::Node::File { digest, size, .. } => {
-                // Tiger Style: fixed limit.
-                const MAX_BLOB_READ: u64 = 8_388_608;
-                if *size > MAX_BLOB_READ {
-                    return Err(Error::Store(format!("blob too large to read: {size} bytes (limit: {MAX_BLOB_READ})")));
-                }
-                *digest
-            }
-            other => {
-                return Err(Error::Store(format!("read_blob called on non-file node: {other:?}")));
-            }
-        };
-
-        let mut reader = self
-            .store
-            .blob_service()
-            .open_read(&digest)
+        const MAX_BLOB_READ_BYTES: u64 = 8_388_608;
+        self.store
+            .read_file_node(node, MAX_BLOB_READ_BYTES)
             .await
-            .map_err(|e| Error::Store(format!("opening blob: {e}")))?
-            .ok_or_else(|| {
-                Error::Store(format!(
-                    "blob not found in castore: {}",
-                    data_encoding::HEXLOWER.encode(digest.as_slice())
-                ))
-            })?;
-
-        let mut buf = Vec::new();
-        reader.read_to_end(&mut buf).await.map_err(|e| Error::Store(format!("reading blob: {e}")))?;
-
-        Ok(buf)
+            .map_err(|error| Error::Store(format!("reading build blob: {error}")))
     }
 
     /// Prefer `build_all` when building multiple roots.
@@ -819,32 +757,22 @@ where BServ: BuildService + 'static
                 output: output_name.clone(),
             })?;
 
-            let mut node = apply_input_rewrites(
-                &build_output.node,
-                &prepared.input_rewrites,
-                &self.store.blob_service(),
-                &self.store.directory_service(),
-            )
-            .await?;
+            let mut node = apply_input_rewrites(&build_output.node, &prepared.input_rewrites, &self.store).await?;
 
             for plan in ca_plans {
                 if plan.provisional.is_empty() {
                     continue;
                 }
-                let (rewritten, _) = crate::rewrite::rewrite_node(
-                    &node,
-                    plan.provisional.as_bytes(),
-                    &plan.marker,
-                    &self.store.blob_service(),
-                    &self.store.directory_service(),
-                )
-                .await?;
+                let (rewritten, _) = self
+                    .store
+                    .rewrite_node(&node, plan.provisional.as_bytes(), &plan.marker)
+                    .await
+                    .map_err(|error| Error::Store(format!("rewriting CA marker: {error}")))?;
                 node = rewritten;
             }
 
-            let marker_nar_renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
             let (nar_size, nar_sha256) =
-                marker_nar_renderer.calculate_nar(&node).await.map_err(|e| Error::NarCalculation(e.to_string()))?;
+                self.store.calculate_nar(&node).await.map_err(|error| Error::NarCalculation(error.to_string()))?;
 
             let plan = ca_plans
                 .iter()
@@ -950,9 +878,11 @@ where BServ: BuildService + 'static
         marker_nar_size: u64,
         marker_nar_sha256: [u8; 32],
     ) -> Result<FinalCaPathInfoFacts, Error> {
-        let renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
-        let (final_nar_size, final_nar_sha256) =
-            renderer.calculate_nar(final_node).await.map_err(|error| Error::NarCalculation(error.to_string()))?;
+        let (final_nar_size, final_nar_sha256) = self
+            .store
+            .calculate_nar(final_node)
+            .await
+            .map_err(|error| Error::NarCalculation(error.to_string()))?;
         Ok(final_ca_path_info_facts(marker_nar_size, marker_nar_sha256, final_nar_size, final_nar_sha256))
     }
 
@@ -961,14 +891,11 @@ where BServ: BuildService + 'static
         let mut final_node = node.clone();
         for (marker, final_bytes) in final_rewrites {
             if marker.len() == final_bytes.len() {
-                let (rewritten, _) = crate::rewrite::rewrite_node(
-                    &final_node,
-                    marker,
-                    final_bytes,
-                    &self.store.blob_service(),
-                    &self.store.directory_service(),
-                )
-                .await?;
+                let (rewritten, _) = self
+                    .store
+                    .rewrite_node(&final_node, marker, final_bytes)
+                    .await
+                    .map_err(|error| Error::Store(format!("rewriting final CA marker: {error}")))?;
                 final_node = rewritten;
             }
         }
@@ -1016,17 +943,11 @@ where BServ: BuildService + 'static
             return Ok(cached_paths.clone());
         }
 
-        let remote_ref = self.store.remote_pathinfo();
-        let remote_dyn: Option<&dyn snix_store::pathinfoservice::PathInfoService> = remote_ref.as_deref();
-        let closure = crunch_store::resolve_closure(
-            input_path,
-            self.store.pathinfo_service().as_ref(),
-            remote_dyn,
-            self.closure_fallback_mode(),
-            self.store.store_dir(),
-        )
-        .await
-        .map_err(|e| Error::Store(format!("closure resolution failed for {}: {e}", input_path)))?;
+        let closure = self
+            .store
+            .resolve_closure(input_path, self.closure_fallback_mode())
+            .await
+            .map_err(|error| Error::Store(format!("closure resolution failed for {input_path}: {error}")))?;
         self.hermeticity_audit_events
             .extend(closure.audit_events.into_iter().map(HermeticityAuditEvent::from));
         assert!(!closure.paths.is_empty(), "closure must contain at least the root input path");
@@ -1064,11 +985,9 @@ where BServ: BuildService + 'static
             return Ok(None);
         }
 
-        let node =
-            ingest_path::<_, _, _, &[u8]>(self.store.blob_service(), self.store.directory_service(), host_path, None)
-                .await
-                .map_err(|e| Error::Sandbox(std::io::Error::other(format!("failed to ingest input {}: {e}", path))))?;
-        self.store.output_nodes.insert(path.clone(), node.clone());
+        let node = self.store.ingest_build_input(path.clone(), host_path).await.map_err(|error| {
+            Error::Sandbox(std::io::Error::other(format!("failed to ingest input {path}: {error}")))
+        })?;
         Ok(Some(node))
     }
 
@@ -1086,7 +1005,7 @@ where BServ: BuildService + 'static
 
         for source_path in &derivation.input_sources {
             let physical_source_path = source_path.to_absolute_path_with_prefix(self.store.output_dir_str());
-            let disposition = source_closure_disposition(self.store.built_outputs.contains_key(&physical_source_path));
+            let disposition = source_closure_disposition(self.store.has_built_output(&physical_source_path));
             if disposition == SourceClosureDisposition::ReuseCurrentSessionOutput {
                 debug!(path = %source_path, "skipping closure resolution for current-session output");
                 continue;
@@ -1191,13 +1110,7 @@ where BServ: BuildService + 'static
         artifact_provenance: &ArtifactProvenance,
         is_root: bool,
     ) -> Result<PathInfo, Error> {
-        let working_node = apply_input_rewrites(
-            &build_output.node,
-            input_rewrites,
-            &self.store.blob_service(),
-            &self.store.directory_service(),
-        )
-        .await?;
+        let working_node = apply_input_rewrites(&build_output.node, input_rewrites, &self.store).await?;
         let resolved = self
             .resolve_output_node(drv_path, drv_name, output_name, output, &working_node, derivation, known_paths, is_ca)
             .await?;
@@ -1255,8 +1168,8 @@ where BServ: BuildService + 'static
                 drv_name: drv_name.to_string(),
             })?
             .clone();
-        let final_nar_renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
-        let (final_nar_size, final_nar_sha256) = final_nar_renderer
+        let (final_nar_size, final_nar_sha256) = self
+            .store
             .calculate_nar(working_node)
             .await
             .map_err(|error| Error::NarCalculation(error.to_string()))?;
@@ -1283,17 +1196,7 @@ where BServ: BuildService + 'static
         let Some(ca_hash) = &output.ca_hash else {
             return Ok(());
         };
-        verify_fod_hash(
-            drv_name,
-            output_name,
-            ca_hash,
-            nar_size,
-            nar_sha256,
-            final_node,
-            &self.store.blob_service(),
-            &self.store.directory_service(),
-        )
-        .await
+        verify_fod_hash(drv_name, output_name, ca_hash, nar_size, nar_sha256, final_node, &self.store).await
     }
 
     /// Compute the final output path and node for a CA derivation output.
@@ -1323,18 +1226,15 @@ where BServ: BuildService + 'static
         let marker = crate::ca_plan::generate_ca_marker(output_name, provisional_bytes.len());
 
         // 2. Replace provisional with zero marker.
-        let (marked_node, _has_self_refs) = crate::rewrite::rewrite_node(
-            working_node,
-            provisional_bytes,
-            &marker,
-            &self.store.blob_service(),
-            &self.store.directory_service(),
-        )
-        .await?;
+        let (marked_node, _has_self_refs) = self
+            .store
+            .rewrite_node(working_node, provisional_bytes, &marker)
+            .await
+            .map_err(|error| Error::Store(format!("rewriting provisional CA path: {error}")))?;
 
         // 3. Compute NAR hash of marker-replaced content (canonical form).
-        let marker_nar_renderer = SimpleRenderer::new(self.store.blob_service(), self.store.directory_service());
-        let (marker_nar_size, marker_nar_sha256) = marker_nar_renderer
+        let (marker_nar_size, marker_nar_sha256) = self
+            .store
             .calculate_nar(&marked_node)
             .await
             .map_err(|error| Error::NarCalculation(error.to_string()))?;
@@ -1347,14 +1247,11 @@ where BServ: BuildService + 'static
         let final_abs = ca_path.to_absolute_path_with_prefix(self.store.store_dir());
         let final_bytes = final_abs.as_bytes();
         let final_node = if marker.len() == final_bytes.len() {
-            let (node, _) = crate::rewrite::rewrite_node(
-                &marked_node,
-                &marker,
-                final_bytes,
-                &self.store.blob_service(),
-                &self.store.directory_service(),
-            )
-            .await?;
+            let (node, _) = self
+                .store
+                .rewrite_node(&marked_node, &marker, final_bytes)
+                .await
+                .map_err(|error| Error::Store(format!("rewriting final CA path: {error}")))?;
             node
         } else {
             marked_node
@@ -1391,7 +1288,7 @@ where BServ: BuildService + 'static
         Ok(())
     }
 
-    /// Build PathInfo, sign it, then delegate persistence to the StoreHandle.
+    /// Build PathInfo, sign it, then delegate persistence to `BuildStore`.
     #[allow(clippy::too_many_arguments)]
     #[allow(tigerstyle::too_many_parameters)] // PathInfo assembly threading hash + reference context
     async fn persist_and_export_output(
@@ -1494,7 +1391,7 @@ where BServ: BuildService + 'static
 
     async fn collect_shared_action_candidates(&self, derivation: &Derivation) -> Result<SharedActionCandidates, Error> {
         let action_ref = action_ref_for_derivation(derivation, self.store.store_dir());
-        let discovery = self.store.discover_action_results(&action_ref).await;
+        let discovery = self.action_results.discover(&action_ref).await;
         let candidate_slots = discovery.lookups.iter().try_fold(0usize, |count, lookup| {
             count
                 .checked_add(lookup.records.len())
@@ -1506,7 +1403,7 @@ where BServ: BuildService + 'static
         for lookup in discovery.lookups {
             for signed_record in lookup.records {
                 let result_ref = signed_record.record.result_ref.clone();
-                let probe = self.store.probe_action_result_outputs(&signed_record.record).await.ok();
+                let probe = self.action_results.probe_outputs(&signed_record.record).await.ok();
                 let facts = candidate_admission_facts(
                     lookup.source_id.clone(),
                     lookup.source_class.clone(),
@@ -1566,7 +1463,7 @@ where BServ: BuildService + 'static
                 return;
             }
         };
-        let diagnostics = match self.store.publish_local_action_result(&signed).await {
+        let diagnostics = match self.action_results.publish_local(&signed).await {
             Ok(_) => Vec::new(),
             Err(error) => {
                 tracing::warn!(result_ref = %signed.record.result_ref, error = %error, "shared action-result publication failed");
@@ -1801,6 +1698,14 @@ mod tests {
 
     fn tmp_ds() -> RedbDirectoryService {
         RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default()).unwrap()
+    }
+
+    fn test_fetch_build_service(
+        blob_service: MemoryBlobService,
+        directory_service: RedbDirectoryService,
+    ) -> crate::fetch_build_service::FetchBuildService {
+        let parts = crate::test_support::pipeline_store_parts(blob_service, directory_service);
+        crate::fetch_build_service::FetchBuildService::new(parts.build_service_store)
     }
 
     /// Write bytes into the blob service and return the resulting
@@ -2399,9 +2304,9 @@ mod tests {
         );
         builder.set_hermeticity_mode(HermeticityMode::Strict);
         let source_path_info = make_source_path_info(&source, vec![]);
-        builder.store.output_nodes.insert(source.clone(), source_path_info.node.clone());
+        builder.store.insert_output_node(source.clone(), source_path_info.node.clone());
         let physical_source_path = source.to_absolute_path_with_prefix(builder.store.output_dir_str());
-        builder.store.built_outputs.insert(physical_source_path, source_path_info);
+        builder.store.insert_built_output(physical_source_path, source_path_info);
         let mut registry = DerivationRegistry::default();
         let (_drv_path, mut derivation) = build_and_register("current-session-source-consumer", &[], &mut registry);
         derivation.input_sources.insert(source.clone());
@@ -2461,7 +2366,7 @@ mod tests {
         let sandbox_inputs = builder.collect_sandbox_inputs(&root_drv, &kp, &[]).await.unwrap();
 
         assert_eq!(sandbox_inputs.get(&dep_output_path), Some(&cached_node));
-        assert_eq!(builder.store.output_nodes.get(&dep_output_path), Some(&cached_node));
+        assert_eq!(builder.store.output_node(&dep_output_path), Some(&cached_node));
     }
 
     #[tokio::test]
@@ -3137,8 +3042,8 @@ mod tests {
         let trusted_keys = test_trusted_keys();
         let (producer_service, producer_calls) = MockBuildService::new(producer_blobs.clone());
         let mut producer = Builder::with_state_dir(
-            Arc::new(producer_blobs),
-            Arc::new(producer_directories),
+            Arc::new(producer_blobs.clone()),
+            Arc::new(producer_directories.clone()),
             producer_service,
             Arc::new(test_pis()),
             producer_output.path().to_path_buf(),
@@ -3156,8 +3061,9 @@ mod tests {
         assert!(producer_derivation.outputs["out"].path.is_some());
         let producer_outcome = producer.build(&drv_path, &mut producer_registry).await.unwrap();
         let output_infos = producer_outcome.outputs.values().cloned().collect::<Vec<_>>();
+        let cache_export_shell = crate::test_support::store_handle(producer_blobs, producer_directories);
         crunch_store::export_paths_to_cache_dir(
-            producer.store_handle(),
+            &cache_export_shell,
             &output_infos,
             cache_dir.path(),
             &crunch_store::PushOptions { trust_unsigned: false },
@@ -3184,8 +3090,14 @@ mod tests {
         );
         store_config.remote_cache_urls = vec![format!("{}?trusted_public_keys[0]={trusted_token}", server.base_url)];
         let consumer_store = crunch_store::StoreHandle::open(store_config).await.unwrap();
-        let mut consumer =
-            Builder::from_store(consumer_store, PanicSandboxService, keypair, trusted_keys, false, false);
+        let mut consumer = Builder::from_store_parts(
+            consumer_store.into_builder_store_parts(),
+            PanicSandboxService,
+            keypair,
+            trusted_keys,
+            false,
+            false,
+        );
         let mut consumer_registry = DerivationRegistry::default();
         let (consumer_drv_path, consumer_derivation) =
             build_and_register("http-shared-input-addressed", &[], &mut consumer_registry);
@@ -3284,8 +3196,7 @@ mod tests {
         let final_bytes = builder.read_blob(&path_info.node).await.unwrap();
         let final_path = path_info.store_path.to_absolute_path();
         assert_eq!(final_bytes, final_path.as_bytes());
-        let renderer = SimpleRenderer::new(builder.store.blob_service(), builder.store.directory_service());
-        let (final_nar_size, final_nar_sha256) = renderer.calculate_nar(&path_info.node).await.unwrap();
+        let (final_nar_size, final_nar_sha256) = builder.store.calculate_nar(&path_info.node).await.unwrap();
         let Some(nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(path_identity_hash))) =
             &path_info.ca
         else {
@@ -3297,7 +3208,8 @@ mod tests {
         assert_eq!(path_info.nar_sha256, final_nar_sha256);
         assert_ne!(path_identity_hash, &final_nar_sha256);
         assert!(path_info.store_path.to_absolute_path().starts_with("/nix/store/"));
-        assert_builder_path_info_archive_round_trip(&builder.store, path_info).await;
+        let archive_shell = crate::test_support::store_handle(bs, ds);
+        assert_builder_path_info_archive_round_trip(&archive_shell, path_info).await;
     }
 
     // r[verify store_transports.archive_export_closure]
@@ -3326,13 +3238,12 @@ mod tests {
         let (drv_path, _) = build_and_register_multi_ca("multi-ca-self-reference", &output_names, &mut known_paths);
 
         let outcome = builder.build(&drv_path, &mut known_paths).await.unwrap();
-        let renderer = SimpleRenderer::new(builder.store.blob_service(), builder.store.directory_service());
 
         assert_eq!(outcome.outputs.len(), output_names.len());
         for path_info in outcome.outputs.values() {
             let final_bytes = builder.read_blob(&path_info.node).await.unwrap();
             let final_path = path_info.store_path.to_absolute_path();
-            let (final_nar_size, final_nar_sha256) = renderer.calculate_nar(&path_info.node).await.unwrap();
+            let (final_nar_size, final_nar_sha256) = builder.store.calculate_nar(&path_info.node).await.unwrap();
             let Some(nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(path_identity_hash))) =
                 &path_info.ca
             else {
@@ -3551,7 +3462,7 @@ mod tests {
             .await
             .unwrap();
         assert!(inputs.contains_key(&closure_source), "transitive source must become a sandbox input");
-        assert!(builder.store.output_nodes.contains_key(&closure_source), "transitive source must be ingested");
+        assert!(builder.store.output_node(&closure_source).is_some(), "transitive source must be ingested");
 
         let missing_source =
             make_source_path("missing-transitive-custom-prefix-source", MISSING_CLOSURE_SOURCE_DIGEST_BYTE);
@@ -4730,6 +4641,55 @@ mod tests {
         }
     }
 
+    fn restricted_fetch_test_builder(
+        blob_service: MemoryBlobService,
+        directory_service: RedbDirectoryService,
+        output_dir: &Path,
+    ) -> (
+        Builder<
+            crate::dispatch_build_service::DispatchBuildService<
+                crate::fetch_build_service::FetchBuildService,
+                PanicSandboxService,
+            >,
+        >,
+        crunch_store::OutputLookup,
+        crunch_store::RootRegistry,
+    ) {
+        let store = crunch_store::StoreHandle::from_services_with_store_dir(
+            crunch_store::StoreHandleServices {
+                blob_service: Arc::new(blob_service),
+                directory_service: Arc::new(directory_service),
+                pathinfo_service: Arc::new(test_pis()),
+                remote_pathinfo: None,
+                state_dir: output_dir.join("state"),
+                output_dir_str: output_dir.to_string_lossy().into_owned(),
+                publishers: Vec::new(),
+            },
+            nix_compat::store_path::STORE_DIR.to_string(),
+        );
+        let crunch_store::PipelineStoreParts {
+            build_store,
+            action_results,
+            build_service_store,
+            output_lookup,
+            root_registry,
+        } = store.into_pipeline_store_parts();
+        let fetch_service = crate::fetch_build_service::FetchBuildService::new(build_service_store);
+        let dispatch = crate::dispatch_build_service::DispatchBuildService::new(fetch_service, PanicSandboxService);
+        let builder = Builder::from_store_parts(
+            crunch_store::BuilderStoreParts {
+                build_store,
+                action_results,
+            },
+            dispatch,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        (builder, output_lookup, root_registry)
+    }
+
     #[tokio::test]
     async fn fetcher_through_dispatch_service_hash_match() {
         use nix_compat::nixhash::CAHash;
@@ -4750,7 +4710,7 @@ mod tests {
         // DispatchBuildService wrapping FetchBuildService + PanicSandboxService.
         // If DispatchBuildService ever routes the fetcher to the sandbox,
         // PanicSandboxService will panic and fail the test.
-        let fetch_svc = crate::fetch_build_service::FetchBuildService::new(bs.clone(), ds.clone());
+        let fetch_svc = test_fetch_build_service(bs.clone(), ds.clone());
         let dispatch = crate::dispatch_build_service::DispatchBuildService::new(fetch_svc, PanicSandboxService);
 
         let output_dir = tempfile::tempdir().unwrap();
@@ -4807,23 +4767,8 @@ mod tests {
 
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
-
-        let fetch_svc = crate::fetch_build_service::FetchBuildService::new(bs.clone(), ds.clone());
-        let dispatch = crate::dispatch_build_service::DispatchBuildService::new(fetch_svc, PanicSandboxService);
-
         let output_dir = tempfile::tempdir().unwrap();
-        let mut builder = Builder::new(
-            bs,
-            ds,
-            dispatch,
-            test_pis(),
-            output_dir.path().to_path_buf(),
-            nix_compat::store_path::STORE_DIR,
-            test_keypair(),
-            test_trusted_keys(),
-            true,
-            false,
-        );
+        let (mut builder, output_lookup, root_registry) = restricted_fetch_test_builder(bs, ds, output_dir.path());
 
         let mut kp = DerivationRegistry::default();
         let (drv_path, drv) = make_fetcher_drv_for_build("fetch-hash-mismatch", &url, Some(wrong_hash), &mut kp);
@@ -4855,17 +4800,23 @@ mod tests {
         // Verify actual hash is reported.
         assert!(err_str.contains(", got sha256-"), "error must report actual hash in SRI format, got: {err_str}");
 
-        // Verify output was NOT persisted: verify_fod_hash returns Err
-        // before persist_and_export_output runs in process_output,
-        // so no PathInfo exists for the bad content. Check via pathinfo.
         let out_path = drv.outputs["out"].path.as_ref().unwrap();
-        let pi = builder.store.pathinfo_service().get(*out_path.digest()).await;
-        assert!(pi.is_ok() && pi.unwrap().is_none(), "PathInfo must NOT be persisted for hash-mismatched output");
-        // Verify the output node was NOT stored in the session cache.
-        assert!(
-            !builder.store.output_nodes.contains_key(out_path),
-            "output_nodes must NOT contain the mismatched output"
-        );
+        let persisted_path_info = output_lookup.find(out_path).await.unwrap();
+        let persisted_roots = root_registry.list().unwrap();
+        let physical_output = PathBuf::from(out_path.to_absolute_path_with_prefix(output_dir.path().to_str().unwrap()));
+        let action_ref = action_ref_for_derivation(&drv, nix_compat::store_path::STORE_DIR);
+        let state_dir = output_dir.path().join("state");
+        let local_results = crunch_store::LocalActionResultStore::new(&state_dir);
+        let lookup = crunch_store::ActionResultStore::lookup(&local_results, &action_ref).await.unwrap();
+
+        assert!(builder.store.output_node(out_path).is_none(), "output_nodes must NOT contain the mismatched output");
+        assert!(persisted_path_info.is_none(), "mismatched output must not publish PathInfo");
+        assert!(!physical_output.exists(), "mismatched output bytes must not be materialized");
+        assert!(builder.store.get_artifact_attestation(out_path).await.unwrap().is_none());
+        assert!(persisted_roots.is_empty(), "mismatched output must not publish roots");
+        assert!(lookup.records.is_empty(), "mismatched output must not publish action results");
+        assert!(lookup.index.result_refs.is_empty(), "mismatched output must not publish action-result indexes");
+        assert!(!builder.take_action_result_reports().iter().any(|report| report.phase == "publication"));
     }
 
     // ── Recursive (NAR) fetcher tests ─────────────────────────────
@@ -4884,7 +4835,7 @@ mod tests {
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
 
-        let fetch_svc = crate::fetch_build_service::FetchBuildService::new(bs.clone(), ds.clone());
+        let fetch_svc = test_fetch_build_service(bs.clone(), ds.clone());
         let dispatch = crate::dispatch_build_service::DispatchBuildService::new(fetch_svc, PanicSandboxService);
 
         let output_dir = tempfile::tempdir().unwrap();
@@ -4933,23 +4884,8 @@ mod tests {
 
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
-
-        let fetch_svc = crate::fetch_build_service::FetchBuildService::new(bs.clone(), ds.clone());
-        let dispatch = crate::dispatch_build_service::DispatchBuildService::new(fetch_svc, PanicSandboxService);
-
         let output_dir = tempfile::tempdir().unwrap();
-        let mut builder = Builder::new(
-            bs,
-            ds,
-            dispatch,
-            test_pis(),
-            output_dir.path().to_path_buf(),
-            nix_compat::store_path::STORE_DIR,
-            test_keypair(),
-            test_trusted_keys(),
-            true,
-            false,
-        );
+        let (mut builder, output_lookup, root_registry) = restricted_fetch_test_builder(bs, ds, output_dir.path());
 
         let mut kp = DerivationRegistry::default();
         let (drv_path, drv) =
@@ -4970,14 +4906,25 @@ mod tests {
         assert!(err_str.contains("expected sha256-"), "must report expected NAR hash in SRI, got: {err_str}");
         assert!(err_str.contains(", got sha256-"), "must report actual NAR hash in SRI, got: {err_str}");
 
-        // No PathInfo persisted.
         let out_path = drv.outputs["out"].path.as_ref().unwrap();
-        let pi = builder.store.pathinfo_service().get(*out_path.digest()).await;
-        assert!(pi.is_ok() && pi.unwrap().is_none(), "PathInfo must NOT be persisted for NAR hash mismatch");
-        // No output node stored.
+        let persisted_path_info = output_lookup.find(out_path).await.unwrap();
+        let persisted_roots = root_registry.list().unwrap();
+        let physical_output = PathBuf::from(out_path.to_absolute_path_with_prefix(output_dir.path().to_str().unwrap()));
+        let action_ref = action_ref_for_derivation(&drv, nix_compat::store_path::STORE_DIR);
+        let state_dir = output_dir.path().join("state");
+        let local_results = crunch_store::LocalActionResultStore::new(&state_dir);
+        let lookup = crunch_store::ActionResultStore::lookup(&local_results, &action_ref).await.unwrap();
+
         assert!(
-            !builder.store.output_nodes.contains_key(out_path),
+            builder.store.output_node(out_path).is_none(),
             "output_nodes must NOT contain the mismatched recursive output"
         );
+        assert!(persisted_path_info.is_none(), "mismatched recursive output must not publish PathInfo");
+        assert!(!physical_output.exists(), "mismatched recursive output bytes must not be materialized");
+        assert!(builder.store.get_artifact_attestation(out_path).await.unwrap().is_none());
+        assert!(persisted_roots.is_empty(), "mismatched recursive output must not publish roots");
+        assert!(lookup.records.is_empty(), "mismatched recursive output must not publish action results");
+        assert!(lookup.index.result_refs.is_empty(), "mismatched output must not publish action-result indexes");
+        assert!(!builder.take_action_result_reports().iter().any(|report| report.phase == "publication"));
     }
 }

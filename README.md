@@ -141,6 +141,10 @@ changes, persistence, verification, and rollback execution. A plan records a
 bounded decision. It does not prove content correctness, provenance,
 reproducibility, release eligibility, or successful execution.
 
+Build, lookup, root, source, action-result, and administrative store authority
+use separate Rust capabilities. See
+[`docs/store-authority-capabilities.md`](docs/store-authority-capabilities.md).
+
 ## Project workflow
 
 A Mantle project uses `mantle-project.ncl`, `mantle.lock`, and generated
