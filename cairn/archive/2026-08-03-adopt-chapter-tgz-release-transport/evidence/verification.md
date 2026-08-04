@@ -120,7 +120,15 @@ cairn gate tasks adopt-chapter-tgz-release-transport --root .
 
 Result: PASS.
 
-The accepted-spec Tracey profile reached 148 of 148 existing requirements after repairing its omitted content-bound bridge. It then reported the seven active chapter requirements as dangling. This is the expected pre-sync state.
+The accepted-spec Tracey profile reached 148 of 148 existing requirements after repairing its omitted content-bound bridge. It then reported the seven active chapter requirements as dangling. This was the expected pre-sync state.
+
+Cairn sync completed with receipt `59dc5d99d10e6b236dba68b49e19265dbd123f04bd98253b918dfc3f5d5d7bd3`.
+
+After sync, Tracey passed with 155 of 155 requirements referenced.
+
+Cairn archive completed with receipt `f945dd4dfeb5b8526bccf4778698dadffc08d9fc50a241ba2080e9816f9649ca`.
+
+Post-archive `cairn validate --root .` passed. Post-archive Tracey also passed with 155 of 155 requirements referenced.
 
 ## Bounded blockers
 

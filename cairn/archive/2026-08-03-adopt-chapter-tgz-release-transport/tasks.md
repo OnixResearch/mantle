@@ -30,4 +30,4 @@
 
 - [x] [serial] V1 Run focused `crunch-release-core`, release transport, release evidence, and CLI tests with positive and negative fixtures. Save exact output in `evidence/verification.md`. r[mantle.release_provenance.chapter_transport.validation]
 - [x] [serial] V2 Run Rustfmt, focused first-party Clippy, Tiger Style, locked offline metadata, standard-reader compatibility, and `git diff --check`. r[mantle.release_provenance.chapter_transport.validation]
-- [ ] [serial] V3 Run Cairn validation, proposal, design, and tasks gates, Tracey coverage, sync, archive, post-archive validation, and the relevant Nix checks. Record exact pass or bounded blocker output. r[mantle.release_provenance.chapter_transport.validation]
+- [x] [serial] V3 Run Cairn validation, proposal, design, and tasks gates, Tracey coverage, sync, archive, post-archive validation, and the relevant Nix checks. Record exact pass or bounded blocker output. r[mantle.release_provenance.chapter_transport.validation]
