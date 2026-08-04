@@ -115,7 +115,6 @@ is NOT unit-tested (it requires a real persisted store with a signing keypair);
 only the no-cache-disabled path and the adoption-copy path are unit-tested.
 Note: `import_constructed_store_path_source` asserts one record import per
 fresh state dir, which holds for the intended fresh-staging flow.
-<<<<<<< HEAD
 
 ## Full-proof round trip attempt (same turn)
 
@@ -149,5 +148,3 @@ blocker surfaced while dogfooding; it sits in the dev-cache worktree to unblock
 the run. A full successful cold proof, and therefore a populated cache and a
 cached->adopt round trip, is not yet achieved; that still needs a valid source
 profile + independent expected digests and a full successful multi-hour run.
-=======
->>>>>>> 0eb7bd36 (Route dev store seeding through the content-addressed store service)
