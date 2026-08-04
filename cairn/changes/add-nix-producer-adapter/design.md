@@ -26,9 +26,15 @@ The contract core is pure: it validates requests, classifies outcomes, and build
 
 ### Decision: Pin and build the fix backend with Mantle
 
-**Choice:** The `fix` source tree enters as a fixed-output fetch pin that binds the upstream repository, the exact revision, and the content hash. The Zig toolchain enters as a pinned fixed-output binary distribution derivation. The `fix` binary builds inside a Mantle sandbox derivation with Zig, libcurl, libgit2, and `pkg-config` as explicit inputs. The output gets signed PathInfo and an artifact attestation.
+**Choice:** The `fix` source tree enters as a fixed-output fetch pin that binds the upstream repository, the exact revision, and the content hash. The `fix` binary builds inside a Mantle sandbox derivation with Zig, libcurl, and libgit2 as explicit inputs. The output gets signed PathInfo and an artifact attestation.
 
 **Rationale:** The `fix` backend binary must be a Mantle build product with provenance. A host-built binary would reintroduce the ambient-frontend problem one level down.
+
+### Decision: Admit two receipt-bound toolchain sources
+
+**Choice:** Toolchain inputs (Zig, libcurl, libgit2) come from exactly two admitted source classes. The first is the pinned upstream binary tarball as a fixed-output source record. The second is signed nixpkgs binary-cache closures admitted through `mantle store pull` with explicit trusted keys, mounted as declared string store-path inputs. Ambient host paths are never toolchain inputs. Receipts name the source class and mark both classes as binary trust inputs, not source-built compilers.
+
+**Rationale:** `fix` force-links libcurl and libgit2, and building that C library chain from source is a multi-rung effort that belongs to the bootstrap roadmap, not to this producer change. Signed cache substitution gives receipt-bound inputs with signature verification today. The pinned tarball remains the fallback when cache trust is unwanted. Both classes keep the build honest: every input is declared, hashed, and mounted, and nothing leaks from the host environment.
 
 ### Decision: Keep host Nix as an explicit ambient backend
 
@@ -63,7 +69,8 @@ The contract core is pure: it validates requests, classifies outcomes, and build
 ## Risks / Trade-offs
 
 - `fix` is alpha-quality and x86_64-Linux-centric. The backend must fail closed on unsupported platforms instead of falling back to host Nix.
-- A fixed-output binary Zig toolchain is a trust input, not a source-built compiler. The receipt must name it as such; source-built Zig stays a non-goal for this change.
+- The Zig toolchain and the C libraries are binary trust inputs (upstream tarball or signed nixpkgs cache artifacts), not source-built compilers. Receipts must name the source class; source-built toolchains stay a non-goal for this change.
+- Cache-substituted toolchain inputs trust the cache.nixos.org signer set. Operators that reject that trust must use the pinned-tarball source class, which trusts the ziglang.org distribution instead.
 - A second backend doubles some test matrices. Shared contract conformance fixtures keep the cost proportional to backends, not to the product of backends and cases.
 - Backend parity (same expression, two backends) can drift when Nix releases change semantics. Parity fixtures compare against recorded expectations per backend, not a claim that all backends always agree.
 

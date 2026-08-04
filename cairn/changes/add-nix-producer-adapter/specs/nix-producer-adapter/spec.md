@@ -58,21 +58,28 @@ r[nix_producer_adapter.fix_pinned_source] The `fix` backend source tree MUST ent
 
 ### Requirement: Mantle-built fix backend binary
 
-r[nix_producer_adapter.fix_mantle_built_toolchain] The `fix` backend binary MUST build from the pinned source through Mantle's ordinary derivation pipeline with the Zig toolchain and C library dependencies as explicit derivation inputs. The output MUST carry signed PathInfo and an artifact attestation, and the build MUST NOT use a host `zig`, host C libraries, or a host-built `fix` binary.
+r[nix_producer_adapter.fix_mantle_built_toolchain] The `fix` backend binary MUST build from the pinned source through Mantle's ordinary derivation pipeline with the Zig toolchain and C library dependencies as explicit derivation inputs. The output MUST carry signed PathInfo and an artifact attestation, and the build MUST NOT use ambient host toolchain paths or a host-built `fix` binary. Every toolchain input MUST be receipt-bound through one of the admitted toolchain sources: the pinned upstream binary tarball source record, or signed nixpkgs binary-cache closures admitted through `mantle store pull` with explicit trusted keys.
 
 #### Scenario: Sandboxed build succeeds
 
-- **GIVEN** the pinned `fix` source, a pinned Zig toolchain derivation, and declared libcurl, libgit2, and pkg-config inputs
+- **GIVEN** the pinned `fix` source and declared Zig, libcurl, and libgit2 inputs from admitted toolchain sources
 - **WHEN** the `fix` build derivation runs
 - **THEN** it MUST produce the `fix` binary inside the Mantle sandbox
 - **AND** the output MUST be admitted with signed PathInfo and an artifact attestation
 
-#### Scenario: Host toolchain leaks into the build
+#### Scenario: Ambient host toolchain leaks into the build
 
-- **GIVEN** a build plan that references a host `zig` path or an undeclared library
+- **GIVEN** a build plan that references an undeclared host path or a toolchain input from no admitted source
 - **WHEN** plan admission or sandbox setup runs
 - **THEN** Mantle MUST reject the plan before execution
 - **AND** the failure MUST name the undeclared input class
+
+#### Scenario: Toolchain source is receipt-bound
+
+- **GIVEN** a toolchain input admitted through signed cache substitution
+- **WHEN** the build receipt is recorded
+- **THEN** the receipt MUST name the toolchain source class and the trusted cache identity
+- **AND** it MUST mark the toolchain as a binary trust input, not a source-built compiler
 
 ### Requirement: Explicit host-Nix backend
 
