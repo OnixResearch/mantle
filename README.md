@@ -259,6 +259,10 @@ Mantle keeps build observations separate from stronger claims:
   builder, compiler, source, or dependency was correct.
 - Release verification checks the selected bundle and policy. Consumers must
   require a successful exit status and the report's final accepted disposition.
+- Optional build witnesses preserve valid individual evidence without requiring
+  quorum. Quorum applies only under an explicit positive-threshold policy.
+  Witnesses do not prove source review, compiler correctness, or broad
+  reproducibility.
 - [Content-bound requirement evidence](docs/content-bound-requirement-evidence.md)
   links selected Cairn and Valence identities to exact release evidence bytes.
 - Foreign import receipts bind the admitted graph and policy, not foreign

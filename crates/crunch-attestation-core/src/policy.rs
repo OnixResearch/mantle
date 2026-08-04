@@ -11,6 +11,7 @@ use crate::Error;
 use crate::release::BinaryDigest;
 use crate::release::BinaryDigestMatchInput;
 use crate::release::FinalClass;
+use crate::release::IndependentAgreementStatus;
 use crate::release::PolicyStatus;
 use crate::release::ReleaseAttestation;
 use crate::release::TechnicalClass;
@@ -24,11 +25,16 @@ pub const RELEASE_REVOCATIONS_SCHEMA: &str = "mantle-release-revocations-v1";
 
 const MAX_SIGNER_COUNT: u32 = 256;
 const MAX_REVOCATION_COUNT: u32 = 4_096;
+const OPTIONAL_WITNESS_MINIMUM: u32 = 0;
+const SINGLE_WITNESS_MINIMUM: u32 = 1;
+const PROFILE_REQUIRED_RELEASE_SIGNER_COUNT: u32 = 1;
+pub const POLICY_PROFILE_MAX_WITNESS_COUNT: u32 = MAX_SIGNER_COUNT;
 const INDEPENDENCE_FIELD_WITNESS_IDENTITY: &str = "witness_identity";
 const INDEPENDENCE_FIELD_SIGNER_KEY_NAME: &str = "signer_key_name";
 const INDEPENDENCE_FIELD_REBUILD_HOST_CLASS: &str = "rebuild_environment_summary.host_class";
 
 const _: () = assert!(MAX_REVOCATION_COUNT >= 1, "revocation limit must be positive");
+const _: () = assert!(POLICY_PROFILE_MAX_WITNESS_COUNT > OPTIONAL_WITNESS_MINIMUM);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum IndependenceSelector {
@@ -63,6 +69,68 @@ impl ReleasePolicy {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReleasePolicyProfile {
+    SelfProofOnly,
+    OptionalWitness,
+    SingleWitness,
+    WitnessQuorum,
+}
+
+impl ReleasePolicyProfile {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SelfProofOnly => "self-proof-only",
+            Self::OptionalWitness => "optional-witness",
+            Self::SingleWitness => "single-witness",
+            Self::WitnessQuorum => "witness-quorum",
+        }
+    }
+
+    const fn rejects_duplicate_names(self) -> bool {
+        matches!(self, Self::OptionalWitness | Self::WitnessQuorum)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReleasePolicyProfileInput {
+    pub profile: ReleasePolicyProfile,
+    pub min_matching_witnesses: Option<u32>,
+    pub independence_field: Option<String>,
+    pub trusted_release_signers: Vec<String>,
+    pub trusted_witness_identities: Vec<String>,
+}
+
+pub fn build_release_policy_profile(input: ReleasePolicyProfileInput) -> Result<ReleasePolicy, Error> {
+    assert!(!input.profile.as_str().is_empty(), "policy profile name must not be empty");
+    let is_duplicate_rejection_required = input.profile.rejects_duplicate_names();
+    let trusted_release_signers = normalize_profile_names(
+        input.trusted_release_signers,
+        "trusted_release_signers",
+        PROFILE_REQUIRED_RELEASE_SIGNER_COUNT,
+        is_duplicate_rejection_required,
+    )?;
+    let trusted_witness_identities = normalize_profile_names(
+        input.trusted_witness_identities,
+        "trusted_witness_identities",
+        OPTIONAL_WITNESS_MINIMUM,
+        is_duplicate_rejection_required,
+    )?;
+    let witness_count = count_profile_values(&trusted_witness_identities, "trusted_witness_identities")?;
+    let (min_matching_witnesses, independence_field) =
+        profile_policy_terms(input.profile, input.min_matching_witnesses, input.independence_field, witness_count)?;
+    let policy = ReleasePolicy::new(
+        min_matching_witnesses,
+        independence_field,
+        trusted_release_signers,
+        trusted_witness_identities,
+    );
+    validate_policy(&policy)?;
+    assert!(policy.trusted_release_signers.windows(2).all(|window| window[0] < window[1]));
+    assert!(policy.trusted_witness_signers.windows(2).all(|window| window[0] < window[1]));
+    Ok(policy)
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ReleaseRevocations {
     pub schema: String,
@@ -94,6 +162,7 @@ pub struct ValidatedWitness {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PolicyEvaluation {
     pub trust_tier: TrustTier,
+    pub witness_quorum_status: IndependentAgreementStatus,
     pub matching_witness_count: u32,
     pub independent_witness_identities: u32,
     pub revoked_witness_count: u32,
@@ -161,17 +230,199 @@ pub fn evaluate_policy(input: PolicyEvaluationInput) -> Result<PolicyEvaluation,
         (PolicyStatus::Satisfied, None)
     };
 
+    let witness_quorum_status = classify_witness_quorum(input.policy.min_matching_witnesses, policy_status);
+    let final_class = resolve_witness_final_class(technical_class, witness_quorum_status);
+    if witness_quorum_status == IndependentAgreementStatus::NotRequired {
+        assert_ne!(final_class, FinalClass::QuorumSatisfied, "optional witness evidence must not claim quorum");
+    }
+
     Ok(PolicyEvaluation {
         trust_tier: TrustTier {
             technical_class,
             policy_status,
-            final_class: FinalClass::resolve(technical_class, policy_status),
+            final_class,
         },
+        witness_quorum_status,
         matching_witness_count: matching_count,
         independent_witness_identities: distinct_identities,
         revoked_witness_count: revoked_count,
         policy_failure_reason: failure_reason,
     })
+}
+
+fn normalize_profile_names(
+    requested_values: Vec<String>,
+    field: &'static str,
+    required_count: u32,
+    reject_duplicates: bool,
+) -> Result<Vec<String>, Error> {
+    let requested_count = count_profile_values(&requested_values, field)?;
+    let mut normalized_values = BTreeSet::new();
+    for requested_value in requested_values {
+        let normalized = requested_value.trim();
+        if normalized.is_empty() {
+            return Err(Error::EmptyField {
+                field: field.to_string(),
+            });
+        }
+        if normalized.chars().any(char::is_control) {
+            return Err(Error::PolicyNameContainsControlCharacter {
+                field: field.to_string(),
+            });
+        }
+        let value = normalized.to_string();
+        let was_inserted = normalized_values.insert(value.clone());
+        if !was_inserted && reject_duplicates {
+            return Err(Error::DuplicatePolicyName {
+                field: field.to_string(),
+                value,
+            });
+        }
+    }
+    let normalized = normalized_values.into_iter().collect::<Vec<_>>();
+    let normalized_count = count_profile_values(&normalized, field)?;
+    if normalized_count < required_count {
+        return Err(Error::InsufficientPolicyValues {
+            field: field.to_string(),
+            required: required_count,
+            actual: normalized_count,
+        });
+    }
+    assert!(normalized_count <= requested_count, "normalization must not add policy values");
+    assert!(normalized.windows(2).all(|window| window[0] < window[1]));
+    Ok(normalized)
+}
+
+fn count_profile_values(values: &[String], field: &'static str) -> Result<u32, Error> {
+    let actual = count_with_overflow_marker(values.len(), POLICY_PROFILE_MAX_WITNESS_COUNT);
+    if actual > POLICY_PROFILE_MAX_WITNESS_COUNT {
+        return Err(Error::CollectionTooLarge {
+            limit: POLICY_PROFILE_MAX_WITNESS_COUNT,
+            actual,
+        });
+    }
+    assert!(actual <= POLICY_PROFILE_MAX_WITNESS_COUNT, "profile value count must fit the limit");
+    assert!(!field.is_empty(), "profile field name must not be empty");
+    Ok(actual)
+}
+
+fn profile_policy_terms(
+    profile: ReleasePolicyProfile,
+    requested_minimum: Option<u32>,
+    requested_independence_field: Option<String>,
+    witness_count: u32,
+) -> Result<(u32, String), Error> {
+    match profile {
+        ReleasePolicyProfile::SelfProofOnly => {
+            reject_profile_parameter(profile, "min_matching_witnesses", requested_minimum.is_some())?;
+            reject_profile_parameter(profile, "independence_field", requested_independence_field.is_some())?;
+            reject_profile_parameter(profile, "trusted_witness_identities", witness_count > 0)?;
+            Ok((OPTIONAL_WITNESS_MINIMUM, INDEPENDENCE_FIELD_WITNESS_IDENTITY.to_string()))
+        }
+        ReleasePolicyProfile::OptionalWitness => {
+            reject_profile_parameter(profile, "min_matching_witnesses", requested_minimum.is_some())?;
+            let field = optional_profile_independence_field(requested_independence_field)?;
+            Ok((OPTIONAL_WITNESS_MINIMUM, field))
+        }
+        ReleasePolicyProfile::SingleWitness => {
+            reject_profile_parameter(profile, "min_matching_witnesses", requested_minimum.is_some())?;
+            reject_profile_parameter(profile, "independence_field", requested_independence_field.is_some())?;
+            require_witness_count(WitnessCountRequirement {
+                actual: witness_count,
+                required: SINGLE_WITNESS_MINIMUM,
+            })?;
+            Ok((SINGLE_WITNESS_MINIMUM, INDEPENDENCE_FIELD_WITNESS_IDENTITY.to_string()))
+        }
+        ReleasePolicyProfile::WitnessQuorum => {
+            let minimum = requested_minimum.ok_or_else(|| Error::MissingPolicyParameter {
+                profile: profile.as_str().to_string(),
+                parameter: "min_matching_witnesses".to_string(),
+            })?;
+            validate_profile_threshold(minimum)?;
+            require_witness_count(WitnessCountRequirement {
+                actual: witness_count,
+                required: minimum,
+            })?;
+            let field = requested_independence_field.ok_or_else(|| Error::MissingPolicyParameter {
+                profile: profile.as_str().to_string(),
+                parameter: "independence_field".to_string(),
+            })?;
+            parse_independence_selector(&field)?;
+            Ok((minimum, field))
+        }
+    }
+}
+
+fn reject_profile_parameter(
+    profile: ReleasePolicyProfile,
+    parameter: &'static str,
+    is_present: bool,
+) -> Result<(), Error> {
+    if is_present {
+        return Err(Error::UnexpectedPolicyParameter {
+            profile: profile.as_str().to_string(),
+            parameter: parameter.to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn optional_profile_independence_field(requested: Option<String>) -> Result<String, Error> {
+    let field = requested.unwrap_or_else(|| INDEPENDENCE_FIELD_WITNESS_IDENTITY.to_string());
+    parse_independence_selector(&field)?;
+    Ok(field)
+}
+
+fn validate_profile_threshold(minimum: u32) -> Result<(), Error> {
+    if minimum == OPTIONAL_WITNESS_MINIMUM || minimum > POLICY_PROFILE_MAX_WITNESS_COUNT {
+        return Err(Error::InvalidPolicyThreshold {
+            minimum: SINGLE_WITNESS_MINIMUM,
+            maximum: POLICY_PROFILE_MAX_WITNESS_COUNT,
+            actual: minimum,
+        });
+    }
+    Ok(())
+}
+
+struct WitnessCountRequirement {
+    actual: u32,
+    required: u32,
+}
+
+fn require_witness_count(requirement: WitnessCountRequirement) -> Result<(), Error> {
+    if requirement.actual < requirement.required {
+        return Err(Error::InsufficientPolicyValues {
+            field: "trusted_witness_identities".to_string(),
+            required: requirement.required,
+            actual: requirement.actual,
+        });
+    }
+    Ok(())
+}
+
+fn classify_witness_quorum(required: u32, policy_status: PolicyStatus) -> IndependentAgreementStatus {
+    if required == OPTIONAL_WITNESS_MINIMUM {
+        return IndependentAgreementStatus::NotRequired;
+    }
+    if policy_status == PolicyStatus::Satisfied {
+        IndependentAgreementStatus::Satisfied
+    } else {
+        IndependentAgreementStatus::Insufficient
+    }
+}
+
+fn resolve_witness_final_class(
+    technical_class: TechnicalClass,
+    quorum_status: IndependentAgreementStatus,
+) -> FinalClass {
+    if quorum_status == IndependentAgreementStatus::Satisfied {
+        return FinalClass::QuorumSatisfied;
+    }
+    match technical_class {
+        TechnicalClass::BundleConsistent => FinalClass::BundleConsistent,
+        TechnicalClass::SelfProofValid => FinalClass::SelfProofValid,
+        TechnicalClass::ExternalWitnessMatch => FinalClass::ExternalWitnessMatch,
+    }
 }
 
 fn filter_active_witnesses(
@@ -360,6 +611,9 @@ mod tests {
 
     use super::*;
     use crate::release::RebuildEnvironmentSummary;
+
+    const TEST_DIGEST_BYTE_COUNT: usize = 32;
+    const TEST_QUORUM: u32 = 2;
     use crate::release::Workflow;
 
     #[test]
@@ -376,6 +630,197 @@ mod tests {
         let json = serde_json::to_string(&rev).unwrap();
         let parsed: ReleaseRevocations = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, rev);
+    }
+
+    #[test]
+    fn compatibility_profiles_keep_canonical_policy_fields() {
+        let self_proof = build_release_policy_profile(ReleasePolicyProfileInput {
+            profile: ReleasePolicyProfile::SelfProofOnly,
+            min_matching_witnesses: None,
+            independence_field: None,
+            trusted_release_signers: vec![
+                "release-b".to_string(),
+                "release-a".to_string(),
+                "release-a".to_string(),
+            ],
+            trusted_witness_identities: Vec::new(),
+        })
+        .unwrap();
+        assert_eq!(self_proof.min_matching_witnesses, OPTIONAL_WITNESS_MINIMUM);
+        assert_eq!(self_proof.independence_field, INDEPENDENCE_FIELD_WITNESS_IDENTITY);
+        assert_eq!(self_proof.trusted_release_signers, vec!["release-a".to_string(), "release-b".to_string()]);
+        assert!(self_proof.trusted_witness_signers.is_empty());
+
+        let single = build_release_policy_profile(ReleasePolicyProfileInput {
+            profile: ReleasePolicyProfile::SingleWitness,
+            min_matching_witnesses: None,
+            independence_field: None,
+            trusted_release_signers: vec!["release-a".to_string()],
+            trusted_witness_identities: vec!["witness-a".to_string()],
+        })
+        .unwrap();
+        assert_eq!(single.min_matching_witnesses, SINGLE_WITNESS_MINIMUM);
+        assert_eq!(single.independence_field, INDEPENDENCE_FIELD_WITNESS_IDENTITY);
+        assert_eq!(single.trusted_witness_signers, vec!["witness-a".to_string()]);
+    }
+
+    #[test]
+    fn optional_profile_accepts_trusted_witnesses_without_quorum() {
+        let policy = build_release_policy_profile(ReleasePolicyProfileInput {
+            profile: ReleasePolicyProfile::OptionalWitness,
+            min_matching_witnesses: None,
+            independence_field: Some(INDEPENDENCE_FIELD_SIGNER_KEY_NAME.to_string()),
+            trusted_release_signers: vec!["release-a".to_string()],
+            trusted_witness_identities: vec!["witness-b".to_string(), "witness-a".to_string()],
+        })
+        .unwrap();
+
+        assert_eq!(policy.min_matching_witnesses, OPTIONAL_WITNESS_MINIMUM);
+        assert_eq!(policy.independence_field, INDEPENDENCE_FIELD_SIGNER_KEY_NAME);
+        assert_eq!(policy.trusted_witness_signers, vec!["witness-a".to_string(), "witness-b".to_string()]);
+    }
+
+    #[test]
+    fn quorum_profile_accepts_each_supported_selector() {
+        let selectors = [
+            INDEPENDENCE_FIELD_WITNESS_IDENTITY,
+            INDEPENDENCE_FIELD_SIGNER_KEY_NAME,
+            INDEPENDENCE_FIELD_REBUILD_HOST_CLASS,
+        ];
+        for selector in selectors {
+            let policy = build_release_policy_profile(ReleasePolicyProfileInput {
+                profile: ReleasePolicyProfile::WitnessQuorum,
+                min_matching_witnesses: Some(TEST_QUORUM),
+                independence_field: Some(selector.to_string()),
+                trusted_release_signers: vec!["release-a".to_string()],
+                trusted_witness_identities: vec!["witness-a".to_string(), "witness-b".to_string()],
+            })
+            .unwrap();
+            assert_eq!(policy.min_matching_witnesses, TEST_QUORUM);
+            assert_eq!(policy.independence_field, selector);
+        }
+    }
+
+    #[test]
+    fn quorum_profile_succeeds_under_each_supported_selector() {
+        let release = sample_release();
+        let selector_witnesses = [
+            (INDEPENDENCE_FIELD_WITNESS_IDENTITY, vec![
+                make_matching_witness_with_details(&release, "witness-a", "key-a", "host-a", b"identity-a"),
+                make_matching_witness_with_details(&release, "witness-b", "key-a", "host-a", b"identity-b"),
+            ]),
+            (INDEPENDENCE_FIELD_SIGNER_KEY_NAME, vec![
+                make_matching_witness_with_details(&release, "witness-a", "key-a", "host-a", b"signer-a"),
+                make_matching_witness_with_details(&release, "witness-b", "key-b", "host-a", b"signer-b"),
+            ]),
+            (INDEPENDENCE_FIELD_REBUILD_HOST_CLASS, vec![
+                make_matching_witness_with_details(&release, "witness-a", "key-a", "host-a", b"host-a"),
+                make_matching_witness_with_details(&release, "witness-b", "key-a", "host-b", b"host-b"),
+            ]),
+        ];
+
+        for (selector, witnesses) in selector_witnesses {
+            let policy = build_release_policy_profile(ReleasePolicyProfileInput {
+                profile: ReleasePolicyProfile::WitnessQuorum,
+                min_matching_witnesses: Some(TEST_QUORUM),
+                independence_field: Some(selector.to_string()),
+                trusted_release_signers: vec!["release-a".to_string()],
+                trusted_witness_identities: vec!["witness-a".to_string(), "witness-b".to_string()],
+            })
+            .unwrap();
+            let result = evaluate_policy(PolicyEvaluationInput {
+                release: release.clone(),
+                witnesses,
+                policy,
+                revocations: ReleaseRevocations::empty(),
+            })
+            .unwrap();
+
+            assert_eq!(result.witness_quorum_status, IndependentAgreementStatus::Satisfied);
+            assert_eq!(result.trust_tier.final_class, FinalClass::QuorumSatisfied);
+            assert_eq!(result.independent_witness_identities, TEST_QUORUM);
+        }
+    }
+
+    #[test]
+    fn quorum_profile_rejects_missing_or_invalid_parameters() {
+        let missing_minimum = build_release_policy_profile(ReleasePolicyProfileInput {
+            profile: ReleasePolicyProfile::WitnessQuorum,
+            min_matching_witnesses: None,
+            independence_field: Some(INDEPENDENCE_FIELD_WITNESS_IDENTITY.to_string()),
+            trusted_release_signers: vec!["release-a".to_string()],
+            trusted_witness_identities: vec!["witness-a".to_string()],
+        })
+        .unwrap_err();
+        assert!(matches!(missing_minimum, Error::MissingPolicyParameter { .. }));
+
+        let zero_minimum = build_release_policy_profile(ReleasePolicyProfileInput {
+            profile: ReleasePolicyProfile::WitnessQuorum,
+            min_matching_witnesses: Some(OPTIONAL_WITNESS_MINIMUM),
+            independence_field: Some(INDEPENDENCE_FIELD_WITNESS_IDENTITY.to_string()),
+            trusted_release_signers: vec!["release-a".to_string()],
+            trusted_witness_identities: vec!["witness-a".to_string()],
+        })
+        .unwrap_err();
+        assert_eq!(zero_minimum, Error::InvalidPolicyThreshold {
+            minimum: SINGLE_WITNESS_MINIMUM,
+            maximum: POLICY_PROFILE_MAX_WITNESS_COUNT,
+            actual: OPTIONAL_WITNESS_MINIMUM,
+        });
+
+        let unsupported_selector = build_release_policy_profile(ReleasePolicyProfileInput {
+            profile: ReleasePolicyProfile::WitnessQuorum,
+            min_matching_witnesses: Some(SINGLE_WITNESS_MINIMUM),
+            independence_field: Some("ambient_organization".to_string()),
+            trusted_release_signers: vec!["release-a".to_string()],
+            trusted_witness_identities: vec!["witness-a".to_string()],
+        })
+        .unwrap_err();
+        assert!(matches!(unsupported_selector, Error::UnsupportedPolicyField { .. }));
+
+        let too_few_identities = build_release_policy_profile(ReleasePolicyProfileInput {
+            profile: ReleasePolicyProfile::WitnessQuorum,
+            min_matching_witnesses: Some(TEST_QUORUM),
+            independence_field: Some(INDEPENDENCE_FIELD_WITNESS_IDENTITY.to_string()),
+            trusted_release_signers: vec!["release-a".to_string()],
+            trusted_witness_identities: vec!["witness-a".to_string()],
+        })
+        .unwrap_err();
+        assert_eq!(too_few_identities, Error::InsufficientPolicyValues {
+            field: "trusted_witness_identities".to_string(),
+            required: TEST_QUORUM,
+            actual: SINGLE_WITNESS_MINIMUM,
+        });
+    }
+
+    #[test]
+    fn new_profiles_reject_duplicate_names_and_unbounded_thresholds() {
+        let duplicate = build_release_policy_profile(ReleasePolicyProfileInput {
+            profile: ReleasePolicyProfile::OptionalWitness,
+            min_matching_witnesses: None,
+            independence_field: None,
+            trusted_release_signers: vec!["release-a".to_string()],
+            trusted_witness_identities: vec!["witness-a".to_string(), " witness-a ".to_string()],
+        })
+        .unwrap_err();
+        assert_eq!(duplicate, Error::DuplicatePolicyName {
+            field: "trusted_witness_identities".to_string(),
+            value: "witness-a".to_string(),
+        });
+
+        let unbounded = build_release_policy_profile(ReleasePolicyProfileInput {
+            profile: ReleasePolicyProfile::WitnessQuorum,
+            min_matching_witnesses: Some(u32::MAX),
+            independence_field: Some(INDEPENDENCE_FIELD_WITNESS_IDENTITY.to_string()),
+            trusted_release_signers: vec!["release-a".to_string()],
+            trusted_witness_identities: vec!["witness-a".to_string()],
+        })
+        .unwrap_err();
+        assert_eq!(unbounded, Error::InvalidPolicyThreshold {
+            minimum: SINGLE_WITNESS_MINIMUM,
+            maximum: POLICY_PROFILE_MAX_WITNESS_COUNT,
+            actual: u32::MAX,
+        });
     }
 
     #[test]
@@ -412,7 +857,8 @@ mod tests {
 
         assert_eq!(result.trust_tier.technical_class, TechnicalClass::SelfProofValid);
         assert_eq!(result.trust_tier.policy_status, PolicyStatus::Satisfied);
-        assert_eq!(result.trust_tier.final_class, FinalClass::QuorumSatisfied);
+        assert_eq!(result.witness_quorum_status, IndependentAgreementStatus::NotRequired);
+        assert_eq!(result.trust_tier.final_class, FinalClass::SelfProofValid);
         assert_eq!(result.matching_witness_count, 0);
     }
 
@@ -438,6 +884,35 @@ mod tests {
     }
 
     #[test]
+    fn optional_policy_keeps_one_or_multiple_valid_witnesses_without_quorum_claim() {
+        let release = sample_release();
+        let witness_sets = [vec![make_matching_witness(&release, "witness-a")], vec![
+            make_matching_witness(&release, "witness-a"),
+            make_matching_witness(&release, "witness-b"),
+        ]];
+
+        for witnesses in witness_sets {
+            let result = evaluate_policy(PolicyEvaluationInput {
+                release: release.clone(),
+                witnesses,
+                policy: ReleasePolicy::new(
+                    OPTIONAL_WITNESS_MINIMUM,
+                    INDEPENDENCE_FIELD_WITNESS_IDENTITY.to_string(),
+                    vec!["signer-1".to_string()],
+                    vec!["witness-a".to_string(), "witness-b".to_string()],
+                ),
+                revocations: ReleaseRevocations::empty(),
+            })
+            .unwrap();
+
+            assert_eq!(result.witness_quorum_status, IndependentAgreementStatus::NotRequired);
+            assert_eq!(result.trust_tier.technical_class, TechnicalClass::ExternalWitnessMatch);
+            assert_eq!(result.trust_tier.final_class, FinalClass::ExternalWitnessMatch);
+            assert!(result.matching_witness_count >= SINGLE_WITNESS_MINIMUM);
+        }
+    }
+
+    #[test]
     fn insufficient_quorum_fails_policy_with_technical_success() {
         let release = sample_release();
         let witness = make_matching_witness(&release, "witness-a");
@@ -455,6 +930,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.trust_tier.technical_class, TechnicalClass::ExternalWitnessMatch);
+        assert_eq!(result.witness_quorum_status, IndependentAgreementStatus::Insufficient);
         assert_eq!(result.trust_tier.policy_status, PolicyStatus::Insufficient);
         assert_eq!(result.trust_tier.final_class, FinalClass::ExternalWitnessMatch);
         assert_eq!(
@@ -486,6 +962,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.trust_tier.policy_status, PolicyStatus::Satisfied);
+        assert_eq!(result.witness_quorum_status, IndependentAgreementStatus::Satisfied);
         assert_eq!(result.trust_tier.final_class, FinalClass::QuorumSatisfied);
         assert_eq!(result.matching_witness_count, 2);
         assert_eq!(result.independent_witness_identities, 2);
@@ -765,6 +1242,62 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.matching_witness_count, 0);
+    }
+
+    #[test]
+    fn optional_policy_excludes_stale_mismatched_and_revoked_witnesses_without_failure() {
+        let release = sample_release();
+        let wrong_release = ValidatedWitness {
+            attestation: WitnessAttestation::new(
+                AttestationDigest::from_canonical_bytes(b"wrong-release".to_vec()),
+                "witness-a".to_string(),
+                release.binary_digests.clone(),
+                sample_env(),
+            ),
+            attestation_digest: AttestationDigest::from_canonical_bytes(b"witness-a-att".to_vec()),
+            signer_key_name: "witness-a-key".to_string(),
+        };
+        let wrong_rebuild = ValidatedWitness {
+            attestation: WitnessAttestation::new(
+                release_attestation_canonical_digest(release.clone()).unwrap(),
+                "witness-b".to_string(),
+                vec![crate::release::BinaryDigest {
+                    name: "crunch".to_string(),
+                    algorithm: "blake3".to_string(),
+                    digest: "ff".repeat(TEST_DIGEST_BYTE_COUNT),
+                }],
+                sample_env(),
+            ),
+            attestation_digest: AttestationDigest::from_canonical_bytes(b"witness-b-att".to_vec()),
+            signer_key_name: "witness-b-key".to_string(),
+        };
+        let revoked = make_matching_witness(&release, "witness-c");
+        let revoked_key = revoked.signer_key_name.clone();
+        let policy = ReleasePolicy::new(
+            OPTIONAL_WITNESS_MINIMUM,
+            INDEPENDENCE_FIELD_WITNESS_IDENTITY.to_string(),
+            vec!["signer-1".to_string()],
+            vec![
+                "witness-a".to_string(),
+                "witness-b".to_string(),
+                "witness-c".to_string(),
+            ],
+        );
+
+        let result = evaluate_policy(PolicyEvaluationInput {
+            release,
+            witnesses: vec![wrong_release, wrong_rebuild, revoked],
+            policy,
+            revocations: ReleaseRevocations::new(vec![revoked_key], Vec::new()),
+        })
+        .unwrap();
+
+        assert_eq!(result.witness_quorum_status, IndependentAgreementStatus::NotRequired);
+        assert_eq!(result.trust_tier.policy_status, PolicyStatus::Satisfied);
+        assert_eq!(result.trust_tier.final_class, FinalClass::SelfProofValid);
+        assert_eq!(result.matching_witness_count, 0);
+        assert_eq!(result.revoked_witness_count, 1);
+        assert!(result.policy_failure_reason.is_none());
     }
 
     #[test]

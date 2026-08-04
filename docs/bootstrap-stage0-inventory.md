@@ -165,6 +165,12 @@ prerequisite-only evidence. External witness agreement alone does not
 satisfy it. Verify with:
 `mantle release verify <bundle-dir> --require-stagex-no-quorum`
 
+Build-witness policy is separate from this technical profile. An
+`optional-witness` policy reports witness quorum as `not-required`. A
+`witness-quorum` policy applies only when an operator selects it with a positive
+minimum and a supported independence field. Neither profile changes StageX
+status or bootstrap parity.
+
 Remaining environmental assumptions:
 
 - Stage0 Rust compiler is a fetched stable binary, not hex0-bootstrapped

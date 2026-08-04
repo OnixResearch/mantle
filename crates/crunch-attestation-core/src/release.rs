@@ -309,8 +309,9 @@ const MAX_AGREEMENT_WITNESS_COUNT: u32 = 1_024;
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum IndependentAgreementStatus {
+    NotRequired,
     Satisfied,
-    Unsatisfied,
+    Insufficient,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
@@ -392,10 +393,13 @@ impl IndependentAgreementReport {
     }
 
     pub fn status(&self) -> IndependentAgreementStatus {
+        if self.required_witness_count == 0 {
+            return IndependentAgreementStatus::NotRequired;
+        }
         if self.counted_witness_count >= self.required_witness_count {
             IndependentAgreementStatus::Satisfied
         } else {
-            IndependentAgreementStatus::Unsatisfied
+            IndependentAgreementStatus::Insufficient
         }
     }
 }
@@ -1138,6 +1142,21 @@ mod tests {
     }
 
     #[test]
+    fn independent_agreement_report_marks_zero_threshold_not_required() {
+        let report = IndependentAgreementReport::new(IndependentAgreementReportInit {
+            release_attestation_digest_blake3: release_attestation_canonical_digest(sample_release()).unwrap(),
+            policy_digest_blake3: AttestationDigest::from_canonical_bytes(b"policy".to_vec()),
+            independence_selector: "witness_identity".to_string(),
+            required_witness_count: 0,
+            witnesses: Vec::new(),
+            artifact_digest_sets: sample_release().binary_digests,
+        })
+        .unwrap();
+
+        assert_eq!(report.status(), IndependentAgreementStatus::NotRequired);
+    }
+
+    #[test]
     fn independent_agreement_report_counts_skipped_and_failed_witnesses() {
         let report = sample_agreement_report(vec![
             sample_agreement_witness("witness-a", "key-a", "host-a", WitnessClassificationReason::Counted, true),
@@ -1154,7 +1173,7 @@ mod tests {
         assert_eq!(report.counted_witness_count, 1);
         assert_eq!(report.skipped_witness_count, 1);
         assert_eq!(report.failed_witness_count, 1);
-        assert_eq!(report.status(), IndependentAgreementStatus::Unsatisfied);
+        assert_eq!(report.status(), IndependentAgreementStatus::Insufficient);
     }
 
     #[test]
@@ -1194,7 +1213,7 @@ mod tests {
         assert_eq!(report.counted_witness_count, 0);
         assert_eq!(report.skipped_witness_count, 4);
         assert_eq!(report.failed_witness_count, 1);
-        assert_eq!(report.status(), IndependentAgreementStatus::Unsatisfied);
+        assert_eq!(report.status(), IndependentAgreementStatus::Insufficient);
     }
 
     #[test]

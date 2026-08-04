@@ -628,6 +628,25 @@ fn make_valid_bundle() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
     make_release_bundle(false, None)
 }
 
+fn make_attested_verification_dir() -> (TempDir, PathBuf, PathBuf, ReleaseEvidenceManifest) {
+    let (temp, bundle_dir, manifest) = make_valid_bundle();
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification");
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+    (temp, bundle_dir, verification_dir, manifest)
+}
+
 fn make_valid_bundle_with_provider() -> (TempDir, PathBuf, ReleaseEvidenceManifest) {
     make_release_bundle(true, None)
 }
@@ -4724,6 +4743,268 @@ fn attest_policy_init_single_witness_writes_policy_files() {
 }
 
 #[test]
+fn attest_policy_init_optional_witness_writes_zero_threshold_policy() {
+    let (_temp, _bundle_dir, verification_dir, _manifest) = make_attested_verification_dir();
+    let output = crunch()
+        .arg("--json")
+        .arg("attest")
+        .arg("policy-init")
+        .arg(&verification_dir)
+        .arg("--profile")
+        .arg("optional-witness")
+        .arg("--trusted-release-signer")
+        .arg(release_keypair().verifying_key.name())
+        .arg("--trusted-witness-identity")
+        .arg("witness-b")
+        .arg("--trusted-witness-identity")
+        .arg("witness-a")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let created_json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let policy = read_policy(&verification_dir);
+
+    assert_eq!(created_json["profile"], "optional-witness");
+    assert_eq!(policy.min_matching_witnesses, 0);
+    assert_eq!(policy.independence_field, "witness_identity");
+    assert_eq!(policy.trusted_witness_signers, vec!["witness-a".to_string(), "witness-b".to_string()]);
+}
+
+#[test]
+fn attest_policy_init_witness_quorum_writes_explicit_threshold_and_selector() {
+    let (_temp, _bundle_dir, verification_dir, _manifest) = make_attested_verification_dir();
+    crunch()
+        .arg("attest")
+        .arg("policy-init")
+        .arg(&verification_dir)
+        .arg("--profile")
+        .arg("witness-quorum")
+        .arg("--trusted-release-signer")
+        .arg(release_keypair().verifying_key.name())
+        .arg("--trusted-witness-identity")
+        .arg("witness-a")
+        .arg("--trusted-witness-identity")
+        .arg("witness-b")
+        .arg("--min-matching-witnesses")
+        .arg("2")
+        .arg("--independence-field")
+        .arg("signer_key_name")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("profile: witness-quorum"))
+        .stdout(predicate::str::contains("min matching witnesses: 2"));
+
+    let policy = read_policy(&verification_dir);
+    assert_eq!(policy.min_matching_witnesses, 2);
+    assert_eq!(policy.independence_field, "signer_key_name");
+    assert_eq!(policy.trusted_witness_signers, vec!["witness-a".to_string(), "witness-b".to_string()]);
+}
+
+#[test]
+fn attest_policy_init_rejects_invalid_new_profile_parameters_without_files() {
+    let (_temp, _bundle_dir, verification_dir, _manifest) = make_attested_verification_dir();
+    const UNBOUNDED_THRESHOLD: &str = "4294967295";
+    let cases: &[(&[&str], bool)] = &[
+        (
+            &[
+                "--profile",
+                "witness-quorum",
+                "--independence-field",
+                "witness_identity",
+            ],
+            false,
+        ),
+        (
+            &[
+                "--profile",
+                "witness-quorum",
+                "--min-matching-witnesses",
+                "0",
+                "--independence-field",
+                "witness_identity",
+            ],
+            false,
+        ),
+        (&["--profile", "witness-quorum", "--min-matching-witnesses", "2"], false),
+        (
+            &[
+                "--profile",
+                "witness-quorum",
+                "--min-matching-witnesses",
+                "1",
+                "--independence-field",
+                "ambient_organization",
+            ],
+            false,
+        ),
+        (
+            &[
+                "--profile",
+                "witness-quorum",
+                "--min-matching-witnesses",
+                "2",
+                "--independence-field",
+                "witness_identity",
+            ],
+            false,
+        ),
+        (&["--profile", "optional-witness"], true),
+        (
+            &[
+                "--profile",
+                "witness-quorum",
+                "--min-matching-witnesses",
+                UNBOUNDED_THRESHOLD,
+                "--independence-field",
+                "witness_identity",
+            ],
+            false,
+        ),
+    ];
+
+    for (case, add_duplicate_identity) in cases {
+        let mut command = crunch();
+        command
+            .arg("attest")
+            .arg("policy-init")
+            .arg(&verification_dir)
+            .args(*case)
+            .arg("--trusted-release-signer")
+            .arg(release_keypair().verifying_key.name())
+            .arg("--trusted-witness-identity")
+            .arg("witness-a");
+        if *add_duplicate_identity {
+            command.arg("--trusted-witness-identity").arg("witness-a");
+        }
+        command.assert().failure();
+        assert!(!verification_dir.join("policy.json").exists());
+        assert!(!verification_dir.join("revocations.json").exists());
+    }
+}
+
+#[test]
+fn attest_release_verify_reports_optional_witness_quorum_not_required() {
+    let (_temp, _bundle_dir, verification_dir, _manifest) = make_attested_verification_dir();
+    crunch()
+        .arg("attest")
+        .arg("policy-init")
+        .arg(&verification_dir)
+        .arg("--profile")
+        .arg("optional-witness")
+        .arg("--trusted-release-signer")
+        .arg(release_keypair().verifying_key.name())
+        .assert()
+        .success();
+
+    let output = crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair().verifying_key.to_string())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let human_output = String::from_utf8_lossy(&output.stderr);
+    let verified: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(human_output.contains("witness quorum status: not-required"));
+    assert!(human_output.contains("independent agreement status: not-required"));
+    assert_eq!(verified["witness_quorum_status"], "not-required");
+    assert_eq!(verified["independent_agreement_status"], "not-required");
+    assert_eq!(verified["final_class"], "self-proof-valid");
+    assert_eq!(verified["matching_witness_count"], 0);
+}
+
+#[test]
+fn attest_release_verify_keeps_multiple_optional_witnesses_without_quorum_claim() {
+    let (_temp, _bundle_dir, verification_dir, _manifest) = make_attested_verification_dir();
+    let release_attestation = read_release_attestation(&verification_dir);
+    let witness_a = crunch_build::generate_keypair().0;
+    let witness_b = crunch_build::generate_keypair().0;
+    write_witness_material(&verification_dir, &release_attestation, &witness_a, "witness-a");
+    write_witness_material(&verification_dir, &release_attestation, &witness_b, "witness-b");
+    crunch()
+        .arg("attest")
+        .arg("policy-init")
+        .arg(&verification_dir)
+        .arg("--profile")
+        .arg("optional-witness")
+        .arg("--trusted-release-signer")
+        .arg(release_keypair().verifying_key.name())
+        .arg("--trusted-witness-identity")
+        .arg("witness-a")
+        .arg("--trusted-witness-identity")
+        .arg("witness-b")
+        .assert()
+        .success();
+
+    let output = crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair().verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(witness_a.verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(witness_b.verifying_key.to_string())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let verified: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(verified["witness_quorum_status"], "not-required");
+    assert_eq!(verified["independent_agreement_status"], "not-required");
+    assert_eq!(verified["final_class"], "external-witness-match");
+    assert_eq!(verified["matching_witness_count"], 2);
+    assert_eq!(verified["independent_agreement_counted_witness_count"], 2);
+    assert!(verified["independent_agreement_class"].is_null());
+}
+
+#[test]
+fn attest_release_verify_classifies_invalid_optional_witness_without_policy_failure() {
+    let (_temp, _bundle_dir, verification_dir, _manifest) = make_attested_verification_dir();
+    let release_attestation = read_release_attestation(&verification_dir);
+    let witness = crunch_build::generate_keypair().0;
+    write_witness_material(&verification_dir, &release_attestation, &witness, "witness-bad");
+    write_file(
+        &verification_dir.join("witnesses/witness-bad.json.sig"),
+        format!("{}\n", invalid_signature_line(witness.verifying_key.name())).as_bytes(),
+    );
+    crunch()
+        .arg("attest")
+        .arg("policy-init")
+        .arg(&verification_dir)
+        .arg("--profile")
+        .arg("optional-witness")
+        .arg("--trusted-release-signer")
+        .arg(release_keypair().verifying_key.name())
+        .arg("--trusted-witness-identity")
+        .arg("witness-bad")
+        .assert()
+        .success();
+
+    let output = crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(release_keypair().verifying_key.to_string())
+        .arg("--trusted-public-key")
+        .arg(witness.verifying_key.to_string())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let verified: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(verified["witness_quorum_status"], "not-required");
+    assert_eq!(verified["policy_status"], "satisfied");
+    assert_eq!(verified["final_class"], "self-proof-valid");
+    assert_eq!(verified["matching_witness_count"], 0);
+    assert_eq!(verified["independent_agreement_failed_witness_count"], 0);
+    assert_eq!(verified["independent_agreement_skipped_witness_count"], 1);
+    assert_eq!(verified["independent_agreement_witnesses"][0]["classification_reason"], "invalid-signature");
+}
+
+#[test]
 fn attest_policy_init_rejects_existing_policy_without_force() {
     let (temp, bundle_dir, _manifest) = make_valid_bundle();
     let signing_key_path = temp.path().join("release.key");
@@ -4774,6 +5055,45 @@ fn attest_policy_init_rejects_existing_policy_without_force() {
     let revocations_after = std::fs::read(verification_dir.join("revocations.json")).unwrap();
     assert_eq!(policy_before, policy_after);
     assert_eq!(revocations_before, revocations_after);
+}
+
+#[test]
+fn attest_policy_init_force_atomically_replaces_compatibility_policy() {
+    let (_temp, _bundle_dir, verification_dir, _manifest) = make_attested_verification_dir();
+    crunch()
+        .arg("attest")
+        .arg("policy-init")
+        .arg(&verification_dir)
+        .arg("--profile")
+        .arg("self-proof-only")
+        .arg("--trusted-release-signer")
+        .arg(release_keypair().verifying_key.name())
+        .assert()
+        .success();
+    crunch()
+        .arg("attest")
+        .arg("policy-init")
+        .arg(&verification_dir)
+        .arg("--profile")
+        .arg("optional-witness")
+        .arg("--trusted-release-signer")
+        .arg(release_keypair().verifying_key.name())
+        .arg("--trusted-witness-identity")
+        .arg("witness-a")
+        .arg("--force")
+        .assert()
+        .success();
+
+    let policy = read_policy(&verification_dir);
+    let revocations = read_revocations(&verification_dir);
+    assert_eq!(policy.min_matching_witnesses, 0);
+    assert_eq!(policy.trusted_witness_signers, vec!["witness-a".to_string()]);
+    assert_eq!(revocations, ReleaseRevocations::empty());
+    let published_names = std::fs::read_dir(&verification_dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect::<Vec<_>>();
+    assert!(published_names.iter().all(|name| !name.to_string_lossy().starts_with(".tmp")));
 }
 
 #[test]
@@ -6628,8 +6948,11 @@ fn attest_witness_show_and_release_verify_report_quorum_satisfied() {
         .output()
         .unwrap();
     assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let human_output = String::from_utf8_lossy(&verify_output.stderr);
     let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
 
+    assert!(human_output.contains("witness quorum status: satisfied"));
+    assert!(human_output.contains("independent agreement status: satisfied"));
     assert_eq!(verify_json["release_signer_key_name"], release_keypair.verifying_key.name());
     assert_eq!(verify_json["discovered_witness_count"], 1);
     assert_eq!(verify_json["considered_witness_count"], 1);
@@ -6773,9 +7096,12 @@ fn attest_release_verify_reports_unsatisfied_for_same_host_class() {
         .output()
         .unwrap();
     assert!(verify_output.status.success(), "{}", String::from_utf8_lossy(&verify_output.stderr));
+    let human_output = String::from_utf8_lossy(&verify_output.stderr);
     let verify_json: serde_json::Value = serde_json::from_slice(&verify_output.stdout).unwrap();
 
-    assert_eq!(verify_json["independent_agreement_status"], "unsatisfied");
+    assert!(human_output.contains("witness quorum status: insufficient"));
+    assert!(human_output.contains("independent agreement status: insufficient"));
+    assert_eq!(verify_json["independent_agreement_status"], "insufficient");
     assert!(verify_json["independent_agreement_class"].is_null());
     assert_eq!(verify_json["independent_agreement_counted_witness_count"], 1);
     assert_eq!(verify_json["independent_agreement_skipped_witness_count"], 1);

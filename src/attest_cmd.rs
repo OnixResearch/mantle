@@ -8,6 +8,7 @@ use crunch_attestation::ArtifactReference;
 use crunch_attestation::Canonicalize;
 use crunch_attestation::ClosureAttestation;
 use crunch_attestation::ClosureSemantics;
+use crunch_attestation::IndependentAgreementStatus;
 use crunch_attestation::ProjectAttestation;
 use crunch_attestation::ReleaseAttestation;
 use crunch_attestation::WitnessAttestation;
@@ -30,6 +31,7 @@ use crate::errors::RunError;
 use crate::release_attestation::CreatedPolicyFiles;
 use crate::release_attestation::CreatedWitnessAttestation;
 use crate::release_attestation::PolicyInitProfile;
+use crate::release_attestation::PolicyProfileRequest;
 use crate::release_attestation::ReleaseVerificationOutput;
 use crate::release_attestation::WITNESS_SOURCE_ACQUISITION_MODE_MANUAL;
 use crate::release_attestation::create_policy_files;
@@ -87,6 +89,8 @@ struct PolicyInitCommand<'a> {
     profile: PolicyInitProfile,
     trusted_release_signers: &'a [String],
     trusted_witness_identities: &'a [String],
+    min_matching_witnesses: Option<u32>,
+    independence_field: Option<&'a str>,
     is_force: bool,
 }
 
@@ -245,6 +249,8 @@ async fn cmd_attest_async(action: crate::AttestAction, context: AttestCommandCon
             profile,
             trusted_release_signer,
             trusted_witness_identity,
+            min_matching_witnesses,
+            independence_field,
             force,
         } => cmd_policy_init(PolicyInitCommand {
             current_dir,
@@ -253,12 +259,14 @@ async fn cmd_attest_async(action: crate::AttestAction, context: AttestCommandCon
             profile: map_policy_profile(profile),
             trusted_release_signers: &trusted_release_signer,
             trusted_witness_identities: &trusted_witness_identity,
+            min_matching_witnesses,
+            independence_field: independence_field.as_deref(),
             is_force: force,
         }),
         crate::AttestAction::ReleaseVerify {
             verification_dir,
             trusted_public_keys,
-        } => cmd_release_verify(&verification_dir, &trusted_public_keys, state_dir),
+        } => cmd_release_verify(&verification_dir, &trusted_public_keys, state_dir, is_json),
     }
 }
 
@@ -411,9 +419,13 @@ fn cmd_policy_init(request: PolicyInitCommand<'_>) -> Result<(), RunError> {
     let resolved_verification_dir = resolve_cli_path(request.current_dir, request.verification_dir);
     let created = create_policy_files(
         &resolved_verification_dir,
-        request.profile,
-        request.trusted_release_signers,
-        request.trusted_witness_identities,
+        PolicyProfileRequest {
+            profile: request.profile,
+            min_matching_witnesses: request.min_matching_witnesses,
+            independence_field: request.independence_field,
+            trusted_release_signers: request.trusted_release_signers,
+            trusted_witness_identities: request.trusted_witness_identities,
+        },
         request.is_force,
     )?;
     print_created_policy_files(&created, request.is_json)
@@ -422,7 +434,9 @@ fn cmd_policy_init(request: PolicyInitCommand<'_>) -> Result<(), RunError> {
 fn map_policy_profile(profile: crate::AttestPolicyProfileArg) -> PolicyInitProfile {
     match profile {
         crate::AttestPolicyProfileArg::SelfProofOnly => PolicyInitProfile::SelfProofOnly,
+        crate::AttestPolicyProfileArg::OptionalWitness => PolicyInitProfile::OptionalWitness,
         crate::AttestPolicyProfileArg::SingleWitness => PolicyInitProfile::SingleWitness,
+        crate::AttestPolicyProfileArg::WitnessQuorum => PolicyInitProfile::WitnessQuorum,
     }
 }
 
@@ -469,10 +483,11 @@ fn cmd_release_verify(
     verification_dir: &Path,
     explicit_trusted_public_keys: &[String],
     state_dir: &Path,
+    is_json: bool,
 ) -> Result<(), RunError> {
     let trusted_public_keys = resolve_release_verify_keys(explicit_trusted_public_keys, state_dir)?;
     let output = verify_release_attestation_directory(verification_dir, &trusted_public_keys)?;
-    print_release_verification_output(&output)
+    print_release_verification_output(&output, is_json)
 }
 
 fn resolve_release_verify_keys(
@@ -595,16 +610,29 @@ fn print_created_policy_files(created: &CreatedPolicyFiles, json: bool) -> Resul
     println!("revocations: {}", created.revocations_path.display());
     println!("profile: {}", created.profile.as_str());
     println!("min matching witnesses: {}", created.policy.min_matching_witnesses);
+    println!("independence field: {}", created.policy.independence_field);
     println!("trusted release signers: {}", created.policy.trusted_release_signers.join(", "));
     println!("trusted witness identities: {}", created.policy.trusted_witness_signers.join(", "));
     Ok(())
 }
 
-fn print_release_verification_output(output: &ReleaseVerificationOutput) -> Result<(), RunError> {
+fn print_release_verification_output(output: &ReleaseVerificationOutput, is_json: bool) -> Result<(), RunError> {
+    if !is_json {
+        eprintln!("witness quorum status: {}", agreement_status_label(output.witness_quorum_status));
+        eprintln!("independent agreement status: {}", agreement_status_label(output.independent_agreement_status));
+    }
     let text = serde_json::to_string_pretty(output)
         .map_err(|err| RunError::Internal(format!("serializing release verification output: {err}")))?;
     println!("{text}");
     Ok(())
+}
+
+fn agreement_status_label(status: IndependentAgreementStatus) -> &'static str {
+    match status {
+        IndependentAgreementStatus::NotRequired => "not-required",
+        IndependentAgreementStatus::Satisfied => "satisfied",
+        IndependentAgreementStatus::Insufficient => "insufficient",
+    }
 }
 
 async fn open_store(output_dir: &Path, state_dir: &Path, store_dir: &str) -> Result<StoreHandle, RunError> {

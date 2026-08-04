@@ -19,6 +19,12 @@ pub enum Error {
     SchemaTagMismatch { expected: String, actual: String },
     FieldTooLong { field: String, limit: u32, actual: u32 },
     UnsupportedPolicyField { field: String, value: String },
+    MissingPolicyParameter { profile: String, parameter: String },
+    UnexpectedPolicyParameter { profile: String, parameter: String },
+    InvalidPolicyThreshold { minimum: u32, maximum: u32, actual: u32 },
+    InsufficientPolicyValues { field: String, required: u32, actual: u32 },
+    DuplicatePolicyName { field: String, value: String },
+    PolicyNameContainsControlCharacter { field: String },
     InvalidDetachedSignature { message: String },
 }
 
@@ -56,6 +62,28 @@ impl fmt::Display for Error {
             }
             Error::UnsupportedPolicyField { field, value } => {
                 write!(f, "unsupported policy field value: {field}={value}")
+            }
+            Error::MissingPolicyParameter { profile, parameter } => {
+                write!(f, "policy profile {profile} requires parameter {parameter}")
+            }
+            Error::UnexpectedPolicyParameter { profile, parameter } => {
+                write!(f, "policy profile {profile} does not accept parameter {parameter}")
+            }
+            Error::InvalidPolicyThreshold {
+                minimum,
+                maximum,
+                actual,
+            } => write!(f, "policy witness threshold must be in {minimum}..={maximum}: {actual}"),
+            Error::InsufficientPolicyValues {
+                field,
+                required,
+                actual,
+            } => write!(f, "policy field {field} requires {required} value(s), got {actual}"),
+            Error::DuplicatePolicyName { field, value } => {
+                write!(f, "policy field {field} contains duplicate value {value:?}")
+            }
+            Error::PolicyNameContainsControlCharacter { field } => {
+                write!(f, "policy field {field} contains a control character")
             }
             Error::InvalidDetachedSignature { message } => write!(f, "detached signature parse error: {message}"),
         }

@@ -2304,9 +2304,18 @@ pub enum AttestAction {
         #[arg(long = "trusted-release-signer", required = true)]
         trusted_release_signer: Vec<String>,
 
-        /// Trusted witness identities recorded in policy.json for witness-count profiles
+        /// Trusted witness identities recorded in policy.json for optional or witness-count
+        /// profiles
         #[arg(long = "trusted-witness-identity")]
         trusted_witness_identity: Vec<String>,
+
+        /// Positive witness minimum required by the witness-quorum profile
+        #[arg(long)]
+        min_matching_witnesses: Option<u32>,
+
+        /// Supported policy field used to count independent witness domains
+        #[arg(long)]
+        independence_field: Option<String>,
 
         /// Overwrite existing policy.json and revocations.json
         #[arg(long)]
@@ -2326,7 +2335,9 @@ pub enum AttestAction {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, clap::ValueEnum)]
 pub enum AttestPolicyProfileArg {
     SelfProofOnly,
+    OptionalWitness,
     SingleWitness,
+    WitnessQuorum,
 }
 
 #[derive(Subcommand, Debug, Clone)]

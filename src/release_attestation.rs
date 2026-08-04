@@ -1,5 +1,6 @@
 // machine-artifact-public: attestation.verification-reports
 use std::collections::BTreeSet;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -18,6 +19,8 @@ use crunch_attestation::RebuildEnvironmentSummary;
 use crunch_attestation::ReleaseAttestation;
 use crunch_attestation::ReleaseAttestationInit;
 use crunch_attestation::ReleasePolicy;
+use crunch_attestation::ReleasePolicyProfile;
+use crunch_attestation::ReleasePolicyProfileInput;
 use crunch_attestation::ReleaseRevocations;
 use crunch_attestation::TechnicalClass;
 use crunch_attestation::ValidatedWitness;
@@ -26,6 +29,7 @@ use crunch_attestation::VerificationMaterial;
 use crunch_attestation::WITNESS_SOURCE_ACQUISITION_MODE_NOT_RECORDED;
 use crunch_attestation::WitnessAttestation;
 use crunch_attestation::WitnessClassificationReason;
+use crunch_attestation::build_release_policy_profile;
 use crunch_attestation::encode_detached_signature;
 use crunch_build::KeyPair;
 use nix_compat::narinfo::SignatureRef;
@@ -45,10 +49,6 @@ pub(crate) const REVOCATIONS_FILE_NAME: &str = "revocations.json";
 pub(crate) const WITNESSES_DIR_NAME: &str = "witnesses";
 const MAX_WITNESS_SHOW_FILES: u32 = 1_024;
 const MAX_WITNESS_IDENTITY_BYTES: usize = 128;
-const SINGLE_WITNESS_QUORUM: u32 = 1;
-const SELF_PROOF_ONLY_QUORUM: u32 = 0;
-const POLICY_INIT_REQUIRED_SIGNER_COUNT: u32 = 1;
-const POLICY_INIT_REQUIRED_WITNESS_COUNT: u32 = 1;
 const INDEPENDENCE_FIELD_WITNESS_IDENTITY: &str = "witness_identity";
 const INDEPENDENCE_FIELD_SIGNER_KEY_NAME: &str = "signer_key_name";
 const INDEPENDENCE_FIELD_REBUILD_HOST_CLASS: &str = "rebuild_environment_summary.host_class";
@@ -82,19 +82,15 @@ pub(crate) struct CreatedWitnessAttestation {
     pub signature_path: PathBuf,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum PolicyInitProfile {
-    SelfProofOnly,
-    SingleWitness,
-}
+pub(crate) type PolicyInitProfile = ReleasePolicyProfile;
 
-impl PolicyInitProfile {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::SelfProofOnly => "self-proof-only",
-            Self::SingleWitness => "single-witness",
-        }
-    }
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PolicyProfileRequest<'a> {
+    pub profile: PolicyInitProfile,
+    pub min_matching_witnesses: Option<u32>,
+    pub independence_field: Option<&'a str>,
+    pub trusted_release_signers: &'a [String],
+    pub trusted_witness_identities: &'a [String],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,6 +123,7 @@ pub(crate) struct ReleaseVerificationOutput {
     pub considered_witness_count: u32,
     pub technical_class: TechnicalClass,
     pub policy_status: PolicyStatus,
+    pub witness_quorum_status: IndependentAgreementStatus,
     pub final_class: FinalClass,
     pub matching_witness_count: u32,
     pub independent_witness_identities: u32,
@@ -236,22 +233,20 @@ pub(crate) fn create_witness_attestation(
 
 pub(crate) fn create_policy_files(
     verification_dir: &Path,
-    profile: PolicyInitProfile,
-    trusted_release_signers: &[String],
-    trusted_witness_identities: &[String],
+    request: PolicyProfileRequest<'_>,
     force: bool,
 ) -> Result<CreatedPolicyFiles, RunError> {
     let (_release_attestation, _stored_path) = load_release_attestation_document(verification_dir)?;
-    let policy_file = build_policy_file_contents(profile, trusted_release_signers, trusted_witness_identities)?;
+    let policy_file = build_policy_file_contents(request)?;
     let policy_path = verification_dir.join(POLICY_FILE_NAME);
     let revocations_path = verification_dir.join(REVOCATIONS_FILE_NAME);
     validate_policy_output_path(&policy_path, force)?;
     validate_policy_output_path(&revocations_path, force)?;
-    write_json_document(&policy_path, &policy_file.policy)?;
-    write_json_document(&revocations_path, &policy_file.revocations)?;
+    write_json_document(&policy_path, &policy_file.policy, force)?;
+    write_json_document(&revocations_path, &policy_file.revocations, force)?;
 
     Ok(CreatedPolicyFiles {
-        profile,
+        profile: request.profile,
         policy: policy_file.policy,
         revocations: policy_file.revocations,
         policy_path,
@@ -265,104 +260,19 @@ struct PolicyFileContents {
     revocations: ReleaseRevocations,
 }
 
-fn build_policy_file_contents(
-    profile: PolicyInitProfile,
-    trusted_release_signers: &[String],
-    trusted_witness_identities: &[String],
-) -> Result<PolicyFileContents, RunError> {
-    let release_signers = normalize_policy_name_set(
-        trusted_release_signers,
-        "trusted release signer",
-        POLICY_INIT_REQUIRED_SIGNER_COUNT,
-    )?;
-    let witness_identities = normalize_policy_witness_identities(profile, trusted_witness_identities)?;
-    let policy = ReleasePolicy::new(
-        profile_min_matching_witnesses(profile),
-        INDEPENDENCE_FIELD_WITNESS_IDENTITY.to_string(),
-        release_signers,
-        witness_identities,
-    );
+fn build_policy_file_contents(request: PolicyProfileRequest<'_>) -> Result<PolicyFileContents, RunError> {
+    let policy = build_release_policy_profile(ReleasePolicyProfileInput {
+        profile: request.profile,
+        min_matching_witnesses: request.min_matching_witnesses,
+        independence_field: request.independence_field.map(str::to_string),
+        trusted_release_signers: request.trusted_release_signers.to_vec(),
+        trusted_witness_identities: request.trusted_witness_identities.to_vec(),
+    })
+    .map_err(|error| RunError::Internal(format!("release policy profile: {error}")))?;
     Ok(PolicyFileContents {
         policy,
         revocations: ReleaseRevocations::empty(),
     })
-}
-
-fn normalize_policy_witness_identities(
-    profile: PolicyInitProfile,
-    trusted_witness_identities: &[String],
-) -> Result<Vec<String>, RunError> {
-    let normalized = normalize_policy_name_set(trusted_witness_identities, "trusted witness identity", 0)?;
-    debug_assert!(normalized.len() <= trusted_witness_identities.len());
-    debug_assert!(normalized.windows(2).all(|window| window[0] < window[1]));
-    match profile {
-        PolicyInitProfile::SelfProofOnly => {
-            if normalized.is_empty() {
-                return Ok(normalized);
-            }
-            Err(RunError::Internal("self-proof-only profile does not accept trusted witness identities".to_string()))
-        }
-        PolicyInitProfile::SingleWitness => {
-            let witness_count = count_policy_entries(&normalized, "trusted witness identity")?;
-            if witness_count < POLICY_INIT_REQUIRED_WITNESS_COUNT {
-                return Err(RunError::Internal(
-                    "single-witness profile requires at least one trusted witness identity".to_string(),
-                ));
-            }
-            Ok(normalized)
-        }
-    }
-}
-
-fn normalize_policy_name_set(
-    requested_values: &[String],
-    field_label: &str,
-    required_count: u32,
-) -> Result<Vec<String>, RunError> {
-    let mut normalized_values = BTreeSet::new();
-    for requested_value in requested_values {
-        let normalized_value = normalize_policy_name(PolicyNameInput {
-            requested_value,
-            field_label,
-        })?;
-        normalized_values.insert(normalized_value);
-    }
-    let normalized = normalized_values.into_iter().collect::<Vec<_>>();
-    let normalized_count = count_policy_entries(&normalized, field_label)?;
-    if normalized_count < required_count {
-        return Err(RunError::Internal(format!("{field_label} requires at least {required_count} value(s)")));
-    }
-    Ok(normalized)
-}
-
-struct PolicyNameInput<'a> {
-    requested_value: &'a str,
-    field_label: &'a str,
-}
-
-fn normalize_policy_name(input: PolicyNameInput<'_>) -> Result<String, RunError> {
-    let normalized = input.requested_value.trim();
-    if normalized.is_empty() {
-        return Err(RunError::Internal(format!("{} must not be empty", input.field_label)));
-    }
-    if normalized.chars().any(|character| character.is_control()) {
-        return Err(RunError::Internal(format!(
-            "{} must not contain control characters: {:?}",
-            input.field_label, input.requested_value
-        )));
-    }
-    Ok(normalized.to_string())
-}
-
-fn count_policy_entries(values: &[String], field_label: &str) -> Result<u32, RunError> {
-    u32::try_from(values.len()).map_err(|_| RunError::Internal(format!("{field_label} count overflowed u32")))
-}
-
-fn profile_min_matching_witnesses(profile: PolicyInitProfile) -> u32 {
-    match profile {
-        PolicyInitProfile::SelfProofOnly => SELF_PROOF_ONLY_QUORUM,
-        PolicyInitProfile::SingleWitness => SINGLE_WITNESS_QUORUM,
-    }
 }
 
 fn validate_policy_output_path(path: &Path, force: bool) -> Result<(), RunError> {
@@ -375,10 +285,35 @@ fn validate_policy_output_path(path: &Path, force: bool) -> Result<(), RunError>
     Ok(())
 }
 
-fn write_json_document<T: Serialize>(path: &Path, document: &T) -> Result<(), RunError> {
+fn write_json_document<T: Serialize>(path: &Path, document: &T, force: bool) -> Result<(), RunError> {
     let json_bytes = serde_json::to_vec_pretty(document)
         .map_err(|err| RunError::Internal(format!("serializing {}: {err}", path.display())))?;
-    std::fs::write(path, json_bytes).map_err(|err| RunError::Internal(format!("writing {}: {err}", path.display())))
+    let parent = path
+        .parent()
+        .ok_or_else(|| RunError::Internal(format!("policy output has no parent: {}", path.display())))?;
+    let mut stage = tempfile::NamedTempFile::new_in(parent)
+        .map_err(|err| RunError::Internal(format!("creating policy stage in {}: {err}", parent.display())))?;
+    stage
+        .write_all(&json_bytes)
+        .map_err(|err| RunError::Internal(format!("writing policy stage for {}: {err}", path.display())))?;
+    stage
+        .as_file_mut()
+        .sync_all()
+        .map_err(|err| RunError::Internal(format!("syncing policy stage for {}: {err}", path.display())))?;
+    if force {
+        stage
+            .persist(path)
+            .map_err(|err| RunError::Internal(format!("publishing {}: {}", path.display(), err.error)))?;
+    } else {
+        stage.persist_noclobber(path).map_err(|err| {
+            RunError::Internal(format!("publishing {} without replacement: {}", path.display(), err.error))
+        })?;
+    }
+    let parent_directory = std::fs::File::open(parent)
+        .map_err(|err| RunError::Internal(format!("opening policy parent {}: {err}", parent.display())))?;
+    parent_directory
+        .sync_all()
+        .map_err(|err| RunError::Internal(format!("syncing policy parent {}: {err}", parent.display())))
 }
 
 pub(crate) fn default_verification_dir(current_dir: &Path, release_id: &str) -> PathBuf {
@@ -461,6 +396,7 @@ fn evaluate_release_verification(
         considered_witness_count,
         technical_class: evaluation.trust_tier.technical_class,
         policy_status: evaluation.trust_tier.policy_status,
+        witness_quorum_status: evaluation.witness_quorum_status,
         final_class: evaluation.trust_tier.final_class,
         matching_witness_count: evaluation.matching_witness_count,
         independent_witness_identities: evaluation.independent_witness_identities,
@@ -1343,18 +1279,21 @@ mod tests {
 
     #[test]
     fn build_policy_file_contents_self_proof_only_drops_witnesses() {
-        let created = build_policy_file_contents(
-            PolicyInitProfile::SelfProofOnly,
-            &[
-                "release-b".to_string(),
-                "release-a".to_string(),
-                "release-a".to_string(),
-            ],
-            &[],
-        )
+        let release_signers = [
+            "release-b".to_string(),
+            "release-a".to_string(),
+            "release-a".to_string(),
+        ];
+        let created = build_policy_file_contents(PolicyProfileRequest {
+            profile: PolicyInitProfile::SelfProofOnly,
+            min_matching_witnesses: None,
+            independence_field: None,
+            trusted_release_signers: &release_signers,
+            trusted_witness_identities: &[],
+        })
         .unwrap();
 
-        assert_eq!(created.policy.min_matching_witnesses, SELF_PROOF_ONLY_QUORUM);
+        assert_eq!(created.policy.min_matching_witnesses, 0);
         assert_eq!(created.policy.trusted_release_signers, vec!["release-a".to_string(), "release-b".to_string()]);
         assert!(created.policy.trusted_witness_signers.is_empty());
         assert_eq!(created.revocations, ReleaseRevocations::empty());
@@ -1362,20 +1301,33 @@ mod tests {
 
     #[test]
     fn build_policy_file_contents_single_witness_requires_identity() {
-        let err =
-            build_policy_file_contents(PolicyInitProfile::SingleWitness, &["release-a".to_string()], &[]).unwrap_err();
+        let release_signers = ["release-a".to_string()];
+        let err = build_policy_file_contents(PolicyProfileRequest {
+            profile: PolicyInitProfile::SingleWitness,
+            min_matching_witnesses: None,
+            independence_field: None,
+            trusted_release_signers: &release_signers,
+            trusted_witness_identities: &[],
+        })
+        .unwrap_err();
 
-        assert!(err.message().contains("single-witness profile requires at least one trusted witness identity"));
+        assert!(err.message().contains("trusted_witness_identities requires 1 value"));
     }
 
     #[test]
     fn build_policy_file_contents_self_proof_only_rejects_identity() {
-        let err = build_policy_file_contents(PolicyInitProfile::SelfProofOnly, &["release-a".to_string()], &[
-            "witness-a".to_string(),
-        ])
+        let release_signers = ["release-a".to_string()];
+        let witness_identities = ["witness-a".to_string()];
+        let err = build_policy_file_contents(PolicyProfileRequest {
+            profile: PolicyInitProfile::SelfProofOnly,
+            min_matching_witnesses: None,
+            independence_field: None,
+            trusted_release_signers: &release_signers,
+            trusted_witness_identities: &witness_identities,
+        })
         .unwrap_err();
 
-        assert!(err.message().contains("self-proof-only profile does not accept trusted witness identities"));
+        assert!(err.message().contains("self-proof-only does not accept parameter trusted_witness_identities"));
     }
 
     fn sample_manifest() -> ReleaseEvidenceManifest {

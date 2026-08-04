@@ -1843,7 +1843,8 @@ let Registry = {
         "cargo test -p mantle release_attestation::tests"
       ],
       "fixture_coverage"= [
-        "classification"
+        "classification",
+        "optional and explicit quorum status"
       ],
       "freshness_strategy"= "classification only pending policy-output cohort",
       "freshness"= {
@@ -1857,7 +1858,7 @@ let Registry = {
       "non_claims"= [
         "verification output shape is not a substitute for cryptographic evidence"
       ],
-      "rationale"= "Policy and witness reports remain compatibility surfaces under their owning release work."
+      "rationale"= "Policy and witness reports retain exact evidence facts and separate zero-threshold status from positive quorum claims."
     },
     {
       "id"= "release.evidence-reports",

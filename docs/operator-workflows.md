@@ -981,7 +981,7 @@ RELEASE_TRUSTED_KEY=$(mantle attest key-show --signing-key /path/to/release.key)
 RELEASE_SIGNER_NAME="${RELEASE_TRUSTED_KEY%%:*}"
 
 mantle attest policy-init target/release-verification/<release-id> \
-  --profile single-witness \
+  --profile optional-witness \
   --trusted-release-signer "$RELEASE_SIGNER_NAME" \
   --trusted-witness-identity <witness-identity>
 
@@ -990,10 +990,32 @@ mantle release witness-export target/release-evidence/<release-id> \
   --request-dir target/release-witness-requests/<release-id>
 ```
 
-Use `--profile self-proof-only` when the verification directory should stay at a
-self-proof-only policy with `min_matching_witnesses = 0`. Use
-`--profile single-witness` when one matching witness should be enough to satisfy
-policy. `mantle attest key-show` prints the exact `name:base64` verifier token
+Use `--profile optional-witness` to verify available trusted witnesses without a
+witness-count requirement. Verification reports `not-required` when the policy
+minimum is zero. Valid witnesses remain visible as individual evidence.
+
+Use `--profile self-proof-only` for the compatible zero-threshold policy that
+accepts no trusted witness identities. Use `--profile single-witness` for the
+compatible one-witness policy.
+
+Select a larger quorum only with explicit values:
+
+```bash
+mantle attest policy-init target/release-verification/<release-id> \
+  --profile witness-quorum \
+  --trusted-release-signer "$RELEASE_SIGNER_NAME" \
+  --trusted-witness-identity witness-a \
+  --trusted-witness-identity witness-b \
+  --min-matching-witnesses 2 \
+  --independence-field witness_identity
+```
+
+Supported independence fields are `witness_identity`, `signer_key_name`, and
+`rebuild_environment_summary.host_class`. The command rejects missing, zero,
+unsupported, or unbounded quorum values. It also rejects duplicate names and a
+quorum larger than the trusted witness identity set.
+
+`mantle attest key-show` prints the exact `name:base64` verifier token
 accepted by `--trusted-public-key`; omit `--signing-key` to read the default
 configured signing key instead. The signer name for `--trusted-release-signer`
 is the token prefix before the colon, so a shell workflow can derive it with
@@ -1058,9 +1080,17 @@ closed on missing signatures, release-digest mismatches, and conflicting
 existing witness identities before copying anything into the publisher
 verification directory.
 
-`mantle attest release-verify --json` reports bundle-local technical validity,
-social policy sufficiency, and independent rebuild agreement as separate
-fields. The independent agreement fields are `independent_agreement_status`,
+`mantle attest release-verify` writes the JSON report to standard output. It
+also writes the two policy-status lines to standard error. Use the global
+`--json` option for JSON-only output.
+
+The report keeps technical validity, social policy sufficiency, and independent
+rebuild agreement separate. `witness_quorum_status` uses only `not-required`,
+`satisfied`, or `insufficient`. A zero threshold never emits `quorum-satisfied`
+as the final class. Optional invalid evidence remains visible but cannot
+satisfy policy.
+
+The independent agreement fields are `independent_agreement_status`,
 `independent_agreement_class`, `independent_agreement_report_digest`,
 `independent_agreement_counted_witness_count`,
 `independent_agreement_skipped_witness_count`,
@@ -1082,7 +1112,8 @@ Release-evidence bundles may carry the same optional report artifact at
 verification applies.
 
 A successful single-witness run proves external witness agreement only under
-the configured policy; a satisfied independent-agreement status gives the
+the configured policy. An optional witness proves the same individual digest
+and signature facts without a quorum claim. A satisfied independent-agreement status gives the
 stronger verifier-local `independent-rebuild-agreement` class for the accepted
 witness set. It still does not prove a full-source bootstrap root, globally
 reproducible release outputs, or global reproducibility for all Mantle build
