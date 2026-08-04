@@ -434,7 +434,10 @@ The output path must not exist. The command replaces exactly one Mantle source
 record. It preserves every other source record and can add materialized fetch
 records from repeated `--include-bundle` arguments. It recomputes the profile
 BLAKE3. It rejects missing, duplicate, mixed-mode, conflicting, classified, or
-changed authority metadata.
+changed authority metadata. Supplemental records must be materialized fetch
+inputs. The proof still requires every native and StageX record to match its
+bound manifest. The expected profile and combined source-manifest BLAKE3 values
+bind each added record.
 
 Run the proof with independent digests and explicit executable paths:
 

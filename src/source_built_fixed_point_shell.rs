@@ -633,6 +633,12 @@ fn validate_materialized_source_records(
     }
     let mut profile_by_identity = BTreeMap::new();
     for record in profile_records {
+        if !crate::source_bundle::source_record_is_fetcher_input(record) {
+            return Err(proof_error(format!(
+                "materialized source profile contains non-fetch source authority {}",
+                record.identity
+            )));
+        }
         if profile_by_identity.insert(record.identity.as_str(), *record).is_some() {
             return Err(proof_error(format!(
                 "materialized source profile repeats source identity {}",
@@ -640,13 +646,7 @@ fn validate_materialized_source_records(
             )));
         }
     }
-    if profile_by_identity.len() != expected_by_identity.len() {
-        return Err(proof_error(format!(
-            "materialized source record set differs from the exact native and StageX union: expected={}, profile={}",
-            expected_by_identity.len(),
-            profile_by_identity.len()
-        )));
-    }
+    let expected_record_count = expected_by_identity.len();
     for (identity, expected_record) in expected_by_identity {
         let Some(profile_record) = profile_by_identity.get(identity) else {
             return Err(proof_error(format!("materialized source profile omits bound source identity {identity}")));
@@ -658,6 +658,7 @@ fn validate_materialized_source_records(
         }
     }
     assert!(!profile_records.is_empty());
+    assert!(profile_by_identity.len() >= expected_record_count);
     debug_assert_eq!(native_manifest.store_prefix, stagex_manifest.store_prefix);
     Ok(())
 }
@@ -2085,14 +2086,16 @@ mod tests {
     }
 
     #[test]
-    fn materialized_source_records_match_exact_native_and_stagex_union() {
+    fn materialized_source_records_preserve_bound_union_and_allow_profile_bound_fetches() {
         let temp = tempfile::tempdir().unwrap();
         let native_payload = temp.path().join("native");
         let stagex_payload = temp.path().join("stagex");
         let extra_payload = temp.path().join("extra");
+        let mismatched_native_payload = temp.path().join("mismatched-native");
         fs::write(&native_payload, b"native source").unwrap();
         fs::write(&stagex_payload, b"stagex source").unwrap();
         fs::write(&extra_payload, b"extra source").unwrap();
+        fs::write(&mismatched_native_payload, b"mismatched native source").unwrap();
         let native = crate::source_bundle::plan_source_bundle(
             &[crate::source_bundle::SourceSpec {
                 kind: crate::source_bundle::SourceRecordKind::FixedUrl,
@@ -2123,6 +2126,16 @@ mod tests {
             LOGICAL_STORE_PREFIX,
         )
         .unwrap();
+        let mismatched_native = crate::source_bundle::plan_source_bundle(
+            &[crate::source_bundle::SourceSpec {
+                kind: crate::source_bundle::SourceRecordKind::FixedUrl,
+                identity: "native".to_string(),
+                path: mismatched_native_payload,
+                adapter: None,
+            }],
+            LOGICAL_STORE_PREFIX,
+        )
+        .unwrap();
         let exact = vec![&native.records[0], &stagex.records[0]];
         let mut native_with_constructed_authority = native.clone();
         let mut constructed_authority = native.records[0].clone();
@@ -2142,17 +2155,29 @@ mod tests {
             &native_raw_digest,
         );
         let missing_error = validate_materialized_source_records(&native, &stagex, &[&native.records[0]]).unwrap_err();
-        let extra_error = validate_materialized_source_records(&native, &stagex, &[
+        validate_materialized_source_records(&native, &stagex, &[
             &native.records[0],
             &stagex.records[0],
             &extra.records[0],
+        ])
+        .unwrap();
+        let constructed_error = validate_materialized_source_records(&native, &stagex, &[
+            &native.records[0],
+            &stagex.records[0],
+            &native_with_constructed_authority.records[1],
+        ])
+        .unwrap_err();
+        let mismatch_error = validate_materialized_source_records(&native, &stagex, &[
+            &mismatched_native.records[0],
+            &stagex.records[0],
         ])
         .unwrap_err();
 
         assert_eq!(native_input.digest_blake3, native_raw_digest);
         assert_ne!(native_input.digest_blake3, native.records[0].content_blake3);
-        assert!(missing_error.to_string().contains("exact native and StageX union"));
-        assert!(extra_error.to_string().contains("exact native and StageX union"));
+        assert!(missing_error.to_string().contains("omits bound source identity"));
+        assert!(constructed_error.to_string().contains("non-fetch source authority"));
+        assert!(mismatch_error.to_string().contains("differs from its independently bound manifest"));
     }
 
     #[test]
