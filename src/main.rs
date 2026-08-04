@@ -153,6 +153,7 @@ mod semantic_graph;
 mod shell_cmd;
 #[allow(dead_code)]
 mod source_built_fixed_point;
+mod source_built_fixed_point_dev_cache;
 mod source_built_fixed_point_receipt;
 mod source_built_fixed_point_shell;
 mod source_bundle;
@@ -870,6 +871,18 @@ enum Command {
         /// Maximum native source records recorded in the immutable plan.
         #[arg(long, default_value_t = SOURCE_BUILT_FIXED_POINT_SOURCE_RECORDS_MAX_DEFAULT, requires = "source_built_fixed_point")]
         proof_source_records_max: u32,
+
+        /// Opt-in dev-only provider-output cache and store snapshot directory.
+        #[arg(long, requires = "source_built_fixed_point")]
+        dev_provider_cache: Option<PathBuf>,
+
+        /// Resume a dev run from verified per-stage completion markers.
+        #[arg(long, requires = "source_built_fixed_point")]
+        dev_resume: bool,
+
+        /// Fast-fail a dev run when the current source profile is unchanged.
+        #[arg(long, requires = "source_built_fixed_point")]
+        dev_fast_fail: bool,
 
         /// Build Mantle through native Rust topology execution without invoking Cargo.
         #[arg(long)]
@@ -7684,6 +7697,9 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             proof_disk_bytes_max,
             proof_exec_events_max,
             proof_source_records_max,
+            dev_provider_cache,
+            dev_resume,
+            dev_fast_fail,
             cargo_free,
             fixed_point,
             out,
@@ -7721,6 +7737,9 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             proof_disk_bytes_max: *proof_disk_bytes_max,
             proof_exec_events_max: *proof_exec_events_max,
             proof_source_records_max: *proof_source_records_max,
+            dev_provider_cache: dev_provider_cache.as_deref(),
+            dev_resume: *dev_resume,
+            dev_fast_fail: *dev_fast_fail,
             cargo_free: *cargo_free,
             fixed_point: *fixed_point,
             out: out.as_deref(),
@@ -7760,6 +7779,9 @@ struct SelfBuildCommandRequest<'a> {
     proof_disk_bytes_max: u64,
     proof_exec_events_max: u32,
     proof_source_records_max: u32,
+    dev_provider_cache: Option<&'a Path>,
+    dev_resume: bool,
+    dev_fast_fail: bool,
     cargo_free: bool,
     fixed_point: bool,
     out: Option<&'a Path>,
@@ -7826,6 +7848,9 @@ fn run_source_built_fixed_point(request: &SelfBuildCommandRequest<'_>) -> Result
             disk_bytes_max: request.proof_disk_bytes_max,
             protected_exec_events_max: request.proof_exec_events_max,
             source_records_max: request.proof_source_records_max,
+            dev_provider_cache: request.dev_provider_cache,
+            dev_resume: request.dev_resume,
+            dev_fast_fail: request.dev_fast_fail,
             verbose: request.ctx.verbose,
             json: request.ctx.json,
         },
@@ -10450,6 +10475,44 @@ let Plan = {
             source_built_fixed_point: true,
             cargo_free: false,
             source_profile: Some(_),
+            out: Some(_),
+            ..
+        }));
+    }
+
+    #[test]
+    fn self_build_cli_accepts_dev_cache_flags_without_promoting_cold_path() {
+        const DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let args = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "self-build",
+            "--source-built-fixed-point",
+            "--source-profile",
+            "/tmp/source-profile.json",
+            "--expected-source-profile-blake3",
+            DIGEST,
+            "--expected-stagex-lineage-blake3",
+            DIGEST,
+            "--expected-native-provider-blake3",
+            DIGEST,
+            "--proof-bwrap",
+            "/tmp/bwrap",
+            "--proof-sandbox-shell",
+            "/tmp/busybox",
+            "--out",
+            "/tmp/source-built-proof",
+            "--dev-provider-cache",
+            "/tmp/dev-cache",
+            "--dev-resume",
+            "--dev-fast-fail",
+        ]))
+        .expect("CLI parser test");
+
+        assert!(matches!(args.command, Command::SelfBuild {
+            source_built_fixed_point: true,
+            dev_provider_cache: Some(_),
+            dev_resume: true,
+            dev_fast_fail: true,
             out: Some(_),
             ..
         }));
