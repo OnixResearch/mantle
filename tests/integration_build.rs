@@ -15,6 +15,8 @@ use crunch_glue::ConversionCache;
 use crunch_glue::CrunchDerivation;
 use crunch_glue::Input;
 
+const FETCH_TEST_PATH_INFO_CAPACITY: usize = 128;
+
 #[test]
 fn typed_nickel_workspace_policy_matches_rust_and_rejects_invalid_bounds() {
     let temp = tempfile::tempdir().unwrap();
@@ -131,6 +133,41 @@ fn test_trusted_keys() -> Vec<nix_compat::narinfo::VerifyingKey> {
     crunch_build::build_trusted_keys(&test_keypair(), None)
 }
 
+fn make_test_builder<BServ, BS, DS, PIS>(
+    services: (BS, DS, PIS),
+    build_service: BServ,
+    output_dir: &Path,
+    is_verbose: bool,
+) -> crunch_build::Builder<BServ>
+where
+    BServ: snix_build::buildservice::BuildService + 'static,
+    BS: snix_castore::blobservice::BlobService + 'static,
+    DS: snix_castore::directoryservice::DirectoryService + 'static,
+    PIS: snix_store::pathinfoservice::PathInfoService + 'static,
+{
+    let (blob_service, directory_service, pathinfo_service) = services;
+    let store = crunch_store::StoreHandle::from_services_with_store_dir(
+        crunch_store::StoreHandleServices {
+            blob_service: std::sync::Arc::new(blob_service),
+            directory_service: std::sync::Arc::new(directory_service),
+            pathinfo_service: std::sync::Arc::new(pathinfo_service),
+            remote_pathinfo: None,
+            state_dir: output_dir.join("state"),
+            output_dir_str: output_dir.to_string_lossy().into_owned(),
+            publishers: Vec::new(),
+        },
+        nix_compat::store_path::STORE_DIR.to_string(),
+    );
+    crunch_build::Builder::from_store_parts(
+        store.into_builder_store_parts(),
+        build_service,
+        test_keypair(),
+        test_trusted_keys(),
+        true,
+        is_verbose,
+    )
+}
+
 fn stdlib_import_path() -> Vec<OsString> {
     let lib_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib");
     vec![lib_dir.into()]
@@ -203,16 +240,10 @@ fn cache_hit_skips_build() {
             std::num::NonZeroUsize::new(128).unwrap(),
         );
 
-        let mut builder = crunch_build::Builder::new(
-            blob_service,
-            directory_service,
+        let mut builder = make_test_builder(
+            (blob_service, directory_service, pis),
             DummyBuildService::default(),
-            pis,
-            PathBuf::from("/nix/store"),
-            nix_compat::store_path::STORE_DIR,
-            test_keypair(),
-            test_trusted_keys(),
-            true,
+            Path::new("/nix/store"),
             false,
         );
 
@@ -340,21 +371,11 @@ fn end_to_end_trivial_build() {
 
             let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
                 "test".to_string(),
-                std::num::NonZeroUsize::new(128).unwrap(),
+                std::num::NonZeroUsize::new(FETCH_TEST_PATH_INFO_CAPACITY).unwrap(),
             );
 
-            let mut builder = crunch_build::Builder::new(
-                blob_service,
-                directory_service,
-                build_service,
-                pis,
-                PathBuf::from("/nix/store"),
-                nix_compat::store_path::STORE_DIR,
-                test_keypair(),
-                test_trusted_keys(),
-                true,
-                true,
-            );
+            let mut builder =
+                make_test_builder((blob_service, directory_service, pis), build_service, Path::new("/nix/store"), true);
 
             let outcome = builder.build(&drv_path, &mut kp).await;
 
@@ -453,21 +474,11 @@ fn end_to_end_ca_build() {
 
             let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
                 "test".to_string(),
-                NonZeroUsize::new(128).unwrap(),
+                NonZeroUsize::new(FETCH_TEST_PATH_INFO_CAPACITY).unwrap(),
             );
 
-            let mut builder = crunch_build::Builder::new(
-                blob_service,
-                directory_service,
-                build_service,
-                pis,
-                PathBuf::from("/nix/store"),
-                nix_compat::store_path::STORE_DIR,
-                test_keypair(),
-                test_trusted_keys(),
-                true,
-                true,
-            );
+            let mut builder =
+                make_test_builder((blob_service, directory_service, pis), build_service, Path::new("/nix/store"), true);
 
             let outcome = builder.build(&drv_path, &mut kp).await;
 
@@ -571,13 +582,7 @@ fn eval_hello_world_with_seed() {
 fn make_fetch_builder(
     output_dir: &std::path::Path,
 ) -> crunch_build::Builder<
-    crunch_build::DispatchBuildService<
-        crunch_build::FetchBuildService<
-            snix_castore::blobservice::MemoryBlobService,
-            snix_castore::directoryservice::RedbDirectoryService,
-        >,
-        snix_build::buildservice::DummyBuildService,
-    >,
+    crunch_build::DispatchBuildService<crunch_build::FetchBuildService, snix_build::buildservice::DummyBuildService>,
 > {
     use snix_build::buildservice::DummyBuildService;
     use snix_castore::blobservice::MemoryBlobService;
@@ -591,20 +596,38 @@ fn make_fetch_builder(
         cache_size: None,
     })
     .unwrap();
-    let fetch_service = crunch_build::FetchBuildService::new(blob_service.clone(), directory_service.clone());
-    let dispatch = crunch_build::DispatchBuildService::new(fetch_service, DummyBuildService::default());
     let pis = snix_store::pathinfoservice::LruPathInfoService::with_capacity(
         "test".to_string(),
-        NonZeroUsize::new(128).unwrap(),
+        NonZeroUsize::new(FETCH_TEST_PATH_INFO_CAPACITY).unwrap(),
     );
+    let store = crunch_store::StoreHandle::from_services_with_store_dir(
+        crunch_store::StoreHandleServices {
+            blob_service: std::sync::Arc::new(blob_service),
+            directory_service: std::sync::Arc::new(directory_service),
+            pathinfo_service: std::sync::Arc::new(pis),
+            remote_pathinfo: None,
+            state_dir: output_dir.join("state"),
+            output_dir_str: output_dir.to_string_lossy().into_owned(),
+            publishers: Vec::new(),
+        },
+        nix_compat::store_path::STORE_DIR.to_string(),
+    );
+    let crunch_store::PipelineStoreParts {
+        build_store,
+        action_results,
+        build_service_store,
+        output_lookup: _output_lookup,
+        root_registry: _root_registry,
+    } = store.into_pipeline_store_parts();
+    let fetch_service = crunch_build::FetchBuildService::new(build_service_store);
+    let dispatch = crunch_build::DispatchBuildService::new(fetch_service, DummyBuildService::default());
 
-    crunch_build::Builder::new(
-        blob_service,
-        directory_service,
+    crunch_build::Builder::from_store_parts(
+        crunch_store::BuilderStoreParts {
+            build_store,
+            action_results,
+        },
         dispatch,
-        pis,
-        output_dir.to_path_buf(),
-        nix_compat::store_path::STORE_DIR,
         test_keypair(),
         test_trusted_keys(),
         true,

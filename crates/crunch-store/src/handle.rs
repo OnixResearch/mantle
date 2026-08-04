@@ -382,14 +382,14 @@ pub struct ActionResultOutputProbe {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct NarByteAccounting {
-    transferred_nar_bytes: u64,
-    reused_nar_bytes: u64,
-    nar_size_bytes: u64,
-    is_transferred: bool,
+pub(crate) struct NarByteAccounting {
+    pub(crate) transferred_nar_bytes: u64,
+    pub(crate) reused_nar_bytes: u64,
+    pub(crate) nar_size_bytes: u64,
+    pub(crate) is_transferred: bool,
 }
 
-fn account_action_result_nar_bytes(accounting: NarByteAccounting) -> Result<(u64, u64), String> {
+pub(crate) fn account_action_result_nar_bytes(accounting: NarByteAccounting) -> Result<(u64, u64), String> {
     if accounting.is_transferred {
         let transferred_nar_bytes = accounting
             .transferred_nar_bytes
@@ -1047,6 +1047,10 @@ impl StoreHandle {
 
     pub fn replace_action_result_stores(&mut self, stores: ActionResultStoreSet) {
         self.action_result_stores = stores;
+    }
+
+    pub(crate) fn take_action_result_stores(&mut self) -> ActionResultStoreSet {
+        std::mem::replace(&mut self.action_result_stores, ActionResultStoreSet::new(false))
     }
 
     pub fn list_retained_roots(&self) -> Result<Vec<GcRootRecord>, Error> {

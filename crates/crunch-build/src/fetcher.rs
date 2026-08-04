@@ -16,10 +16,6 @@ use nix_compat::derivation::Derivation;
 use nix_compat::nixhash::CAHash;
 use nix_compat::nixhash::HashAlgo;
 use nix_compat::nixhash::NixHash;
-use snix_castore::blobservice::MemoryBlobService;
-use snix_castore::directoryservice::RedbDirectoryService;
-use snix_castore::directoryservice::RedbDirectoryServiceConfig;
-use snix_castore::import::fs::ingest_path;
 use tracing::info;
 use tracing::warn;
 use url::Url;
@@ -280,29 +276,8 @@ pub fn verify_recursive_hash(out_path: &Path, expected: &NixHash, name: &str) ->
     verify_hash_bytes(&out_path.display().to_string(), expected, name, actual.digest_as_bytes())
 }
 
-#[allow(
-    tigerstyle::explicit_defaults,
-    reason = "MemoryBlobService has private fields and exposes Default as its only direct constructor"
-)]
-fn empty_recursive_hash_blob_service() -> MemoryBlobService {
-    MemoryBlobService::default()
-}
-
 async fn recursive_path_hash(out_path: &Path, algo: HashAlgo) -> Result<NixHash, FetchError> {
-    let blob_service = empty_recursive_hash_blob_service();
-    let directory_service =
-        RedbDirectoryService::new_temporary("fetch-capture-hash".to_string(), RedbDirectoryServiceConfig {
-            path: None,
-            cache_size: None,
-            read_only: false,
-        })
-        .map_err(|error| {
-            FetchError::Io(io::Error::other(format!("creating recursive hash directory service: {error}")))
-        })?;
-    let node = ingest_path::<_, _, _, &[u8]>(blob_service.clone(), directory_service.clone(), out_path, None)
-        .await
-        .map_err(|error| FetchError::Io(io::Error::other(format!("ingesting recursive hash path: {error}"))))?;
-    crate::hash::nar_hash(&node, algo, blob_service, directory_service)
+    crunch_store::hash_host_path(out_path, algo)
         .await
         .map_err(|error| FetchError::Io(io::Error::other(format!("hashing recursive fetch output: {error}"))))
 }

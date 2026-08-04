@@ -21,9 +21,11 @@ use snix_build::buildservice::BuildService;
 use snix_castore::Node;
 use snix_castore::blobservice::BlobService;
 use snix_castore::blobservice::MemoryBlobService;
+use snix_castore::directoryservice::DirectoryService;
 use snix_castore::directoryservice::RedbDirectoryService;
 use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 use snix_store::pathinfoservice::LruPathInfoService;
+use snix_store::pathinfoservice::PathInfoService;
 use tokio::io::AsyncWriteExt;
 
 use crate::registry::DerivationRegistry;
@@ -49,7 +51,37 @@ pub fn test_trusted_keys() -> Vec<VerifyingKey> {
 
 /// Create an in-memory LRU path info service.
 pub fn test_pis() -> LruPathInfoService {
-    LruPathInfoService::with_capacity("test".to_string(), std::num::NonZeroUsize::new(128).unwrap())
+    const TEST_PATH_INFO_CAPACITY: usize = 128;
+    let capacity = std::num::NonZeroUsize::new(TEST_PATH_INFO_CAPACITY).expect("test capacity must be positive");
+    LruPathInfoService::with_capacity("test".to_string(), capacity)
+}
+
+pub fn store_handle<BS, DS>(blob_service: BS, directory_service: DS) -> crunch_store::StoreHandle
+where
+    BS: BlobService + 'static,
+    DS: DirectoryService + 'static,
+{
+    const TEST_STORE_DIR: &str = "/nix/store";
+    crunch_store::StoreHandle::from_services_with_store_dir(
+        crunch_store::StoreHandleServices {
+            blob_service: Arc::new(blob_service),
+            directory_service: Arc::new(directory_service),
+            pathinfo_service: Arc::new(test_pis()) as Arc<dyn PathInfoService>,
+            remote_pathinfo: None,
+            state_dir: std::path::PathBuf::from("/tmp/mantle-store-authority-test"),
+            output_dir_str: TEST_STORE_DIR.to_string(),
+            publishers: Vec::new(),
+        },
+        TEST_STORE_DIR.to_string(),
+    )
+}
+
+pub fn pipeline_store_parts<BS, DS>(blob_service: BS, directory_service: DS) -> crunch_store::PipelineStoreParts
+where
+    BS: BlobService + 'static,
+    DS: DirectoryService + 'static,
+{
+    store_handle(blob_service, directory_service).into_pipeline_store_parts()
 }
 
 /// A mock BuildService that records command_args from each request and

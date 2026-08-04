@@ -3,14 +3,17 @@
 //! crunch-store: Store operations for crunch.
 //!
 //! Owns service construction, cache checking, realization (castore -> disk
-//! export), CA mapping persistence, and store queries. Consumers receive a
-//! `StoreHandle` — they do not construct or own individual services.
+//! export), CA mapping persistence, and store queries. Build and pipeline
+//! consumers receive narrow capability values. Shell code can retain the
+//! compatibility `StoreHandle` for explicit orchestration.
 
 mod action_result;
 mod archive;
 mod attestation;
 mod audit;
+mod build_io;
 mod ca_mapping;
+mod capability;
 mod closure;
 mod completeness;
 mod error;
@@ -67,8 +70,18 @@ pub use attestation::closure_attestation_file_path;
 pub use attestation::persist_artifact_attestation;
 pub use audit::StoreAuditEvent;
 pub use audit::StoreAuditKind;
+pub use build_io::hash_host_path;
 pub use ca_mapping::CaMappings;
 pub use ca_mapping::OutputMap;
+pub use capability::ActionResultPort;
+pub use capability::BuildServiceStore;
+pub use capability::BuildStore;
+pub use capability::BuilderStoreParts;
+pub use capability::OutputLookup;
+pub use capability::PipelineStoreParts;
+pub use capability::RootRegistry;
+pub use capability::SourceAdmission;
+pub use capability::StoreAdmin;
 pub use closure::ClosureResolution;
 pub use closure::MAX_CLOSURE_DEPTH;
 pub use closure::resolve_closure;

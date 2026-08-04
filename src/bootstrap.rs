@@ -840,22 +840,40 @@ async fn fetch_raw_seed(request: FetchRawSeedRequest<'_>) -> Result<String, RunE
     } else {
         crunch_build::FetchSourcePolicy::RequireOverride
     };
-    let fetch_service = crunch_build::FetchBuildService::new(blob_service.clone(), directory_service.clone())
+    let store = crunch_store::StoreHandle::from_services_with_store_dir(
+        crunch_store::StoreHandleServices {
+            blob_service: blob_service as std::sync::Arc<dyn snix_castore::blobservice::BlobService>,
+            directory_service: std::sync::Arc::new(directory_service)
+                as std::sync::Arc<dyn snix_castore::directoryservice::DirectoryService>,
+            pathinfo_service: std::sync::Arc::new(pathinfo_service)
+                as std::sync::Arc<dyn snix_store::pathinfoservice::PathInfoService>,
+            remote_pathinfo: None,
+            state_dir,
+            output_dir_str: request.store_dir.to_string_lossy().into_owned(),
+            publishers: Vec::new(),
+        },
+        LOGICAL_STORE_DIR.to_string(),
+    );
+    let crunch_store::PipelineStoreParts {
+        build_store,
+        action_results,
+        build_service_store,
+        output_lookup: _output_lookup,
+        root_registry: _root_registry,
+    } = store.into_pipeline_store_parts();
+    let fetch_service = crunch_build::FetchBuildService::new(build_service_store)
         .with_source_overrides(request.source_fetch_overrides)
         .with_source_policy(source_policy);
 
     let (bootstrap_keypair, _bootstrap_key_line) = crunch_build::generate_keypair();
     let bootstrap_trusted = crunch_build::build_trusted_keys(&bootstrap_keypair, None);
 
-    let mut builder = crunch_build::Builder::with_state_dir(
-        blob_service as std::sync::Arc<dyn snix_castore::blobservice::BlobService>,
-        std::sync::Arc::new(directory_service) as std::sync::Arc<dyn snix_castore::directoryservice::DirectoryService>,
+    let mut builder = crunch_build::Builder::from_store_parts(
+        crunch_store::BuilderStoreParts {
+            build_store,
+            action_results,
+        },
         fetch_service,
-        std::sync::Arc::new(pathinfo_service) as std::sync::Arc<dyn snix_store::pathinfoservice::PathInfoService>,
-        request.store_dir.to_path_buf(),
-        Some(state_dir),
-        None,
-        LOGICAL_STORE_DIR,
         bootstrap_keypair,
         bootstrap_trusted,
         false,

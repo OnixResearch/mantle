@@ -20,9 +20,6 @@ use snix_build::buildservice::BuildOutput;
 use snix_build::buildservice::BuildRequest;
 use snix_build::buildservice::BuildResult;
 use snix_build::buildservice::BuildService;
-use snix_castore::blobservice::BlobService;
-use snix_castore::directoryservice::DirectoryService;
-use snix_castore::import::fs::ingest_path;
 use tracing::info;
 use url::Url;
 
@@ -426,18 +423,17 @@ fn set_executable_mode(_path: &Path) -> Result<(), FetchError> {
 ///
 /// Non-fetch requests are rejected with an error — use
 /// `DispatchBuildService` to route between fetch and sandbox services.
-pub struct FetchBuildService<BS, DS> {
-    blob_service: BS,
-    directory_service: DS,
+pub struct FetchBuildService {
+    store: crunch_store::BuildServiceStore,
     source_overrides: Vec<FetchSourceOverride>,
     source_policy: FetchSourcePolicy,
 }
 
-impl<BS, DS> FetchBuildService<BS, DS> {
-    pub fn new(blob_service: BS, directory_service: DS) -> Self {
+impl FetchBuildService {
+    #[must_use]
+    pub fn new(store: crunch_store::BuildServiceStore) -> Self {
         Self {
-            blob_service,
-            directory_service,
+            store,
             source_overrides: Vec::new(),
             source_policy: FetchSourcePolicy::AllowNetwork,
         }
@@ -456,11 +452,7 @@ impl<BS, DS> FetchBuildService<BS, DS> {
 }
 
 #[async_trait]
-impl<BS, DS> BuildService for FetchBuildService<BS, DS>
-where
-    BS: BlobService + Clone + Send + Sync + 'static,
-    DS: DirectoryService + Clone + Send + Sync + 'static,
-{
+impl BuildService for FetchBuildService {
     async fn do_build(&self, request: BuildRequest) -> io::Result<BuildResult> {
         // Tiger Style: assert the request has at least one output.
         debug_assert!(!request.outputs.is_empty(), "fetch request must have at least one output");
@@ -547,10 +539,11 @@ where
         }
 
         // Ingest into castore.
-        let node =
-            ingest_path::<_, _, _, &[u8]>(self.blob_service.clone(), self.directory_service.clone(), &out_path, None)
-                .await
-                .map_err(|e| io::Error::other(format!("ingesting fetch output: {e}")))?;
+        let node = self
+            .store
+            .ingest_host_path(&out_path)
+            .await
+            .map_err(|error| io::Error::other(format!("ingesting fetch output: {error}")))?;
 
         // One BuildOutput per requested output.
         // Fetcher outputs have no self-references → empty needles.
@@ -596,6 +589,14 @@ mod tests {
 
     fn tmp_ds() -> RedbDirectoryService {
         RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default()).unwrap()
+    }
+
+    fn test_fetch_service(
+        blob_service: MemoryBlobService,
+        directory_service: RedbDirectoryService,
+    ) -> FetchBuildService {
+        let parts = crate::test_support::pipeline_store_parts(blob_service, directory_service);
+        FetchBuildService::new(parts.build_service_store)
     }
 
     fn env(key: &str, value: &str) -> EnvVar {
@@ -782,7 +783,7 @@ mod tests {
         const LOCAL_PAYLOAD: &[u8] = b"hello fetch service";
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
-        let svc = FetchBuildService::new(bs, ds);
+        let svc = test_fetch_service(bs, ds);
 
         // Write a local file to serve via file:// URL.
         let tmp = tempfile::NamedTempFile::new().unwrap();
@@ -814,7 +815,7 @@ mod tests {
             payload_path: payload.path().to_path_buf(),
             source_state_blake3: blake3::hash(b"test-source-state").to_hex().to_string(),
         };
-        let svc = FetchBuildService::new(bs, ds).with_source_overrides(vec![source_override]);
+        let svc = test_fetch_service(bs, ds).with_source_overrides(vec![source_override]);
 
         let req = fetch_request(vec![env("url", "https://example.invalid/source.txt")]);
         let result = svc.do_build(req).await.unwrap();
@@ -842,7 +843,7 @@ mod tests {
             payload_path: payload.path().to_path_buf(),
             source_state_blake3: blake3::hash(b"mirror-source-state").to_hex().to_string(),
         };
-        let service = FetchBuildService::new(MemoryBlobService::default(), tmp_ds())
+        let service = test_fetch_service(MemoryBlobService::default(), tmp_ds())
             .with_source_overrides(vec![source_override])
             .with_source_policy(FetchSourcePolicy::RequireOverride);
         let request = fetch_request(vec![env("url", primary), env(FOREIGN_FETCH_CANDIDATES_ENV, &candidates)]);
@@ -861,7 +862,7 @@ mod tests {
     async fn required_source_override_rejects_unmatched_fetch_before_network() {
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
-        let svc = FetchBuildService::new(bs, ds).with_source_policy(FetchSourcePolicy::RequireOverride);
+        let svc = test_fetch_service(bs, ds).with_source_policy(FetchSourcePolicy::RequireOverride);
         let req = fetch_request(vec![env("url", "https://example.invalid/missing.txt")]);
 
         let error = svc.do_build(req).await.unwrap_err();
@@ -898,7 +899,7 @@ mod tests {
     async fn do_build_fetches_tarball() {
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
-        let svc = FetchBuildService::new(bs, ds);
+        let svc = test_fetch_service(bs, ds);
 
         // Create a tarball with a single file.
         let tmp_src = tempfile::tempdir().unwrap();
@@ -930,7 +931,7 @@ mod tests {
     async fn do_build_rejects_non_fetch() {
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
-        let svc = FetchBuildService::new(bs, ds);
+        let svc = test_fetch_service(bs, ds);
 
         let req = sandbox_request();
         let err = svc.do_build(req).await.unwrap_err();
@@ -941,7 +942,7 @@ mod tests {
     async fn do_build_rejects_missing_url() {
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
-        let svc = FetchBuildService::new(bs, ds);
+        let svc = test_fetch_service(bs, ds);
 
         let req = fetch_request(vec![]);
         let err = svc.do_build(req).await.unwrap_err();
@@ -952,7 +953,7 @@ mod tests {
     async fn do_build_executable_sets_mode() {
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();
-        let svc = FetchBuildService::new(bs, ds);
+        let svc = test_fetch_service(bs, ds);
 
         let tmp = tempfile::NamedTempFile::new().unwrap();
         std::fs::write(tmp.path(), b"#!/bin/sh\necho hi").unwrap();

@@ -24,7 +24,6 @@ pub mod fetch_build_service;
 pub mod fetcher;
 mod fod;
 pub mod goal;
-mod hash;
 mod hermeticity;
 mod network_policy;
 mod orchestrate;

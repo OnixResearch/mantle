@@ -262,6 +262,14 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
 }
 
 #[cfg(target_os = "linux")]
+struct PipelineBuilderBundle<S> {
+    builder: Builder<S>,
+    output_lookup: crunch_store::OutputLookup,
+    root_registry: crunch_store::RootRegistry,
+    workspace_evidence_sink: crunch_build::WorkspaceReportCollector,
+}
+
+#[cfg(target_os = "linux")]
 async fn build_linux(
     config: &BuildConfig,
     store: crunch_store::StoreHandle,
@@ -271,7 +279,11 @@ async fn build_linux(
     debug_assert!(!config.store_dir.is_empty());
     debug_assert!(config.max_jobs >= 1);
 
-    let (mut builder, workspace_evidence_sink) = create_pipeline_builder(config, store)?;
+    let bundle = create_pipeline_builder(config, store)?;
+    let mut builder = bundle.builder;
+    let workspace_evidence_sink = bundle.workspace_evidence_sink;
+    let _output_lookup = bundle.output_lookup;
+    let _root_registry = bundle.root_registry;
 
     let (tx, mut rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
     let mut known_paths = DerivationRegistry::new(&config.store_dir);
@@ -328,12 +340,29 @@ pub async fn build_registered_derivations(
             return Err(Error::Build("registered derivation build requires at least one root".to_string()));
         }
         if request.cache_only {
-            let (builder, workspace_evidence_sink) = create_cache_only_observer(config, store)?;
-            return run_registered_builder(config, builder, known_paths, request, workspace_evidence_sink).await;
+            let bundle = create_cache_only_observer(config, store)?;
+            return run_registered_builder(
+                config,
+                bundle.builder,
+                known_paths,
+                request,
+                bundle.output_lookup,
+                bundle.root_registry,
+                bundle.workspace_evidence_sink,
+            )
+            .await;
         }
-        let (builder, workspace_evidence_sink) =
-            create_pipeline_builder_with_source_policy(config, store, request.source_policy)?;
-        run_registered_builder(config, builder, known_paths, request, workspace_evidence_sink).await
+        let bundle = create_pipeline_builder_with_source_policy(config, store, request.source_policy)?;
+        run_registered_builder(
+            config,
+            bundle.builder,
+            known_paths,
+            request,
+            bundle.output_lookup,
+            bundle.root_registry,
+            bundle.workspace_evidence_sink,
+        )
+        .await
     }
 }
 
@@ -343,6 +372,8 @@ async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'sta
     mut builder: Builder<S>,
     known_paths: &mut DerivationRegistry,
     request: RegisteredBuildRequest<'_>,
+    output_lookup: crunch_store::OutputLookup,
+    root_registry: crunch_store::RootRegistry,
     workspace_evidence_sink: crunch_build::WorkspaceReportCollector,
 ) -> Result<RegisteredBuildResult, Error> {
     let mut worker_result = builder
@@ -350,11 +381,10 @@ async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'sta
         .await
         .map_err(|error| Error::Build(error.to_string()))?;
     normalize_failed_goal_keys(&mut worker_result.failed, &config.store_dir);
-    let pathinfo_service = builder.store_handle().pathinfo_service();
     let mut outputs = Vec::with_capacity(request.expected_outputs.len());
     for expected in request.expected_outputs {
-        let path_info = pathinfo_service
-            .get(*expected.store_path.digest())
+        let path_info = output_lookup
+            .find(&expected.store_path)
             .await
             .map_err(|error| Error::Build(format!("registered output lookup failed: {error}")))?;
         if let Some(path_info) = path_info {
@@ -372,18 +402,10 @@ async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'sta
         }
     }
     for retained_output in request.retained_outputs {
-        let is_present = pathinfo_service
-            .get(*retained_output.digest())
+        root_registry
+            .register_if_present(retained_output, GcRootSource::Build)
             .await
-            .map_err(|error| Error::Build(format!("selected root lookup failed: {error}")))?
-            .is_some();
-        if is_present {
-            builder
-                .store_handle()
-                .register_retained_root(retained_output, GcRootSource::Build)
-                .await
-                .map_err(|error| Error::Build(format!("registering selected foreign root: {error}")))?;
-        }
+            .map_err(|error| Error::Build(format!("registering selected foreign root: {error}")))?;
     }
     assert_eq!(worker_result.outcomes.len().saturating_add(worker_result.failed.len()), request.roots.len());
     if worker_result.failed.is_empty() {
@@ -405,25 +427,41 @@ async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'sta
 fn create_cache_only_observer(
     config: &BuildConfig,
     store: crunch_store::StoreHandle,
-) -> Result<(Builder<impl snix_build::buildservice::BuildService + use<>>, crunch_build::WorkspaceReportCollector), Error>
-{
-    let blob_service = store.blob_service();
-    let directory_service = store.directory_service();
-    let service =
-        FetchBuildService::new(blob_service, directory_service).with_source_policy(FetchSourcePolicy::RequireOverride);
+) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
+    let crunch_store::PipelineStoreParts {
+        build_store,
+        action_results,
+        build_service_store,
+        output_lookup,
+        root_registry,
+    } = store.into_pipeline_store_parts();
+    let service = FetchBuildService::new(build_service_store).with_source_policy(FetchSourcePolicy::RequireOverride);
     let workspace_evidence_sink = empty_workspace_report_collector();
-    let mut builder =
-        Builder::from_store(store, service, config.keypair.clone(), config.trusted_keys.clone(), false, config.verbose);
+    let mut builder = Builder::from_store_parts(
+        crunch_store::BuilderStoreParts {
+            build_store,
+            action_results,
+        },
+        service,
+        config.keypair.clone(),
+        config.trusted_keys.clone(),
+        false,
+        config.verbose,
+    );
     builder.set_hermeticity_mode(HermeticityMode::Strict);
-    Ok((builder, workspace_evidence_sink))
+    Ok(PipelineBuilderBundle {
+        builder,
+        output_lookup,
+        root_registry,
+        workspace_evidence_sink,
+    })
 }
 
 #[cfg(target_os = "linux")]
 fn create_pipeline_builder(
     config: &BuildConfig,
     store: crunch_store::StoreHandle,
-) -> Result<(Builder<impl snix_build::buildservice::BuildService + use<>>, crunch_build::WorkspaceReportCollector), Error>
-{
+) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
     let source_policy = if config.source_fetch_overrides.is_empty() {
         FetchSourcePolicy::AllowNetwork
     } else {
@@ -437,17 +475,21 @@ fn create_pipeline_builder_with_source_policy(
     config: &BuildConfig,
     store: crunch_store::StoreHandle,
     source_policy: FetchSourcePolicy,
-) -> Result<(Builder<impl snix_build::buildservice::BuildService + use<>>, crunch_build::WorkspaceReportCollector), Error>
-{
-    use snix_build::buildservice::BubblewrapBuildService;
+) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
     debug_assert!(!config.store_dir.is_empty(), "store prefix must not be empty");
     debug_assert!(config.max_jobs >= 1, "builder requires at least one job");
 
-    let blob_service = store.blob_service();
-    let directory_service = store.directory_service();
+    let crunch_store::PipelineStoreParts {
+        build_store,
+        action_results,
+        build_service_store,
+        output_lookup,
+        root_registry,
+    } = store.into_pipeline_store_parts();
+    let state_dir = build_store.state_dir().to_path_buf();
     let workdir = std::env::temp_dir().join("crunch-builds");
     std::fs::create_dir_all(&workdir).map_err(|error| Error::Internal(format!("create workdir: {error}")))?;
-    let fetch_service = FetchBuildService::new(blob_service.clone(), directory_service.clone())
+    let fetch_service = FetchBuildService::new(build_service_store.clone())
         .with_source_overrides(config.source_fetch_overrides.clone())
         .with_source_policy(source_policy);
 
@@ -460,21 +502,21 @@ fn create_pipeline_builder_with_source_policy(
         capabilities: Vec::new(),
         parameters: std::collections::BTreeMap::new(),
     };
-    let local_bwrap = BubblewrapBuildService::new(
-        std::env::temp_dir().join("crunch-builds-local"),
-        blob_service.clone(),
-        directory_service.clone(),
-    );
-    let remote_bwrap = BubblewrapBuildService::new(workdir, blob_service.clone(), directory_service.clone());
+    let local_bwrap =
+        build_service_store.bubblewrap_build_service(std::env::temp_dir().join("crunch-builds-local"), None);
+    let remote_bwrap = build_service_store.bubblewrap_build_service(workdir, None);
     let remote_realizer = LocalBuildServiceRealizer::new(remote_bwrap, profile);
     let sandbox_service =
         RemoteFirstBuildService::new(remote_realizer, local_bwrap, RemoteBuildFallbackPolicy::OnRemoteFailure);
     let dispatch = DispatchBuildService::new(fetch_service, sandbox_service);
     let workspace_evidence_sink = empty_workspace_report_collector();
     let build_service =
-        crunch_build::StatefulWorkspaceBuildService::new(dispatch, store.state_dir(), workspace_evidence_sink.clone());
-    let mut builder = Builder::from_store(
-        store,
+        crunch_build::StatefulWorkspaceBuildService::new(dispatch, &state_dir, workspace_evidence_sink.clone());
+    let mut builder = Builder::from_store_parts(
+        crunch_store::BuilderStoreParts {
+            build_store,
+            action_results,
+        },
         build_service,
         config.keypair.clone(),
         config.trusted_keys.clone(),
@@ -483,7 +525,12 @@ fn create_pipeline_builder_with_source_policy(
     );
     builder.set_hermeticity_mode(config.hermeticity_mode);
     builder.set_root_retention_source(config.root_retention_source);
-    Ok((builder, workspace_evidence_sink))
+    Ok(PipelineBuilderBundle {
+        builder,
+        output_lookup,
+        root_registry,
+        workspace_evidence_sink,
+    })
 }
 
 struct PipelineRunEvidence {
