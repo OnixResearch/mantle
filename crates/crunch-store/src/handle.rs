@@ -1333,27 +1333,7 @@ impl StoreHandle {
                     // r[impl cache_substitution.castore_completeness]
                     let has_content = self.castore_has_complete_content(&path_info.node).await?;
                     if has_content {
-                        let stored_attestation =
-                            load_artifact_attestation(&self.state_dir, &output_path, &self.store_dir).await?;
-                        let preserve_attestation = match stored_attestation.as_ref() {
-                            Some(stored) => artifact_attestation_matches_pathinfo(
-                                &self.store_dir,
-                                &path_info,
-                                output_name,
-                                &stored.attestation,
-                            ),
-                            None => false,
-                        };
-                        if !preserve_attestation {
-                            persist_artifact_attestation(
-                                &self.state_dir,
-                                &self.store_dir,
-                                &path_info,
-                                output_name,
-                                None,
-                            )
-                            .await?;
-                        }
+                        self.persist_artifact_attestation_without_evidence_loss(&path_info, output_name, None).await?;
                         self.export_output_if_needed(&output_path, &path_info.node, is_root).await?;
                         self.output_nodes.insert(output_path.clone(), path_info.node.clone());
                         self.built_outputs
@@ -2717,9 +2697,7 @@ impl StoreHandle {
             .put(req.path_info.clone())
             .await
             .map_err(|e| Error::Store(format!("persisting PathInfo: {e}")))?;
-        persist_artifact_attestation(
-            &self.state_dir,
-            &self.store_dir,
+        self.persist_artifact_attestation_without_evidence_loss(
             &req.path_info,
             req.output_name,
             req.provenance.as_ref(),
@@ -2750,6 +2728,30 @@ impl StoreHandle {
         }
 
         Ok(req.path_info)
+    }
+
+    async fn persist_artifact_attestation_without_evidence_loss(
+        &self,
+        path_info: &PathInfo,
+        output_name: &str,
+        provenance: Option<&ArtifactProvenance>,
+    ) -> Result<(), Error> {
+        assert!(!output_name.is_empty(), "output_name must not be empty");
+
+        let preserve_existing = match provenance {
+            Some(_) => false,
+            None => match load_artifact_attestation(&self.state_dir, &path_info.store_path, &self.store_dir).await? {
+                Some(stored) => {
+                    artifact_attestation_matches_pathinfo(&self.store_dir, path_info, output_name, &stored.attestation)
+                }
+                None => false,
+            },
+        };
+        if preserve_existing {
+            return Ok(());
+        }
+        persist_artifact_attestation(&self.state_dir, &self.store_dir, path_info, output_name, provenance).await?;
+        Ok(())
     }
 
     async fn export_output_if_needed(
@@ -3945,6 +3947,42 @@ mod tests {
                 .count(),
             EXPECTED_BUILD_INPUT_EDGE_COUNT
         );
+    }
+
+    #[tokio::test]
+    async fn action_result_admission_preserves_current_detailed_artifact_attestation() {
+        const OUTPUT_DIGEST_BYTE: u8 = 60;
+        const DERIVER_DIGEST_BYTE: u8 = 61;
+        const INPUT_DIGEST_BYTE: u8 = 62;
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let output_path = test_output("action-result-provenance", OUTPUT_DIGEST_BYTE);
+        let mut path_info = signed_pathinfo(output_path.clone());
+        path_info.deriver = Some(test_output("action-result-provenance.drv", DERIVER_DIGEST_BYTE));
+        persist_artifact_attestation(
+            state_dir.path(),
+            "/nix/store",
+            &path_info,
+            "out",
+            Some(&ArtifactProvenance {
+                claims: None,
+                input_sources: Vec::new(),
+                input_artifacts: vec![test_output("action-result-input", INPUT_DIGEST_BYTE)],
+                store_layer: StoreLayer::Overlay,
+            }),
+        )
+        .await
+        .unwrap();
+        let attestation_path = crate::artifact_attestation_file_path(state_dir.path(), "/nix/store", &output_path);
+        let bytes_before_admission = std::fs::read(&attestation_path).unwrap();
+        let outputs = BTreeMap::from([("out".to_string(), path_info)]);
+
+        handle.admit_action_result_outputs(&outputs, false, None).await.unwrap();
+
+        let bytes_after_admission = std::fs::read(&attestation_path).unwrap();
+        let admitted = handle.get_artifact_attestation(&output_path).await.unwrap().unwrap();
+        assert_eq!(bytes_after_admission, bytes_before_admission);
+        assert!(admitted.attestation.edges.iter().any(|edge| edge.kind == crunch_attestation::EdgeKind::BuildInput));
     }
 
     #[tokio::test]

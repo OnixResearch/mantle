@@ -403,6 +403,7 @@ mod tests {
 
     #[test]
     fn resolver_converts_lazy_file_edge_without_embedding_dependency() {
+        const EXPECTED_INPUT_DERIVATION_COUNT: usize = 1;
         let dir = tempfile::tempdir().unwrap();
         let dep = dir.path().join("dep.ncl");
         let root = dir.path().join("root.ncl");
@@ -414,8 +415,44 @@ mod tests {
         let mut resolver = DerivationFileResolver::new(&root, &[]).unwrap();
         resolver.resolve_root_inputs(&root, &mut derivation, &mut cache).unwrap();
         assert!(matches!(derivation.inputs.as_slice(), [Input::ResolvedDerivation(_)]));
-        crunch_glue::convert(&derivation, &mut cache).unwrap();
+        let (_, converted) = crunch_glue::convert(&derivation, &mut cache).unwrap();
+        assert_eq!(converted.input_derivations.len(), EXPECTED_INPUT_DERIVATION_COUNT);
         assert_eq!(cache.drain_pending().len(), EXPECTED_PENDING_DERIVATION_COUNT);
+    }
+
+    #[test]
+    fn full_source_linux_headers_preserve_all_derivation_file_edges() {
+        const EXPECTED_INPUT_DERIVATION_COUNT: usize = 3;
+        const STORE_PREFIX: &str = "/mantle/store";
+        let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+        let root = workspace.join("bootstrap/linux-headers-6.6-gcc10.ncl");
+        let import_paths = vec![
+            workspace.join("lib").into_os_string(),
+            workspace.join("bootstrap").into_os_string(),
+        ];
+        let mut roots =
+            crunch_eval::evaluate_and_extract_named_roots::<CrunchDerivation>(&root, &import_paths).unwrap();
+        assert_eq!(roots.len(), SINGLE_FILE_ROOT_COUNT);
+        let (_, mut derivation) = roots.pop().unwrap();
+        let mut cache = ConversionCache::new(STORE_PREFIX);
+        let mut resolver = DerivationFileResolver::new(&root, &import_paths).unwrap();
+        resolver.resolve_root_inputs(&root, &mut derivation, &mut cache).unwrap();
+
+        let (_, converted) = crunch_glue::convert(&derivation, &mut cache).unwrap();
+        let dependency_names = converted.input_derivations.keys().map(ToString::to_string).collect::<Vec<_>>();
+
+        assert_eq!(converted.input_derivations.len(), EXPECTED_INPUT_DERIVATION_COUNT);
+        for required_name in [
+            "full-source-seed-toolchain",
+            "make-4.4.1-full-source-gcc10-v1",
+            "linux-6.6-src",
+        ] {
+            assert!(
+                dependency_names.iter().any(|name| name.contains(required_name)),
+                "converted Linux-header dependencies: {dependency_names:?}"
+            );
+        }
+        assert!(!dependency_names.iter().any(|name| name.contains("linux-headers-6.6-full-source-gcc10-v3")));
     }
 
     #[test]
