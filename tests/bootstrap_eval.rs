@@ -113,20 +113,29 @@ fn contract_violations<'a>(source: &str, required: &'a [&'a str], forbidden: &'a
 }
 
 #[test]
-fn full_source_busybox_binds_the_selected_linux_header_identity() {
-    let source = std::fs::read_to_string(bootstrap_path("busybox-1.37.0-gcc10.ncl")).unwrap();
-    let required = ["HEADERS=$(find_input linux-headers-6.6-full-source-gcc10-v3)"];
-    let forbidden = ["HEADERS=$(find_input linux-headers-6.6-full-source-gcc10-v2)"];
-    let violations = contract_violations(&source, &required, &forbidden);
-    let invalid_source = source.replace(required[0], forbidden[0]);
-    let invalid_violations = contract_violations(&invalid_source, &required, &forbidden);
+fn full_source_host_tools_bind_the_selected_linux_header_identity() {
     let headers = eval_bootstrap("linux-headers-6.6-gcc10.ncl");
-    let busybox = eval_bootstrap("busybox-1.37.0-gcc10.ncl");
-
-    assert!(violations.is_empty(), "BusyBox Linux-header contract violations: {violations:?}");
-    assert_eq!(invalid_violations, vec![required[0], forbidden[0]]);
     assert_eq!(headers.name, "linux-headers-6.6-full-source-gcc10-v3");
-    assert_eq!(busybox.name, "busybox-1.37.0-full-source-gcc10-v1");
+
+    for (recipe, variable) in [
+        ("busybox-1.37.0-gcc10.ncl", "HEADERS"),
+        ("cmake-3.31.8-gcc10.ncl", "LINUX_HEADERS"),
+        ("python-3.13.5-gcc10.ncl", "LINUX_HEADERS"),
+        ("perl-5.10.1-gcc10.ncl", "LINUX_HEADERS"),
+        ("perl-5.6.2-gcc10.ncl", "LINUX_HEADERS"),
+    ] {
+        let source = std::fs::read_to_string(bootstrap_path(recipe)).unwrap();
+        let selected = format!("{variable}=$(find_input linux-headers-6.6-full-source-gcc10-v3)");
+        let stale = format!("{variable}=$(find_input linux-headers-6.6-full-source-gcc10-v1)");
+        let invalid_source = source.replace(&selected, &stale);
+        let derivation = eval_bootstrap(recipe);
+
+        assert!(source.contains(&selected), "{recipe} does not select {}", headers.name);
+        assert!(!source.contains(&stale), "{recipe} retains a stale Linux-header identity");
+        assert!(!invalid_source.contains(&selected));
+        assert!(invalid_source.contains(&stale));
+        assert!(!derivation.name.is_empty());
+    }
 }
 
 #[test]
