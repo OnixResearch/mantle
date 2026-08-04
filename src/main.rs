@@ -2912,6 +2912,10 @@ pub enum SourceBundleAction {
         #[arg(long = "mantle-source")]
         mantle_source: std::path::PathBuf,
 
+        /// Materialized fetch-source bundle to add; repeat for multiple bundles
+        #[arg(long = "include-bundle")]
+        include_bundles: Vec<std::path::PathBuf>,
+
         /// New profile output path, which must not exist
         #[arg(long)]
         to: std::path::PathBuf,
@@ -9532,6 +9536,8 @@ mod tests {
             "/tmp/source-built-profile.json",
             "--mantle-source",
             "/tmp/mantle-source",
+            "--include-bundle",
+            "/tmp/host-tool-sources.json",
             "--to",
             "/tmp/refreshed-profile.json",
         ]))
@@ -9544,6 +9550,7 @@ mod tests {
                         SourceBundleAction::RefreshMantleSource {
                             from,
                             mantle_source,
+                            include_bundles,
                             to,
                         },
                 },
@@ -9553,6 +9560,7 @@ mod tests {
         };
         assert_eq!(from, PathBuf::from("/tmp/source-built-profile.json"));
         assert_eq!(mantle_source, PathBuf::from("/tmp/mantle-source"));
+        assert_eq!(include_bundles, vec![PathBuf::from("/tmp/host-tool-sources.json")]);
         assert_eq!(to, PathBuf::from("/tmp/refreshed-profile.json"));
     }
 

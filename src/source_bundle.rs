@@ -36,7 +36,7 @@ pub const SOURCE_BUNDLE_NON_CLAIM: &str =
 pub const BOOTSTRAP_SOURCE_PROFILE_NON_CLAIM: &str =
     "bootstrap source profile proves source/input availability and identity only";
 pub const MANTLE_SOURCE_REFRESH_NON_CLAIM: &str =
-    "profile refresh preserves bound records and replaces only declared Mantle source identity";
+    "profile refresh proves bounded record preservation and source identity only, not proof completion";
 pub const SOURCE_NEXT_ACTION_EXPORT_IMPORT_PIN: &str = "mantle source bundle export --build-root <root.ncl> --to <bundle.json>; mantle source bundle import --from <bundle.json> --pin";
 pub const SOURCE_NEXT_ACTION_REEXPORT_IMPORT_PIN: &str = "mantle source bundle export --build-root <root.ncl> --to <bundle.json>; mantle source bundle import --from <bundle.json> --pin";
 pub const SOURCE_NEXT_ACTION_PIN_IMPORTED: &str = "mantle source bundle import --from <bundle.json> --pin";
@@ -393,6 +393,7 @@ pub struct MantleSourceRefreshReport {
     pub previous_mantle_source_blake3: String,
     pub replacement_mantle_source_blake3: String,
     pub preserved_record_count: u32,
+    pub added_record_count: u32,
     pub non_claim: &'static str,
 }
 
@@ -994,6 +995,7 @@ pub fn bootstrap_source_bundle_profile_report(
 pub fn plan_source_built_mantle_source_refresh(
     manifest: SourceBundleManifest,
     replacement: SourceRecord,
+    supplemental_records: Vec<SourceRecord>,
 ) -> Result<(SourceBundleManifest, MantleSourceRefreshReport), RunError> {
     validate_source_built_refresh_profile(&manifest)?;
     let original = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)?.clone();
@@ -1004,12 +1006,46 @@ pub fn plan_source_built_mantle_source_refresh(
     let preserved_record_count = original_record_count
         .checked_sub(1)
         .ok_or_else(|| RunError::Internal("source-built profile has no records to preserve".to_string()))?;
+    let (records, added_record_count) = plan_source_built_refresh_records(
+        manifest.records,
+        &original.identity,
+        replacement.clone(),
+        supplemental_records,
+        &store_prefix,
+    )?;
+    let refreshed = assemble_source_bundle(records, &store_prefix)?;
+    validate_source_built_refresh_profile(&refreshed)?;
+    let expected_record_count = original_record_count
+        .checked_add(added_record_count)
+        .ok_or_else(|| RunError::Internal("refreshed source record count overflow".to_string()))?;
+    assert_eq!(refreshed.records.len(), expected_record_count);
+    assert_ne!(original.content_blake3, "");
+    assert_ne!(replacement.content_blake3, "");
+    let report = MantleSourceRefreshReport {
+        format: MANTLE_SOURCE_REFRESH_REPORT_FORMAT,
+        input_manifest_blake3,
+        output_manifest_blake3: refreshed.manifest_blake3.clone(),
+        previous_mantle_source_blake3: original.content_blake3,
+        replacement_mantle_source_blake3: replacement.content_blake3,
+        preserved_record_count: checked_u32(preserved_record_count, "preserved source record count")?,
+        added_record_count: checked_u32(added_record_count, "added source record count")?,
+        non_claim: MANTLE_SOURCE_REFRESH_NON_CLAIM,
+    };
+    Ok((refreshed, report))
+}
+
+fn plan_source_built_refresh_records(
+    records: Vec<SourceRecord>,
+    mantle_source_identity: &str,
+    replacement: SourceRecord,
+    supplemental_records: Vec<SourceRecord>,
+    store_prefix: &str,
+) -> Result<(Vec<SourceRecord>, usize), RunError> {
     let mut replacement_count = 0usize;
-    let records = manifest
-        .records
+    let mut refreshed = records
         .into_iter()
         .map(|record| {
-            if record.identity == original.identity {
+            if record.identity == mantle_source_identity {
                 replacement_count = replacement_count.saturating_add(1);
                 replacement.clone()
             } else {
@@ -1022,21 +1058,47 @@ pub fn plan_source_built_mantle_source_refresh(
             "source-built profile refresh replaced {replacement_count} Mantle source records instead of one"
         )));
     }
-    let refreshed = assemble_source_bundle(records, &store_prefix)?;
-    validate_source_built_refresh_profile(&refreshed)?;
-    assert_eq!(refreshed.records.len(), original_record_count);
-    assert_ne!(original.content_blake3, "");
-    assert_ne!(replacement.content_blake3, "");
-    let report = MantleSourceRefreshReport {
-        format: MANTLE_SOURCE_REFRESH_REPORT_FORMAT,
-        input_manifest_blake3,
-        output_manifest_blake3: refreshed.manifest_blake3.clone(),
-        previous_mantle_source_blake3: original.content_blake3,
-        replacement_mantle_source_blake3: replacement.content_blake3,
-        preserved_record_count: checked_u32(preserved_record_count, "preserved source record count")?,
-        non_claim: MANTLE_SOURCE_REFRESH_NON_CLAIM,
-    };
-    Ok((refreshed, report))
+
+    let mut record_indexes = refreshed
+        .iter()
+        .enumerate()
+        .map(|(index, record)| (record.identity.clone(), index))
+        .collect::<BTreeMap<_, _>>();
+    let mut added_record_count = 0usize;
+    for record in supplemental_records {
+        validate_source_record(&record)?;
+        if record.store_prefix.as_deref().is_some_and(|prefix| prefix != store_prefix) {
+            return Err(RunError::Internal(format!(
+                "supplemental source record '{}' uses a different store prefix",
+                record.identity
+            )));
+        }
+        if record.metadata.contains_key(RECORD_METADATA_PROFILE_CLASS_KEY) || !source_record_is_fetcher_input(&record) {
+            return Err(RunError::Internal(format!(
+                "supplemental source record '{}' is not unclassified fetch-source authority",
+                record.identity
+            )));
+        }
+        if let Some(index) = record_indexes.get(&record.identity) {
+            if refreshed[*index] != record {
+                return Err(RunError::Internal(format!(
+                    "supplemental source identity '{}' conflicts with the verified profile",
+                    record.identity
+                )));
+            }
+            continue;
+        }
+        if refreshed.len() >= MAX_SOURCE_RECORDS {
+            return Err(RunError::Internal(format!("refreshed source record count exceeds {MAX_SOURCE_RECORDS}")));
+        }
+        record_indexes.insert(record.identity.clone(), refreshed.len());
+        refreshed.push(record);
+        added_record_count = added_record_count
+            .checked_add(1)
+            .ok_or_else(|| RunError::Internal("added source record count overflow".to_string()))?;
+    }
+    assert_eq!(refreshed.len(), record_indexes.len());
+    Ok((refreshed, added_record_count))
 }
 
 fn validate_source_built_refresh_profile(manifest: &SourceBundleManifest) -> Result<(), RunError> {
@@ -4588,6 +4650,7 @@ fn cmd_bootstrap_profile(
 fn cmd_refresh_mantle_source(
     from: &Path,
     mantle_source: &Path,
+    include_bundles: &[PathBuf],
     to: &Path,
     context: &SourceBundleCliContext<'_>,
 ) -> Result<(), RunError> {
@@ -4597,9 +4660,33 @@ fn cmd_refresh_mantle_source(
     let manifest = read_source_bundle(from)?;
     let original = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)?;
     let replacement = source_built_mantle_source_record(mantle_source, &original.identity, &manifest.store_prefix)?;
-    let (refreshed, report) = plan_source_built_mantle_source_refresh(manifest, replacement)?;
+    let supplemental_records = read_refresh_supplemental_bundle_records(include_bundles)?;
+    let (refreshed, report) = plan_source_built_mantle_source_refresh(manifest, replacement, supplemental_records)?;
     write_source_bundle_no_replace(to, &refreshed)?;
     print_mantle_source_refresh_report(&report, context.is_json_output)
+}
+
+fn read_refresh_supplemental_bundle_records(paths: &[PathBuf]) -> Result<Vec<SourceRecord>, RunError> {
+    let mut records = Vec::new();
+    for path in paths {
+        let manifest = read_source_bundle(path)?;
+        records
+            .try_reserve(manifest.records.len())
+            .map_err(|error| RunError::Internal(format!("reserving refresh source records: {error}")))?;
+        for record in manifest.records {
+            if record.metadata.contains_key(RECORD_METADATA_PROFILE_CLASS_KEY) {
+                return Err(RunError::Internal(format!(
+                    "refresh bundle {} contains classified authority '{}'",
+                    path.display(),
+                    record.identity
+                )));
+            }
+            if source_record_is_fetcher_input(&record) {
+                records.push(record);
+            }
+        }
+    }
+    merge_identical_source_records(records)
 }
 
 fn read_supplemental_bundle_records(paths: &[PathBuf]) -> Result<Vec<SourceRecord>, RunError> {
@@ -4684,8 +4771,9 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
         crate::SourceBundleAction::RefreshMantleSource {
             from,
             mantle_source,
+            include_bundles,
             to,
-        } => cmd_refresh_mantle_source(&from, &mantle_source, &to, context),
+        } => cmd_refresh_mantle_source(&from, &mantle_source, &include_bundles, &to, context),
         crate::SourceBundleAction::List { from } => cmd_list_source_bundle(&from, context),
         crate::SourceBundleAction::Import { from, pin } => cmd_import_source_bundle(&from, pin, context),
         crate::SourceBundleAction::HydrateSelfBuild {
@@ -5089,13 +5177,14 @@ fn print_mantle_source_refresh_report(report: &MantleSourceRefreshReport, json_o
         return Ok(());
     }
     println!(
-        "format={} input_manifest_blake3={} output_manifest_blake3={} previous_mantle_source_blake3={} replacement_mantle_source_blake3={} preserved_records={}",
+        "format={} input_manifest_blake3={} output_manifest_blake3={} previous_mantle_source_blake3={} replacement_mantle_source_blake3={} preserved_records={} added_records={}",
         report.format,
         report.input_manifest_blake3,
         report.output_manifest_blake3,
         report.previous_mantle_source_blake3,
         report.replacement_mantle_source_blake3,
         report.preserved_record_count,
+        report.added_record_count,
     );
     eprintln!("non_claim={}", report.non_claim);
     Ok(())
@@ -6272,13 +6361,28 @@ mod tests {
         fs::write(replacement_root.join("src/main.txt"), b"refreshed Mantle source").unwrap();
         let replacement =
             source_built_mantle_source_record(&replacement_root, &original.identity, &manifest.store_prefix).unwrap();
+        let supplemental_payload = temp.path().join("host-tool-source.tar");
+        fs::write(&supplemental_payload, b"host tool source").unwrap();
+        let supplemental_fetcher = fixed_fetcher("host-tool-source", &file_url(&supplemental_payload));
+        let supplemental_root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(supplemental_fetcher))]);
+        let supplemental_plan = plan_source_bundle_from_derivations(
+            &[("host-tool-source".to_string(), supplemental_root)],
+            &[],
+            &manifest.store_prefix,
+        )
+        .unwrap();
+        let supplemental =
+            materialized_record_from_payload(&supplemental_plan.records[0], &supplemental_payload, false);
 
-        let (refreshed, report) = plan_source_built_mantle_source_refresh(manifest, replacement.clone()).unwrap();
+        let (refreshed, report) =
+            plan_source_built_mantle_source_refresh(manifest, replacement.clone(), vec![supplemental.clone()]).unwrap();
 
         assert_ne!(report.input_manifest_blake3, report.output_manifest_blake3);
         assert_ne!(report.previous_mantle_source_blake3, report.replacement_mantle_source_blake3);
         assert_eq!(report.replacement_mantle_source_blake3, replacement.content_blake3);
         assert_eq!(report.preserved_record_count as usize, original_records.len() - 1);
+        assert_eq!(report.added_record_count, 1);
+        assert!(refreshed.records.contains(&supplemental));
         for record in original_records.iter().filter(|record| record.identity != original.identity) {
             assert!(refreshed.records.contains(record));
         }
@@ -6301,7 +6405,7 @@ mod tests {
         missing_records.retain(|record| record.identity != original.identity);
         let missing = assemble_source_bundle(missing_records, &manifest.store_prefix).unwrap();
 
-        let missing_error = plan_source_built_mantle_source_refresh(missing, original.clone()).unwrap_err();
+        let missing_error = plan_source_built_mantle_source_refresh(missing, original.clone(), Vec::new()).unwrap_err();
 
         assert!(missing_error.to_string().contains("missing record class mantle-source"));
 
@@ -6311,7 +6415,7 @@ mod tests {
         duplicate_records.push(duplicate_record);
         let duplicate = assemble_source_bundle(duplicate_records, &manifest.store_prefix).unwrap();
 
-        let duplicate_error = plan_source_built_mantle_source_refresh(duplicate, original).unwrap_err();
+        let duplicate_error = plan_source_built_mantle_source_refresh(duplicate, original, Vec::new()).unwrap_err();
 
         assert!(duplicate_error.to_string().contains("duplicate record class mantle-source"));
     }
@@ -6340,10 +6444,44 @@ mod tests {
             digest_source_record_content(&classified.kind, &classified.metadata, &classified.files).unwrap();
         let wrong_mode = assemble_source_bundle(records, &manifest.store_prefix).unwrap();
 
-        let error = plan_source_built_mantle_source_refresh(wrong_mode, replacement).unwrap_err();
+        let error = plan_source_built_mantle_source_refresh(wrong_mode, replacement, Vec::new()).unwrap_err();
 
         assert!(error.to_string().contains("every classified record"));
         assert!(error.to_string().contains("source-built-fixed-point mode"));
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
+    #[test]
+    fn source_built_mantle_source_refresh_rejects_supplemental_authority_drift() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = source_built_fixed_point_profile_fixture(temp.path());
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let replacement =
+            require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap().clone();
+
+        let classified_error =
+            plan_source_built_mantle_source_refresh(manifest.clone(), replacement.clone(), vec![replacement.clone()])
+                .unwrap_err();
+
+        assert!(classified_error.to_string().contains("not unclassified fetch-source authority"));
+
+        let mut conflict = manifest
+            .records
+            .iter()
+            .find(|record| {
+                !record.metadata.contains_key(RECORD_METADATA_PROFILE_CLASS_KEY)
+                    && source_record_is_fetcher_input(record)
+            })
+            .unwrap()
+            .clone();
+        conflict.metadata.insert("conflict-probe".to_string(), "true".to_string());
+        conflict.content_blake3 =
+            digest_source_record_content(&conflict.kind, &conflict.metadata, &conflict.files).unwrap();
+
+        let conflict_error =
+            plan_source_built_mantle_source_refresh(manifest, replacement, vec![conflict]).unwrap_err();
+
+        assert!(conflict_error.to_string().contains("conflicts with the verified profile"));
     }
 
     #[test]

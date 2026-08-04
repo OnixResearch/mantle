@@ -426,13 +426,15 @@ Refresh an existing verified profile after a Mantle source change:
 mantle source bundle refresh-mantle-source \
   --from /media/handoff/source-built-fixed-point-sources.json \
   --mantle-source . \
+  --include-bundle /media/handoff/new-host-tool-sources.json \
   --to /media/handoff/refreshed-source-built-fixed-point-sources.json
 ```
 
 The output path must not exist. The command replaces exactly one Mantle source
-record. It preserves every other source record and recomputes the profile
-BLAKE3. It rejects missing, duplicate, mixed-mode, or changed authority
-metadata.
+record. It preserves every other source record and can add materialized fetch
+records from repeated `--include-bundle` arguments. It recomputes the profile
+BLAKE3. It rejects missing, duplicate, mixed-mode, conflicting, classified, or
+changed authority metadata.
 
 Run the proof with independent digests and explicit executable paths:
 
