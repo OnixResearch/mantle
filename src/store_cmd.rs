@@ -55,9 +55,18 @@ async fn cmd_store_async(action: crate::StoreAction, context: StoreCommandContex
             let svc = open_pathinfo_service(context.state_dir, true).await?;
             cmd_store_info(&svc, &path).await
         }
-        crate::StoreAction::Roots => {
-            let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
-            cmd_store_roots(&store)
+        crate::StoreAction::Roots { migrate } => {
+            let _guard = if migrate {
+                Some(store_mutation_guard(context.state_dir)?)
+            } else {
+                None
+            };
+            let mut store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+            cmd_store_roots(&mut store, migrate, context)
+        }
+        crate::StoreAction::Usage => {
+            let mut store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+            cmd_store_usage(&mut store, context.is_json_output).await
         }
         other => cmd_store_mutation_or_transfer(other, context).await,
     }
@@ -78,7 +87,14 @@ async fn cmd_store_mutation_or_transfer(
             let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
             cmd_store_unpin(&store, &path)
         }
-        crate::StoreAction::Gc { is_dry_run } => cmd_store_gc_action(context, is_dry_run).await,
+        crate::StoreAction::Gc {
+            execute,
+            plan_id,
+            legacy_dry_run,
+        } => {
+            debug_assert!(!legacy_dry_run || !execute);
+            cmd_store_gc_action(context, execute, plan_id.as_deref()).await
+        }
         crate::StoreAction::Verify {
             path,
             signing_key,
@@ -150,15 +166,31 @@ async fn cmd_store_mutation_or_transfer(
             .await
         }
         crate::StoreAction::Archive { action } => cmd_store_archive(action, context).await,
-        crate::StoreAction::List | crate::StoreAction::Info { .. } | crate::StoreAction::Roots => {
+        crate::StoreAction::List
+        | crate::StoreAction::Info { .. }
+        | crate::StoreAction::Roots { .. }
+        | crate::StoreAction::Usage => {
             Err(RunError::Internal("mutation dispatcher received a read-only store action".to_string()))
         }
     }
 }
 
-async fn cmd_store_gc_action(context: StoreCommandContext<'_>, is_dry_run: bool) -> Result<(), RunError> {
-    let _guard = crunch_store::StoreMutationGuard::try_acquire(context.state_dir)
-        .map_err(|e| RunError::Build(format!("{e}")))?;
+async fn cmd_store_gc_action(
+    context: StoreCommandContext<'_>,
+    execute: bool,
+    accepted_plan_id: Option<&str>,
+) -> Result<(), RunError> {
+    if execute != accepted_plan_id.is_some() {
+        return Err(RunError::Build("store gc execution requires both --execute and --plan-id".to_string()));
+    }
+    let _guard = if execute {
+        Some(
+            crunch_store::StoreMutationGuard::try_acquire(context.state_dir)
+                .map_err(|error| RunError::Build(format!("{error}")))?,
+        )
+    } else {
+        None
+    };
     let rust_cache = crunch_rust_cache::RustCache::open_async(crunch_store::StoreConfig {
         state_dir: context.state_dir.to_path_buf(),
         output_dir: context.output_dir.to_path_buf(),
@@ -174,7 +206,7 @@ async fn cmd_store_gc_action(context: StoreCommandContext<'_>, is_dry_run: bool)
         .map_err(|error| RunError::Build(format!("planning Rust cache retention: {error}")))?;
     drop(rust_cache);
     let mut store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
-    cmd_store_gc(&mut store, &rust_retention, is_dry_run).await
+    cmd_store_gc(&mut store, &rust_retention, accepted_plan_id, context.is_json_output).await
 }
 
 fn store_mutation_guard(state_dir: &Path) -> Result<crunch_store::StoreMutationGuard, RunError> {
@@ -451,16 +483,92 @@ async fn cmd_store_info(svc: &impl snix_store::pathinfoservice::PathInfoService,
     Ok(())
 }
 
-fn cmd_store_roots(store: &crunch_store::StoreHandle) -> Result<(), RunError> {
-    let roots = store.list_retained_roots().map_err(|e| RunError::Internal(format!("{e}")))?;
+fn cmd_store_roots(
+    store: &mut crunch_store::StoreHandle,
+    migrate: bool,
+    context: StoreCommandContext<'_>,
+) -> Result<(), RunError> {
+    let roots = if migrate {
+        store
+            .store_admin()
+            .migrate_legacy_root_registry()
+            .map_err(|error| RunError::Internal(format!("{error}")))?
+    } else {
+        store.list_retained_roots().map_err(|error| RunError::Internal(format!("{error}")))?
+    };
+    if context.is_json_output {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&roots)
+                .map_err(|error| RunError::Internal(format!("serializing root report: {error}")))?
+        );
+        return Ok(());
+    }
     if roots.is_empty() {
         eprintln!("No retained GC roots.");
         return Ok(());
     }
     for root in &roots {
-        println!("{}  source={}  created_unix_s={}", root.logical_path, root.source, root.created_unix_s);
+        println!(
+            "{}  class={}  owner={}  policy={}  source={}  created_unix_s={}  transition={}  transition_reason={}",
+            root.logical_path,
+            root.root_class,
+            root.owner_scope,
+            root.policy_blake3,
+            root.source,
+            root.created_unix_s,
+            root.last_transition_id,
+            root.last_transition_reason,
+        );
     }
     eprintln!("{} retained root(s)", roots.len());
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct StoreUsageOutput<'a> {
+    usage: &'a crunch_store::GcUsageReport,
+    reclaim_observations: &'a [crunch_store::GcReclaimObservation],
+}
+
+async fn cmd_store_usage(store: &mut crunch_store::StoreHandle, is_json_output: bool) -> Result<(), RunError> {
+    let report = store
+        .store_admin()
+        .garbage_collect(None)
+        .await
+        .map_err(|error| RunError::Build(format!("{error}")))?;
+    if is_json_output {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&StoreUsageOutput {
+                usage: &report.usage,
+                reclaim_observations: &report.reclaim_observations,
+            })
+            .map_err(|error| RunError::Internal(format!("serializing usage report: {error}")))?
+        );
+        return Ok(());
+    }
+    println!(
+        "observed_bytes={}  retained_bytes={}  reclaimable_bytes={}  quarantined_bytes={}  unclassified_bytes={}  shared_bytes={}  unknown_objects={}",
+        report.usage.observed_bytes,
+        report.usage.retained_bytes,
+        report.usage.reclaimable_bytes,
+        report.usage.quarantined_bytes,
+        report.usage.unclassified_bytes,
+        report.usage.shared_bytes,
+        report.usage.unknown_object_count,
+    );
+    for root in &report.usage.roots {
+        println!(
+            "ROOT {}  inclusive_bytes={}  unique_bytes={}  unknown_objects={}",
+            root.root, root.inclusive_bytes, root.unique_bytes, root.unknown_object_count,
+        );
+    }
+    for observation in &report.reclaim_observations {
+        if let Some(blocker) = observation.blocker.as_deref() {
+            println!("UNKNOWN_BYTES {}  category={}  blocker={}", observation.path, observation.category, blocker,);
+        }
+    }
     Ok(())
 }
 
@@ -482,94 +590,103 @@ fn cmd_store_unpin(store: &crunch_store::StoreHandle, path: &str) -> Result<(), 
 async fn cmd_store_gc(
     store: &mut crunch_store::StoreHandle,
     rust_retention: &crunch_rust_cache::RustCacheRetentionPlan,
-    is_dry_run: bool,
+    accepted_plan_id: Option<&str>,
+    is_json_output: bool,
 ) -> Result<(), RunError> {
     debug_assert!(!store.store_dir().is_empty());
     debug_assert!(Path::new(store.store_dir()).is_absolute());
+    let is_plan_only = accepted_plan_id.is_none();
     let mut store_admin = store.store_admin();
     let gc_evidence = store_admin
-        .garbage_collect_with_castore_roots(is_dry_run, rust_retention.live_nodes())
+        .garbage_collect_with_castore_roots(accepted_plan_id, rust_retention.live_nodes())
         .await
-        .map_err(|e| RunError::Build(format!("{e}")))?;
-    rust_retention
-        .apply(is_dry_run)
-        .map_err(|error| RunError::Build(format!("applying Rust cache retention: {error}")))?;
-    if !gc_report_has_candidates(&gc_evidence) && rust_retention.stale_result_count() == 0 {
+        .map_err(|error| RunError::Build(format!("{error}")))?;
+    if is_plan_only || gc_evidence.execution_complete {
+        rust_retention
+            .apply(is_plan_only)
+            .map_err(|error| RunError::Build(format!("applying Rust cache retention: {error}")))?;
+    }
+    if is_json_output {
         println!(
-            "retained_roots={}  retained_rust_results={}  stale_rust_results={}  candidate_paths=0  reclaimable_bytes=0",
-            gc_evidence.retained_root_count,
-            gc_evidence.retained_castore_root_count,
-            rust_retention.stale_result_count(),
+            "{}",
+            serde_json::to_string_pretty(&gc_evidence)
+                .map_err(|error| RunError::Internal(format!("serializing GC report: {error}")))?
         );
-        if is_dry_run {
-            eprintln!("dry-run: no changes made");
-        } else {
-            eprintln!("gc: nothing to do");
-        }
-        return Ok(());
-    }
-
-    println!(
-        "retained_roots={}  retained_rust_results={}  stale_rust_results={}  candidate_paths={}  reclaimable_bytes={}",
-        gc_evidence.retained_root_count,
-        gc_evidence.retained_castore_root_count,
-        rust_retention.stale_result_count(),
-        gc_evidence.candidate_path_count,
-        gc_evidence.reclaimable_bytes_total
-    );
-    println!(
-        "candidate_exported_outputs={}  candidate_artifact_attestations={}  candidate_closure_attestations={}  candidate_blob_indexes={}  candidate_blob_chunks={}  candidate_action_result_records={}  candidate_action_result_indexes={}",
-        gc_evidence.candidate_exported_output_count,
-        gc_evidence.candidate_artifact_attestation_count,
-        gc_evidence.candidate_closure_attestation_count,
-        gc_evidence.candidate_blob_index_count,
-        gc_evidence.candidate_blob_chunk_count,
-        gc_evidence.candidate_action_result_record_count,
-        gc_evidence.candidate_action_result_index_count,
-    );
-    for path in &gc_evidence.candidate_paths {
-        println!("DELETE {path}");
-    }
-    if is_dry_run {
-        eprintln!("dry-run: no changes made");
     } else {
-        eprintln!(
-            "gc: removed {} candidate path(s) and {} stale Rust result record(s)",
-            gc_evidence.candidate_path_count,
-            rust_retention.stale_result_count(),
-        );
+        print_human_gc_report(&gc_evidence, rust_retention);
+    }
+    if !is_plan_only && !gc_evidence.execution_complete {
+        return Err(RunError::Build(format!(
+            "GC execution completed {} operation(s) with {} failure(s); first failure: {}",
+            gc_evidence.operations.len(),
+            gc_evidence.failed_operations.len(),
+            gc_evidence.failed_operation.as_deref().unwrap_or("unknown operation failure"),
+        )));
     }
     Ok(())
 }
 
-fn gc_report_has_candidates(report: &crunch_store::GcReport) -> bool {
-    debug_assert_eq!(report.candidate_path_count == 0, report.candidate_paths.is_empty());
-    debug_assert!(report.candidate_paths.iter().all(|path| !path.is_empty()));
-    if report.candidate_path_count > 0 {
-        return true;
+fn print_human_gc_report(report: &crunch_store::GcReport, rust_retention: &crunch_rust_cache::RustCacheRetentionPlan) {
+    println!("plan_id={}  retention_plan_id={}", report.plan_id, report.retention_plan_id);
+    println!(
+        "retained_roots={}  retained_rust_results={}  stale_rust_results={}  candidate_paths={}  reclaimable_bytes={}",
+        report.retained_root_count,
+        report.retained_castore_root_count,
+        rust_retention.stale_result_count(),
+        report.candidate_path_count,
+        report.reclaimable_bytes_total,
+    );
+    println!(
+        "observed_bytes={}  retained_bytes={}  shared_bytes={}  unknown_objects={}  unknown_reclaim_observations={}",
+        report.usage.observed_bytes,
+        report.usage.retained_bytes,
+        report.usage.shared_bytes,
+        report.usage.unknown_object_count,
+        report.reclaim_observations.iter().filter(|observation| observation.bytes.is_none()).count(),
+    );
+    for explanation in &report.retention_explanations {
+        println!(
+            "ROOT {}  class={}  owner={}  policy={}  project={}  selector={}  generation={}  lease={}  transition={}  transition_reason={}  decision={}  reason={}",
+            explanation.path,
+            explanation.root_class,
+            explanation.owner_scope,
+            explanation.policy_blake3,
+            explanation.project_identity.as_deref().unwrap_or("-"),
+            explanation.selector.as_deref().unwrap_or("-"),
+            explanation.generation.map_or_else(|| "-".to_string(), |value| value.to_string()),
+            explanation.lease_id.as_deref().unwrap_or("-"),
+            explanation.transition_id,
+            explanation.transition_reason,
+            explanation.disposition,
+            explanation.reason,
+        );
     }
-    if report.candidate_blob_index_count > 0 {
-        return true;
+    for path in &report.candidate_paths {
+        println!("CANDIDATE {path}  reason=unreachable-from-retained-root");
     }
-    if report.candidate_blob_chunk_count > 0 {
-        return true;
+    for observation in &report.reclaim_observations {
+        if let Some(blocker) = observation.blocker.as_deref() {
+            println!("UNKNOWN_BYTES {}  category={}  blocker={}", observation.path, observation.category, blocker,);
+        }
     }
-    if report.candidate_artifact_attestation_count > 0 {
-        return true;
+    if report.is_dry_run {
+        eprintln!("plan only: no changes made; execute with --execute --plan-id {}", report.plan_id);
+    } else if report.execution_complete {
+        eprintln!(
+            "gc: removed {} candidate path(s) and {} stale Rust result record(s)",
+            report.candidate_path_count,
+            rust_retention.stale_result_count(),
+        );
+    } else {
+        eprintln!(
+            "gc: incomplete after {} completed operation(s) and {} failure(s)",
+            report.operations.len(),
+            report.failed_operations.len(),
+        );
+        for failure in &report.failed_operations {
+            eprintln!("gc operation failed: {failure}");
+        }
     }
-    if report.candidate_closure_attestation_count > 0 {
-        return true;
-    }
-    if report.candidate_exported_output_count > 0 {
-        return true;
-    }
-    if report.candidate_action_result_record_count > 0 {
-        return true;
-    }
-    if report.candidate_action_result_index_count > 0 {
-        return true;
-    }
-    false
 }
 
 struct StoreVerifyRequest<'a> {

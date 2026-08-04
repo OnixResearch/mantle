@@ -608,6 +608,8 @@ pub struct StoreHandle {
     pub advisory_metadata_cache: AdvisoryMetadataCache,
     /// Advisory shared action-result discovery/publication stores.
     action_result_stores: ActionResultStoreSet,
+    /// Optional managed provenance for selected roots in this build session.
+    root_registration: Option<crate::retention::RootRegistration>,
     /// Output publication adapters called after successful admission.
     publishers: Vec<Arc<dyn Publisher>>,
 }
@@ -714,6 +716,7 @@ impl StoreHandle {
             ca_mappings,
             advisory_metadata_cache,
             action_result_stores,
+            root_registration: None,
             publishers: Vec::new(),
         })
     }
@@ -874,6 +877,7 @@ impl StoreHandle {
             ca_mappings,
             advisory_metadata_cache,
             action_result_stores,
+            root_registration: None,
             publishers: Vec::new(),
         })
     }
@@ -909,6 +913,7 @@ impl StoreHandle {
             ca_mappings,
             advisory_metadata_cache,
             action_result_stores,
+            root_registration: None,
             publishers: services.publishers,
         }
     }
@@ -1068,21 +1073,47 @@ impl StoreHandle {
         })
     }
 
+    pub fn set_root_registration(&mut self, registration: Option<crate::retention::RootRegistration>) {
+        self.root_registration = registration;
+    }
+
     pub async fn register_retained_root(
         &self,
         store_path: &StorePath<String>,
         source: GcRootSource,
     ) -> Result<GcRootRecord, Error> {
-        roots::register_root(&self.state_dir, &self.store_dir, self.pathinfo_service.as_ref(), store_path, source).await
+        match &self.root_registration {
+            Some(registration) => {
+                roots::register_root_with_registration(
+                    &self.state_dir,
+                    &self.store_dir,
+                    self.pathinfo_service.as_ref(),
+                    store_path,
+                    source,
+                    registration.clone(),
+                )
+                .await
+            }
+            None => {
+                roots::register_root(
+                    &self.state_dir,
+                    &self.store_dir,
+                    self.pathinfo_service.as_ref(),
+                    store_path,
+                    source,
+                )
+                .await
+            }
+        }
     }
 
-    pub async fn garbage_collect(&mut self, is_dry_run: bool) -> Result<GcReport, Error> {
-        self.garbage_collect_with_castore_roots(is_dry_run, &[]).await
+    pub async fn garbage_collect(&mut self, accepted_plan_id: Option<&str>) -> Result<GcReport, Error> {
+        self.garbage_collect_with_castore_roots(accepted_plan_id, &[]).await
     }
 
     pub async fn garbage_collect_with_castore_roots(
         &mut self,
-        is_dry_run: bool,
+        accepted_plan_id: Option<&str>,
         retained_castore_roots: &[Node],
     ) -> Result<GcReport, Error> {
         let ctx = gc::GcContext {
@@ -1094,7 +1125,7 @@ impl StoreHandle {
             blob_service: self.blob_service.as_ref(),
             retained_castore_roots,
         };
-        gc::run_gc(&ctx, &mut self.ca_mappings, is_dry_run).await
+        gc::run_gc(&ctx, &mut self.ca_mappings, accepted_plan_id).await
     }
 
     /// Render a NAR archive from a castore node into an arbitrary writer.
@@ -2308,7 +2339,7 @@ impl StoreHandle {
             output_path,
             output_name,
             is_root,
-            root_source,
+            root_source: root_source.map(GcRootSource::for_remote_result),
         };
 
         // Try the primary remote PathInfo service (built from the first URL).

@@ -7,6 +7,7 @@
 
 mod derivation_file;
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -85,6 +86,8 @@ pub struct BuildConfig {
     pub trust_unsigned: bool,
     /// Optional retained-root source for successful top-level outputs.
     pub root_retention_source: Option<GcRootSource>,
+    /// Optional managed provenance for successful selected roots.
+    pub root_registration: Option<crunch_store::RootRegistration>,
     /// Optional local source-state payloads that can satisfy fixed-output fetchers.
     pub source_fetch_overrides: Vec<FetchSourceOverride>,
     /// When true, wrap the sandbox service in RemoteFirstBuildService
@@ -283,7 +286,7 @@ async fn build_linux(
     let mut builder = bundle.builder;
     let workspace_evidence_sink = bundle.workspace_evidence_sink;
     let _output_lookup = bundle.output_lookup;
-    let _root_registry = bundle.root_registry;
+    let root_registry = bundle.root_registry;
 
     let (tx, mut rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
     let mut known_paths = DerivationRegistry::new(&config.store_dir);
@@ -305,6 +308,7 @@ async fn build_linux(
         Err(err) => return Err(Error::Build(format!("{err}"))),
     };
     let eval_stream = eval_stream?;
+    let source_generation_paths = builder.source_generation_paths();
     let mut hermeticity_audit_events = hermeticity_audit_events;
     hermeticity_audit_events.extend(builder.take_hermeticity_audit_events());
     let pipeline_evidence = PipelineRunEvidence {
@@ -314,13 +318,23 @@ async fn build_linux(
         workspace_rows: workspace_evidence_sink.take(),
         action_result_rows: builder.take_action_result_reports(),
     };
-    Ok(finish_pipeline_result(
+    let result = finish_pipeline_result(
         &config.store_dir,
         config.hermeticity_mode,
         worker_result,
         eval_stream,
         pipeline_evidence,
-    ))
+    );
+    register_managed_generation(
+        config.root_registration.as_ref(),
+        config.root_retention_source,
+        &root_registry,
+        &result.outcomes,
+        &source_generation_paths,
+        result.failed.is_empty(),
+    )
+    .await?;
+    Ok(result)
 }
 
 pub async fn build_registered_derivations(
@@ -367,6 +381,53 @@ pub async fn build_registered_derivations(
 }
 
 #[cfg(target_os = "linux")]
+async fn register_managed_generation(
+    base_registration: Option<&crunch_store::RootRegistration>,
+    root_retention_source: Option<GcRootSource>,
+    root_registry: &crunch_store::RootRegistry,
+    outcomes: &[BuildOutcome],
+    source_paths: &[nix_compat::store_path::StorePath<String>],
+    include_source_generation: bool,
+) -> Result<(), Error> {
+    let Some(base_registration) = base_registration else {
+        return Ok(());
+    };
+    let local_source = root_retention_source.unwrap_or(GcRootSource::Build);
+    let mut seen_paths = BTreeSet::new();
+    let mut registrations = Vec::new();
+    for outcome in outcomes {
+        for (output_name, path_info) in &outcome.outputs {
+            if !seen_paths.insert(path_info.store_path.clone()) {
+                continue;
+            }
+            let source = if outcome.substitutions.contains_key(output_name) {
+                GcRootSource::Remote
+            } else {
+                local_source
+            };
+            registrations.push((path_info.store_path.clone(), source, base_registration.clone()));
+        }
+    }
+    if include_source_generation && base_registration.class == crunch_store::GcRootClass::ProjectOutputGeneration {
+        for source_path in source_paths {
+            if !seen_paths.insert(source_path.clone()) {
+                continue;
+            }
+            let mut source_registration = base_registration.clone();
+            source_registration.class = crunch_store::GcRootClass::ProjectSourceGeneration;
+            source_registration.generation = None;
+            source_registration.lease = None;
+            registrations.push((source_path.clone(), GcRootSource::Source, source_registration));
+        }
+    }
+    root_registry
+        .register_managed_batch(registrations)
+        .await
+        .map_err(|error| Error::Build(format!("committing managed root generation: {error}")))?;
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
 async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'static>(
     config: &BuildConfig,
     mut builder: Builder<S>,
@@ -380,6 +441,7 @@ async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'sta
         .build_all_report(request.roots, known_paths, config.max_jobs)
         .await
         .map_err(|error| Error::Build(error.to_string()))?;
+    let source_generation_paths = builder.source_generation_paths();
     normalize_failed_goal_keys(&mut worker_result.failed, &config.store_dir);
     let mut outputs = Vec::with_capacity(request.expected_outputs.len());
     for expected in request.expected_outputs {
@@ -401,6 +463,15 @@ async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'sta
             });
         }
     }
+    register_managed_generation(
+        config.root_registration.as_ref(),
+        config.root_retention_source,
+        &root_registry,
+        &worker_result.outcomes,
+        &source_generation_paths,
+        worker_result.failed.is_empty(),
+    )
+    .await?;
     for retained_output in request.retained_outputs {
         root_registry
             .register_if_present(retained_output, GcRootSource::Build)
@@ -524,7 +595,13 @@ fn create_pipeline_builder_with_source_policy(
         config.verbose,
     );
     builder.set_hermeticity_mode(config.hermeticity_mode);
-    builder.set_root_retention_source(config.root_retention_source);
+    let has_managed_registration = config.root_registration.is_some();
+    builder.set_root_retention_source(if has_managed_registration {
+        None
+    } else {
+        config.root_retention_source
+    });
+    builder.set_root_registration(None);
     Ok(PipelineBuilderBundle {
         builder,
         output_lookup,
@@ -867,9 +944,23 @@ pub fn label_for_key<'a>(result: &'a PipelineResult, drv_key: &str) -> Option<&'
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
+    use snix_castore::Node;
+    use snix_castore::SymlinkTarget;
+    use snix_store::path_info::PathInfo;
+    use snix_store::pathinfoservice::PathInfoService;
     use tokio::sync::mpsc;
 
     use super::*;
+
+    const MANAGED_TEST_STORE_PREFIX: &str = "/mantle/store";
+    const MANAGED_TEST_NAR_DIGEST_BYTES: usize = 32;
+    const MANAGED_TEST_NAR_SIZE: u64 = 1;
+    const MANAGED_TEST_OUTPUT_DIGEST_BYTE: u8 = 31;
+    const MANAGED_TEST_SOURCE_DIGEST_BYTE: u8 = 32;
+    const MANAGED_TEST_DRV_DIGEST_BYTE: u8 = 33;
+    const MANAGED_TEST_GENERATION: u64 = 1;
 
     async fn collect_eval_message_labels(mut rx: mpsc::Receiver<EvalMessage>) -> Vec<String> {
         let mut labels = Vec::new();
@@ -877,6 +968,40 @@ mod tests {
             labels.push(message.label);
         }
         labels
+    }
+
+    fn managed_test_path(name: &str, digest_byte: u8) -> StorePath<String> {
+        StorePath::from_name_and_digest_fixed(name, [digest_byte; nix_compat::store_path::DIGEST_SIZE])
+            .expect("valid managed-generation test path")
+    }
+
+    fn managed_test_path_info(store_path: StorePath<String>) -> PathInfo {
+        PathInfo {
+            store_path,
+            node: Node::Symlink {
+                target: SymlinkTarget::try_from("managed-generation-target")
+                    .expect("valid managed-generation symlink target"),
+            },
+            references: Vec::new(),
+            nar_size: MANAGED_TEST_NAR_SIZE,
+            nar_sha256: [MANAGED_TEST_OUTPUT_DIGEST_BYTE; MANAGED_TEST_NAR_DIGEST_BYTES],
+            signatures: Vec::new(),
+            deriver: None,
+            ca: None,
+        }
+    }
+
+    fn managed_test_registration() -> crunch_store::RootRegistration {
+        crunch_store::RootRegistration {
+            class: crunch_store::GcRootClass::ProjectOutputGeneration,
+            owner_scope: "project:b3:pipeline-test".to_string(),
+            project_identity: Some("b3:pipeline-test".to_string()),
+            selector: Some("default".to_string()),
+            generation: None,
+            generation_identity: Some("b3:pipeline-lock-test".to_string()),
+            lease: None,
+            removal_requested: false,
+        }
     }
 
     #[test]
@@ -1035,6 +1160,77 @@ mod tests {
         assert!(file.is_file());
         assert!(file.starts_with(directory.path()));
         (directory, file)
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn managed_generation_defers_sources_until_success_then_commits_output_and_source() {
+        let state = tempfile::tempdir().expect("managed-generation state directory");
+        let output = tempfile::tempdir().expect("managed-generation output directory");
+        let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig::new(
+            state.path().to_path_buf(),
+            output.path().to_path_buf(),
+            MANAGED_TEST_STORE_PREFIX.to_string(),
+        ))
+        .await
+        .expect("open managed-generation store");
+        let pathinfo_service = store.pathinfo_service();
+        let output_path = managed_test_path("managed-output", MANAGED_TEST_OUTPUT_DIGEST_BYTE);
+        let source_path = managed_test_path("managed-source", MANAGED_TEST_SOURCE_DIGEST_BYTE);
+        let output_path_info = managed_test_path_info(output_path.clone());
+        pathinfo_service.put(output_path_info.clone()).await.expect("persist managed output PathInfo");
+        pathinfo_service
+            .put(managed_test_path_info(source_path.clone()))
+            .await
+            .expect("persist managed source PathInfo");
+        let root_registry = store.into_pipeline_store_parts().root_registry;
+        let outcome = BuildOutcome {
+            drv_path: managed_test_path("managed.drv", MANAGED_TEST_DRV_DIGEST_BYTE),
+            outputs: BTreeMap::from([("out".to_string(), output_path_info)]),
+            substitutions: BTreeMap::new(),
+            cached: false,
+            log: None,
+        };
+        let registration = managed_test_registration();
+
+        register_managed_generation(
+            Some(&registration),
+            Some(GcRootSource::Build),
+            &root_registry,
+            std::slice::from_ref(&outcome),
+            std::slice::from_ref(&source_path),
+            false,
+        )
+        .await
+        .expect("failed pipeline keeps source generation deferred");
+        let incomplete_roots = root_registry.list().expect("list incomplete generation roots");
+        assert_eq!(incomplete_roots.len(), 1);
+        assert_eq!(incomplete_roots[0].root_class, crunch_store::GcRootClass::ProjectOutputGeneration);
+
+        register_managed_generation(
+            Some(&registration),
+            Some(GcRootSource::Build),
+            &root_registry,
+            std::slice::from_ref(&outcome),
+            std::slice::from_ref(&source_path),
+            true,
+        )
+        .await
+        .expect("successful pipeline commits output and source generation");
+        let complete_roots = root_registry.list().expect("list complete generation roots");
+        assert_eq!(complete_roots.len(), 2);
+        assert_eq!(complete_roots[0].generation, Some(MANAGED_TEST_GENERATION));
+        assert_eq!(complete_roots[1].generation, Some(MANAGED_TEST_GENERATION));
+        assert!(complete_roots.iter().any(|record| {
+            record.logical_path == output_path.to_absolute_path_with_prefix(MANAGED_TEST_STORE_PREFIX)
+                && record.root_class == crunch_store::GcRootClass::ProjectOutputGeneration
+                && record.source == GcRootSource::Build
+        }));
+        assert!(complete_roots.iter().any(|record| {
+            record.logical_path == source_path.to_absolute_path_with_prefix(MANAGED_TEST_STORE_PREFIX)
+                && record.root_class == crunch_store::GcRootClass::ProjectSourceGeneration
+                && record.source == GcRootSource::Source
+        }));
     }
 
     #[tokio::test]

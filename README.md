@@ -141,6 +141,25 @@ changes, persistence, verification, and rollback execution. A plan records a
 bounded decision. It does not prove content correctness, provenance,
 reproducibility, release eligibility, or successful execution.
 
+Use the explained retention workflow for store cleanup:
+
+```bash
+mantle store roots --migrate
+mantle store usage
+mantle store gc
+mantle store gc --execute --plan-id <blake3-plan-id>
+```
+
+Migration preserves old roots as `legacy-unmanaged`. It does not infer an owner
+or authorize deletion. `store usage` reports observed, retained, reclaimable,
+quarantined, shared, and unknown bytes. Unknown closure or size facts stay
+visible. They do not become zero-byte estimates.
+
+The first GC command only creates a plan. Execution replans from current facts
+and rejects a stale plan ID. It commits authoritative metadata before file
+cleanup. It then continues across independent safe cleanup attempts and reports
+candidate paths, completed operation classes, and observed failures.
+
 Build, lookup, root, source, action-result, and administrative store authority
 use separate Rust capabilities. See
 [`docs/store-authority-capabilities.md`](docs/store-authority-capabilities.md).

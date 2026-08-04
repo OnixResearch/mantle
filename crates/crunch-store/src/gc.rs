@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -12,10 +13,16 @@ use crunch_gc_core::GcPlanRequest;
 use crunch_gc_core::GcReportDecision;
 use crunch_gc_core::plan_gc;
 use crunch_gc_core::report_decision;
+use crunch_gc_core::retention::RetentionDecision;
+use crunch_gc_core::retention::RetentionDisposition;
+use crunch_gc_core::retention::UsageObjectObservation;
+use crunch_gc_core::retention::aggregate_usage;
+use crunch_gc_core::retention::plan_retention;
 use crunch_gc_core::summarize_reclaim_observations;
 use data_encoding::HEXLOWER;
 use futures::StreamExt;
 use nix_compat::store_path::StorePath;
+use serde::Serialize;
 use snix_castore::B3Digest;
 use snix_castore::Directory;
 use snix_castore::Node;
@@ -42,6 +49,8 @@ use crate::artifact_attestation_file_path;
 use crate::roots;
 use crate::roots::GcRootRecord;
 
+const GC_REPORT_SCHEMA: &str = "mantle-store-gc-report-v3";
+const GC_EXECUTION_PLAN_DOMAIN: &[u8] = b"mantle.gc.execution-plan.v2";
 const MAX_GC_BYTES_WALK_ENTRIES: u32 = 100_000;
 const MAX_GC_FILE_SCAN_ENTRIES: u32 = 200_000;
 const MAX_GC_RETAINED_CASTORE_ROOTS: usize = 1_000_000;
@@ -49,7 +58,8 @@ const INITIAL_PATHINFO_CAPACITY: usize = 256;
 #[cfg(unix)]
 const OWNER_WRITE_PERMISSION_MODE: u32 = 0o200;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum GcOperationKind {
     ExportedOutputs,
     PathInfoRewrite,
@@ -62,14 +72,76 @@ pub enum GcOperationKind {
     CaMappings,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GcRetentionExplanation {
+    pub path: String,
+    pub root_class: String,
+    pub owner_scope: String,
+    pub policy_blake3: String,
+    pub project_identity: Option<String>,
+    pub selector: Option<String>,
+    pub generation: Option<u64>,
+    pub lease_id: Option<String>,
+    pub transition_id: String,
+    pub transition_reason: String,
+    pub disposition: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GcPathExplanation {
+    pub path: String,
+    pub reason: String,
+    pub retaining_roots: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GcRootUsage {
+    pub root: String,
+    pub inclusive_bytes: u64,
+    pub unique_bytes: u64,
+    pub unknown_object_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GcUsageReport {
+    pub observed_bytes: u64,
+    pub retained_bytes: u64,
+    pub reclaimable_bytes: u64,
+    pub quarantined_bytes: u64,
+    pub unclassified_bytes: u64,
+    pub shared_bytes: u64,
+    pub unknown_object_count: usize,
+    pub roots: Vec<GcRootUsage>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GcReclaimObservation {
+    pub category: String,
+    pub path: String,
+    pub path_kind: Option<String>,
+    pub bytes: Option<u64>,
+    pub blocker: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GcReport {
+    pub schema: String,
+    pub plan_id: String,
+    pub retention_plan_id: String,
     pub is_dry_run: bool,
+    pub execution_complete: bool,
+    pub failed_operation: Option<String>,
+    pub failed_operations: Vec<String>,
     pub retained_root_count: u32,
     pub retained_castore_root_count: u32,
     pub candidate_path_count: u32,
     pub reclaimable_bytes_total: u64,
+    pub reclaim_observations: Vec<GcReclaimObservation>,
     pub candidate_paths: Vec<String>,
+    pub retention_explanations: Vec<GcRetentionExplanation>,
+    pub path_explanations: Vec<GcPathExplanation>,
+    pub usage: GcUsageReport,
     pub candidate_blob_index_count: u32,
     pub candidate_blob_chunk_count: u32,
     pub candidate_artifact_attestation_count: u32,
@@ -88,8 +160,13 @@ struct LiveCastoreState {
 }
 
 struct GcPlan {
+    plan_id: String,
+    retention_plan_id: String,
     core_decision: GcReportDecision,
     retained_roots: Vec<GcRootRecord>,
+    retention_explanations: Vec<GcRetentionExplanation>,
+    path_explanations: Vec<GcPathExplanation>,
+    usage: GcUsageReport,
     live_pathinfos: Vec<PathInfo>,
     dead_pathinfos: Vec<PathInfo>,
     live_castore: LiveCastoreState,
@@ -98,40 +175,62 @@ struct GcPlan {
     closure_attestation_paths: Vec<PathBuf>,
     blob_index_paths: Vec<PathBuf>,
     blob_chunk_paths: Vec<PathBuf>,
+    action_result_record_paths: Vec<PathBuf>,
+    action_result_index_paths: Vec<PathBuf>,
     candidate_paths: Vec<String>,
     reclaimable_bytes_total: u64,
+    reclaim_observations: Vec<GcReclaimObservation>,
 }
 
-pub async fn run_gc(ctx: &GcContext<'_>, ca_mappings: &mut CaMappings, is_dry_run: bool) -> Result<GcReport, Error> {
+// r[impl store_lifecycle.safe_gc_execution]
+pub async fn run_gc(
+    ctx: &GcContext<'_>,
+    ca_mappings: &mut CaMappings,
+    accepted_plan_id: Option<&str>,
+) -> Result<GcReport, Error> {
     assert!(!ctx.store_dir.is_empty(), "store_dir must not be empty");
     assert!(ctx.store_dir.starts_with('/'), "store_dir must be absolute");
     if ctx.retained_castore_roots.len() > MAX_GC_RETAINED_CASTORE_ROOTS {
         return Err(Error::Gc(format!("retained castore root count exceeds {MAX_GC_RETAINED_CASTORE_ROOTS}")));
     }
 
-    let plan = build_plan(ctx, is_dry_run).await?;
+    let is_execution_requested = accepted_plan_id.is_some();
+    let plan = build_plan(ctx, is_execution_requested).await?;
+    if let Some(accepted_plan_id) = accepted_plan_id
+        && accepted_plan_id != plan.plan_id
+    {
+        return Err(Error::Gc(format!("stale-gc-plan: accepted={accepted_plan_id} observed={}", plan.plan_id)));
+    }
     let core_decision = plan.core_decision;
     let live_paths: BTreeSet<String> = plan
         .live_pathinfos
         .iter()
         .map(|path_info| path_info.store_path.to_absolute_path_with_prefix(ctx.store_dir))
         .collect();
-    let action_result_gc = local_action_result_gc_candidates(ctx.state_dir, &live_paths)
-        .map_err(|error| Error::Gc(format!("planning action-result metadata collection: {error}")))?;
     let mut gc_result = GcReport {
-        is_dry_run,
+        schema: GC_REPORT_SCHEMA.to_string(),
+        plan_id: plan.plan_id.clone(),
+        retention_plan_id: plan.retention_plan_id.clone(),
+        is_dry_run: !is_execution_requested,
+        execution_complete: false,
+        failed_operation: None,
+        failed_operations: Vec::new(),
         retained_root_count: saturating_u32(plan.retained_roots.len()),
         retained_castore_root_count: saturating_u32(ctx.retained_castore_roots.len()),
         candidate_path_count: saturating_u32(plan.dead_pathinfos.len()),
         reclaimable_bytes_total: plan.reclaimable_bytes_total,
+        reclaim_observations: plan.reclaim_observations.clone(),
         candidate_paths: plan.candidate_paths.clone(),
+        retention_explanations: plan.retention_explanations.clone(),
+        path_explanations: plan.path_explanations.clone(),
+        usage: plan.usage.clone(),
         candidate_blob_index_count: saturating_u32(plan.blob_index_paths.len()),
         candidate_blob_chunk_count: saturating_u32(plan.blob_chunk_paths.len()),
         candidate_artifact_attestation_count: saturating_u32(plan.artifact_attestation_paths.len()),
         candidate_closure_attestation_count: saturating_u32(plan.closure_attestation_paths.len()),
         candidate_exported_output_count: saturating_u32(plan.orphaned_on_disk.len()),
-        candidate_action_result_record_count: saturating_u32(action_result_gc.record_paths.len()),
-        candidate_action_result_index_count: saturating_u32(action_result_gc.index_marker_paths.len()),
+        candidate_action_result_record_count: saturating_u32(plan.action_result_record_paths.len()),
+        candidate_action_result_index_count: saturating_u32(plan.action_result_index_paths.len()),
         operations: Vec::new(),
     };
     assert_eq!(core_decision.candidate_path_count, plan.dead_pathinfos.len());
@@ -140,49 +239,79 @@ pub async fn run_gc(ctx: &GcContext<'_>, ca_mappings: &mut CaMappings, is_dry_ru
         return Ok(gc_result);
     }
 
-    remove_exported_outputs(&plan.orphaned_on_disk)?;
-    gc_result.operations.push(GcOperationKind::ExportedOutputs);
-
-    rewrite_pathinfo_db(ctx.state_dir, &plan.live_pathinfos).await?;
-    gc_result.operations.push(GcOperationKind::PathInfoRewrite);
-
-    remove_files(&plan.artifact_attestation_paths)?;
-    gc_result.operations.push(GcOperationKind::ArtifactAttestations);
-
-    remove_files(&plan.closure_attestation_paths)?;
-    gc_result.operations.push(GcOperationKind::ClosureAttestations);
-
-    rewrite_directory_db(ctx.state_dir, plan.live_castore.directories.values()).await?;
-    gc_result.operations.push(GcOperationKind::DirectoryRewrite);
-
-    remove_files(&plan.blob_index_paths)?;
-    gc_result.operations.push(GcOperationKind::BlobIndexFiles);
-
-    remove_files(&plan.blob_chunk_paths)?;
-    gc_result.operations.push(GcOperationKind::BlobChunkFiles);
-
-    remove_files(&action_result_gc.record_paths)?;
-    remove_files(&action_result_gc.index_marker_paths)?;
-    gc_result.operations.push(GcOperationKind::ActionResults);
-
+    let pathinfo_result = rewrite_pathinfo_db(ctx.state_dir, &plan.live_pathinfos).await;
+    if !record_gc_operation(&mut gc_result, GcOperationKind::PathInfoRewrite, pathinfo_result) {
+        return Ok(gc_result);
+    }
+    let _exported_outputs_succeeded = record_gc_operation(
+        &mut gc_result,
+        GcOperationKind::ExportedOutputs,
+        remove_exported_outputs(&plan.orphaned_on_disk),
+    );
+    let _artifact_attestations_succeeded = record_gc_operation(
+        &mut gc_result,
+        GcOperationKind::ArtifactAttestations,
+        remove_files(&plan.artifact_attestation_paths),
+    );
+    let _closure_attestations_succeeded = record_gc_operation(
+        &mut gc_result,
+        GcOperationKind::ClosureAttestations,
+        remove_files(&plan.closure_attestation_paths),
+    );
+    let directory_result = rewrite_directory_db(ctx.state_dir, plan.live_castore.directories.values()).await;
+    if !record_gc_operation(&mut gc_result, GcOperationKind::DirectoryRewrite, directory_result) {
+        return Ok(gc_result);
+    }
+    let _blob_indexes_succeeded =
+        record_gc_operation(&mut gc_result, GcOperationKind::BlobIndexFiles, remove_files(&plan.blob_index_paths));
+    let _blob_chunks_succeeded =
+        record_gc_operation(&mut gc_result, GcOperationKind::BlobChunkFiles, remove_files(&plan.blob_chunk_paths));
+    let action_result = remove_action_result_files(&plan.action_result_record_paths, &plan.action_result_index_paths);
+    let _action_results_succeeded = record_gc_operation(&mut gc_result, GcOperationKind::ActionResults, action_result);
     ca_mappings.retain_output_paths(&live_paths);
-    ca_mappings
+    let ca_mapping_result = ca_mappings
         .save_checked(ctx.state_dir)
-        .map_err(|err| Error::Gc(format!("saving CA mappings: {err}")))?;
-    gc_result.operations.push(GcOperationKind::CaMappings);
+        .map_err(|error| Error::Gc(format!("saving CA mappings: {error}")));
+    let _ca_mappings_succeeded = record_gc_operation(&mut gc_result, GcOperationKind::CaMappings, ca_mapping_result);
 
+    gc_result.execution_complete = gc_result.failed_operations.is_empty();
     Ok(gc_result)
 }
 
-async fn build_plan(ctx: &GcContext<'_>, is_dry_run: bool) -> Result<GcPlan, Error> {
+// r[impl store_lifecycle.gc_explanation]
+async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result<GcPlan, Error> {
     assert!(!ctx.store_dir.is_empty(), "build_plan: store_dir must not be empty");
     assert!(ctx.store_dir.starts_with('/'), "build_plan: store_dir must be absolute");
 
-    let retained_roots = roots::list_roots(ctx.state_dir)?;
+    let all_roots = roots::list_roots(ctx.state_dir)?;
+    let current_unix_s = roots::current_unix_seconds()?;
+    let retention_policy = crate::retention::core_retention_policy();
+    let retention_facts = crate::retention::records_to_core(&all_roots)?;
+    let retention_plan = plan_retention(&retention_policy, current_unix_s, retention_facts)
+        .map_err(|error| Error::Gc(format!("planning root retention: {error:?}")))?;
+    let retained_root_ids = retention_plan
+        .decisions
+        .iter()
+        .filter(|decision| decision.disposition.retains_path())
+        .map(|decision| decision.path_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let retained_roots = all_roots
+        .iter()
+        .filter(|root| retained_root_ids.contains(root.logical_path.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
     let snapshot = snapshot_pathinfos(ctx.pathinfo).await?;
-    let core_plan = plan_gc(core_plan_request(&retained_roots, &snapshot, ctx.store_dir, is_dry_run)?)
+    let core_plan = plan_gc(core_plan_request(&retained_roots, &snapshot, ctx.store_dir, !is_execution_requested)?)
         .map_err(|error| shell_gc_plan_error(error, ctx.store_dir))?;
     let live_paths = core_plan.retained_path_ids.iter().cloned().collect::<BTreeSet<_>>();
+    let usage = build_usage_report(&snapshot, &core_plan.retaining_roots, &retention_plan.decisions, ctx.store_dir)?;
+    let explanation_link_limit =
+        crate::retention::store_retention_runtime_policy().limits.max_closure_links_per_explanation;
+    let path_explanations = build_path_explanations(&core_plan, explanation_link_limit)?;
+    let core_plan_id = core_plan.plan_id.into_bytes();
+    let retention_plan_id_bytes = retention_plan.plan_id.into_bytes();
+    let retention_plan_id = encode_blake3_identity(&retention_plan_id_bytes);
+    let retention_explanations = build_retention_explanations(&retention_plan.decisions, &all_roots)?;
     let (live_pathinfos, dead_pathinfos) = split_pathinfos(snapshot, &live_paths, ctx.store_dir);
     let live_castore = collect_live_castore_state(
         &live_pathinfos,
@@ -197,19 +326,34 @@ async fn build_plan(ctx: &GcContext<'_>, is_dry_run: bool) -> Result<GcPlan, Err
     let closure_attestation_paths = collect_dead_closure_attestations(ctx.state_dir, &retained_roots)?;
     let blob_index_paths = collect_dead_blob_files(ctx.state_dir, &live_castore.blob_index_digests, true)?;
     let blob_chunk_paths = collect_dead_blob_files(ctx.state_dir, &live_castore.chunk_digests, false)?;
-    let reclaimable_bytes_total = compute_reclaimable_bytes(
-        &orphaned_on_disk,
-        &artifact_attestation_paths,
-        &closure_attestation_paths,
-        &blob_index_paths,
-        &blob_chunk_paths,
-    )?;
+    let action_result_gc = local_action_result_gc_candidates(ctx.state_dir, &live_paths)
+        .map_err(|error| Error::Gc(format!("planning action-result metadata collection: {error}")))?;
+    let reclaim_summary = compute_reclaimable_bytes(ReclaimObservationPaths {
+        orphaned_on_disk: &orphaned_on_disk,
+        artifact_attestations: &artifact_attestation_paths,
+        closure_attestations: &closure_attestation_paths,
+        blob_indexes: &blob_index_paths,
+        blob_chunks: &blob_chunk_paths,
+        action_result_records: &action_result_gc.record_paths,
+        action_result_indexes: &action_result_gc.index_marker_paths,
+    })?;
     let candidate_paths = core_plan.candidate_path_ids.clone();
+    let plan_id = execution_plan_id(ExecutionPlanIdentityInput {
+        core_plan_id: &core_plan_id,
+        retention_plan_id: &retention_plan_id_bytes,
+        candidate_paths: &candidate_paths,
+        reclaim_observations: &reclaim_summary.observations,
+    });
     let core_decision = report_decision(core_plan);
 
     Ok(GcPlan {
+        plan_id,
+        retention_plan_id,
         core_decision,
         retained_roots,
+        retention_explanations,
+        path_explanations,
+        usage,
         live_pathinfos,
         dead_pathinfos,
         live_castore,
@@ -218,9 +362,211 @@ async fn build_plan(ctx: &GcContext<'_>, is_dry_run: bool) -> Result<GcPlan, Err
         closure_attestation_paths,
         blob_index_paths,
         blob_chunk_paths,
+        action_result_record_paths: action_result_gc.record_paths,
+        action_result_index_paths: action_result_gc.index_marker_paths,
         candidate_paths,
-        reclaimable_bytes_total,
+        reclaimable_bytes_total: reclaim_summary.reclaimable_bytes_total,
+        reclaim_observations: reclaim_summary.observations,
     })
+}
+
+fn record_gc_operation(report: &mut GcReport, kind: GcOperationKind, result: Result<(), Error>) -> bool {
+    match result {
+        Ok(()) => {
+            report.operations.push(kind);
+            true
+        }
+        Err(error) => {
+            let failure = format!("{kind:?}: {error}");
+            if report.failed_operation.is_none() {
+                report.failed_operation = Some(failure.clone());
+            }
+            report.failed_operations.push(failure);
+            false
+        }
+    }
+}
+
+fn remove_action_result_files(record_paths: &[PathBuf], index_paths: &[PathBuf]) -> Result<(), Error> {
+    remove_file_iter(record_paths.iter().chain(index_paths))
+}
+
+fn build_retention_explanations(
+    decisions: &[RetentionDecision],
+    roots: &[GcRootRecord],
+) -> Result<Vec<GcRetentionExplanation>, Error> {
+    let roots_by_path = roots.iter().map(|root| (root.logical_path.as_str(), root)).collect::<BTreeMap<_, _>>();
+    let mut explanations = Vec::with_capacity(decisions.len());
+    for decision in decisions {
+        let root = roots_by_path
+            .get(decision.path_id.as_str())
+            .ok_or_else(|| Error::Gc(format!("retention decision has no root record: {}", decision.path_id)))?;
+        explanations.push(GcRetentionExplanation {
+            path: decision.path_id.clone(),
+            root_class: decision.class.as_str().to_string(),
+            owner_scope: decision.owner_scope.clone(),
+            policy_blake3: root.policy_blake3.clone(),
+            project_identity: root.project_identity.clone(),
+            selector: root.selector.clone(),
+            generation: root.generation,
+            lease_id: root.lease.as_ref().map(|lease| lease.lease_id.clone()),
+            transition_id: root.last_transition_id.clone(),
+            transition_reason: root.last_transition_reason.clone(),
+            disposition: retention_disposition_name(decision.disposition).to_string(),
+            reason: decision.reason.as_str().to_string(),
+        });
+    }
+    Ok(explanations)
+}
+
+const fn retention_disposition_name(disposition: RetentionDisposition) -> &'static str {
+    match disposition {
+        RetentionDisposition::Keep => "keep",
+        RetentionDisposition::Expire => "expire",
+        RetentionDisposition::Migrate => "migrate",
+        RetentionDisposition::Quarantine => "quarantine",
+        RetentionDisposition::Remove => "remove",
+    }
+}
+
+fn build_path_explanations(
+    core_plan: &crunch_gc_core::GcPlan,
+    retaining_root_limit: usize,
+) -> Result<Vec<GcPathExplanation>, Error> {
+    if retaining_root_limit == 0 {
+        return Err(Error::Gc("retaining-root explanation limit must be positive".to_string()));
+    }
+    let mut explanations = Vec::with_capacity(core_plan.retaining_roots.len());
+    for retained in &core_plan.retaining_roots {
+        if retained.root_ids.len() > retaining_root_limit {
+            return Err(Error::Gc(format!(
+                "retaining-root explanation exceeds policy limit {retaining_root_limit}: {}",
+                retained.path_id
+            )));
+        }
+        explanations.push(GcPathExplanation {
+            path: retained.path_id.clone(),
+            reason: "reachable-from-retained-root".to_string(),
+            retaining_roots: retained.root_ids.clone(),
+        });
+    }
+    explanations.extend(core_plan.candidate_path_ids.iter().map(|path| GcPathExplanation {
+        path: path.clone(),
+        reason: "unreachable-from-retained-root".to_string(),
+        retaining_roots: Vec::new(),
+    }));
+    explanations.sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(explanations)
+}
+
+// r[impl store_lifecycle.usage_report]
+fn build_usage_report(
+    snapshot: &[PathInfo],
+    retaining_roots: &[crunch_gc_core::GcRetainingRoots],
+    decisions: &[RetentionDecision],
+    store_dir: &str,
+) -> Result<GcUsageReport, Error> {
+    let roots_by_path = retaining_roots
+        .iter()
+        .map(|entry| (entry.path_id.as_str(), entry.root_ids.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let observations = snapshot
+        .iter()
+        .map(|path_info| {
+            let path = path_info.store_path.to_absolute_path_with_prefix(store_dir);
+            UsageObjectObservation {
+                object_id: path.clone(),
+                bytes: Some(path_info.nar_size),
+                unknown_reason: None,
+                retaining_root_ids: roots_by_path.get(path.as_str()).cloned().unwrap_or_default(),
+            }
+        })
+        .collect();
+    let report = aggregate_usage(decisions, observations)
+        .map_err(|error| Error::Gc(format!("aggregating store usage: {error:?}")))?;
+    Ok(GcUsageReport {
+        observed_bytes: report.observed_bytes,
+        retained_bytes: report.retained_bytes,
+        reclaimable_bytes: report.reclaimable_bytes,
+        quarantined_bytes: report.quarantined_bytes,
+        unclassified_bytes: report.unclassified_bytes,
+        shared_bytes: report.shared_bytes,
+        unknown_object_count: report.unknown_object_count,
+        roots: report
+            .roots
+            .into_iter()
+            .map(|root| GcRootUsage {
+                root: root.root_id,
+                inclusive_bytes: root.inclusive_bytes,
+                unique_bytes: root.unique_bytes,
+                unknown_object_count: root.unknown_object_count,
+            })
+            .collect(),
+    })
+}
+
+struct ExecutionPlanIdentityInput<'a> {
+    core_plan_id: &'a [u8; blake3::OUT_LEN],
+    retention_plan_id: &'a [u8; blake3::OUT_LEN],
+    candidate_paths: &'a [String],
+    reclaim_observations: &'a [GcReclaimObservation],
+}
+
+fn execution_plan_id(input: ExecutionPlanIdentityInput<'_>) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(GC_EXECUTION_PLAN_DOMAIN);
+    hasher.update(input.core_plan_id);
+    hasher.update(input.retention_plan_id);
+    hash_plan_strings(&mut hasher, input.candidate_paths);
+    hasher.update(&(input.reclaim_observations.len() as u128).to_be_bytes());
+    for observation in input.reclaim_observations {
+        hash_plan_string(&mut hasher, &observation.category);
+        hash_plan_string(&mut hasher, &observation.path);
+        match observation.path_kind.as_deref() {
+            Some(path_kind) => {
+                hasher.update(&[1]);
+                hash_plan_string(&mut hasher, path_kind);
+            }
+            None => {
+                hasher.update(&[0]);
+            }
+        }
+        match observation.bytes {
+            Some(bytes) => {
+                hasher.update(&[1]);
+                hasher.update(&bytes.to_be_bytes());
+            }
+            None => {
+                hasher.update(&[0]);
+            }
+        }
+        match observation.blocker.as_deref() {
+            Some(blocker) => {
+                hasher.update(&[1]);
+                hash_plan_string(&mut hasher, blocker);
+            }
+            None => {
+                hasher.update(&[0]);
+            }
+        }
+    }
+    encode_blake3_identity(hasher.finalize().as_bytes())
+}
+
+fn hash_plan_strings(hasher: &mut blake3::Hasher, values: &[String]) {
+    hasher.update(&(values.len() as u128).to_be_bytes());
+    for value in values {
+        hash_plan_string(hasher, value);
+    }
+}
+
+fn hash_plan_string(hasher: &mut blake3::Hasher, value: &str) {
+    hasher.update(&(value.len() as u128).to_be_bytes());
+    hasher.update(value.as_bytes());
+}
+
+fn encode_blake3_identity(bytes: &[u8; blake3::OUT_LEN]) -> String {
+    format!("b3:{}", HEXLOWER.encode(bytes))
 }
 
 fn core_plan_request(
@@ -585,96 +931,194 @@ fn scan_blob_dir(
     Ok(())
 }
 
-fn compute_reclaimable_bytes(
-    orphaned_on_disk: &[PathBuf],
-    artifact_attestation_paths: &[PathBuf],
-    closure_attestation_paths: &[PathBuf],
-    blob_index_paths: &[PathBuf],
-    blob_chunk_paths: &[PathBuf],
-) -> Result<u64, Error> {
-    debug_assert!(orphaned_on_disk.iter().all(|path| path.is_absolute()));
-    debug_assert!(artifact_attestation_paths.iter().all(|path| path.is_absolute()));
-    let observation_count = orphaned_on_disk
-        .len()
-        .checked_add(artifact_attestation_paths.len())
-        .and_then(|count| count.checked_add(closure_attestation_paths.len()))
-        .and_then(|count| count.checked_add(blob_index_paths.len()))
-        .and_then(|count| count.checked_add(blob_chunk_paths.len()))
-        .ok_or_else(|| Error::Gc("reclaim observation count overflowed usize".to_string()))?;
+const RECLAIM_CATEGORY_EXPORTED_OUTPUT: &str = "exported-output";
+const RECLAIM_CATEGORY_ARTIFACT_ATTESTATION: &str = "artifact-attestation";
+const RECLAIM_CATEGORY_CLOSURE_ATTESTATION: &str = "closure-attestation";
+const RECLAIM_CATEGORY_BLOB_INDEX: &str = "blob-index";
+const RECLAIM_CATEGORY_BLOB_CHUNK: &str = "blob-chunk";
+const RECLAIM_CATEGORY_ACTION_RESULT_RECORD: &str = "action-result-record";
+const RECLAIM_CATEGORY_ACTION_RESULT_INDEX: &str = "action-result-index";
+const MAX_RECLAIM_PATH_WORKLIST: usize = 256;
+const INITIAL_RECLAIM_PATH_WORKLIST_CAPACITY: usize = 16;
+
+struct ReclaimObservationPaths<'a> {
+    orphaned_on_disk: &'a [PathBuf],
+    artifact_attestations: &'a [PathBuf],
+    closure_attestations: &'a [PathBuf],
+    blob_indexes: &'a [PathBuf],
+    blob_chunks: &'a [PathBuf],
+    action_result_records: &'a [PathBuf],
+    action_result_indexes: &'a [PathBuf],
+}
+
+struct ReclaimObservationSummary {
+    reclaimable_bytes_total: u64,
+    observations: Vec<GcReclaimObservation>,
+}
+
+struct PathSizeObservation {
+    bytes: u64,
+    path_kind: &'static str,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PathSizeBlocker {
+    MetadataUnreadable,
+    DirectoryUnreadable,
+    DirectoryEntryUnreadable,
+    EntryLimitExceeded,
+    WorklistLimitExceeded,
+    ByteOverflow,
+}
+
+impl PathSizeBlocker {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::MetadataUnreadable => "metadata-unreadable",
+            Self::DirectoryUnreadable => "directory-unreadable",
+            Self::DirectoryEntryUnreadable => "directory-entry-unreadable",
+            Self::EntryLimitExceeded => "entry-limit-exceeded",
+            Self::WorklistLimitExceeded => "worklist-limit-exceeded",
+            Self::ByteOverflow => "byte-overflow",
+        }
+    }
+}
+
+fn compute_reclaimable_bytes(paths: ReclaimObservationPaths<'_>) -> Result<ReclaimObservationSummary, Error> {
+    let categorized_paths = [
+        (RECLAIM_CATEGORY_EXPORTED_OUTPUT, paths.orphaned_on_disk),
+        (RECLAIM_CATEGORY_ARTIFACT_ATTESTATION, paths.artifact_attestations),
+        (RECLAIM_CATEGORY_CLOSURE_ATTESTATION, paths.closure_attestations),
+        (RECLAIM_CATEGORY_BLOB_INDEX, paths.blob_indexes),
+        (RECLAIM_CATEGORY_BLOB_CHUNK, paths.blob_chunks),
+        (RECLAIM_CATEGORY_ACTION_RESULT_RECORD, paths.action_result_records),
+        (RECLAIM_CATEGORY_ACTION_RESULT_INDEX, paths.action_result_indexes),
+    ];
+    let observation_count = categorized_paths
+        .iter()
+        .try_fold(0_usize, |count, (_, category_paths)| count.checked_add(category_paths.len()));
+    let Some(observation_count) = observation_count else {
+        return Err(Error::Gc("reclaim observation count overflowed usize".to_string()));
+    };
     if observation_count > crunch_gc_core::MAX_RECLAIM_OBSERVATIONS {
         return Err(Error::Gc(format!(
             "reclaim observation count exceeds {}",
             crunch_gc_core::MAX_RECLAIM_OBSERVATIONS
         )));
     }
-    let mut observed_sizes_bytes = Vec::with_capacity(observation_count);
-    for path in orphaned_on_disk
-        .iter()
-        .chain(artifact_attestation_paths.iter())
-        .chain(closure_attestation_paths.iter())
-        .chain(blob_index_paths.iter())
-        .chain(blob_chunk_paths.iter())
-    {
-        observed_sizes_bytes.push(path_size_bytes(path)?);
+    let mut known_sizes_bytes = Vec::with_capacity(observation_count);
+    let mut observations = Vec::with_capacity(observation_count);
+    for (category, category_paths) in categorized_paths {
+        for path in category_paths {
+            debug_assert!(path.is_absolute());
+            match path_size_bytes(path) {
+                Ok(observation) => {
+                    known_sizes_bytes.push(observation.bytes);
+                    observations.push(GcReclaimObservation {
+                        category: category.to_string(),
+                        path: path.to_string_lossy().into_owned(),
+                        path_kind: Some(observation.path_kind.to_string()),
+                        bytes: Some(observation.bytes),
+                        blocker: None,
+                    });
+                }
+                Err(blocker) => observations.push(GcReclaimObservation {
+                    category: category.to_string(),
+                    path: path.to_string_lossy().into_owned(),
+                    path_kind: None,
+                    bytes: None,
+                    blocker: Some(blocker.as_str().to_string()),
+                }),
+            }
+        }
     }
-    let summary = summarize_reclaim_observations(observed_sizes_bytes)
+    let summary = summarize_reclaim_observations(known_sizes_bytes)
         .map_err(|error| Error::Gc(format!("summarizing reclaimable bytes: {error:?}")))?;
-    Ok(summary.reclaimable_bytes)
+    Ok(ReclaimObservationSummary {
+        reclaimable_bytes_total: summary.reclaimable_bytes,
+        observations,
+    })
 }
 
-fn path_size_bytes(root: &Path) -> Result<u64, Error> {
+fn path_size_bytes(root: &Path) -> Result<PathSizeObservation, PathSizeBlocker> {
     assert!(root.is_absolute(), "path_size_bytes: root must be absolute");
-    const MAX_WORKLIST: usize = 256;
+    let root_metadata = std::fs::symlink_metadata(root).map_err(|_| PathSizeBlocker::MetadataUnreadable)?;
+    let path_kind = if root_metadata.file_type().is_symlink() {
+        "symlink"
+    } else if root_metadata.is_file() {
+        "file"
+    } else if root_metadata.is_dir() {
+        "directory"
+    } else {
+        "special"
+    };
     let mut total: u64 = 0;
     let mut seen_entries: u32 = 0;
-    let mut worklist = Vec::with_capacity(16);
+    let mut worklist = Vec::with_capacity(INITIAL_RECLAIM_PATH_WORKLIST_CAPACITY);
     worklist.push(root.to_path_buf());
 
     while let Some(current) = worklist.pop() {
-        assert!(worklist.len() < MAX_WORKLIST, "path walk directory nesting exceeded {MAX_WORKLIST}");
         seen_entries = seen_entries.saturating_add(1);
         if seen_entries > MAX_GC_BYTES_WALK_ENTRIES {
-            return Err(Error::Gc(format!("path walk exceeded {} entries", MAX_GC_BYTES_WALK_ENTRIES)));
+            return Err(PathSizeBlocker::EntryLimitExceeded);
         }
 
-        let metadata = std::fs::symlink_metadata(&current)
-            .map_err(|err| Error::Gc(format!("reading metadata for {}: {err}", current.display())))?;
+        let metadata = std::fs::symlink_metadata(&current).map_err(|_| PathSizeBlocker::MetadataUnreadable)?;
         if metadata.file_type().is_symlink() || metadata.is_file() {
-            total = total
-                .checked_add(metadata.len())
-                .ok_or_else(|| Error::Gc(format!("byte total overflowed while walking {}", root.display())))?;
+            total = total.checked_add(metadata.len()).ok_or(PathSizeBlocker::ByteOverflow)?;
             continue;
         }
         if !metadata.is_dir() {
             continue;
         }
 
-        for entry in
-            std::fs::read_dir(&current).map_err(|err| Error::Gc(format!("reading {}: {err}", current.display())))?
-        {
-            let entry = entry.map_err(|err| Error::Gc(format!("reading {} entry: {err}", current.display())))?;
+        let entries = std::fs::read_dir(&current).map_err(|_| PathSizeBlocker::DirectoryUnreadable)?;
+        for entry in entries {
+            let entry = entry.map_err(|_| PathSizeBlocker::DirectoryEntryUnreadable)?;
+            if worklist.len() >= MAX_RECLAIM_PATH_WORKLIST {
+                return Err(PathSizeBlocker::WorklistLimitExceeded);
+            }
             worklist.push(entry.path());
         }
     }
-    Ok(total)
+    Ok(PathSizeObservation {
+        bytes: total,
+        path_kind,
+    })
 }
 
 fn remove_exported_outputs(paths: &[PathBuf]) -> Result<(), Error> {
+    let mut failures = Vec::new();
     for path in paths {
-        remove_path(path)?;
+        if let Err(error) = remove_path(path) {
+            failures.push(error.to_string());
+        }
     }
-    Ok(())
+    cleanup_result(failures)
 }
 
 fn remove_files(paths: &[PathBuf]) -> Result<(), Error> {
+    remove_file_iter(paths.iter())
+}
+
+fn remove_file_iter<'a>(paths: impl Iterator<Item = &'a PathBuf>) -> Result<(), Error> {
+    let mut failures = Vec::new();
     for path in paths {
         match std::fs::remove_file(path) {
             Ok(()) => {}
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-            Err(err) => return Err(Error::Gc(format!("removing {}: {err}", path.display()))),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => failures.push(format!("removing {}: {error}", path.display())),
         }
     }
-    Ok(())
+    cleanup_result(failures)
+}
+
+fn cleanup_result(failures: Vec<String>) -> Result<(), Error> {
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(Error::Gc(format!("{} independent cleanup failure(s): {}", failures.len(), failures.join("; "))))
+    }
 }
 
 fn remove_path(path: &Path) -> Result<(), Error> {
@@ -950,6 +1394,7 @@ mod tests {
         open_store(state_dir, output_dir).await
     }
 
+    // r[verify store_lifecycle.gc_explanation]
     #[tokio::test]
     async fn dry_run_reports_same_candidates_as_real_run() {
         let state_dir = tempfile::tempdir().unwrap();
@@ -962,17 +1407,103 @@ mod tests {
         persist_output(&mut store, "out", keep_path.clone(), keep_node, vec![], true, Some(GcRootSource::Build)).await;
         persist_output(&mut store, "out", drop_path.clone(), drop_node, vec![], true, None).await;
 
-        let is_dry_run = store.garbage_collect(true).await.unwrap();
+        let is_dry_run = store.garbage_collect(None).await.unwrap();
+        assert!(is_dry_run.is_dry_run);
+        assert!(is_dry_run.operations.is_empty());
         assert_eq!(is_dry_run.candidate_paths, vec![drop_path.to_absolute_path()]);
+        assert!(is_dry_run.retention_explanations.iter().any(|item| item.path == keep_path.to_absolute_path()));
+        assert!(is_dry_run.path_explanations.iter().any(|item| item.path == drop_path.to_absolute_path()));
         assert!(output_dir.path().join(drop_path.to_string()).exists());
 
-        let real = store.garbage_collect(false).await.unwrap();
+        let accepted_plan_id = is_dry_run.plan_id.clone();
+        let real = store.garbage_collect(Some(&accepted_plan_id)).await.unwrap();
         assert_eq!(real.candidate_paths, is_dry_run.candidate_paths);
+        assert!(real.execution_complete);
 
         let reopened = reopen_store(state_dir.path(), output_dir.path()).await;
         let listed = crate::store_list(reopened.pathinfo_service().as_ref()).await.unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].0, keep_path.to_string());
+    }
+
+    #[tokio::test]
+    async fn operation_reporting_preserves_first_failure_and_records_later_work() {
+        const EXPECTED_FAILURE_COUNT: usize = 2;
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let mut store = open_store(state_dir.path(), output_dir.path()).await;
+        let mut report = store.garbage_collect(None).await.unwrap();
+
+        let first_succeeded = record_gc_operation(
+            &mut report,
+            GcOperationKind::ExportedOutputs,
+            Err(Error::Gc("first deletion failure".to_string())),
+        );
+        let later_succeeded = record_gc_operation(&mut report, GcOperationKind::ArtifactAttestations, Ok(()));
+        let second_succeeded = record_gc_operation(
+            &mut report,
+            GcOperationKind::ClosureAttestations,
+            Err(Error::Gc("second deletion failure".to_string())),
+        );
+
+        assert!(!first_succeeded);
+        assert!(later_succeeded);
+        assert!(!second_succeeded);
+        assert_eq!(report.operations, vec![GcOperationKind::ArtifactAttestations]);
+        assert_eq!(report.failed_operations.len(), EXPECTED_FAILURE_COUNT);
+        assert!(report.failed_operation.as_deref().is_some_and(|failure| failure.contains("first deletion failure")));
+        assert!(report.failed_operations[1].contains("second deletion failure"));
+    }
+
+    // r[verify store_lifecycle.safe_gc_execution]
+    // r[verify store_lifecycle.retention_validation]
+    #[tokio::test]
+    async fn stale_plan_is_rejected_after_root_change_without_deletion() {
+        const KEEP_PATH_DIGEST_BYTE: u8 = 31;
+        const CANDIDATE_PATH_DIGEST_BYTE: u8 = 32;
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let mut store = open_store(state_dir.path(), output_dir.path()).await;
+        let keep_path = store_path("keep", KEEP_PATH_DIGEST_BYTE);
+        let candidate_path = store_path("candidate", CANDIDATE_PATH_DIGEST_BYTE);
+        let keep_node = write_blob(&store, b"keep").await;
+        let candidate_node = write_blob(&store, b"candidate").await;
+        persist_output(&mut store, "out", keep_path, keep_node, vec![], true, Some(GcRootSource::Build)).await;
+        persist_output(&mut store, "out", candidate_path.clone(), candidate_node, vec![], true, None).await;
+
+        let plan = store.garbage_collect(None).await.unwrap();
+        assert_eq!(plan.candidate_paths, vec![candidate_path.to_absolute_path()]);
+        store.pin_retained_root(&candidate_path.to_absolute_path()).await.unwrap();
+
+        let error = store.garbage_collect(Some(&plan.plan_id)).await.expect_err("changed root must stale the plan");
+        assert!(matches!(error, Error::Gc(message) if message.contains("stale-gc-plan")));
+        assert!(output_dir.path().join(candidate_path.to_string()).exists());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn stale_plan_is_rejected_after_export_symlink_substitution() {
+        const KEEP_PATH_DIGEST_BYTE: u8 = 33;
+        const CANDIDATE_PATH_DIGEST_BYTE: u8 = 34;
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let mut store = open_store(state_dir.path(), output_dir.path()).await;
+        let keep_path = store_path("keep-symlink-guard", KEEP_PATH_DIGEST_BYTE);
+        let candidate_path = store_path("candidate-symlink-guard", CANDIDATE_PATH_DIGEST_BYTE);
+        let keep_node = write_blob(&store, b"keep").await;
+        let candidate_node = write_blob(&store, b"candidate").await;
+        persist_output(&mut store, "out", keep_path.clone(), keep_node, vec![], true, Some(GcRootSource::Build)).await;
+        persist_output(&mut store, "out", candidate_path.clone(), candidate_node, vec![], true, None).await;
+        let plan = store.garbage_collect(None).await.unwrap();
+        let candidate_export = output_dir.path().join(candidate_path.to_string());
+        let keep_export = output_dir.path().join(keep_path.to_string());
+        std::fs::remove_file(&candidate_export).unwrap();
+        std::os::unix::fs::symlink(&keep_export, &candidate_export).unwrap();
+
+        let error = store.garbage_collect(Some(&plan.plan_id)).await.expect_err("symlink drift must stale the plan");
+        assert!(matches!(error, Error::Gc(message) if message.contains("stale-gc-plan")));
+        assert!(candidate_export.is_symlink());
+        assert!(keep_export.exists());
     }
 
     #[tokio::test]
@@ -1005,12 +1536,13 @@ mod tests {
         store.runtime_closure_attestation(std::slice::from_ref(&root_path)).await.unwrap();
         assert!(closure_path.exists());
 
-        let report = store.garbage_collect(false).await.unwrap();
+        let report = store.garbage_collect(None).await.unwrap();
         assert_eq!(report.candidate_path_count, 0);
         assert!(closure_path.exists());
         assert!(crate::artifact_attestation_file_path(state_dir.path(), "/nix/store", &dep_path).exists());
         assert!(crate::artifact_attestation_file_path(state_dir.path(), "/nix/store", &root_path).exists());
 
+        drop(store);
         let reopened = reopen_store(state_dir.path(), output_dir.path()).await;
         let listed = crate::store_list(reopened.pathinfo_service().as_ref()).await.unwrap();
         assert_eq!(listed.len(), 2);
@@ -1039,7 +1571,8 @@ mod tests {
         let export_path = output_dir.path().join(drop_path.to_string());
         assert!(export_path.exists());
 
-        let report = store.garbage_collect(false).await.unwrap();
+        let plan = store.garbage_collect(None).await.unwrap();
+        let report = store.garbage_collect(Some(&plan.plan_id)).await.unwrap();
         assert_eq!(report.candidate_paths, vec![drop_path.to_absolute_path()]);
         assert!(!export_path.exists());
         assert!(!crate::artifact_attestation_file_path(state_dir.path(), "/nix/store", &drop_path).exists());
@@ -1073,7 +1606,8 @@ mod tests {
         let chunk_path = blob_chunk_path(state_dir.path(), &shared_digest);
         assert!(chunk_path.exists());
 
-        store.garbage_collect(false).await.unwrap();
+        let plan = store.garbage_collect(None).await.unwrap();
+        store.garbage_collect(Some(&plan.plan_id)).await.unwrap();
 
         assert!(chunk_path.exists());
     }
@@ -1098,8 +1632,11 @@ mod tests {
         assert!(retained_path.is_file());
         assert!(stale_path.is_file());
 
-        let report =
-            store.garbage_collect_with_castore_roots(false, std::slice::from_ref(&retained_node)).await.unwrap();
+        let plan = store.garbage_collect_with_castore_roots(None, std::slice::from_ref(&retained_node)).await.unwrap();
+        let report = store
+            .garbage_collect_with_castore_roots(Some(&plan.plan_id), std::slice::from_ref(&retained_node))
+            .await
+            .unwrap();
 
         assert_eq!(report.retained_castore_root_count, 1);
         assert!(retained_path.is_file());
@@ -1118,7 +1655,7 @@ mod tests {
         std::fs::remove_file(state_dir.path().join("pathinfo.redb")).unwrap();
 
         let mut reopened = reopen_store(state_dir.path(), output_dir.path()).await;
-        let err = reopened.garbage_collect(true).await.unwrap_err();
+        let err = reopened.garbage_collect(None).await.unwrap_err();
         assert!(matches!(err, Error::MissingClosureFacts { .. }));
     }
 
@@ -1129,7 +1666,7 @@ mod tests {
         std::fs::write(state_dir.path().join("gc-roots.json"), b"not json").unwrap();
         let mut store = open_store(state_dir.path(), output_dir.path()).await;
 
-        let err = store.garbage_collect(true).await.unwrap_err();
+        let err = store.garbage_collect(None).await.unwrap_err();
         assert!(matches!(err, Error::RootRegistry(_)));
     }
 
@@ -1145,11 +1682,12 @@ mod tests {
         persist_output(&mut store, "out", root_path, root_node, vec![], true, Some(GcRootSource::Build)).await;
         persist_output(&mut store, "out", drop_path.clone(), drop_node, vec![], true, None).await;
 
-        let report = store.garbage_collect(false).await.unwrap();
+        let plan = store.garbage_collect(None).await.unwrap();
+        let report = store.garbage_collect(Some(&plan.plan_id)).await.unwrap();
 
         assert_eq!(report.operations, vec![
-            GcOperationKind::ExportedOutputs,
             GcOperationKind::PathInfoRewrite,
+            GcOperationKind::ExportedOutputs,
             GcOperationKind::ArtifactAttestations,
             GcOperationKind::ClosureAttestations,
             GcOperationKind::DirectoryRewrite,
@@ -1171,9 +1709,160 @@ mod tests {
 
         drop(store);
         let mut reopened = reopen_store(state_dir.path(), output_dir.path()).await;
-        let report = reopened.garbage_collect(false).await.unwrap();
+        let report = reopened.garbage_collect(None).await.unwrap();
         assert_eq!(report.candidate_path_count, 0);
         assert!(output_dir.path().join(dir_path.to_string()).join("hello.txt").exists());
+    }
+
+    #[test]
+    fn path_explanation_rejects_retaining_root_links_above_policy_limit() {
+        const ROOT_LINK_LIMIT: usize = 1;
+        let root_a = "/mantle/store/root-a".to_string();
+        let root_b = "/mantle/store/root-b".to_string();
+        let shared = "/mantle/store/shared".to_string();
+        let plan = plan_gc(GcPlanRequest {
+            roots: vec![root_a.clone(), root_b.clone()],
+            entries: vec![
+                GcEntry {
+                    path_id: root_a,
+                    references: vec![shared.clone()],
+                    declared_nar_bytes: 1,
+                },
+                GcEntry {
+                    path_id: root_b,
+                    references: vec![shared.clone()],
+                    declared_nar_bytes: 1,
+                },
+                GcEntry {
+                    path_id: shared,
+                    references: Vec::new(),
+                    declared_nar_bytes: 1,
+                },
+            ],
+            execution_mode: GcExecutionMode::DryRun,
+        })
+        .expect("valid shared-closure plan");
+
+        let error = build_path_explanations(&plan, ROOT_LINK_LIMIT)
+            .expect_err("retaining-root links above the configured limit must fail");
+
+        assert!(matches!(error, Error::Gc(message) if message.contains("exceeds policy limit")));
+    }
+
+    #[tokio::test]
+    async fn pathinfo_rewrite_failure_stops_before_export_deletion() {
+        const ROOT_PATH_DIGEST_BYTE: u8 = 12;
+        const CANDIDATE_PATH_DIGEST_BYTE: u8 = 13;
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let mut store = open_store(state_dir.path(), output_dir.path()).await;
+        let root_path = store_path("rewrite-root", ROOT_PATH_DIGEST_BYTE);
+        let candidate_path = store_path("rewrite-candidate", CANDIDATE_PATH_DIGEST_BYTE);
+        let root_node = write_blob(&store, b"rewrite-root").await;
+        let candidate_node = write_blob(&store, b"rewrite-candidate").await;
+        persist_output(&mut store, "out", root_path, root_node, vec![], true, Some(GcRootSource::Build)).await;
+        persist_output(&mut store, "out", candidate_path.clone(), candidate_node, vec![], true, None).await;
+        let candidate_export = output_dir.path().join(candidate_path.to_string());
+        let plan = store.garbage_collect(None).await.unwrap();
+        let rewrite_blocker = state_dir.path().join("pathinfo.redb.gc-tmp");
+        std::fs::create_dir(&rewrite_blocker).unwrap();
+
+        let report = store.garbage_collect(Some(&plan.plan_id)).await.unwrap();
+
+        assert!(!report.execution_complete);
+        assert!(report.operations.is_empty());
+        assert!(report.failed_operation.as_deref().is_some_and(|failure| failure.contains("PathInfoRewrite")));
+        assert!(candidate_export.exists());
+    }
+
+    #[test]
+    fn file_cleanup_reports_failure_after_attempting_later_independent_paths() {
+        let cleanup_root = tempfile::tempdir().unwrap();
+        let blocked_path = cleanup_root.path().join("blocked-directory");
+        let removable_path = cleanup_root.path().join("removable-file");
+        std::fs::create_dir(&blocked_path).unwrap();
+        std::fs::write(&removable_path, b"remove-me").unwrap();
+
+        let error = remove_files(&[blocked_path.clone(), removable_path.clone()])
+            .expect_err("directory removal through the file rail must fail");
+
+        assert!(matches!(error, Error::Gc(message) if message.contains("independent cleanup failure")));
+        assert!(blocked_path.is_dir());
+        assert!(!removable_path.exists());
+    }
+
+    #[test]
+    fn reclaim_observation_preserves_unknown_bytes_and_plan_identity_binds_shape() {
+        const FIRST_OBSERVED_BYTES: u64 = 7;
+        const SECOND_OBSERVED_BYTES: u64 = 8;
+        let observation_root = tempfile::tempdir().unwrap();
+        let missing_root = observation_root.path().join("missing-reclaim-observation");
+        assert!(matches!(path_size_bytes(&missing_root), Err(PathSizeBlocker::MetadataUnreadable)));
+        let missing_paths = vec![missing_root.clone()];
+        let empty_paths = Vec::new();
+        let unknown_summary = compute_reclaimable_bytes(ReclaimObservationPaths {
+            orphaned_on_disk: &missing_paths,
+            artifact_attestations: &empty_paths,
+            closure_attestations: &empty_paths,
+            blob_indexes: &empty_paths,
+            blob_chunks: &empty_paths,
+            action_result_records: &empty_paths,
+            action_result_indexes: &empty_paths,
+        })
+        .expect("unknown byte observations must remain reportable");
+        assert_eq!(unknown_summary.reclaimable_bytes_total, 0);
+        assert_eq!(unknown_summary.observations.len(), 1);
+        assert!(unknown_summary.observations[0].bytes.is_none());
+        assert_eq!(unknown_summary.observations[0].blocker.as_deref(), Some("metadata-unreadable"));
+
+        const IDENTITY_OBSERVATION_PATH: &str = "/mantle/store/observed-candidate";
+        let observations_a = vec![GcReclaimObservation {
+            category: RECLAIM_CATEGORY_EXPORTED_OUTPUT.to_string(),
+            path: IDENTITY_OBSERVATION_PATH.to_string(),
+            path_kind: Some("file".to_string()),
+            bytes: Some(FIRST_OBSERVED_BYTES),
+            blocker: None,
+        }];
+        let observations_b = vec![GcReclaimObservation {
+            category: RECLAIM_CATEGORY_EXPORTED_OUTPUT.to_string(),
+            path: IDENTITY_OBSERVATION_PATH.to_string(),
+            path_kind: Some("file".to_string()),
+            bytes: Some(SECOND_OBSERVED_BYTES),
+            blocker: None,
+        }];
+        let observations_c = vec![GcReclaimObservation {
+            category: RECLAIM_CATEGORY_EXPORTED_OUTPUT.to_string(),
+            path: IDENTITY_OBSERVATION_PATH.to_string(),
+            path_kind: Some("symlink".to_string()),
+            bytes: Some(FIRST_OBSERVED_BYTES),
+            blocker: None,
+        }];
+        let core_plan_id = [0_u8; blake3::OUT_LEN];
+        let retention_plan_id = [1_u8; blake3::OUT_LEN];
+        let candidates = vec!["/mantle/store/candidate".to_string()];
+        let plan_a = execution_plan_id(ExecutionPlanIdentityInput {
+            core_plan_id: &core_plan_id,
+            retention_plan_id: &retention_plan_id,
+            candidate_paths: &candidates,
+            reclaim_observations: &observations_a,
+        });
+        let plan_b = execution_plan_id(ExecutionPlanIdentityInput {
+            core_plan_id: &core_plan_id,
+            retention_plan_id: &retention_plan_id,
+            candidate_paths: &candidates,
+            reclaim_observations: &observations_b,
+        });
+        let plan_c = execution_plan_id(ExecutionPlanIdentityInput {
+            core_plan_id: &core_plan_id,
+            retention_plan_id: &retention_plan_id,
+            candidate_paths: &candidates,
+            reclaim_observations: &observations_c,
+        });
+
+        const EXPECTED_PLAN_ID: &str = "b3:d018941192561471a85b01e1dc8365b1acde9a5664ec3f85c5c77146c8ede9c1";
+        assert_eq!(plan_a, EXPECTED_PLAN_ID);
+        assert_ne!(plan_a, plan_b);
+        assert_ne!(plan_a, plan_c);
     }
 
     #[cfg(unix)]

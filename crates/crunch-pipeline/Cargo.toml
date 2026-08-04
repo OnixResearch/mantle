@@ -18,5 +18,7 @@ tracing = "0.1"
 [dev-dependencies]
 data-encoding = "2.6"
 sha2 = "0.10.8"
+snix-castore = { path = "../../vendor/snix-castore" }
+snix-store = { path = "../../vendor/snix-store" }
 tokio = { version = "1", features = ["full"] }
 tempfile = "3"

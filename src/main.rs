@@ -2685,8 +2685,14 @@ pub enum StoreAction {
         /// Store path (full or fragment to match)
         path: String,
     },
-    /// List retained GC roots
-    Roots,
+    /// List retained GC roots with provenance
+    Roots {
+        /// Persist protected versioned records for legacy path-only roots
+        #[arg(long)]
+        migrate: bool,
+    },
+    /// Report bounded retained, reclaimable, shared, and unknown store usage
+    Usage,
     /// Pin a logical store path as a retained GC root
     Pin {
         /// Logical store path to retain
@@ -2697,11 +2703,19 @@ pub enum StoreAction {
         /// Logical store path to remove
         path: String,
     },
-    /// Run manual garbage collection
+    /// Plan garbage collection, or execute one accepted unchanged plan
     Gc {
-        /// Preview removals without mutating state
-        #[arg(long = "dry-run")]
-        is_dry_run: bool,
+        /// Execute the accepted plan instead of creating a non-mutating plan
+        #[arg(long, requires = "plan_id")]
+        execute: bool,
+
+        /// Exact BLAKE3 plan identity returned by a prior planning command
+        #[arg(long, value_name = "BLAKE3_PLAN_ID", requires = "execute")]
+        plan_id: Option<String>,
+
+        /// Compatibility spelling for the now-default non-mutating plan
+        #[arg(long = "dry-run", hide = true, conflicts_with = "execute")]
+        legacy_dry_run: bool,
     },
     /// Verify NAR hash and trusted signatures of stored paths
     Verify {
@@ -3250,7 +3264,8 @@ fn store_command_label(action: &StoreAction) -> &'static str {
     match action {
         StoreAction::List => "store.list",
         StoreAction::Info { .. } => "store.info",
-        StoreAction::Roots => "store.roots",
+        StoreAction::Roots { .. } => "store.roots",
+        StoreAction::Usage => "store.usage",
         StoreAction::Pin { .. } => "store.pin",
         StoreAction::Unpin { .. } => "store.unpin",
         StoreAction::Gc { .. } => "store.gc",
@@ -4462,6 +4477,7 @@ fn run_local_file_build(
             prepared.ctx.output_mode(),
             source_fetch_plan.overrides.clone(),
             prepared.ctx.base_state_dirs.clone(),
+            None,
         );
     }
     build_cmd::cmd_build(
@@ -4488,6 +4504,7 @@ fn run_project_build_target(prepared: &PreparedBuildCommand<'_>) -> Result<(), R
     let cwd = current_dir_or_error()?;
     let resolved = project_build::resolve_project_target(&prepared.target, &cwd, prepared.import_path_args)?;
     let expr = project_build::generate_extraction_expr(&resolved.root_file, &resolved.target);
+    let root_registration = project_output_root_registration(&resolved)?;
     let mut nickel_search_dirs = build_import_paths(&[])?;
     nickel_search_dirs.extend(resolved.import_paths);
     let source_preflight = run_offline_source_preflight_for_expr_if_requested(OfflineExprPreflightRequest {
@@ -4526,7 +4543,105 @@ fn run_project_build_target(prepared: &PreparedBuildCommand<'_>) -> Result<(), R
         import_entries: &nickel_search_dirs,
         prepared,
         source_fetch_overrides: source_fetch_plan.map(|plan| plan.overrides).unwrap_or_default(),
+        root_registration,
     })
+}
+
+const MAX_PROJECT_RETENTION_FACT_BYTES: u64 = 16_777_216;
+const PROJECT_RETENTION_IDENTITY_DOMAIN: &[u8] = b"mantle.project.retention-identity.v1";
+const CURRENT_PROJECT_LOCK_FILE: &str = "mantle.lock";
+const LEGACY_PROJECT_LOCK_FILE: &str = "crunch.lock";
+const PROJECT_OWNER_SCOPE: &str = "project";
+
+fn project_output_root_registration(
+    project: &project_build::ResolvedProject,
+) -> Result<crunch_store::RootRegistration, RunError> {
+    let project_dir = project.root_file.parent().ok_or_else(|| {
+        RunError::Internal(format!("project root file has no parent: {}", project.root_file.display()))
+    })?;
+    let manifest_bytes = read_bounded_project_retention_fact(&project.root_file)?;
+    let current_lock = project_dir.join(CURRENT_PROJECT_LOCK_FILE);
+    let legacy_lock = project_dir.join(LEGACY_PROJECT_LOCK_FILE);
+    if current_lock.exists() && legacy_lock.exists() {
+        return Err(RunError::Internal(format!(
+            "both {CURRENT_PROJECT_LOCK_FILE} and {LEGACY_PROJECT_LOCK_FILE} exist in {}",
+            project_dir.display()
+        )));
+    }
+    let lock_bytes = if current_lock.exists() {
+        Some(read_bounded_project_retention_fact(&current_lock)?)
+    } else if legacy_lock.exists() {
+        Some(read_bounded_project_retention_fact(&legacy_lock)?)
+    } else {
+        None
+    };
+    let project_identity = project_retention_identity(&manifest_bytes);
+    let generation_identity = project_generation_identity(lock_bytes.as_deref());
+    Ok(crunch_store::RootRegistration {
+        class: crunch_store::GcRootClass::ProjectOutputGeneration,
+        owner_scope: PROJECT_OWNER_SCOPE.to_string(),
+        project_identity: Some(project_identity),
+        selector: Some(project_retention_selector(&project.target)),
+        generation: None,
+        generation_identity: Some(generation_identity),
+        lease: None,
+        removal_requested: false,
+    })
+}
+
+fn read_bounded_project_retention_fact(path: &Path) -> Result<Vec<u8>, RunError> {
+    let metadata = std::fs::metadata(path).map_err(|error| {
+        RunError::Internal(format!("reading project retention metadata {}: {error}", path.display()))
+    })?;
+    if !metadata.is_file() {
+        return Err(RunError::Internal(format!("project retention fact is not a file: {}", path.display())));
+    }
+    if metadata.len() > MAX_PROJECT_RETENTION_FACT_BYTES {
+        return Err(RunError::Internal(format!(
+            "project retention fact exceeds {MAX_PROJECT_RETENTION_FACT_BYTES} bytes: {}",
+            path.display()
+        )));
+    }
+    std::fs::read(path)
+        .map_err(|error| RunError::Internal(format!("reading project retention fact {}: {error}", path.display())))
+}
+
+fn project_retention_identity(manifest_bytes: &[u8]) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(PROJECT_RETENTION_IDENTITY_DOMAIN);
+    hash_project_retention_fact(&mut hasher, manifest_bytes);
+    format!("b3:{}", hasher.finalize().to_hex())
+}
+
+fn project_generation_identity(lock_bytes: Option<&[u8]>) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"mantle.project.retention-generation.v1");
+    match lock_bytes {
+        Some(lock_bytes) => {
+            hasher.update(&[1]);
+            hash_project_retention_fact(&mut hasher, lock_bytes);
+        }
+        None => {
+            hasher.update(&[0]);
+        }
+    }
+    format!("b3:{}", hasher.finalize().to_hex())
+}
+
+fn hash_project_retention_fact(hasher: &mut blake3::Hasher, bytes: &[u8]) {
+    hasher.update(&(bytes.len() as u128).to_be_bytes());
+    hasher.update(bytes);
+}
+
+fn project_retention_selector(target: &project_build::ProjectTarget) -> String {
+    match target {
+        project_build::ProjectTarget::Default => "default".to_string(),
+        project_build::ProjectTarget::Attribute(segments) => segments.join("."),
+        project_build::ProjectTarget::AllPackages => "all-packages".to_string(),
+        project_build::ProjectTarget::AllChecks => "all-checks".to_string(),
+        project_build::ProjectTarget::DefaultShell => "default-shell".to_string(),
+        project_build::ProjectTarget::NamedShell(name) => format!("shell.{name}"),
+    }
 }
 
 struct RemoteBuildSelection {
@@ -7979,6 +8094,7 @@ struct InlineBuildRequest<'a> {
     import_entries: &'a [OsString],
     prepared: &'a PreparedBuildCommand<'a>,
     source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
+    root_registration: crunch_store::RootRegistration,
 }
 
 /// Build from an inline Nickel expression string (for project selectors).
@@ -8005,6 +8121,7 @@ fn build_from_expr(request: InlineBuildRequest<'_>) -> Result<(), RunError> {
         request.prepared.ctx.output_mode(),
         request.source_fetch_overrides,
         Vec::new(),
+        Some(request.root_registration),
     )
 }
 
@@ -8048,6 +8165,7 @@ struct RawInlineBuildRequest<'a> {
     trusted_public_keys: Option<&'a [nix_compat::narinfo::VerifyingKey]>,
     trust_unsigned: bool,
     hermeticity_mode: crunch_pipeline::HermeticityMode,
+    root_registration: Option<crunch_store::RootRegistration>,
 }
 
 /// Build from an inline Nickel expression and return the pipeline result.
@@ -8076,7 +8194,8 @@ fn build_from_expr_raw(request: RawInlineBuildRequest<'_>) -> Result<crunch_pipe
         keypair,
         trusted_keys,
         trust_unsigned: request.trust_unsigned,
-        root_retention_source: None,
+        root_retention_source: request.root_registration.as_ref().map(|_| crunch_store::GcRootSource::Build),
+        root_registration: request.root_registration,
         source_fetch_overrides: Vec::new(),
         remote_enabled: false,
     };
@@ -8284,6 +8403,7 @@ struct ProjectExprBuildRequest<'a> {
     expr: &'a str,
     resolved_import_entries: Vec<OsString>,
     settings: &'a RunBuildSettings<'a>,
+    root_registration: Option<crunch_store::RootRegistration>,
 }
 
 fn build_project_expr_request(
@@ -8307,6 +8427,7 @@ fn build_project_expr_request(
         trusted_public_keys: None,
         trust_unsigned: request.settings.trust_unsigned,
         hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+        root_registration: request.root_registration,
     })
 }
 
@@ -8329,6 +8450,7 @@ fn build_project_expr(
     no_substitute: bool,
     signing_key_path: Option<&Path>,
     trust_unsigned: bool,
+    root_registration: Option<crunch_store::RootRegistration>,
 ) -> Result<crunch_pipeline::PipelineResult, RunError> {
     debug_assert!(max_jobs > 0);
     debug_assert!(store_prefix.starts_with('/'));
@@ -8346,6 +8468,7 @@ fn build_project_expr(
         expr,
         resolved_import_entries,
         settings: &settings,
+        root_registration,
     })
 }
 
@@ -8383,6 +8506,7 @@ fn build_file_raw(request: FileRawBuildRequest<'_>) -> Result<crunch_pipeline::P
         trusted_keys,
         trust_unsigned: request.settings.trust_unsigned,
         root_retention_source: None,
+        root_registration: None,
         source_fetch_overrides: Vec::new(),
         remote_enabled: false,
     };
@@ -8437,10 +8561,12 @@ fn cmd_run(request: RunCommandRequest<'_>) -> Result<(), RunError> {
         project_build::BuildTarget::ProjectDefault | project_build::BuildTarget::Selector(_) => {
             let resolved = project_build::resolve_project_target(&target, &cwd, request.import_paths)?;
             let expr = generate_run_project_expr(&resolved.root_file, &resolved.target);
+            let root_registration = project_output_root_registration(&resolved)?;
             build_project_expr_request(ProjectExprBuildRequest {
                 expr: &expr,
                 resolved_import_entries: resolved.import_paths,
                 settings: &settings,
+                root_registration: Some(root_registration),
             })?
         }
     };

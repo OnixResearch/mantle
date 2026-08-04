@@ -279,6 +279,7 @@ pub struct Builder<BServ> {
     network_policy_reports: Vec<BuildNetworkPolicyReport>,
     action_result_reports: Vec<ActionResultRuntimeReport>,
     source_closure_cache: HashMap<StorePath<String>, Vec<StorePath<String>>>,
+    observed_source_paths: BTreeSet<StorePath<String>>,
     root_retention_source: Option<GcRootSource>,
 }
 
@@ -393,6 +394,7 @@ where BServ: BuildService + 'static
             network_policy_reports: Vec::new(),
             action_result_reports: Vec::new(),
             source_closure_cache: HashMap::new(),
+            observed_source_paths: BTreeSet::new(),
             root_retention_source: None,
         }
     }
@@ -416,6 +418,14 @@ where BServ: BuildService + 'static
 
     pub fn set_root_retention_source(&mut self, root_retention_source: Option<GcRootSource>) {
         self.root_retention_source = root_retention_source;
+    }
+
+    pub fn set_root_registration(&mut self, registration: Option<crunch_store::RootRegistration>) {
+        self.store.set_root_registration(registration);
+    }
+
+    pub fn source_generation_paths(&self) -> Vec<StorePath<String>> {
+        self.observed_source_paths.iter().cloned().collect()
     }
 
     pub fn take_hermeticity_audit_events(&mut self) -> Vec<HermeticityAuditEvent> {
@@ -1019,7 +1029,9 @@ where BServ: BuildService + 'static
             let host_path = self.preferred_source_host_path(source_path);
             if self.cached_or_ingested_node_for_path(source_path, &host_path).await?.is_none() {
                 debug!(path = %source_path, "source path not found on disk, skipping");
+                continue;
             }
+            self.observed_source_paths.insert(source_path.clone());
         }
 
         Ok(all_source_paths)
@@ -1377,8 +1389,9 @@ where BServ: BuildService + 'static
         let infos = selected_probe
             .map(|probe| probe.outputs)
             .ok_or_else(|| Error::Store("selected action result has no admitted outputs".to_string()))?;
+        let remote_result_source = self.root_retention_source.map(GcRootSource::for_remote_result);
         self.store
-            .admit_action_result_outputs(&infos, is_root, self.root_retention_source)
+            .admit_action_result_outputs(&infos, is_root, remote_result_source)
             .await
             .map_err(|error| Error::Store(format!("admitting shared action result: {error}")))?;
         self.persist_shared_ca_mapping(drv_path, derivation, &infos);

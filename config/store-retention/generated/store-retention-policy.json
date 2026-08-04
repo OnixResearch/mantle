@@ -1,0 +1,102 @@
+{
+  "hash_algorithm": "BLAKE3",
+  "leases": {
+    "reject_clock_rollback": true,
+    "require_identity": true,
+    "require_owner": true,
+    "unsafe_state": "quarantine"
+  },
+  "limits": {
+    "default_lease_seconds": 28800,
+    "max_closure_links_per_explanation": 256,
+    "max_decisions": 65536,
+    "max_lease_renewals": 1024,
+    "max_lease_seconds": 86400,
+    "max_roots": 65536,
+    "max_roots_per_object": 65536,
+    "max_usage_objects": 1000000,
+    "retained_project_output_generations": 2,
+    "retained_project_source_generations": 2
+  },
+  "non_claims": [
+    "retention-does-not-prove-content-correctness",
+    "retention-does-not-prove-rebuildability",
+    "usage-does-not-prove-exclusive-ownership",
+    "plan-does-not-prove-successful-deletion"
+  ],
+  "policy_name": "mantle-store-retention-default-v1",
+  "rules": {
+    "active_shell_lease": {
+      "durability": "lease",
+      "eligible_owner_scopes": [
+        "operator",
+        "project"
+      ],
+      "explicit_removal_required": true
+    },
+    "bootstrap": {
+      "durability": "durable",
+      "eligible_owner_scopes": [
+        "operator",
+        "project",
+        "system"
+      ],
+      "explicit_removal_required": true
+    },
+    "explicit_pin": {
+      "durability": "durable",
+      "eligible_owner_scopes": [
+        "operator",
+        "project",
+        "system"
+      ],
+      "explicit_removal_required": true
+    },
+    "legacy_unmanaged": {
+      "durability": "protected-unclassified",
+      "eligible_owner_scopes": [
+        "legacy-unmanaged"
+      ],
+      "explicit_removal_required": true
+    },
+    "project_output_generation": {
+      "durability": "generation",
+      "eligible_owner_scopes": [
+        "project"
+      ],
+      "explicit_removal_required": true
+    },
+    "project_source_generation": {
+      "durability": "generation",
+      "eligible_owner_scopes": [
+        "project"
+      ],
+      "explicit_removal_required": true
+    },
+    "remote_result": {
+      "durability": "generation",
+      "eligible_owner_scopes": [
+        "remote",
+        "project"
+      ],
+      "explicit_removal_required": true
+    },
+    "self_build": {
+      "durability": "durable",
+      "eligible_owner_scopes": [
+        "operator",
+        "project",
+        "system"
+      ],
+      "explicit_removal_required": true
+    }
+  },
+  "schema": "mantle-store-retention-policy-v1",
+  "transitions": {
+    "partial_failure_is_incomplete": true,
+    "plan_is_non_mutating": true,
+    "require_explicit_execution": true,
+    "require_plan_identity": true,
+    "revalidate_bound_facts": true
+  }
+}

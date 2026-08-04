@@ -2667,6 +2667,7 @@ fn self_build_pipeline_config(
         trusted_keys: pipeline.trusted_keys.to_vec(),
         trust_unsigned: pipeline.trust_unsigned,
         root_retention_source,
+        root_registration: None,
         source_fetch_overrides: pipeline.source_fetch_overrides.to_vec(),
         remote_enabled: false,
     }

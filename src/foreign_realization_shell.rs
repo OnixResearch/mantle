@@ -288,6 +288,7 @@ pub(crate) async fn realize_foreign_plan(
         trusted_keys: request.trusted_keys.to_vec(),
         trust_unsigned: false,
         root_retention_source: None,
+        root_registration: None,
         source_fetch_overrides,
         remote_enabled: false,
     };

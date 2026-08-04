@@ -130,6 +130,38 @@ fn store_pin_and_unpin_round_trip() {
 }
 
 #[test]
+fn store_roots_migrates_legacy_records_without_inventing_ownership() {
+    const LEGACY_CREATED_UNIX_S: i64 = 100;
+    const LEGACY_PATH_DIGEST_BYTE: u8 = 4;
+    const EXPECTED_SCHEMA_VERSION: u64 = 3;
+    let legacy_path = test_output("legacy", LEGACY_PATH_DIGEST_BYTE).to_absolute_path();
+    let (state_dir, output_dir) = seed_store(|_rt, state, _output| {
+        let legacy = serde_json::json!({
+            legacy_path.clone(): {
+                "logical_path": legacy_path.clone(),
+                "source": "build",
+                "created_unix_s": LEGACY_CREATED_UNIX_S,
+            }
+        });
+        std::fs::write(state.join("gc-roots.json"), serde_json::to_vec_pretty(&legacy).unwrap()).unwrap();
+    });
+
+    crunch_cmd(state_dir.path(), output_dir.path())
+        .args(["store", "roots", "--migrate"])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("legacy-unmanaged"));
+
+    let persisted: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(state_dir.path().join("gc-roots.json")).unwrap()).unwrap();
+    assert_eq!(persisted[&legacy_path]["schema_version"], EXPECTED_SCHEMA_VERSION);
+    assert_eq!(persisted[&legacy_path]["root_class"], "legacy-unmanaged");
+    assert_eq!(persisted[&legacy_path]["owner_scope"], "legacy-unmanaged");
+    assert!(persisted[&legacy_path]["project_identity"].is_null());
+    assert_eq!(persisted[&legacy_path]["last_transition_reason"], "migrated-from-path-only-v1");
+}
+
+#[test]
 fn store_gc_dry_run_reports_candidate_without_mutating() {
     let keep_path = test_output("keep", 2);
     let drop_path = test_output("drop", 3);
@@ -152,7 +184,7 @@ fn store_gc_dry_run_reports_candidate_without_mutating() {
         .assert()
         .success()
         .stdout(predicates::str::contains("candidate_paths=1"))
-        .stdout(predicates::str::contains(format!("DELETE {logical_drop}")));
+        .stdout(predicates::str::contains(format!("CANDIDATE {logical_drop}")));
 
     assert!(export_path.exists(), "dry-run must not remove exported output");
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -164,12 +196,20 @@ fn store_gc_dry_run_reports_candidate_without_mutating() {
 }
 
 #[test]
-fn store_gc_refuses_when_mutation_lock_is_held() {
+fn store_gc_execution_refuses_when_mutation_lock_is_held() {
     let (state_dir, output_dir) = seed_store(|_rt, _state, _output| {});
+    let plan_output = crunch_cmd(state_dir.path(), output_dir.path())
+        .arg("--json")
+        .args(["store", "gc"])
+        .output()
+        .expect("GC plan command");
+    assert!(plan_output.status.success());
+    let plan: serde_json::Value = serde_json::from_slice(&plan_output.stdout).expect("GC plan JSON");
+    let plan_id = plan["plan_id"].as_str().expect("GC plan identity");
     let _guard = crunch_store::StoreMutationGuard::acquire_wait(state_dir.path()).unwrap();
 
     crunch_cmd(state_dir.path(), output_dir.path())
-        .args(["store", "gc", "--dry-run"])
+        .args(["store", "gc", "--execute", "--plan-id", plan_id])
         .assert()
         .failure()
         .stderr(predicates::str::contains("another local build, substitution, or store mutation is active"));

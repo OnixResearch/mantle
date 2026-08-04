@@ -205,7 +205,8 @@
               || pkgs.lib.hasPrefix "${toString ./builders}/" pathString
               || pkgs.lib.hasPrefix "${toString ./cairn-policy/evidence}/" pathString
               || pkgs.lib.hasPrefix "${toString ./cairn/archive}/" pathString
-              || pkgs.lib.hasPrefix "${toString ./config/action-result-policy}/" pathString
+              || pathString == toString ./config
+              || pkgs.lib.hasPrefix "${toString ./config}/" pathString
               || builtins.elem pathString catalogExamplePaths
               || pathString == toString ./examples/catalog.ncl
               || pathString == toString ./examples/README.md
@@ -721,6 +722,49 @@
           doCheck = false;
         };
 
+        checkStoreRetentionPolicy = pkgs.writeShellApplication {
+          name = "check-store-retention-policy";
+          runtimeInputs = [
+            pkgs.coreutils
+            pkgs.diffutils
+            pkgs.gnugrep
+            pkgs.nickel
+          ];
+          text = ''
+            set -eu
+            policy_root="config/store-retention"
+            scratch="$(mktemp -d)"
+            trap 'rm -rf "$scratch"' EXIT
+
+            nickel typecheck "$policy_root/default.ncl"
+            nickel export --format json "$policy_root/default.ncl" > "$scratch/policy.json"
+            diff -u "$policy_root/generated/store-retention-policy.json" "$scratch/policy.json"
+            nickel export --format json "$policy_root/tests/positive-default.ncl" > "$scratch/positive.json"
+            diff -u "$policy_root/generated/store-retention-policy.json" "$scratch/positive.json"
+
+            assert_invalid() {
+              fixture="$1"
+              expected="$2"
+              if nickel export --format json "$fixture" > /dev/null 2> "$scratch/error.log"; then
+                echo "negative retention fixture unexpectedly passed: $fixture" >&2
+                exit 1
+              fi
+              if ! grep -Fq "$expected" "$scratch/error.log"; then
+                echo "negative retention fixture failed for the wrong reason: $fixture" >&2
+                cat "$scratch/error.log" >&2
+                exit 1
+              fi
+            }
+
+            assert_invalid "$policy_root/tests/invalid-duplicate-rule.ncl" "duplicate"
+            assert_invalid "$policy_root/tests/invalid-generation.ncl" "retained_project_output_generations"
+            assert_invalid "$policy_root/tests/invalid-lease.ncl" "unsafe_state"
+            assert_invalid "$policy_root/tests/invalid-limit.ncl" "max_roots"
+            assert_invalid "$policy_root/tests/invalid-missing-owner.ncl" "eligible_owner_scopes"
+            assert_invalid "$policy_root/tests/invalid-unknown-class.ncl" "durability"
+          '';
+        };
+
         checkNickelConfigs = pkgs.writeShellApplication {
           name = "check-nickel-configs";
           runtimeInputs = [
@@ -952,6 +996,7 @@
           wasm-component-toolchain-compatibility = wasmComponentToolchainCompatibility;
           mantle-transcript-quality = mantleTranscriptQuality;
           release-nix-witness-quality = releaseNixWitnessQuality;
+          check-store-retention-policy = checkStoreRetentionPolicy;
         }
         // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
           oci-distribution-registry = pkgs.distribution;
@@ -984,6 +1029,17 @@
           bootstrap-blocker-inventory = bootstrapBlockerInventory;
           nickel-export-core-pin = nickelExportCorePin;
           content-bound-requirement-evidence = contentBoundRequirementEvidence;
+          store-retention-policy =
+            pkgs.runCommand "mantle-store-retention-policy"
+              {
+                nativeBuildInputs = [ checkStoreRetentionPolicy ];
+                inherit src;
+              }
+              ''
+                cd "$src"
+                check-store-retention-policy
+                touch "$out"
+              '';
           release-determinism-quality = releaseDeterminismQuality;
           release-nix-witness-quality = releaseNixWitnessQuality;
 
@@ -1261,6 +1317,7 @@
             ++ [
               astGrepToolchain
               checkNickelConfigs
+              checkStoreRetentionPolicy
               wasmComponentToolchain
               tigerstyle.packages.${system}.cargo-tigerstyle
             ];

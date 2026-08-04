@@ -14,6 +14,7 @@ use crate::errors::RunError;
 use crate::project_build;
 
 const SIDECAR_FILENAME: &str = ".crunch-shell.json";
+const SHELL_LEASE_ID_DOMAIN: &[u8] = b"mantle.shell.retention-lease.v1";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct HookExecutionMode {
@@ -164,6 +165,7 @@ fn build_shell_target(request: BuildShellTargetRequest<'_>) -> Result<PathBuf, R
         other => other.clone(),
     };
     let expr = project_build::generate_extraction_expr(&resolved.root_file, &shell_target);
+    let root_registration = shell_root_registration(&resolved, &shell_target)?;
     let max_jobs = crunch_pipeline::resolve_max_jobs(request.jobs);
     let result = crate::build_project_expr(
         &expr,
@@ -176,9 +178,66 @@ fn build_shell_target(request: BuildShellTargetRequest<'_>) -> Result<PathBuf, R
         request.no_substitute,
         request.signing_key,
         request.trust_unsigned,
+        Some(root_registration),
     )?;
     crate::first_output_path(&result, request.output_dir, request.store_prefix)
         .ok_or_else(|| RunError::Internal("no outputs built for shell".into()))
+}
+
+fn shell_root_registration(
+    project: &project_build::ResolvedProject,
+    shell_target: &project_build::ProjectTarget,
+) -> Result<crunch_store::RootRegistration, RunError> {
+    let registration = crate::project_output_root_registration(project)?;
+    let selector = crate::project_retention_selector(shell_target);
+    let now_unix_s_u64 = crate::unix_time_now_s()?;
+    let now_unix_s =
+        i64::try_from(now_unix_s_u64).map_err(|_| RunError::Internal("shell lease time exceeds i64".to_string()))?;
+    let lease_seconds = crunch_store::store_retention_runtime_policy().limits.default_lease_seconds;
+    plan_shell_root_registration(registration, selector, now_unix_s, lease_seconds)
+}
+
+fn plan_shell_root_registration(
+    mut registration: crunch_store::RootRegistration,
+    selector: String,
+    now_unix_s: i64,
+    lease_seconds: u64,
+) -> Result<crunch_store::RootRegistration, RunError> {
+    let lease_seconds_i64 =
+        i64::try_from(lease_seconds).map_err(|_| RunError::Internal("shell lease duration exceeds i64".to_string()))?;
+    let expires_unix_s = now_unix_s
+        .checked_add(lease_seconds_i64)
+        .ok_or_else(|| RunError::Internal("shell lease expiry overflowed i64".to_string()))?;
+    let project_identity = registration
+        .project_identity
+        .as_deref()
+        .ok_or_else(|| RunError::Internal("shell project identity is missing".to_string()))?;
+    let lease_id = shell_lease_identity(project_identity, &selector, now_unix_s);
+    registration.class = crunch_store::GcRootClass::ActiveShellLease;
+    registration.selector = Some(selector);
+    registration.generation = None;
+    registration.generation_identity = None;
+    registration.lease = Some(crunch_store::GcRootLease {
+        lease_id,
+        expires_unix_s,
+        last_observed_unix_s: now_unix_s,
+        renewal_count: 0,
+    });
+    Ok(registration)
+}
+
+fn shell_lease_identity(project_identity: &str, selector: &str, now_unix_s: i64) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(SHELL_LEASE_ID_DOMAIN);
+    hash_shell_lease_field(&mut hasher, project_identity.as_bytes());
+    hash_shell_lease_field(&mut hasher, selector.as_bytes());
+    hasher.update(&now_unix_s.to_be_bytes());
+    format!("b3:{}", hasher.finalize().to_hex())
+}
+
+fn hash_shell_lease_field(hasher: &mut blake3::Hasher, bytes: &[u8]) {
+    hasher.update(&(bytes.len() as u128).to_be_bytes());
+    hasher.update(bytes);
 }
 
 fn snapshot_host_env() -> HostEnv {
@@ -265,4 +324,79 @@ fn exec_plan(plan: &ActivationPlan) -> Result<(), RunError> {
     .map_err(|e| RunError::Internal(format!("exec: {e}")))?;
 
     std::process::exit(status.code().unwrap_or(1));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TEST_NOW_UNIX_S: i64 = 1_000;
+    const TEST_LEASE_SECONDS: u64 = 600;
+    const TEST_EXPECTED_EXPIRY_UNIX_S: i64 = 1_600;
+
+    fn project_registration() -> crunch_store::RootRegistration {
+        crunch_store::RootRegistration {
+            class: crunch_store::GcRootClass::ProjectOutputGeneration,
+            owner_scope: "project:b3:shell-test".to_string(),
+            project_identity: Some("b3:shell-test".to_string()),
+            selector: Some("default".to_string()),
+            generation: Some(1),
+            generation_identity: Some("b3:shell-generation".to_string()),
+            lease: None,
+            removal_requested: false,
+        }
+    }
+
+    #[test]
+    fn shell_lease_plan_is_deterministic_and_does_not_change_project_identity() {
+        let first = plan_shell_root_registration(
+            project_registration(),
+            "shell:default".to_string(),
+            TEST_NOW_UNIX_S,
+            TEST_LEASE_SECONDS,
+        )
+        .expect("valid shell lease plan");
+        let second = plan_shell_root_registration(
+            project_registration(),
+            "shell:default".to_string(),
+            TEST_NOW_UNIX_S,
+            TEST_LEASE_SECONDS,
+        )
+        .expect("equivalent shell lease plan");
+
+        assert_eq!(first, second);
+        assert_eq!(first.class, crunch_store::GcRootClass::ActiveShellLease);
+        assert_eq!(first.project_identity.as_deref(), Some("b3:shell-test"));
+        assert_eq!(first.selector.as_deref(), Some("shell:default"));
+        assert!(first.generation.is_none());
+        assert!(first.generation_identity.is_none());
+        let lease = first.lease.expect("planned lease facts");
+        assert_eq!(lease.expires_unix_s, TEST_EXPECTED_EXPIRY_UNIX_S);
+        assert_eq!(lease.last_observed_unix_s, TEST_NOW_UNIX_S);
+        assert_eq!(lease.renewal_count, 0);
+        assert!(lease.lease_id.starts_with("b3:"));
+    }
+
+    #[test]
+    fn shell_lease_plan_rejects_missing_identity_and_time_overflow() {
+        let mut missing_identity = project_registration();
+        missing_identity.project_identity = None;
+        let missing_error = plan_shell_root_registration(
+            missing_identity,
+            "shell:default".to_string(),
+            TEST_NOW_UNIX_S,
+            TEST_LEASE_SECONDS,
+        )
+        .expect_err("missing project identity must fail");
+        assert!(matches!(missing_error, RunError::Internal(message) if message.contains("project identity")));
+
+        let overflow_error = plan_shell_root_registration(
+            project_registration(),
+            "shell:default".to_string(),
+            i64::MAX,
+            TEST_LEASE_SECONDS,
+        )
+        .expect_err("lease expiry overflow must fail");
+        assert!(matches!(overflow_error, RunError::Internal(message) if message.contains("expiry overflow")));
+    }
 }

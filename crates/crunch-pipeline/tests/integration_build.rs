@@ -66,6 +66,7 @@ fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConf
         trusted_keys,
         trust_unsigned: false,
         root_retention_source: None,
+        root_registration: None,
         source_fetch_overrides: Vec::new(),
         remote_enabled: false,
     }

@@ -1087,6 +1087,7 @@ mod tests {
             trusted_keys: Vec::new(),
             trust_unsigned: false,
             root_retention_source: None,
+            root_registration: None,
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
         };
@@ -1159,6 +1160,7 @@ mod tests {
             trusted_keys: Vec::new(),
             trust_unsigned: false,
             root_retention_source: None,
+            root_registration: None,
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
         };
@@ -1216,6 +1218,7 @@ mod tests {
             trusted_keys: Vec::new(),
             trust_unsigned: false,
             root_retention_source: None,
+            root_registration: None,
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
         };
@@ -1440,6 +1443,7 @@ mod tests {
             trusted_keys: Vec::new(),
             trust_unsigned: false,
             root_retention_source: None,
+            root_registration: None,
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
         };
@@ -1894,6 +1898,7 @@ mod tests {
             trusted_keys: Vec::new(),
             trust_unsigned: false,
             root_retention_source: None,
+            root_registration: None,
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
         };
@@ -1996,6 +2001,7 @@ mod tests {
             trusted_keys: Vec::new(),
             trust_unsigned: false,
             root_retention_source: None,
+            root_registration: None,
             source_fetch_overrides: Vec::new(),
             remote_enabled: false,
         };

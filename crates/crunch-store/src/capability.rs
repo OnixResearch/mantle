@@ -22,6 +22,7 @@ use crate::GcRootRecord;
 use crate::GcRootSource;
 use crate::OutputSubstitutionReport;
 use crate::PersistOutputRequest;
+use crate::RootRegistration;
 use crate::StoreAuditEvent;
 use crate::StoreFallbackMode;
 use crate::StoreHandle;
@@ -221,6 +222,10 @@ impl BuildStore {
     #[must_use]
     pub fn startup_audit_events(&self) -> &[StoreAuditEvent] {
         self.handle.startup_audit_events()
+    }
+
+    pub fn set_root_registration(&mut self, registration: Option<RootRegistration>) {
+        self.handle.set_root_registration(registration);
     }
 
     pub async fn read_file_node(&self, node: &Node, max_bytes: u64) -> Result<Vec<u8>, Error> {
@@ -503,6 +508,46 @@ impl RootRegistry {
             .await
             .map(Some)
     }
+
+    pub async fn register_managed_batch(
+        &self,
+        registrations: Vec<(StorePath<String>, GcRootSource, RootRegistration)>,
+    ) -> Result<Vec<GcRootRecord>, Error> {
+        roots::register_root_batch_with_registration(
+            &self.state_dir,
+            &self.store_dir,
+            self.pathinfo_service.as_ref(),
+            registrations,
+        )
+        .await
+    }
+
+    pub async fn register_managed_if_present(
+        &self,
+        store_path: &StorePath<String>,
+        source: GcRootSource,
+        registration: RootRegistration,
+    ) -> Result<Option<GcRootRecord>, Error> {
+        let is_present = self
+            .pathinfo_service
+            .get(*store_path.digest())
+            .await
+            .map_err(|error| Error::PathInfoService(format!("managed root registration lookup: {error}")))?
+            .is_some();
+        if !is_present {
+            return Ok(None);
+        }
+        roots::register_root_with_registration(
+            &self.state_dir,
+            &self.store_dir,
+            self.pathinfo_service.as_ref(),
+            store_path,
+            source,
+            registration,
+        )
+        .await
+        .map(Some)
+    }
 }
 
 impl SourceAdmission<'_> {
@@ -537,16 +582,20 @@ impl StoreAdmin<'_> {
         self.handle.list_retained_roots()
     }
 
-    pub async fn garbage_collect(&mut self, is_dry_run: bool) -> Result<GcReport, Error> {
-        self.handle.garbage_collect(is_dry_run).await
+    pub fn migrate_legacy_root_registry(&self) -> Result<Vec<GcRootRecord>, Error> {
+        roots::migrate_legacy_registry(self.handle.state_dir())
+    }
+
+    pub async fn garbage_collect(&mut self, accepted_plan_id: Option<&str>) -> Result<GcReport, Error> {
+        self.handle.garbage_collect(accepted_plan_id).await
     }
 
     pub async fn garbage_collect_with_castore_roots(
         &mut self,
-        is_dry_run: bool,
+        accepted_plan_id: Option<&str>,
         retained_castore_roots: &[Node],
     ) -> Result<GcReport, Error> {
-        self.handle.garbage_collect_with_castore_roots(is_dry_run, retained_castore_roots).await
+        self.handle.garbage_collect_with_castore_roots(accepted_plan_id, retained_castore_roots).await
     }
 }
 

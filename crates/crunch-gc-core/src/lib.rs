@@ -9,9 +9,12 @@
 
 extern crate alloc;
 
+pub mod retention;
+
 use alloc::collections::BTreeMap;
 use alloc::collections::BTreeSet;
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 
 pub const MAX_GC_ENTRIES: usize = 1_000_000;
@@ -27,7 +30,6 @@ const ROOTS_FIELD: &[u8] = b"roots";
 const ENTRIES_FIELD: &[u8] = b"entries";
 const RETAINED_FIELD: &[u8] = b"retained";
 const CANDIDATES_FIELD: &[u8] = b"candidates";
-const MODE_FIELD: &[u8] = b"mode";
 const FIELD_SEPARATOR: u8 = 0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -91,10 +93,17 @@ pub struct GcObservedReclaimSummary {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GcRetainingRoots {
+    pub path_id: String,
+    pub root_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GcPlan {
     pub plan_id: GcPlanId,
     pub roots: Vec<String>,
     pub retained_path_ids: Vec<String>,
+    pub retaining_roots: Vec<GcRetainingRoots>,
     pub candidate_path_ids: Vec<String>,
     pub reclaim_summary: GcReclaimSummary,
     pub mutation_disposition: GcMutationDisposition,
@@ -195,6 +204,7 @@ pub fn plan_gc(request: GcPlanRequest) -> Result<GcPlan, GcPlanError> {
         .map(|entry| entry.path_id.clone())
         .collect::<Vec<_>>();
     let retained_path_ids = retained.into_iter().collect::<Vec<_>>();
+    let retaining_roots = compute_retaining_roots(&roots, &entries_by_id)?;
     let reclaim_summary = summarize_reclaim(&candidate_path_ids, &entries_by_id)?;
     let mutation_disposition = disposition_for_mode(request.execution_mode);
     let mutation_intents = candidate_path_ids
@@ -205,7 +215,7 @@ pub fn plan_gc(request: GcPlanRequest) -> Result<GcPlan, GcPlanError> {
             disposition: mutation_disposition,
         })
         .collect::<Vec<_>>();
-    let plan_id = compute_plan_id(&roots, &entries, &retained_path_ids, &candidate_path_ids, request.execution_mode)?;
+    let plan_id = compute_plan_id(&roots, &entries, &retained_path_ids, &candidate_path_ids)?;
 
     debug_assert_eq!(candidate_path_ids.len(), mutation_intents.len());
     debug_assert_eq!(reclaim_summary.candidate_count, candidate_path_ids.len());
@@ -213,6 +223,7 @@ pub fn plan_gc(request: GcPlanRequest) -> Result<GcPlan, GcPlanError> {
         plan_id,
         roots,
         retained_path_ids,
+        retaining_roots,
         candidate_path_ids,
         reclaim_summary,
         mutation_disposition,
@@ -368,6 +379,37 @@ fn compute_reachable(
     Ok(retained)
 }
 
+fn compute_retaining_roots(
+    roots: &[String],
+    entries_by_id: &BTreeMap<&str, &GcEntry>,
+) -> Result<Vec<GcRetainingRoots>, GcPlanError> {
+    let mut roots_by_path = BTreeMap::<String, BTreeSet<String>>::new();
+    for root in roots {
+        let mut visited = BTreeSet::new();
+        let mut queue = vec![root.clone()];
+        let mut queue_index = 0_usize;
+        while queue_index < queue.len() {
+            let path_id = &queue[queue_index];
+            queue_index += 1;
+            if !visited.insert(path_id.clone()) {
+                continue;
+            }
+            roots_by_path.entry(path_id.clone()).or_default().insert(root.clone());
+            let entry = entries_by_id.get(path_id.as_str()).ok_or_else(|| GcPlanError::MissingRoot {
+                path_id: path_id.clone(),
+            })?;
+            queue.extend(entry.references.iter().cloned());
+        }
+    }
+    Ok(roots_by_path
+        .into_iter()
+        .map(|(path_id, root_ids)| GcRetainingRoots {
+            path_id,
+            root_ids: root_ids.into_iter().collect(),
+        })
+        .collect())
+}
+
 fn summarize_reclaim(
     candidate_path_ids: &[String],
     entries_by_id: &BTreeMap<&str, &GcEntry>,
@@ -398,7 +440,6 @@ fn compute_plan_id(
     entries: &[GcEntry],
     retained_path_ids: &[String],
     candidate_path_ids: &[String],
-    execution_mode: GcExecutionMode,
 ) -> Result<GcPlanId, GcPlanError> {
     debug_assert!(roots.windows(2).all(|pair| pair[0] < pair[1]));
     debug_assert!(entries.windows(2).all(|pair| pair[0].path_id < pair[1].path_id));
@@ -423,12 +464,6 @@ fn compute_plan_id(
     hash_strings(&mut hasher, retained_path_ids)?;
     hash_field_label(&mut hasher, CANDIDATES_FIELD);
     hash_strings(&mut hasher, candidate_path_ids)?;
-    hash_field_label(&mut hasher, MODE_FIELD);
-    let mode_byte = match execution_mode {
-        GcExecutionMode::DryRun => 0_u8,
-        GcExecutionMode::Execute => 1_u8,
-    };
-    hasher.update(&[mode_byte]);
     Ok(GcPlanId(*hasher.finalize().as_bytes()))
 }
 
@@ -537,7 +572,7 @@ mod tests {
         let execute = plan_gc(request(GcExecutionMode::Execute)).expect("execution must plan");
         assert_eq!(dry_run.candidate_path_ids, execute.candidate_path_ids);
         assert_eq!(dry_run.mutation_intents[0].disposition, GcMutationDisposition::ReportOnly);
-        assert_ne!(dry_run.plan_id, execute.plan_id);
+        assert_eq!(dry_run.plan_id, execute.plan_id);
     }
 
     #[test]

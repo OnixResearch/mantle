@@ -1550,6 +1550,8 @@ dependencies = [
  "nix-compat",
  "sha2",
  "snix-build",
+ "snix-castore",
+ "snix-store",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
