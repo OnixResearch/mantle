@@ -420,6 +420,20 @@ directories must remain absent until the source-built proof shell starts.
 See [ADR 0050](../adr/0050-build-the-source-fixed-point-through-one-rust-proof-authority.md)
 and [ADR 0051](../adr/0051-cut-legacy-bootstrap-edges-at-the-stagex-provider.md).
 
+Refresh an existing verified profile after a Mantle source change:
+
+```bash
+mantle source bundle refresh-mantle-source \
+  --from /media/handoff/source-built-fixed-point-sources.json \
+  --mantle-source . \
+  --to /media/handoff/refreshed-source-built-fixed-point-sources.json
+```
+
+The output path must not exist. The command replaces exactly one Mantle source
+record. It preserves every other source record and recomputes the profile
+BLAKE3. It rejects missing, duplicate, mixed-mode, or changed authority
+metadata.
+
 Run the proof with independent digests and explicit executable paths:
 
 ```bash

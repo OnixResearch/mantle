@@ -2902,6 +2902,20 @@ pub enum SourceBundleAction {
         #[arg(long)]
         preflight: bool,
     },
+    /// Replace only the Mantle source record in a verified source-built profile
+    RefreshMantleSource {
+        /// Existing source-built fixed-point profile
+        #[arg(long)]
+        from: std::path::PathBuf,
+
+        /// Mantle source tree to bind into the refreshed profile
+        #[arg(long = "mantle-source")]
+        mantle_source: std::path::PathBuf,
+
+        /// New profile output path, which must not exist
+        #[arg(long)]
+        to: std::path::PathBuf,
+    },
     /// List a source bundle without mutating state
     List {
         /// Bundle input path
@@ -3239,6 +3253,7 @@ fn source_bundle_command_label(action: &SourceBundleAction) -> &'static str {
         SourceBundleAction::Plan { .. } => "source.bundle.plan",
         SourceBundleAction::Export { .. } => "source.bundle.export",
         SourceBundleAction::BootstrapProfile { .. } => "source.bundle.bootstrap-profile",
+        SourceBundleAction::RefreshMantleSource { .. } => "source.bundle.refresh-mantle-source",
         SourceBundleAction::List { .. } => "source.bundle.list",
         SourceBundleAction::Import { .. } => "source.bundle.import",
         SourceBundleAction::HydrateSelfBuild { .. } => "source.bundle.hydrate-self-build",
@@ -9504,6 +9519,41 @@ mod tests {
             panic!("expected source bundle bootstrap-profile");
         };
         assert_eq!(mode, "legacy-seed");
+    }
+
+    #[test]
+    fn source_bundle_refresh_mantle_source_subcommand_requires_explicit_paths() {
+        let args = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "source",
+            "bundle",
+            "refresh-mantle-source",
+            "--from",
+            "/tmp/source-built-profile.json",
+            "--mantle-source",
+            "/tmp/mantle-source",
+            "--to",
+            "/tmp/refreshed-profile.json",
+        ]))
+        .expect("CLI parser test");
+
+        let Command::Source {
+            action:
+                SourceAction::Bundle {
+                    action:
+                        SourceBundleAction::RefreshMantleSource {
+                            from,
+                            mantle_source,
+                            to,
+                        },
+                },
+        } = args.command
+        else {
+            panic!("expected source bundle refresh-mantle-source");
+        };
+        assert_eq!(from, PathBuf::from("/tmp/source-built-profile.json"));
+        assert_eq!(mantle_source, PathBuf::from("/tmp/mantle-source"));
+        assert_eq!(to, PathBuf::from("/tmp/refreshed-profile.json"));
     }
 
     #[test]

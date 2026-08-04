@@ -29,11 +29,14 @@ pub const SOURCE_BUNDLE_FORMAT: &str = "mantle-source-bundle-v1";
 pub const SOURCE_OFFLINE_PREFLIGHT_FORMAT: &str = "mantle-source-offline-preflight-v1";
 pub const BOOTSTRAP_SOURCE_PROFILE_FORMAT: &str = "mantle-bootstrap-source-profile-v1";
 pub const SELF_BUILD_HYDRATION_REPORT_FORMAT: &str = "mantle-self-build-source-hydration-v1";
+pub const MANTLE_SOURCE_REFRESH_REPORT_FORMAT: &str = "mantle-source-built-profile-refresh-v1";
 pub const SOURCE_BUNDLE_VERSION: u32 = 1;
 pub const SOURCE_BUNDLE_NON_CLAIM: &str =
     "source bundle evidence proves declared source/input availability and identity only";
 pub const BOOTSTRAP_SOURCE_PROFILE_NON_CLAIM: &str =
     "bootstrap source profile proves source/input availability and identity only";
+pub const MANTLE_SOURCE_REFRESH_NON_CLAIM: &str =
+    "profile refresh preserves bound records and replaces only declared Mantle source identity";
 pub const SOURCE_NEXT_ACTION_EXPORT_IMPORT_PIN: &str = "mantle source bundle export --build-root <root.ncl> --to <bundle.json>; mantle source bundle import --from <bundle.json> --pin";
 pub const SOURCE_NEXT_ACTION_REEXPORT_IMPORT_PIN: &str = "mantle source bundle export --build-root <root.ncl> --to <bundle.json>; mantle source bundle import --from <bundle.json> --pin";
 pub const SOURCE_NEXT_ACTION_PIN_IMPORTED: &str = "mantle source bundle import --from <bundle.json> --pin";
@@ -141,6 +144,7 @@ const SOURCE_STATE_DIR: &str = "source-bundles";
 const SOURCE_RECORDS_DIR: &str = "records";
 const SOURCE_PINS_DIR: &str = "pins";
 const TEMP_FILE_EXTENSION: &str = "tmp";
+const SOURCE_REFRESH_TEMP_FILE_EXTENSION: &str = "source-refresh-tmp";
 const HYDRATION_STAGING_PREFIX: &str = ".mantle-self-build-hydration-";
 const VENDOR_DEPS_DIR_NAME: &str = "vendor-deps";
 
@@ -378,6 +382,17 @@ pub struct BootstrapSourceBundleProfileReport {
     pub manifest_blake3: String,
     pub required_record_count: u32,
     pub provider_kind: String,
+    pub non_claim: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MantleSourceRefreshReport {
+    pub format: &'static str,
+    pub input_manifest_blake3: String,
+    pub output_manifest_blake3: String,
+    pub previous_mantle_source_blake3: String,
+    pub replacement_mantle_source_blake3: String,
+    pub preserved_record_count: u32,
     pub non_claim: &'static str,
 }
 
@@ -975,6 +990,112 @@ pub fn bootstrap_source_bundle_profile_report(
     })
 }
 
+// r[impl bootstrap_inventory.source_built_mantle_fixed_point]
+pub fn plan_source_built_mantle_source_refresh(
+    manifest: SourceBundleManifest,
+    replacement: SourceRecord,
+) -> Result<(SourceBundleManifest, MantleSourceRefreshReport), RunError> {
+    validate_source_built_refresh_profile(&manifest)?;
+    let original = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)?.clone();
+    validate_mantle_source_replacement(&original, &replacement)?;
+    let input_manifest_blake3 = manifest.manifest_blake3.clone();
+    let store_prefix = manifest.store_prefix.clone();
+    let original_record_count = manifest.records.len();
+    let preserved_record_count = original_record_count
+        .checked_sub(1)
+        .ok_or_else(|| RunError::Internal("source-built profile has no records to preserve".to_string()))?;
+    let mut replacement_count = 0usize;
+    let records = manifest
+        .records
+        .into_iter()
+        .map(|record| {
+            if record.identity == original.identity {
+                replacement_count = replacement_count.saturating_add(1);
+                replacement.clone()
+            } else {
+                record
+            }
+        })
+        .collect::<Vec<_>>();
+    if replacement_count != 1 {
+        return Err(RunError::Internal(format!(
+            "source-built profile refresh replaced {replacement_count} Mantle source records instead of one"
+        )));
+    }
+    let refreshed = assemble_source_bundle(records, &store_prefix)?;
+    validate_source_built_refresh_profile(&refreshed)?;
+    assert_eq!(refreshed.records.len(), original_record_count);
+    assert_ne!(original.content_blake3, "");
+    assert_ne!(replacement.content_blake3, "");
+    let report = MantleSourceRefreshReport {
+        format: MANTLE_SOURCE_REFRESH_REPORT_FORMAT,
+        input_manifest_blake3,
+        output_manifest_blake3: refreshed.manifest_blake3.clone(),
+        previous_mantle_source_blake3: original.content_blake3,
+        replacement_mantle_source_blake3: replacement.content_blake3,
+        preserved_record_count: checked_u32(preserved_record_count, "preserved source record count")?,
+        non_claim: MANTLE_SOURCE_REFRESH_NON_CLAIM,
+    };
+    Ok((refreshed, report))
+}
+
+fn validate_source_built_refresh_profile(manifest: &SourceBundleManifest) -> Result<(), RunError> {
+    source_built_fixed_point_profile_records(manifest)?;
+    for record in &manifest.records {
+        if !record.metadata.contains_key(RECORD_METADATA_PROFILE_CLASS_KEY) {
+            continue;
+        }
+        if record.metadata.get(RECORD_METADATA_PROFILE_MODE_KEY).map(String::as_str)
+            != Some(BootstrapSourceBundleMode::SourceBuiltFixedPoint.as_str())
+        {
+            return Err(RunError::Internal(
+                "source-built profile refresh requires every classified record to use source-built-fixed-point mode"
+                    .to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_mantle_source_replacement(original: &SourceRecord, replacement: &SourceRecord) -> Result<(), RunError> {
+    validate_source_record(replacement)?;
+    if replacement.kind != original.kind
+        || replacement.identity != original.identity
+        || replacement.store_prefix != original.store_prefix
+        || replacement.adapter != original.adapter
+        || replacement.metadata != original.metadata
+    {
+        return Err(RunError::Internal(
+            "Mantle source refresh replacement changes profile authority metadata".to_string(),
+        ));
+    }
+    if replacement.files.is_empty() {
+        return Err(RunError::Internal("Mantle source refresh replacement has no files".to_string()));
+    }
+    assert_eq!(replacement.kind, SourceRecordKind::LocalPath);
+    assert_eq!(
+        replacement.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str),
+        Some(BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)
+    );
+    Ok(())
+}
+
+fn source_built_mantle_source_record(
+    source_path: &Path,
+    identity: &str,
+    store_prefix: &str,
+) -> Result<SourceRecord, RunError> {
+    bootstrap_profile_record(BootstrapProfileRecordRequest {
+        kind: SourceRecordKind::LocalPath,
+        identity: identity.to_string(),
+        path: source_path,
+        mode: BootstrapSourceBundleMode::SourceBuiltFixedPoint,
+        class: BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE,
+        provider_metadata: None,
+        store_prefix,
+    })
+}
+
 pub(crate) struct SourceBuiltFixedPointProfileRecords<'a> {
     pub(crate) stagex_seed: &'a SourceRecord,
     pub(crate) stagex_lineage: &'a SourceRecord,
@@ -1333,6 +1454,46 @@ pub fn write_source_bundle(path: &Path, manifest: &SourceBundleManifest) -> Resu
     assert!(path.is_file());
     debug_assert!(fs::metadata(path).is_ok_and(|metadata| metadata.len() > 0));
     Ok(())
+}
+
+fn write_source_bundle_no_replace(path: &Path, manifest: &SourceBundleManifest) -> Result<(), RunError> {
+    validate_manifest(manifest)?;
+    let parent = path.parent().filter(|candidate| !candidate.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let stage = path.with_extension(SOURCE_REFRESH_TEMP_FILE_EXTENSION);
+    if stage == path {
+        return Err(RunError::Internal("source bundle output and staging paths must differ".to_string()));
+    }
+    let file =
+        fs::OpenOptions::new().write(true).create_new(true).open(&stage).map_err(|error| {
+            RunError::Internal(format!("creating source bundle stage {}: {error}", stage.display()))
+        })?;
+    let write_result = (|| -> Result<(), RunError> {
+        let mut writer = BufWriter::new(file);
+        serde_json::to_writer_pretty(&mut writer, manifest)
+            .map_err(|error| RunError::Internal(format!("serializing source bundle: {error}")))?;
+        writer
+            .write_all(b"\n")
+            .map_err(|error| RunError::Internal(format!("writing source bundle stage {}: {error}", stage.display())))?;
+        writer.flush().map_err(|error| {
+            RunError::Internal(format!("flushing source bundle stage {}: {error}", stage.display()))
+        })?;
+        writer
+            .get_ref()
+            .sync_all()
+            .map_err(|error| RunError::Internal(format!("syncing source bundle stage {}: {error}", stage.display())))?;
+        drop(writer);
+        crate::linux_rename::rename_path_no_replace(&stage, path).map_err(|error| {
+            RunError::Internal(format!("publishing source bundle {} without replacement: {error}", path.display()))
+        })?;
+        fs::File::open(parent).and_then(|directory| directory.sync_all()).map_err(|error| {
+            RunError::Internal(format!("syncing source bundle parent {}: {error}", parent.display()))
+        })?;
+        Ok(())
+    })();
+    if write_result.is_err() {
+        let _ = fs::remove_file(&stage);
+    }
+    write_result
 }
 
 pub fn read_source_bundle(path: &Path) -> Result<SourceBundleManifest, RunError> {
@@ -4424,6 +4585,23 @@ fn cmd_bootstrap_profile(
     print_bootstrap_profile_report(&profile_receipt, context.is_json_output)
 }
 
+fn cmd_refresh_mantle_source(
+    from: &Path,
+    mantle_source: &Path,
+    to: &Path,
+    context: &SourceBundleCliContext<'_>,
+) -> Result<(), RunError> {
+    if from == to {
+        return Err(RunError::Internal("source-built profile refresh input and output paths must differ".to_string()));
+    }
+    let manifest = read_source_bundle(from)?;
+    let original = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)?;
+    let replacement = source_built_mantle_source_record(mantle_source, &original.identity, &manifest.store_prefix)?;
+    let (refreshed, report) = plan_source_built_mantle_source_refresh(manifest, replacement)?;
+    write_source_bundle_no_replace(to, &refreshed)?;
+    print_mantle_source_refresh_report(&report, context.is_json_output)
+}
+
 fn read_supplemental_bundle_records(paths: &[PathBuf]) -> Result<Vec<SourceRecord>, RunError> {
     let mut records = Vec::new();
     for path in paths {
@@ -4503,6 +4681,11 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
             },
             context,
         ),
+        crate::SourceBundleAction::RefreshMantleSource {
+            from,
+            mantle_source,
+            to,
+        } => cmd_refresh_mantle_source(&from, &mantle_source, &to, context),
         crate::SourceBundleAction::List { from } => cmd_list_source_bundle(&from, context),
         crate::SourceBundleAction::Import { from, pin } => cmd_import_source_bundle(&from, pin, context),
         crate::SourceBundleAction::HydrateSelfBuild {
@@ -4895,6 +5078,24 @@ fn print_bootstrap_profile_report(
         report.required_record_count,
         report.manifest_blake3,
         report.provider_kind
+    );
+    eprintln!("non_claim={}", report.non_claim);
+    Ok(())
+}
+
+fn print_mantle_source_refresh_report(report: &MantleSourceRefreshReport, json_output: bool) -> Result<(), RunError> {
+    if json_output {
+        println!("{}", render_json(report)?);
+        return Ok(());
+    }
+    println!(
+        "format={} input_manifest_blake3={} output_manifest_blake3={} previous_mantle_source_blake3={} replacement_mantle_source_blake3={} preserved_records={}",
+        report.format,
+        report.input_manifest_blake3,
+        report.output_manifest_blake3,
+        report.previous_mantle_source_blake3,
+        report.replacement_mantle_source_blake3,
+        report.preserved_record_count,
     );
     eprintln!("non_claim={}", report.non_claim);
     Ok(())
@@ -6056,6 +6257,109 @@ mod tests {
         assert_eq!(manifest.records[hydration.provider_archive_record_index].identity, "stagex-seed");
         assert_eq!(manifest.records[hydration.provider_manifest_record_index].identity, "stagex-lineage");
         assert!(!manifest.records.iter().any(|record| record.identity.contains("imported-provider")));
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
+    #[test]
+    fn source_built_mantle_source_refresh_preserves_every_other_record() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = source_built_fixed_point_profile_fixture(temp.path());
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let original_records = manifest.records.clone();
+        let original = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap().clone();
+        let replacement_root = temp.path().join("replacement-mantle-source");
+        write_fixture(&replacement_root);
+        fs::write(replacement_root.join("src/main.txt"), b"refreshed Mantle source").unwrap();
+        let replacement =
+            source_built_mantle_source_record(&replacement_root, &original.identity, &manifest.store_prefix).unwrap();
+
+        let (refreshed, report) = plan_source_built_mantle_source_refresh(manifest, replacement.clone()).unwrap();
+
+        assert_ne!(report.input_manifest_blake3, report.output_manifest_blake3);
+        assert_ne!(report.previous_mantle_source_blake3, report.replacement_mantle_source_blake3);
+        assert_eq!(report.replacement_mantle_source_blake3, replacement.content_blake3);
+        assert_eq!(report.preserved_record_count as usize, original_records.len() - 1);
+        for record in original_records.iter().filter(|record| record.identity != original.identity) {
+            assert!(refreshed.records.contains(record));
+        }
+        assert_eq!(
+            require_single_profile_record(&refreshed, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)
+                .unwrap()
+                .content_blake3,
+            replacement.content_blake3
+        );
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
+    #[test]
+    fn source_built_mantle_source_refresh_rejects_missing_and_duplicate_authority() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = source_built_fixed_point_profile_fixture(temp.path());
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let original = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap().clone();
+        let mut missing_records = manifest.records.clone();
+        missing_records.retain(|record| record.identity != original.identity);
+        let missing = assemble_source_bundle(missing_records, &manifest.store_prefix).unwrap();
+
+        let missing_error = plan_source_built_mantle_source_refresh(missing, original.clone()).unwrap_err();
+
+        assert!(missing_error.to_string().contains("missing record class mantle-source"));
+
+        let mut duplicate_record = original.clone();
+        duplicate_record.identity = "duplicate-mantle-source-tree".to_string();
+        let mut duplicate_records = manifest.records.clone();
+        duplicate_records.push(duplicate_record);
+        let duplicate = assemble_source_bundle(duplicate_records, &manifest.store_prefix).unwrap();
+
+        let duplicate_error = plan_source_built_mantle_source_refresh(duplicate, original).unwrap_err();
+
+        assert!(duplicate_error.to_string().contains("duplicate record class mantle-source"));
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
+    #[test]
+    fn source_built_mantle_source_refresh_rejects_wrong_profile_mode() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = source_built_fixed_point_profile_fixture(temp.path());
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let replacement =
+            require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap().clone();
+        let mut records = manifest.records.clone();
+        let classified = records
+            .iter_mut()
+            .find(|record| {
+                record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+                    == Some(BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS)
+            })
+            .unwrap();
+        classified.metadata.insert(
+            RECORD_METADATA_PROFILE_MODE_KEY.to_string(),
+            BootstrapSourceBundleMode::SelfBuildProof.as_str().to_string(),
+        );
+        classified.content_blake3 =
+            digest_source_record_content(&classified.kind, &classified.metadata, &classified.files).unwrap();
+        let wrong_mode = assemble_source_bundle(records, &manifest.store_prefix).unwrap();
+
+        let error = plan_source_built_mantle_source_refresh(wrong_mode, replacement).unwrap_err();
+
+        assert!(error.to_string().contains("every classified record"));
+        assert!(error.to_string().contains("source-built-fixed-point mode"));
+    }
+
+    #[test]
+    fn source_bundle_no_replace_publication_preserves_existing_destination() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = plan_empty_source_bundle("/mantle/store").unwrap();
+        let published = temp.path().join("published.json");
+        write_source_bundle_no_replace(&published, &manifest).unwrap();
+        assert_eq!(read_source_bundle(&published).unwrap(), manifest);
+
+        fs::write(&published, b"existing destination").unwrap();
+        let error = write_source_bundle_no_replace(&published, &manifest).unwrap_err();
+
+        assert!(error.to_string().contains("without replacement"));
+        assert_eq!(fs::read(&published).unwrap(), b"existing destination");
+        assert!(!published.with_extension(SOURCE_REFRESH_TEMP_FILE_EXTENSION).exists());
     }
 
     // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
