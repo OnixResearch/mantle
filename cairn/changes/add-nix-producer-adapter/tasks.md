@@ -2,7 +2,8 @@
 
 ## Phase 1: Baseline and contract core
 
-- [ ] [serial] I1 Run the existing foreign-derivation-import, direct-`.drv` producer, and source-record tests before any change. Record the baseline outputs. r[nix_producer_adapter.validation]
+- [x] [serial] I1 Run the existing foreign-derivation-import, direct-`.drv` producer, and source-record tests before any change. Record the baseline outputs. r[nix_producer_adapter.validation]
+  - Evidence: `evidence/baseline-i1.md` — 20 + 85 + 14 tests pass on the clean base with bwrap on PATH.
 - [ ] [serial] I2 Define the pure `nix-producer-v1` contract core: request, outcome, identity-fact, and error-class types with validation and classification. r[nix_producer_adapter.backend_contract]
 - [ ] [serial] I3 Add explicit backend selection with registered kinds, availability probes, and fail-closed rejection. r[nix_producer_adapter.backend_selection]
 - [ ] [parallel] I4 Add positive contract fixtures and negative unknown-backend, missing-binary, and incomplete-output fixtures. r[nix_producer_adapter.validation]
