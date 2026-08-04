@@ -115,3 +115,36 @@ is NOT unit-tested (it requires a real persisted store with a signing keypair);
 only the no-cache-disabled path and the adoption-copy path are unit-tested.
 Note: `import_constructed_store_path_source` asserts one record import per
 fresh state dir, which holds for the intended fresh-staging flow.
+
+## Full-proof round trip attempt (same turn)
+
+The full cold->cached->adopt round trip is not yet demonstrable end to end on
+this host: prior full proofs failed, and this machine lacks a real bubblewrap on
+PATH (though `nix shell nixpkgs#bubblewrap` provides it) and the handoff source
+closures are not under `/media/handoff`.
+
+Latest prior run `~/.cargo-target/mantle-source-built-fixed-point-runs-v19a`
+got through StageX -> provider -> native-provider admission (native provider
+`82b08dcd...`) and then FAILED constructing the Rust provider:
+
+```
+constructing full-source Rust provider: launch
+ .../rust-provider-scratch/run-mrustc-first-stage.sh: Exec format error (os error 8)
+```
+
+Root cause: the generated `.sh` script's shebang embeds the absolute
+native-store busybox path, which is 266 bytes long. Linux rejects shebang lines
+over ~256 bytes with ENOEXEC. The busybox interpreter itself is fine (running it
+explicitly builds the first stage successfully).
+
+Fix applied in `src/rust_source_provider.rs`: `run_generated_script_with_log`
+now launches generated scripts through an explicit absolute interpreter in
+argv[0] (the full-source busybox `sh`) instead of relying on the shebang, for
+all three build stages (first-stage, rustc stage1, rustc final). `rust_source_provider`
+tests: 94 passed; touched file clippy/fmt-clean.
+
+This fix is a pre-existing parent (`prove-source-built-mantle-fixed-point`)
+blocker surfaced while dogfooding; it sits in the dev-cache worktree to unblock
+the run. A full successful cold proof, and therefore a populated cache and a
+cached->adopt round trip, is not yet achieved; that still needs a valid source
+profile + independent expected digests and a full successful multi-hour run.

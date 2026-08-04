@@ -18,9 +18,10 @@ use std::process::ExitStatus;
 use std::process::Output;
 use std::time::Duration;
 
-use crate::full_source_rust_binding::FULL_SOURCE_RUST_STAGE_PARALLEL_JOB_COUNT_MAX;
 use crate::full_source_rust_binding::FullSourceRustHostToolRole;
+use crate::full_source_rust_binding::FULL_SOURCE_RUST_STAGE_PARALLEL_JOB_COUNT_MAX;
 use crate::full_source_rust_binding_shell::FullSourceRustExecutionContext;
+use crate::rust_bootstrap_patch_plan::derive_rust_bootstrap_patch_plan;
 use crate::rust_bootstrap_patch_plan::RustBootstrapPatchCapabilities;
 use crate::rust_bootstrap_patch_plan::RustBootstrapPatchOperation;
 use crate::rust_bootstrap_patch_plan::RustBootstrapPatchOperationKind;
@@ -29,10 +30,6 @@ use crate::rust_bootstrap_patch_plan::RustBootstrapPatchPlan;
 use crate::rust_bootstrap_patch_plan::RustBootstrapPatchPlanInput;
 use crate::rust_bootstrap_patch_plan::RustBootstrapPatchSourceIdentity;
 use crate::rust_bootstrap_patch_plan::RustBootstrapPatchStage;
-use crate::rust_bootstrap_patch_plan::derive_rust_bootstrap_patch_plan;
-use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_ID;
-use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_METADATA_PATH;
-use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_RECEIPT_SCHEMA;
 use crate::source_toolchain_closure::RustProviderArtifact;
 use crate::source_toolchain_closure::RustProviderBuildReceiptIdentity;
 use crate::source_toolchain_closure::RustProviderObservedArtifact;
@@ -53,6 +50,9 @@ use crate::source_toolchain_closure::RustSourceProviderProvenance;
 use crate::source_toolchain_closure::RustSourceProviderValidation;
 use crate::source_toolchain_closure::ToolchainBuildReceiptKind;
 use crate::source_toolchain_closure::ToolchainSourceKind;
+use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_ID;
+use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_METADATA_PATH;
+use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_RECEIPT_SCHEMA;
 
 pub(crate) const RUST_SOURCE_PROVIDER_BLOCKED_REASON: &str = "source-built Rust provider completion remains pending until every planned stage passes and the validated final provider is published";
 
@@ -3841,6 +3841,7 @@ fn run_smoke_rustc_with_bounded_launch_retry(rustc_path: &Path, rustc_args: &[Os
 
 fn run_generated_script_with_log(
     script_path: &Path,
+    interpreter: Option<&Path>,
     log_path: &Path,
     clear_environment: bool,
 ) -> Result<ExitStatus, RustSourceProviderError> {
@@ -3857,7 +3858,19 @@ fn run_generated_script_with_log(
         let stderr = log
             .try_clone()
             .map_err(|err| RustSourceProviderError::Build(format!("clone {}: {err}", log_path.display())))?;
-        let mut command = Command::new(script_path);
+        // Launch through an explicit absolute interpreter (argv[0]) instead of relying
+        // on the script shebang. The generated script's shebang embeds the full
+        // native-store busybox path, which regularly exceeds the kernel's ~256-byte
+        // shebang limit and then fails with ENOEXEC (Exec format error). An absolute
+        // interpreter in argv is not length-limited.
+        let mut command = match interpreter {
+            Some(interp) => {
+                let mut command = Command::new(interp);
+                command.arg(script_path);
+                command
+            }
+            None => Command::new(script_path),
+        };
         if clear_environment {
             command.env_clear();
         }
@@ -3887,8 +3900,14 @@ fn run_rustc_stage1_build(
         eprintln!("  rustc_stage1_build_script: {}", boundary.script_path.display());
         eprintln!("  rustc_stage1_build_log: {}", boundary.build_log_path.display());
     }
+    let interpreter = boundary
+        .full_source_context
+        .as_ref()
+        .map(|context| full_source_busybox_applet_path(context, "sh"))
+        .transpose()?;
     let status = run_generated_script_with_log(
         &boundary.script_path,
+        interpreter.as_deref(),
         &boundary.build_log_path,
         boundary.full_source_context.is_some(),
     )?;
@@ -3940,8 +3959,14 @@ fn run_rustc_final_build(
         eprintln!("  rustc_final_build_script: {}", boundary.script_path.display());
         eprintln!("  rustc_final_build_log: {}", boundary.build_log_path.display());
     }
+    let interpreter = boundary
+        .full_source_context
+        .as_ref()
+        .map(|context| full_source_busybox_applet_path(context, "sh"))
+        .transpose()?;
     let status = run_generated_script_with_log(
         &boundary.script_path,
+        interpreter.as_deref(),
         &boundary.build_log_path,
         boundary.full_source_context.is_some(),
     )?;
@@ -4998,8 +5023,14 @@ fn run_first_stage_build(
         eprintln!("  first_stage_build_script: {}", boundary.script_path.display());
         eprintln!("  first_stage_build_log: {}", boundary.build_log_path.display());
     }
+    let interpreter = boundary
+        .full_source_context
+        .as_ref()
+        .map(|context| full_source_busybox_applet_path(context, "sh"))
+        .transpose()?;
     let status = run_generated_script_with_log(
         &boundary.script_path,
+        interpreter.as_deref(),
         &boundary.build_log_path,
         boundary.full_source_context.is_some(),
     )?;
@@ -8564,9 +8595,6 @@ fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), RustSou
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_ID;
-    use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_RECEIPT_SCHEMA;
-    use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_SCHEMA;
     use crate::source_toolchain_closure::RustProviderArtifact;
     use crate::source_toolchain_closure::RustProviderBuildReceiptIdentity;
     use crate::source_toolchain_closure::RustProviderReceiptArtifact;
@@ -8577,6 +8605,9 @@ mod tests {
     use crate::source_toolchain_closure::RustSourceProviderProvenance;
     use crate::source_toolchain_closure::ToolchainBuildReceiptKind;
     use crate::source_toolchain_closure::ToolchainSourceKind;
+    use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_ID;
+    use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_RECEIPT_SCHEMA;
+    use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_SCHEMA;
 
     const HOST_TRIPLE: &str = "x86_64-unknown-linux-gnu";
     const TARGET_TRIPLE: &str = "x86_64-unknown-linux-musl";
@@ -8908,12 +8939,12 @@ mod tests {
     }
 
     fn full_source_execution_context_fixture() -> FullSourceRustExecutionContext {
-        use crate::full_source_rust_binding::FULL_SOURCE_RUST_HOST_TOOL_SCHEMA;
         use crate::full_source_rust_binding::FullSourceNativeProviderAdmissionIdentity;
         use crate::full_source_rust_binding::FullSourceRustHostSupportInputBinding;
         use crate::full_source_rust_binding::FullSourceRustHostToolBinding;
         use crate::full_source_rust_binding::FullSourceRustHostToolManifest;
         use crate::full_source_rust_binding::FullSourceRustHostToolRole;
+        use crate::full_source_rust_binding::FULL_SOURCE_RUST_HOST_TOOL_SCHEMA;
         use crate::full_source_rust_binding_shell::FullSourceRustHostToolObservation;
 
         let tool = |role, name: &str| FullSourceRustHostToolBinding {
@@ -8992,18 +9023,15 @@ mod tests {
         assert_eq!(step.name, "record-stage-construction-identity");
         assert_eq!(step.arguments.len(), FULL_SOURCE_STAGE_CONSTRUCTION_IDENTITY_ARGUMENT_COUNT);
         assert!(step.arguments.contains(&format!("native-provider-id={}", context.admission.provider_id)));
-        assert!(
-            step.arguments
-                .contains(&format!("native-provider-output-blake3={}", context.admission.output_digest_blake3))
-        );
-        assert!(
-            step.arguments
-                .contains(&format!("source-closure-blake3={}", context.admission.source_closure_manifest_blake3))
-        );
-        assert!(
-            step.arguments
-                .contains(&format!("host-tool-manifest-blake3={}", context.host_tools.manifest_digest_blake3))
-        );
+        assert!(step
+            .arguments
+            .contains(&format!("native-provider-output-blake3={}", context.admission.output_digest_blake3)));
+        assert!(step
+            .arguments
+            .contains(&format!("source-closure-blake3={}", context.admission.source_closure_manifest_blake3)));
+        assert!(step
+            .arguments
+            .contains(&format!("host-tool-manifest-blake3={}", context.host_tools.manifest_digest_blake3)));
         assert!(step.arguments.contains(&format!(
             "linux-headers-blake3={}",
             context.host_tools.manifest.support_inputs[0].content_digest_blake3
@@ -9071,12 +9099,10 @@ mod tests {
         assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
         assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR).is_dir());
         assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR).join(RUST_SOURCE_PROVIDER_METADATA_PATH).is_file());
-        assert!(
-            scratch
-                .join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR)
-                .join(FIRST_STAGE_PROVIDER_RECEIPT_RELATIVE_PATH)
-                .is_file()
-        );
+        assert!(scratch
+            .join(FIRST_STAGE_PROVIDER_CANDIDATE_DIR)
+            .join(FIRST_STAGE_PROVIDER_RECEIPT_RELATIVE_PATH)
+            .is_file());
         assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_SUMMARY_FILE).is_file());
         assert!(scratch.join(FIRST_STAGE_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_OUTPUT_FILE).is_file());
         assert!(scratch.join(RUSTC_STAGE1_PLAN_FILE).is_file());
@@ -9092,12 +9118,10 @@ mod tests {
         assert!(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
         assert!(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR).is_dir());
         assert!(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR).join(RUST_SOURCE_PROVIDER_METADATA_PATH).is_file());
-        assert!(
-            scratch
-                .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
-                .join(RUSTC_STAGE1_PROVIDER_RECEIPT_RELATIVE_PATH)
-                .is_file()
-        );
+        assert!(scratch
+            .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
+            .join(RUSTC_STAGE1_PROVIDER_RECEIPT_RELATIVE_PATH)
+            .is_file());
         assert!(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_SUMMARY_FILE).is_file());
         assert!(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_OUTPUT_FILE).is_file());
         assert!(scratch.join(RUSTC_STAGE1_SOURCE_DIR).join("rust-1.91.1/README.txt").is_file());
@@ -9109,12 +9133,10 @@ mod tests {
         assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/bin/minicargo").is_file());
         assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/output/rustc").is_file());
         assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("mrustc-0.12.0/output/cargo").is_file());
-        assert!(
-            scratch
-                .join(FIRST_STAGE_SOURCE_DIR)
-                .join("mrustc-0.12.0/run_rustc/output/prefix/bin/rustc")
-                .is_file()
-        );
+        assert!(scratch
+            .join(FIRST_STAGE_SOURCE_DIR)
+            .join("mrustc-0.12.0/run_rustc/output/prefix/bin/rustc")
+            .is_file());
         assert!(scratch.join(FIRST_STAGE_SOURCE_DIR).join("rust-1.90.0/README.txt").is_file());
         #[cfg(unix)]
         assert_eq!(script_mode(&scratch.join(FIRST_STAGE_SCRIPT_FILE)), EXECUTABLE_MODE);
@@ -9252,13 +9274,11 @@ mod tests {
             scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR).join(RUSTC_STAGE1_PROVIDER_RECEIPT_RELATIVE_PATH);
         assert_receipt_has_stage_construction_identity(&rustc_stage1_receipt_path);
         assert_receipt_has_patch_plan_step(&rustc_stage1_receipt_path, "rust-bootstrap-rustc-private-tool-rlibs");
-        assert!(
-            rustc_stage1_candidate_validation
-                .metadata
-                .sources
-                .iter()
-                .any(|source| source.id == "rust-1.91.1-stage1-bootstrap-provider")
-        );
+        assert!(rustc_stage1_candidate_validation
+            .metadata
+            .sources
+            .iter()
+            .any(|source| source.id == "rust-1.91.1-stage1-bootstrap-provider"));
         let rustc_stage1_smoke_summary: serde_json::Value = serde_json::from_slice(
             &fs::read(scratch.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_SUMMARY_FILE))
                 .unwrap(),
@@ -9279,24 +9299,18 @@ mod tests {
         assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_OUTPUT_DIR).join(PROVIDER_RUSTC_RELATIVE_PATH).is_file());
         assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_OUTPUT_DIR).join(PROVIDER_CARGO_RELATIVE_PATH).is_file());
         assert!(rustc_stage1_next_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
-        assert!(
-            rustc_stage1_next_root
-                .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
-                .join(RUST_SOURCE_PROVIDER_METADATA_PATH)
-                .is_file()
-        );
-        assert!(
-            rustc_stage1_next_root
-                .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
-                .join(RUSTC_STAGE1_PROVIDER_RECEIPT_RELATIVE_PATH)
-                .is_file()
-        );
-        assert!(
-            rustc_stage1_next_root
-                .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR)
-                .join(SMOKE_EVIDENCE_SUMMARY_FILE)
-                .is_file()
-        );
+        assert!(rustc_stage1_next_root
+            .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
+            .join(RUST_SOURCE_PROVIDER_METADATA_PATH)
+            .is_file());
+        assert!(rustc_stage1_next_root
+            .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
+            .join(RUSTC_STAGE1_PROVIDER_RECEIPT_RELATIVE_PATH)
+            .is_file());
+        assert!(rustc_stage1_next_root
+            .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_SMOKE_DIR)
+            .join(SMOKE_EVIDENCE_SUMMARY_FILE)
+            .is_file());
         let rustc_stage1_next_plan: serde_json::Value =
             serde_json::from_slice(&fs::read(rustc_stage1_next_root.join(RUSTC_STAGE1_PLAN_FILE)).unwrap()).unwrap();
         assert_eq!(rustc_stage1_next_plan["schema"], RUSTC_STAGE1_PLAN_SCHEMA);
@@ -9349,13 +9363,11 @@ mod tests {
             rustc_stage1_next_candidate_validation.validation.source_count,
             expected_rustc_stage1_candidate_sources
         );
-        assert!(
-            rustc_stage1_next_candidate_validation
-                .metadata
-                .sources
-                .iter()
-                .any(|source| source.id == "rust-1.92.0-stage1-bootstrap-provider")
-        );
+        assert!(rustc_stage1_next_candidate_validation
+            .metadata
+            .sources
+            .iter()
+            .any(|source| source.id == "rust-1.92.0-stage1-bootstrap-provider"));
         let rustc_stage1_next_smoke_summary: serde_json::Value = serde_json::from_slice(
             &fs::read(
                 rustc_stage1_next_root
@@ -9380,18 +9392,14 @@ mod tests {
         assert!(rustc_stage1_final_root.join(RUSTC_STAGE1_OUTPUT_DIR).join(PROVIDER_RUSTC_RELATIVE_PATH).is_file());
         assert!(rustc_stage1_final_root.join(RUSTC_STAGE1_OUTPUT_DIR).join(PROVIDER_CARGO_RELATIVE_PATH).is_file());
         assert!(rustc_stage1_final_root.join(RUSTC_STAGE1_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
-        assert!(
-            rustc_stage1_final_root
-                .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
-                .join(RUST_SOURCE_PROVIDER_METADATA_PATH)
-                .is_file()
-        );
-        assert!(
-            rustc_stage1_final_root
-                .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
-                .join(RUSTC_STAGE1_PROVIDER_RECEIPT_RELATIVE_PATH)
-                .is_file()
-        );
+        assert!(rustc_stage1_final_root
+            .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
+            .join(RUST_SOURCE_PROVIDER_METADATA_PATH)
+            .is_file());
+        assert!(rustc_stage1_final_root
+            .join(RUSTC_STAGE1_PROVIDER_CANDIDATE_DIR)
+            .join(RUSTC_STAGE1_PROVIDER_RECEIPT_RELATIVE_PATH)
+            .is_file());
         let rustc_stage1_final_plan: serde_json::Value =
             serde_json::from_slice(&fs::read(rustc_stage1_final_root.join(RUSTC_STAGE1_PLAN_FILE)).unwrap()).unwrap();
         assert_eq!(rustc_stage1_final_plan["schema"], RUSTC_STAGE1_PLAN_SCHEMA);
@@ -9445,13 +9453,11 @@ mod tests {
             rustc_stage1_final_candidate_validation.validation.source_count,
             expected_rustc_stage1_candidate_sources
         );
-        assert!(
-            rustc_stage1_final_candidate_validation
-                .metadata
-                .sources
-                .iter()
-                .any(|source| source.id == "rust-1.93.1-stage1-bootstrap-provider")
-        );
+        assert!(rustc_stage1_final_candidate_validation
+            .metadata
+            .sources
+            .iter()
+            .any(|source| source.id == "rust-1.93.1-stage1-bootstrap-provider"));
         let rustc_stage1_final_smoke_summary: serde_json::Value = serde_json::from_slice(
             &fs::read(
                 rustc_stage1_final_root
@@ -9477,24 +9483,18 @@ mod tests {
         assert!(rustc_final_root.join(RUSTC_FINAL_OUTPUT_DIR).join(PROVIDER_CARGO_RELATIVE_PATH).is_file());
         assert!(rustc_final_root.join(RUSTC_FINAL_OUTPUT_DIR).join(PROVIDER_RUSTDOC_RELATIVE_PATH).is_file());
         assert!(rustc_final_root.join(RUSTC_FINAL_PROVIDER_CANDIDATE_MANIFEST_FILE).is_file());
-        assert!(
-            rustc_final_root
-                .join(RUSTC_FINAL_PROVIDER_CANDIDATE_DIR)
-                .join(RUST_SOURCE_PROVIDER_METADATA_PATH)
-                .is_file()
-        );
-        assert!(
-            rustc_final_root
-                .join(RUSTC_FINAL_PROVIDER_CANDIDATE_DIR)
-                .join(RUSTC_FINAL_PROVIDER_RECEIPT_RELATIVE_PATH)
-                .is_file()
-        );
-        assert!(
-            rustc_final_root
-                .join(RUSTC_FINAL_PROVIDER_CANDIDATE_SMOKE_DIR)
-                .join(SMOKE_EVIDENCE_SUMMARY_FILE)
-                .is_file()
-        );
+        assert!(rustc_final_root
+            .join(RUSTC_FINAL_PROVIDER_CANDIDATE_DIR)
+            .join(RUST_SOURCE_PROVIDER_METADATA_PATH)
+            .is_file());
+        assert!(rustc_final_root
+            .join(RUSTC_FINAL_PROVIDER_CANDIDATE_DIR)
+            .join(RUSTC_FINAL_PROVIDER_RECEIPT_RELATIVE_PATH)
+            .is_file());
+        assert!(rustc_final_root
+            .join(RUSTC_FINAL_PROVIDER_CANDIDATE_SMOKE_DIR)
+            .join(SMOKE_EVIDENCE_SUMMARY_FILE)
+            .is_file());
         let rustc_final_plan: serde_json::Value =
             serde_json::from_slice(&fs::read(rustc_final_root.join(RUSTC_FINAL_PLAN_FILE)).unwrap()).unwrap();
         assert_eq!(rustc_final_plan["schema"], RUSTC_FINAL_PLAN_SCHEMA);
@@ -9570,20 +9570,16 @@ mod tests {
             .join(RUSTC_FINAL_PROVIDER_RECEIPT_RELATIVE_PATH);
         assert_receipt_has_stage_construction_identity(&rustc_final_receipt_path);
         assert_receipt_has_patch_plan_step(&rustc_final_receipt_path, "rust-bootstrap-rustc-private-tool-rlibs");
-        assert!(
-            rustc_final_candidate_validation
-                .metadata
-                .artifacts
-                .iter()
-                .any(|artifact| artifact.role == RustProviderRole::Rustdoc)
-        );
-        assert!(
-            rustc_final_candidate_validation
-                .metadata
-                .sources
-                .iter()
-                .any(|source| source.id == "rust-1.94.0-final-bootstrap-provider")
-        );
+        assert!(rustc_final_candidate_validation
+            .metadata
+            .artifacts
+            .iter()
+            .any(|artifact| artifact.role == RustProviderRole::Rustdoc));
+        assert!(rustc_final_candidate_validation
+            .metadata
+            .sources
+            .iter()
+            .any(|source| source.id == "rust-1.94.0-final-bootstrap-provider"));
         let rustc_final_smoke_summary: serde_json::Value = serde_json::from_slice(
             &fs::read(
                 rustc_final_root.join(RUSTC_FINAL_PROVIDER_CANDIDATE_SMOKE_DIR).join(SMOKE_EVIDENCE_SUMMARY_FILE),
@@ -9619,10 +9615,8 @@ mod tests {
         assert!(!rustc_stage1_script.contains("\"LLVM_ENABLE_ZLIB\" = \"ON\""));
         assert!(rustc_stage1_script.contains("LLVM_TOOL_LTO_BUILD"));
         assert!(rustc_stage1_script.contains("LLVM_TOOL_REMARKS_SHLIB_BUILD"));
-        assert!(
-            rustc_stage1_script
-                .contains("normalizing Rust bootstrap rustc_driver crate type for static musl compiler host")
-        );
+        assert!(rustc_stage1_script
+            .contains("normalizing Rust bootstrap rustc_driver crate type for static musl compiler host"));
         assert!(rustc_stage1_script.contains(RUSTC_SOURCE_RUSTC_DRIVER_MANIFEST));
         assert!(rustc_stage1_script.contains(
             "Rust bootstrap rustc_driver manifest lacks expected crate-type line for musl host normalization"
@@ -9643,11 +9637,8 @@ mod tests {
         assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TOOL_BUILD_RLIB_SYSROOT_ERROR));
         assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TARGET_LINKER_ALIAS_DIR));
         assert!(rustc_stage1_script.contains(RUSTC_SOURCE_TARGET_LINKER_RUNTIME_DIR));
-        assert!(
-            rustc_stage1_script.contains(
-                "Rust bootstrap target toolchain does not expose musl/gcc CRT, unwinder, and objcopy objects"
-            )
-        );
+        assert!(rustc_stage1_script
+            .contains("Rust bootstrap target toolchain does not expose musl/gcc CRT, unwinder, and objcopy objects"));
         assert!(rustc_stage1_script.contains("target_objcopy_program=$target_tool_prefix-objcopy"));
         assert!(rustc_stage1_script.contains("--remove-section .init_array --remove-section .rela.init_array --remove-section .fini_array --remove-section .rela.fini_array"));
         assert!(rustc_stage1_script.contains("rcrt1.o|*/rcrt1.o) mapped_arg=\"$target_runtime_dir/crt1.o\""));
@@ -9682,10 +9673,8 @@ mod tests {
         assert!(rustc_stage1_script.contains(
             "{ [ \"$dynamic_rustc_link\" = true ] || [ \"$dynamic_executable_link\" = true ]; }; then set -- \"$@\" -no-pie -Wl,-Bdynamic \"-Wl,-dynamic-linker,$target_runtime_dir/libc.so\" -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group"
         ));
-        assert!(
-            rustc_stage1_script
-                .contains("set -- \"$@\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group")
-        );
+        assert!(rustc_stage1_script
+            .contains("set -- \"$@\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group"));
         assert!(rustc_stage1_script.contains("crt-static = false"));
         assert!(rustc_stage1_script.contains("__atomic_compare_exchange_16"));
         assert!(rustc_stage1_script.contains("linker = \"$MANTLE_TARGET_CC\""));
@@ -9769,9 +9758,7 @@ mod tests {
         assert!(script.contains("MANTLE_TARGET_CC_PATH"));
         assert!(script.contains("-shared|-dynamiclib) shared_link=true"));
         assert!(script.contains("-shared|-dynamiclib) static_support_link=false"));
-        assert!(
-            script.contains("-static) if [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"$arg\"; fi")
-        );
+        assert!(script.contains("-static) if [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"$arg\"; fi"));
         assert!(script.contains(
             "-static-pie) if [ \"$dynamic_rustc_link\" = true ] || [ \"$shared_link\" = true ]; then continue; else mapped_arg=\"-static\"; fi"
         ));
@@ -10030,11 +10017,9 @@ mod tests {
         let minicargo_makefile = fs::read_to_string(mrustc_source.join(FIRST_STAGE_MINICARGO_MAKEFILE)).unwrap();
         assert!(minicargo_makefile.contains("LLVM_ENABLE_ZSTD=OFF"));
         assert!(minicargo_makefile.contains("CMAKE_DISABLE_FIND_PACKAGE_zstd=ON"));
-        assert!(
-            !minicargo_makefile
-                .lines()
-                .any(|line| line == FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE)
-        );
+        assert!(!minicargo_makefile
+            .lines()
+            .any(|line| line == FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE));
         let run_rustc_makefile =
             fs::read_to_string(mrustc_source.join(FIRST_STAGE_RUN_RUSTC_DIR).join(FIRST_STAGE_MAKEFILE)).unwrap();
         assert!(run_rustc_makefile.contains(FIRST_STAGE_RUN_RUSTC_FINAL_PREFIX2_ENV_LINE));
@@ -10098,10 +10083,8 @@ mod tests {
         let message = err.to_string();
         assert!(message.contains("first-stage mrustc/minicargo build failed"));
         let build_log = fs::read_to_string(scratch.join(FIRST_STAGE_BUILD_LOG_FILE)).unwrap();
-        assert!(
-            build_log
-                .contains("mrustc run_rustc Makefile lacks expected Cargo build line for all-static normalization")
-        );
+        assert!(build_log
+            .contains("mrustc run_rustc Makefile lacks expected Cargo build line for all-static normalization"));
         assert!(!output.join(RUST_SOURCE_PROVIDER_METADATA_PATH).exists());
     }
 
@@ -10182,22 +10165,18 @@ mod tests {
 
         assert_eq!(materialized.output_path, output);
         assert!(validate_materialized_rust_source_provider(&output).is_ok());
-        assert!(
-            !scratch
-                .join(RUSTC_STAGE1_SOURCE_DIR)
-                .join("rust-1.91.1")
-                .join(RUSTC_STAGE1_SOURCE_BUILD_SCRIPT)
-                .exists()
-        );
+        assert!(!scratch
+            .join(RUSTC_STAGE1_SOURCE_DIR)
+            .join("rust-1.91.1")
+            .join(RUSTC_STAGE1_SOURCE_BUILD_SCRIPT)
+            .exists());
         assert!(scratch.join(RUSTC_STAGE1_BUILD_DIR).join(RUSTC_STAGE1_GENERATED_BUILD_SCRIPT).is_file());
         let rustc_final_root = scratch.join(RUSTC_FINAL_DIR);
-        assert!(
-            !rustc_final_root
-                .join(RUSTC_FINAL_SOURCE_DIR)
-                .join("rust-1.94.0")
-                .join(RUSTC_FINAL_SOURCE_BUILD_SCRIPT)
-                .exists()
-        );
+        assert!(!rustc_final_root
+            .join(RUSTC_FINAL_SOURCE_DIR)
+            .join("rust-1.94.0")
+            .join(RUSTC_FINAL_SOURCE_BUILD_SCRIPT)
+            .exists());
         assert!(rustc_final_root.join(RUSTC_FINAL_BUILD_DIR).join(RUSTC_FINAL_GENERATED_BUILD_SCRIPT).is_file());
         let rustc_stage1_log = fs::read_to_string(scratch.join(RUSTC_STAGE1_BUILD_LOG_FILE)).unwrap();
         assert!(rustc_stage1_log.contains("scrubbing inherited Rust bootstrap Cargo environment"));
@@ -10216,21 +10195,15 @@ mod tests {
         assert!(generated_stage1_script.contains(FIRST_STAGE_MAKE_FALLBACK_GLOB));
         assert!(generated_stage1_script.contains(FIRST_STAGE_CMAKE_FALLBACK_GLOB));
         assert!(generated_stage1_script.contains(FIRST_STAGE_TARGET_MUSL_GCC_FALLBACK_GLOB));
-        assert!(
-            generated_stage1_script
-                .contains("MANTLE_TARGET_TOOLCHAIN_ROOT=${MANTLE_TARGET_TOOLCHAIN_ROOT:-${SOURCE_ROOT:-}}")
-        );
+        assert!(generated_stage1_script
+            .contains("MANTLE_TARGET_TOOLCHAIN_ROOT=${MANTLE_TARGET_TOOLCHAIN_ROOT:-${SOURCE_ROOT:-}}"));
         assert!(generated_stage1_script.contains("using explicit Rust bootstrap source-root musl target toolchain"));
         assert!(generated_stage1_script.contains(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_GCC_MISSING));
         assert!(generated_stage1_script.contains(FIRST_STAGE_TARGET_TOOLCHAIN_ROOT_INCOMPLETE));
-        assert!(
-            generated_stage1_script
-                .contains("for candidate_name in x86_64-unknown-linux-musl-gcc x86_64-linux-musl-gcc")
-        );
-        assert!(
-            generated_stage1_script
-                .contains("MANTLE_TARGET_MUSL_MACHINE_ALIASES='x86_64-unknown-linux-musl x86_64-linux-musl'")
-        );
+        assert!(generated_stage1_script
+            .contains("for candidate_name in x86_64-unknown-linux-musl-gcc x86_64-linux-musl-gcc"));
+        assert!(generated_stage1_script
+            .contains("MANTLE_TARGET_MUSL_MACHINE_ALIASES='x86_64-unknown-linux-musl x86_64-linux-musl'"));
         assert!(generated_stage1_script.contains("MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT='x86_64-linux-musl'"));
         assert!(
             generated_stage1_script.contains("$target_wrapper_root/$MANTLE_TARGET_MUSL_SOURCE_ROOT_SYSROOT/lib/libc.a")
@@ -10678,12 +10651,10 @@ mod tests {
         assert!(wrapper.contains("LD_LIBRARY_PATH=\"$ld_path\""));
         assert!(wrapper.contains(PROVIDER_MRUSTC_RUSTC_SYSROOT_BINARY_BASENAME));
         assert!(wrapper.contains("--sysroot \"$root_dir\""));
-        assert!(
-            fs::symlink_metadata(provider_dir.join(PROVIDER_MRUSTC_RUSTC_SYSROOT_BINARY_RELATIVE_PATH))
-                .unwrap()
-                .file_type()
-                .is_symlink()
-        );
+        assert!(fs::symlink_metadata(provider_dir.join(PROVIDER_MRUSTC_RUSTC_SYSROOT_BINARY_RELATIVE_PATH))
+            .unwrap()
+            .file_type()
+            .is_symlink());
         assert!(output.status.success(), "stderr={}", String::from_utf8_lossy(&output.stderr));
         assert_eq!(fs::read(&output_path).unwrap(), SYNTHETIC_RLIB_BYTES);
     }
@@ -10771,12 +10742,10 @@ mod tests {
             .unwrap(),
             b"shared libgcc linker name"
         );
-        assert!(
-            fs::symlink_metadata(provider_dir.join(PROVIDER_MRUSTC_RUSTC_SYSROOT_BINARY_RELATIVE_PATH))
-                .unwrap()
-                .file_type()
-                .is_symlink()
-        );
+        assert!(fs::symlink_metadata(provider_dir.join(PROVIDER_MRUSTC_RUSTC_SYSROOT_BINARY_RELATIVE_PATH))
+            .unwrap()
+            .file_type()
+            .is_symlink());
     }
 
     #[test]
