@@ -2699,6 +2699,25 @@ mod tests {
     }
 
     #[test]
+    fn store_service_registration_adopts_real_provider_and_is_observable() {
+        const STORE_PATH_HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let temp = tempfile::tempdir().unwrap();
+        let store_dir = temp.path().join("out");
+        let state_dir = temp.path().join("state");
+        fs::create_dir_all(&store_dir).unwrap();
+        let basename = format!("{STORE_PATH_HASH}-native-provider-test");
+        let provider = store_dir.join(&basename);
+        fs::create_dir_all(&provider).unwrap();
+        fs::write(provider.join("provider.txt"), b"verified-provider").unwrap();
+
+        let logical = register_adopted_provider(&provider, &store_dir, &state_dir).unwrap();
+
+        assert_eq!(logical, format!("/mantle/store/{basename}"));
+        assert!(state_dir.join("pathinfo.redb").is_file());
+        assert!(state_dir.join(NATIVE_STATE_DIR).is_dir() || state_dir.join("blobs").is_dir());
+    }
+
+    #[test]
     fn store_seed_is_disabled_without_cache_flag() {
         let temp = tempfile::tempdir().unwrap();
         let executable = write_executable(&temp.path().join("bwrap"));
