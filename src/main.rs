@@ -79,6 +79,10 @@ mod nix_free_demo_bundle;
 // stable.
 #[allow(clippy::large_enum_variant)]
 mod nix_free_demo_cmd;
+// The producer backend shells land in later tasks of `add-nix-producer-adapter`;
+// until then only contract-core tests consume this module.
+#[allow(dead_code)]
+mod nix_producer;
 mod oci_projection;
 mod oci_projection_shell;
 mod oci_registry;
