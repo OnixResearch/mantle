@@ -113,6 +113,23 @@ fn contract_violations<'a>(source: &str, required: &'a [&'a str], forbidden: &'a
 }
 
 #[test]
+fn full_source_busybox_binds_the_selected_linux_header_identity() {
+    let source = std::fs::read_to_string(bootstrap_path("busybox-1.37.0-gcc10.ncl")).unwrap();
+    let required = ["HEADERS=$(find_input linux-headers-6.6-full-source-gcc10-v3)"];
+    let forbidden = ["HEADERS=$(find_input linux-headers-6.6-full-source-gcc10-v2)"];
+    let violations = contract_violations(&source, &required, &forbidden);
+    let invalid_source = source.replace(required[0], forbidden[0]);
+    let invalid_violations = contract_violations(&invalid_source, &required, &forbidden);
+    let headers = eval_bootstrap("linux-headers-6.6-gcc10.ncl");
+    let busybox = eval_bootstrap("busybox-1.37.0-gcc10.ncl");
+
+    assert!(violations.is_empty(), "BusyBox Linux-header contract violations: {violations:?}");
+    assert_eq!(invalid_violations, vec![required[0], forbidden[0]]);
+    assert_eq!(headers.name, "linux-headers-6.6-full-source-gcc10-v3");
+    assert_eq!(busybox.name, "busybox-1.37.0-full-source-gcc10-v1");
+}
+
+#[test]
 fn gcc_pass3_linker_uses_only_relocatable_stagex_authority() {
     let source = std::fs::read_to_string(bootstrap_path("gcc-4.0-musl-pass3.ncl")).unwrap();
     let required = [
