@@ -916,6 +916,57 @@ local visibility and no-clobber guarantee; rename alone is not evidence of
 filesystem crash durability, power-loss persistence, artifact correctness, or
 release eligibility.
 
+### Move release evidence with chaptered transport
+
+Use the opt-in chaptered transport after the release directory passes normal
+verification:
+
+```bash
+mantle release transport pack \
+  target/release-evidence/<release-id> \
+  --to target/release-transports/<release-id>
+
+mantle release transport inspect \
+  target/release-transports/<release-id>
+
+mantle release transport unpack \
+  target/release-transports/<release-id> \
+  --to target/imported-release-evidence/<release-id>
+```
+
+The transport directory contains `release.tgz` and `receipt.json`. The source
+release directory remains canonical. Both output and unpack destinations must
+be absent.
+
+Chapter zero contains the reserved transport index and canonical release
+manifest. Later chapters group source members, each immediate binary child, and
+other top-level artifact groups. The format is deterministic for the same
+verified tree and compression version.
+
+The receipt binds the complete compressed archive with BLAKE3. It also binds
+the source manifest, transport index, archive size, format versions, chapter
+count, member count, claim scope, and non-claims. The receipt needs an
+authenticated parent handoff when the transport crosses a hostile boundary.
+
+Inspect and unpack first copy `release.tgz` into a private snapshot while they
+measure the receipt-bound digest. They also validate the complete bounded gzip
+stream and marker count before chapter access. These checks reject payload,
+marker, trailer, malformed-stream, and excessive-chapter changes.
+
+Unpack validates every indexed tar entry before output writes. It accepts only
+regular files, directories, and validated internal relative links. It writes
+through capability-relative no-follow operations, runs normal release
+verification, and publishes with one atomic no-replace directory rename.
+
+Ordinary gzip and tar readers can read `release.tgz`. A standard extraction also
+writes `__mantle_release_transport_index__.json`. Mantle unpack omits this
+transport-only file.
+
+A valid transport proves compressed-byte identity, index consistency, safe
+materialization, and preserved bundle verification. It does not prove build or
+source correctness, semantic correctness, reproducibility, deployment safety,
+or universal release eligibility. See [ADR 0063](../adr/0063-keep-chaptered-release-archives-as-receipt-bound-transport.md).
+
 Generic release verification leaves Valence stack provenance optional unless
 `--stack-provenance required` is selected. The `onix-stack` release profile makes
 that requirement profile-declared: verification fails closed unless the bundle

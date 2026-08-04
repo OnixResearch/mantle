@@ -158,6 +158,24 @@ impl ReleaseCapabilityRoot {
         Ok(())
     }
 
+    pub(crate) fn create_symlink_nofollow(&self, path: &ValidatedReleasePath, target: &str) -> io::Result<()> {
+        let (parent, name) = open_or_create_relative_parent(&self.dir, path)?;
+        match parent.symlink_metadata(&name) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+            Ok(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    format!("release symlink destination already exists: {}", path.as_str()),
+                ));
+            }
+        }
+        DirExt::symlink(&parent, target, &name)?;
+        debug_assert!(!path.as_str().is_empty());
+        debug_assert!(!target.is_empty());
+        Ok(())
+    }
+
     pub(crate) fn remove_file_nofollow(&self, path: &ValidatedReleasePath) -> io::Result<()> {
         let (parent, name) = open_existing_relative_parent(&self.dir, path)?;
         parent.remove_file(name)

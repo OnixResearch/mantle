@@ -15,6 +15,9 @@ use cap_std::fs::OpenOptions;
 use cap_std::fs::OpenOptionsExt;
 #[cfg(unix)]
 use cap_std::fs::PermissionsExt;
+use crunch_release_core::ChapterTransportEntryInput;
+use crunch_release_core::ChapterTransportEntryKind;
+use crunch_release_core::ChapterTransportMember;
 use crunch_release_core::TreeCopyBlocker;
 use crunch_release_core::TreeCopyLimits;
 use crunch_release_core::TreeCopyOperation;
@@ -33,6 +36,8 @@ const TREE_COPY_DIAGNOSTIC_BLOCKERS_MAX: usize = 16;
 const EMPTY_DIRECTORY_ACCOUNTED_SIZE_BYTES: u64 = 1;
 #[cfg(unix)]
 const UNIX_PERMISSION_BITS_MASK: u32 = 0o7_777;
+#[cfg(not(unix))]
+const UNIX_PERMISSION_BITS_MASK: u32 = 0;
 #[cfg(unix)]
 const STAGING_DIRECTORY_MODE: u32 = 0o700;
 #[cfg(unix)]
@@ -54,6 +59,24 @@ struct PendingDirectory {
 impl PreparedTreeCopy {
     pub(crate) fn artifact_identity(&self) -> Result<(u64, String), RunError> {
         hash_prepared_tree(self)
+    }
+
+    pub(crate) fn chapter_transport_entries(&self) -> Result<Vec<ChapterTransportEntryInput>, RunError> {
+        let mut entries = Vec::with_capacity(self.plan.entries.len());
+        for observation in &self.plan.entries {
+            entries.push(chapter_transport_entry(self, observation)?);
+        }
+        debug_assert_eq!(entries.len(), self.plan.entries.len());
+        debug_assert!(entries.capacity() >= entries.len());
+        Ok(entries)
+    }
+
+    pub(crate) fn append_chapter_transport_member<W: Write>(
+        &self,
+        builder: &mut tar::Builder<W>,
+        member: &ChapterTransportMember,
+    ) -> Result<(), RunError> {
+        append_chapter_transport_member(self, builder, member)
     }
 
     #[cfg(test)]
@@ -957,6 +980,208 @@ fn tree_io_error(action: impl AsRef<str>, relative_path: &str, error: std::io::E
     RunError::Internal(format!("{} {relative_path}: {error}", action.as_ref()))
 }
 
+fn chapter_transport_entry(
+    prepared: &PreparedTreeCopy,
+    observation: &TreeEntryObservation,
+) -> Result<ChapterTransportEntryInput, RunError> {
+    let size_bytes = chapter_transport_entry_size(prepared, observation)?;
+    let entry = ChapterTransportEntryInput {
+        relative_path: observation.relative_path.clone(),
+        kind: chapter_transport_kind(observation.kind),
+        mode: observation.mode & UNIX_PERMISSION_BITS_MASK,
+        size_bytes,
+        symlink_target: observation.symlink_target.clone(),
+    };
+    debug_assert!(!entry.relative_path.is_empty());
+    debug_assert!(entry.size_bytes == 0 || entry.kind == ChapterTransportEntryKind::File);
+    Ok(entry)
+}
+
+fn chapter_transport_entry_size(
+    prepared: &PreparedTreeCopy,
+    observation: &TreeEntryObservation,
+) -> Result<u64, RunError> {
+    if observation.kind != TreeEntryKind::File {
+        revalidate_source_path(
+            &prepared.source_root,
+            &observation.relative_path,
+            observation.kind,
+            observation.mode,
+            observation.symlink_target.as_ref(),
+        )?;
+        return Ok(0);
+    }
+    let (parent, name) =
+        open_parent_directory_nofollow(prepared.source_root.dir(), &observation.relative_path, TreePathRole::Source)?;
+    let file = open_file_nofollow(&parent, name, false, 0)
+        .map_err(|error| tree_io_error("opening chapter transport source file", &observation.relative_path, error))?;
+    let metadata = file.metadata().map_err(|error| {
+        tree_io_error("reading chapter transport source metadata", &observation.relative_path, error)
+    })?;
+    validate_source_metadata(&observation.relative_path, &metadata, TreeEntryKind::File, observation.mode)?;
+    Ok(metadata.len())
+}
+
+fn chapter_transport_kind(kind: TreeEntryKind) -> ChapterTransportEntryKind {
+    match kind {
+        TreeEntryKind::Directory => ChapterTransportEntryKind::Directory,
+        TreeEntryKind::File => ChapterTransportEntryKind::File,
+        TreeEntryKind::Symlink => ChapterTransportEntryKind::Symlink,
+        TreeEntryKind::Unsupported => ChapterTransportEntryKind::Unsupported,
+    }
+}
+
+fn append_chapter_transport_member<W: Write>(
+    prepared: &PreparedTreeCopy,
+    builder: &mut tar::Builder<W>,
+    member: &ChapterTransportMember,
+) -> Result<(), RunError> {
+    match member.kind {
+        ChapterTransportEntryKind::Directory => append_transport_directory(prepared, builder, member),
+        ChapterTransportEntryKind::File => append_transport_file(prepared, builder, member),
+        ChapterTransportEntryKind::Symlink => append_transport_symlink(prepared, builder, member),
+        ChapterTransportEntryKind::Unsupported => {
+            Err(RunError::Internal(format!("unsupported chapter transport entry kind for {}", member.relative_path)))
+        }
+    }
+}
+
+fn append_transport_directory<W: Write>(
+    prepared: &PreparedTreeCopy,
+    builder: &mut tar::Builder<W>,
+    member: &ChapterTransportMember,
+) -> Result<(), RunError> {
+    revalidate_transport_member(prepared, member, TreeEntryKind::Directory)?;
+    let mut header = transport_header(member, tar::EntryType::Directory)?;
+    builder
+        .append_data(&mut header, &member.relative_path, std::io::empty())
+        .map_err(|error| tree_io_error("appending chapter transport directory", &member.relative_path, error))?;
+    debug_assert_eq!(member.size_bytes, 0);
+    debug_assert!(member.symlink_target.is_none());
+    Ok(())
+}
+
+fn append_transport_file<W: Write>(
+    prepared: &PreparedTreeCopy,
+    builder: &mut tar::Builder<W>,
+    member: &ChapterTransportMember,
+) -> Result<(), RunError> {
+    let (parent, name) =
+        open_parent_directory_nofollow(prepared.source_root.dir(), &member.relative_path, TreePathRole::Source)?;
+    let mut file = open_file_nofollow(&parent, name, false, 0)
+        .map_err(|error| tree_io_error("opening chapter transport file", &member.relative_path, error))?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| tree_io_error("reading chapter transport file metadata", &member.relative_path, error))?;
+    validate_transport_metadata(member, &metadata, TreeEntryKind::File)?;
+    let mut header = transport_header(member, tar::EntryType::Regular)?;
+    builder
+        .append_data(&mut header, &member.relative_path, &mut file)
+        .map_err(|error| tree_io_error("appending chapter transport file", &member.relative_path, error))?;
+    let mut trailing = [0_u8; 1];
+    let trailing_count = file
+        .read(&mut trailing)
+        .map_err(|error| tree_io_error("checking chapter transport source growth", &member.relative_path, error))?;
+    if trailing_count != 0 {
+        return Err(RunError::Internal(format!(
+            "chapter transport source grew while packing {}",
+            member.relative_path
+        )));
+    }
+    debug_assert_eq!(metadata.len(), member.size_bytes);
+    debug_assert_eq!(trailing_count, 0);
+    Ok(())
+}
+
+fn append_transport_symlink<W: Write>(
+    prepared: &PreparedTreeCopy,
+    builder: &mut tar::Builder<W>,
+    member: &ChapterTransportMember,
+) -> Result<(), RunError> {
+    revalidate_transport_member(prepared, member, TreeEntryKind::Symlink)?;
+    let target = member.symlink_target.as_ref().ok_or_else(|| {
+        RunError::Internal(format!("chapter transport symlink target is missing for {}", member.relative_path))
+    })?;
+    let mut header = transport_header(member, tar::EntryType::Symlink)?;
+    header
+        .set_link_name(target)
+        .map_err(|error| tree_io_error("setting chapter transport link target", &member.relative_path, error))?;
+    header.set_cksum();
+    builder
+        .append_data(&mut header, &member.relative_path, std::io::empty())
+        .map_err(|error| tree_io_error("appending chapter transport symlink", &member.relative_path, error))?;
+    debug_assert_eq!(member.size_bytes, 0);
+    debug_assert!(!target.is_empty());
+    Ok(())
+}
+
+fn revalidate_transport_member(
+    prepared: &PreparedTreeCopy,
+    member: &ChapterTransportMember,
+    expected_kind: TreeEntryKind,
+) -> Result<(), RunError> {
+    let (parent, name) =
+        open_parent_directory_nofollow(prepared.source_root.dir(), &member.relative_path, TreePathRole::Source)?;
+    let metadata = parent
+        .symlink_metadata(&name)
+        .map_err(|error| tree_io_error("revalidating chapter transport member", &member.relative_path, error))?;
+    validate_transport_metadata(member, &metadata, expected_kind)?;
+    if expected_kind == TreeEntryKind::Symlink {
+        let actual_target = read_symlink_target(&parent, &name, &member.relative_path)?;
+        if member.symlink_target.as_deref() != Some(actual_target.as_str()) {
+            return Err(RunError::Internal(format!(
+                "chapter transport source link target drift for {}",
+                member.relative_path
+            )));
+        }
+    }
+    debug_assert_eq!(metadata_kind(&metadata), expected_kind);
+    debug_assert_eq!(metadata_mode(&metadata) & UNIX_PERMISSION_BITS_MASK, member.mode);
+    Ok(())
+}
+
+fn validate_transport_metadata(
+    member: &ChapterTransportMember,
+    metadata: &Metadata,
+    expected_kind: TreeEntryKind,
+) -> Result<(), RunError> {
+    if metadata_kind(metadata) != expected_kind {
+        return Err(RunError::Internal(format!("chapter transport source type drift for {}", member.relative_path)));
+    }
+    if metadata_mode(metadata) & UNIX_PERMISSION_BITS_MASK != member.mode {
+        return Err(RunError::Internal(format!("chapter transport source mode drift for {}", member.relative_path)));
+    }
+    if expected_kind == TreeEntryKind::File && metadata.len() != member.size_bytes {
+        return Err(RunError::Internal(format!(
+            "chapter transport source size drift for {}: expected {}, found {}",
+            member.relative_path,
+            member.size_bytes,
+            metadata.len()
+        )));
+    }
+    Ok(())
+}
+
+fn transport_header(member: &ChapterTransportMember, entry_type: tar::EntryType) -> Result<tar::Header, RunError> {
+    let mut header = tar::Header::new_gnu();
+    header.set_entry_type(entry_type);
+    header.set_mode(member.mode);
+    header.set_uid(0);
+    header.set_gid(0);
+    header.set_mtime(0);
+    header.set_size(member.size_bytes);
+    header
+        .set_username("")
+        .map_err(|error| tree_io_error("setting chapter transport header username", &member.relative_path, error))?;
+    header
+        .set_groupname("")
+        .map_err(|error| tree_io_error("setting chapter transport header group name", &member.relative_path, error))?;
+    header.set_cksum();
+    debug_assert_eq!(header.size().ok(), Some(member.size_bytes));
+    debug_assert_eq!(header.entry_type(), entry_type);
+    Ok(header)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1027,6 +1252,27 @@ mod tests {
         assert_eq!(digest.1.len(), blake3::OUT_LEN.saturating_mul(2));
         assert!(error.to_string().contains("exceeds"));
         assert!(error.to_string().contains("1"));
+    }
+
+    // r[verify mantle.release_provenance.chapter_transport.pack]
+    #[test]
+    fn chapter_transport_emission_rejects_source_size_drift() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        write_file(&source.join("manifest.json"), FILE_BYTES);
+        let prepared = prepare_tree_copy(&source).unwrap();
+        let inputs = prepared.chapter_transport_entries().unwrap();
+        let index =
+            crunch_release_core::plan_chapter_transport(inputs, blake3::hash(FILE_BYTES).to_hex().to_string()).unwrap();
+        write_file(&source.join("manifest.json"), b"changed-size");
+        let mut builder = tar::Builder::new(Vec::new());
+
+        let error = prepared.append_chapter_transport_member(&mut builder, &index.chapters[0].members[0]).unwrap_err();
+
+        let archive_bytes = builder.into_inner().unwrap();
+        assert!(error.to_string().contains("size drift"), "{error}");
+        assert!(!archive_bytes.is_empty());
+        assert!(archive_bytes.iter().all(|byte| *byte == 0));
     }
 
     // r[verify mantle.release_provenance.bundle_tree_copy.fixtures.negative.target]

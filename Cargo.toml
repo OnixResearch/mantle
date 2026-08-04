@@ -191,6 +191,7 @@ libc = "0.2"
 url = "2"
 tar = "0.4"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+chapter-tgz = "=0.1.0"
 
 [patch.crates-io]
 fuse-backend-rs = { path = "vendor/fuse-backend-rs" }

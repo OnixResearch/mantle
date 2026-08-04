@@ -69,4 +69,5 @@ compatibility surface, crate name, or historical decision.
 | [0060](0060-verify-remote-admission-with-a-trellis-model.md) | Verify remote admission with a Trellis model | Proposed |
 | [0061](0061-keep-remote-bearers-out-of-durable-state.md) | Keep remote bearers out of durable state | Accepted |
 | [0062](0062-adapt-ekala-package-maintenance-patterns-without-transferring-authority.md) | Adapt Ekala package-maintenance patterns without transferring authority | Proposed |
-| [0063](0063-explain-store-retention-before-garbage-collection.md) | Explain store retention before garbage collection | Accepted |
+| [0063](0063-keep-chaptered-release-archives-as-receipt-bound-transport.md) | Keep chaptered release archives as receipt-bound transport | Accepted |
+| [0064](0064-explain-store-retention-before-garbage-collection.md) | Explain store retention before garbage collection | Accepted |

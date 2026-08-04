@@ -1,4 +1,4 @@
-# ADR 0063: Explain store retention before garbage collection
+# ADR 0064: Explain store retention before garbage collection
 
 ## Status
 

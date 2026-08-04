@@ -92,6 +92,7 @@ pub(crate) fn cmd_release(
         crate::ReleaseAction::Verify { .. } => {
             cmd_release_verify(release_verify_request(action, current_dir)?, context.is_json_output)
         }
+        crate::ReleaseAction::Transport { action } => cmd_release_transport_action(action, context.is_json_output),
         crate::ReleaseAction::Reproduce { .. } => cmd_release_reproduce(context, release_reproduce_command(action)?),
         crate::ReleaseAction::FunctionAddressBind { .. } => cmd_release_function_address_action(action, context),
         crate::ReleaseAction::GlobalReproducibility { .. } => cmd_global_reproducibility_action(action, context),
@@ -115,6 +116,40 @@ struct ReleaseCommandContext<'a> {
     current_dir: &'a Path,
     state_dir: &'a Path,
     is_json_output: bool,
+}
+
+fn cmd_release_transport_action(action: crate::ReleaseTransportAction, is_json_output: bool) -> Result<(), RunError> {
+    match action {
+        crate::ReleaseTransportAction::Pack { bundle_dir, to } => {
+            let outcome = crate::release_chapter_transport::pack_release_transport(&bundle_dir, &to)?;
+            render_release_transport_output(&outcome, is_json_output, "packed")
+        }
+        crate::ReleaseTransportAction::Inspect { transport_dir } => {
+            let inspection = crate::release_chapter_transport::inspect_release_transport(&transport_dir)?;
+            render_release_transport_output(&inspection, is_json_output, "valid")
+        }
+        crate::ReleaseTransportAction::Unpack { transport_dir, to } => {
+            let outcome = crate::release_chapter_transport::unpack_release_transport(&transport_dir, &to)?;
+            render_release_transport_output(&outcome, is_json_output, "unpacked")
+        }
+    }
+}
+
+fn render_release_transport_output<T: serde::Serialize>(
+    value: &T,
+    is_json_output: bool,
+    status: &str,
+) -> Result<(), RunError> {
+    if is_json_output {
+        let rendered = serde_json::to_string(value)
+            .map_err(|error| RunError::Internal(format!("serializing release transport output: {error}")))?;
+        println!("{rendered}");
+    } else {
+        println!("release chapter transport: {status}");
+    }
+    debug_assert!(!status.is_empty());
+    debug_assert!(is_json_output || !status.is_empty());
+    Ok(())
 }
 
 fn cmd_release_function_address_action(

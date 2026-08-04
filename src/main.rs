@@ -108,6 +108,7 @@ mod rebuild_authority;
 mod release_attestation;
 #[allow(dead_code)]
 mod release_capability;
+mod release_chapter_transport;
 mod release_cmd;
 #[allow(dead_code)]
 mod release_evidence;
@@ -1698,6 +1699,11 @@ pub enum ReleaseAction {
         #[arg(long = "requirement-coverage", value_parser = ["optional", "required"], default_value = "optional")]
         requirement_coverage: String,
     },
+    /// Pack, inspect, or unpack an opt-in chaptered release transport
+    Transport {
+        #[command(subcommand)]
+        action: ReleaseTransportAction,
+    },
     /// Bind bundle-local function-address evidence into a Cairn-ready Mantle receipt
     FunctionAddressBind {
         /// Verified release evidence bundle containing the selected external evidence rows
@@ -2131,6 +2137,33 @@ pub enum ArtifactAction {
         /// New destination for the contracted registry pull receipt.
         #[arg(long = "receipt-out")]
         receipt_out: PathBuf,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ReleaseTransportAction {
+    /// Pack a verified release directory into a chaptered transport directory
+    Pack {
+        /// Verified release evidence directory
+        bundle_dir: PathBuf,
+
+        /// New transport directory containing release.tgz and receipt.json
+        #[arg(long)]
+        to: PathBuf,
+    },
+    /// Inspect and validate a chaptered release transport directory
+    Inspect {
+        /// Transport directory containing release.tgz and receipt.json
+        transport_dir: PathBuf,
+    },
+    /// Unpack a validated chaptered transport into a verified release directory
+    Unpack {
+        /// Transport directory containing release.tgz and receipt.json
+        transport_dir: PathBuf,
+
+        /// New destination for the verified release evidence directory
+        #[arg(long)]
+        to: PathBuf,
     },
 }
 
@@ -9936,6 +9969,50 @@ let Plan = {
 
         assert!(capabilities.is_ok());
         assert!(unsupported.is_err());
+    }
+
+    // r[verify mantle.release_provenance.chapter_transport.optional]
+    #[test]
+    fn release_transport_commands_parse() {
+        let pack = parse_args_with_cli_test_stack(vec![
+            "mantle",
+            "release",
+            "transport",
+            "pack",
+            "/tmp/release-bundle",
+            "--to",
+            "/tmp/release-transport",
+        ])
+        .unwrap();
+        let inspect =
+            parse_args_with_cli_test_stack(vec!["mantle", "release", "transport", "inspect", "/tmp/release-transport"])
+                .unwrap();
+        let unpack = parse_args_with_cli_test_stack(vec![
+            "mantle",
+            "release",
+            "transport",
+            "unpack",
+            "/tmp/release-transport",
+            "--to",
+            "/tmp/unpacked-release",
+        ])
+        .unwrap();
+
+        assert!(matches!(pack.command, Command::Release {
+            action: ReleaseAction::Transport {
+                action: ReleaseTransportAction::Pack { .. }
+            }
+        }));
+        assert!(matches!(inspect.command, Command::Release {
+            action: ReleaseAction::Transport {
+                action: ReleaseTransportAction::Inspect { .. }
+            }
+        }));
+        assert!(matches!(unpack.command, Command::Release {
+            action: ReleaseAction::Transport {
+                action: ReleaseTransportAction::Unpack { .. }
+            }
+        }));
     }
 
     #[test]

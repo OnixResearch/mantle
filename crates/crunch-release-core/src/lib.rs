@@ -13,6 +13,7 @@ fn default_false() -> bool {
 
 mod ast_grep;
 mod cairn_handoff;
+mod chapter_transport;
 mod content_bound_requirements;
 mod determinism;
 mod error;
@@ -60,6 +61,7 @@ pub use ast_grep::parse_ast_grep_structural_evidence_json;
 pub use ast_grep::validate_ast_grep_release_attachment;
 pub use ast_grep::validate_ast_grep_structural_evidence;
 pub use cairn_handoff::*;
+pub use chapter_transport::*;
 pub use content_bound_requirements::*;
 pub use determinism::BUILD_EFFECT_POLICY_VERSION;
 pub use determinism::BuildEffect;
