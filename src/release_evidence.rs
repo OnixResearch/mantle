@@ -1897,7 +1897,7 @@ fn path_to_forward_slash_string(path: &Path) -> Result<String, RunError> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use crunch_release_core::KANI_NON_CLAIM_RELEASE_ELIGIBILITY;
     use crunch_release_core::KANI_NON_CLAIM_SEMANTICS;
     use crunch_release_core::KANI_NON_CLAIM_VERIFIER_SOUNDNESS;
@@ -2272,7 +2272,7 @@ mod tests {
         }
     }
 
-    fn publication_fixture(temp: &Path, release_id: &str, bundle_name: &str) -> ReleaseBundleCreateRequest {
+    pub(crate) fn publication_fixture(temp: &Path, release_id: &str, bundle_name: &str) -> ReleaseBundleCreateRequest {
         let input_root = temp.join(format!("inputs-{bundle_name}"));
         let source_archive = input_root.join("mantle-src.tar");
         let binary_path = input_root.join("mantle");

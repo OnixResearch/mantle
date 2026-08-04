@@ -39,7 +39,7 @@ r[mantle.release_provenance.chapter_transport.plan] Mantle MUST compute chapter 
 
 ### Requirement: Pack output is deterministic and standard-compatible
 
-r[mantle.release_provenance.chapter_transport.pack] `mantle release transport pack` MUST verify the source release bundle, write deterministic tar headers and chapter order, produce an ordinary-compatible gzip and tar stream, and publish the archive plus canonical detached receipt without replacement.
+r[mantle.release_provenance.chapter_transport.pack] `mantle release transport pack` MUST verify the source release bundle, write deterministic tar headers and chapter order, produce an ordinary-compatible gzip and tar stream, validate a complete staged round trip, and publish the archive plus canonical detached receipt without replacement.
 
 #### Scenario: Valid bundle packs reproducibly
 
@@ -67,9 +67,10 @@ r[mantle.release_provenance.chapter_transport.receipt] The transport receipt MUS
 
 #### Scenario: Truncation or replacement is rejected
 
-- GIVEN an archive is truncated, has one modified compressed byte, or is paired with a receipt for another archive
+- GIVEN an archive is truncated, has one modified compressed byte, is paired with a receipt for another archive, has a rewritten receipt for malformed gzip bytes, or declares excessive chapter markers
 - WHEN inspect or unpack measures the compressed bytes
-- THEN it MUST reject the input before chapter access or destination mutation.
+- THEN it MUST check the complete bounded gzip stream and marker count
+- AND it MUST reject invalid input before chapter access or destination mutation.
 
 ### Requirement: Inspect requires the versioned transport index
 
@@ -102,7 +103,7 @@ r[mantle.release_provenance.chapter_transport.unpack] `mantle release transport 
 
 #### Scenario: Unsafe archive fails without external writes
 
-- GIVEN an archive contains traversal, absolute path, duplicate member, unsupported special type, escaping link, link-parent substitution, stale index metadata, oversized payload, or an existing destination
+- GIVEN an archive contains traversal, absolute path, duplicate member, unsupported special type, privileged mode bits, escaping link, link-parent substitution, stale index metadata, oversized payload, or an existing destination
 - WHEN Mantle validates or unpacks it
 - THEN it MUST fail closed without following the unsafe entry
 - AND paths outside the private stage and any competing destination MUST remain unchanged.
@@ -113,10 +114,10 @@ r[mantle.release_provenance.chapter_transport.validation] The change MUST includ
 
 #### Scenario: Focused validation covers pass and fail paths
 
-- GIVEN deterministic, standard-reader, round-trip, random-access, legacy, truncation, tamper, bounds, path, link, and no-clobber fixtures
+- GIVEN deterministic, standard-reader, round-trip, random-access, legacy, truncation, tamper, bounds, path, link, no-clobber, and representative benchmark fixtures
 - WHEN focused validation runs
 - THEN valid fixtures MUST pass and invalid fixtures MUST fail closed
-- AND evidence MUST record exact commands, dependency identity, known maturity limits, and any blocked broad checks.
+- AND evidence MUST record exact commands, dependency identity, sequential and parallel measurements, known maturity limits, and any blocked broad checks.
 
 #### Scenario: Transport evidence does not strengthen release claims
 

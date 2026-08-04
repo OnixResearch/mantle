@@ -482,6 +482,7 @@ notices.
 - [fzakaria/guix-transfer](https://github.com/fzakaria/guix-transfer) provides MIT-licensed ATerm parsing, graph translation, and path-mapping design references. Mantle retains execution and evidence authority.
 - [fzakaria/guixpkgs](https://github.com/fzakaria/guixpkgs) provides the checked-in translated Guix package graph used by the live GuixPkgs export proof. Mantle trusts the proof exporter's separate cache key.
 - [adeci/guix-by-nix](https://github.com/adeci/guix-by-nix) provides a system-level reference for consuming translated Guix packages without Guix in the target environment.
+- [dtolnay/chapter-tgz](https://github.com/dtolnay/chapter-tgz) provides the pinned chapter-marker encoding used by opt-in release transport. Mantle retains digest, index, extraction, and release-verification authority.
 - [OnixResearch/trellis](https://github.com/OnixResearch/trellis) provides reusable verified logic and proof evidence for selected bounded models. Mantle retains runtime, adapter, and release authority.
 - [Atom Reforged](https://nrd.sh/blog/atom-reforged.html) provides architecture references for narrow store authority, source observations, monotonic ingest, and small formal protocol models. Mantle does not adopt its package registry or ownership protocol.
 - `durable-file-publication` at `rad:z3tAR4For7qw8ZirkJzoDw1VNDDLM` provides the reviewed capability-relative one-file publication mechanism.

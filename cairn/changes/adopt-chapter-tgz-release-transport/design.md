@@ -55,7 +55,9 @@ The reserved index path is `__mantle_release_transport_index__.json`. Input tree
 
 The receipt binds archive size, archive BLAKE3, source manifest BLAKE3, index BLAKE3, chapter count, member count, format version, dependency version, claim scope, and non-claims.
 
-**Rationale:** Chapter reads do not validate the final gzip trailer. A BLAKE3 over compressed bytes catches truncation, trailer changes, and payload replacement without full decompression.
+**Rationale:** Chapter reads do not validate the final gzip trailer. A BLAKE3 over compressed bytes catches truncation, trailer changes, and payload replacement before chapter access.
+
+Mantle also validates the complete bounded gzip stream before chapter access. This check rejects a malformed archive even when an untrusted party also rewrites the receipt. A raw marker-prefix count rejects excessive chapter chains before `TgzReader::open` can allocate for them.
 
 The receipt still needs authentication from the publication or handoff layer. A matching archive and attacker-written receipt do not establish authority.
 
@@ -77,9 +79,11 @@ Mantle unpack omits the reserved index so the published directory recreates the 
 
 ### Decision: Keep the first reader sequential
 
-**Choice:** The first shell uses a seekable file and chapter jumps for inspection. Complete metadata validation and extraction are sequential. A `FileExt::read_at` `IndependentRead` adapter and parallel decompression remain deferred.
+**Choice:** The first shell uses a seekable file and chapter jumps for inspection. Complete metadata validation and extraction are sequential. Production parallel decompression remains deferred.
 
-**Rationale:** The first adoption must establish format safety, determinism, and workload evidence before concurrency adds complexity.
+A test-only `FileExt::read_at` `IndependentRead` adapter measures future parallel access without changing production behavior. The activation threshold requires a median improvement of at least 20 percent on representative bundles, with equal extracted bytes and no weaker validation.
+
+**Rationale:** The final 64 MiB pilot measured 8,678 microseconds for sequential chapter reads and 7,962 microseconds for parallel reads. The 8.3 percent improvement is below the activation threshold. The current plan keeps the large source archive in one chapter, which limits useful concurrency.
 
 ### Decision: Publish outputs without replacement
 
@@ -100,14 +104,14 @@ The initial values align with the existing release tree entry bound and permit l
 - New upstream code has limited independent use evidence.
 - Each chapter adds compressed marker overhead.
 - Standard extraction leaves the reserved transport index in the output.
-- Two-pass unpack reads compressed data more than once.
+- Complete gzip validation and two-pass unpack read compressed data more than once.
 - A detached receipt needs an authenticated parent handoff for adversarial transport authority.
 - Sequential extraction does not yet prove a parallel performance gain.
 
 ## Validation Strategy
 
 - Core tests cover deterministic grouping, canonical models, bounds, duplicates, missing control members, reserved-path collisions, and invalid links.
-- Shell tests cover deterministic bytes, standard gzip/tar readers, chapter zero inspection, full round trip, internal links, and normal release verification.
-- Negative shell tests cover truncation, digest mismatch, malformed index, legacy tgz, path escape, link escape, unsupported entry types, source drift, bounds, and destination races.
+- Shell tests cover deterministic bytes, standard gzip/tar readers, chapter zero inspection, complete gzip validation, a verified pre-publication round trip, internal links, and normal release verification.
+- Negative shell tests cover truncation with original and rebound receipts, excessive marker prefixes, digest mismatch, malformed index, privileged modes, legacy tgz, path escape, link escape, unsupported entry types, source drift, bounds, and destination races.
 - CLI tests cover argument parsing plus human and JSON output contracts.
 - Lifecycle evidence records focused Cargo results, formatting, Clippy, Tiger Style, Cairn gates, Tracey coverage, and any external Nix blockers.

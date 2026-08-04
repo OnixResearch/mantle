@@ -248,3 +248,34 @@
 // r[verify mantle.release_provenance.deterministic_rebuild_admission.legacy]
 // r[impl mantle.release_provenance.deterministic_rebuild_admission.validation]
 // r[verify mantle.release_provenance.deterministic_rebuild_admission.fixtures.negative]
+
+// Content-bound requirement evidence.
+// Implementation and tests: `crates/crunch-release-core/src/content_bound_requirements.rs`,
+// `src/content_bound_requirement_evidence.rs`, `src/release_evidence.rs`, and
+// `src/release_cmd.rs`. The dedicated bridge remains in
+// `tools/content_bound_release_requirement_tracey_refs.rs`.
+// Archived validation:
+// `cairn/archive/2026-07-27-bind-release-requirement-evidence/`.
+// r[impl mantle.release_provenance.content_bound_requirement_coverage]
+// r[verify mantle.release_provenance.content_bound_evidence_manifest]
+// r[verify mantle.release_provenance.legacy_coverage_boundary]
+
+// Chaptered release transport.
+// Implementation and tests: `crates/crunch-release-core/src/chapter_transport.rs`,
+// `src/release_chapter_transport.rs`, `src/release_tree_copy.rs`,
+// `src/release_capability.rs`, `src/release_cmd.rs`, and `src/main.rs`.
+// Validation: `cairn/archive/2026-08-03-adopt-chapter-tgz-release-transport/`.
+// r[impl mantle.release_provenance.chapter_transport.optional]
+// r[verify mantle.release_provenance.chapter_transport.optional]
+// r[impl mantle.release_provenance.chapter_transport.plan]
+// r[verify mantle.release_provenance.chapter_transport.plan]
+// r[impl mantle.release_provenance.chapter_transport.pack]
+// r[verify mantle.release_provenance.chapter_transport.pack]
+// r[impl mantle.release_provenance.chapter_transport.receipt]
+// r[verify mantle.release_provenance.chapter_transport.receipt]
+// r[impl mantle.release_provenance.chapter_transport.inspect]
+// r[verify mantle.release_provenance.chapter_transport.inspect]
+// r[impl mantle.release_provenance.chapter_transport.unpack]
+// r[verify mantle.release_provenance.chapter_transport.unpack]
+// r[impl mantle.release_provenance.chapter_transport.validation]
+// r[verify mantle.release_provenance.chapter_transport.validation]

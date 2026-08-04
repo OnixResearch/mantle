@@ -14,7 +14,7 @@ The upstream crate is new. Version `0.1.0` was published on 2026-08-02 and has l
 - Keep the verified release directory and `manifest.json` as the canonical release evidence.
 - Add a pure `crunch-release-core` planner for deterministic chapter grouping, indexes, receipts, limits, and diagnostics.
 - Add a filesystem shell that uses `chapter-tgz` only after normal release verification succeeds.
-- Bind each compressed archive to a detached BLAKE3 transport receipt.
+- Bind each compressed archive to a detached BLAKE3 transport receipt and validate the complete bounded gzip stream.
 - Stage unpacked content, validate every member without following links, run normal release verification, and publish with no replacement.
 - Preserve ordinary gzip and tar reader compatibility.
 - Document the external dependency and add it to the Mantle README references.
@@ -24,7 +24,8 @@ The upstream crate is new. Version `0.1.0` was published on 2026-08-02 and has l
 - Replacing canonical OCI layers, Android image archives, NARs, upstream source archives, or the existing release source tar.
 - Changing the `mantle-source-bundle-v1` JSON format.
 - Replacing Aspen deterministic `tar.zst` exports.
-- Parallel decompression or remote range transport before representative benchmarks exist.
+- Production parallel decompression because the representative benchmark did not meet its activation threshold.
+- Remote range transport without a separate authenticated handoff design.
 - Claiming that transport validity proves build correctness, source correctness, reproducibility, or release eligibility.
 
 ## Impact
