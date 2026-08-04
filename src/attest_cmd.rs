@@ -38,6 +38,10 @@ use crate::release_attestation::create_policy_files;
 use crate::release_attestation::create_witness_attestation;
 use crate::release_attestation::load_release_attestation_document;
 use crate::release_attestation::load_witness_documents;
+
+const MIN_ATTESTATION_BASE_LAYER_INDEX: usize = 1;
+const MAX_ATTESTATION_BASE_LAYERS: usize = 8;
+const MAX_ATTESTATION_SELECTED_LAYERS: usize = 65_536;
 use crate::release_attestation::verify_release_attestation_directory;
 use crate::witness_handoff::import_witness_material;
 
@@ -51,6 +55,7 @@ struct AttestCommandContext<'a> {
     output_dir: &'a Path,
     state_dir: &'a Path,
     store_dir: &'a str,
+    base_state_dirs: &'a [PathBuf],
     is_json: bool,
 }
 
@@ -58,6 +63,7 @@ struct ShowRequest<'a> {
     output_dir: &'a Path,
     state_dir: &'a Path,
     store_dir: &'a str,
+    base_state_dirs: &'a [PathBuf],
     selector: &'a str,
 }
 
@@ -65,6 +71,7 @@ struct DiffRequest<'a> {
     output_dir: &'a Path,
     state_dir: &'a Path,
     store_dir: &'a str,
+    base_state_dirs: &'a [PathBuf],
     left: &'a str,
     right: &'a str,
 }
@@ -135,6 +142,10 @@ struct AttestationEnvelopeOutput {
     digest: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     stored_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    selected_layer: Option<crunch_store::layer::StoreLayer>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    selected_layers: Option<std::collections::BTreeMap<String, crunch_store::layer::StoreLayer>>,
     attestation: Value,
 }
 
@@ -154,6 +165,7 @@ pub fn cmd_attest(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
+    base_state_dirs: &[PathBuf],
     is_json: bool,
 ) -> Result<(), RunError> {
     let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
@@ -162,6 +174,7 @@ pub fn cmd_attest(
         output_dir,
         state_dir,
         store_dir,
+        base_state_dirs,
         is_json,
     }))
 }
@@ -178,6 +191,7 @@ async fn cmd_attest_async(action: crate::AttestAction, context: AttestCommandCon
         output_dir,
         state_dir,
         store_dir,
+        base_state_dirs,
         is_json,
     } = context;
     debug_assert!(!store_dir.is_empty());
@@ -188,26 +202,30 @@ async fn cmd_attest_async(action: crate::AttestAction, context: AttestCommandCon
                 output_dir,
                 state_dir,
                 store_dir,
+                base_state_dirs,
                 selector: &path,
             })
             .await
         }
-        crate::AttestAction::Closure { roots } => cmd_closure(output_dir, state_dir, store_dir, &roots).await,
+        crate::AttestAction::Closure { roots } => {
+            cmd_closure(output_dir, state_dir, store_dir, base_state_dirs, &roots).await
+        }
         crate::AttestAction::Verify { target } => {
-            cmd_verify(target, current_dir, output_dir, state_dir, store_dir).await
+            cmd_verify(target, current_dir, output_dir, state_dir, store_dir, base_state_dirs).await
         }
         crate::AttestAction::Diff { left, right } => {
             cmd_diff(DiffRequest {
                 output_dir,
                 state_dir,
                 store_dir,
+                base_state_dirs,
                 left: &left,
                 right: &right,
             })
             .await
         }
         crate::AttestAction::Project { roots } => {
-            cmd_project(current_dir, output_dir, state_dir, store_dir, &roots).await
+            cmd_project(current_dir, output_dir, state_dir, store_dir, base_state_dirs, &roots).await
         }
         crate::AttestAction::ReleaseShow { verification_dir } => {
             let (attestation, stored_path) = load_release_attestation_document(&verification_dir)?;
@@ -271,13 +289,19 @@ async fn cmd_attest_async(action: crate::AttestAction, context: AttestCommandCon
 }
 
 async fn cmd_show(request: ShowRequest<'_>) -> Result<(), RunError> {
-    let store = open_store(request.output_dir, request.state_dir, request.store_dir).await?;
-    let (document, stored_path) = load_artifact_document(&store, request.selector).await?;
-    print_document(&document, Some(stored_path))
+    let store = open_store(request.output_dir, request.state_dir, request.store_dir, request.base_state_dirs).await?;
+    let (document, stored_path, selected_layer) = load_artifact_document(&store, request.selector).await?;
+    print_document_with_layers(&document, Some(stored_path), Some(selected_layer), None)
 }
 
-async fn cmd_closure(output_dir: &Path, state_dir: &Path, store_dir: &str, roots: &[String]) -> Result<(), RunError> {
-    let store = open_store(output_dir, state_dir, store_dir).await?;
+async fn cmd_closure(
+    output_dir: &Path,
+    state_dir: &Path,
+    store_dir: &str,
+    base_state_dirs: &[PathBuf],
+    roots: &[String],
+) -> Result<(), RunError> {
+    let store = open_store(output_dir, state_dir, store_dir, base_state_dirs).await?;
     let root_paths = resolve_roots(roots, store_dir, output_dir)?;
     let stored = store
         .runtime_closure_attestation(&root_paths)
@@ -285,11 +309,16 @@ async fn cmd_closure(output_dir: &Path, state_dir: &Path, store_dir: &str, roots
         .map_err(|e| RunError::Internal(format!("loading closure attestation: {e}")))?;
     let path =
         closure_attestation_file_path(store.state_dir(), store.store_dir(), &root_paths, ClosureSemantics::Runtime);
-    print_document(&AttestationDocument::Closure(stored.attestation), Some(path))
+    print_document_with_layers(
+        &AttestationDocument::Closure(stored.attestation),
+        Some(path),
+        None,
+        Some(stored.selected_layers),
+    )
 }
 
 async fn cmd_diff(request: DiffRequest<'_>) -> Result<(), RunError> {
-    let store = open_store(request.output_dir, request.state_dir, request.store_dir).await?;
+    let store = open_store(request.output_dir, request.state_dir, request.store_dir, request.base_state_dirs).await?;
     let left_document = load_document_input(Some(&store), request.left).await?;
     let right_document = load_document_input(Some(&store), request.right).await?;
     print_diff(request.left, &left_document, request.right, &right_document)
@@ -300,9 +329,10 @@ async fn cmd_project(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
+    base_state_dirs: &[PathBuf],
     roots: &[String],
 ) -> Result<(), RunError> {
-    let store = open_store(output_dir, state_dir, store_dir).await?;
+    let store = open_store(output_dir, state_dir, store_dir, base_state_dirs).await?;
     let document = load_project_document(current_dir, &store, roots).await?;
     print_document(&document, None)
 }
@@ -313,15 +343,16 @@ async fn cmd_verify(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
+    base_state_dirs: &[PathBuf],
 ) -> Result<(), RunError> {
     match target {
         crate::AttestVerifyAction::Artifact { path } => {
-            let store = open_store(output_dir, state_dir, store_dir).await?;
-            let (document, stored_path) = load_artifact_document(&store, &path).await?;
+            let store = open_store(output_dir, state_dir, store_dir, base_state_dirs).await?;
+            let (document, stored_path, _selected_layer) = load_artifact_document(&store, &path).await?;
             verify_persisted_document(&document, &stored_path)
         }
         crate::AttestVerifyAction::Closure { roots } => {
-            let store = open_store(output_dir, state_dir, store_dir).await?;
+            let store = open_store(output_dir, state_dir, store_dir, base_state_dirs).await?;
             let root_paths = resolve_roots(&roots, store_dir, output_dir)?;
             let stored = store
                 .runtime_closure_attestation(&root_paths)
@@ -336,7 +367,7 @@ async fn cmd_verify(
             verify_persisted_document(&AttestationDocument::Closure(stored.attestation), &path)
         }
         crate::AttestVerifyAction::Project { file, digest, roots } => {
-            let store = open_store(output_dir, state_dir, store_dir).await?;
+            let store = open_store(output_dir, state_dir, store_dir, base_state_dirs).await?;
             let document = load_project_document(current_dir, &store, &roots).await?;
             verify_project_document(&document, file.as_deref(), digest.as_deref())
         }
@@ -635,14 +666,19 @@ fn agreement_status_label(status: IndependentAgreementStatus) -> &'static str {
     }
 }
 
-async fn open_store(output_dir: &Path, state_dir: &Path, store_dir: &str) -> Result<StoreHandle, RunError> {
+async fn open_store(
+    output_dir: &Path,
+    state_dir: &Path,
+    store_dir: &str,
+    base_state_dirs: &[PathBuf],
+) -> Result<StoreHandle, RunError> {
     let config = StoreConfig {
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
         store_dir: store_dir.to_string(),
-        base_state_dirs: Vec::new(),
+        base_state_dirs: base_state_dirs.to_vec(),
     };
     StoreHandle::open(config).await.map_err(|e| RunError::Internal(format!("opening store: {e}")))
 }
@@ -650,7 +686,7 @@ async fn open_store(output_dir: &Path, state_dir: &Path, store_dir: &str) -> Res
 async fn load_artifact_document(
     store: &StoreHandle,
     selector: &str,
-) -> Result<(AttestationDocument, PathBuf), RunError> {
+) -> Result<(AttestationDocument, PathBuf, crunch_store::layer::StoreLayer), RunError> {
     let store_path = resolve_store_path(StorePathInput {
         selector,
         store_dir: store.store_dir(),
@@ -662,7 +698,7 @@ async fn load_artifact_document(
         .map_err(|e| RunError::Internal(format!("loading artifact attestation: {e}")))?
         .ok_or_else(|| RunError::Internal(format!("no artifact attestation for {}", selector)))?;
     let stored_path = artifact_attestation_file_path(store.state_dir(), store.store_dir(), &store_path);
-    Ok((AttestationDocument::Artifact(stored.attestation), stored_path))
+    Ok((AttestationDocument::Artifact(stored.attestation), stored_path, stored.selected_layer))
 }
 
 async fn load_project_document(
@@ -773,7 +809,16 @@ fn resolve_store_path(input: StorePathInput<'_>) -> Result<StorePath<String>, Ru
 }
 
 fn print_document(document: &AttestationDocument, stored_path: Option<PathBuf>) -> Result<(), RunError> {
-    let text = render_document(document, stored_path.as_deref())?;
+    print_document_with_layers(document, stored_path, None, None)
+}
+
+fn print_document_with_layers(
+    document: &AttestationDocument,
+    stored_path: Option<PathBuf>,
+    selected_layer: Option<crunch_store::layer::StoreLayer>,
+    selected_layers: Option<std::collections::BTreeMap<String, crunch_store::layer::StoreLayer>>,
+) -> Result<(), RunError> {
+    let text = render_document_with_layers(document, stored_path.as_deref(), selected_layer, selected_layers)?;
     println!("{text}");
     Ok(())
 }
@@ -854,7 +899,7 @@ fn verify_project_document(
 
 async fn load_document_input(store: Option<&StoreHandle>, input: &str) -> Result<AttestationDocument, RunError> {
     if let Some(store) = store
-        && let Ok((document, _stored_path)) = load_artifact_document(store, input).await
+        && let Ok((document, _stored_path, _selected_layer)) = load_artifact_document(store, input).await
     {
         return Ok(document);
     }
@@ -926,15 +971,51 @@ fn parse_document_value(kind: &str, value: Value) -> Result<AttestationDocument,
 }
 
 fn render_document(document: &AttestationDocument, stored_path: Option<&Path>) -> Result<String, RunError> {
+    render_document_with_layers(document, stored_path, None, None)
+}
+
+fn render_document_with_layers(
+    document: &AttestationDocument,
+    stored_path: Option<&Path>,
+    selected_layer: Option<crunch_store::layer::StoreLayer>,
+    selected_layers: Option<std::collections::BTreeMap<String, crunch_store::layer::StoreLayer>>,
+) -> Result<String, RunError> {
+    validate_attestation_layer_evidence(selected_layer, selected_layers.as_ref())?;
     let attestation_value = document_value(document)?;
     let envelope = AttestationEnvelopeOutput {
         kind: document.kind(),
         digest: document_digest_hex(document)?,
         stored_path: stored_path.map(|path| path.display().to_string()),
+        selected_layer,
+        selected_layers,
         attestation: attestation_value,
     };
     serde_json::to_string_pretty(&envelope)
         .map_err(|e| RunError::Internal(format!("serializing attestation output: {e}")))
+}
+
+fn validate_attestation_layer_evidence(
+    selected_layer: Option<crunch_store::layer::StoreLayer>,
+    selected_layers: Option<&std::collections::BTreeMap<String, crunch_store::layer::StoreLayer>>,
+) -> Result<(), RunError> {
+    let valid_layer = |layer: crunch_store::layer::StoreLayer| match layer {
+        crunch_store::layer::StoreLayer::Overlay => true,
+        crunch_store::layer::StoreLayer::Base { index } => {
+            (MIN_ATTESTATION_BASE_LAYER_INDEX..=MAX_ATTESTATION_BASE_LAYERS).contains(&index)
+        }
+    };
+    if selected_layer.is_some_and(|layer| !valid_layer(layer)) {
+        return Err(RunError::Internal("attestation selected layer is invalid".to_string()));
+    }
+    if let Some(selected_layers) = selected_layers {
+        if selected_layers.len() > MAX_ATTESTATION_SELECTED_LAYERS {
+            return Err(RunError::Internal("attestation selected layer limit exceeded".to_string()));
+        }
+        if selected_layers.iter().any(|(path, layer)| path.is_empty() || !valid_layer(*layer)) {
+            return Err(RunError::Internal("attestation selected layer evidence is invalid".to_string()));
+        }
+    }
+    Ok(())
 }
 
 fn document_value(document: &AttestationDocument) -> Result<Value, RunError> {
@@ -1112,6 +1193,31 @@ mod machine_contract_tests {
             &std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(path)).expect("read release fixture"),
         )
         .expect("parse release fixture")
+    }
+
+    #[test]
+    fn attestation_envelope_reports_selected_base_layer() {
+        let rendered = render_document_with_layers(
+            &AttestationDocument::Release(release_attestation()),
+            None,
+            Some(crunch_store::layer::StoreLayer::Base {
+                index: MIN_ATTESTATION_BASE_LAYER_INDEX,
+            }),
+            None,
+        )
+        .expect("serialize selected base layer");
+        let value: Value = serde_json::from_str(&rendered).expect("parse selected base layer envelope");
+
+        assert_eq!(value["selected_layer"]["kind"], "base");
+        assert_eq!(value["selected_layer"]["index"], MIN_ATTESTATION_BASE_LAYER_INDEX);
+    }
+
+    #[test]
+    fn attestation_envelope_rejects_invalid_base_layer() {
+        let error = validate_attestation_layer_evidence(Some(crunch_store::layer::StoreLayer::Base { index: 0 }), None)
+            .expect_err("zero base layer must fail");
+
+        assert!(error.message().contains("selected layer is invalid"));
     }
 
     #[test]

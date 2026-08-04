@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use crunch_gc_core::GcEntry;
 use crunch_gc_core::GcExecutionMode;
 use crunch_gc_core::GcMutationDisposition;
+use crunch_gc_core::GcOwnership;
 use crunch_gc_core::GcPlanError;
 use crunch_gc_core::GcPlanRequest;
 use crunch_gc_core::GcReportDecision;
@@ -40,17 +41,19 @@ pub struct GcContext<'a> {
     pub state_dir: &'a Path,
     pub output_dir_str: &'a str,
     pub store_dir: &'a str,
-    pub pathinfo: &'a dyn PathInfoService,
-    pub directory_service: &'a dyn DirectoryService,
-    pub blob_service: &'a dyn BlobService,
+    pub overlay_pathinfo: &'a dyn PathInfoService,
+    pub composed_pathinfo: &'a dyn PathInfoService,
+    pub overlay_directory_service: &'a dyn DirectoryService,
+    pub overlay_blob_service: &'a dyn BlobService,
+    pub overlay_plan_identity: Option<[u8; blake3::OUT_LEN]>,
     pub retained_castore_roots: &'a [Node],
 }
 use crate::artifact_attestation_file_path;
 use crate::roots;
 use crate::roots::GcRootRecord;
 
-const GC_REPORT_SCHEMA: &str = "mantle-store-gc-report-v3";
-const GC_EXECUTION_PLAN_DOMAIN: &[u8] = b"mantle.gc.execution-plan.v2";
+const GC_REPORT_SCHEMA: &str = "mantle-store-gc-report-v4";
+const GC_EXECUTION_PLAN_DOMAIN: &[u8] = b"mantle.gc.execution-plan.v3";
 const MAX_GC_BYTES_WALK_ENTRIES: u32 = 100_000;
 const MAX_GC_FILE_SCAN_ENTRIES: u32 = 200_000;
 const MAX_GC_RETAINED_CASTORE_ROOTS: usize = 1_000_000;
@@ -96,6 +99,13 @@ pub struct GcPathExplanation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GcBaseReachability {
+    pub path: String,
+    pub layer_index: usize,
+    pub retaining_roots: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GcRootUsage {
     pub root: String,
     pub inclusive_bytes: u64,
@@ -129,6 +139,7 @@ pub struct GcReport {
     pub schema: String,
     pub plan_id: String,
     pub retention_plan_id: String,
+    pub overlay_plan_blake3: Option<String>,
     pub is_dry_run: bool,
     pub execution_complete: bool,
     pub failed_operation: Option<String>,
@@ -141,6 +152,7 @@ pub struct GcReport {
     pub candidate_paths: Vec<String>,
     pub retention_explanations: Vec<GcRetentionExplanation>,
     pub path_explanations: Vec<GcPathExplanation>,
+    pub base_reachability: Vec<GcBaseReachability>,
     pub usage: GcUsageReport,
     pub candidate_blob_index_count: u32,
     pub candidate_blob_chunk_count: u32,
@@ -150,6 +162,11 @@ pub struct GcReport {
     pub candidate_action_result_record_count: u32,
     pub candidate_action_result_index_count: u32,
     pub operations: Vec<GcOperationKind>,
+}
+
+struct ComposedGcSnapshot {
+    pathinfos: Vec<PathInfo>,
+    ownership: BTreeMap<String, GcOwnership>,
 }
 
 #[derive(Default)]
@@ -166,6 +183,7 @@ struct GcPlan {
     retained_roots: Vec<GcRootRecord>,
     retention_explanations: Vec<GcRetentionExplanation>,
     path_explanations: Vec<GcPathExplanation>,
+    base_reachability: Vec<GcBaseReachability>,
     usage: GcUsageReport,
     live_pathinfos: Vec<PathInfo>,
     dead_pathinfos: Vec<PathInfo>,
@@ -211,6 +229,7 @@ pub async fn run_gc(
         schema: GC_REPORT_SCHEMA.to_string(),
         plan_id: plan.plan_id.clone(),
         retention_plan_id: plan.retention_plan_id.clone(),
+        overlay_plan_blake3: ctx.overlay_plan_identity.as_ref().map(encode_blake3_identity),
         is_dry_run: !is_execution_requested,
         execution_complete: false,
         failed_operation: None,
@@ -223,6 +242,7 @@ pub async fn run_gc(
         candidate_paths: plan.candidate_paths.clone(),
         retention_explanations: plan.retention_explanations.clone(),
         path_explanations: plan.path_explanations.clone(),
+        base_reachability: plan.base_reachability.clone(),
         usage: plan.usage.clone(),
         candidate_blob_index_count: saturating_u32(plan.blob_index_paths.len()),
         candidate_blob_chunk_count: saturating_u32(plan.blob_chunk_paths.len()),
@@ -234,7 +254,10 @@ pub async fn run_gc(
         operations: Vec::new(),
     };
     assert_eq!(core_decision.candidate_path_count, plan.dead_pathinfos.len());
-    assert_eq!(core_decision.retained_path_count, plan.live_pathinfos.len());
+    assert_eq!(
+        core_decision.retained_path_count,
+        plan.live_pathinfos.len().saturating_add(plan.base_reachability.len()),
+    );
     if core_decision.mutation_disposition == GcMutationDisposition::ReportOnly {
         return Ok(gc_result);
     }
@@ -300,24 +323,44 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
         .filter(|root| retained_root_ids.contains(root.logical_path.as_str()))
         .cloned()
         .collect::<Vec<_>>();
-    let snapshot = snapshot_pathinfos(ctx.pathinfo).await?;
-    let core_plan = plan_gc(core_plan_request(&retained_roots, &snapshot, ctx.store_dir, !is_execution_requested)?)
-        .map_err(|error| shell_gc_plan_error(error, ctx.store_dir))?;
+    let overlay_snapshot = snapshot_pathinfos(ctx.overlay_pathinfo).await?;
+    let overlay_trusted_keys = if ctx.overlay_plan_identity.is_some() {
+        Some(crate::overlay::load_layer_trust_keys(ctx.state_dir)?)
+    } else {
+        None
+    };
+    let composed_snapshot = compose_gc_snapshot(
+        &overlay_snapshot,
+        &retained_roots,
+        ctx.composed_pathinfo,
+        ctx.store_dir,
+        overlay_trusted_keys.as_deref(),
+    )
+    .await?;
+    let core_plan =
+        plan_gc(core_plan_request(&retained_roots, &composed_snapshot, ctx.store_dir, !is_execution_requested)?)
+            .map_err(|error| shell_gc_plan_error(error, ctx.store_dir))?;
     let live_paths = core_plan.retained_path_ids.iter().cloned().collect::<BTreeSet<_>>();
-    let usage = build_usage_report(&snapshot, &core_plan.retaining_roots, &retention_plan.decisions, ctx.store_dir)?;
+    let usage = build_usage_report(
+        &composed_snapshot.pathinfos,
+        &core_plan.retaining_roots,
+        &retention_plan.decisions,
+        ctx.store_dir,
+    )?;
     let explanation_link_limit =
         crate::retention::store_retention_runtime_policy().limits.max_closure_links_per_explanation;
     let path_explanations = build_path_explanations(&core_plan, explanation_link_limit)?;
+    let base_reachability = build_base_reachability(&core_plan.retaining_roots, &composed_snapshot.ownership);
     let core_plan_id = core_plan.plan_id.into_bytes();
     let retention_plan_id_bytes = retention_plan.plan_id.into_bytes();
     let retention_plan_id = encode_blake3_identity(&retention_plan_id_bytes);
     let retention_explanations = build_retention_explanations(&retention_plan.decisions, &all_roots)?;
-    let (live_pathinfos, dead_pathinfos) = split_pathinfos(snapshot, &live_paths, ctx.store_dir);
+    let (live_pathinfos, dead_pathinfos) = split_pathinfos(overlay_snapshot, &live_paths, ctx.store_dir);
     let live_castore = collect_live_castore_state(
         &live_pathinfos,
         ctx.retained_castore_roots,
-        ctx.directory_service,
-        ctx.blob_service,
+        ctx.overlay_directory_service,
+        ctx.overlay_blob_service,
     )
     .await?;
     let orphaned_on_disk = collect_existing_exported_outputs(&dead_pathinfos, ctx.output_dir_str)?;
@@ -341,6 +384,7 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
     let plan_id = execution_plan_id(ExecutionPlanIdentityInput {
         core_plan_id: &core_plan_id,
         retention_plan_id: &retention_plan_id_bytes,
+        overlay_plan_identity: ctx.overlay_plan_identity.as_ref(),
         candidate_paths: &candidate_paths,
         reclaim_observations: &reclaim_summary.observations,
     });
@@ -353,6 +397,7 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
         retained_roots,
         retention_explanations,
         path_explanations,
+        base_reachability,
         usage,
         live_pathinfos,
         dead_pathinfos,
@@ -508,6 +553,7 @@ fn build_usage_report(
 struct ExecutionPlanIdentityInput<'a> {
     core_plan_id: &'a [u8; blake3::OUT_LEN],
     retention_plan_id: &'a [u8; blake3::OUT_LEN],
+    overlay_plan_identity: Option<&'a [u8; blake3::OUT_LEN]>,
     candidate_paths: &'a [String],
     reclaim_observations: &'a [GcReclaimObservation],
 }
@@ -517,6 +563,15 @@ fn execution_plan_id(input: ExecutionPlanIdentityInput<'_>) -> String {
     hasher.update(GC_EXECUTION_PLAN_DOMAIN);
     hasher.update(input.core_plan_id);
     hasher.update(input.retention_plan_id);
+    match input.overlay_plan_identity {
+        Some(overlay_plan_identity) => {
+            hasher.update(&[1]);
+            hasher.update(overlay_plan_identity);
+        }
+        None => {
+            hasher.update(&[0]);
+        }
+    };
     hash_plan_strings(&mut hasher, input.candidate_paths);
     hasher.update(&(input.reclaim_observations.len() as u128).to_be_bytes());
     for observation in input.reclaim_observations {
@@ -569,14 +624,111 @@ fn encode_blake3_identity(bytes: &[u8; blake3::OUT_LEN]) -> String {
     format!("b3:{}", HEXLOWER.encode(bytes))
 }
 
+async fn compose_gc_snapshot(
+    overlay_snapshot: &[PathInfo],
+    retained_roots: &[GcRootRecord],
+    composed_pathinfo: &dyn PathInfoService,
+    store_dir: &str,
+    overlay_trusted_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
+) -> Result<ComposedGcSnapshot, Error> {
+    let mut pathinfos_by_id = BTreeMap::new();
+    let mut ownership = BTreeMap::new();
+    let mut queue = Vec::new();
+    for path_info in overlay_snapshot {
+        if let Some(trusted_keys) = overlay_trusted_keys {
+            crate::overlay::verify_pathinfo_trust(path_info, trusted_keys)
+                .map_err(|error| Error::Gc(format!("overlay-gc-untrusted-layer: {error}")))?;
+        }
+        let path_id = path_info.store_path.to_absolute_path_with_prefix(store_dir);
+        if pathinfos_by_id.insert(path_id.clone(), path_info.clone()).is_some()
+            || ownership.insert(path_id.clone(), GcOwnership::Overlay).is_some()
+        {
+            return Err(Error::Gc(format!("duplicate overlay PathInfo during GC: {path_id}")));
+        }
+        queue.push(path_id);
+    }
+    queue.extend(retained_roots.iter().map(|root| root.logical_path.clone()));
+
+    let mut visited = BTreeSet::new();
+    let mut queue_index = 0_usize;
+    while queue_index < queue.len() {
+        let path_id = queue[queue_index].clone();
+        queue_index = queue_index.saturating_add(1);
+        if !visited.insert(path_id.clone()) {
+            continue;
+        }
+        if !pathinfos_by_id.contains_key(&path_id) {
+            let store_path: StorePath<String> =
+                StorePath::from_absolute_path_with_prefix(path_id.as_bytes(), store_dir)
+                    .map_err(|error| Error::Gc(format!("parsing composed GC path {path_id}: {error}")))?;
+            let read = composed_pathinfo
+                .get_with_layer(*store_path.digest())
+                .await
+                .map_err(|error| Error::Gc(format!("resolving composed GC path {path_id}: {error}")))?
+                .ok_or_else(|| Error::MissingClosureFacts {
+                    path: store_path.clone(),
+                    store_dir: store_dir.to_string(),
+                    detail: "composed GC path has no PathInfo".to_string(),
+                })?;
+            if read.layer_index == 0 {
+                return Err(Error::Gc(format!(
+                    "overlay PathInfo is readable but absent from overlay GC listing: {path_id}"
+                )));
+            }
+            let observed_path = read.value.store_path.to_absolute_path_with_prefix(store_dir);
+            if observed_path != path_id {
+                return Err(Error::Gc(format!(
+                    "composed GC digest collision: requested {path_id}, observed {observed_path}"
+                )));
+            }
+            if pathinfos_by_id.len() >= crunch_gc_core::MAX_GC_ENTRIES {
+                return Err(Error::Gc(format!(
+                    "composed GC snapshot exceeds {} PathInfos",
+                    crunch_gc_core::MAX_GC_ENTRIES
+                )));
+            }
+            ownership.insert(path_id.clone(), GcOwnership::Base {
+                layer_index: read.layer_index,
+            });
+            pathinfos_by_id.insert(path_id.clone(), read.value);
+        }
+        let path_info = pathinfos_by_id
+            .get(&path_id)
+            .ok_or_else(|| Error::Gc(format!("composed GC snapshot lost PathInfo {path_id}")))?;
+        queue.extend(path_info.references.iter().map(|reference| reference.to_absolute_path_with_prefix(store_dir)));
+    }
+    Ok(ComposedGcSnapshot {
+        pathinfos: pathinfos_by_id.into_values().collect(),
+        ownership,
+    })
+}
+
+fn build_base_reachability(
+    retaining_roots: &[crunch_gc_core::GcRetainingRoots],
+    ownership: &BTreeMap<String, GcOwnership>,
+) -> Vec<GcBaseReachability> {
+    retaining_roots
+        .iter()
+        .filter_map(|entry| match ownership.get(&entry.path_id) {
+            Some(GcOwnership::Base { layer_index }) => Some(GcBaseReachability {
+                path: entry.path_id.clone(),
+                layer_index: *layer_index,
+                retaining_roots: entry.root_ids.clone(),
+            }),
+            Some(GcOwnership::Overlay) | None => None,
+        })
+        .collect()
+}
+
 fn core_plan_request(
     retained_roots: &[GcRootRecord],
-    snapshot: &[PathInfo],
+    snapshot: &ComposedGcSnapshot,
     store_dir: &str,
     is_dry_run: bool,
 ) -> Result<GcPlanRequest, Error> {
-    assert!(!store_dir.is_empty(), "core GC store directory must not be empty");
-    assert!(store_dir.starts_with('/'), "core GC store directory must be absolute");
+    if store_dir.is_empty() || !store_dir.starts_with('/') {
+        return Err(Error::Gc(format!("core GC store directory is invalid: {store_dir:?}")));
+    }
     let roots = retained_roots
         .iter()
         .map(|root| {
@@ -588,17 +740,27 @@ fn core_plan_request(
         })
         .collect::<Result<Vec<_>, _>>()?;
     let entries = snapshot
+        .pathinfos
         .iter()
-        .map(|path_info| GcEntry {
-            path_id: path_info.store_path.to_absolute_path_with_prefix(store_dir),
-            references: path_info
-                .references
-                .iter()
-                .map(|reference| reference.to_absolute_path_with_prefix(store_dir))
-                .collect(),
-            declared_nar_bytes: path_info.nar_size,
+        .map(|path_info| {
+            let path_id = path_info.store_path.to_absolute_path_with_prefix(store_dir);
+            let ownership = snapshot
+                .ownership
+                .get(&path_id)
+                .copied()
+                .ok_or_else(|| Error::Gc(format!("composed GC snapshot has no ownership for {path_id}")))?;
+            Ok(GcEntry {
+                path_id,
+                references: path_info
+                    .references
+                    .iter()
+                    .map(|reference| reference.to_absolute_path_with_prefix(store_dir))
+                    .collect(),
+                declared_nar_bytes: path_info.nar_size,
+                ownership,
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>, Error>>()?;
     let execution_mode = if is_dry_run {
         GcExecutionMode::DryRun
     } else {
@@ -1727,16 +1889,19 @@ mod tests {
                     path_id: root_a,
                     references: vec![shared.clone()],
                     declared_nar_bytes: 1,
+                    ownership: GcOwnership::Overlay,
                 },
                 GcEntry {
                     path_id: root_b,
                     references: vec![shared.clone()],
                     declared_nar_bytes: 1,
+                    ownership: GcOwnership::Overlay,
                 },
                 GcEntry {
                     path_id: shared,
                     references: Vec::new(),
                     declared_nar_bytes: 1,
+                    ownership: GcOwnership::Overlay,
                 },
             ],
             execution_mode: GcExecutionMode::DryRun,
@@ -1839,30 +2004,42 @@ mod tests {
         }];
         let core_plan_id = [0_u8; blake3::OUT_LEN];
         let retention_plan_id = [1_u8; blake3::OUT_LEN];
+        let overlay_plan_id = [2_u8; blake3::OUT_LEN];
         let candidates = vec!["/mantle/store/candidate".to_string()];
         let plan_a = execution_plan_id(ExecutionPlanIdentityInput {
             core_plan_id: &core_plan_id,
             retention_plan_id: &retention_plan_id,
+            overlay_plan_identity: None,
             candidate_paths: &candidates,
             reclaim_observations: &observations_a,
         });
         let plan_b = execution_plan_id(ExecutionPlanIdentityInput {
             core_plan_id: &core_plan_id,
             retention_plan_id: &retention_plan_id,
+            overlay_plan_identity: None,
             candidate_paths: &candidates,
             reclaim_observations: &observations_b,
         });
         let plan_c = execution_plan_id(ExecutionPlanIdentityInput {
             core_plan_id: &core_plan_id,
             retention_plan_id: &retention_plan_id,
+            overlay_plan_identity: None,
             candidate_paths: &candidates,
             reclaim_observations: &observations_c,
         });
+        let plan_with_overlay = execution_plan_id(ExecutionPlanIdentityInput {
+            core_plan_id: &core_plan_id,
+            retention_plan_id: &retention_plan_id,
+            overlay_plan_identity: Some(&overlay_plan_id),
+            candidate_paths: &candidates,
+            reclaim_observations: &observations_a,
+        });
 
-        const EXPECTED_PLAN_ID: &str = "b3:d018941192561471a85b01e1dc8365b1acde9a5664ec3f85c5c77146c8ede9c1";
+        const EXPECTED_PLAN_ID: &str = "b3:0548ff6cc95bec041ce51a773c67dd823983a1cfae5b7378adfb6ab940f5b6c2";
         assert_eq!(plan_a, EXPECTED_PLAN_ID);
         assert_ne!(plan_a, plan_b);
         assert_ne!(plan_a, plan_c);
+        assert_ne!(plan_a, plan_with_overlay);
     }
 
     #[cfg(unix)]

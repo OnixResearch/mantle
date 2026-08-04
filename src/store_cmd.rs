@@ -23,6 +23,7 @@ pub fn cmd_store(
     output_dir: &Path,
     state_dir: &Path,
     store_dir: &str,
+    base_state_dirs: &[PathBuf],
     is_json_output: bool,
 ) -> Result<(), RunError> {
     let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
@@ -31,6 +32,7 @@ pub fn cmd_store(
             output_dir,
             state_dir,
             store_dir,
+            base_state_dirs,
             is_json_output,
         })
         .await
@@ -42,18 +44,19 @@ struct StoreCommandContext<'a> {
     output_dir: &'a Path,
     state_dir: &'a Path,
     store_dir: &'a str,
+    base_state_dirs: &'a [PathBuf],
     is_json_output: bool,
 }
 
 async fn cmd_store_async(action: crate::StoreAction, context: StoreCommandContext<'_>) -> Result<(), RunError> {
     match action {
         crate::StoreAction::List => {
-            let svc = open_pathinfo_service(context.state_dir, true).await?;
-            cmd_store_list(&svc).await
+            let store = open_store(context).await?;
+            cmd_store_list(&store, context.is_json_output).await
         }
         crate::StoreAction::Info { path } => {
-            let svc = open_pathinfo_service(context.state_dir, true).await?;
-            cmd_store_info(&svc, &path).await
+            let store = open_store(context).await?;
+            cmd_store_info(&store, &path, context.is_json_output).await
         }
         crate::StoreAction::Roots { migrate } => {
             let _guard = if migrate {
@@ -61,11 +64,11 @@ async fn cmd_store_async(action: crate::StoreAction, context: StoreCommandContex
             } else {
                 None
             };
-            let mut store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+            let mut store = open_store(context).await?;
             cmd_store_roots(&mut store, migrate, context)
         }
         crate::StoreAction::Usage => {
-            let mut store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+            let mut store = open_store(context).await?;
             cmd_store_usage(&mut store, context.is_json_output).await
         }
         other => cmd_store_mutation_or_transfer(other, context).await,
@@ -79,12 +82,12 @@ async fn cmd_store_mutation_or_transfer(
     match action {
         crate::StoreAction::Pin { path } => {
             let _guard = store_mutation_guard(context.state_dir)?;
-            let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+            let store = open_store(context).await?;
             cmd_store_pin(&store, &path).await
         }
         crate::StoreAction::Unpin { path } => {
             let _guard = store_mutation_guard(context.state_dir)?;
-            let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+            let store = open_store(context).await?;
             cmd_store_unpin(&store, &path)
         }
         crate::StoreAction::Gc {
@@ -120,7 +123,7 @@ async fn cmd_store_mutation_or_transfer(
             signing_key,
         } => {
             let _guard = store_mutation_guard(context.state_dir)?;
-            let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+            let store = open_store(context).await?;
             cmd_store_repair_final_nar(
                 &store,
                 &path,
@@ -205,7 +208,7 @@ async fn cmd_store_gc_action(
         .plan_retention_gc()
         .map_err(|error| RunError::Build(format!("planning Rust cache retention: {error}")))?;
     drop(rust_cache);
-    let mut store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+    let mut store = open_store(context).await?;
     cmd_store_gc(&mut store, &rust_retention, accepted_plan_id, context.is_json_output).await
 }
 
@@ -252,7 +255,7 @@ async fn cmd_store_verify_action(context: StoreCommandContext<'_>, action: Store
 
 async fn cmd_store_push_action(context: StoreCommandContext<'_>, action: StorePushAction) -> Result<(), RunError> {
     let _guard = store_mutation_guard(context.state_dir)?;
-    let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+    let store = open_store(context).await?;
     cmd_store_push(&store, StorePushRequest {
         destination_dir: &action.destination_dir,
         is_all: action.is_all,
@@ -269,7 +272,7 @@ async fn cmd_store_pull_action(context: StoreCommandContext<'_>, action: StorePu
         context.store_dir,
     )?;
     let _guard = store_mutation_guard(context.state_dir)?;
-    let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+    let store = open_store(context).await?;
     cmd_store_pull(&store, StorePullRequest {
         source_url: &action.source_url,
         is_all: action.is_all,
@@ -408,79 +411,173 @@ async fn open_pathinfo_service(
     .map_err(|e| RunError::Internal(format!("opening PathInfo database {}: {e}", db_path.display())))
 }
 
-async fn open_store(
-    output_dir: &Path,
-    state_dir: &Path,
-    store_dir: &str,
-) -> Result<crunch_store::StoreHandle, RunError> {
-    if store_dir.is_empty() || !Path::new(store_dir).is_absolute() {
+async fn open_store(context: StoreCommandContext<'_>) -> Result<crunch_store::StoreHandle, RunError> {
+    if context.store_dir.is_empty() || !Path::new(context.store_dir).is_absolute() {
         return Err(RunError::Internal(format!(
-            "logical store directory must be absolute and non-empty: {store_dir:?}"
+            "logical store directory must be absolute and non-empty: {:?}",
+            context.store_dir
         )));
     }
-    debug_assert!(!store_dir.is_empty());
-    debug_assert!(Path::new(store_dir).is_absolute());
+    debug_assert!(!context.store_dir.is_empty());
+    debug_assert!(Path::new(context.store_dir).is_absolute());
     crunch_store::StoreHandle::open(crunch_store::StoreConfig {
-        state_dir: state_dir.to_path_buf(),
-        output_dir: output_dir.to_path_buf(),
+        state_dir: context.state_dir.to_path_buf(),
+        output_dir: context.output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),
         fallback_mode: crunch_store::StoreFallbackMode::Practical,
-        store_dir: store_dir.to_string(),
-        base_state_dirs: Vec::new(),
+        store_dir: context.store_dir.to_string(),
+        base_state_dirs: context.base_state_dirs.to_vec(),
     })
     .await
     .map_err(|e| RunError::Internal(format!("opening store: {e}")))
 }
 
-async fn cmd_store_list(svc: &impl snix_store::pathinfoservice::PathInfoService) -> Result<(), RunError> {
-    let entries = crunch_store::store_list(svc).await.map_err(|e| RunError::Internal(format!("{e}")))?;
-    debug_assert!(entries.iter().all(|(store_path, _, _)| !store_path.is_empty()));
+async fn cmd_store_list(store: &crunch_store::StoreHandle, is_json_output: bool) -> Result<(), RunError> {
+    let entries = store.list_pathinfos_with_layer().await.map_err(|error| RunError::Internal(format!("{error}")))?;
+    debug_assert!(entries.iter().all(|entry| !entry.value.store_path.to_string().is_empty()));
     debug_assert!(u32::try_from(entries.len()).is_ok());
+    let overlay = store
+        .overlay_report()
+        .map_err(|error| RunError::Internal(format!("building overlay report: {error}")))?;
+    if is_json_output {
+        let paths = entries
+            .iter()
+            .map(|entry| {
+                serde_json::json!({
+                    "store_path": entry.value.store_path.to_string(),
+                    "layer": entry.layer,
+                    "shadows": entry.shadows,
+                    "deriver": entry.value.deriver.as_ref().map(ToString::to_string),
+                    "nar_size": entry.value.nar_size,
+                })
+            })
+            .collect::<Vec<_>>();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "schema": "mantle-store-list-v2",
+                "overlay": overlay,
+                "paths": paths,
+            }))
+            .map_err(|error| RunError::Internal(format!("serializing store list: {error}")))?
+        );
+        return Ok(());
+    }
+    print_overlay_summary(overlay.as_ref());
     if entries.is_empty() {
-        eprintln!("No paths in PathInfo database.");
+        eprintln!("No paths in the composed store.");
     } else {
-        for (store_path, deriver, nar_size) in &entries {
-            println!("{store_path}  deriver={deriver}  nar_size={nar_size}");
+        for entry in &entries {
+            let deriver =
+                entry.value.deriver.as_ref().map_or_else(|| "-".to_string(), |value| value.name().to_string());
+            println!(
+                "{}  layer={}  deriver={}  nar_size={}  shadows={:?}",
+                entry.value.store_path, entry.layer, deriver, entry.value.nar_size, entry.shadows
+            );
         }
         eprintln!("{} path(s)", entries.len());
     }
     Ok(())
 }
 
-async fn cmd_store_info(svc: &impl snix_store::pathinfoservice::PathInfoService, path: &str) -> Result<(), RunError> {
-    let details = crunch_store::store_info(svc, path).await.map_err(|e| RunError::Internal(format!("{e}")))?;
+async fn cmd_store_info(store: &crunch_store::StoreHandle, path: &str, is_json_output: bool) -> Result<(), RunError> {
+    if path.is_empty() {
+        return Err(RunError::Internal("store info path filter must not be empty".to_string()));
+    }
+    let entries = store.list_pathinfos_with_layer().await.map_err(|error| RunError::Internal(format!("{error}")))?;
+    let details: Vec<_> =
+        entries.into_iter().filter(|entry| entry.value.store_path.to_string().contains(path)).collect();
     if details.is_empty() {
         return Err(RunError::Internal(format!("no PathInfo matching '{path}'")));
     }
-    debug_assert!(details.iter().all(|detail| !detail.store_path.is_empty()));
     debug_assert!(u32::try_from(details.len()).is_ok());
+    let overlay = store
+        .overlay_report()
+        .map_err(|error| RunError::Internal(format!("building overlay report: {error}")))?;
+    if is_json_output {
+        let paths = details
+            .iter()
+            .map(|detail| {
+                let path_info = &detail.value;
+                serde_json::json!({
+                    "store_path": path_info.store_path.to_string(),
+                    "layer": detail.layer,
+                    "shadows": detail.shadows,
+                    "nar_size": path_info.nar_size,
+                    "nar_sha256": data_encoding::HEXLOWER.encode(path_info.nar_sha256.as_ref()),
+                    "deriver": path_info.deriver.as_ref().map(ToString::to_string),
+                    "references": path_info.references.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                    "signatures": path_info.signatures.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                    "ca": path_info.ca.as_ref().map(|value| format!("{value:?}")),
+                    "node": format!("{:?}", path_info.node),
+                })
+            })
+            .collect::<Vec<_>>();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "schema": "mantle-store-info-v2",
+                "overlay": overlay,
+                "paths": paths,
+            }))
+            .map_err(|error| RunError::Internal(format!("serializing store info: {error}")))?
+        );
+        return Ok(());
+    }
+    print_overlay_summary(overlay.as_ref());
     for detail in &details {
-        println!("store_path: {}", detail.store_path);
-        println!("nar_size:   {}", detail.nar_size);
-        println!("nar_sha256: {}", data_encoding::HEXLOWER.encode(&detail.nar_sha256));
-        if let Some(ref deriver) = detail.deriver {
+        let path_info = &detail.value;
+        println!("store_path: {}", path_info.store_path);
+        println!("layer:      {}", detail.layer);
+        println!("shadows:    {:?}", detail.shadows);
+        println!("nar_size:   {}", path_info.nar_size);
+        println!("nar_sha256: {}", data_encoding::HEXLOWER.encode(path_info.nar_sha256.as_ref()));
+        if let Some(deriver) = path_info.deriver.as_ref() {
             println!("deriver:    {deriver}");
         }
-        if !detail.references.is_empty() {
+        if !path_info.references.is_empty() {
             println!("references:");
-            for reference in &detail.references {
+            for reference in &path_info.references {
                 println!("  {reference}");
             }
         }
-        if let Some(ref ca) = detail.ca {
-            println!("ca:         {ca}");
+        if let Some(ca) = path_info.ca.as_ref() {
+            println!("ca:         {ca:?}");
         }
-        if detail.signatures.is_empty() {
+        if path_info.signatures.is_empty() {
             println!("signatures: (none)");
         } else {
             println!("signatures:");
-            for sig in &detail.signatures {
-                println!("  {sig}");
+            for signature in &path_info.signatures {
+                println!("  {signature}");
             }
         }
-        println!("node:       {}", detail.node);
+        println!("node:       {:?}", path_info.node);
     }
     Ok(())
+}
+
+fn print_overlay_summary(report: Option<&crunch_store::StoreOverlayReport>) {
+    let Some(report) = report else {
+        eprintln!("store composition: single writable store");
+        return;
+    };
+    eprintln!(
+        "store composition: overlay plan={} no_backfill={} bases={}",
+        report.plan_blake3,
+        report.no_backfill,
+        report.bases.len()
+    );
+    for base in &report.bases {
+        eprintln!(
+            "  base[{}] descriptor={} generation={} trust={} signers={}",
+            base.declaration_index.saturating_add(1),
+            base.descriptor_blake3,
+            base.generation_blake3,
+            base.trust_policy_id,
+            base.accepted_signer_names.join(",")
+        );
+    }
 }
 
 fn cmd_store_roots(
@@ -628,6 +725,17 @@ async fn cmd_store_gc(
 
 fn print_human_gc_report(report: &crunch_store::GcReport, rust_retention: &crunch_rust_cache::RustCacheRetentionPlan) {
     println!("plan_id={}  retention_plan_id={}", report.plan_id, report.retention_plan_id);
+    if let Some(overlay_plan_blake3) = report.overlay_plan_blake3.as_deref() {
+        println!("overlay_plan={}  retained_base_paths={}", overlay_plan_blake3, report.base_reachability.len());
+        for path in &report.base_reachability {
+            println!(
+                "base_reachable: layer=base[{}] path={} retained_by={}",
+                path.layer_index,
+                path.path,
+                path.retaining_roots.join(",")
+            );
+        }
+    }
     println!(
         "retained_roots={}  retained_rust_results={}  stale_rust_results={}  candidate_paths={}  reclaimable_bytes={}",
         report.retained_root_count,
@@ -1197,7 +1305,7 @@ async fn cmd_store_archive(
             trust_unsigned,
             paths,
         } => {
-            let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+            let store = open_store(context).await?;
             cmd_store_archive_export(&store, StoreArchiveExportRequest {
                 destination: &to,
                 is_all: all,
@@ -1214,7 +1322,7 @@ async fn cmd_store_archive(
             no_materialize,
         } => {
             let _guard = store_mutation_guard(context.state_dir)?;
-            let store = open_store(context.output_dir, context.state_dir, context.store_dir).await?;
+            let store = open_store(context).await?;
             cmd_store_archive_import(&store, StoreArchiveImportRequest {
                 source: &from,
                 is_trust_unsigned: trust_unsigned,

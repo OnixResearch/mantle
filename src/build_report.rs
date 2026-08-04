@@ -23,6 +23,9 @@ use crate::frontend_artifact_spec::FrontendArtifactAdmissionAttestation;
 const OFFLINE_CARGO_EVIDENCE_NEXT_ACTION: &str =
     "inspect share/mantle/offline-cargo-build.json and rebuild with mantle.offlineCargoPackage if the sidecar is stale";
 const AST_GREP_EVIDENCE_NEXT_ACTION: &str = "regenerate share/mantle/ast-grep-structural-evidence.json with the pinned ast-grep toolchain and current BLAKE3 identities";
+const MIN_OVERLAY_BASE_LAYER_INDEX: usize = 1;
+const MAX_OVERLAY_BASE_LAYERS: usize = 8;
+const MAX_STORE_LAYER_LABEL_BYTES: usize = 32;
 
 #[derive(Debug, Serialize)]
 pub struct BuildJsonReport {
@@ -41,6 +44,10 @@ pub struct BuildJsonReport {
     pub action_result_reports: Vec<crunch_build::ActionResultRuntimeReport>,
     pub native_dynamic_plans: Vec<BuildJsonNativeDynamicPlan>,
     pub scheduler_priority_decisions: Vec<crunch_pipeline::PriorityDecisionEvidence>,
+    pub overlay_base_generations: Vec<BuildJsonOverlayBaseGeneration>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overlay_plan_blake3: Option<String>,
+    pub store_layer_selections: Vec<BuildJsonStoreLayerSelection>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub remote_telemetry_events: Vec<crunch_build::distributed::RemoteTelemetryEvent>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -55,6 +62,26 @@ pub struct BuildJsonReport {
     pub outcomes: Vec<BuildJsonOutcome>,
     pub failed: Vec<BuildFailureEnvelope>,
     pub fod_mismatches: Vec<BuildJsonFodMismatch>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct BuildJsonOverlayBaseGeneration {
+    pub layer_index: usize,
+    pub descriptor_blake3: String,
+    pub generation_blake3: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct BuildJsonStoreLayerSelection {
+    pub store_path: String,
+    pub selected_layer: String,
+    pub shadows: Vec<BuildJsonStoreLayerShadow>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct BuildJsonStoreLayerShadow {
+    pub layer: String,
+    pub status: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -392,6 +419,39 @@ fn build_json_report(
     let action_result_rows = result.action_result_reports.clone();
     let native_dynamic_plans = build_native_dynamic_plan_reports(result, &config.store_dir);
     let scheduler_priority_decisions = result.priority_decisions.clone();
+    let overlay_plan_blake3 = result.overlay_report.as_ref().map(|report| report.plan_blake3.clone());
+    let overlay_base_generations = result.overlay_report.as_ref().map_or_else(Vec::new, |report| {
+        report
+            .bases
+            .iter()
+            .map(|base| BuildJsonOverlayBaseGeneration {
+                layer_index: base.declaration_index.saturating_add(1),
+                descriptor_blake3: base.descriptor_blake3.clone(),
+                generation_blake3: base.generation_blake3.clone(),
+            })
+            .collect()
+    });
+    debug_assert!(overlay_base_generations.len() <= MAX_OVERLAY_BASE_LAYERS);
+    debug_assert!(overlay_base_generations.iter().all(|base| base.layer_index >= MIN_OVERLAY_BASE_LAYER_INDEX));
+    let store_layer_selections = result
+        .store_layer_selections
+        .iter()
+        .map(|selection| BuildJsonStoreLayerSelection {
+            store_path: selection.store_path.clone(),
+            selected_layer: selection.selected_layer.to_string(),
+            shadows: selection
+                .shadows
+                .iter()
+                .map(|shadow| BuildJsonStoreLayerShadow {
+                    layer: shadow.layer.to_string(),
+                    status: shadow.status.as_str().to_string(),
+                })
+                .collect(),
+        })
+        .collect::<Vec<_>>();
+    debug_assert!(store_layer_selections.iter().all(|selection| {
+        !selection.selected_layer.is_empty() && selection.selected_layer.len() <= MAX_STORE_LAYER_LABEL_BYTES
+    }));
     let remote_telemetry_events = result
         .priority_decisions
         .iter()
@@ -413,6 +473,9 @@ fn build_json_report(
         action_result_reports: action_result_rows,
         native_dynamic_plans,
         scheduler_priority_decisions,
+        overlay_base_generations,
+        overlay_plan_blake3,
+        store_layer_selections,
         remote_telemetry_events,
         remote_observability: None,
         frontend_artifact_attestations: frontend_artifact_attestations.to_vec(),
@@ -1117,6 +1180,8 @@ mod tests {
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
+            overlay_report: None,
+            store_layer_selections: Vec::new(),
         };
 
         let json_report = render_build_json_report(&config, &result, logs_dir.path(), &[]).unwrap();
@@ -1185,6 +1250,8 @@ mod tests {
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
+            overlay_report: None,
+            store_layer_selections: Vec::new(),
         };
 
         let json_report = render_build_json_report(&config, &result, logs_dir.path(), &[]).unwrap();
@@ -1347,6 +1414,33 @@ mod tests {
                 scheduler_action: "registered-roots".to_string(),
             }],
             priority_decisions: vec![sample_priority_decision()],
+            overlay_report: Some(crunch_store::StoreOverlayReport {
+                schema: crunch_store::STORE_OVERLAY_REPORT_SCHEMA.to_string(),
+                policy_blake3: "a".repeat(TEST_WORKSPACE_DIGEST_HEX_LENGTH),
+                plan_blake3: "b".repeat(TEST_WORKSPACE_DIGEST_HEX_LENGTH),
+                logical_prefix: config.store_dir.clone(),
+                writable_overlay_count: 1,
+                base_order: "declaration-order".to_string(),
+                no_backfill: true,
+                bases: vec![crunch_store::StoreOverlayBaseReport {
+                    declaration_index: 0,
+                    declaration_identity_blake3: "c".repeat(TEST_WORKSPACE_DIGEST_HEX_LENGTH),
+                    accepted_signer_names: vec!["base-key".to_string()],
+                    descriptor_blake3: "d".repeat(TEST_WORKSPACE_DIGEST_HEX_LENGTH),
+                    generation_blake3: "e".repeat(TEST_WORKSPACE_DIGEST_HEX_LENGTH),
+                    state_schema: crunch_store::STORE_STATE_SCHEMA.to_string(),
+                    trust_policy_id: "default-ed25519".to_string(),
+                    capability_class: "read-only".to_string(),
+                    observed_member_count: 1,
+                    observed_bytes: 1,
+                }],
+                non_claims: Vec::new(),
+            }),
+            store_layer_selections: vec![crunch_store::layer::StoreLayerSelection {
+                store_path: output_path.to_absolute_path_with_prefix(&config.store_dir),
+                selected_layer: crunch_store::layer::StoreLayer::Base { index: 1 },
+                shadows: Vec::new(),
+            }],
         };
 
         let report = build_json_report(&config, &result, logs_dir.path(), &[], &[]);
@@ -1395,6 +1489,9 @@ mod tests {
         assert_eq!(report.native_dynamic_plans[0].scheduler_action, "registered-roots");
         assert_eq!(report.native_dynamic_plans[0].accepted_unit_ids, vec!["unit.build".to_string()]);
         assert_eq!(report.scheduler_priority_decisions.len(), 1);
+        assert_eq!(report.overlay_plan_blake3, Some("b".repeat(TEST_WORKSPACE_DIGEST_HEX_LENGTH)));
+        assert_eq!(report.overlay_base_generations[0].layer_index, 1);
+        assert_eq!(report.store_layer_selections[0].selected_layer, "base[1]");
         let priority_json = serde_json::to_string(&report.scheduler_priority_decisions).unwrap();
         assert!(!priority_json.contains(SENSITIVE_PRIORITY_GOAL));
         assert!(priority_json.contains("configured-known-fact-ordering"));
@@ -1511,6 +1608,8 @@ mod tests {
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
+            overlay_report: None,
+            store_layer_selections: Vec::new(),
         };
 
         let report = build_json_report(&config, &result, logs_dir.path(), &[], &[]);
@@ -1915,6 +2014,8 @@ mod tests {
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
+            overlay_report: None,
+            store_layer_selections: Vec::new(),
         };
         let spec_hash = blake3::hash(SPEC_MATERIAL).to_hex().to_string();
         let spec = crate::frontend_artifact_spec::FrontendArtifactSpecRef {
@@ -2057,6 +2158,8 @@ mod tests {
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
+            overlay_report: None,
+            store_layer_selections: Vec::new(),
         };
 
         let diagnostic_failures = vec![crate::build_log::DiagnosticPersistenceFailure::write_build_log(
@@ -2092,6 +2195,8 @@ mod tests {
                 "workspace_reports": [],
                 "native_dynamic_plans": [],
                 "scheduler_priority_decisions": [],
+                "overlay_base_generations": [],
+                "store_layer_selections": [],
                 "frontend_artifact_attestations": [],
                 "ast_grep_structural_evidence": [],
                 "ast_grep_structural_evidence_diagnostics": [],

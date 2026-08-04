@@ -1791,11 +1791,11 @@ mod tests {
         assert_eq!(archive.len().saturating_sub(header_start), CPIO_HEADER_BYTES);
         archive.extend_from_slice(name.as_bytes());
         archive.push(0);
-        while archive.len() % CPIO_ALIGNMENT_BYTES != 0 {
+        while !archive.len().is_multiple_of(CPIO_ALIGNMENT_BYTES) {
             archive.push(0);
         }
         archive.extend_from_slice(bytes);
-        while archive.len() % CPIO_ALIGNMENT_BYTES != 0 {
+        while !archive.len().is_multiple_of(CPIO_ALIGNMENT_BYTES) {
             archive.push(0);
         }
     }

@@ -242,10 +242,15 @@ pub struct LocalActionResultStore {
 
 impl LocalActionResultStore {
     pub fn new(state_dir: &Path) -> Self {
+        Self::new_with_source_id(state_dir, LOCAL_ACTION_RESULT_SOURCE_ID.to_string())
+    }
+
+    pub(crate) fn new_with_source_id(state_dir: &Path, source_id: String) -> Self {
         assert!(!state_dir.as_os_str().is_empty(), "state_dir must not be empty");
+        assert!(!source_id.is_empty(), "source_id must not be empty");
         Self {
             root: state_dir.join(ACTION_RESULTS_DIR).join(ACTION_RESULT_STORE_LAYOUT_VERSION),
-            source_id: LOCAL_ACTION_RESULT_SOURCE_ID.to_string(),
+            source_id,
         }
     }
 
@@ -679,6 +684,7 @@ impl ActionResultStore for HttpActionResultStore {
 #[derive(Debug)]
 pub struct ActionResultStoreSet {
     local: Vec<Box<dyn ActionResultStore>>,
+    discovery_only: Vec<Box<dyn ActionResultStore>>,
     remote: Vec<Box<dyn ActionResultStore>>,
     offline: bool,
     max_sources: usize,
@@ -691,6 +697,7 @@ impl ActionResultStoreSet {
     pub fn new(offline: bool) -> Self {
         Self {
             local: Vec::new(),
+            discovery_only: Vec::new(),
             remote: Vec::new(),
             offline,
             max_sources: action_result_runtime_policy().limits.max_sources,
@@ -706,6 +713,10 @@ impl ActionResultStoreSet {
 
     pub fn add_remote(&mut self, store: Box<dyn ActionResultStore>) {
         self.remote.push(store);
+    }
+
+    pub(crate) fn add_discovery_only(&mut self, store: Box<dyn ActionResultStore>) {
+        self.discovery_only.push(store);
     }
 
     pub async fn publish_local(
@@ -752,6 +763,17 @@ impl ActionResultStoreSet {
         let mut attempted_source_count = 0usize;
         discover_sources(
             &self.local,
+            DiscoveryRequest {
+                action_ref,
+                is_remote: false,
+                limits: discovery_constraints,
+            },
+            &mut attempted_source_count,
+            &mut discovery_result,
+        )
+        .await;
+        discover_sources(
+            &self.discovery_only,
             DiscoveryRequest {
                 action_ref,
                 is_remote: false,
@@ -1112,6 +1134,37 @@ mod tests {
                 signature: "signature".to_string(),
             }],
         }
+    }
+
+    #[tokio::test]
+    async fn discovery_only_base_is_readable_but_never_receives_publication() {
+        const EXPECTED_DISCOVERY_LOOKUPS: usize = 2;
+        let overlay = tempfile::tempdir().unwrap();
+        let base = tempfile::tempdir().unwrap();
+        let overlay_store = LocalActionResultStore::new(overlay.path());
+        let base_store = LocalActionResultStore::new_with_source_id(base.path(), "base[1]".to_string());
+        let base_record = signed_record("base-discovery");
+        base_store.publish(&base_record).await.unwrap();
+        let overlay_record = signed_record("overlay-publication");
+
+        let mut stores = ActionResultStoreSet::new(true);
+        stores.add_local(Box::new(overlay_store.clone()));
+        stores.add_discovery_only(Box::new(base_store.clone()));
+        let discovery = stores.discover(&base_record.record.action_ref).await;
+        assert_eq!(discovery.lookups.len(), EXPECTED_DISCOVERY_LOOKUPS);
+        let base_lookup = discovery
+            .lookups
+            .iter()
+            .find(|lookup| lookup.source_id == "base[1]")
+            .expect("base discovery lookup");
+        assert_eq!(base_lookup.records.len(), 1);
+
+        stores.publish_local(&overlay_record).await.unwrap();
+        assert_eq!(overlay_store.lookup(&overlay_record.record.action_ref).await.unwrap().records.len(), 1);
+        let base_after_publish = base_store.lookup(&overlay_record.record.action_ref).await.unwrap();
+        assert_eq!(base_after_publish.records.len(), 1);
+        assert_eq!(base_after_publish.records[0].record.result_ref, base_record.record.result_ref);
+        assert_ne!(base_after_publish.records[0].record.result_ref, overlay_record.record.result_ref);
     }
 
     #[tokio::test]

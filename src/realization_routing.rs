@@ -14,6 +14,10 @@ const MAX_DETAIL_BYTES: usize = 256;
 const MAX_UPLOAD_CLASSES: usize = 4;
 const MAX_UPLOAD_OBJECTS: u32 = 65_536;
 const MAX_UPLOAD_BYTES: u64 = 1_099_511_627_776;
+const MIN_ROUTE_STORE_LAYER_INDEX: usize = 1;
+const MAX_ROUTE_STORE_BASES: usize = 8;
+const MAX_ROUTE_STORE_LAYER_LABEL_BYTES: usize = 32;
+const MAX_ROUTE_STORE_LAYER_SELECTIONS: usize = 65_536;
 const REMOTE_CAPABILITY_DEFAULT: &str = "stdio-default";
 const REMOTE_PLAN_NON_CLAIM: &str = "route-eligibility-only";
 
@@ -403,6 +407,29 @@ pub struct RouteRejection {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct RouteStoreOverlayBaseEvidence {
+    pub layer_index: usize,
+    pub descriptor_blake3: String,
+    pub generation_blake3: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct RouteStoreOverlayEvidence {
+    pub plan_blake3: String,
+    pub bases: Vec<RouteStoreOverlayBaseEvidence>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct RouteStoreLayerEvidence {
+    pub store_path: String,
+    pub selected_layer: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_descriptor_blake3: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_generation_blake3: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct RoutePlanReport {
     pub schema: &'static str,
     pub selected_route: RouteClass,
@@ -414,7 +441,39 @@ pub struct RoutePlanReport {
     pub rejected_routes: Vec<RouteRejection>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub upload_summary: Option<UploadSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub store_overlay: Option<RouteStoreOverlayEvidence>,
+    pub selected_store_layers: Vec<RouteStoreLayerEvidence>,
     pub non_claim: &'static str,
+}
+
+impl RoutePlanReport {
+    pub fn bind_store_evidence(
+        &mut self,
+        overlay: Option<RouteStoreOverlayEvidence>,
+        selected_layers: Vec<RouteStoreLayerEvidence>,
+    ) -> Result<(), String> {
+        if selected_layers.len() > MAX_ROUTE_STORE_LAYER_SELECTIONS {
+            return Err("route store layer selection limit exceeded".to_string());
+        }
+        if selected_layers.iter().any(|selection| {
+            selection.selected_layer.is_empty() || selection.selected_layer.len() > MAX_ROUTE_STORE_LAYER_LABEL_BYTES
+        }) {
+            return Err("route store layer label is invalid".to_string());
+        }
+        if let Some(overlay) = overlay.as_ref() {
+            if overlay.bases.len() > MAX_ROUTE_STORE_BASES
+                || overlay.bases.iter().any(|base| {
+                    base.layer_index < MIN_ROUTE_STORE_LAYER_INDEX || base.layer_index > MAX_ROUTE_STORE_BASES
+                })
+            {
+                return Err("route overlay base evidence is invalid".to_string());
+            }
+        }
+        self.store_overlay = overlay;
+        self.selected_store_layers = selected_layers;
+        Ok(())
+    }
 }
 
 pub fn plan_realization_route(input: RoutePlannerInput) -> RoutePlanReport {
@@ -465,6 +524,8 @@ pub fn plan_realization_route(input: RoutePlannerInput) -> RoutePlanReport {
         tie_breaker: ROUTE_TIE_BREAKER,
         rejected_routes,
         upload_summary: selected.upload_summary,
+        store_overlay: None,
+        selected_store_layers: Vec::new(),
         non_claim: ROUTE_NON_CLAIM,
     }
 }
@@ -1033,6 +1094,56 @@ mod tests {
             actual: MAX_UPLOAD_OBJECTS.saturating_add(1),
             limit: MAX_UPLOAD_OBJECTS,
         });
+    }
+
+    #[test]
+    fn route_report_binds_base_descriptor_generation_and_selected_layer() {
+        let digest = blake3::hash(b"route-store-evidence").to_hex().to_string();
+        let mut report = plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), vec![
+            RouteCandidateFacts::eligible(RouteClass::CachedLocal, "base-cache-hit"),
+        ]));
+
+        report
+            .bind_store_evidence(
+                Some(RouteStoreOverlayEvidence {
+                    plan_blake3: digest.clone(),
+                    bases: vec![RouteStoreOverlayBaseEvidence {
+                        layer_index: MIN_ROUTE_STORE_LAYER_INDEX,
+                        descriptor_blake3: digest.clone(),
+                        generation_blake3: digest.clone(),
+                    }],
+                }),
+                vec![RouteStoreLayerEvidence {
+                    store_path: "/mantle/store/example".to_string(),
+                    selected_layer: "base[1]".to_string(),
+                    base_descriptor_blake3: Some(digest.clone()),
+                    base_generation_blake3: Some(digest),
+                }],
+            )
+            .expect("bounded route store evidence must bind");
+
+        assert_eq!(report.selected_store_layers[0].selected_layer, "base[1]");
+        assert!(report.selected_store_layers[0].base_descriptor_blake3.is_some());
+    }
+
+    #[test]
+    fn route_report_rejects_oversized_layer_label() {
+        let mut report = plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), vec![
+            RouteCandidateFacts::eligible(RouteClass::LocalBuild, "local-build"),
+        ]));
+        let oversized_label = "x".repeat(MAX_ROUTE_STORE_LAYER_LABEL_BYTES.saturating_add(1));
+
+        let error = report
+            .bind_store_evidence(None, vec![RouteStoreLayerEvidence {
+                store_path: "/mantle/store/example".to_string(),
+                selected_layer: oversized_label,
+                base_descriptor_blake3: None,
+                base_generation_blake3: None,
+            }])
+            .expect_err("oversized route layer label must fail");
+
+        assert_eq!(error, "route store layer label is invalid");
+        assert!(report.selected_store_layers.is_empty());
     }
 
     #[test]

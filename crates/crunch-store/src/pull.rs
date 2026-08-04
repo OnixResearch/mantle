@@ -110,6 +110,7 @@ pub async fn import_paths_from_cache_dir(
     options: &PullOptions,
 ) -> Result<PullReport, Error> {
     assert!(!source.as_os_str().is_empty(), "pull source must not be empty");
+    handle.revalidate_overlay_bases()?;
 
     if !source.exists() {
         return Err(Error::Store(format!("pull source directory does not exist: {}", source.display())));
@@ -137,7 +138,9 @@ pub async fn import_paths_from_cache_dir(
     };
 
     for narinfo_path in &narinfo_files {
+        handle.revalidate_overlay_bases()?;
         pull_single_narinfo(&context, narinfo_path, &mut pull_result).await?;
+        handle.revalidate_overlay_bases()?;
     }
 
     Ok(pull_result)
@@ -346,6 +349,7 @@ pub async fn import_paths_from_http_cache(
 ) -> Result<PullReport, Error> {
     assert!(!cache_url.as_str().is_empty(), "cache URL must not be empty");
     assert!(paths.len() <= MAX_PULL_PATHS, "pull batch exceeds limit of {MAX_PULL_PATHS}");
+    handle.revalidate_overlay_bases()?;
 
     validate_http_cache_url(cache_url)?;
 
@@ -362,7 +366,9 @@ pub async fn import_paths_from_http_cache(
     };
 
     for requested_path in paths {
+        handle.revalidate_overlay_bases()?;
         pull_single_http_path(&context, requested_path, &mut pull_result).await?;
+        handle.revalidate_overlay_bases()?;
     }
 
     Ok(pull_result)
@@ -392,6 +398,7 @@ pub async fn import_http_cache_closure_with_validator<F>(
 where
     F: FnOnce(&HttpClosurePlan) -> Result<(), String>,
 {
+    handle.revalidate_overlay_bases()?;
     validate_http_cache_url(cache_url)?;
     let client = build_http_pull_client()?;
     let normalized_cache_url = normalize_http_cache_base_url(cache_url);
@@ -403,7 +410,9 @@ where
         return Err(Error::Store("http-closure-plan-identity-mismatch".to_string()));
     }
     validate_plan(&discovered.plan).map_err(Error::Store)?;
-    import_discovered_http_closure(handle, &client, &normalized_cache_url, options, discovered).await
+    let report = import_discovered_http_closure(handle, &client, &normalized_cache_url, options, discovered).await?;
+    handle.revalidate_overlay_bases()?;
+    Ok(report)
 }
 
 #[derive(Debug)]

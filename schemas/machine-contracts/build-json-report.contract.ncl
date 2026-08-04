@@ -12,6 +12,7 @@ let MAX_AST_GREP_VERSION_BYTES = 128 in
 let MAX_BLOCKED_ROOT_PRESSURE = 256 in
 let MAX_BUILD_REPORT_ROWS = 65536 in
 let MAX_KNOWN_CRITICAL_PATH_WORK_UNITS = 80000 in
+let MAX_OVERLAY_BASE_LAYERS = 8 in
 let MAX_PRIORITY_DECISIONS = 10000 in
 let MAX_READY_GOALS = 10000 in
 let MAX_REMOTE_STATUS_DIAGNOSTIC_BYTES = 4096 in
@@ -19,6 +20,7 @@ let MAX_REMOTE_TELEMETRY_EVENT_CAPACITY = 16384 in
 let MAX_SCHEDULING_EPOCH = 80000 in
 let MAX_SCHEDULING_GOALS = 10000 in
 let MAX_SCHEDULING_POLICY_ID_BYTES = 128 in
+let MAX_STORE_LAYER_LABEL_BYTES = 32 in
 let MAX_U32 = 4294967295 in
 let MAX_U64 = 18446744073709551615 in
 let MAX_WORKSPACE_ID_BYTES = 128 in
@@ -38,6 +40,7 @@ let MIN_KNOWN_CRITICAL_PATH_WORK_UNITS = 0 in
 let MIN_LOG_CHUNKS = 1 in
 let MIN_LOG_CURSOR = 0 in
 let MIN_LOG_RECORDS = 0 in
+let MIN_OVERLAY_BASE_LAYER_INDEX = 1 in
 let MIN_PROTECTED_AFTER_EPOCHS = 2 in
 let MIN_READY_GOAL_COUNT = 1 in
 let MIN_RETAINED_LOG_BYTES = 0 in
@@ -703,6 +706,16 @@ let is_outcome = fun value => ((std.is_record (value)
   && (std.record.has_field "outputs" (value) && (((std.is_array (std.record.get "outputs" (value))
   && std.array.length (std.record.get "outputs" (value)) <= MAX_BUILD_REPORT_ROWS
   && std.array.all (fun item_2 => is_output (item_2)) (std.record.get "outputs" (value)))))))) in
+let is_overlay_base_generation = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["descriptor_blake3","generation_blake3","layer_index"]) (std.record.fields (value))
+  && (std.record.has_field "descriptor_blake3" (value) && (((std.is_string (std.record.get "descriptor_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "descriptor_blake3" (value))))))
+  && (std.record.has_field "generation_blake3" (value) && (((std.is_string (std.record.get "generation_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "generation_blake3" (value))))))
+  && (std.record.has_field "layer_index" (value) && (((std.is_number (std.record.get "layer_index" (value))
+  && std.number.is_integer (std.record.get "layer_index" (value))
+  && (std.record.get "layer_index" (value)) >= MIN_OVERLAY_BASE_LAYER_INDEX
+  && (std.record.get "layer_index" (value)) <= MAX_OVERLAY_BASE_LAYERS)))))) in
 let is_persistence_failure = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["artifact","attempted_path","error","label","operation"]) (std.record.fields (value))
   && (std.record.has_field "artifact" (value) && (((std.is_string (std.record.get "artifact" (value))
@@ -883,6 +896,23 @@ let is_search_path = fun value => ((std.is_record (value)
   && std.array.length (std.record.get "real_tool_refs" (value)) <= MAX_BUILD_REPORT_ROWS
   && std.array.all (fun item_2 => ((std.is_string (item_2)
   && C.IsSafeReference (item_2)))) (std.record.get "real_tool_refs" (value)))))))) in
+let is_store_layer_shadow = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["layer","status"]) (std.record.fields (value))
+  && (std.record.has_field "layer" (value) && (((std.is_string (std.record.get "layer" (value))
+  && C.Utf8ByteLength (std.record.get "layer" (value)) <= MAX_STORE_LAYER_LABEL_BYTES
+  && C.IsNonEmptyString (std.record.get "layer" (value))))))
+  && (std.record.has_field "status" (value) && ((std.array.elem (std.record.get "status" (value)) ["matching","conflicting","digest-collision","read-failure"]
+  && (std.is_string (std.record.get "status" (value)))))))) in
+let is_store_layer_selection = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["selected_layer","shadows","store_path"]) (std.record.fields (value))
+  && (std.record.has_field "selected_layer" (value) && (((std.is_string (std.record.get "selected_layer" (value))
+  && C.Utf8ByteLength (std.record.get "selected_layer" (value)) <= MAX_STORE_LAYER_LABEL_BYTES
+  && C.IsNonEmptyString (std.record.get "selected_layer" (value))))))
+  && (std.record.has_field "shadows" (value) && (((std.is_array (std.record.get "shadows" (value))
+  && std.array.length (std.record.get "shadows" (value)) <= MAX_OVERLAY_BASE_LAYERS
+  && std.array.all (fun item_2 => is_store_layer_shadow (item_2)) (std.record.get "shadows" (value))))))
+  && (std.record.has_field "store_path" (value) && (((std.is_string (std.record.get "store_path" (value))
+  && C.IsSafeReference (std.record.get "store_path" (value)))))))) in
 let is_substitution = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["fallback_reason","mode","reused_bytes","transferred_bytes"]) (std.record.fields (value))
   && (!std.record.has_field "fallback_reason" (value) || ((((std.record.get "fallback_reason" (value)) == null || ((std.is_string (std.record.get "fallback_reason" (value))
@@ -955,7 +985,7 @@ let is_workspace = fun value => ((std.is_record (value)
   && (std.record.has_field "workspace_id" (value) && ((((std.record.get "workspace_id" (value)) == null || ((std.is_string (std.record.get "workspace_id" (value))
   && C.Utf8ByteLength (std.record.get "workspace_id" (value)) <= MAX_WORKSPACE_ID_BYTES)))))))) in
 C.FromPredicate (fun value => ((std.is_record (value)
-  && std.array.all (fun field_1 => std.array.elem field_1 ["action_result_reports","ast_grep_structural_evidence","ast_grep_structural_evidence_diagnostics","build_environment_reports","cargo_build_evidence","cargo_build_evidence_diagnostics","counts","diagnostic_persistence_failures","failed","file","fod_mismatches","frontend_artifact_attestations","hermeticity_audit_events","hermeticity_mode","native_dynamic_plans","network_policy_reports","outcomes","output_dir","remote_observability","remote_telemetry_events","scheduler_policy","scheduler_priority_decisions","schema","state_dir","store_dir","workspace_reports"]) (std.record.fields (value))
+  && std.array.all (fun field_1 => std.array.elem field_1 ["action_result_reports","ast_grep_structural_evidence","ast_grep_structural_evidence_diagnostics","build_environment_reports","cargo_build_evidence","cargo_build_evidence_diagnostics","counts","diagnostic_persistence_failures","failed","file","fod_mismatches","frontend_artifact_attestations","hermeticity_audit_events","hermeticity_mode","native_dynamic_plans","network_policy_reports","outcomes","output_dir","overlay_base_generations","overlay_plan_blake3","remote_observability","remote_telemetry_events","scheduler_policy","scheduler_priority_decisions","schema","state_dir","store_dir","store_layer_selections","workspace_reports"]) (std.record.fields (value))
   && (!std.record.has_field "action_result_reports" (value) || (((std.is_array (std.record.get "action_result_reports" (value))
   && std.array.length (std.record.get "action_result_reports" (value)) <= MAX_BUILD_REPORT_ROWS
   && std.array.all (fun item_2 => is_action_result_report (item_2)) (std.record.get "action_result_reports" (value))))))
@@ -1023,6 +1053,11 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && std.array.all (fun item_2 => is_outcome (item_2)) (std.record.get "outcomes" (value))))))
   && (std.record.has_field "output_dir" (value) && (((std.is_string (std.record.get "output_dir" (value))
   && C.IsSafeReference (std.record.get "output_dir" (value))))))
+  && (std.record.has_field "overlay_base_generations" (value) && (((std.is_array (std.record.get "overlay_base_generations" (value))
+  && std.array.length (std.record.get "overlay_base_generations" (value)) <= MAX_OVERLAY_BASE_LAYERS
+  && std.array.all (fun item_2 => is_overlay_base_generation (item_2)) (std.record.get "overlay_base_generations" (value))))))
+  && (!std.record.has_field "overlay_plan_blake3" (value) || ((((std.record.get "overlay_plan_blake3" (value)) == null || ((std.is_string (std.record.get "overlay_plan_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "overlay_plan_blake3" (value))))))))
   && (!std.record.has_field "remote_observability" (value) || (((std.is_array (std.record.get "remote_observability" (value))
   && std.array.length (std.record.get "remote_observability" (value)) <= MAX_BUILD_REPORT_ROWS
   && std.array.all (fun item_2 => is_remote_observability (item_2)) (std.record.get "remote_observability" (value))))))
@@ -1039,6 +1074,9 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && C.IsSafeReference (std.record.get "state_dir" (value))))))
   && (std.record.has_field "store_dir" (value) && (((std.is_string (std.record.get "store_dir" (value))
   && C.IsSafeReference (std.record.get "store_dir" (value))))))
+  && (std.record.has_field "store_layer_selections" (value) && (((std.is_array (std.record.get "store_layer_selections" (value))
+  && std.array.length (std.record.get "store_layer_selections" (value)) <= MAX_BUILD_REPORT_ROWS
+  && std.array.all (fun item_2 => is_store_layer_selection (item_2)) (std.record.get "store_layer_selections" (value))))))
   && (std.record.has_field "workspace_reports" (value) && (((std.is_array (std.record.get "workspace_reports" (value))
   && std.array.length (std.record.get "workspace_reports" (value)) <= MAX_BUILD_REPORT_ROWS
   && std.array.all (fun item_2 => is_workspace (item_2)) (std.record.get "workspace_reports" (value))))))

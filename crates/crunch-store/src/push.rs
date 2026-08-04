@@ -56,6 +56,7 @@ pub async fn export_paths_to_cache_dir(
 ) -> Result<PushReport, Error> {
     assert!(!dest.as_os_str().is_empty(), "push destination must not be empty");
     assert!(paths.len() <= MAX_PUSH_PATHS, "push batch exceeds limit of {MAX_PUSH_PATHS}");
+    handle.revalidate_overlay_bases()?;
 
     let nar_dir = dest.join("nar");
     tokio::fs::create_dir_all(&nar_dir)
@@ -81,7 +82,9 @@ pub async fn export_paths_to_cache_dir(
     };
 
     for path_info in paths {
+        handle.revalidate_overlay_bases()?;
         push_single_path(&context, path_info, &mut push_result).await?;
+        handle.revalidate_overlay_bases()?;
     }
 
     Ok(push_result)

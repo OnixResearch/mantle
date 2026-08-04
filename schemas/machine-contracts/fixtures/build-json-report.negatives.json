@@ -13,6 +13,8 @@
       "expected_path": "/counts",
       "artifact": {
         "schema": "crunch-build-report-v1",
+        "overlay_base_generations": [],
+        "store_layer_selections": [],
         "file": "examples/hello.ncl",
         "output_dir": "/mantle/store",
         "state_dir": ".mantle/state",
@@ -47,6 +49,8 @@
       "expected_path": "/scheduler_policy",
       "artifact": {
         "schema": "crunch-build-report-v1",
+        "overlay_base_generations": [],
+        "store_layer_selections": [],
         "file": "examples/hello.ncl",
         "output_dir": "/mantle/store",
         "state_dir": ".mantle/state",
@@ -82,6 +86,8 @@
       "expected_path": "/scheduler_priority_decisions/0/candidate_snapshot_digest_blake3",
       "artifact": {
         "schema": "crunch-build-report-v1",
+        "overlay_base_generations": [],
+        "store_layer_selections": [],
         "file": "examples/hello.ncl",
         "output_dir": "/mantle/store",
         "state_dir": ".mantle/state",
@@ -143,6 +149,8 @@
       "expected_path": "/token",
       "artifact": {
         "schema": "crunch-build-report-v1",
+        "overlay_base_generations": [],
+        "store_layer_selections": [],
         "file": "examples/hello.ncl",
         "output_dir": "/mantle/store",
         "state_dir": ".mantle/state",
@@ -179,6 +187,8 @@
       "expected_path": "/remote_telemetry_events/0/retry",
       "artifact": {
         "schema": "crunch-build-report-v1",
+        "overlay_base_generations": [],
+        "store_layer_selections": [],
         "file": "examples/hello.ncl",
         "output_dir": "/mantle/store",
         "state_dir": ".mantle/state",

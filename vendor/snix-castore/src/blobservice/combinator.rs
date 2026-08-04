@@ -1,3 +1,4 @@
+use std::io;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -10,26 +11,36 @@ use super::ChunkedReader;
 use crate::B3Digest;
 use crate::composition::CompositionContext;
 use crate::composition::ServiceBuilder;
+use crate::proto::stat_blob_response::ChunkMeta;
+use crate::service_provenance::LayeredRead;
+use crate::service_provenance::ReadThroughMode;
 
-/// Combinator for a BlobService, using a "near" and "far" blobservice.
-/// Requests are tried in (and returned from) the near store first, only if
-/// things are not present there, the far BlobService is queried.
-/// In case the near blobservice doesn't have the blob, we ask the remote
-/// blobservice for chunks, and try to read each of these chunks from the near
-/// blobservice again, before falling back to the far one.
-/// The far BlobService is never written to.
+/// Composes a near and far blob service.
+///
+/// Cache mode preserves chunk reuse across near and far. No-backfill mode reads
+/// a far blob directly, so one read never mixes chunks from different layers.
 pub struct CombinedBlobService<BL, BR> {
     instance_name: String,
     near: BL,
     far: BR,
+    mode: ReadThroughMode,
 }
 
 impl<BL, BR> CombinedBlobService<BL, BR> {
     pub fn new(instance_name: String, near: BL, far: BR) -> Self {
+        Self::with_mode(instance_name, near, far, ReadThroughMode::Cache)
+    }
+
+    pub fn new_no_backfill(instance_name: String, near: BL, far: BR) -> Self {
+        Self::with_mode(instance_name, near, far, ReadThroughMode::NoBackfill)
+    }
+
+    pub fn with_mode(instance_name: String, near: BL, far: BR, mode: ReadThroughMode) -> Self {
         Self {
             instance_name,
             near,
             far,
+            mode,
         }
     }
 }
@@ -44,6 +55,7 @@ where
             instance_name: self.instance_name.clone(),
             near: self.near.clone(),
             far: self.far.clone(),
+            mode: self.mode,
         }
     }
 }
@@ -55,52 +67,99 @@ where
     BR: AsRef<dyn BlobService> + Clone + Send + Sync + 'static,
 {
     #[instrument(skip(self, digest), fields(blob.digest=%digest, instance_name=%self.instance_name))]
-    async fn has(&self, digest: &B3Digest) -> std::io::Result<bool> {
+    async fn has(&self, digest: &B3Digest) -> io::Result<bool> {
         Ok(self.near.as_ref().has(digest).await? || self.far.as_ref().has(digest).await?)
     }
 
     #[instrument(skip(self, digest), fields(blob.digest=%digest, instance_name=%self.instance_name), err)]
-    async fn open_read(&self, digest: &B3Digest) -> std::io::Result<Option<Box<dyn BlobReader>>> {
-        if self.near.as_ref().has(digest).await? {
-            // near store has the blob, so we can assume it also has all chunks.
-            self.near.as_ref().open_read(digest).await
-        } else {
-            // near store doesn't have the blob.
-            // Ask the remote one for the list of chunks,
-            // and create a chunked reader that uses self.open_read() for
-            // individual chunks. There's a chance we already have some chunks
-            // in near, meaning we don't need to fetch them all from the far
-            // BlobService.
-            match self.far.as_ref().chunks(digest).await? {
-                // blob doesn't exist on the near side either, nothing we can do.
-                None => Ok(None),
-                Some(remote_chunks) => {
-                    // if there's no more granular chunks, or the far
-                    // blobservice doesn't support chunks, read the blob from
-                    // the far blobservice directly.
-                    if remote_chunks.is_empty() {
-                        return self.far.as_ref().open_read(digest).await;
-                    }
-                    // otherwise, a chunked reader, which will always try the
-                    // near backend first.
+    async fn open_read(&self, digest: &B3Digest) -> io::Result<Option<Box<dyn BlobReader>>> {
+        Ok(self.open_read_with_layer(digest).await?.map(|read| read.value))
+    }
 
-                    let chunked_reader = ChunkedReader::from_chunks(
-                        remote_chunks
-                            .into_iter()
-                            .map(|chunk| (chunk.digest.try_into().expect("invalid b3 digest"), chunk.size)),
-                        Arc::new(self.clone()) as Arc<dyn BlobService>,
-                    );
-                    Ok(Some(Box::new(chunked_reader)))
-                }
+    #[instrument(skip(self, digest), fields(blob.digest=%digest, instance_name=%self.instance_name), err)]
+    async fn open_read_with_layer(&self, digest: &B3Digest) -> io::Result<Option<LayeredRead<Box<dyn BlobReader>>>> {
+        if self.near.as_ref().has(digest).await? {
+            let read = self.near.as_ref().open_read_with_layer(digest).await?;
+            if read.is_some() || self.mode == ReadThroughMode::Cache {
+                return Ok(read);
             }
+            return Err(incomplete_blob("near"));
         }
+        if self.mode == ReadThroughMode::NoBackfill {
+            if !self.far.as_ref().has(digest).await? {
+                return Ok(None);
+            }
+            return self
+                .far
+                .as_ref()
+                .open_read_with_layer(digest)
+                .await?
+                .map_or_else(|| Err(incomplete_blob("far")), |read| Ok(Some(read.shift_far().map_err(layer_error)?)));
+        }
+
+        let Some(far_chunks) = self.far.as_ref().chunks_with_layer(digest).await? else {
+            return Ok(None);
+        };
+        let far_layer = far_chunks.layer_index.checked_add(1).ok_or_else(layer_index_overflow)?;
+        if far_chunks.value.is_empty() {
+            let far_read =
+                self.far.as_ref().open_read_with_layer(digest).await?.ok_or_else(|| incomplete_blob("far"))?;
+            let shifted = far_read.shift_far().map_err(layer_error)?;
+            if shifted.layer_index != far_layer {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "far blob metadata and reader resolved from different layers",
+                ));
+            }
+            return Ok(Some(shifted));
+        }
+        let mut chunks = Vec::with_capacity(far_chunks.value.len());
+        for chunk in far_chunks.value {
+            let digest = chunk.digest.try_into().map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidData, "far blob service returned an invalid BLAKE3 chunk digest")
+            })?;
+            chunks.push((digest, chunk.size));
+        }
+        let chunked_reader =
+            ChunkedReader::from_chunks(chunks.into_iter(), Arc::new(self.clone()) as Arc<dyn BlobService>);
+        Ok(Some(LayeredRead {
+            value: Box::new(chunked_reader),
+            layer_index: far_layer,
+        }))
     }
 
     #[instrument(skip_all, fields(instance_name=%self.instance_name))]
     async fn open_write(&self) -> Box<dyn BlobWriter> {
-        // direct writes to the near one.
         self.near.as_ref().open_write().await
     }
+
+    async fn chunks(&self, digest: &B3Digest) -> io::Result<Option<Vec<ChunkMeta>>> {
+        Ok(self.chunks_with_layer(digest).await?.map(|read| read.value))
+    }
+
+    async fn chunks_with_layer(&self, digest: &B3Digest) -> io::Result<Option<LayeredRead<Vec<ChunkMeta>>>> {
+        if let Some(chunks) = self.near.as_ref().chunks_with_layer(digest).await? {
+            return Ok(Some(chunks));
+        }
+        self.far
+            .as_ref()
+            .chunks_with_layer(digest)
+            .await?
+            .map(|chunks| chunks.shift_far().map_err(layer_error))
+            .transpose()
+    }
+}
+
+fn incomplete_blob(layer: &str) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, format!("{layer} blob service reported a blob but returned no reader"))
+}
+
+fn layer_error(error: crate::service_provenance::LayerIndexOverflow) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, error)
+}
+
+fn layer_index_overflow() -> io::Error {
+    layer_error(crate::service_provenance::LayerIndexOverflow)
 }
 
 #[derive(serde::Deserialize, Debug, Clone)]
@@ -108,10 +167,13 @@ where
 pub struct CombinedBlobServiceConfig {
     near: String,
     far: String,
+    #[serde(default)]
+    mode: ReadThroughMode,
 }
 
 impl TryFrom<url::Url> for CombinedBlobServiceConfig {
     type Error = Box<dyn std::error::Error + Send + Sync>;
+
     fn try_from(_url: url::Url) -> Result<Self, Self::Error> {
         Err("Instantiating a CombinedBlobService from a url is not supported".into())
     }
@@ -120,6 +182,7 @@ impl TryFrom<url::Url> for CombinedBlobServiceConfig {
 #[async_trait]
 impl ServiceBuilder for CombinedBlobServiceConfig {
     type Output = dyn BlobService;
+
     async fn build<'a>(
         &'a self,
         instance_name: &str,
@@ -130,6 +193,53 @@ impl ServiceBuilder for CombinedBlobServiceConfig {
             instance_name: instance_name.to_string(),
             near: local?,
             far: remote?,
+            mode: self.mode,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use super::*;
+    use crate::fixtures::BLOB_A;
+    use crate::fixtures::BLOB_A_DIGEST;
+
+    const FAR_LAYER_INDEX: usize = 1;
+
+    async fn memory_service() -> Arc<dyn BlobService> {
+        crate::blobservice::from_addr("memory:").await.expect("memory blob service must open")
+    }
+
+    async fn write_blob(service: &Arc<dyn BlobService>) {
+        let mut writer = service.open_write().await;
+        tokio::io::copy(&mut Cursor::new(&*BLOB_A), &mut writer).await.expect("fixture blob must write");
+        let digest = writer.close().await.expect("fixture blob must close");
+        assert_eq!(digest, *BLOB_A_DIGEST);
+    }
+
+    #[tokio::test]
+    async fn no_backfill_reports_far_layer_without_near_blob() {
+        let near = memory_service().await;
+        let far = memory_service().await;
+        write_blob(&far).await;
+        let service = CombinedBlobService::new_no_backfill("overlay".to_string(), near.clone(), far);
+
+        let read = service.open_read_with_layer(&BLOB_A_DIGEST).await.unwrap().unwrap();
+        assert_eq!(read.layer_index, FAR_LAYER_INDEX);
+        assert!(!near.has(&BLOB_A_DIGEST).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn explicit_write_routes_to_near_only() {
+        let near = memory_service().await;
+        let far = memory_service().await;
+        let service = CombinedBlobService::new_no_backfill("overlay".to_string(), near.clone(), far.clone());
+        let service: Arc<dyn BlobService> = Arc::new(service);
+
+        write_blob(&service).await;
+        assert!(near.has(&BLOB_A_DIGEST).await.unwrap());
+        assert!(!far.has(&BLOB_A_DIGEST).await.unwrap());
     }
 }

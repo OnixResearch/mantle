@@ -14,5 +14,6 @@
       "reason_code": "network-disabled"
     }
   ],
+  "selected_store_layers": [],
   "non_claim": "route planning is advisory and does not prove transport execution or artifact correctness"
 }

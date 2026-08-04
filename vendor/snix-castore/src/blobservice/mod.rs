@@ -7,6 +7,7 @@ use crate::B3Digest;
 use crate::composition::Registry;
 use crate::composition::ServiceBuilder;
 use crate::proto::stat_blob_response::ChunkMeta;
+use crate::service_provenance::LayeredRead;
 
 mod chunked_reader;
 pub mod chunker;
@@ -44,6 +45,11 @@ pub trait BlobService: Send + Sync {
     /// On implementations returning chunks, this must also work for chunks.
     async fn open_read(&self, digest: &B3Digest) -> io::Result<Option<Box<dyn BlobReader>>>;
 
+    /// Request a blob and return its zero-based near/far precedence index.
+    async fn open_read_with_layer(&self, digest: &B3Digest) -> io::Result<Option<LayeredRead<Box<dyn BlobReader>>>> {
+        Ok(self.open_read(digest).await?.map(LayeredRead::local))
+    }
+
     /// Insert a new blob into the store. Returns a [BlobWriter], which
     /// implements [tokio::io::AsyncWrite] and a [BlobWriter::close] to finalize
     /// the blob and get its digest.
@@ -63,6 +69,11 @@ pub trait BlobService: Send + Sync {
         // default implementation, signalling the backend does not have more
         // granular chunks available.
         Ok(Some(vec![]))
+    }
+
+    /// Return chunk metadata and its zero-based near/far precedence index.
+    async fn chunks_with_layer(&self, digest: &B3Digest) -> io::Result<Option<LayeredRead<Vec<ChunkMeta>>>> {
+        Ok(self.chunks(digest).await?.map(LayeredRead::local))
     }
 }
 

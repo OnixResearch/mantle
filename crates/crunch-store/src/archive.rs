@@ -211,6 +211,7 @@ pub async fn export_store_archive<W: AsyncWrite + Unpin + Send>(
     if roots.is_empty() {
         return Err(Error::Export("archive export requires at least one root PathInfo".to_string()));
     }
+    handle.revalidate_overlay_bases()?;
 
     let planned = plan_export_closure(handle, roots, options).await?;
     let root_set = roots.iter().map(|pi| pi.store_path.to_string()).collect::<BTreeSet<_>>();
@@ -239,6 +240,7 @@ pub async fn export_store_archive<W: AsyncWrite + Unpin + Send>(
     };
 
     for path_info in &planned {
+        handle.revalidate_overlay_bases()?;
         let rendered = render_payload_to_temp(handle, path_info).await?;
         write_frame(
             writer,
@@ -252,6 +254,7 @@ pub async fn export_store_archive<W: AsyncWrite + Unpin + Send>(
         .await?;
         copy_payload_file(writer, &rendered.path).await?;
         remove_rendered_payload(&rendered.path).await;
+        handle.revalidate_overlay_bases()?;
 
         archive_state.exported_count = archive_state.exported_count.saturating_add(1);
         archive_state.total_payload_bytes = archive_state.total_payload_bytes.saturating_add(rendered.payload_len);
@@ -268,6 +271,7 @@ pub async fn export_store_archive<W: AsyncWrite + Unpin + Send>(
     )
     .await?;
     writer.flush().await.map_err(write_archive_error("flushing archive"))?;
+    handle.revalidate_overlay_bases()?;
 
     Ok(archive_state)
 }
@@ -323,6 +327,7 @@ pub async fn import_store_archive<R: AsyncRead + Unpin + Send>(
 ) -> Result<ArchiveImportReport, Error> {
     assert!(!handle.store_dir().is_empty());
     assert!(handle.store_dir().starts_with('/'));
+    handle.revalidate_overlay_bases()?;
     read_magic(reader).await?;
     let header = read_header(reader).await?;
     validate_header_store_prefix(&header, handle.store_dir())?;
@@ -344,15 +349,18 @@ pub async fn import_store_archive<R: AsyncRead + Unpin + Send>(
                 if !seen.insert(listed.store_path.clone()) {
                     return Err(Error::Store(format!("archive contains duplicate path record {}", listed.store_path)));
                 }
+                handle.revalidate_overlay_bases()?;
                 let mut context = ArchiveImportContext {
                     handle,
                     options,
                     result: &mut archive_state,
                 };
                 import_or_skip_path(reader, ArchiveImportRecord { path_frame, listed }, &mut context).await?;
+                handle.revalidate_overlay_bases()?;
             }
             ArchiveFrame::End(end) => {
                 validate_import_end(&archive_state, &end, header.record_count)?;
+                handle.revalidate_overlay_bases()?;
                 return Ok(archive_state);
             }
             ArchiveFrame::Header(_) => {

@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-07-06)
+Accepted and implemented (2026-08-04)
 
 ## Context
 
@@ -104,9 +104,45 @@ wiring is needed beyond routing input resolution through the composed handle.
 
 ### CLI surface
 
-A new global `--base-store <state-dir>` (repeatable, ordered) declares one or
-more read-only base stores under the writable local store. The local store
-remains the overlay; declared bases stack in declaration order below it.
+A new global `--base-store <state-dir>` option declares one read-only base.
+The option is repeatable. Declaration order sets read precedence.
+
+`mantle store list` and `mantle store info` show the selected layer.
+Their JSON reports also include descriptors, generations, trust policy, signer names, and no-backfill status.
+
+### Base admission and trust
+
+Each base must be a direct directory. Symlinks and special files are rejected.
+The base directory and all members must have no write permission.
+
+Each base contains `store-identity.json`. This file binds the logical prefix, state schema, and trust policy.
+
+Each base also contains `overlay-trusted-public-keys` or `signing-key`.
+Mantle verifies each selected PathInfo signature with the accepted Ed25519 keys for that layer.
+Signature presence alone is not sufficient.
+
+Mantle computes a deterministic BLAKE3 generation identity over bounded state observations.
+The identity includes ordered paths, member kinds, lengths, and content digests.
+Mantle revalidates this identity before reads, execution, GC, and output admission.
+Route reports bind selected base paths to the matching descriptor and generation.
+Build reports record the overlay plan, base generations, selected layers, and shadows.
+Attestation envelopes record the selected artifact or closure layers.
+
+### Operations and rollback
+
+GC planning includes exact layer ownership and cross-layer reachability.
+GC can mutate only overlay PathInfo, directory, blob, export, attestation, root, and mapping state.
+A base-to-overlay reference is invalid and blocks GC.
+
+To roll back, remove all `--base-store` options and reopen the writable store.
+This action restores single-store behavior. It does not copy base content into the overlay.
+
+### Non-claims
+
+The composition report does not prove permanent base immutability.
+A generation identity does not prove whole-database atomicity or source correctness.
+Layer trust does not prove content correctness, release eligibility, or mutation authority.
+No-backfill evidence does not authorize writes to a base.
 
 ## Consequences
 
@@ -122,9 +158,8 @@ remains the overlay; declared bases stack in declaration order below it.
 - **GC gets a cross-layer reachability rule** the single-store model did not
   need. Implemented in crunch-store, scoped to the overlay's own state.
 - **No path invariance change**: both layers share a prefix, so derivation
-  hashes, ATerm, and CA provisionals remain consistent with ADR 0003. Existing
-  `pathinfo.redb` databases at the same prefix remain valid as overlays or
-  bases.
+  hashes, ATerm, and CA provisionals remain consistent with ADR 0003. A base
+  also needs accepted identity, trust-key, permission, and generation facts.
 - **Substituter chain is orthogonal.** `--substituters` still governs remote
   narinfo fetch for paths missing from *both* layers; the overlay just adds a
   local read-only tier below the local store and above the remote substituters.

@@ -1,9 +1,8 @@
-//! StoreLayer: tracking which store layer produced or served a path, blob,
-//! directory, or PathInfo during overlay store composition.
+//! Exact store-layer provenance for composed reads.
 
 use std::fmt;
 
-/// Identifies which store layer produced or served a given artifact.
+/// Identifies the selected precedence layer for one store read.
 #[derive(
     Debug,
     Clone,
@@ -15,62 +14,134 @@ use std::fmt;
     serde::Serialize,
     serde::Deserialize
 )]
-#[serde(rename_all = "snake_case")]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum StoreLayer {
-    /// Served from the writable overlay (local store).
+    /// Served from the writable overlay or the only local store.
     #[default]
     Overlay,
-    /// Served from a read-only base store.
-    Base,
+    /// Served from a read-only base. Index one is the first declared base.
+    Base { index: usize },
 }
 
 impl StoreLayer {
-    /// Return `true` if this is the Base layer.
-    pub fn is_base(self) -> bool {
-        matches!(self, StoreLayer::Base)
+    pub fn from_service_index(index: usize) -> Result<Self, LayerIndexError> {
+        if index == 0 {
+            return Ok(Self::Overlay);
+        }
+        Ok(Self::Base { index })
     }
 
-    /// Return `true` if this is the Overlay layer.
-    pub fn is_overlay(self) -> bool {
-        matches!(self, StoreLayer::Overlay)
+    #[must_use]
+    pub const fn service_index(self) -> usize {
+        match self {
+            Self::Overlay => 0,
+            Self::Base { index } => index,
+        }
+    }
+
+    #[must_use]
+    pub const fn is_base(self) -> bool {
+        matches!(self, Self::Base { .. })
+    }
+
+    #[must_use]
+    pub const fn is_overlay(self) -> bool {
+        matches!(self, Self::Overlay)
     }
 }
 
 impl fmt::Display for StoreLayer {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            StoreLayer::Overlay => write!(f, "overlay"),
-            StoreLayer::Base => write!(f, "base"),
+            Self::Overlay => formatter.write_str("overlay"),
+            Self::Base { index } => write!(formatter, "base[{index}]"),
         }
     }
 }
 
-/// A value that carries a store-layer provenance tag.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
+#[error("store layer index is invalid")]
+pub struct LayerIndexError;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LayerShadowStatus {
+    Matching,
+    Conflicting,
+    DigestCollision,
+    ReadFailure,
+}
+
+impl LayerShadowStatus {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Matching => "matching",
+            Self::Conflicting => "conflicting",
+            Self::DigestCollision => "digest-collision",
+            Self::ReadFailure => "read-failure",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct LayerShadowObservation {
+    pub layer: StoreLayer,
+    pub status: LayerShadowStatus,
+}
+
+/// A value with exact store-layer provenance.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Layered<T> {
     pub value: T,
     pub layer: StoreLayer,
+    pub shadows: Vec<LayerShadowObservation>,
+}
+
+/// Bounded evidence for one logical store path selected during an operation.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+pub struct StoreLayerSelection {
+    pub store_path: String,
+    pub selected_layer: StoreLayer,
+    pub shadows: Vec<LayerShadowObservation>,
+}
+
+impl StoreLayerSelection {
+    #[must_use]
+    pub fn from_layered<T>(store_path: String, layered: &Layered<T>) -> Self {
+        Self {
+            store_path,
+            selected_layer: layered.layer,
+            shadows: layered.shadows.clone(),
+        }
+    }
 }
 
 impl<T> Layered<T> {
-    pub fn overlay(value: T) -> Self {
+    #[must_use]
+    pub const fn overlay(value: T) -> Self {
         Self {
             value,
             layer: StoreLayer::Overlay,
+            shadows: Vec::new(),
         }
     }
 
-    pub fn base(value: T) -> Self {
-        Self {
+    pub fn from_service_index(value: T, index: usize) -> Result<Self, LayerIndexError> {
+        Ok(Self {
             value,
-            layer: StoreLayer::Base,
-        }
+            layer: StoreLayer::from_service_index(index)?,
+            shadows: Vec::new(),
+        })
     }
 
-    pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> Layered<U> {
+    #[must_use]
+    pub fn map<U, F>(self, map_value: F) -> Layered<U>
+    where F: FnOnce(T) -> U {
         Layered {
-            value: f(self.value),
+            value: map_value(self.value),
             layer: self.layer,
+            shadows: self.shadows,
         }
     }
 }
@@ -79,39 +150,52 @@ impl<T> Layered<T> {
 mod tests {
     use super::*;
 
+    const FIRST_BASE_INDEX: usize = 1;
+    const SECOND_BASE_INDEX: usize = 2;
+
     #[test]
-    fn store_layer_display() {
+    fn store_layer_display_includes_exact_base_index() {
         assert_eq!(StoreLayer::Overlay.to_string(), "overlay");
-        assert_eq!(StoreLayer::Base.to_string(), "base");
+        assert_eq!(
+            StoreLayer::Base {
+                index: SECOND_BASE_INDEX
+            }
+            .to_string(),
+            "base[2]"
+        );
     }
 
     #[test]
-    fn store_layer_booleans() {
+    fn store_layer_booleans_are_disjoint() {
         assert!(StoreLayer::Overlay.is_overlay());
         assert!(!StoreLayer::Overlay.is_base());
-        assert!(StoreLayer::Base.is_base());
-        assert!(!StoreLayer::Base.is_overlay());
+        assert!(
+            StoreLayer::Base {
+                index: FIRST_BASE_INDEX
+            }
+            .is_base()
+        );
+        assert!(
+            !StoreLayer::Base {
+                index: FIRST_BASE_INDEX
+            }
+            .is_overlay()
+        );
     }
 
     #[test]
-    fn layered_overlay_constructor() {
-        let l = Layered::overlay(42usize);
-        assert_eq!(l.value, 42);
-        assert_eq!(l.layer, StoreLayer::Overlay);
-    }
-
-    #[test]
-    fn layered_base_constructor() {
-        let l = Layered::base("hello");
-        assert_eq!(l.value, "hello");
-        assert_eq!(l.layer, StoreLayer::Base);
-    }
-
-    #[test]
-    fn layered_map() {
-        let l = Layered::overlay(5u64);
-        let mapped = l.map(|v| v * 2);
+    fn layered_value_preserves_exact_index_through_map() {
+        let layered = Layered::from_service_index(5_u64, SECOND_BASE_INDEX).unwrap();
+        let mapped = layered.map(|value| value * 2);
         assert_eq!(mapped.value, 10);
-        assert_eq!(mapped.layer, StoreLayer::Overlay);
+        assert_eq!(mapped.layer, StoreLayer::Base {
+            index: SECOND_BASE_INDEX
+        });
+    }
+
+    #[test]
+    fn zero_service_index_is_overlay() {
+        let layered = Layered::from_service_index("value", 0).unwrap();
+        assert_eq!(layered.layer, StoreLayer::Overlay);
     }
 }

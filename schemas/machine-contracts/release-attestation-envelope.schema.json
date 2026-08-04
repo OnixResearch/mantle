@@ -5,6 +5,7 @@
   "x-mantle-rust-owner": "src/attest_cmd.rs::AttestationEnvelopeOutput",
   "$defs": {
     "string_array": { "type": "array", "maxItems": 256, "x-mantle-bound-name": { "maxItems": "MAX_RELEASE_CLAIMS" }, "items": { "type": "string", "x-mantle-semantic": "redaction-safe" } },
+    "store_layer": { "type": "object", "required": ["kind"], "properties": { "kind": { "type": "string", "enum": ["overlay", "base"] }, "index": { "type": ["integer", "null"], "minimum": 1, "maximum": 8, "x-mantle-bound-name": { "minimum": "MIN_ATTESTATION_BASE_LAYER_INDEX", "maximum": "MAX_ATTESTATION_BASE_LAYERS" } } }, "additionalProperties": false },
     "workflow": {
       "type": "object",
       "required": ["command", "version"],
@@ -50,6 +51,8 @@
     "kind": { "type": "string", "const": "mantle-release-attestation" },
     "digest": { "type": "string", "x-mantle-semantic": "blake3" },
     "stored_path": { "type": "string", "x-mantle-semantic": "safe-reference" },
+    "selected_layer": { "type": ["object", "null"], "required": ["kind"], "properties": { "kind": { "type": "string", "enum": ["overlay", "base"] }, "index": { "type": ["integer", "null"], "minimum": 1, "maximum": 8, "x-mantle-bound-name": { "minimum": "MIN_ATTESTATION_BASE_LAYER_INDEX", "maximum": "MAX_ATTESTATION_BASE_LAYERS" } } }, "additionalProperties": false },
+    "selected_layers": { "type": ["object", "null"], "maxProperties": 65536, "x-mantle-bound-name": { "maxProperties": "MAX_ATTESTATION_SELECTED_LAYERS" }, "additionalProperties": { "$ref": "#/$defs/store_layer" } },
     "attestation": { "$ref": "#/$defs/release_attestation" }
   },
   "additionalProperties": false

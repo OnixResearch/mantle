@@ -109,6 +109,7 @@ Mantle separates logical identity from physical placement:
 | `--store-prefix` | `/mantle/store` | Logical paths used in derivation identity and ATerm serialization |
 | `--store` | `/nix/store` | Physical directory where final outputs are exported |
 | `--state-dir` | `$CRUNCH_STATE_DIR`, `$XDG_STATE_HOME/crunch`, or `~/.local/state/crunch` | PathInfo, castore blobs, logs, roots, and evidence |
+| `--base-store` | None | Repeatable, ordered read-only base state directory below the writable store |
 
 Use `--store /tmp/mantle-store` for an unprivileged physical output directory.
 Use `--nix-compat` when the logical prefix must be `/nix/store` for
@@ -119,6 +120,43 @@ Content-addressed outputs are the default. Input-addressed derivations and Nix
 hash algorithms remain available where compatibility requires them. Mantle signs
 PathInfo records with Ed25519 keys and rechecks signatures, content hashes, and
 castore completeness before admitting cached outputs.
+
+### Read-only overlay composition
+
+Use `--base-store <state-dir>` to add an ordered read-only base.
+The current `--state-dir` remains the only writable overlay.
+All layers must use the same logical store prefix.
+
+Prepare a base only after all base writes finish:
+
+```bash
+printf '%s\n' '<name>:<base64-ed25519-public-key>' \
+  > /srv/mantle-base/overlay-trusted-public-keys
+chmod -R a-w /srv/mantle-base
+mantle --base-store /srv/mantle-base store list
+mantle --base-store /srv/mantle-base --json store info '<path-filter>'
+```
+
+The base must contain `store-identity.json` and one accepted trust-key file.
+Mantle also accepts a local `signing-key` when the public-key file is absent.
+Do not distribute a private signing key only to enable base reads.
+
+Mantle rejects writable members, symlinks, special files, prefix mismatches, duplicate bases, and invalid signatures.
+Reads do not copy PathInfo, directories, or blobs into the overlay.
+An invalid higher layer blocks fallback to lower layers.
+
+Store and GC reports include the exact layer, shadows, descriptor, generation, trust policy, and signer names.
+Route and build reports bind selected base layers to their observed descriptors and generations.
+Attestation envelopes report the selected artifact layer or the selected closure layers.
+Mantle revalidates base generations before execution, GC, and output admission.
+GC can remove only overlay-owned state.
+
+To roll back, remove all `--base-store` options.
+The writable store then uses normal single-store behavior.
+This action does not copy or delete base content.
+
+These checks do not prove source correctness, permanent immutability, release eligibility, or whole-database atomicity.
+See [ADR 0012](adr/0012-overlay-store-composition.md) for the full decision and non-claims.
 
 Historical signed PathInfo created before final-NAR metadata fixes can be inspected
 and explicitly migrated one exact path at a time:

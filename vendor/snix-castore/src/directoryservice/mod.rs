@@ -1,11 +1,14 @@
 use async_trait::async_trait;
 use auto_impl::auto_impl;
+use futures::StreamExt;
+use futures::TryStreamExt;
 use futures::stream::BoxStream;
 
 use crate::B3Digest;
 use crate::Directory;
 use crate::composition::Registry;
 use crate::composition::ServiceBuilder;
+use crate::service_provenance::LayeredRead;
 
 mod combinators;
 mod directory_graph;
@@ -59,6 +62,12 @@ pub trait DirectoryService: Send + Sync {
     /// sent to a DirectoryPutter. This makes sense for implementations bundling
     /// closures of directories together in batches.
     async fn get(&self, digest: &B3Digest) -> Result<Option<Directory>, Error>;
+
+    /// Look up one directory and return its zero-based near/far precedence index.
+    async fn get_with_layer(&self, digest: &B3Digest) -> Result<Option<LayeredRead<Directory>>, Error> {
+        Ok(self.get(digest).await?.map(LayeredRead::local))
+    }
+
     /// Uploads a single Directory message, and returns the calculated
     /// digest, or an error. An error *must* also be returned if the message is
     /// not valid.
@@ -80,6 +89,14 @@ pub trait DirectoryService: Send + Sync {
     ///
     /// In case the directory can not be found, this should return an empty stream.
     fn get_recursive(&self, root_directory_digest: &B3Digest) -> BoxStream<'_, Result<Directory, Error>>;
+
+    /// Look up a directory closure and return each value's precedence index.
+    fn get_recursive_with_layer(
+        &self,
+        root_directory_digest: &B3Digest,
+    ) -> BoxStream<'_, Result<LayeredRead<Directory>, Error>> {
+        self.get_recursive(root_directory_digest).map_ok(LayeredRead::local).boxed()
+    }
 
     /// Allows persisting a closure of [Directory], which is a graph of
     /// connected Directory messages.

@@ -161,6 +161,9 @@ fn doctor_and_build_reports_serialize_to_registered_positive_fixtures() {
         }],
         native_dynamic_plans: Vec::new(),
         scheduler_priority_decisions: vec![scheduler_fixture_decision()],
+        overlay_base_generations: Vec::new(),
+        overlay_plan_blake3: None,
+        store_layer_selections: Vec::new(),
         remote_telemetry_events: Vec::new(),
         remote_observability: None,
         frontend_artifact_attestations: Vec::new(),
@@ -210,6 +213,8 @@ fn route_report_serializes_to_registered_positive_fixture() {
             detail: None,
         }],
         upload_summary: None,
+        store_overlay: None,
+        selected_store_layers: Vec::new(),
         non_claim: "route planning is advisory and does not prove transport execution or artifact correctness",
     };
     assert_fixture("route-plan-report.valid.json", &route);

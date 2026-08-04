@@ -3602,9 +3602,14 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::Bootstrap { .. } => run_bootstrap_from_command(ctx, &args.command),
         Command::Release { action } => run_release_command(ctx, action.clone()),
         Command::Log { query, list } => log_cmd::cmd_log(query.as_deref(), *list),
-        Command::Store { action } => {
-            store_cmd::cmd_store(action.clone(), &ctx.store, &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
-        }
+        Command::Store { action } => store_cmd::cmd_store(
+            action.clone(),
+            &ctx.store,
+            &ctx.resolved_state_dir,
+            &ctx.store_prefix,
+            &ctx.base_state_dirs,
+            ctx.json,
+        ),
         Command::Source { action } => {
             source_bundle::cmd_source(action.clone(), &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
         }
@@ -4472,6 +4477,7 @@ fn run_file_build_plan(
         import_paths: import_entries,
         output_dir: &prepared.ctx.store,
         state_dir: &prepared.ctx.resolved_state_dir,
+        base_state_dirs: &prepared.ctx.base_state_dirs,
         store_dir: &prepared.ctx.store_prefix,
         substituter_urls: &prepared.substituter_urls,
         signing_key_path: prepared.signing_key,
@@ -6984,6 +6990,7 @@ fn run_attest_command(ctx: &RunContext, action: AttestAction) -> Result<(), RunE
         &ctx.store,
         &ctx.resolved_state_dir,
         &ctx.store_prefix,
+        &ctx.base_state_dirs,
         ctx.json,
     )
 }
@@ -8174,6 +8181,7 @@ fn build_plan_from_expr(request: InlineBuildPlanRequest<'_>) -> Result<(), RunEr
         import_paths: request.import_entries,
         output_dir: &request.prepared.ctx.store,
         state_dir: &request.prepared.ctx.resolved_state_dir,
+        base_state_dirs: &request.prepared.ctx.base_state_dirs,
         store_dir: &request.prepared.ctx.store_prefix,
         substituter_urls: &request.prepared.substituter_urls,
         signing_key_path: request.prepared.signing_key,

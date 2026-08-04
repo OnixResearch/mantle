@@ -1,0 +1,53 @@
+{
+  "composition": {
+    "base_capability": "read-only",
+    "base_order": "declaration-order",
+    "no_backfill": true,
+    "reject_duplicate_bases": true,
+    "require_same_prefix": true,
+    "writable_overlay_count": 1
+  },
+  "failures": {
+    "base_to_overlay_reference": "block",
+    "corrupt_higher_layer": "block",
+    "duplicate_base": "block",
+    "generation_drift": "block",
+    "incomplete_higher_layer": "block",
+    "prefix_mismatch": "block",
+    "unknown_trust": "block",
+    "writable_base": "block"
+  },
+  "generation": {
+    "allowed_state_schemas": [
+      "mantle-store-state-v1"
+    ],
+    "bind_blobs": true,
+    "bind_directories": true,
+    "bind_pathinfo": true,
+    "bind_root_inventory": true,
+    "revalidate_before_execution": true,
+    "revalidate_before_output_admission": true
+  },
+  "hash_algorithm": "BLAKE3",
+  "limits": {
+    "max_base_layers": 8,
+    "max_descriptor_bytes": 65536,
+    "max_generation_bytes": 1099511627776,
+    "max_generation_members": 1000000
+  },
+  "non_claims": [
+    "overlay-composition-does-not-prove-base-immutability",
+    "base-generation-does-not-prove-whole-database-atomicity",
+    "layer-trust-does-not-prove-content-correctness",
+    "read-through-does-not-authorize-base-mutation"
+  ],
+  "policy_name": "mantle-store-overlay-default-v1",
+  "schema": "mantle-store-overlay-policy-v1",
+  "trust": {
+    "policy_id": "mantle-store-overlay-trust-v2",
+    "shadow_failure": "block",
+    "skip_failure_classes": [],
+    "unknown_policy": "reject",
+    "verification": "ed25519-pathinfo"
+  }
+}

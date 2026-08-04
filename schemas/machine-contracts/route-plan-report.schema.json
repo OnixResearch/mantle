@@ -18,6 +18,27 @@
       },
       "additionalProperties": false
     },
+    "overlay_base": {
+      "type": "object",
+      "required": ["layer_index", "descriptor_blake3", "generation_blake3"],
+      "properties": {
+        "layer_index": { "type": "integer", "minimum": 1, "maximum": 8, "x-mantle-bound-name": { "minimum": "MIN_ROUTE_STORE_LAYER_INDEX", "maximum": "MAX_ROUTE_STORE_BASES" } },
+        "descriptor_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "generation_blake3": { "type": "string", "x-mantle-semantic": "blake3" }
+      },
+      "additionalProperties": false
+    },
+    "store_layer": {
+      "type": "object",
+      "required": ["store_path", "selected_layer"],
+      "properties": {
+        "store_path": { "type": "string", "x-mantle-semantic": "safe-reference" },
+        "selected_layer": { "type": "string", "maxLength": 32, "x-mantle-bound-name": { "maxLength": "MAX_ROUTE_STORE_LAYER_LABEL_BYTES" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "non-empty" },
+        "base_descriptor_blake3": { "type": ["string", "null"], "x-mantle-semantic": "blake3" },
+        "base_generation_blake3": { "type": ["string", "null"], "x-mantle-semantic": "blake3" }
+      },
+      "additionalProperties": false
+    },
     "upload_summary": {
       "type": "object",
       "required": ["classes", "object_count", "byte_count"],
@@ -35,7 +56,7 @@
     }
   },
   "type": "object",
-  "required": ["schema", "selected_route", "selected_reason_code", "policy", "tie_breaker", "rejected_routes", "non_claim"],
+  "required": ["schema", "selected_route", "selected_reason_code", "policy", "tie_breaker", "rejected_routes", "selected_store_layers", "non_claim"],
   "properties": {
     "schema": { "type": "string", "const": "mantle-realization-route-plan-v1", "x-mantle-issue-class": "version" },
     "selected_route": { "$ref": "#/$defs/route" },
@@ -58,6 +79,8 @@
       "items": { "$ref": "#/$defs/rejection" }
     },
     "upload_summary": { "type": ["object", "null"], "required": ["classes", "object_count", "byte_count"], "properties": { "classes": { "type": "array", "maxItems": 4, "x-mantle-bound-name": { "maxItems": "MAX_UPLOAD_CLASSES" }, "items": { "type": "string", "enum": ["source", "store-object", "proof", "secret-descriptor"] } }, "object_count": { "type": "integer", "minimum": 0, "maximum": 65536, "x-mantle-bound-name": { "minimum": "MIN_UPLOAD_OBJECTS", "maximum": "MAX_UPLOAD_OBJECTS" } }, "byte_count": { "type": "integer", "minimum": 0, "maximum": 1099511627776, "x-mantle-bound-name": { "minimum": "MIN_UPLOAD_BYTES", "maximum": "MAX_UPLOAD_BYTES" } } }, "additionalProperties": false },
+    "store_overlay": { "type": ["object", "null"], "required": ["plan_blake3", "bases"], "properties": { "plan_blake3": { "type": "string", "x-mantle-semantic": "blake3" }, "bases": { "type": "array", "maxItems": 8, "x-mantle-bound-name": { "maxItems": "MAX_ROUTE_STORE_BASES" }, "items": { "$ref": "#/$defs/overlay_base" } } }, "additionalProperties": false },
+    "selected_store_layers": { "type": "array", "maxItems": 65536, "x-mantle-bound-name": { "maxItems": "MAX_ROUTE_STORE_LAYER_SELECTIONS" }, "items": { "$ref": "#/$defs/store_layer" } },
     "non_claim": { "type": "string", "const": "route planning is advisory and does not prove transport execution or artifact correctness" }
   },
   "additionalProperties": false,

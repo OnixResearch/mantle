@@ -9,6 +9,7 @@ pub mod composition;
 pub mod directoryservice;
 pub mod fixtures;
 pub mod refscan;
+pub mod service_provenance;
 pub mod utils;
 
 #[cfg(feature = "fs")]

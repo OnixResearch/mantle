@@ -109,6 +109,8 @@ pub struct PipelineResult {
     pub action_result_reports: Vec<crunch_build::ActionResultRuntimeReport>,
     pub native_dynamic_plans: Vec<NativeDynamicPlanReport>,
     pub priority_decisions: Vec<PriorityDecisionEvidence>,
+    pub overlay_report: Option<crunch_store::StoreOverlayReport>,
+    pub store_layer_selections: Vec<crunch_store::layer::StoreLayerSelection>,
 }
 
 #[derive(Debug, Clone)]
@@ -309,6 +311,10 @@ async fn build_linux(
     };
     let eval_stream = eval_stream?;
     let source_generation_paths = builder.source_generation_paths();
+    let overlay_report = builder
+        .overlay_report()
+        .map_err(|error| Error::Build(format!("collecting overlay build evidence: {error}")))?;
+    let store_layer_selections = builder.take_store_layer_selections();
     let mut hermeticity_audit_events = hermeticity_audit_events;
     hermeticity_audit_events.extend(builder.take_hermeticity_audit_events());
     let pipeline_evidence = PipelineRunEvidence {
@@ -317,6 +323,8 @@ async fn build_linux(
         network_policy_rows: builder.take_network_policy_reports(),
         workspace_rows: workspace_evidence_sink.take(),
         action_result_rows: builder.take_action_result_reports(),
+        overlay_report,
+        store_layer_selections,
     };
     let result = finish_pipeline_result(
         &config.store_dir,
@@ -616,6 +624,8 @@ struct PipelineRunEvidence {
     network_policy_rows: Vec<BuildNetworkPolicyReport>,
     workspace_rows: Vec<crunch_build::WorkspaceExecutionReport>,
     action_result_rows: Vec<crunch_build::ActionResultRuntimeReport>,
+    overlay_report: Option<crunch_store::StoreOverlayReport>,
+    store_layer_selections: Vec<crunch_store::layer::StoreLayerSelection>,
 }
 
 fn empty_workspace_report_collector() -> crunch_build::WorkspaceReportCollector {
@@ -669,6 +679,8 @@ fn finish_pipeline_result(
         action_result_reports: evidence.action_result_rows,
         native_dynamic_plans: worker_result.native_dynamic_plans,
         priority_decisions: worker_result.priority_decisions,
+        overlay_report: evidence.overlay_report,
+        store_layer_selections: evidence.store_layer_selections,
     }
 }
 
@@ -891,6 +903,8 @@ fn build_preflight_failure(
         action_result_reports: Vec::new(),
         native_dynamic_plans: Vec::new(),
         priority_decisions: Vec::new(),
+        overlay_report: None,
+        store_layer_selections: Vec::new(),
     })
 }
 

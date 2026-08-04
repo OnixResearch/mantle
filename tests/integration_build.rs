@@ -178,6 +178,23 @@ fn has_bwrap() -> bool {
     std::process::Command::new("bwrap").arg("--version").output().is_ok_and(|o| o.status.success())
 }
 
+#[cfg(unix)]
+fn set_tree_read_only(root: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    const UNIX_WRITE_PERMISSION_BITS: u32 = 0o222;
+    let metadata = std::fs::symlink_metadata(root).unwrap();
+    assert!(!metadata.file_type().is_symlink());
+    if metadata.is_dir() {
+        for entry in std::fs::read_dir(root).unwrap() {
+            set_tree_read_only(&entry.unwrap().path());
+        }
+    }
+    let mut permissions = metadata.permissions();
+    permissions.set_mode(permissions.mode() & !UNIX_WRITE_PERMISSION_BITS);
+    std::fs::set_permissions(root, permissions).unwrap();
+}
+
 // -- Cache hit test (no sandbox needed) --
 
 #[test]
@@ -411,6 +428,141 @@ fn end_to_end_trivial_build() {
             // Don't hard-fail the test suite.
             eprintln!("SKIP end-to-end build (bwrap failed): {e}");
         }
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn end_to_end_overlay_build_reads_base_only_input_without_backfill() {
+    if !has_bwrap() {
+        eprintln!("SKIP: bwrap not available");
+        return;
+    }
+
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let result = runtime.block_on(async {
+        use snix_build::buildservice::BubblewrapBuildService;
+        use snix_store::pathinfoservice::PathInfoService;
+        use snix_store::pathinfoservice::RedbPathInfoService;
+        use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
+
+        const SOURCE_PATH_DIGEST_BYTE: u8 = 41;
+        const BASE_LAYER_INDEX: usize = 1;
+        let store_dir = "/nix/store";
+        let base_state = tempfile::tempdir().unwrap();
+        let base_output = tempfile::tempdir().unwrap();
+        let overlay_state = tempfile::tempdir().unwrap();
+        let overlay_output = tempfile::tempdir().unwrap();
+        let source_tree = tempfile::tempdir().unwrap();
+        let workdir = tempfile::tempdir().unwrap();
+        std::fs::write(source_tree.path().join("input.txt"), "base-only-input\n").unwrap();
+
+        let keypair = test_keypair();
+        let source_store_path: nix_compat::store_path::StorePath<String> =
+            nix_compat::store_path::StorePath::from_name_and_digest_fixed(
+                "base-only-source",
+                [SOURCE_PATH_DIGEST_BYTE; nix_compat::store_path::DIGEST_SIZE],
+            )
+            .unwrap();
+        let logical_source_path = source_store_path.to_absolute_path_with_prefix(store_dir);
+        let mut base_store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            state_dir: base_state.path().to_path_buf(),
+            output_dir: base_output.path().to_path_buf(),
+            remote_cache_urls: Vec::new(),
+            fallback_mode: crunch_store::StoreFallbackMode::Practical,
+            store_dir: store_dir.to_string(),
+            base_state_dirs: Vec::new(),
+        })
+        .await
+        .unwrap();
+        base_store
+            .ingest_verified_source(crunch_store::VerifiedSourceIngestRequest {
+                source_path: source_tree.path(),
+                logical_store_path: &logical_source_path,
+                source_name: "base-only-source",
+                signing_key: &keypair.signing_key,
+            })
+            .await
+            .unwrap();
+        drop(base_store);
+        std::fs::write(base_state.path().join("overlay-trusted-public-keys"), format!("{}\n", keypair.verifying_key))
+            .unwrap();
+        set_tree_read_only(base_state.path());
+
+        std::fs::write(
+            overlay_state.path().join("overlay-trusted-public-keys"),
+            format!("{}\n", keypair.verifying_key),
+        )
+        .unwrap();
+        let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            state_dir: overlay_state.path().to_path_buf(),
+            output_dir: overlay_output.path().to_path_buf(),
+            remote_cache_urls: Vec::new(),
+            fallback_mode: crunch_store::StoreFallbackMode::Practical,
+            store_dir: store_dir.to_string(),
+            base_state_dirs: vec![base_state.path().to_path_buf()],
+        })
+        .await
+        .unwrap();
+        let blob_service = store.blob_service();
+        let directory_service = store.directory_service();
+        let build_service = BubblewrapBuildService::new(workdir.path().to_path_buf(), blob_service, directory_service);
+        let mut builder = crunch_build::Builder::from_store_parts(
+            store.into_builder_store_parts(),
+            build_service,
+            keypair,
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let derivation = CrunchDerivation {
+            name: "base-input-build".to_string(),
+            builder: "/bin/sh".to_string(),
+            system: "x86_64-linux".to_string(),
+            args: vec![
+                "-c".to_string(),
+                format!("mkdir -p $out && cat {logical_source_path}/input.txt > $out/result.txt"),
+            ],
+            outputs: vec!["out".to_string()],
+            dynamic_plan_outputs: Vec::new(),
+            env: HashMap::new(),
+            inputs: vec![Input::Source(logical_source_path.clone())],
+            fixed_output: None,
+            addressing_mode: "input-addressed".to_string(),
+            provenance: None,
+        };
+        let mut conversion_cache = ConversionCache::new(store_dir);
+        let (drv_path, _) = crunch_glue::convert(&derivation, &mut conversion_cache).unwrap();
+        let mut registry = DerivationRegistry::default();
+        populate_registry(&mut registry, conversion_cache.iter_entries());
+        let outcome = builder.build(&drv_path, &mut registry).await;
+        let selections = builder.take_store_layer_selections();
+        let selected_source = selections
+            .iter()
+            .find(|selection| selection.store_path == logical_source_path)
+            .expect("base-only source layer selection");
+        assert_eq!(selected_source.selected_layer, crunch_store::layer::StoreLayer::Base {
+            index: BASE_LAYER_INDEX,
+        });
+
+        let overlay_pathinfo =
+            RedbPathInfoService::new("overlay-no-backfill-check".to_string(), RedbPathInfoServiceConfig {
+                path: Some(overlay_state.path().join("pathinfo.redb")),
+                read_only: true,
+                cache_size: None,
+            })
+            .await
+            .unwrap();
+        assert!(overlay_pathinfo.get(*source_store_path.digest()).await.unwrap().is_none());
+        outcome
+    });
+
+    match result {
+        Ok(outcome) => {
+            assert!(!outcome.cached);
+            assert!(outcome.outputs.contains_key("out"));
+        }
+        Err(error) => eprintln!("SKIP end-to-end overlay build (bwrap failed): {error}"),
     }
 }
 

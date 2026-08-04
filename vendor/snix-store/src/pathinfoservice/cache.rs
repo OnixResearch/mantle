@@ -1,11 +1,16 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use async_stream::try_stream;
 use async_trait::async_trait;
+use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream::BoxStream;
 use nix_compat::nixbase32;
 use snix_castore::composition::CompositionContext;
 use snix_castore::composition::ServiceBuilder;
+use snix_castore::service_provenance::LayeredRead;
+use snix_castore::service_provenance::ReadThroughMode;
 use tracing::debug;
 use tracing::instrument;
 
@@ -13,37 +18,36 @@ use super::PathInfo;
 use super::PathInfoService;
 use crate::pathinfoservice;
 
+const MAX_COMPOSED_LIST_ENTRIES: usize = 1_000_000;
+
 /// Asks near first, if not found, asks far.
 /// If found in there, returns it, and *inserts* it into
 /// near (unless `read_only_far` is true).
 /// There is no negative cache.
-/// Inserts and listings are not implemented for now.
+/// Inserts always target near. Listings merge layers without backfill.
 pub struct Cache<PS1, PS2> {
     instance_name: String,
     near: PS1,
     far: PS2,
-    /// When true, far hits are returned without inserting into near.
-    /// This is the "overlay" mode: read-through without backfill.
-    read_only_far: bool,
+    mode: ReadThroughMode,
 }
 
 impl<PS1, PS2> Cache<PS1, PS2> {
     pub fn new(instance_name: String, near: PS1, far: PS2) -> Self {
-        Self {
-            instance_name,
-            near,
-            far,
-            read_only_far: false,
-        }
+        Self::with_mode(instance_name, near, far, ReadThroughMode::Cache)
     }
 
-    /// Create a Cache with read-only far mode (no backfill on read).
-    pub fn new_read_only_far(instance_name: String, near: PS1, far: PS2) -> Self {
+    /// Create read-through composition that never backfills far hits.
+    pub fn new_no_backfill(instance_name: String, near: PS1, far: PS2) -> Self {
+        Self::with_mode(instance_name, near, far, ReadThroughMode::NoBackfill)
+    }
+
+    pub fn with_mode(instance_name: String, near: PS1, far: PS2, mode: ReadThroughMode) -> Self {
         Self {
             instance_name,
             near,
             far,
-            read_only_far: true,
+            mode,
         }
     }
 }
@@ -56,27 +60,26 @@ where
 {
     #[instrument(level = "trace", skip_all, fields(path_info.digest = nixbase32::encode(&digest), instance_name = %self.instance_name))]
     async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, pathinfoservice::Error> {
-        match self.near.get(digest).await.map_err(Error::NearGet)? {
-            Some(path_info) => {
-                debug!("serving from cache");
-                Ok(Some(path_info))
-            }
-            None => {
-                debug!("not found in near, asking remote…");
-                match self.far.get(digest).await.map_err(Error::FarGet)? {
-                    None => Ok(None),
-                    Some(path_info) => {
-                        if !self.read_only_far {
-                            debug!("found in remote, adding to cache");
-                            self.near.put(path_info.clone()).await.map_err(Error::NearPut)?;
-                        } else {
-                            debug!("found in remote (read-only far, no backfill)");
-                        }
-                        Ok(Some(path_info))
-                    }
-                }
-            }
+        Ok(self.get_with_layer(digest).await?.map(|read| read.value))
+    }
+
+    #[instrument(level = "trace", skip_all, fields(path_info.digest = nixbase32::encode(&digest), instance_name = %self.instance_name))]
+    async fn get_with_layer(&self, digest: [u8; 20]) -> Result<Option<LayeredRead<PathInfo>>, pathinfoservice::Error> {
+        if let Some(path_info) = self.near.get_with_layer(digest).await.map_err(Error::NearGet)? {
+            debug!("serving from near service");
+            return Ok(Some(path_info));
         }
+        debug!("not found in near, asking far service");
+        let Some(path_info) = self.far.get_with_layer(digest).await.map_err(Error::FarGet)? else {
+            return Ok(None);
+        };
+        if self.mode == ReadThroughMode::Cache {
+            debug!("found in far service, adding to near service");
+            self.near.put(path_info.value.clone()).await.map_err(Error::NearPut)?;
+        } else {
+            debug!("found in far service without backfill");
+        }
+        Ok(Some(path_info.shift_far().map_err(Error::LayerIndex)?))
     }
 
     #[instrument(level = "trace", skip_all, fields(path_info.digest = nixbase32::encode(&digest), instance_name = %self.instance_name))]
@@ -93,7 +96,47 @@ where
     }
 
     fn list(&self) -> BoxStream<'static, Result<PathInfo, pathinfoservice::Error>> {
-        Box::pin(tokio_stream::once(Err(Error::Unimplemented)).err_into())
+        self.list_with_layer().map_ok(|read| read.value).boxed()
+    }
+
+    fn list_with_layer(&self) -> BoxStream<'static, Result<LayeredRead<PathInfo>, pathinfoservice::Error>> {
+        let mut near = self.near.list_with_layer();
+        let mut far = self.far.list_with_layer();
+        Box::pin(try_stream! {
+            let mut observed = BTreeMap::new();
+            while let Some(read) = near.try_next().await.map_err(Error::NearGet)? {
+                let digest = *read.value.store_path.digest();
+                let path = read.value.store_path.to_string();
+                if let Some(previous) = observed.insert(digest, path.clone()) {
+                    if previous != path {
+                        Err(Error::DigestCollision { previous, current: path })?;
+                    }
+                    continue;
+                }
+                if observed.len() > MAX_COMPOSED_LIST_ENTRIES {
+                    Err(Error::ListLimit { limit: MAX_COMPOSED_LIST_ENTRIES })?;
+                }
+                yield read;
+            }
+            while let Some(read) = far.try_next().await.map_err(Error::FarGet)? {
+                let digest = *read.value.store_path.digest();
+                let path = read.value.store_path.to_string();
+                if let Some(previous) = observed.get(&digest) {
+                    if previous != &path {
+                        Err(Error::DigestCollision {
+                            previous: previous.clone(),
+                            current: path,
+                        })?;
+                    }
+                    continue;
+                }
+                observed.insert(digest, path);
+                if observed.len() > MAX_COMPOSED_LIST_ENTRIES {
+                    Err(Error::ListLimit { limit: MAX_COMPOSED_LIST_ENTRIES })?;
+                }
+                yield read.shift_far().map_err(Error::LayerIndex)?;
+            }
+        })
     }
 }
 
@@ -102,6 +145,8 @@ where
 pub struct CacheConfig {
     pub near: String,
     pub far: String,
+    #[serde(default)]
+    pub mode: ReadThroughMode,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -115,9 +160,12 @@ pub enum Error {
     NearPut(#[source] pathinfoservice::Error),
     #[error("getting from far: {0}")]
     FarGet(#[source] pathinfoservice::Error),
-
-    #[error("puts are unimplemented")]
-    Unimplemented,
+    #[error("tracking far service provenance: {0}")]
+    LayerIndex(#[source] snix_castore::service_provenance::LayerIndexOverflow),
+    #[error("composed PathInfo listing exceeds {limit} entries")]
+    ListLimit { limit: usize },
+    #[error("composed PathInfo listing has one digest for both {previous} and {current}")]
+    DigestCollision { previous: String, current: String },
 }
 
 impl TryFrom<url::Url> for CacheConfig {
@@ -141,7 +189,7 @@ impl ServiceBuilder for CacheConfig {
             instance_name: instance_name.to_string(),
             near: near?,
             far: far?,
-            read_only_far: false,
+            mode: self.mode,
         }))
     }
 }
@@ -149,6 +197,9 @@ impl ServiceBuilder for CacheConfig {
 #[cfg(test)]
 mod test {
     use std::num::NonZeroUsize;
+
+    use futures::TryStreamExt;
+    use nix_compat::store_path::StorePath;
 
     use crate::fixtures::PATH_INFO;
     use crate::pathinfoservice::LruPathInfoService;
@@ -179,9 +230,50 @@ mod test {
         svc.far.put(PATH_INFO.clone()).await.unwrap();
 
         // now try getting it again, it should succeed.
-        assert_eq!(Some(PATH_INFO.clone()), svc.get(*PATH_INFO.store_path.digest()).await.unwrap());
+        let read = svc.get_with_layer(*PATH_INFO.store_path.digest()).await.unwrap().unwrap();
+        assert_eq!(PATH_INFO.clone(), read.value);
+        assert_eq!(read.layer_index, 1);
 
         // peek near, it should now be there.
         assert_eq!(Some(PATH_INFO.clone()), svc.near.get(*PATH_INFO.store_path.digest()).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn no_backfill_reports_far_layer_and_preserves_near_miss() {
+        let far = gen_test_pathinfo_service();
+        far.put(PATH_INFO.clone()).await.unwrap();
+        let near = LruPathInfoService::with_capacity("near".into(), NonZeroUsize::new(1).unwrap());
+        let svc = super::Cache::new_no_backfill("root".into(), near, far);
+
+        let read = svc.get_with_layer(*PATH_INFO.store_path.digest()).await.unwrap().unwrap();
+        assert_eq!(PATH_INFO.clone(), read.value);
+        assert_eq!(read.layer_index, 1);
+        assert!(svc.near.get(*PATH_INFO.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn no_backfill_listing_merges_precedence_and_exact_layers() {
+        const LIST_CAPACITY: usize = 2;
+        const STORE_PATH_DIGEST_BYTES: usize = 20;
+        const FAR_DIGEST_BYTE: u8 = 17;
+        let far = gen_test_pathinfo_service();
+        let mut far_only = PATH_INFO.clone();
+        far_only.store_path =
+            StorePath::from_name_and_digest_fixed("far-only", [FAR_DIGEST_BYTE; STORE_PATH_DIGEST_BYTES]).unwrap();
+        far.put(PATH_INFO.clone()).await.unwrap();
+        far.put(far_only.clone()).await.unwrap();
+        let near = LruPathInfoService::with_capacity("near".into(), NonZeroUsize::new(LIST_CAPACITY).unwrap());
+        near.put(PATH_INFO.clone()).await.unwrap();
+        let svc = super::Cache::new_no_backfill("root".into(), near, far);
+
+        let mut reads = svc.list_with_layer().try_collect::<Vec<_>>().await.unwrap();
+        reads.sort_by(|left, right| left.value.store_path.cmp(&right.value.store_path));
+
+        assert_eq!(reads.len(), LIST_CAPACITY);
+        let near_read = reads.iter().find(|read| read.value == *PATH_INFO).unwrap();
+        let far_read = reads.iter().find(|read| read.value == far_only).unwrap();
+        assert_eq!(near_read.layer_index, 0);
+        assert_eq!(far_read.layer_index, 1);
+        assert!(svc.near.get(*far_read.value.store_path.digest()).await.unwrap().is_none());
     }
 }

@@ -428,6 +428,14 @@ where BServ: BuildService + 'static
         self.observed_source_paths.iter().cloned().collect()
     }
 
+    pub fn overlay_report(&self) -> Result<Option<crunch_store::StoreOverlayReport>, Error> {
+        self.store.overlay_report().map_err(|error| Error::Store(error.to_string()))
+    }
+
+    pub fn take_store_layer_selections(&mut self) -> Vec<crunch_store::layer::StoreLayerSelection> {
+        self.store.take_read_layer_selections()
+    }
+
     pub fn take_hermeticity_audit_events(&mut self) -> Vec<HermeticityAuditEvent> {
         std::mem::take(&mut self.hermeticity_audit_events)
     }
@@ -1519,11 +1527,13 @@ where BServ: BuildService + 'static
             })
             .collect::<BTreeMap<_, _>>();
 
-        if self.trust_unsigned {
+        if self.trust_unsigned || self.store.is_overlay_composed() {
+            // Overlay composition verifies the selected PathInfo against the
+            // selected layer's accepted keys before this boundary.
             return Ok(Some(CacheCheckHit { infos, substitutions }));
         }
 
-        // Verify signatures on every cached output.
+        // Verify signatures on every single-store cached output.
         for (output_name, path_info) in &infos {
             let result = signing::verify_pathinfo_signatures_with_store_dir(
                 path_info,

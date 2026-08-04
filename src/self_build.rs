@@ -3871,6 +3871,8 @@ mod tests {
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
+            overlay_report: None,
+            store_layer_selections: Vec::new(),
         };
 
         let actual =
@@ -3914,6 +3916,8 @@ mod tests {
             action_result_reports: Vec::new(),
             native_dynamic_plans: Vec::new(),
             priority_decisions: Vec::new(),
+            overlay_report: None,
+            store_layer_selections: Vec::new(),
         };
 
         let err =

@@ -4,8 +4,10 @@
 // r[impl foreign_derivation_import.source_materialization]
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::num::NonZeroUsize;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -75,10 +77,14 @@ use crate::metadata_cache::RefreshPolicy;
 use crate::metadata_cache::check_metadata_validity;
 use crate::metadata_cache::metadata_cache_key;
 use crate::metadata_cache::new_metadata_entry;
+use crate::overlay::StoreOverlayState;
 use crate::roots;
 
 const NAR_SHA256_BYTES: usize = 32;
 const MAX_REMOTE_TRUSTED_PUBLIC_KEYS: usize = 16;
+const OVERLAY_DIRECTORY_READ_LIMIT: usize = 1_000_000;
+const MAX_LAYERED_CLOSURE_PATHS: usize = 1_000_000;
+const MAX_RECORDED_LAYER_SELECTIONS: usize = 65_536;
 
 /// Configuration for opening a store.
 pub struct StoreConfig {
@@ -507,9 +513,9 @@ fn combine_blob_services(
         return Err(Error::Store("overlay blob service requires at least one base".to_string()));
     };
     for base in bases {
-        inner = Arc::new(CombinedBlobService::new("base-chain".to_string(), inner, base));
+        inner = Arc::new(CombinedBlobService::new_no_backfill("base-chain".to_string(), inner, base));
     }
-    Ok(Arc::new(CombinedBlobService::new("overlay".to_string(), overlay, inner)))
+    Ok(Arc::new(CombinedBlobService::new_no_backfill("overlay".to_string(), overlay, inner)))
 }
 
 fn combine_directory_services(
@@ -521,10 +527,12 @@ fn combine_directory_services(
     let Some(mut inner) = bases.next() else {
         return Err(Error::Store("overlay directory service requires at least one base".to_string()));
     };
+    let read_limit = NonZeroUsize::new(OVERLAY_DIRECTORY_READ_LIMIT)
+        .ok_or_else(|| Error::Store("overlay directory read limit must be positive".to_string()))?;
     for base in bases {
-        inner = Arc::new(DirectoryCache::new_read_only_far("base-chain".to_string(), inner, base));
+        inner = Arc::new(DirectoryCache::new_no_backfill("base-chain".to_string(), inner, base, read_limit));
     }
-    Ok(Arc::new(DirectoryCache::new_read_only_far("overlay".to_string(), overlay, inner)))
+    Ok(Arc::new(DirectoryCache::new_no_backfill("overlay".to_string(), overlay, inner, read_limit)))
 }
 
 fn combine_pathinfo_services(
@@ -537,18 +545,38 @@ fn combine_pathinfo_services(
         return Err(Error::Store("overlay PathInfo service requires at least one base".to_string()));
     };
     for base in bases {
-        inner = Arc::new(PathInfoCache::new_read_only_far("base-chain".to_string(), inner, base));
+        inner = Arc::new(PathInfoCache::new_no_backfill("base-chain".to_string(), inner, base));
     }
-    Ok(Arc::new(PathInfoCache::new_read_only_far("overlay".to_string(), overlay, inner)))
+    Ok(Arc::new(PathInfoCache::new_no_backfill("overlay".to_string(), overlay, inner)))
 }
 
-fn configured_action_result_stores(state_dir: &Path, remote_urls: &[String]) -> ActionResultStoreSet {
+fn validate_store_dir(store_dir: &str) -> Result<(), Error> {
+    let path = Path::new(store_dir);
+    if store_dir.is_empty() || !path.is_absolute() || store_dir.ends_with('/') {
+        return Err(Error::Store(format!(
+            "logical store directory must be absolute, non-empty, and have no trailing slash: {store_dir:?}"
+        )));
+    }
+    Ok(())
+}
+
+fn configured_action_result_stores(
+    state_dir: &Path,
+    base_state_dirs: &[PathBuf],
+    remote_urls: &[String],
+) -> ActionResultStoreSet {
     let policy = crate::action_result::action_result_runtime_policy();
     assert!(policy.limits.max_sources > 0);
     assert!(policy.limits.max_candidates > 0);
     let mut stores = ActionResultStoreSet::new(remote_urls.is_empty());
     if policy.sources.local_enabled {
         stores.add_local(Box::new(LocalActionResultStore::new(state_dir)));
+        for (base_index, base_state_dir) in base_state_dirs.iter().enumerate() {
+            stores.add_discovery_only(Box::new(LocalActionResultStore::new_with_source_id(
+                base_state_dir,
+                format!("base[{}]", base_index.saturating_add(1)),
+            )));
+        }
     }
     if !policy.sources.http_enabled {
         return stores;
@@ -577,9 +605,11 @@ pub struct StoreHandle {
     blob_service: Arc<dyn BlobService>,
     directory_service: Arc<dyn DirectoryService>,
     pathinfo_service: Arc<dyn PathInfoService>,
-    /// Raw overlay pathinfo service used by composition boundary tests.
-    #[cfg(test)]
+    /// Raw writable-overlay services retained for mutation and GC isolation.
+    overlay_blob_service: Arc<dyn BlobService>,
+    overlay_directory_service: Arc<dyn DirectoryService>,
     overlay_pathinfo: Arc<dyn PathInfoService>,
+    base_pathinfo_inspection_services: Vec<Arc<dyn PathInfoService>>,
     remote_pathinfo: Option<Arc<dyn PathInfoService>>,
     remote_cache_urls: Vec<Url>,
     remote_trusted_public_keys: Vec<VerifyingKey>,
@@ -598,8 +628,12 @@ pub struct StoreHandle {
     pub built_outputs: HashMap<String, PathInfo>,
     /// Successful remote substitutions recorded for reporting.
     output_substitution_reports: HashMap<StorePath<String>, OutputSubstitutionReport>,
-    /// Persistent CA derivation -> output path mapping.
+    /// Exact composed-layer selections observed during this store session.
+    read_layer_selections: BTreeMap<String, crate::layer::StoreLayerSelection>,
+    /// Persistent writable-overlay CA derivation -> output path mapping.
     pub ca_mappings: CaMappings,
+    /// Read-only CA mappings in declared base order.
+    base_ca_mappings: Vec<CaMappings>,
     /// Advisory remote metadata cache for accelerating repeat probes.
     /// Loaded from state_dir at construction; saved after each modification.
     #[cfg(not(test))]
@@ -608,6 +642,8 @@ pub struct StoreHandle {
     pub advisory_metadata_cache: AdvisoryMetadataCache,
     /// Advisory shared action-result discovery/publication stores.
     action_result_stores: ActionResultStoreSet,
+    /// Accepted ordered base descriptors and generation observations.
+    overlay_state: Option<StoreOverlayState>,
     /// Optional managed provenance for selected roots in this build session.
     root_registration: Option<crate::retention::RootRegistration>,
     /// Output publication adapters called after successful admission.
@@ -621,12 +657,19 @@ impl StoreHandle {
     /// state directory. Optionally configures a remote binary cache for
     /// substitution.
     pub async fn open(config: StoreConfig) -> Result<Self, Error> {
-        assert!(!config.store_dir.is_empty(), "store_dir must not be empty");
-        assert!(config.store_dir.starts_with('/'), "store_dir must be an absolute path");
+        validate_store_dir(&config.store_dir)?;
+        if !config.base_state_dirs.is_empty() {
+            return Self::open_overlay(config).await;
+        }
+        Self::open_single(config).await
+    }
 
+    async fn open_single(config: StoreConfig) -> Result<Self, Error> {
+        validate_store_dir(&config.store_dir)?;
         let state_dir = &config.state_dir;
         std::fs::create_dir_all(state_dir)
             .map_err(|e| Error::Store(format!("creating state dir {}: {e}", state_dir.display())))?;
+        crate::overlay::ensure_store_identity(state_dir, &config.store_dir)?;
 
         let blob_service = open_blob_service(state_dir)?;
         let directory_service = open_directory_service(state_dir).await?;
@@ -693,14 +736,16 @@ impl StoreHandle {
         }
 
         let advisory_metadata_cache = AdvisoryMetadataCache::load(&config.state_dir);
-        let action_result_stores = configured_action_result_stores(&config.state_dir, &config.remote_cache_urls);
+        let action_result_stores = configured_action_result_stores(&config.state_dir, &[], &config.remote_cache_urls);
 
         Ok(Self {
-            blob_service,
-            directory_service,
+            blob_service: blob_service.clone(),
+            directory_service: directory_service.clone(),
             pathinfo_service: pathinfo_service.clone(),
-            #[cfg(test)]
+            overlay_blob_service: blob_service,
+            overlay_directory_service: directory_service,
             overlay_pathinfo: pathinfo_service,
+            base_pathinfo_inspection_services: Vec::new(),
             remote_pathinfo,
             remote_cache_urls,
             remote_trusted_public_keys,
@@ -713,9 +758,12 @@ impl StoreHandle {
             output_nodes: HashMap::new(),
             built_outputs: HashMap::new(),
             output_substitution_reports: HashMap::new(),
+            read_layer_selections: BTreeMap::new(),
             ca_mappings,
+            base_ca_mappings: Vec::new(),
             advisory_metadata_cache,
             action_result_stores,
+            overlay_state: None,
             root_registration: None,
             publishers: Vec::new(),
         })
@@ -728,32 +776,35 @@ impl StoreHandle {
     ///
     /// When `base_state_dirs` is empty, this is equivalent to `open()`.
     pub async fn open_overlay(config: StoreConfig) -> Result<Self, Error> {
-        assert!(!config.store_dir.is_empty(), "store_dir must not be empty");
-        assert!(config.store_dir.starts_with('/'), "store_dir must be an absolute path");
+        validate_store_dir(&config.store_dir)?;
+        if config.base_state_dirs.is_empty() {
+            return Self::open_single(config).await;
+        }
 
-        // Open the overlay (local writable store) services.
+        // Validate every base before creating or opening writable overlay state.
+        let overlay_state = crate::overlay::prepare_overlay_state(&config.base_state_dirs, &config.store_dir)?;
+
         let state_dir = &config.state_dir;
         std::fs::create_dir_all(state_dir)
             .map_err(|e| Error::Store(format!("creating state dir {}: {e}", state_dir.display())))?;
+        crate::overlay::ensure_store_identity(state_dir, &config.store_dir)?;
 
         let overlay_blob = open_blob_service(state_dir)?;
         let overlay_directory = open_directory_service(state_dir).await?;
         let (overlay_pathinfo, mut startup_audit_events) =
             open_pathinfo_service(state_dir, config.fallback_mode).await?;
 
-        // If no base stores, return a plain single-store handle.
-        if config.base_state_dirs.is_empty() {
-            return Self::open(config).await;
-        }
-
-        // Verify prefix match and open each base store in read-only mode.
+        // Open each accepted base through read-only services.
         let mut base_blob_services: Vec<Arc<dyn BlobService>> = Vec::with_capacity(config.base_state_dirs.len());
         let mut base_directory_services: Vec<Arc<dyn DirectoryService>> =
             Vec::with_capacity(config.base_state_dirs.len());
         let mut base_pathinfo_services: Vec<Arc<dyn PathInfoService>> =
             Vec::with_capacity(config.base_state_dirs.len());
+        let mut base_pathinfo_inspection_services: Vec<Arc<dyn PathInfoService>> =
+            Vec::with_capacity(config.base_state_dirs.len());
+        let mut base_ca_mappings = Vec::with_capacity(config.base_state_dirs.len());
 
-        for base_dir in &config.base_state_dirs {
+        for (declaration_index, base_dir) in config.base_state_dirs.iter().enumerate() {
             if !base_dir.is_dir() {
                 return Err(Error::Store(format!("base state directory does not exist: {}", base_dir.display())));
             }
@@ -780,18 +831,22 @@ impl StoreHandle {
 
             // Open base pathinfo service (read-only).
             let base_pathinfo = open_pathinfo_service_read_only(base_dir, config.fallback_mode).await?;
-            base_pathinfo_services.push(base_pathinfo);
+            base_pathinfo_inspection_services.push(base_pathinfo.clone());
+            base_pathinfo_services.push(crate::overlay::trusted_base_pathinfo_service(
+                base_pathinfo,
+                base_dir,
+                declaration_index,
+            )?);
+            base_ca_mappings.push(CaMappings::load(base_dir));
         }
 
         // Chain services: near=overlay, far=base_stack.
         // For multiple bases, wrap inner layers: overlay -> baseA -> baseB.
-        let combined_blob = combine_blob_services(overlay_blob, base_blob_services)?;
-        let combined_directory = combine_directory_services(overlay_directory, base_directory_services)?;
+        let combined_blob = combine_blob_services(overlay_blob.clone(), base_blob_services)?;
+        let combined_directory = combine_directory_services(overlay_directory.clone(), base_directory_services)?;
 
         // PathInfo writes remain routed to the overlay while reads can fall through.
-        #[cfg(test)]
-        let overlay_pathinfo_for_writes = overlay_pathinfo.clone();
-        let combined_pathinfo = combine_pathinfo_services(overlay_pathinfo, base_pathinfo_services)?;
+        let combined_pathinfo = combine_pathinfo_services(overlay_pathinfo.clone(), base_pathinfo_services)?;
 
         // Remote substitution (single cache URL, same as open() but added to combined pathinfo).
         let (remote_pathinfo, remote_cache_urls, remote_trusted_public_keys) = match config.remote_cache_urls.first() {
@@ -854,14 +909,17 @@ impl StoreHandle {
         }
 
         let advisory_metadata_cache = AdvisoryMetadataCache::load(&config.state_dir);
-        let action_result_stores = configured_action_result_stores(&config.state_dir, &config.remote_cache_urls);
+        let action_result_stores =
+            configured_action_result_stores(&config.state_dir, &config.base_state_dirs, &config.remote_cache_urls);
 
         Ok(Self {
             blob_service: combined_blob,
             directory_service: combined_directory,
             pathinfo_service: combined_pathinfo,
-            #[cfg(test)]
-            overlay_pathinfo: overlay_pathinfo_for_writes,
+            overlay_blob_service: overlay_blob,
+            overlay_directory_service: overlay_directory,
+            overlay_pathinfo,
+            base_pathinfo_inspection_services,
             remote_pathinfo,
             remote_cache_urls,
             remote_trusted_public_keys,
@@ -874,9 +932,12 @@ impl StoreHandle {
             output_nodes: HashMap::new(),
             built_outputs: HashMap::new(),
             output_substitution_reports: HashMap::new(),
+            read_layer_selections: BTreeMap::new(),
             ca_mappings,
+            base_ca_mappings,
             advisory_metadata_cache,
             action_result_stores,
+            overlay_state: Some(overlay_state),
             root_registration: None,
             publishers: Vec::new(),
         })
@@ -891,13 +952,15 @@ impl StoreHandle {
     pub fn from_services_with_store_dir(services: StoreHandleServices, store_dir: String) -> Self {
         let ca_mappings = CaMappings::load(&services.state_dir);
         let advisory_metadata_cache = AdvisoryMetadataCache::load(&services.state_dir);
-        let action_result_stores = configured_action_result_stores(&services.state_dir, &[]);
+        let action_result_stores = configured_action_result_stores(&services.state_dir, &[], &[]);
         Self {
-            blob_service: services.blob_service,
-            directory_service: services.directory_service,
+            blob_service: services.blob_service.clone(),
+            directory_service: services.directory_service.clone(),
             pathinfo_service: services.pathinfo_service.clone(),
-            #[cfg(test)]
+            overlay_blob_service: services.blob_service,
+            overlay_directory_service: services.directory_service,
             overlay_pathinfo: services.pathinfo_service.clone(),
+            base_pathinfo_inspection_services: Vec::new(),
             remote_pathinfo: services.remote_pathinfo,
             remote_cache_urls: Vec::new(),
             remote_trusted_public_keys: Vec::new(),
@@ -910,9 +973,12 @@ impl StoreHandle {
             output_nodes: HashMap::new(),
             built_outputs: HashMap::new(),
             output_substitution_reports: HashMap::new(),
+            read_layer_selections: BTreeMap::new(),
             ca_mappings,
+            base_ca_mappings: Vec::new(),
             advisory_metadata_cache,
             action_result_stores,
+            overlay_state: None,
             root_registration: None,
             publishers: services.publishers,
         }
@@ -938,6 +1004,18 @@ impl StoreHandle {
         self.pathinfo_service.clone()
     }
 
+    pub(crate) fn base_pathinfo_inspection_services(&self) -> Vec<Arc<dyn PathInfoService>> {
+        self.base_pathinfo_inspection_services.clone()
+    }
+
+    pub(crate) fn overlay_state(&self) -> Option<StoreOverlayState> {
+        self.overlay_state.clone()
+    }
+
+    pub(crate) fn ca_mapping_snapshots(&self) -> (CaMappings, Vec<CaMappings>) {
+        (self.ca_mappings.clone(), self.base_ca_mappings.clone())
+    }
+
     /// Arc-cloned remote pathinfo service (if configured).
     pub fn remote_pathinfo(&self) -> Option<Arc<dyn PathInfoService>> {
         self.remote_pathinfo.clone()
@@ -951,6 +1029,119 @@ impl StoreHandle {
     /// The logical store prefix (e.g. "/crunch/store").
     pub fn store_dir(&self) -> &str {
         &self.store_dir
+    }
+
+    pub fn overlay_report(&self) -> Result<Option<crate::StoreOverlayReport>, Error> {
+        self.revalidate_overlay_bases()?;
+        self.overlay_state.as_ref().map(crate::overlay::overlay_report).transpose()
+    }
+
+    pub fn revalidate_overlay_bases(&self) -> Result<(), Error> {
+        let Some(state) = self.overlay_state.as_ref() else {
+            return Ok(());
+        };
+        crate::overlay::revalidate_overlay_state(state)
+    }
+
+    pub async fn path_info_with_layer(
+        &self,
+        path: &StorePath<String>,
+    ) -> Result<Option<crate::layer::Layered<PathInfo>>, Error> {
+        self.revalidate_overlay_bases()?;
+        let read = self
+            .pathinfo_service
+            .get_with_layer(*path.digest())
+            .await
+            .map_err(|error| Error::Store(format!("PathInfo lookup for {path}: {error}")))?;
+        self.revalidate_overlay_bases()?;
+        let Some(read) = read else {
+            return Ok(None);
+        };
+        if read.value.store_path != *path {
+            return Err(Error::Store(format!(
+                "overlay-pathinfo-digest-collision: requested {path}, observed {} in layer {}",
+                read.value.store_path, read.layer_index,
+            )));
+        }
+        if self.overlay_state.is_some() && read.layer_index == 0 {
+            let trusted_keys = crate::overlay::load_layer_trust_keys(&self.state_dir)?;
+            crate::overlay::verify_pathinfo_trust(&read.value, &trusted_keys)
+                .map_err(|error| Error::Store(format!("overlay-layer-trust-failure for {path}: {error}")))?;
+        }
+        let shadows = self.pathinfo_shadow_observations(read.layer_index, &read.value).await;
+        let mut layered = crate::layer::Layered::from_service_index(read.value, read.layer_index)
+            .map_err(|error| Error::Store(format!("mapping PathInfo layer for {path}: {error}")))?;
+        layered.shadows = shadows;
+        Ok(Some(layered))
+    }
+
+    async fn pathinfo_shadow_observations(
+        &self,
+        selected_layer_index: usize,
+        selected: &PathInfo,
+    ) -> Vec<crate::layer::LayerShadowObservation> {
+        let mut observations = Vec::new();
+        for (base_index, service) in self.base_pathinfo_inspection_services.iter().enumerate() {
+            let layer_index = base_index.saturating_add(1);
+            if layer_index <= selected_layer_index {
+                continue;
+            }
+            let layer = crate::layer::StoreLayer::Base { index: layer_index };
+            let status = match service.get(*selected.store_path.digest()).await {
+                Ok(Some(lower)) if lower.store_path != selected.store_path => {
+                    crate::layer::LayerShadowStatus::DigestCollision
+                }
+                Ok(Some(lower)) if lower == *selected => crate::layer::LayerShadowStatus::Matching,
+                Ok(Some(_)) => crate::layer::LayerShadowStatus::Conflicting,
+                Ok(None) => continue,
+                Err(_) => crate::layer::LayerShadowStatus::ReadFailure,
+            };
+            observations.push(crate::layer::LayerShadowObservation { layer, status });
+        }
+        observations
+    }
+
+    fn record_layer_selection<T>(
+        &mut self,
+        store_path: &StorePath<String>,
+        layered: &crate::layer::Layered<T>,
+    ) -> Result<(), Error> {
+        let key = store_path.to_string();
+        if !self.read_layer_selections.contains_key(&key)
+            && self.read_layer_selections.len() >= MAX_RECORDED_LAYER_SELECTIONS
+        {
+            return Err(Error::Store("store layer selection limit exceeded".to_string()));
+        }
+        self.read_layer_selections
+            .insert(key.clone(), crate::layer::StoreLayerSelection::from_layered(key, layered));
+        Ok(())
+    }
+
+    pub fn take_read_layer_selections(&mut self) -> Vec<crate::layer::StoreLayerSelection> {
+        std::mem::take(&mut self.read_layer_selections).into_values().collect()
+    }
+
+    pub async fn list_pathinfos_with_layer(&self) -> Result<Vec<crate::layer::Layered<PathInfo>>, Error> {
+        self.revalidate_overlay_bases()?;
+        let mut stream = self.pathinfo_service.list_with_layer();
+        let mut pathinfos = Vec::new();
+        while let Some(read) = stream.next().await {
+            let read = read.map_err(|error| Error::Store(format!("listing composed PathInfos: {error}")))?;
+            if self.overlay_state.is_some() && read.layer_index == 0 {
+                let trusted_keys = crate::overlay::load_layer_trust_keys(&self.state_dir)?;
+                crate::overlay::verify_pathinfo_trust(&read.value, &trusted_keys).map_err(|error| {
+                    Error::Store(format!("overlay-layer-trust-failure for {}: {error}", read.value.store_path))
+                })?;
+            }
+            let shadows = self.pathinfo_shadow_observations(read.layer_index, &read.value).await;
+            let mut layered = crate::layer::Layered::from_service_index(read.value, read.layer_index)
+                .map_err(|error| Error::Store(format!("mapping listed PathInfo layer: {error}")))?;
+            layered.shadows = shadows;
+            pathinfos.push(layered);
+        }
+        pathinfos.sort_by(|left, right| left.value.store_path.cmp(&right.value.store_path));
+        self.revalidate_overlay_bases()?;
+        Ok(pathinfos)
     }
 
     pub async fn discover_action_results(&self, action_ref: &str) -> ActionResultDiscoveryReport {
@@ -1063,7 +1254,11 @@ impl StoreHandle {
     }
 
     pub async fn pin_retained_root(&self, logical_path: &str) -> Result<GcRootRecord, Error> {
-        roots::pin_root(&self.state_dir, &self.store_dir, self.pathinfo_service.as_ref(), logical_path).await
+        self.revalidate_overlay_bases()?;
+        let root =
+            roots::pin_root(&self.state_dir, &self.store_dir, self.pathinfo_service.as_ref(), logical_path).await?;
+        self.revalidate_overlay_bases()?;
+        Ok(root)
     }
 
     pub fn unpin_retained_root(&self, logical_path: &str) -> Result<Option<GcRootRecord>, Error> {
@@ -1082,7 +1277,8 @@ impl StoreHandle {
         store_path: &StorePath<String>,
         source: GcRootSource,
     ) -> Result<GcRootRecord, Error> {
-        match &self.root_registration {
+        self.revalidate_overlay_bases()?;
+        let root = match &self.root_registration {
             Some(registration) => {
                 roots::register_root_with_registration(
                     &self.state_dir,
@@ -1104,7 +1300,9 @@ impl StoreHandle {
                 )
                 .await
             }
-        }
+        }?;
+        self.revalidate_overlay_bases()?;
+        Ok(root)
     }
 
     pub async fn garbage_collect(&mut self, accepted_plan_id: Option<&str>) -> Result<GcReport, Error> {
@@ -1116,16 +1314,21 @@ impl StoreHandle {
         accepted_plan_id: Option<&str>,
         retained_castore_roots: &[Node],
     ) -> Result<GcReport, Error> {
+        self.revalidate_overlay_bases()?;
         let ctx = gc::GcContext {
             state_dir: &self.state_dir,
             output_dir_str: &self.output_dir_str,
             store_dir: &self.store_dir,
-            pathinfo: self.pathinfo_service.as_ref(),
-            directory_service: self.directory_service.as_ref(),
-            blob_service: self.blob_service.as_ref(),
+            overlay_pathinfo: self.overlay_pathinfo.as_ref(),
+            composed_pathinfo: self.pathinfo_service.as_ref(),
+            overlay_directory_service: self.overlay_directory_service.as_ref(),
+            overlay_blob_service: self.overlay_blob_service.as_ref(),
+            overlay_plan_identity: self.overlay_state.as_ref().map(|state| state.plan.plan_identity.into_bytes()),
             retained_castore_roots,
         };
-        gc::run_gc(&ctx, &mut self.ca_mappings, accepted_plan_id).await
+        let report = gc::run_gc(&ctx, &mut self.ca_mappings, accepted_plan_id).await?;
+        self.revalidate_overlay_bases()?;
+        Ok(report)
     }
 
     /// Render a NAR archive from a castore node into an arbitrary writer.
@@ -1258,37 +1461,44 @@ impl StoreHandle {
     /// when no reusable local node is known or when the referenced castore
     /// content is missing.
     pub async fn cached_node_for_path(&mut self, path: &StorePath<String>) -> Result<Option<Node>, Error> {
-        assert!(!path.name().is_empty(), "store path name must not be empty");
-        assert!(path.to_string().contains('-'), "store path text must include a digest/name separator");
+        Ok(self.cached_node_for_path_with_layer(path).await?.map(|read| read.value))
+    }
 
+    pub async fn cached_node_for_path_with_layer(
+        &mut self,
+        path: &StorePath<String>,
+    ) -> Result<Option<crate::layer::Layered<Node>>, Error> {
+        if path.name().is_empty() || !path.to_string().contains('-') {
+            return Err(Error::Store(format!("invalid logical store path: {path}")));
+        }
         if let Some(node) = self.output_nodes.get(path).cloned() {
             if self.castore_has_complete_content(&node).await? {
-                return Ok(Some(node));
+                return Ok(Some(crate::layer::Layered::overlay(node)));
             }
             self.output_nodes.remove(path);
             return Ok(None);
         }
 
-        let maybe_path_info = self
-            .pathinfo_service
-            .get(*path.digest())
-            .await
-            .map_err(|e| Error::Store(format!("PathInfo lookup for {path}: {e}")))?;
-        let Some(path_info) = maybe_path_info else {
+        let Some(path_info) = self.path_info_with_layer(path).await? else {
             return Ok(None);
         };
-        if path_info.store_path != *path {
+        if !self.castore_has_complete_content(&path_info.value.node).await? {
+            if self.overlay_state.is_none() {
+                return Ok(None);
+            }
             return Err(Error::Store(format!(
-                "PathInfo digest collision for {path}: stored path was {}",
-                path_info.store_path
+                "overlay-content-incomplete: {path} selected from {} has incomplete castore content",
+                path_info.layer,
             )));
         }
-        if !self.castore_has_complete_content(&path_info.node).await? {
-            return Ok(None);
-        }
+        self.revalidate_overlay_bases()?;
+        self.record_layer_selection(path, &path_info)?;
 
-        self.output_nodes.insert(path.clone(), path_info.node.clone());
-        Ok(Some(path_info.node))
+        let layered_node = path_info.map(|value| value.node);
+        if layered_node.layer.is_overlay() {
+            self.output_nodes.insert(path.clone(), layered_node.value.clone());
+        }
+        Ok(Some(layered_node))
     }
 
     /// Return and physically export one complete local PathInfo.
@@ -1310,6 +1520,29 @@ impl StoreHandle {
         self.built_outputs
             .insert(path.to_absolute_path_with_prefix(&self.output_dir_str), path_info.clone());
         Ok(Some(path_info))
+    }
+
+    pub fn resolve_ca_mapping(
+        &self,
+        drv_abs: &str,
+        output_name: &str,
+    ) -> Result<Option<crate::layer::Layered<String>>, Error> {
+        self.revalidate_overlay_bases()?;
+        if let Some(path) = self.ca_mappings.get(drv_abs, output_name) {
+            return Ok(Some(crate::layer::Layered::overlay(path.to_string())));
+        }
+        for (base_index, mappings) in self.base_ca_mappings.iter().enumerate() {
+            if let Some(path) = mappings.get(drv_abs, output_name) {
+                return Ok(Some(crate::layer::Layered {
+                    value: path.to_string(),
+                    layer: crate::layer::StoreLayer::Base {
+                        index: base_index.saturating_add(1),
+                    },
+                    shadows: Vec::new(),
+                }));
+            }
+        }
+        Ok(None)
     }
 
     /// Record a CA mapping and persist to disk.
@@ -1342,20 +1575,21 @@ impl StoreHandle {
         for (output_name, output) in &derivation.outputs {
             let output_path: StorePath<String> = match output.path.as_ref() {
                 Some(p) => p.clone(),
-                None => match self.ca_mappings.get(&drv_abs, output_name) {
-                    Some(ca_abs) => StorePath::from_absolute_path_with_prefix(ca_abs.as_bytes(), &self.store_dir)
-                        .map_err(|_| Error::Cache(format!("invalid CA mapping path: {ca_abs}")))?,
+                None => match self.resolve_ca_mapping(&drv_abs, output_name)? {
+                    Some(ca_mapping) => {
+                        StorePath::from_absolute_path_with_prefix(ca_mapping.value.as_bytes(), &self.store_dir)
+                            .map_err(|_| Error::Cache(format!("invalid CA mapping path: {}", ca_mapping.value)))?
+                    }
                     None => return Ok(None),
                 },
             };
 
-            let digest = *output_path.digest();
-
-            let stored =
-                self.pathinfo_service.get(digest).await.map_err(|e| Error::Cache(format!("PathInfo lookup: {e}")))?;
+            let stored = self.path_info_with_layer(&output_path).await?;
 
             match stored {
-                Some(path_info) => {
+                Some(layered_path_info) => {
+                    self.record_layer_selection(&output_path, &layered_path_info)?;
+                    let path_info = layered_path_info.value;
                     // All outputs require declared-size castore completeness.
                     // Directory outputs recursively check child blobs and directories;
                     // file outputs verify the blob can reconstruct the declared size;
@@ -1366,7 +1600,9 @@ impl StoreHandle {
                         persist_artifact_attestation(&self.state_dir, &self.store_dir, &path_info, output_name, None)
                             .await?;
                         self.export_output_if_needed(&output_path, &path_info.node, is_root).await?;
-                        self.output_nodes.insert(output_path.clone(), path_info.node.clone());
+                        if layered_path_info.layer.is_overlay() {
+                            self.output_nodes.insert(output_path.clone(), path_info.node.clone());
+                        }
                         self.built_outputs
                             .insert(output_path.to_absolute_path_with_prefix(&self.output_dir_str), path_info.clone());
                         if is_root && let Some(source) = root_source {
@@ -1383,8 +1619,15 @@ impl StoreHandle {
                 }
                 None => {
                     if !is_fod
-                        && let Some(remote_pi) =
-                            self.try_substitute_remote(digest, &output_path, output_name, is_root, root_source).await?
+                        && let Some(remote_pi) = self
+                            .try_substitute_remote(
+                                *output_path.digest(),
+                                &output_path,
+                                output_name,
+                                is_root,
+                                root_source,
+                            )
+                            .await?
                     {
                         infos.insert(output_name.clone(), remote_pi);
                         continue;
@@ -2711,7 +2954,9 @@ impl StoreHandle {
     /// "always sign before persist" invariant at the storage boundary,
     /// even if a caller constructs the PathInfo itself.
     pub async fn persist_and_export_signed_output(&mut self, req: PersistOutputRequest<'_>) -> Result<PathInfo, Error> {
-        assert!(!req.output_name.is_empty(), "output_name must not be empty");
+        if req.output_name.is_empty() {
+            return Err(Error::Store("output name must not be empty".to_string()));
+        }
 
         if req.path_info.store_path != *req.output_path {
             return Err(Error::Store(format!(
@@ -2724,6 +2969,7 @@ impl StoreHandle {
             return Err(Error::Store(format!("refusing to persist unsigned PathInfo for {}", req.output_path)));
         }
 
+        self.revalidate_overlay_bases()?;
         self.pathinfo_service
             .put(req.path_info.clone())
             .await
@@ -2738,6 +2984,7 @@ impl StoreHandle {
         .await?;
 
         self.export_output_if_needed(req.output_path, &req.final_node, req.is_root).await?;
+        self.revalidate_overlay_bases()?;
         let abs_path = req.output_path.to_absolute_path_with_prefix(&self.output_dir_str);
         self.built_outputs.insert(abs_path, req.path_info.clone());
         self.output_nodes.insert(req.output_path.clone(), req.final_node.clone());
@@ -2813,22 +3060,100 @@ impl StoreHandle {
         &self,
         store_path: &StorePath<String>,
     ) -> Result<Option<StoredArtifactAttestation>, Error> {
-        load_artifact_attestation(&self.state_dir, store_path, &self.store_dir).await
+        Ok(self.get_artifact_attestation_with_layer(store_path).await?.map(|read| read.value))
+    }
+
+    pub async fn get_artifact_attestation_with_layer(
+        &self,
+        store_path: &StorePath<String>,
+    ) -> Result<Option<crate::layer::Layered<StoredArtifactAttestation>>, Error> {
+        let Some(path_info) = self.path_info_with_layer(store_path).await? else {
+            return Ok(None);
+        };
+        let state_dir = match path_info.layer {
+            crate::layer::StoreLayer::Overlay => &self.state_dir,
+            crate::layer::StoreLayer::Base { index } => {
+                let base_index = index
+                    .checked_sub(1)
+                    .ok_or_else(|| Error::Store("base layer index must be greater than zero".to_string()))?;
+                self.overlay_state
+                    .as_ref()
+                    .and_then(|state| state.base_state_dirs.get(base_index))
+                    .ok_or_else(|| Error::Store(format!("base layer index {index} is not declared")))?
+            }
+        };
+        let attestation = load_artifact_attestation(state_dir, store_path, &self.store_dir).await?;
+        self.revalidate_overlay_bases()?;
+        Ok(attestation.map(|mut value| {
+            value.selected_layer = path_info.layer;
+            crate::layer::Layered {
+                value,
+                layer: path_info.layer,
+                shadows: path_info.shadows.clone(),
+            }
+        }))
     }
 
     pub async fn runtime_closure_attestation(
         &self,
         roots: &[StorePath<String>],
     ) -> Result<StoredClosureAttestation, Error> {
+        self.revalidate_overlay_bases()?;
         let remote: Option<&dyn PathInfoService> = self.remote_pathinfo.as_ref().map(|svc| svc.as_ref());
-        load_or_create_runtime_closure_attestation(
+        let mut attestation = load_or_create_runtime_closure_attestation(
             &self.state_dir,
             &self.store_dir,
             self.pathinfo_service.as_ref(),
             remote,
             roots,
         )
-        .await
+        .await?;
+        attestation.selected_layers = self.closure_layer_provenance(roots).await?;
+        self.revalidate_overlay_bases()?;
+        Ok(attestation)
+    }
+
+    async fn closure_layer_provenance(
+        &self,
+        roots: &[StorePath<String>],
+    ) -> Result<BTreeMap<String, crate::layer::StoreLayer>, Error> {
+        let mut pending = roots.to_vec();
+        let mut visited = BTreeSet::new();
+        let mut selected_layers = BTreeMap::new();
+        while let Some(path) = pending.pop() {
+            if !visited.insert(path.clone()) {
+                continue;
+            }
+            if visited.len() > MAX_LAYERED_CLOSURE_PATHS {
+                return Err(Error::Store(format!("layered closure exceeds {MAX_LAYERED_CLOSURE_PATHS} paths")));
+            }
+            let read = self
+                .pathinfo_service
+                .get_with_layer(*path.digest())
+                .await
+                .map_err(|error| Error::Store(format!("reading closure layer for {path}: {error}")))?
+                .ok_or_else(|| Error::MissingClosureFacts {
+                    path: path.clone(),
+                    store_dir: self.store_dir.clone(),
+                    detail: "PathInfo missing while recording closure layer provenance".to_string(),
+                })?;
+            if read.value.store_path != path {
+                return Err(Error::Store(format!(
+                    "closure layer digest collision: requested {path}, observed {}",
+                    read.value.store_path
+                )));
+            }
+            if self.overlay_state.is_some() && read.layer_index == 0 {
+                let trusted_keys = crate::overlay::load_layer_trust_keys(&self.state_dir)?;
+                crate::overlay::verify_pathinfo_trust(&read.value, &trusted_keys)
+                    .map_err(|error| Error::Store(format!("overlay-layer-trust-failure for {path}: {error}")))?;
+            }
+            let layer = crate::layer::StoreLayer::from_service_index(read.layer_index)
+                .map_err(|error| Error::Store(format!("mapping closure layer for {path}: {error}")))?;
+            selected_layers.insert(path.to_absolute_path_with_prefix(&self.store_dir), layer);
+            pending.extend(read.value.references);
+        }
+        Ok(selected_layers)
     }
 }
 
@@ -3335,14 +3660,27 @@ mod tests {
         StorePath::from_name_and_digest_fixed(name, [digest_byte; 20]).unwrap()
     }
 
+    fn test_signing_key() -> SigningKey<ed25519_dalek::SigningKey> {
+        SigningKey::new("store-test-1".to_string(), ed25519_dalek::SigningKey::from_bytes(&[3_u8; 32]))
+    }
+
+    fn test_verifying_key() -> VerifyingKey {
+        let raw = ed25519_dalek::SigningKey::from_bytes(&[3_u8; 32]);
+        VerifyingKey::new("store-test-1".to_string(), raw.verifying_key())
+    }
+
     fn test_signature() -> nix_compat::narinfo::Signature<String> {
-        let signing_key =
-            SigningKey::new("store-test-1".to_string(), ed25519_dalek::SigningKey::from_bytes(&[3u8; 32]));
-        signing_key.sign(b"signed").to_owned()
+        test_signing_key().sign(b"signed").to_owned()
+    }
+
+    fn sign_test_pathinfo(path_info: &mut PathInfo) {
+        path_info.signatures.clear();
+        let signed_fingerprint = compute_pathinfo_fingerprint(path_info, nix_compat::store_path::STORE_DIR);
+        path_info.signatures.push(test_signing_key().sign(signed_fingerprint.as_bytes()).to_owned());
     }
 
     fn signed_pathinfo(store_path: StorePath<String>) -> PathInfo {
-        PathInfo {
+        let mut path_info = PathInfo {
             store_path,
             node: Node::Symlink {
                 target: SymlinkTarget::try_from("target").unwrap(),
@@ -3350,10 +3688,12 @@ mod tests {
             references: vec![],
             nar_size: 1,
             nar_sha256: [9u8; 32],
-            signatures: vec![test_signature()],
+            signatures: Vec::new(),
             deriver: None,
             ca: None,
-        }
+        };
+        sign_test_pathinfo(&mut path_info);
+        path_info
     }
 
     fn signed_pathinfo_with_signing_key(
@@ -5778,14 +6118,44 @@ mod tests {
 
     // ── Overlay composition tests ───────────────────────────────────────
 
+    fn set_test_tree_read_only(root: &Path, is_read_only: bool) {
+        let mut directories = vec![root.to_path_buf()];
+        let mut visited_directories = Vec::new();
+        while let Some(directory) = directories.pop() {
+            visited_directories.push(directory.clone());
+            for entry in std::fs::read_dir(&directory).unwrap() {
+                let path = entry.unwrap().path();
+                let metadata = std::fs::symlink_metadata(&path).unwrap();
+                if metadata.file_type().is_symlink() {
+                    continue;
+                }
+                if metadata.is_dir() {
+                    directories.push(path);
+                    continue;
+                }
+                let mut permissions = metadata.permissions();
+                permissions.set_readonly(is_read_only);
+                std::fs::set_permissions(path, permissions).unwrap();
+            }
+        }
+        for directory in visited_directories.into_iter().rev() {
+            let mut permissions = std::fs::metadata(&directory).unwrap().permissions();
+            permissions.set_readonly(is_read_only);
+            std::fs::set_permissions(directory, permissions).unwrap();
+        }
+    }
+
     /// Create a real filesystem-based base store populated with a blob,
     /// directory, and a signed PathInfo for a symlink output.
-    async fn create_base_store(base_dir: &Path, _store_dir: &str, output_path: &StorePath<String>) -> PathInfo {
+    async fn create_base_store(base_dir: &Path, store_dir: &str, output_path: &StorePath<String>) -> PathInfo {
         use snix_castore::directoryservice::RedbDirectoryServiceConfig;
         use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 
-        // Create required directories.
+        // Create required directories and bind the logical prefix before service creation.
+        set_test_tree_read_only(base_dir, false);
         std::fs::create_dir_all(base_dir.join("blobs")).unwrap();
+        crate::overlay::ensure_store_identity(base_dir, store_dir).unwrap();
+        std::fs::write(base_dir.join("overlay-trusted-public-keys"), format!("{}\n", test_verifying_key())).unwrap();
 
         // Open and close directory service to create the DB file.
         let _dir_svc = RedbDirectoryService::new("base-test".to_string(), RedbDirectoryServiceConfig {
@@ -5808,13 +6178,106 @@ mod tests {
         // Create a signed PathInfo for a symlink output.
         let path_info = signed_pathinfo(output_path.clone());
         pathinfo_svc.put(path_info.clone()).await.unwrap();
+        persist_artifact_attestation(base_dir, store_dir, &path_info, "out", None).await.unwrap();
+        drop(pathinfo_svc);
+        drop(_dir_svc);
+        set_test_tree_read_only(base_dir, true);
 
+        path_info
+    }
+
+    async fn create_base_store_with_host_tree(
+        base_dir: &Path,
+        store_dir: &str,
+        output_path: &StorePath<String>,
+        source_is_directory: bool,
+    ) -> PathInfo {
+        const BASE_FILE_CONTENT: &[u8] = b"base-file-content";
+        set_test_tree_read_only(base_dir, false);
+        std::fs::create_dir_all(base_dir.join("blobs")).unwrap();
+        crate::overlay::ensure_store_identity(base_dir, store_dir).unwrap();
+        std::fs::write(base_dir.join("overlay-trusted-public-keys"), format!("{}\n", test_verifying_key())).unwrap();
+        let source = base_dir.join("fixture-source");
+        if source_is_directory {
+            std::fs::create_dir_all(&source).unwrap();
+            std::fs::write(source.join("member"), BASE_FILE_CONTENT).unwrap();
+        } else {
+            std::fs::write(&source, BASE_FILE_CONTENT).unwrap();
+        }
+
+        let blob_service: Arc<dyn BlobService> =
+            Arc::new(ObjectStoreBlobService::new_local(base_dir.join("blobs")).unwrap());
+        let directory_service: Arc<dyn DirectoryService> = Arc::new(
+            RedbDirectoryService::new("base-tree".to_string(), RedbDirectoryServiceConfig {
+                path: Some(base_dir.join("directories.redb")),
+                read_only: false,
+                cache_size: None,
+            })
+            .await
+            .unwrap(),
+        );
+        let node = ingest_path::<_, _, _, &[u8]>(blob_service.clone(), directory_service.clone(), &source, None)
+            .await
+            .unwrap();
+        let renderer = SimpleRenderer::new(blob_service.clone(), directory_service.clone());
+        let (nar_size, nar_sha256) = renderer.calculate_nar(&node).await.unwrap();
+        let mut path_info = PathInfo {
+            store_path: output_path.clone(),
+            node,
+            references: Vec::new(),
+            nar_size,
+            nar_sha256,
+            signatures: Vec::new(),
+            deriver: None,
+            ca: None,
+        };
+        sign_test_pathinfo(&mut path_info);
+        let pathinfo_service = RedbPathInfoService::new("base-tree".to_string(), RedbPathInfoServiceConfig {
+            path: Some(base_dir.join("pathinfo.redb")),
+            read_only: false,
+            cache_size: None,
+        })
+        .await
+        .unwrap();
+        pathinfo_service.put(path_info.clone()).await.unwrap();
+        persist_artifact_attestation(base_dir, store_dir, &path_info, "out", None).await.unwrap();
+        drop(pathinfo_service);
+        drop(renderer);
+        drop(directory_service);
+        drop(blob_service);
+        set_test_tree_read_only(base_dir, true);
+        path_info
+    }
+
+    async fn create_base_store_with_references(
+        base_dir: &Path,
+        store_dir: &str,
+        output_path: &StorePath<String>,
+        references: Vec<StorePath<String>>,
+    ) -> PathInfo {
+        use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
+
+        let mut path_info = create_base_store(base_dir, store_dir, output_path).await;
+        set_test_tree_read_only(base_dir, false);
+        path_info.references = references;
+        sign_test_pathinfo(&mut path_info);
+        let pathinfo_svc = RedbPathInfoService::new("base-test-update".to_string(), RedbPathInfoServiceConfig {
+            path: Some(base_dir.join("pathinfo.redb")),
+            read_only: false,
+            cache_size: None,
+        })
+        .await
+        .unwrap();
+        pathinfo_svc.put(path_info.clone()).await.unwrap();
+        drop(pathinfo_svc);
+        set_test_tree_read_only(base_dir, true);
         path_info
     }
 
     /// Create a real filesystem-based overlay store over a base store,
     /// both sharing the same store_dir prefix.
     async fn create_overlay_handle(overlay_dir: &Path, base_dir: &Path, store_dir: &str) -> StoreHandle {
+        std::fs::write(overlay_dir.join("overlay-trusted-public-keys"), format!("{}\n", test_verifying_key())).unwrap();
         StoreHandle::open_overlay(StoreConfig {
             state_dir: overlay_dir.to_path_buf(),
             output_dir: overlay_dir.to_path_buf(),
@@ -5846,13 +6309,88 @@ mod tests {
         let mut handle = create_overlay_handle(overlay_dir.path(), base_dir.path(), store_dir).await;
 
         // Read the path through the composed handle.
-        let cached = handle.cached_node_for_path(&output_path).await.unwrap();
-        assert!(cached.is_some(), "base path should be readable through overlay");
+        let cached = handle.cached_node_for_path_with_layer(&output_path).await.unwrap().unwrap();
+        assert_eq!(cached.layer, crate::layer::StoreLayer::Base { index: 1 });
 
         // Verify overlay was NOT populated: check the overlay's raw pathinfo
         // service (not the combined service).
         let overlay_hit = handle.overlay_pathinfo.get(*output_path.digest()).await.unwrap();
         assert!(overlay_hit.is_none(), "overlay must NOT have the path after read-through");
+    }
+
+    #[tokio::test]
+    async fn overlay_ca_mapping_precedence_and_publication_are_layer_bounded() {
+        const HIGHER_BASE_LAYER_INDEX: usize = 1;
+        const LOWER_BASE_LAYER_INDEX: usize = 2;
+        let overlay_dir = tempfile::tempdir().unwrap();
+        let higher_base_dir = tempfile::tempdir().unwrap();
+        let lower_base_dir = tempfile::tempdir().unwrap();
+        let store_dir = "/nix/store";
+        let fixture_path = test_output("mapping-fixture", 1);
+        let shared_drv = "/nix/store/shared.drv";
+        let lower_only_drv = "/nix/store/lower-only.drv";
+        let overlay_only_drv = "/nix/store/overlay-only.drv";
+        let higher_output = "/nix/store/higher-output";
+        let lower_output = "/nix/store/lower-output";
+        let lower_only_output = "/nix/store/lower-only-output";
+        let overlay_output = "/nix/store/overlay-output";
+
+        create_base_store(higher_base_dir.path(), store_dir, &fixture_path).await;
+        set_test_tree_read_only(higher_base_dir.path(), false);
+        let mut higher_mappings = CaMappings::default();
+        higher_mappings.insert(shared_drv, "out", higher_output);
+        higher_mappings.save_checked(higher_base_dir.path()).unwrap();
+        set_test_tree_read_only(higher_base_dir.path(), true);
+
+        create_base_store(lower_base_dir.path(), store_dir, &fixture_path).await;
+        set_test_tree_read_only(lower_base_dir.path(), false);
+        let mut lower_mappings = CaMappings::default();
+        lower_mappings.insert(shared_drv, "out", lower_output);
+        lower_mappings.insert(lower_only_drv, "out", lower_only_output);
+        lower_mappings.save_checked(lower_base_dir.path()).unwrap();
+        set_test_tree_read_only(lower_base_dir.path(), true);
+
+        std::fs::write(overlay_dir.path().join("overlay-trusted-public-keys"), format!("{}\n", test_verifying_key()))
+            .unwrap();
+        let mut handle = StoreHandle::open_overlay(StoreConfig {
+            state_dir: overlay_dir.path().to_path_buf(),
+            output_dir: overlay_dir.path().to_path_buf(),
+            remote_cache_urls: Vec::new(),
+            fallback_mode: StoreFallbackMode::Practical,
+            store_dir: store_dir.to_string(),
+            base_state_dirs: vec![
+                higher_base_dir.path().to_path_buf(),
+                lower_base_dir.path().to_path_buf(),
+            ],
+        })
+        .await
+        .unwrap();
+
+        let shared = handle.resolve_ca_mapping(shared_drv, "out").unwrap().unwrap();
+        assert_eq!(shared.value, higher_output);
+        assert_eq!(shared.layer, crate::layer::StoreLayer::Base {
+            index: HIGHER_BASE_LAYER_INDEX,
+        });
+        let lower_only = handle.resolve_ca_mapping(lower_only_drv, "out").unwrap().unwrap();
+        assert_eq!(lower_only.value, lower_only_output);
+        assert_eq!(lower_only.layer, crate::layer::StoreLayer::Base {
+            index: LOWER_BASE_LAYER_INDEX,
+        });
+
+        handle.insert_ca_mapping(shared_drv, "out", overlay_output);
+        handle.insert_ca_mapping(overlay_only_drv, "out", overlay_output);
+        let selected = handle.resolve_ca_mapping(shared_drv, "out").unwrap().unwrap();
+        assert_eq!(selected.value, overlay_output);
+        assert_eq!(selected.layer, crate::layer::StoreLayer::Overlay);
+
+        let persisted_overlay = CaMappings::load(overlay_dir.path());
+        assert_eq!(persisted_overlay.get(overlay_only_drv, "out"), Some(overlay_output));
+        let unchanged_higher = CaMappings::load(higher_base_dir.path());
+        assert_eq!(unchanged_higher.get(shared_drv, "out"), Some(higher_output));
+        assert_eq!(unchanged_higher.get(overlay_only_drv, "out"), None);
+        let unchanged_lower = CaMappings::load(lower_base_dir.path());
+        assert_eq!(unchanged_lower.get(shared_drv, "out"), Some(lower_output));
+        assert_eq!(unchanged_lower.get(overlay_only_drv, "out"), None);
     }
 
     #[tokio::test]
@@ -5875,7 +6413,7 @@ mod tests {
 
         // Write a different PathInfo into the overlay's raw pathinfo database
         // (not through the combined service, which has Unimplemented for put).
-        let overlay_path_info = PathInfo {
+        let mut overlay_path_info = PathInfo {
             store_path: output_path.clone(),
             node: Node::Symlink {
                 target: SymlinkTarget::try_from("overlay-target").unwrap(),
@@ -5883,13 +6421,20 @@ mod tests {
             references: Vec::new(),
             nar_size: 42,
             nar_sha256: [4u8; 32],
-            signatures: vec![test_signature()],
+            signatures: Vec::new(),
             deriver: None,
             ca: None,
         };
+        sign_test_pathinfo(&mut overlay_path_info);
         handle.overlay_pathinfo.put(overlay_path_info.clone()).await.unwrap();
 
         // Read the path through the composed handle.
+        let selected = handle.path_info_with_layer(&output_path).await.unwrap().unwrap();
+        assert_eq!(selected.layer, crate::layer::StoreLayer::Overlay);
+        assert_eq!(selected.shadows, vec![crate::layer::LayerShadowObservation {
+            layer: crate::layer::StoreLayer::Base { index: 1 },
+            status: crate::layer::LayerShadowStatus::Conflicting,
+        }]);
         let cached = handle.cached_node_for_path(&output_path).await.unwrap();
         assert!(cached.is_some(), "shadowed path should be readable");
         if let Some(Node::Symlink { target }) = cached {
@@ -5975,14 +6520,12 @@ mod tests {
         })
         .await;
 
-        // Currently the mismatch is enforced by having both layers share the
-        // same store_dir in the config. If they differ, the overlay will work
-        // but the prefixes won't match for derivation hashes. This is a config
-        // error that should be caught at plan time.
-        // The task requires a hard error; for now, we assert the overlay opens
-        // but document that mismatched prefixes break hash invariance.
-        // FUTUREWORK: add a strict prefix check to open_overlay.
-        assert!(result.is_ok(), "overlay opened with mismatched prefix (config-level check pending)");
+        let error = match result {
+            Ok(_) => panic!("prefix mismatch must fail before overlay services open"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("PrefixMismatch"));
+        assert!(!overlay_dir.path().join("pathinfo.redb").exists());
     }
 
     #[tokio::test]
@@ -6013,7 +6556,7 @@ mod tests {
             Err(e) => e.to_string(),
             Ok(_) => panic!("missing base must fail closed"),
         };
-        assert!(err.contains("does not exist"), "error must mention missing directory");
+        assert!(err.contains("opening overlay base"), "error must identify the missing base");
     }
 
     #[tokio::test]
@@ -6052,20 +6595,67 @@ mod tests {
         .unwrap();
 
         // path_a should be found via base A.
-        let cached_a = handle.cached_node_for_path(&path_a).await.unwrap();
-        assert!(cached_a.is_some(), "path_a must be readable through base A");
+        let cached_a = handle.cached_node_for_path_with_layer(&path_a).await.unwrap().unwrap();
+        assert_eq!(cached_a.layer, crate::layer::StoreLayer::Base { index: 1 });
 
         // path_b should be found via base B.
-        let cached_b = handle.cached_node_for_path(&path_b).await.unwrap();
-        assert!(cached_b.is_some(), "path_b must be readable through base B");
+        let cached_b = handle.cached_node_for_path_with_layer(&path_b).await.unwrap().unwrap();
+        assert_eq!(cached_b.layer, crate::layer::StoreLayer::Base { index: 2 });
 
         // path_both should be found via base A (hit in A prevents B consult).
-        let cached_both = handle.cached_node_for_path(&path_both).await.unwrap();
-        assert!(cached_both.is_some(), "path_both must be readable through base A");
+        let cached_both = handle.cached_node_for_path_with_layer(&path_both).await.unwrap().unwrap();
+        assert_eq!(cached_both.layer, crate::layer::StoreLayer::Base { index: 1 });
     }
 
     #[tokio::test]
-    async fn overlay_artifact_attestation_records_base_layer() {
+    async fn overlay_reads_file_and_directory_content_from_distinct_bases_without_backfill() {
+        let overlay_dir = tempfile::tempdir().unwrap();
+        let base_file_dir = tempfile::tempdir().unwrap();
+        let base_directory_dir = tempfile::tempdir().unwrap();
+        let store_dir = "/nix/store";
+        let file_path = test_output("base-file", 13);
+        let directory_path = test_output("base-directory", 14);
+        let file_info = create_base_store_with_host_tree(base_file_dir.path(), store_dir, &file_path, false).await;
+        let directory_info =
+            create_base_store_with_host_tree(base_directory_dir.path(), store_dir, &directory_path, true).await;
+
+        let mut handle = StoreHandle::open_overlay(StoreConfig {
+            state_dir: overlay_dir.path().to_path_buf(),
+            output_dir: overlay_dir.path().to_path_buf(),
+            remote_cache_urls: Vec::new(),
+            fallback_mode: StoreFallbackMode::Practical,
+            store_dir: store_dir.to_string(),
+            base_state_dirs: vec![
+                base_file_dir.path().to_path_buf(),
+                base_directory_dir.path().to_path_buf(),
+            ],
+        })
+        .await
+        .unwrap();
+
+        let selected_file = handle.cached_node_for_path_with_layer(&file_path).await.unwrap().unwrap();
+        let selected_directory = handle.cached_node_for_path_with_layer(&directory_path).await.unwrap().unwrap();
+        assert_eq!(selected_file.layer, crate::layer::StoreLayer::Base { index: 1 });
+        assert_eq!(selected_directory.layer, crate::layer::StoreLayer::Base { index: 2 });
+        assert_eq!(handle.read_blob(&selected_file.value).await.unwrap(), b"base-file-content");
+        assert!(handle.castore_has_complete_content(&selected_directory.value).await.unwrap());
+
+        if let Node::File { digest, .. } = &file_info.node {
+            assert!(!handle.overlay_blob_service.has(digest).await.unwrap());
+        } else {
+            panic!("file fixture must produce a file node");
+        }
+        if let Node::Directory { digest, .. } = &directory_info.node {
+            assert!(handle.overlay_directory_service.get(digest).await.unwrap().is_none());
+        } else {
+            panic!("directory fixture must produce a directory node");
+        }
+        assert!(handle.overlay_pathinfo.get(*file_path.digest()).await.unwrap().is_none());
+        assert!(handle.overlay_pathinfo.get(*directory_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn overlay_report_records_selected_base_descriptor() {
         // r[verify store_transports.overlay_provenance_layer.scenario.base-trust]
         // GIVEN a path is read through the base because the overlay lacks it
         // WHEN synthesizing an artifact attestation for that path
@@ -6082,17 +6672,22 @@ mod tests {
         // Open overlay over base.
         let mut handle = create_overlay_handle(overlay_dir.path(), base_dir.path(), store_dir).await;
 
-        // Read the path through the composed handle (triggers attestation synthesis).
-        let cached = handle.cached_node_for_path(&output_path).await.unwrap();
-        assert!(cached.is_some(), "base path should be readable");
-
-        // NOTE: Artifact attestations are only synthesized during
-        // persist_and_export_signed_output or substitution, not during
-        // read-through cache hits.  StoreLayer provenance threading through
-        // attestation facts is tested via the write-routing test (which calls
-        // persist_and_export_signed_output and verifies overlay-only writes).
-        // Future work: update cached_node_for_path to record layer provenance
-        // and synthesize attestations for cache hits too.
+        let cached = handle.cached_node_for_path_with_layer(&output_path).await.unwrap().unwrap();
+        assert_eq!(cached.layer, crate::layer::StoreLayer::Base { index: 1 });
+        let attestation = handle.get_artifact_attestation_with_layer(&output_path).await.unwrap().unwrap();
+        assert_eq!(attestation.layer, crate::layer::StoreLayer::Base { index: 1 });
+        assert_eq!(attestation.value.selected_layer, crate::layer::StoreLayer::Base { index: 1 });
+        let closure_attestation = handle.runtime_closure_attestation(std::slice::from_ref(&output_path)).await.unwrap();
+        assert_eq!(
+            closure_attestation.selected_layers.get(&output_path.to_absolute_path()),
+            Some(&crate::layer::StoreLayer::Base { index: 1 })
+        );
+        let report = handle.overlay_report().unwrap().unwrap();
+        assert_eq!(report.bases.len(), 1);
+        assert_eq!(report.bases[0].declaration_index, 0);
+        assert_eq!(report.bases[0].trust_policy_id, "mantle-store-overlay-trust-v2");
+        assert_eq!(report.bases[0].accepted_signer_names, vec!["store-test-1"]);
+        assert!(report.bases[0].descriptor_blake3.starts_with("b3:"));
     }
 
     #[tokio::test]
@@ -6130,22 +6725,11 @@ mod tests {
         // Write an UNSIGNED PathInfo into the overlay's raw pathinfo database.
         handle.overlay_pathinfo.put(unsigned_path_info.clone()).await.unwrap();
 
-        // Read the path through the composed handle.
-        let cached = handle.cached_node_for_path(&output_path).await.unwrap();
-        assert!(cached.is_some(), "shadowed unsigned path should be readable");
+        // The invalid higher-precedence shadow must block lower-layer fallback.
+        let error = handle.cached_node_for_path(&output_path).await.unwrap_err();
+        assert!(error.to_string().contains("overlay-layer-trust-failure"));
 
-        // Verify the returned node is the overlay's (unsigned) symlink, not the base's.
-        if let Some(Node::Symlink { target }) = cached {
-            assert_eq!(
-                target.to_string(),
-                "unsigned-target",
-                "overlay's unsigned symlink must shadow base's signed one"
-            );
-        } else {
-            panic!("expected symlink node");
-        }
-
-        // Verify that persist_and_export_signed_output rejects the unsigned path.
+        // Verify that persist_and_export_signed_output also rejects the unsigned path.
         let result = handle
             .persist_and_export_signed_output(PersistOutputRequest {
                 output_name: "out",
@@ -6160,5 +6744,259 @@ mod tests {
         assert!(result.is_err(), "unsigned PathInfo must be rejected by persist");
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("unsigned PathInfo"), "error must mention unsigned: {err_msg}");
+    }
+
+    #[tokio::test]
+    async fn overlay_incomplete_shadow_blocks_complete_base_fallback() {
+        const SHADOW_PATH_DIGEST_BYTE: u8 = 51;
+        let overlay_dir = tempfile::tempdir().unwrap();
+        let base_dir = tempfile::tempdir().unwrap();
+        let store_dir = "/nix/store";
+        let output_path = test_output("incomplete-shadow", SHADOW_PATH_DIGEST_BYTE);
+        create_base_store(base_dir.path(), store_dir, &output_path).await;
+        let mut handle = create_overlay_handle(overlay_dir.path(), base_dir.path(), store_dir).await;
+        let missing_digest: snix_castore::B3Digest = blake3::hash(b"missing-shadow-blob").as_bytes().into();
+        let overlay_path_info = signed_pathinfo_with_signing_key(
+            output_path.clone(),
+            Node::File {
+                digest: missing_digest,
+                size: 1,
+                executable: false,
+            },
+            1,
+            [6_u8; NAR_SHA256_BYTES],
+            &test_signing_key(),
+        );
+        handle.overlay_pathinfo.put(overlay_path_info).await.unwrap();
+
+        let error = handle.cached_node_for_path(&output_path).await.unwrap_err();
+
+        assert!(error.to_string().contains("overlay-content-incomplete"));
+        assert!(handle.overlay_pathinfo.get(*output_path.digest()).await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn overlay_duplicate_base_declaration_fails_before_overlay_creation() {
+        let overlay_dir = tempfile::tempdir().unwrap();
+        let base_dir = tempfile::tempdir().unwrap();
+        let store_dir = "/nix/store";
+        create_base_store(base_dir.path(), store_dir, &test_output("duplicate-base", 41)).await;
+
+        let result = StoreHandle::open_overlay(StoreConfig {
+            state_dir: overlay_dir.path().to_path_buf(),
+            output_dir: overlay_dir.path().to_path_buf(),
+            remote_cache_urls: Vec::new(),
+            fallback_mode: StoreFallbackMode::Practical,
+            store_dir: store_dir.to_string(),
+            base_state_dirs: vec![base_dir.path().to_path_buf(), base_dir.path().to_path_buf()],
+        })
+        .await;
+        let error = match result {
+            Ok(_) => panic!("duplicate base must fail"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("DuplicateBase"));
+        assert!(!overlay_dir.path().join("pathinfo.redb").exists());
+    }
+
+    #[tokio::test]
+    async fn overlay_rejects_base_with_write_permission() {
+        const WRITABLE_BASE_DIGEST_BYTE: u8 = 49;
+        let overlay_dir = tempfile::tempdir().unwrap();
+        let base_dir = tempfile::tempdir().unwrap();
+        let store_dir = "/nix/store";
+        create_base_store(base_dir.path(), store_dir, &test_output("writable-base", WRITABLE_BASE_DIGEST_BYTE)).await;
+        set_test_tree_read_only(base_dir.path(), false);
+
+        let result = StoreHandle::open_overlay(StoreConfig {
+            state_dir: overlay_dir.path().to_path_buf(),
+            output_dir: overlay_dir.path().to_path_buf(),
+            remote_cache_urls: Vec::new(),
+            fallback_mode: StoreFallbackMode::Practical,
+            store_dir: store_dir.to_string(),
+            base_state_dirs: vec![base_dir.path().to_path_buf()],
+        })
+        .await;
+
+        let error = match result {
+            Ok(_) => panic!("writable base must fail"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("overlay-base-writable"));
+        assert!(!overlay_dir.path().join("pathinfo.redb").exists());
+    }
+
+    #[tokio::test]
+    async fn overlay_rejects_base_pathinfo_with_invalid_layer_signature() {
+        const INVALID_SIGNATURE_DIGEST_BYTE: u8 = 50;
+        let overlay_dir = tempfile::tempdir().unwrap();
+        let base_dir = tempfile::tempdir().unwrap();
+        let store_dir = "/nix/store";
+        let output_path = test_output("invalid-base-signature", INVALID_SIGNATURE_DIGEST_BYTE);
+        create_base_store(base_dir.path(), store_dir, &output_path).await;
+        set_test_tree_read_only(base_dir.path(), false);
+        let pathinfo_svc = RedbPathInfoService::new("base-corruption".to_string(), RedbPathInfoServiceConfig {
+            path: Some(base_dir.path().join("pathinfo.redb")),
+            read_only: false,
+            cache_size: None,
+        })
+        .await
+        .unwrap();
+        let mut invalid = signed_pathinfo(output_path.clone());
+        invalid.signatures = vec![test_signature()];
+        pathinfo_svc.put(invalid).await.unwrap();
+        drop(pathinfo_svc);
+        set_test_tree_read_only(base_dir.path(), true);
+        let mut handle = create_overlay_handle(overlay_dir.path(), base_dir.path(), store_dir).await;
+
+        let error = handle.cached_node_for_path(&output_path).await.unwrap_err();
+
+        assert!(error.to_string().contains("overlay-layer-trust-failure"));
+        assert!(handle.overlay_pathinfo.get(*output_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn overlay_generation_drift_blocks_later_read() {
+        let overlay_dir = tempfile::tempdir().unwrap();
+        let base_dir = tempfile::tempdir().unwrap();
+        let store_dir = "/nix/store";
+        let output_path = test_output("generation-drift", 42);
+        create_base_store(base_dir.path(), store_dir, &output_path).await;
+        let handle = create_overlay_handle(overlay_dir.path(), base_dir.path(), store_dir).await;
+
+        set_test_tree_read_only(base_dir.path(), false);
+        std::fs::write(base_dir.path().join("generation-drift-marker"), b"changed").unwrap();
+        set_test_tree_read_only(base_dir.path(), true);
+        let error = handle.path_info_with_layer(&output_path).await.unwrap_err();
+        assert!(error.to_string().contains("BaseGenerationDrift"));
+    }
+
+    #[tokio::test]
+    async fn overlay_base_state_mutation_blocks_output_admission() {
+        let overlay_dir = tempfile::tempdir().unwrap();
+        let base_dir = tempfile::tempdir().unwrap();
+        let store_dir = "/nix/store";
+        let output_path = test_output("base-replacement", 43);
+        create_base_store(base_dir.path(), store_dir, &output_path).await;
+        let mut handle = create_overlay_handle(overlay_dir.path(), base_dir.path(), store_dir).await;
+
+        set_test_tree_read_only(base_dir.path(), false);
+        std::fs::write(base_dir.path().join("replacement-marker"), b"replacement").unwrap();
+        set_test_tree_read_only(base_dir.path(), true);
+        let path_info = signed_pathinfo(test_output("blocked-output", 44));
+        let blocked_output = path_info.store_path.clone();
+        let error = handle
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name: "out",
+                output_path: &blocked_output,
+                final_node: path_info.node.clone(),
+                path_info,
+                provenance: None,
+                is_root: false,
+                root_source: None,
+            })
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("BaseGenerationDrift"));
+        assert!(handle.overlay_pathinfo.get(*blocked_output.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn overlay_gc_retains_base_reachability_without_base_mutation() {
+        let overlay_dir = tempfile::tempdir().unwrap();
+        let base_dir = tempfile::tempdir().unwrap();
+        let store_dir = "/nix/store";
+        let base_path = test_output("gc-base", 45);
+        create_base_store(base_dir.path(), store_dir, &base_path).await;
+        let base_database = base_dir.path().join("pathinfo.redb");
+        let base_before = blake3::hash(&std::fs::read(&base_database).unwrap());
+        let mut handle = create_overlay_handle(overlay_dir.path(), base_dir.path(), store_dir).await;
+
+        let overlay_path = test_output("gc-overlay-root", 46);
+        let mut overlay_path_info = signed_pathinfo(overlay_path.clone());
+        overlay_path_info.references = vec![base_path.clone()];
+        sign_test_pathinfo(&mut overlay_path_info);
+        handle
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name: "out",
+                output_path: &overlay_path,
+                final_node: overlay_path_info.node.clone(),
+                path_info: overlay_path_info,
+                provenance: None,
+                is_root: true,
+                root_source: Some(GcRootSource::Build),
+            })
+            .await
+            .unwrap();
+
+        let plan = handle.garbage_collect(None).await.unwrap();
+        assert_eq!(plan.candidate_path_count, 0);
+        assert_eq!(plan.base_reachability.len(), 1);
+        assert_eq!(plan.base_reachability[0].path, base_path.to_absolute_path());
+        assert_eq!(plan.base_reachability[0].layer_index, 1);
+        let executed = handle.garbage_collect(Some(&plan.plan_id)).await.unwrap();
+        assert!(executed.execution_complete);
+        let base_after = blake3::hash(&std::fs::read(&base_database).unwrap());
+        assert_eq!(base_before, base_after);
+        assert!(handle.overlay_pathinfo.get(*base_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn overlay_gc_execution_rejects_stale_base_generation() {
+        const STALE_BASE_DIGEST_BYTE: u8 = 52;
+        let overlay_dir = tempfile::tempdir().unwrap();
+        let base_dir = tempfile::tempdir().unwrap();
+        let store_dir = "/nix/store";
+        let base_path = test_output("stale-gc-base", STALE_BASE_DIGEST_BYTE);
+        create_base_store(base_dir.path(), store_dir, &base_path).await;
+        let mut handle = create_overlay_handle(overlay_dir.path(), base_dir.path(), store_dir).await;
+        handle.pin_retained_root(&base_path.to_absolute_path()).await.unwrap();
+        let plan = handle.garbage_collect(None).await.unwrap();
+        set_test_tree_read_only(base_dir.path(), false);
+        std::fs::write(base_dir.path().join("stale-gc-marker"), b"changed").unwrap();
+        set_test_tree_read_only(base_dir.path(), true);
+
+        let error = handle.garbage_collect(Some(&plan.plan_id)).await.unwrap_err();
+
+        assert!(error.to_string().contains("BaseGenerationDrift"));
+        assert!(handle.overlay_pathinfo.get(*base_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn overlay_gc_rejects_base_to_overlay_reference() {
+        let overlay_dir = tempfile::tempdir().unwrap();
+        let base_dir = tempfile::tempdir().unwrap();
+        let store_dir = "/nix/store";
+        let overlay_path = test_output("reverse-overlay", 47);
+        let mut single = StoreHandle::open(StoreConfig::new(
+            overlay_dir.path().to_path_buf(),
+            overlay_dir.path().to_path_buf(),
+            store_dir.to_string(),
+        ))
+        .await
+        .unwrap();
+        let overlay_path_info = signed_pathinfo(overlay_path.clone());
+        single
+            .persist_and_export_signed_output(PersistOutputRequest {
+                output_name: "out",
+                output_path: &overlay_path,
+                final_node: overlay_path_info.node.clone(),
+                path_info: overlay_path_info,
+                provenance: None,
+                is_root: false,
+                root_source: None,
+            })
+            .await
+            .unwrap();
+        drop(single);
+
+        let base_path = test_output("reverse-base", 48);
+        create_base_store_with_references(base_dir.path(), store_dir, &base_path, vec![overlay_path.clone()]).await;
+        let mut handle = create_overlay_handle(overlay_dir.path(), base_dir.path(), store_dir).await;
+        handle.pin_retained_root(&base_path.to_absolute_path()).await.unwrap();
+
+        let error = handle.garbage_collect(None).await.unwrap_err();
+        assert!(error.to_string().contains("BaseToOverlayReference"));
+        assert!(handle.overlay_pathinfo.get(*overlay_path.digest()).await.unwrap().is_some());
     }
 }

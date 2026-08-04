@@ -44,6 +44,8 @@
     }
   ],
   "native_dynamic_plans": [],
+  "overlay_base_generations": [],
+  "store_layer_selections": [],
   "scheduler_priority_decisions": [
     {
       "schema": "mantle-priority-decision-v1",

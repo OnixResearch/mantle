@@ -12,6 +12,7 @@
         "policy": { "network": "offline", "requested_claim_strength": "practical" },
         "tie_breaker": "local-cache,trusted-substitute,archive-import,source-bundle,p2p-remote-builder,local-build,preflight-error",
         "rejected_routes": [{ "route": "local-build", "reason_code": "contradiction" }],
+        "selected_store_layers": [],
         "non_claim": "route planning is advisory and does not prove transport execution or artifact correctness"
       }
     }

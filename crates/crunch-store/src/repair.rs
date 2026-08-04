@@ -141,6 +141,7 @@ pub async fn inspect_final_nar_repair(
 ) -> Result<FinalNarRepairInspection, Error> {
     assert!(handle.store_dir().starts_with('/'), "logical store prefix must be absolute");
     assert!(!handle.state_dir().as_os_str().is_empty(), "state directory must not be empty");
+    handle.revalidate_overlay_bases()?;
     let store_path = parse_exact_store_path(ExactStorePathInput {
         logical_store_path,
         store_dir: handle.store_dir(),
@@ -164,6 +165,7 @@ pub async fn inspect_final_nar_repair(
         validate_artifact_attestation(artifact_attestation.as_ref(), &original_path_info, handle.store_dir());
     let signature_count = u32::try_from(original_path_info.signatures.len())
         .map_err(|_| repair_error("signature count does not fit report bounds"))?;
+    handle.revalidate_overlay_bases()?;
     let transaction_plan = plan_repair_transaction(RepairTransactionRequest {
         path_id: original_path_info.store_path.to_absolute_path_with_prefix(handle.store_dir()),
         planning_facts: FinalNarRepairPlanningFacts {
@@ -194,6 +196,7 @@ pub async fn execute_final_nar_repair(
 ) -> Result<FinalNarRepairReport, Error> {
     assert!(!signing_key.name().is_empty(), "signing key name must not be empty");
     assert!(!inspection.original_path_info.store_path.name().is_empty());
+    handle.revalidate_overlay_bases()?;
     if inspection.transaction_plan.final_nar_plan == FinalNarRepairPlan::Current {
         return Ok(inspection.report(true));
     }
@@ -219,6 +222,7 @@ pub async fn execute_final_nar_repair(
     .await?;
 
     verify_repaired_state(handle, &repaired, staged_attestation.as_ref()).await?;
+    handle.revalidate_overlay_bases()?;
     let decision = plan_repair_report(RepairReportRequest {
         final_nar_plan: inspection.transaction_plan.final_nar_plan,
         artifact_attestation_present: staged_attestation.is_some(),
@@ -632,7 +636,7 @@ mod tests {
         async fn put(&self, path_info: PathInfo) -> Result<PathInfo, snix_store::pathinfoservice::Error> {
             let did_consume_failure = self
                 .put_failures_remaining
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| remaining.checked_sub(1))
+                .try_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| remaining.checked_sub(1))
                 .is_ok();
             if did_consume_failure {
                 return Err(std::io::Error::other("forced PathInfo persistence failure").into());

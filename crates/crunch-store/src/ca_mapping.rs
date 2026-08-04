@@ -16,7 +16,7 @@ use serde::Serialize;
 pub type OutputMap = HashMap<String, String>;
 
 /// Maps drv path (absolute string) -> output name -> CA store path (absolute string).
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct CaMappings {
     /// drv absolute path -> { output_name -> resolved CA path }
     mappings: HashMap<String, OutputMap>,

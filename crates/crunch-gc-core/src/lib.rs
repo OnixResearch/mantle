@@ -25,11 +25,12 @@ pub const MAX_RECLAIM_OBSERVATIONS: usize = 4_000_000;
 pub const MAX_STORE_PATH_ID_BYTES: usize = 4_096;
 pub const GC_PLAN_ID_BYTES: usize = blake3::OUT_LEN;
 
-const GC_PLAN_DOMAIN: &[u8] = b"mantle.gc.plan.v1";
+const GC_PLAN_DOMAIN: &[u8] = b"mantle.gc.plan.v2";
 const ROOTS_FIELD: &[u8] = b"roots";
 const ENTRIES_FIELD: &[u8] = b"entries";
 const RETAINED_FIELD: &[u8] = b"retained";
 const CANDIDATES_FIELD: &[u8] = b"candidates";
+const BASES_FIELD: &[u8] = b"bases";
 const FIELD_SEPARATOR: u8 = 0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -49,11 +50,28 @@ pub enum GcMutationKind {
     RemoveStorePath,
 }
 
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum GcOwnership {
+    Overlay,
+    Base { layer_index: usize },
+}
+
+impl GcOwnership {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Overlay => "overlay",
+            Self::Base { .. } => "base",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GcEntry {
     pub path_id: String,
     pub references: Vec<String>,
     pub declared_nar_bytes: u64,
+    pub ownership: GcOwnership,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -104,6 +122,7 @@ pub struct GcPlan {
     pub roots: Vec<String>,
     pub retained_path_ids: Vec<String>,
     pub retaining_roots: Vec<GcRetainingRoots>,
+    pub base_path_ids: Vec<String>,
     pub candidate_path_ids: Vec<String>,
     pub reclaim_summary: GcReclaimSummary,
     pub mutation_disposition: GcMutationDisposition,
@@ -150,6 +169,11 @@ pub enum GcPlanError {
     MissingReference {
         owner_path_id: String,
         reference_path_id: String,
+    },
+    BaseToOverlayReference {
+        owner_path_id: String,
+        reference_path_id: String,
+        base_layer_index: usize,
     },
     ReclaimSizeOverflow,
     TooManyReclaimObservations {
@@ -200,7 +224,12 @@ pub fn plan_gc(request: GcPlanRequest) -> Result<GcPlan, GcPlanError> {
     let retained = compute_reachable(&roots, &entries_by_id)?;
     let candidate_path_ids = entries
         .iter()
-        .filter(|entry| !retained.contains(entry.path_id.as_str()))
+        .filter(|entry| entry.ownership == GcOwnership::Overlay && !retained.contains(entry.path_id.as_str()))
+        .map(|entry| entry.path_id.clone())
+        .collect::<Vec<_>>();
+    let base_path_ids = entries
+        .iter()
+        .filter(|entry| matches!(entry.ownership, GcOwnership::Base { .. }))
         .map(|entry| entry.path_id.clone())
         .collect::<Vec<_>>();
     let retained_path_ids = retained.into_iter().collect::<Vec<_>>();
@@ -215,7 +244,7 @@ pub fn plan_gc(request: GcPlanRequest) -> Result<GcPlan, GcPlanError> {
             disposition: mutation_disposition,
         })
         .collect::<Vec<_>>();
-    let plan_id = compute_plan_id(&roots, &entries, &retained_path_ids, &candidate_path_ids)?;
+    let plan_id = compute_plan_id(&roots, &entries, &retained_path_ids, &base_path_ids, &candidate_path_ids)?;
 
     debug_assert_eq!(candidate_path_ids.len(), mutation_intents.len());
     debug_assert_eq!(reclaim_summary.candidate_count, candidate_path_ids.len());
@@ -224,6 +253,7 @@ pub fn plan_gc(request: GcPlanRequest) -> Result<GcPlan, GcPlanError> {
         roots,
         retained_path_ids,
         retaining_roots,
+        base_path_ids,
         candidate_path_ids,
         reclaim_summary,
         mutation_disposition,
@@ -346,10 +376,19 @@ fn validate_links(
     }
     for entry in entries {
         for reference in &entry.references {
-            if !entries_by_id.contains_key(reference.as_str()) {
+            let Some(target) = entries_by_id.get(reference.as_str()) else {
                 return Err(GcPlanError::MissingReference {
                     owner_path_id: entry.path_id.clone(),
                     reference_path_id: reference.clone(),
+                });
+            };
+            if let GcOwnership::Base { layer_index } = entry.ownership
+                && target.ownership == GcOwnership::Overlay
+            {
+                return Err(GcPlanError::BaseToOverlayReference {
+                    owner_path_id: entry.path_id.clone(),
+                    reference_path_id: reference.clone(),
+                    base_layer_index: layer_index,
                 });
             }
         }
@@ -439,15 +478,16 @@ fn compute_plan_id(
     roots: &[String],
     entries: &[GcEntry],
     retained_path_ids: &[String],
+    base_path_ids: &[String],
     candidate_path_ids: &[String],
 ) -> Result<GcPlanId, GcPlanError> {
     debug_assert!(roots.windows(2).all(|pair| pair[0] < pair[1]));
     debug_assert!(entries.windows(2).all(|pair| pair[0].path_id < pair[1].path_id));
-    let partition_count = retained_path_ids
+    let classified_count = retained_path_ids
         .len()
         .checked_add(candidate_path_ids.len())
         .ok_or(GcPlanError::IdentityEncodingOverflow)?;
-    debug_assert_eq!(partition_count, entries.len());
+    debug_assert!(classified_count <= entries.len());
     let mut hasher = blake3::Hasher::new();
     hasher.update(GC_PLAN_DOMAIN);
     hash_field_label(&mut hasher, ROOTS_FIELD);
@@ -459,9 +499,18 @@ fn compute_plan_id(
         hash_string(&mut hasher, &entry.path_id)?;
         hash_strings(&mut hasher, &entry.references)?;
         hasher.update(&entry.declared_nar_bytes.to_be_bytes());
+        hash_string(&mut hasher, entry.ownership.as_str())?;
+        let layer_index = match entry.ownership {
+            GcOwnership::Overlay => 0,
+            GcOwnership::Base { layer_index } => layer_index,
+        };
+        let encoded_layer = u64::try_from(layer_index).map_err(|_| GcPlanError::IdentityEncodingOverflow)?;
+        hasher.update(&encoded_layer.to_be_bytes());
     }
     hash_field_label(&mut hasher, RETAINED_FIELD);
     hash_strings(&mut hasher, retained_path_ids)?;
+    hash_field_label(&mut hasher, BASES_FIELD);
+    hash_strings(&mut hasher, base_path_ids)?;
     hash_field_label(&mut hasher, CANDIDATES_FIELD);
     hash_strings(&mut hasher, candidate_path_ids)?;
     Ok(GcPlanId(*hasher.finalize().as_bytes()))
@@ -514,7 +563,14 @@ mod tests {
             path_id: path_id.to_string(),
             references: references.iter().map(|value| (*value).to_string()).collect(),
             declared_nar_bytes,
+            ownership: GcOwnership::Overlay,
         }
+    }
+
+    fn base_entry(path_id: &str, references: &[&str], declared_nar_bytes: u64) -> GcEntry {
+        let mut value = entry(path_id, references, declared_nar_bytes);
+        value.ownership = GcOwnership::Base { layer_index: 1 };
+        value
     }
 
     fn request(mode: GcExecutionMode) -> GcPlanRequest {
@@ -660,5 +716,49 @@ mod tests {
             execution_mode: GcExecutionMode::DryRun,
         };
         assert_eq!(plan_gc(invalid), Err(GcPlanError::ReclaimSizeOverflow));
+    }
+
+    #[test]
+    fn overlay_root_can_reach_base_without_base_mutation_intent() {
+        let plan = plan_gc(GcPlanRequest {
+            roots: vec![ROOT.to_string()],
+            entries: vec![entry(ROOT, &[CHILD], ROOT_BYTES), base_entry(CHILD, &[], CHILD_BYTES)],
+            execution_mode: GcExecutionMode::Execute,
+        })
+        .expect("overlay-to-base reachability must plan");
+        assert_eq!(plan.retained_path_ids, vec![ROOT.to_string(), CHILD.to_string()]);
+        assert_eq!(plan.base_path_ids, vec![CHILD.to_string()]);
+        assert!(plan.candidate_path_ids.is_empty());
+        assert!(plan.mutation_intents.is_empty());
+    }
+
+    #[test]
+    fn unreachable_base_is_reported_but_never_collected() {
+        let plan = plan_gc(GcPlanRequest {
+            roots: vec![],
+            entries: vec![entry(DEAD, &[], DEAD_BYTES), base_entry(CHILD, &[], CHILD_BYTES)],
+            execution_mode: GcExecutionMode::Execute,
+        })
+        .expect("unreachable base fact must remain external");
+        assert_eq!(plan.base_path_ids, vec![CHILD.to_string()]);
+        assert_eq!(plan.candidate_path_ids, vec![DEAD.to_string()]);
+        assert_eq!(plan.mutation_intents.len(), EXPECTED_CANDIDATES);
+    }
+
+    #[test]
+    fn base_to_overlay_reference_is_rejected() {
+        let invalid = GcPlanRequest {
+            roots: vec![CHILD.to_string()],
+            entries: vec![base_entry(CHILD, &[ROOT], CHILD_BYTES), entry(ROOT, &[], ROOT_BYTES)],
+            execution_mode: GcExecutionMode::DryRun,
+        };
+        assert_eq!(
+            plan_gc(invalid),
+            Err(GcPlanError::BaseToOverlayReference {
+                owner_path_id: CHILD.to_string(),
+                reference_path_id: ROOT.to_string(),
+                base_layer_index: 1,
+            })
+        );
     }
 }

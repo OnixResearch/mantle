@@ -778,6 +778,54 @@ mantle run .#hello -- --help
 If the selected package output does not contain `bin/`, `mantle run` fails
 instead of guessing.
 
+## Use an ordered read-only base stack
+
+Complete all base writes before you admit the base.
+Add an accepted Ed25519 public key, and then remove all write permissions:
+
+```bash
+printf '%s\n' '<name>:<base64-ed25519-public-key>' \
+  > /srv/mantle-base/overlay-trusted-public-keys
+chmod -R a-w /srv/mantle-base
+```
+
+Declare bases in read-precedence order:
+
+```bash
+mantle \
+  --base-store /srv/mantle-base-a \
+  --base-store /srv/mantle-base-b \
+  store list
+
+mantle \
+  --base-store /srv/mantle-base-a \
+  --base-store /srv/mantle-base-b \
+  --json store info '<path-filter>'
+```
+
+The current state directory is the only writable overlay.
+A selected base read does not backfill overlay PathInfo, directory, or blob state.
+A higher invalid layer blocks lower-layer fallback.
+
+The reports identify `overlay`, `base[1]`, `base[2]`, and later declared bases.
+They also include descriptor, generation, trust-policy, signer, shadow, and no-backfill facts.
+
+`mantle build --plan` adds `store_overlay` and `selected_store_layers` to each route report.
+Each selected base entry binds its descriptor and observed generation.
+
+A JSON build report includes `overlay_plan_blake3`, `overlay_base_generations`, and `store_layer_selections`.
+These fields record the layers that the completed build read.
+
+`mantle attest show` reports `selected_layer` in its envelope.
+`mantle attest closure` reports `selected_layers` for all observed closure paths.
+
+Run GC with the same ordered base declarations used for planning.
+Execution binds the accepted plan to the overlay descriptor and current base generations.
+GC never selects base-owned paths for mutation.
+
+Remove all `--base-store` options to return to single-store operation.
+This rollback does not copy or delete base content.
+
 ## Inspect GC and final-NAR repair plans
 
 Use dry-run commands before a store mutation:

@@ -39,12 +39,14 @@ pub struct ArtifactProvenance {
 pub struct StoredArtifactAttestation {
     pub digest: AttestationDigest,
     pub attestation: ArtifactAttestation,
+    pub selected_layer: StoreLayer,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StoredClosureAttestation {
     pub digest: AttestationDigest,
     pub attestation: ClosureAttestation,
+    pub selected_layers: BTreeMap<String, StoreLayer>,
 }
 
 pub async fn persist_artifact_attestation(
@@ -58,7 +60,11 @@ pub async fn persist_artifact_attestation(
     let digest = artifact_attestation_digest(attestation.clone())?;
     let path = artifact_attestation_path(state_dir, &attestation.facts.logical_path);
     write_canonical_artifact_file(&path, &attestation).await?;
-    Ok(StoredArtifactAttestation { digest, attestation })
+    Ok(StoredArtifactAttestation {
+        digest,
+        attestation,
+        selected_layer: provenance.map_or(StoreLayer::Overlay, |value| value.store_layer),
+    })
 }
 
 pub fn artifact_attestation_digest_for_pathinfo(
@@ -516,7 +522,11 @@ fn push_unique_edge(edges: &mut Vec<Edge>, seen: &mut BTreeSet<(String, EdgeKind
 
 fn stored_artifact_attestation(attestation: ArtifactAttestation) -> Result<StoredArtifactAttestation, Error> {
     let digest = artifact_attestation_digest(attestation.clone())?;
-    Ok(StoredArtifactAttestation { digest, attestation })
+    Ok(StoredArtifactAttestation {
+        digest,
+        attestation,
+        selected_layer: StoreLayer::Overlay,
+    })
 }
 
 fn artifact_attestation_digest(
@@ -527,7 +537,11 @@ fn artifact_attestation_digest(
 
 fn stored_closure_attestation(attestation: ClosureAttestation) -> Result<StoredClosureAttestation, Error> {
     let digest = attestation.canonical_digest().map_err(|e| Error::Attestation(format!("closure digest: {e}")))?;
-    Ok(StoredClosureAttestation { digest, attestation })
+    Ok(StoredClosureAttestation {
+        digest,
+        attestation,
+        selected_layers: BTreeMap::new(),
+    })
 }
 
 async fn write_canonical_artifact_file(path: &Path, attestation: &ArtifactAttestation) -> Result<(), Error> {

@@ -8,9 +8,11 @@ use crunch_store::StoreFallbackMode;
 use crunch_store::StoreHandle;
 use nix_compat::store_path::StorePath;
 use snix_castore::Node;
+use snix_castore::SymlinkTarget;
 use snix_store::path_info::PathInfo;
 
 const STORE_DIR: &str = "/nix/store";
+const NAR_SHA256_BYTES: usize = 32;
 
 fn crunch_cmd(state_dir: &Path, output_dir: &Path) -> Command {
     let mut cmd = Command::cargo_bin("crunch").unwrap();
@@ -58,6 +60,54 @@ fn signed_pathinfo(store_path: StorePath<String>, node: Node, refs: Vec<StorePat
     };
     crunch_build::sign_pathinfo(&mut path_info, &keypair.signing_key);
     path_info
+}
+
+fn set_tree_read_only(root: &Path, is_read_only: bool) {
+    let mut directories = vec![root.to_path_buf()];
+    let mut visited = Vec::new();
+    while let Some(directory) = directories.pop() {
+        visited.push(directory.clone());
+        for entry in std::fs::read_dir(&directory).unwrap() {
+            let path = entry.unwrap().path();
+            let metadata = std::fs::symlink_metadata(&path).unwrap();
+            if metadata.file_type().is_symlink() {
+                continue;
+            }
+            if metadata.is_dir() {
+                directories.push(path);
+            } else {
+                let mut permissions = metadata.permissions();
+                permissions.set_readonly(is_read_only);
+                std::fs::set_permissions(path, permissions).unwrap();
+            }
+        }
+    }
+    for directory in visited.into_iter().rev() {
+        let mut permissions = std::fs::metadata(&directory).unwrap().permissions();
+        permissions.set_readonly(is_read_only);
+        std::fs::set_permissions(directory, permissions).unwrap();
+    }
+}
+
+async fn seed_overlay_base(state_dir: &Path, output_dir: &Path, store_path: &StorePath<String>) {
+    let store = open_store(state_dir, output_dir).await;
+    let (keypair, _) = crunch_build::generate_keypair();
+    std::fs::write(state_dir.join("overlay-trusted-public-keys"), format!("{}\n", keypair.verifying_key)).unwrap();
+    let mut path_info = PathInfo {
+        store_path: store_path.clone(),
+        node: Node::Symlink {
+            target: SymlinkTarget::try_from("base-target").unwrap(),
+        },
+        references: Vec::new(),
+        nar_size: 1,
+        nar_sha256: [5_u8; NAR_SHA256_BYTES],
+        signatures: Vec::new(),
+        deriver: None,
+        ca: None,
+    };
+    crunch_build::sign_pathinfo(&mut path_info, &keypair.signing_key);
+    store.pathinfo_service().put(path_info).await.unwrap();
+    drop(store);
 }
 
 async fn write_blob(store: &StoreHandle, contents: &[u8]) -> Node {
@@ -213,4 +263,62 @@ fn store_gc_execution_refuses_when_mutation_lock_is_held() {
         .assert()
         .failure()
         .stderr(predicates::str::contains("another local build, substitution, or store mutation is active"));
+}
+
+#[test]
+fn store_info_reports_base_layer_without_mutating_base() {
+    const BASE_PATH_DIGEST_BYTE: u8 = 61;
+    let base_state = tempfile::tempdir().unwrap();
+    let base_output = tempfile::tempdir().unwrap();
+    let overlay_state = tempfile::tempdir().unwrap();
+    let overlay_output = tempfile::tempdir().unwrap();
+    let base_path = test_output("cli-base", BASE_PATH_DIGEST_BYTE);
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(seed_overlay_base(base_state.path(), base_output.path(), &base_path));
+    set_tree_read_only(base_state.path(), true);
+    let base_database = base_state.path().join("pathinfo.redb");
+    let base_before = blake3::hash(&std::fs::read(&base_database).unwrap());
+
+    let output = crunch_cmd(overlay_state.path(), overlay_output.path())
+        .arg("--base-store")
+        .arg(base_state.path())
+        .arg("--json")
+        .args(["store", "info", "cli-base"])
+        .output()
+        .expect("composed store info command");
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["schema"], "mantle-store-info-v2");
+    assert_eq!(report["paths"][0]["layer"]["kind"], "base");
+    assert_eq!(report["paths"][0]["layer"]["index"], 1);
+    assert_eq!(
+        report["overlay"]["bases"][0]["accepted_signer_names"][0],
+        report["paths"][0]["signatures"][0].as_str().unwrap().split(':').next().unwrap()
+    );
+    assert!(report["overlay"]["bases"][0]["generation_blake3"].as_str().unwrap().starts_with("b3:"));
+    let base_after = blake3::hash(&std::fs::read(&base_database).unwrap());
+    assert_eq!(base_before, base_after);
+    set_tree_read_only(base_state.path(), false);
+}
+
+#[test]
+fn store_info_rejects_writable_base_before_overlay_creation() {
+    const WRITABLE_BASE_DIGEST_BYTE: u8 = 62;
+    let base_state = tempfile::tempdir().unwrap();
+    let base_output = tempfile::tempdir().unwrap();
+    let overlay_state = tempfile::tempdir().unwrap();
+    let overlay_output = tempfile::tempdir().unwrap();
+    let base_path = test_output("writable-cli-base", WRITABLE_BASE_DIGEST_BYTE);
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(seed_overlay_base(base_state.path(), base_output.path(), &base_path));
+
+    crunch_cmd(overlay_state.path(), overlay_output.path())
+        .arg("--base-store")
+        .arg(base_state.path())
+        .args(["store", "info", "writable-cli-base"])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("overlay-base-writable"));
+    assert!(!overlay_state.path().join("pathinfo.redb").exists());
 }

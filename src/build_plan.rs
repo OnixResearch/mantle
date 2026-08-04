@@ -1,10 +1,8 @@
 // machine-artifact-public: build.build-plan-report
 use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::num::NonZeroUsize;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use clap::ValueEnum;
 use crunch_action_result_core::DiscoveredActionResultCandidate;
@@ -19,28 +17,11 @@ use crunch_build::action_result::trust_policy_for_action;
 use crunch_build::signing;
 use crunch_glue::ConversionCache;
 use crunch_glue::CrunchDerivation;
-use crunch_store::ActionResultStoreSet;
-use crunch_store::CaMappings;
-use crunch_store::HttpActionResultStore;
-use crunch_store::LocalActionResultStore;
 use nix_compat::derivation::Derivation;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
 use serde::Serialize;
-use snix_castore::Node;
-use snix_castore::blobservice::BlobService;
-use snix_castore::blobservice::MemoryBlobService;
-use snix_castore::blobservice::ObjectStoreBlobService;
-use snix_castore::directoryservice::DirectoryService;
-use snix_castore::directoryservice::RedbDirectoryService;
-use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 use snix_store::path_info::PathInfo;
-use snix_store::pathinfoservice::LruPathInfoService;
-use snix_store::pathinfoservice::NixHTTPPathInfoService;
-use snix_store::pathinfoservice::NixHTTPPathInfoServiceConfig;
-use snix_store::pathinfoservice::PathInfoService;
-use snix_store::pathinfoservice::RedbPathInfoService;
-use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 
 use crate::build_cmd::BuildOutputMode;
 use crate::build_cmd::load_configured_trusted_public_keys;
@@ -52,7 +33,6 @@ use crate::operator_diagnostics::collect_doctor_report;
 
 const PLAN_REPORT_SCHEMA: &str = "crunch-build-plan-v1";
 const MAX_LABELED_EVAL_ERROR_DEPTH: u32 = 64;
-const EMPTY_PATHINFO_ENTRY_COUNT: usize = 32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
@@ -181,6 +161,7 @@ pub struct BuildPlanConfig<'a> {
     pub import_paths: &'a [OsString],
     pub output_dir: &'a Path,
     pub state_dir: &'a Path,
+    pub base_state_dirs: &'a [PathBuf],
     pub store_dir: &'a str,
     pub substituter_urls: &'a [String],
     pub signing_key_path: Option<&'a Path>,
@@ -224,7 +205,14 @@ async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanRepo
         store_dir: config.output_dir,
         state_dir: config.state_dir,
     });
-    let plan_store = PlanStore::open(config.state_dir, config.store_dir, config.substituter_urls).await?;
+    let plan_store = PlanStore::open(
+        config.state_dir,
+        config.output_dir,
+        config.store_dir,
+        config.base_state_dirs,
+        config.substituter_urls,
+    )
+    .await?;
     let trust = PlanTrust::load(
         config.signing_key_path,
         config.trusted_public_keys,
@@ -312,6 +300,7 @@ fn validate_plan_config(config: &BuildPlanConfig<'_>) -> Option<String> {
     None
 }
 
+#[derive(Clone, Copy)]
 struct PlanRootRequest<'a> {
     plan_store: &'a PlanStore,
     trust: &'a PlanTrust,
@@ -332,6 +321,33 @@ struct CacheActionRequest<'a> {
 }
 
 async fn plan_root_action(request: PlanRootRequest<'_>) -> Result<BuildPlanEntry, RunError> {
+    let mut entry = plan_root_action_without_store_evidence(request).await?;
+    let overlay = request
+        .plan_store
+        .output_lookup
+        .overlay_report()
+        .map_err(|error| RunError::Internal(format!("building route overlay evidence: {error}")))?
+        .map(|report| crate::realization_routing::RouteStoreOverlayEvidence {
+            plan_blake3: report.plan_blake3,
+            bases: report
+                .bases
+                .into_iter()
+                .map(|base| crate::realization_routing::RouteStoreOverlayBaseEvidence {
+                    layer_index: base.declaration_index.saturating_add(1),
+                    descriptor_blake3: base.descriptor_blake3,
+                    generation_blake3: base.generation_blake3,
+                })
+                .collect(),
+        });
+    let selected_layers = request.plan_store.route_layer_evidence(request.root, request.trust).await?;
+    entry
+        .route_plan
+        .bind_store_evidence(overlay, selected_layers)
+        .map_err(|error| RunError::Internal(format!("binding route store evidence: {error}")))?;
+    Ok(entry)
+}
+
+async fn plan_root_action_without_store_evidence(request: PlanRootRequest<'_>) -> Result<BuildPlanEntry, RunError> {
     let PlanRootRequest {
         plan_store,
         trust,
@@ -525,52 +541,101 @@ fn action_result_plan_disposition(plan: &crunch_action_result_core::StrongReuseP
     crunch_build::action_result::ACTION_RESULT_DISPOSITION_MISS
 }
 
-fn open_action_result_stores(state_dir: &Path, substituter_urls: &[String]) -> Result<ActionResultStoreSet, RunError> {
-    let policy = crunch_store::action_result_runtime_policy();
-    let mut stores = ActionResultStoreSet::new(substituter_urls.is_empty());
-    if policy.sources.local_enabled {
-        stores.add_local(Box::new(LocalActionResultStore::new(state_dir)));
-    }
-    if !policy.sources.http_enabled {
-        return Ok(stores);
-    }
-    for url in substituter_urls {
-        let parsed = url::Url::parse(url)
-            .map_err(|error| RunError::Build(format!("invalid shared action-result source URL: {error}")))?;
-        let store = HttpActionResultStore::with_default_timeout(parsed).map_err(RunError::Build)?;
-        stores.add_remote(Box::new(store));
-    }
-    Ok(stores)
-}
-
 struct PlanStore {
     store_dir: String,
-    local_pathinfo: Arc<dyn PathInfoService>,
-    remote_pathinfo: Option<Arc<dyn PathInfoService>>,
-    blob_service: Arc<dyn BlobService>,
-    directory_service: Arc<dyn DirectoryService>,
-    ca_mappings: CaMappings,
-    action_result_stores: ActionResultStoreSet,
+    output_lookup: crunch_store::OutputLookup,
+    build_service_store: crunch_store::BuildServiceStore,
+    action_results: crunch_store::ActionResultPort,
 }
 
 impl PlanStore {
-    async fn open(state_dir: &Path, store_dir: &str, substituter_urls: &[String]) -> Result<Self, RunError> {
-        let blob_service = open_blob_service(state_dir)?;
-        let directory_service = open_directory_service(state_dir).await?;
-        let local_pathinfo = open_pathinfo_service(state_dir).await?;
-        let remote_pathinfo = match substituter_urls.first() {
-            Some(url) => Some(open_remote_pathinfo(url, blob_service.clone(), directory_service.clone())?),
-            None => None,
-        };
+    async fn open(
+        state_dir: &Path,
+        output_dir: &Path,
+        store_dir: &str,
+        base_state_dirs: &[PathBuf],
+        substituter_urls: &[String],
+    ) -> Result<Self, RunError> {
+        let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            state_dir: state_dir.to_path_buf(),
+            output_dir: output_dir.to_path_buf(),
+            remote_cache_urls: substituter_urls.to_vec(),
+            fallback_mode: crunch_store::StoreFallbackMode::Practical,
+            store_dir: store_dir.to_string(),
+            base_state_dirs: base_state_dirs.to_vec(),
+        })
+        .await
+        .map_err(|error| RunError::Internal(format!("opening composed planning store: {error}")))?;
+        let parts = store.into_pipeline_store_parts();
         Ok(Self {
             store_dir: store_dir.to_string(),
-            local_pathinfo,
-            remote_pathinfo,
-            blob_service,
-            directory_service,
-            ca_mappings: CaMappings::load(state_dir),
-            action_result_stores: open_action_result_stores(state_dir, substituter_urls)?,
+            output_lookup: parts.output_lookup,
+            build_service_store: parts.build_service_store,
+            action_results: parts.action_results,
         })
+    }
+
+    async fn route_layer_evidence(
+        &self,
+        root: &PlannedRoot,
+        trust: &PlanTrust,
+    ) -> Result<Vec<crate::realization_routing::RouteStoreLayerEvidence>, RunError> {
+        let overlay = self
+            .output_lookup
+            .overlay_report()
+            .map_err(|error| RunError::Internal(format!("reading route overlay evidence: {error}")))?;
+        let mut paths = BTreeMap::new();
+        for input_source in &root.derivation.input_sources {
+            paths.insert(input_source.to_string(), input_source.clone());
+        }
+        let drv_abs = root.drv_path.to_absolute_path_with_prefix(&self.store_dir);
+        for (output_name, output) in &root.derivation.outputs {
+            let ca_mapping = self
+                .output_lookup
+                .resolve_ca_mapping(&drv_abs, output_name)
+                .map_err(|error| RunError::Internal(format!("resolving route CA mapping: {error}")))?;
+            if let Some(output_path) = resolve_output_path(ResolveOutputRequest {
+                output,
+                mapped_ca_path: ca_mapping.as_deref(),
+                store_dir: &self.store_dir,
+            })? {
+                paths.insert(output_path.to_string(), output_path);
+            }
+        }
+
+        let mut evidence = Vec::new();
+        for (store_path, path) in paths {
+            let Some(layered) = self
+                .output_lookup
+                .find_with_layer(&path)
+                .await
+                .map_err(|error| RunError::Internal(format!("reading route layer for {path}: {error}")))?
+            else {
+                continue;
+            };
+            if !self
+                .build_service_store
+                .has_complete_content(&layered.value)
+                .await
+                .map_err(|error| RunError::Internal(format!("checking route content for {path}: {error}")))?
+            {
+                continue;
+            }
+            if !self.output_lookup.is_overlay_composed() && !trust.pathinfo_is_accepted(&layered.value) {
+                continue;
+            }
+            let base = overlay.as_ref().and_then(|report| {
+                let selected_index = layered.layer.service_index();
+                report.bases.iter().find(|base| base.declaration_index.saturating_add(1) == selected_index)
+            });
+            evidence.push(crate::realization_routing::RouteStoreLayerEvidence {
+                store_path,
+                selected_layer: layered.layer.to_string(),
+                base_descriptor_blake3: base.map(|base| base.descriptor_blake3.clone()),
+                base_generation_blake3: base.map(|base| base.generation_blake3.clone()),
+            });
+        }
+        Ok(evidence)
     }
 
     async fn plan_action_result(
@@ -579,7 +644,7 @@ impl PlanStore {
         trust: &PlanTrust,
     ) -> Result<crunch_build::ActionResultRuntimeReport, RunError> {
         let action_ref = action_ref_for_derivation(&root.derivation, &self.store_dir);
-        let discovery = self.action_result_stores.discover(&action_ref).await;
+        let discovery = self.action_results.discover(&action_ref).await;
         let candidate_count_max = discovery
             .lookups
             .iter()
@@ -639,8 +704,8 @@ impl PlanStore {
                 RunError::Build(format!("invalid shared action-result path: {}", output.store_path))
             })?;
             let Some(path_info) = self
-                .local_pathinfo
-                .get(*store_path.digest())
+                .output_lookup
+                .find(&store_path)
                 .await
                 .map_err(|error| RunError::Internal(format!("shared action-result PathInfo probe: {error}")))?
             else {
@@ -649,7 +714,12 @@ impl PlanStore {
             if path_info.store_path != store_path {
                 return Ok(None);
             }
-            if !castore_has_content(&path_info, self.blob_service.as_ref(), self.directory_service.as_ref()).await? {
+            if !self
+                .build_service_store
+                .has_complete_content(&path_info)
+                .await
+                .map_err(|error| RunError::Internal(format!("shared action-result object probe: {error}")))?
+            {
                 return Ok(None);
             }
             if outputs.insert(output.name.clone(), path_info).is_some() {
@@ -668,11 +738,13 @@ impl PlanStore {
         let drv_abs = root.drv_path.to_absolute_path_with_prefix(&self.store_dir);
 
         for (output_name, output) in &root.derivation.outputs {
+            let ca_mapping = self
+                .output_lookup
+                .resolve_ca_mapping(&drv_abs, output_name)
+                .map_err(|error| RunError::Internal(format!("resolving composed CA mapping: {error}")))?;
             let Some(output_path) = resolve_output_path(ResolveOutputRequest {
-                drv_abs: &drv_abs,
-                output_name,
                 output,
-                ca_mappings: &self.ca_mappings,
+                mapped_ca_path: ca_mapping.as_deref(),
                 store_dir: &self.store_dir,
             })?
             else {
@@ -723,33 +795,33 @@ impl PlanStore {
         output_path: &StorePath<String>,
         trust: &PlanTrust,
     ) -> Result<OutputPlan, RunError> {
-        let Some(path_info) = self
-            .local_pathinfo
-            .get(*output_path.digest())
+        let Some(layered_path_info) = self
+            .output_lookup
+            .find_with_layer(output_path)
             .await
             .map_err(|e| RunError::Internal(format!("PathInfo lookup for {output_path}: {e}")))?
         else {
             return Ok(OutputPlan::Missing);
         };
 
-        if path_info.store_path != *output_path {
-            return Ok(OutputPlan::Build("digest collision".to_string()));
-        }
-        if !castore_has_content(&path_info, self.blob_service.as_ref(), self.directory_service.as_ref()).await? {
+        let path_info = layered_path_info.value;
+        if !self
+            .build_service_store
+            .has_complete_content(&path_info)
+            .await
+            .map_err(|error| RunError::Internal(format!("composed castore probe: {error}")))?
+        {
             return Ok(OutputPlan::Build("castore content missing".to_string()));
         }
-        if !trust.pathinfo_is_accepted(&path_info) {
+        if !self.output_lookup.is_overlay_composed() && !trust.pathinfo_is_accepted(&path_info) {
             return Ok(OutputPlan::Build("untrusted PathInfo".to_string()));
         }
         Ok(OutputPlan::Local)
     }
 
     async fn remote_output_available(&self, output_path: &StorePath<String>) -> Result<bool, RunError> {
-        let Some(remote) = &self.remote_pathinfo else {
-            return Ok(false);
-        };
-        remote
-            .get_references(*output_path.digest())
+        self.output_lookup
+            .find_remote(output_path)
             .await
             .map(|found| found.is_some())
             .map_err(|e| RunError::Internal(format!("remote plan probe for {output_path}: {e}")))
@@ -828,10 +900,8 @@ fn config_dir_or(state_dir: &Path) -> PathBuf {
 }
 
 struct ResolveOutputRequest<'a> {
-    drv_abs: &'a str,
-    output_name: &'a str,
     output: &'a nix_compat::derivation::Output,
-    ca_mappings: &'a CaMappings,
+    mapped_ca_path: Option<&'a str>,
     store_dir: &'a str,
 }
 
@@ -839,107 +909,12 @@ fn resolve_output_path(request: ResolveOutputRequest<'_>) -> Result<Option<Store
     if let Some(path) = &request.output.path {
         return Ok(Some(path.clone()));
     }
-    let Some(mapped) = request.ca_mappings.get(request.drv_abs, request.output_name) else {
+    let Some(mapped) = request.mapped_ca_path else {
         return Ok(None);
     };
     let path = StorePath::from_absolute_path_with_prefix(mapped.as_bytes(), request.store_dir)
         .map_err(|_| RunError::Internal(format!("invalid CA mapping path: {mapped}")))?;
     Ok(Some(path))
-}
-
-fn open_blob_service(state_dir: &Path) -> Result<Arc<dyn BlobService>, RunError> {
-    let blob_dir = state_dir.join("blobs");
-    if !blob_dir.is_dir() {
-        return Ok(Arc::new(empty_memory_blob_service()) as Arc<dyn BlobService>);
-    }
-    let svc = ObjectStoreBlobService::new_local(&blob_dir)
-        .map_err(|e| RunError::Internal(format!("opening blob dir {}: {e}", blob_dir.display())))?;
-    Ok(Arc::new(svc) as Arc<dyn BlobService>)
-}
-
-#[allow(
-    tigerstyle::explicit_defaults,
-    reason = "MemoryBlobService has private fields and exposes Default as its only direct constructor"
-)]
-fn empty_memory_blob_service() -> MemoryBlobService {
-    MemoryBlobService::default()
-}
-
-async fn open_directory_service(state_dir: &Path) -> Result<Arc<dyn DirectoryService>, RunError> {
-    debug_assert!(!state_dir.as_os_str().is_empty());
-    let path = state_dir.join("directories.redb");
-    debug_assert!(path.starts_with(state_dir));
-    if !path.is_file() {
-        let svc = RedbDirectoryService::new_temporary("plan-empty-directory".to_string(), RedbDirectoryServiceConfig {
-            path: None,
-            cache_size: None,
-            read_only: false,
-        })
-        .map_err(|e| RunError::Internal(format!("creating empty directory service: {e}")))?;
-        return Ok(Arc::new(svc) as Arc<dyn DirectoryService>);
-    }
-
-    let svc = RedbDirectoryService::new("plan-directory".to_string(), RedbDirectoryServiceConfig {
-        path: Some(path.clone()),
-        cache_size: None,
-        read_only: true,
-    })
-    .await
-    .map_err(|e| RunError::Internal(format!("opening {}: {e}", path.display())))?;
-    Ok(Arc::new(svc) as Arc<dyn DirectoryService>)
-}
-
-async fn open_pathinfo_service(state_dir: &Path) -> Result<Arc<dyn PathInfoService>, RunError> {
-    let path = state_dir.join("pathinfo.redb");
-    if !path.is_file() {
-        let pathinfo_entry_count_max = NonZeroUsize::new(EMPTY_PATHINFO_ENTRY_COUNT)
-            .ok_or_else(|| RunError::Internal("empty plan PathInfo capacity must be non-zero".to_string()))?;
-        let svc = LruPathInfoService::with_capacity("plan-empty-pathinfo".to_string(), pathinfo_entry_count_max);
-        return Ok(Arc::new(svc) as Arc<dyn PathInfoService>);
-    }
-
-    let svc = RedbPathInfoService::new("plan-pathinfo".to_string(), RedbPathInfoServiceConfig {
-        path: Some(path.clone()),
-        cache_size: None,
-        read_only: true,
-    })
-    .await
-    .map_err(|e| RunError::Internal(format!("opening {}: {e}", path.display())))?;
-    Ok(Arc::new(svc) as Arc<dyn PathInfoService>)
-}
-
-fn open_remote_pathinfo(
-    url_str: &str,
-    blob_service: Arc<dyn BlobService>,
-    directory_service: Arc<dyn DirectoryService>,
-) -> Result<Arc<dyn PathInfoService>, RunError> {
-    let nix_url: url::Url = format!("nix+{url_str}")
-        .parse()
-        .map_err(|e| RunError::Internal(format!("invalid substituter URL '{url_str}': {e}")))?;
-    let config: NixHTTPPathInfoServiceConfig = nix_url
-        .try_into()
-        .map_err(|e| RunError::Internal(format!("remote cache config for '{url_str}': {e}")))?;
-    let svc = NixHTTPPathInfoService::try_build("plan-remote".to_string(), config, blob_service, directory_service)
-        .map_err(|e| RunError::Internal(format!("building remote cache client: {e}")))?;
-    Ok(Arc::new(svc) as Arc<dyn PathInfoService>)
-}
-
-async fn castore_has_content(
-    path_info: &PathInfo,
-    blob_service: &dyn BlobService,
-    directory_service: &dyn DirectoryService,
-) -> Result<bool, RunError> {
-    match &path_info.node {
-        Node::File { digest, .. } => {
-            blob_service.has(digest).await.map_err(|e| RunError::Internal(format!("blob existence check: {e}")))
-        }
-        Node::Directory { digest, .. } => directory_service
-            .get(digest)
-            .await
-            .map(|directory| directory.is_some())
-            .map_err(|e| RunError::Internal(format!("directory existence check: {e}"))),
-        Node::Symlink { .. } => Ok(true),
-    }
 }
 
 #[cfg(test)]

@@ -97,6 +97,12 @@ pub struct ActionResultPort {
 #[derive(Clone)]
 pub struct OutputLookup {
     pathinfo_service: Arc<dyn PathInfoService>,
+    base_pathinfo_inspection_services: Vec<Arc<dyn PathInfoService>>,
+    remote_pathinfo: Option<Arc<dyn PathInfoService>>,
+    state_dir: PathBuf,
+    overlay_state: Option<crate::overlay::StoreOverlayState>,
+    ca_mappings: crate::CaMappings,
+    base_ca_mappings: Vec<crate::CaMappings>,
 }
 
 /// Selected-root registration and retention-query authority.
@@ -149,8 +155,15 @@ pub struct BuilderStoreParts {
 impl StoreHandle {
     #[must_use]
     pub fn into_pipeline_store_parts(mut self) -> PipelineStoreParts {
+        let (ca_mappings, base_ca_mappings) = self.ca_mapping_snapshots();
         let output_lookup = OutputLookup {
             pathinfo_service: self.pathinfo_service(),
+            base_pathinfo_inspection_services: self.base_pathinfo_inspection_services(),
+            remote_pathinfo: self.remote_pathinfo(),
+            state_dir: self.state_dir().to_path_buf(),
+            overlay_state: self.overlay_state(),
+            ca_mappings,
+            base_ca_mappings,
         };
         let root_registry = RootRegistry {
             state_dir: self.state_dir().to_path_buf(),
@@ -328,6 +341,19 @@ impl BuildStore {
         self.handle.take_output_substitution_report(path)
     }
 
+    pub fn overlay_report(&self) -> Result<Option<crate::StoreOverlayReport>, Error> {
+        self.handle.overlay_report()
+    }
+
+    #[must_use]
+    pub fn is_overlay_composed(&self) -> bool {
+        self.handle.overlay_state().is_some()
+    }
+
+    pub fn take_read_layer_selections(&mut self) -> Vec<crate::layer::StoreLayerSelection> {
+        self.handle.take_read_layer_selections()
+    }
+
     pub fn record_verified_output_substitution_report(
         &mut self,
         path: &StorePath<String>,
@@ -471,17 +497,105 @@ impl ActionResultPort {
 
 impl OutputLookup {
     pub async fn find(&self, path: &StorePath<String>) -> Result<Option<PathInfo>, Error> {
+        self.find_with_layer(path).await.map(|found| found.map(|layered| layered.value))
+    }
+
+    pub async fn find_with_layer(
+        &self,
+        path: &StorePath<String>,
+    ) -> Result<Option<crate::layer::Layered<PathInfo>>, Error> {
+        self.revalidate_overlay()?;
         let found = self
             .pathinfo_service
-            .get(*path.digest())
+            .get_with_layer(*path.digest())
             .await
             .map_err(|error| Error::PathInfoService(format!("output lookup: {error}")))?;
-        match &found {
-            Some(path_info) if path_info.store_path != *path => {
-                Err(Error::Store(format!("output lookup returned a conflicting path for {path}")))
-            }
-            _ => Ok(found),
+        self.revalidate_overlay()?;
+        let Some(found) = found else {
+            return Ok(None);
+        };
+        if found.value.store_path != *path {
+            return Err(Error::Store(format!("output lookup returned a conflicting path for {path}")));
         }
+        if self.overlay_state.is_some() && found.layer_index == 0 {
+            let trusted_keys = crate::overlay::load_layer_trust_keys(&self.state_dir)?;
+            crate::overlay::verify_pathinfo_trust(&found.value, &trusted_keys)
+                .map_err(|error| Error::Store(format!("overlay-layer-trust-failure for {path}: {error}")))?;
+        }
+        let shadows = self.shadow_observations(found.layer_index, &found.value).await;
+        let mut layered = crate::layer::Layered::from_service_index(found.value, found.layer_index)
+            .map_err(|error| Error::Store(format!("mapping output layer for {path}: {error}")))?;
+        layered.shadows = shadows;
+        Ok(Some(layered))
+    }
+
+    pub async fn find_remote(&self, path: &StorePath<String>) -> Result<Option<PathInfo>, Error> {
+        let Some(remote) = self.remote_pathinfo.as_ref() else {
+            return Ok(None);
+        };
+        let found = remote
+            .get(*path.digest())
+            .await
+            .map_err(|error| Error::PathInfoService(format!("remote output lookup: {error}")))?;
+        if let Some(path_info) = found.as_ref()
+            && path_info.store_path != *path
+        {
+            return Err(Error::Store(format!("remote output lookup returned a conflicting path for {path}")));
+        }
+        Ok(found)
+    }
+
+    pub fn resolve_ca_mapping(&self, drv_abs: &str, output_name: &str) -> Result<Option<String>, Error> {
+        self.revalidate_overlay()?;
+        if let Some(path) = self.ca_mappings.get(drv_abs, output_name) {
+            return Ok(Some(path.to_string()));
+        }
+        for mappings in &self.base_ca_mappings {
+            if let Some(path) = mappings.get(drv_abs, output_name) {
+                return Ok(Some(path.to_string()));
+            }
+        }
+        Ok(None)
+    }
+
+    pub fn overlay_report(&self) -> Result<Option<crate::StoreOverlayReport>, Error> {
+        self.revalidate_overlay()?;
+        self.overlay_state.as_ref().map(crate::overlay::overlay_report).transpose()
+    }
+
+    #[must_use]
+    pub fn is_overlay_composed(&self) -> bool {
+        self.overlay_state.is_some()
+    }
+
+    fn revalidate_overlay(&self) -> Result<(), Error> {
+        self.overlay_state.as_ref().map_or(Ok(()), crate::overlay::revalidate_overlay_state)
+    }
+
+    async fn shadow_observations(
+        &self,
+        selected_layer_index: usize,
+        selected: &PathInfo,
+    ) -> Vec<crate::layer::LayerShadowObservation> {
+        let mut observations = Vec::new();
+        for (base_index, service) in self.base_pathinfo_inspection_services.iter().enumerate() {
+            let layer_index = base_index.saturating_add(1);
+            if layer_index <= selected_layer_index {
+                continue;
+            }
+            let layer = crate::layer::StoreLayer::Base { index: layer_index };
+            let status = match service.get(*selected.store_path.digest()).await {
+                Ok(Some(lower)) if lower.store_path != selected.store_path => {
+                    crate::layer::LayerShadowStatus::DigestCollision
+                }
+                Ok(Some(lower)) if lower == *selected => crate::layer::LayerShadowStatus::Matching,
+                Ok(Some(_)) => crate::layer::LayerShadowStatus::Conflicting,
+                Ok(None) => continue,
+                Err(_) => crate::layer::LayerShadowStatus::ReadFailure,
+            };
+            observations.push(crate::layer::LayerShadowObservation { layer, status });
+        }
+        observations
     }
 }
 
@@ -600,6 +714,15 @@ impl StoreAdmin<'_> {
 }
 
 impl BuildServiceStore {
+    pub async fn has_complete_content(&self, path_info: &PathInfo) -> Result<bool, Error> {
+        crate::recursive_castore_completeness(
+            self.blob_service.as_ref(),
+            self.directory_service.as_ref(),
+            &path_info.node,
+        )
+        .await
+    }
+
     #[must_use]
     pub fn bubblewrap_build_service(
         &self,
@@ -676,6 +799,12 @@ mod tests {
         service.put(expected.clone()).await.expect("insert test PathInfo");
         let output_lookup = OutputLookup {
             pathinfo_service: service.clone(),
+            base_pathinfo_inspection_services: Vec::new(),
+            remote_pathinfo: None,
+            state_dir: state.path().to_path_buf(),
+            overlay_state: None,
+            ca_mappings: crate::CaMappings::default(),
+            base_ca_mappings: Vec::new(),
         };
         let root_registry = RootRegistry {
             state_dir: state.path().to_path_buf(),

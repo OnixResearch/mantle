@@ -4,11 +4,25 @@ let C = import "prelude.ncl" in
 let MAX_DETAIL_BYTES = 256 in
 let MAX_REASON_CODE_BYTES = 96 in
 let MAX_REJECTED_ROUTES = 7 in
+let MAX_ROUTE_STORE_BASES = 8 in
+let MAX_ROUTE_STORE_LAYER_LABEL_BYTES = 32 in
+let MAX_ROUTE_STORE_LAYER_SELECTIONS = 65536 in
 let MAX_UPLOAD_BYTES = 1099511627776 in
 let MAX_UPLOAD_CLASSES = 4 in
 let MAX_UPLOAD_OBJECTS = 65536 in
+let MIN_ROUTE_STORE_LAYER_INDEX = 1 in
 let MIN_UPLOAD_BYTES = 0 in
 let MIN_UPLOAD_OBJECTS = 0 in
+let is_overlay_base = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["descriptor_blake3","generation_blake3","layer_index"]) (std.record.fields (value))
+  && (std.record.has_field "descriptor_blake3" (value) && (((std.is_string (std.record.get "descriptor_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "descriptor_blake3" (value))))))
+  && (std.record.has_field "generation_blake3" (value) && (((std.is_string (std.record.get "generation_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "generation_blake3" (value))))))
+  && (std.record.has_field "layer_index" (value) && (((std.is_number (std.record.get "layer_index" (value))
+  && std.number.is_integer (std.record.get "layer_index" (value))
+  && (std.record.get "layer_index" (value)) >= MIN_ROUTE_STORE_LAYER_INDEX
+  && (std.record.get "layer_index" (value)) <= MAX_ROUTE_STORE_BASES)))))) in
 let is_route = fun value => (std.array.elem (value) ["cached-local","trusted-substitute","archive-import","source-bundle","p2p-remote-builder","local-build","preflight-error"]
   && (std.is_string (value))) in
 let is_rejection = fun value => ((std.is_record (value)
@@ -20,6 +34,17 @@ let is_rejection = fun value => ((std.is_record (value)
   && C.Utf8ByteLength (std.record.get "reason_code" (value)) <= MAX_REASON_CODE_BYTES
   && C.IsNonEmptyString (std.record.get "reason_code" (value))))))
   && (std.record.has_field "route" (value) && (is_route (std.record.get "route" (value)))))) in
+let is_store_layer = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["base_descriptor_blake3","base_generation_blake3","selected_layer","store_path"]) (std.record.fields (value))
+  && (!std.record.has_field "base_descriptor_blake3" (value) || ((((std.record.get "base_descriptor_blake3" (value)) == null || ((std.is_string (std.record.get "base_descriptor_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "base_descriptor_blake3" (value))))))))
+  && (!std.record.has_field "base_generation_blake3" (value) || ((((std.record.get "base_generation_blake3" (value)) == null || ((std.is_string (std.record.get "base_generation_blake3" (value))
+  && C.IsBlake3Hex (std.record.get "base_generation_blake3" (value))))))))
+  && (std.record.has_field "selected_layer" (value) && (((std.is_string (std.record.get "selected_layer" (value))
+  && C.Utf8ByteLength (std.record.get "selected_layer" (value)) <= MAX_ROUTE_STORE_LAYER_LABEL_BYTES
+  && C.IsNonEmptyString (std.record.get "selected_layer" (value))))))
+  && (std.record.has_field "store_path" (value) && (((std.is_string (std.record.get "store_path" (value))
+  && C.IsSafeReference (std.record.get "store_path" (value)))))))) in
 let is_upload_summary = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["byte_count","classes","object_count"]) (std.record.fields (value))
   && (std.record.has_field "byte_count" (value) && (((std.is_number (std.record.get "byte_count" (value))
@@ -35,7 +60,7 @@ let is_upload_summary = fun value => ((std.is_record (value)
   && (std.record.get "object_count" (value)) >= MIN_UPLOAD_OBJECTS
   && (std.record.get "object_count" (value)) <= MAX_UPLOAD_OBJECTS)))))) in
 C.FromPredicate (fun value => ((std.is_record (value)
-  && std.array.all (fun field_1 => std.array.elem field_1 ["non_claim","policy","rejected_routes","schema","selected_detail","selected_reason_code","selected_route","tie_breaker","upload_summary"]) (std.record.fields (value))
+  && std.array.all (fun field_1 => std.array.elem field_1 ["non_claim","policy","rejected_routes","schema","selected_detail","selected_reason_code","selected_route","selected_store_layers","store_overlay","tie_breaker","upload_summary"]) (std.record.fields (value))
   && (std.record.has_field "non_claim" (value) && (((std.record.get "non_claim" (value)) == "route planning is advisory and does not prove transport execution or artifact correctness"
   && (std.is_string (std.record.get "non_claim" (value))))))
   && (std.record.has_field "policy" (value) && (((std.is_record (std.record.get "policy" (value))
@@ -56,6 +81,16 @@ C.FromPredicate (fun value => ((std.is_record (value)
   && C.Utf8ByteLength (std.record.get "selected_reason_code" (value)) <= MAX_REASON_CODE_BYTES
   && C.IsNonEmptyString (std.record.get "selected_reason_code" (value))))))
   && (std.record.has_field "selected_route" (value) && (is_route (std.record.get "selected_route" (value))))
+  && (std.record.has_field "selected_store_layers" (value) && (((std.is_array (std.record.get "selected_store_layers" (value))
+  && std.array.length (std.record.get "selected_store_layers" (value)) <= MAX_ROUTE_STORE_LAYER_SELECTIONS
+  && std.array.all (fun item_2 => is_store_layer (item_2)) (std.record.get "selected_store_layers" (value))))))
+  && (!std.record.has_field "store_overlay" (value) || ((((std.record.get "store_overlay" (value)) == null || ((std.is_record (std.record.get "store_overlay" (value))
+  && std.array.all (fun field_2 => std.array.elem field_2 ["bases","plan_blake3"]) (std.record.fields (std.record.get "store_overlay" (value)))
+  && (std.record.has_field "bases" (std.record.get "store_overlay" (value)) && (((std.is_array (std.record.get "bases" (std.record.get "store_overlay" (value)))
+  && std.array.length (std.record.get "bases" (std.record.get "store_overlay" (value))) <= MAX_ROUTE_STORE_BASES
+  && std.array.all (fun item_3 => is_overlay_base (item_3)) (std.record.get "bases" (std.record.get "store_overlay" (value)))))))
+  && (std.record.has_field "plan_blake3" (std.record.get "store_overlay" (value)) && (((std.is_string (std.record.get "plan_blake3" (std.record.get "store_overlay" (value)))
+  && C.IsBlake3Hex (std.record.get "plan_blake3" (std.record.get "store_overlay" (value)))))))))))))
   && (std.record.has_field "tie_breaker" (value) && (((std.record.get "tie_breaker" (value)) == "local-cache,trusted-substitute,archive-import,source-bundle,p2p-remote-builder,local-build,preflight-error"
   && (std.is_string (std.record.get "tie_breaker" (value))))))
   && (!std.record.has_field "upload_summary" (value) || ((((std.record.get "upload_summary" (value)) == null || ((std.is_record (std.record.get "upload_summary" (value))
