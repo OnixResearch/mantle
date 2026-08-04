@@ -540,6 +540,27 @@ When claiming test results, status, completion, or feature support in commit mes
   linting) because vendored `snix-build` uses `env!("SNIX_BUILD_SANDBOX_SHELL")`
   at compile time.
 
+## Long builds and proofs with pueue
+
+Long builds and proofs (source-built fixed-point, self-hosting, native provider,
+multi-stage bootstrap) run for many minutes to hours. Run them in the background
+with pueue, never in the foreground of the session.
+
+- Queue long runs with `pueue_run` **without** `wait`; redirect the process
+  output to a log file inside a dedicated run dir so the pueue task output stays
+  small.
+- Quick commands whose output you need now: `pueue_run wait=true`.
+- Monitor with `pueue_status query="id=<id>"`, `pueue_log id=<id>`, and
+  `pueue_wait id=<id>` when you want to watch it now. The run stays detached and
+  keeps going.
+- After it finishes, read the log file and the staging evidence (for proofs,
+  `attempt-status.json` names the exact blocker). Never quote a result from
+  memory; run the command in the same turn you report it.
+- For the source-built fixed-point proof specifically, follow the repo-local pi
+  skill `.pi/skills/pueue-long-builds/SKILL.md`: it covers the gcc/mold linker
+  override for this host, the bubblewrap/disk-bounds prerequisites, the
+  source-profile graph-match requirement, and how to read the staging blocker.
+
 ## Self-Build and Self-Hosting Proof
 
 - `scripts/prove-self-hosting.sh` is the checked-in entry point for the self-hosting proof. Run `./scripts/prove-self-hosting.sh --check` to validate the toolchain/linker/pkg-config setup without starting the ~30 minute proof.

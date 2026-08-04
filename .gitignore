@@ -22,7 +22,8 @@ data/
 vendor-deps/
 autoresearch.config.json
 
-.pi/
+.pi/*
+!.pi/skills/
 /.agent
 
 # Local agent permissions
