@@ -130,6 +130,10 @@ Cairn archive completed with receipt `f945dd4dfeb5b8526bccf4778698dadffc08d9fc50
 
 Post-archive `cairn validate --root .` passed. Post-archive Tracey also passed with 155 of 155 requirements referenced.
 
+Before integration, `origin/main` had advanced to `332b62a98bc8b6239461364cab171897f45285e0`. The change branch merged that revision without conflict.
+
+After the merge, Rustfmt passed. The core passed 223 tests, the transport passed 12 tests, Cairn validation passed, and Tracey passed at 155 of 155.
+
 ## Bounded blockers
 
 ### Nix
