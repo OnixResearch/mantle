@@ -1,0 +1,13 @@
+## Phase 1: Dev cache integration
+
+- [ ] [serial] I1 Add the opt-in dev-only provider-output cache keyed by source-authority + policy digests, with receipt re-validation on lookup and a hard-miss cold fallback on missing/stale/mismatched entries. r[source_built_fixed_point_improved_iteration.dev_provider_cache]
+- [ ] [serial] I2 Add per-stage completion markers and a dev-only resume path that re-verifies each marker's digest against a fresh source replay before trusting it. r[source_built_fixed_point_improved_iteration.dev_stage_resume]
+- [ ] [serial] I3 Add the content-addressed native store/state snapshot keyed by plan digest and a dev-only seeding path bounded by the existing disk preflight. r[source_built_fixed_point_improved_iteration.dev_store_snapshot]
+- [ ] [serial] I4 Add the fast-fail baseline that matches the current source profile against the last published fixed-point receipt and reports an unchanged prior success with a dev notice. r[source_built_fixed_point_improved_iteration.dev_fast_fail_baseline]
+- [ ] [serial] I5 Wire the dev-only flags in `src/main.rs` so the promoted cold path remains byte-for-byte unchanged and no cache/resume/fast-fail path can update `latest` or release aliases. r[source_built_fixed_point_improved_iteration.dev_provider_cache]
+
+## Phase 2: Verification
+
+- [ ] [serial] V1 Add positive tests for receipt-validated provider adoption, resume-after-kill, snapshot seeding, and unchanged-source fast-fail, plus negative tests for stale/mismatched receipt misses, mutated marker restarts, disabled cold paths, and cache-labeled non-authorizing transcripts. r[source_built_fixed_point_improved_iteration.dev_provider_cache]
+- [ ] [serial] V2 Run focused `cargo test -p mantle --bin mantle source_built_fixed_point_shell`, `cargo test -p mantle --test bootstrap_eval`, first-party Clippy, `cargo fmt --check -p mantle`, and `git diff --check`. r[source_built_fixed_point_improved_iteration.dev_provider_cache]
+- [ ] [serial] V3 Confirm the promoted cold proof path still starts from empty authority with strict policy unchanged, and record Cairn validation plus the proposal/design/tasks gates. r[source_built_fixed_point_improved_iteration.dev_provider_cache]
