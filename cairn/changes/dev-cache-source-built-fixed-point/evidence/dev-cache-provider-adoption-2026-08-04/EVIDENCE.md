@@ -61,3 +61,28 @@ store paths were GC'd on this host.
   a fresh staging dir, not only the same interrupted dir.
 - Confirm the adopted path with a real emitted run and a fresh promoted cold
   bundle.
+
+## Store-service rework (same day)
+
+Addresses the review point that the snapshot/seeding were raw tree copies
+instead of content-addressed store reuse.
+
+- `seed_dev_store_snapshot` now adopts the cached provider store subtrees
+  through the store service: `adopt_verified_local_provider_path_strict`
+  (-> `StoreHandle::adopt_verified_local_output`) plus
+  `import_constructed_store_path_source`, the exact seam the cold path uses for
+  freshly constructed transition/provider paths.
+- The coarse whole-tree snapshot of `native-store` + `native-state`
+  (`write_dev_store_snapshot` / `dev_store_snapshot_root`) was removed; the
+  provider cache (`write_dev_provider_cache`) is now the content-addressed
+  capture of the expensive store content, and `prepare_attempt` always imports
+  source records via the content-addressed `import_source_bundle` first.
+- Adoption copies (idempotent) and observes the seeded providers; store
+  registration happens once at prepare-time seeding.
+
+Validation: `source_built_fixed_point` tests 45 passed; touched files
+clippy/fmt-clean; `git diff --check` clean. The store-service registration itself
+is NOT unit-tested (it requires a real persisted store with a signing keypair);
+only the no-cache-disabled path and the adoption-copy path are unit-tested.
+Note: `import_constructed_store_path_source` asserts one record import per
+fresh state dir, which holds for the intended fresh-staging flow.
