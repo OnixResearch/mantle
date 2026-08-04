@@ -4,6 +4,15 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 
+use crunch_gc_core::GcEntry;
+use crunch_gc_core::GcExecutionMode;
+use crunch_gc_core::GcMutationDisposition;
+use crunch_gc_core::GcPlanError;
+use crunch_gc_core::GcPlanRequest;
+use crunch_gc_core::GcReportDecision;
+use crunch_gc_core::plan_gc;
+use crunch_gc_core::report_decision;
+use crunch_gc_core::summarize_reclaim_observations;
 use data_encoding::HEXLOWER;
 use futures::StreamExt;
 use nix_compat::store_path::StorePath;
@@ -17,7 +26,6 @@ use snix_store::pathinfoservice::PathInfoService;
 
 use crate::CaMappings;
 use crate::Error;
-use crate::StoreFallbackMode;
 use crate::action_result::local_action_result_gc_candidates;
 
 /// Services and paths needed for GC operations.
@@ -31,13 +39,13 @@ pub struct GcContext<'a> {
     pub retained_castore_roots: &'a [Node],
 }
 use crate::artifact_attestation_file_path;
-use crate::closure::resolve_closure;
 use crate::roots;
 use crate::roots::GcRootRecord;
 
 const MAX_GC_BYTES_WALK_ENTRIES: u32 = 100_000;
 const MAX_GC_FILE_SCAN_ENTRIES: u32 = 200_000;
 const MAX_GC_RETAINED_CASTORE_ROOTS: usize = 1_000_000;
+const INITIAL_PATHINFO_CAPACITY: usize = 256;
 #[cfg(unix)]
 const OWNER_WRITE_PERMISSION_MODE: u32 = 0o200;
 
@@ -80,6 +88,7 @@ struct LiveCastoreState {
 }
 
 struct GcPlan {
+    core_decision: GcReportDecision,
     retained_roots: Vec<GcRootRecord>,
     live_pathinfos: Vec<PathInfo>,
     dead_pathinfos: Vec<PathInfo>,
@@ -100,7 +109,8 @@ pub async fn run_gc(ctx: &GcContext<'_>, ca_mappings: &mut CaMappings, is_dry_ru
         return Err(Error::Gc(format!("retained castore root count exceeds {MAX_GC_RETAINED_CASTORE_ROOTS}")));
     }
 
-    let plan = build_plan(ctx).await?;
+    let plan = build_plan(ctx, is_dry_run).await?;
+    let core_decision = plan.core_decision;
     let live_paths: BTreeSet<String> = plan
         .live_pathinfos
         .iter()
@@ -124,7 +134,9 @@ pub async fn run_gc(ctx: &GcContext<'_>, ca_mappings: &mut CaMappings, is_dry_ru
         candidate_action_result_index_count: saturating_u32(action_result_gc.index_marker_paths.len()),
         operations: Vec::new(),
     };
-    if is_dry_run {
+    assert_eq!(core_decision.candidate_path_count, plan.dead_pathinfos.len());
+    assert_eq!(core_decision.retained_path_count, plan.live_pathinfos.len());
+    if core_decision.mutation_disposition == GcMutationDisposition::ReportOnly {
         return Ok(gc_result);
     }
 
@@ -162,14 +174,16 @@ pub async fn run_gc(ctx: &GcContext<'_>, ca_mappings: &mut CaMappings, is_dry_ru
     Ok(gc_result)
 }
 
-async fn build_plan(ctx: &GcContext<'_>) -> Result<GcPlan, Error> {
+async fn build_plan(ctx: &GcContext<'_>, is_dry_run: bool) -> Result<GcPlan, Error> {
     assert!(!ctx.store_dir.is_empty(), "build_plan: store_dir must not be empty");
     assert!(ctx.store_dir.starts_with('/'), "build_plan: store_dir must be absolute");
 
     let retained_roots = roots::list_roots(ctx.state_dir)?;
-    let live_paths = mark_live_paths(&retained_roots, ctx.pathinfo, ctx.store_dir).await?;
     let snapshot = snapshot_pathinfos(ctx.pathinfo).await?;
-    let (live_pathinfos, dead_pathinfos) = split_pathinfos(snapshot, &live_paths);
+    let core_plan = plan_gc(core_plan_request(&retained_roots, &snapshot, ctx.store_dir, is_dry_run)?)
+        .map_err(|error| shell_gc_plan_error(error, ctx.store_dir))?;
+    let live_paths = core_plan.retained_path_ids.iter().cloned().collect::<BTreeSet<_>>();
+    let (live_pathinfos, dead_pathinfos) = split_pathinfos(snapshot, &live_paths, ctx.store_dir);
     let live_castore = collect_live_castore_state(
         &live_pathinfos,
         ctx.retained_castore_roots,
@@ -190,12 +204,11 @@ async fn build_plan(ctx: &GcContext<'_>) -> Result<GcPlan, Error> {
         &blob_index_paths,
         &blob_chunk_paths,
     )?;
-    let candidate_paths = dead_pathinfos
-        .iter()
-        .map(|path_info| path_info.store_path.to_absolute_path_with_prefix(ctx.store_dir))
-        .collect();
+    let candidate_paths = core_plan.candidate_path_ids.clone();
+    let core_decision = report_decision(core_plan);
 
     Ok(GcPlan {
+        core_decision,
         retained_roots,
         live_pathinfos,
         dead_pathinfos,
@@ -210,31 +223,76 @@ async fn build_plan(ctx: &GcContext<'_>) -> Result<GcPlan, Error> {
     })
 }
 
-async fn mark_live_paths(
+fn core_plan_request(
     retained_roots: &[GcRootRecord],
-    pathinfo: &dyn PathInfoService,
+    snapshot: &[PathInfo],
     store_dir: &str,
-) -> Result<BTreeSet<StorePath<String>>, Error> {
-    let mut live_paths = BTreeSet::new();
-    for root in retained_roots {
-        let store_path = roots::parse_logical_store_path(roots::LogicalStorePathRef {
-            logical_path: &root.logical_path,
-            store_dir,
-        })?;
-        let closure = resolve_closure(&store_path, pathinfo, None, StoreFallbackMode::Strict, store_dir).await?;
-        for member in closure.paths {
-            live_paths.insert(member);
-        }
+    is_dry_run: bool,
+) -> Result<GcPlanRequest, Error> {
+    assert!(!store_dir.is_empty(), "core GC store directory must not be empty");
+    assert!(store_dir.starts_with('/'), "core GC store directory must be absolute");
+    let roots = retained_roots
+        .iter()
+        .map(|root| {
+            roots::parse_logical_store_path(roots::LogicalStorePathRef {
+                logical_path: &root.logical_path,
+                store_dir,
+            })
+            .map(|path| path.to_absolute_path_with_prefix(store_dir))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let entries = snapshot
+        .iter()
+        .map(|path_info| GcEntry {
+            path_id: path_info.store_path.to_absolute_path_with_prefix(store_dir),
+            references: path_info
+                .references
+                .iter()
+                .map(|reference| reference.to_absolute_path_with_prefix(store_dir))
+                .collect(),
+            declared_nar_bytes: path_info.nar_size,
+        })
+        .collect();
+    let execution_mode = if is_dry_run {
+        GcExecutionMode::DryRun
+    } else {
+        GcExecutionMode::Execute
+    };
+    Ok(GcPlanRequest {
+        roots,
+        entries,
+        execution_mode,
+    })
+}
+
+fn shell_gc_plan_error(error: GcPlanError, store_dir: &str) -> Error {
+    let missing_path_id = match &error {
+        GcPlanError::MissingRoot { path_id } => Some(path_id.as_str()),
+        GcPlanError::MissingReference { reference_path_id, .. } => Some(reference_path_id.as_str()),
+        _ => None,
+    };
+    if let Some(path_id) = missing_path_id
+        && let Ok(path) = StorePath::from_absolute_path_with_prefix(path_id.as_bytes(), store_dir)
+    {
+        return Error::MissingClosureFacts {
+            path,
+            store_dir: store_dir.to_string(),
+            detail: format!("normalized GC graph is incomplete: {error:?}"),
+        };
     }
-    Ok(live_paths)
+    Error::Gc(format!("planning normalized reachability: {error:?}"))
 }
 
 pub(crate) async fn snapshot_pathinfos(pathinfo: &dyn PathInfoService) -> Result<Vec<PathInfo>, Error> {
-    const MAX_PATHINFO_ENTRIES: usize = 1_000_000;
-    let mut snapshot = Vec::with_capacity(256);
+    let mut snapshot = Vec::with_capacity(INITIAL_PATHINFO_CAPACITY);
     let mut stream = pathinfo.list();
-    for _ in 0..MAX_PATHINFO_ENTRIES {
-        let Some(item) = stream.next().await else { break };
+    for observed_entry_count in 0..=crunch_gc_core::MAX_GC_ENTRIES {
+        let Some(item) = stream.next().await else {
+            break;
+        };
+        if observed_entry_count == crunch_gc_core::MAX_GC_ENTRIES {
+            return Err(Error::Gc(format!("PathInfo snapshot exceeds {} entries", crunch_gc_core::MAX_GC_ENTRIES)));
+        }
         let path_info = item.map_err(|err| Error::Gc(format!("listing PathInfo rows: {err}")))?;
         snapshot.push(path_info);
     }
@@ -243,12 +301,14 @@ pub(crate) async fn snapshot_pathinfos(pathinfo: &dyn PathInfoService) -> Result
 
 fn split_pathinfos(
     snapshot: Vec<PathInfo>,
-    live_paths: &BTreeSet<StorePath<String>>,
+    live_paths: &BTreeSet<String>,
+    store_dir: &str,
 ) -> (Vec<PathInfo>, Vec<PathInfo>) {
     let mut live = Vec::with_capacity(snapshot.len());
     let mut dead = Vec::with_capacity(snapshot.len());
     for path_info in snapshot {
-        if live_paths.contains(&path_info.store_path) {
+        let path_id = path_info.store_path.to_absolute_path_with_prefix(store_dir);
+        if live_paths.contains(&path_id) {
             live.push(path_info);
         } else {
             dead.push(path_info);
@@ -532,7 +592,22 @@ fn compute_reclaimable_bytes(
     blob_index_paths: &[PathBuf],
     blob_chunk_paths: &[PathBuf],
 ) -> Result<u64, Error> {
-    let mut total: u64 = 0;
+    debug_assert!(orphaned_on_disk.iter().all(|path| path.is_absolute()));
+    debug_assert!(artifact_attestation_paths.iter().all(|path| path.is_absolute()));
+    let observation_count = orphaned_on_disk
+        .len()
+        .checked_add(artifact_attestation_paths.len())
+        .and_then(|count| count.checked_add(closure_attestation_paths.len()))
+        .and_then(|count| count.checked_add(blob_index_paths.len()))
+        .and_then(|count| count.checked_add(blob_chunk_paths.len()))
+        .ok_or_else(|| Error::Gc("reclaim observation count overflowed usize".to_string()))?;
+    if observation_count > crunch_gc_core::MAX_RECLAIM_OBSERVATIONS {
+        return Err(Error::Gc(format!(
+            "reclaim observation count exceeds {}",
+            crunch_gc_core::MAX_RECLAIM_OBSERVATIONS
+        )));
+    }
+    let mut observed_sizes_bytes = Vec::with_capacity(observation_count);
     for path in orphaned_on_disk
         .iter()
         .chain(artifact_attestation_paths.iter())
@@ -540,11 +615,11 @@ fn compute_reclaimable_bytes(
         .chain(blob_index_paths.iter())
         .chain(blob_chunk_paths.iter())
     {
-        total = total
-            .checked_add(path_size_bytes(path)?)
-            .ok_or_else(|| Error::Gc("reclaimable byte total overflowed u64".to_string()))?;
+        observed_sizes_bytes.push(path_size_bytes(path)?);
     }
-    Ok(total)
+    let summary = summarize_reclaim_observations(observed_sizes_bytes)
+        .map_err(|error| Error::Gc(format!("summarizing reclaimable bytes: {error:?}")))?;
+    Ok(summary.reclaimable_bytes)
 }
 
 fn path_size_bytes(root: &Path) -> Result<u64, Error> {

@@ -1,7 +1,7 @@
 # Ownership Review
 
 Status: adopted-core boundary review synchronized to main spec assets
-Date: 2026-04-22
+Date: 2026-08-03
 
 ## Legacy std paths reduced to adapter-only form
 
@@ -93,6 +93,15 @@ Date: 2026-04-22
 - `crates/crunch-delta/src/substitution.rs` → `adapter-only`
   - async store/network/session orchestration and attestation integration stay
     in the std adaptor around `crunch-delta-core`
+- `crates/crunch-store/src/gc.rs` → `adapter-only`
+  - service and filesystem observations become normalized owned facts before
+    `crunch-gc-core` computes reachability, candidates, and mutation disposition
+  - deletion, database rewrites, and report serialization remain in std
+- `crates/crunch-store/src/repair.rs` → `adapter-only`
+  - NAR rendering and authority checks become normalized facts before
+    `crunch-repair-core` decides admission, transaction order, and report status
+  - signing, sidecar publication, persistence, verification, and rollback
+    execution remain in std
 - `src/attest_cmd.rs` → `unrelated`
   - root CLI shell for attestation commands, store access, and output formatting
 - `src/project_cmd.rs` → `unrelated`
@@ -125,5 +134,7 @@ Date: 2026-04-22
   CLI shells, and related adapters) until a later extraction wave explicitly
   reshapes those APIs.
 - shell/release business logic remains in `crunch-shell-core` and `crunch-release-core`, while delta planning/protocol business logic remains in `crunch-delta-core` rather than drifting back into the reviewed std adapter files.
+- GC and final-NAR repair decisions remain in `crunch-gc-core` and
+  `crunch-repair-core`. Their std adapters retain observations and effects only.
 
 Reviewer: pi session

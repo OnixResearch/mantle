@@ -4,6 +4,22 @@ use std::path::PathBuf;
 
 use crunch_attestation::ArtifactAttestation;
 use crunch_attestation::Canonicalize;
+pub use crunch_repair_core::FinalNarFacts;
+pub use crunch_repair_core::FinalNarRepairPlan;
+pub use crunch_repair_core::FinalNarRepairPlanningFacts;
+pub use crunch_repair_core::FinalNarRepairRejection;
+use crunch_repair_core::RepairExecutionMode;
+use crunch_repair_core::RepairMutationIntent;
+use crunch_repair_core::RepairReportRequest;
+use crunch_repair_core::RepairReportStatus;
+use crunch_repair_core::RepairRollbackIntent;
+use crunch_repair_core::RepairSidecarDisposition;
+use crunch_repair_core::RepairTransactionPlan;
+use crunch_repair_core::RepairTransactionRequest;
+pub use crunch_repair_core::SHA256_DIGEST_BYTES;
+pub use crunch_repair_core::plan_final_nar_repair;
+use crunch_repair_core::plan_repair_report;
+use crunch_repair_core::plan_repair_transaction;
 use nix_compat::narinfo::Signature;
 use nix_compat::narinfo::SigningKey;
 use nix_compat::store_path::StorePath;
@@ -19,66 +35,8 @@ use crate::StoreHandle;
 use crate::artifact_attestation_file_path;
 use crate::path_identity::require_ca_path_identity;
 
-const SHA256_DIGEST_BYTES: usize = 32;
 const SIGNATURE_COUNT_MAX: usize = 4_096;
 const ATTESTATION_REPAIR_TEMP_EXTENSION: &str = "json.final-nar-repair.tmp";
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct FinalNarFacts {
-    pub nar_size: u64,
-    pub nar_sha256: [u8; SHA256_DIGEST_BYTES],
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct FinalNarRepairPlanningFacts {
-    pub recorded: FinalNarFacts,
-    pub observed: FinalNarFacts,
-    pub signature_count: u32,
-    pub is_content_complete: bool,
-    pub is_ca_path_identity_valid: bool,
-    pub is_attestation_valid: bool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FinalNarRepairPlan {
-    Current,
-    Repair,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FinalNarRepairRejection {
-    Unsigned,
-    InvalidObservedNarFacts,
-    IncompleteContent,
-    InvalidCaPathIdentity,
-    InvalidArtifactAttestation,
-}
-
-pub fn plan_final_nar_repair(
-    facts: FinalNarRepairPlanningFacts,
-) -> Result<FinalNarRepairPlan, FinalNarRepairRejection> {
-    debug_assert_eq!(facts.recorded.nar_sha256.len(), SHA256_DIGEST_BYTES);
-    debug_assert_eq!(facts.observed.nar_sha256.len(), SHA256_DIGEST_BYTES);
-    if facts.signature_count == 0 {
-        return Err(FinalNarRepairRejection::Unsigned);
-    }
-    if facts.observed.nar_size == 0 {
-        return Err(FinalNarRepairRejection::InvalidObservedNarFacts);
-    }
-    if !facts.is_content_complete {
-        return Err(FinalNarRepairRejection::IncompleteContent);
-    }
-    if !facts.is_ca_path_identity_valid {
-        return Err(FinalNarRepairRejection::InvalidCaPathIdentity);
-    }
-    if !facts.is_attestation_valid {
-        return Err(FinalNarRepairRejection::InvalidArtifactAttestation);
-    }
-    if facts.recorded == facts.observed {
-        return Ok(FinalNarRepairPlan::Current);
-    }
-    Ok(FinalNarRepairPlan::Repair)
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -140,7 +98,7 @@ pub struct FinalNarRepairReport {
 pub struct FinalNarRepairInspection {
     original_path_info: PathInfo,
     observed: FinalNarFacts,
-    plan: FinalNarRepairPlan,
+    transaction_plan: RepairTransactionPlan,
     artifact_attestation: Option<ArtifactAttestation>,
     signature_count: u32,
     store_dir: String,
@@ -148,29 +106,31 @@ pub struct FinalNarRepairInspection {
 
 impl FinalNarRepairInspection {
     pub fn is_repair_required(&self) -> bool {
-        self.plan == FinalNarRepairPlan::Repair
+        self.transaction_plan.final_nar_plan == FinalNarRepairPlan::Repair
     }
 
     pub fn report(&self, is_execution_requested: bool) -> FinalNarRepairReport {
-        let status = match self.plan {
-            FinalNarRepairPlan::Current => FinalNarRepairStatus::Current,
-            FinalNarRepairPlan::Repair => FinalNarRepairStatus::WouldRepair,
+        let execution_mode = if is_execution_requested {
+            RepairExecutionMode::Execute
+        } else {
+            RepairExecutionMode::Inspect
         };
-        let artifact_attestation = match (&self.plan, &self.artifact_attestation) {
-            (_, None) => ArtifactAttestationRepairStatus::Absent,
-            (FinalNarRepairPlan::Current, Some(_)) => ArtifactAttestationRepairStatus::Current,
-            (FinalNarRepairPlan::Repair, Some(_)) => ArtifactAttestationRepairStatus::WouldRefresh,
-        };
+        let decision = plan_repair_report(RepairReportRequest {
+            final_nar_plan: self.transaction_plan.final_nar_plan,
+            artifact_attestation_present: self.artifact_attestation.is_some(),
+            execution_mode,
+            execution_completed: false,
+        });
         repair_report(RepairReportInput {
             original: &self.original_path_info,
             store_dir: &self.store_dir,
             observed: self.observed,
-            status,
-            is_execution_requested,
-            is_mutated: false,
+            status: shell_report_status(decision.status),
+            is_execution_requested: decision.execution_requested,
+            is_mutated: decision.mutated,
             old_signature_count: self.signature_count,
             signer: None,
-            artifact_attestation,
+            artifact_attestation: shell_sidecar_status(decision.sidecar_disposition, false),
         })
     }
 }
@@ -204,19 +164,23 @@ pub async fn inspect_final_nar_repair(
         validate_artifact_attestation(artifact_attestation.as_ref(), &original_path_info, handle.store_dir());
     let signature_count = u32::try_from(original_path_info.signatures.len())
         .map_err(|_| repair_error("signature count does not fit report bounds"))?;
-    let plan = plan_final_nar_repair(FinalNarRepairPlanningFacts {
-        recorded: path_info_final_nar_facts(&original_path_info),
-        observed,
-        signature_count,
-        is_content_complete,
-        is_ca_path_identity_valid,
-        is_attestation_valid,
+    let transaction_plan = plan_repair_transaction(RepairTransactionRequest {
+        path_id: original_path_info.store_path.to_absolute_path_with_prefix(handle.store_dir()),
+        planning_facts: FinalNarRepairPlanningFacts {
+            recorded: path_info_final_nar_facts(&original_path_info),
+            observed,
+            signature_count,
+            is_content_complete,
+            is_ca_path_identity_valid,
+            is_attestation_valid,
+        },
+        artifact_attestation_present: artifact_attestation.is_some(),
     })
     .map_err(repair_rejection_error)?;
     Ok(FinalNarRepairInspection {
         original_path_info,
         observed,
-        plan,
+        transaction_plan,
         artifact_attestation,
         signature_count,
         store_dir: handle.store_dir().to_string(),
@@ -230,9 +194,10 @@ pub async fn execute_final_nar_repair(
 ) -> Result<FinalNarRepairReport, Error> {
     assert!(!signing_key.name().is_empty(), "signing key name must not be empty");
     assert!(!inspection.original_path_info.store_path.name().is_empty());
-    if inspection.plan == FinalNarRepairPlan::Current {
+    if inspection.transaction_plan.final_nar_plan == FinalNarRepairPlan::Current {
         return Ok(inspection.report(true));
     }
+    validate_shell_transaction_plan(&inspection.transaction_plan, inspection.artifact_attestation.is_some())?;
     let current = load_exact_pathinfo(handle, &inspection.original_path_info.store_path).await?;
     if current != inspection.original_path_info {
         return Err(repair_error("PathInfo changed after inspection; rerun dry-run"));
@@ -254,22 +219,54 @@ pub async fn execute_final_nar_repair(
     .await?;
 
     verify_repaired_state(handle, &repaired, staged_attestation.as_ref()).await?;
-    let artifact_status = if staged_attestation.is_some() {
-        ArtifactAttestationRepairStatus::Refreshed
-    } else {
-        ArtifactAttestationRepairStatus::Absent
-    };
+    let decision = plan_repair_report(RepairReportRequest {
+        final_nar_plan: inspection.transaction_plan.final_nar_plan,
+        artifact_attestation_present: staged_attestation.is_some(),
+        execution_mode: RepairExecutionMode::Execute,
+        execution_completed: true,
+    });
     Ok(repair_report(RepairReportInput {
         original: &inspection.original_path_info,
         store_dir: handle.store_dir(),
         observed: inspection.observed,
-        status: FinalNarRepairStatus::Repaired,
-        is_execution_requested: true,
-        is_mutated: true,
+        status: shell_report_status(decision.status),
+        is_execution_requested: decision.execution_requested,
+        is_mutated: decision.mutated,
         old_signature_count: inspection.signature_count,
         signer: Some(signing_key.name().to_string()),
-        artifact_attestation: artifact_status,
+        artifact_attestation: shell_sidecar_status(decision.sidecar_disposition, true),
     }))
+}
+
+fn validate_shell_transaction_plan(
+    plan: &RepairTransactionPlan,
+    artifact_attestation_present: bool,
+) -> Result<(), Error> {
+    debug_assert_eq!(plan.final_nar_plan, FinalNarRepairPlan::Repair);
+    debug_assert!(!plan.mutation_intents.is_empty());
+    let has_valid_intents = matches!(
+        (artifact_attestation_present, plan.mutation_intents.as_slice()),
+        (true, [
+            RepairMutationIntent::PersistPathInfo,
+            RepairMutationIntent::PublishArtifactAttestation,
+            RepairMutationIntent::VerifyPathInfo,
+            RepairMutationIntent::VerifyArtifactAttestation,
+        ],) | (false, [
+            RepairMutationIntent::PersistPathInfo,
+            RepairMutationIntent::VerifyPathInfo,
+        ],)
+    );
+    let has_valid_rollback = matches!(
+        (artifact_attestation_present, plan.rollback_intents.as_slice()),
+        (true, [
+            RepairRollbackIntent::RestorePathInfo,
+            RepairRollbackIntent::RemoveStagedArtifactAttestation,
+        ],) | (false, [RepairRollbackIntent::RestorePathInfo])
+    );
+    if !has_valid_intents || !has_valid_rollback {
+        return Err(repair_error("repair core returned an unsupported transaction order"));
+    }
+    Ok(())
 }
 
 struct RepairPersistenceInput<'a> {
@@ -489,6 +486,26 @@ async fn verify_repaired_state(
     Ok(())
 }
 
+const fn shell_report_status(status: RepairReportStatus) -> FinalNarRepairStatus {
+    match status {
+        RepairReportStatus::Current => FinalNarRepairStatus::Current,
+        RepairReportStatus::WouldRepair => FinalNarRepairStatus::WouldRepair,
+        RepairReportStatus::Repaired => FinalNarRepairStatus::Repaired,
+    }
+}
+
+const fn shell_sidecar_status(
+    disposition: RepairSidecarDisposition,
+    execution_completed: bool,
+) -> ArtifactAttestationRepairStatus {
+    match (disposition, execution_completed) {
+        (RepairSidecarDisposition::Absent, _) => ArtifactAttestationRepairStatus::Absent,
+        (RepairSidecarDisposition::Current, _) => ArtifactAttestationRepairStatus::Current,
+        (RepairSidecarDisposition::Refresh, false) => ArtifactAttestationRepairStatus::WouldRefresh,
+        (RepairSidecarDisposition::Refresh, true) => ArtifactAttestationRepairStatus::Refreshed,
+    }
+}
+
 struct RepairReportInput<'a> {
     original: &'a PathInfo,
     store_dir: &'a str,
@@ -537,6 +554,8 @@ fn repair_rejection_error(rejection: FinalNarRepairRejection) -> Error {
         FinalNarRepairRejection::IncompleteContent => "local castore content is missing or incomplete",
         FinalNarRepairRejection::InvalidCaPathIdentity => "CA metadata does not derive the selected store path",
         FinalNarRepairRejection::InvalidArtifactAttestation => "artifact attestation does not match the stale PathInfo",
+        FinalNarRepairRejection::InvalidPathIdentity => "repair path identity is not canonical",
+        FinalNarRepairRejection::IdentityEncodingOverflow => "repair plan identity encoding overflowed",
     };
     repair_error(reason)
 }

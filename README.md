@@ -134,6 +134,13 @@ castore content, preserves CA/path/node/reference identity, discards signatures
 bound to stale facts, and emits a replacement local signature. This does not
 recover historical signer authority or prove output correctness.
 
+GC and final-NAR repair use separate pure decision cores. The cores receive
+bounded, normalized facts and return ordered plans with BLAKE3 identities.
+`crunch-store` still owns service reads, NAR rendering, signing, filesystem
+changes, persistence, verification, and rollback execution. A plan records a
+bounded decision. It does not prove content correctness, provenance,
+reproducibility, release eligibility, or successful execution.
+
 ## Project workflow
 
 A Mantle project uses `mantle-project.ncl`, `mantle.lock`, and generated

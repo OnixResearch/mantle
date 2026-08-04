@@ -123,3 +123,38 @@ required_std_adapter_files = [
   "crates/crunch-delta/src/manifest.rs",
   "crates/crunch-delta/src/substitution.rs",
 ]
+
+[[core]]
+package = "crunch-gc-core"
+crate_dir = "crates/crunch-gc-core"
+lib_path = "crates/crunch-gc-core/src/lib.rs"
+manifest_path = "crates/crunch-gc-core/Cargo.toml"
+required_exports = [
+  "pub struct GcPlanRequest",
+  "pub struct GcPlan",
+  "pub enum GcPlanError",
+  "pub fn plan_gc(",
+  "pub fn report_decision(",
+  "pub fn summarize_reclaim_observations(",
+]
+legacy_std_files = []
+required_std_adapter_files = [
+  "crates/crunch-store/src/gc.rs",
+]
+
+[[core]]
+package = "crunch-repair-core"
+crate_dir = "crates/crunch-repair-core"
+lib_path = "crates/crunch-repair-core/src/lib.rs"
+manifest_path = "crates/crunch-repair-core/Cargo.toml"
+required_exports = [
+  "pub struct FinalNarRepairPlanningFacts",
+  "pub struct RepairTransactionPlan",
+  "pub fn plan_final_nar_repair(",
+  "pub fn plan_repair_transaction(",
+  "pub fn plan_repair_report(",
+]
+legacy_std_files = []
+required_std_adapter_files = [
+  "crates/crunch-store/src/repair.rs",
+]

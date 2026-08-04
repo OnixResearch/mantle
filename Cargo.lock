@@ -1474,6 +1474,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-gc-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+]
+
+[[package]]
 name = "crunch-glue"
 version = "0.1.0"
 dependencies = [
@@ -1585,6 +1592,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-repair-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+]
+
+[[package]]
 name = "crunch-rust-cache"
 version = "0.1.0"
 dependencies = [
@@ -1688,6 +1702,8 @@ dependencies = [
  "crunch-action-result-core",
  "crunch-attestation",
  "crunch-delta",
+ "crunch-gc-core",
+ "crunch-repair-core",
  "data-encoding",
  "ed25519-dalek",
  "filetime",

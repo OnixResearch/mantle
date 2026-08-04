@@ -6,8 +6,10 @@ cfg-if
 constant_time_eq
 crunch-attestation-core
 crunch-delta-core
+crunch-gc-core
 crunch-project-core
 crunch-release-core
+crunch-repair-core
 crunch-shell-core
 data-encoding
 itoa

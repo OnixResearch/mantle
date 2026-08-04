@@ -778,6 +778,30 @@ mantle run .#hello -- --help
 If the selected package output does not contain `bin/`, `mantle run` fails
 instead of guessing.
 
+## Inspect GC and final-NAR repair plans
+
+Use dry-run commands before a store mutation:
+
+```bash
+mantle store gc --dry-run
+mantle store repair-final-nar /mantle/store/<digest>-<name>
+```
+
+The GC core computes normalized reachability, retained paths, candidates,
+reclaim summaries, and dry-run mutation dispositions. The repair core decides
+admission, signing and sidecar dispositions, mutation order, report status, and
+rollback intent. Both cores use bounded owned data and BLAKE3 plan identities.
+
+The `crunch-store` shell collects the facts and performs all effects. It reads
+services, renders NARs, signs metadata, changes files, persists records,
+verifies results, and executes rollback.
+
+A core plan is not an execution receipt. It does not prove that a mutation
+started or completed. It also does not prove content correctness, signer
+authority, provenance, reproducibility, release eligibility, or global cache
+availability. A missing root, unresolved reference, duplicate identity,
+invalid repair fact, or exceeded bound makes planning fail closed.
+
 ## Inspect and verify attestations
 
 Successful builds, accepted cache hits, and remote substitutions persist native
