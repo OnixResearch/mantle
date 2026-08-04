@@ -140,7 +140,6 @@ const RUSTC_RELATIVE_PATH: &str = "bin/rustc";
 const TARGET_TRIPLE: &str = "x86_64-unknown-linux-musl";
 const SOURCE_RECORD_COUNT_MIN: usize = 1;
 const DEV_CACHE_PROVIDERS_SUBDIR: &str = "providers";
-const DEV_CACHE_STORES_SUBDIR: &str = "stores";
 const STAGE_MARKERS_SUBDIR: &str = ".stage-markers";
 const FAST_FAIL_NOTICE: &str = "dev fast-fail: source profile unchanged from the last published fixed-point receipt; reporting the prior success without a fresh rebuild";
 const EXPECTED_SINGLE_OUTPUT_COUNT: usize = 1;
@@ -336,9 +335,6 @@ pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions
         }
     };
     write_attempt_status(&prepared.staging_dir, Some(&prepared.plan.plan_digest_blake3), PROOF_STATUS_COMPLETE, None)?;
-    if let Some(cache) = options.dev_provider_cache {
-        write_dev_store_snapshot(cache, &prepared)?;
-    }
     if adopted {
         // Dev-only provider adoption: never publish to the success aliases and never
         // update `latest`/`latest-source-built-fixed-point`.
@@ -604,10 +600,9 @@ fn prepare_attempt(
         .map_err(|error| proof_error(format!("creating native state {}: {error}", native_state_dir.display())))?;
     fs::create_dir(&transcripts_dir)
         .map_err(|error| proof_error(format!("creating transcripts {}: {error}", transcripts_dir.display())))?;
-    let dev_store_seeded =
-        seed_dev_store_snapshot(options, &plan.plan_digest_blake3, &native_store_dir, &native_state_dir)?;
-    if !dev_store_seeded {
-        crate::source_bundle::import_source_bundle(&profile, &native_state_dir, true)?;
+    crate::source_bundle::import_source_bundle(&profile, &native_state_dir, true)?;
+    if options.dev_provider_cache.is_some() {
+        seed_dev_store_snapshot(options, &plan, &native_store_dir, &native_state_dir)?;
     }
     Ok(PreparedAttempt {
         final_dir: options.output_dir.to_path_buf(),
@@ -1079,48 +1074,39 @@ fn emit_fast_fail_notice(
     }
 }
 
-fn dev_store_snapshot_root(cache: &Path, plan_digest_blake3: &str) -> PathBuf {
-    cache.join(DEV_CACHE_STORES_SUBDIR).join(plan_digest_blake3)
-}
-
 fn seed_dev_store_snapshot(
     options: &SourceBuiltFixedPointOptions<'_>,
-    plan_digest_blake3: &str,
+    plan: &SourceBuiltFixedPointPlan,
     store_dir: &Path,
     state_dir: &Path,
 ) -> Result<bool, RunError> {
     let Some(cache) = options.dev_provider_cache else {
         return Ok(false);
     };
-    let root = dev_store_snapshot_root(cache, plan_digest_blake3);
-    let source_store = root.join(NATIVE_STORE_DIR);
-    let source_state = root.join(NATIVE_STATE_DIR);
-    if !source_store.is_dir() || !source_state.is_dir() {
+    let policies = DevCachePolicies::from_plan(plan);
+    let entry = match read_provider_cache_entry(options, plan, &policies)? {
+        Some(entry) => entry,
+        None => return Ok(false),
+    };
+    if evaluate_provider_cache_lookup(Some(&entry), plan, &policies) != DevProviderCacheLookup::Hit {
         return Ok(false);
     }
-    crate::stagex_mes_lib::copy_tree_bounded(&source_store, store_dir)
-        .map_err(|error| proof_error(format!("seeding dev store snapshot store: {error}")))?;
-    crate::stagex_mes_lib::copy_tree_bounded(&source_state, state_dir)
-        .map_err(|error| proof_error(format!("seeding dev store snapshot state: {error}")))?;
-    debug_assert!(store_dir.is_dir());
-    debug_assert!(state_dir.is_dir());
-    Ok(true)
-}
-
-fn write_dev_store_snapshot(cache: &Path, prepared: &PreparedAttempt) -> Result<(), RunError> {
-    let root = dev_store_snapshot_root(cache, &prepared.plan.plan_digest_blake3);
-    if root.exists() {
-        return Err(proof_error(format!("dev store snapshot root already exists: {}", root.display())));
+    let entry_root = cache.join(DEV_CACHE_PROVIDERS_SUBDIR).join(&plan.plan_digest_blake3).join(&entry.cache_key);
+    let stagex_dst = store_dir.join(&entry.stagex_provider.store_basename);
+    if !stagex_dst.exists() {
+        crate::stagex_mes_lib::copy_tree_bounded(&entry_root.join(&entry.stagex_provider.store_basename), &stagex_dst)
+            .map_err(|error| proof_error(format!("seeding cached StageX provider: {error}")))?;
     }
-    fs::create_dir_all(&root)
-        .map_err(|error| proof_error(format!("creating dev store snapshot root {}: {error}", root.display())))?;
-    crate::stagex_mes_lib::copy_tree_bounded(&prepared.native_store_dir, &root.join(NATIVE_STORE_DIR))
-        .map_err(|error| proof_error(format!("writing dev store snapshot store: {error}")))?;
-    crate::stagex_mes_lib::copy_tree_bounded(&prepared.native_state_dir, &root.join(NATIVE_STATE_DIR))
-        .map_err(|error| proof_error(format!("writing dev store snapshot state: {error}")))?;
-    debug_assert!(root.join(NATIVE_STORE_DIR).is_dir());
-    debug_assert!(root.join(NATIVE_STATE_DIR).is_dir());
-    Ok(())
+    register_adopted_provider(&stagex_dst, store_dir, state_dir)?;
+    let native_dst = store_dir.join(&entry.native_provider.store_basename);
+    if !native_dst.exists() {
+        crate::stagex_mes_lib::copy_tree_bounded(&entry_root.join(&entry.native_provider.store_basename), &native_dst)
+            .map_err(|error| proof_error(format!("seeding cached native provider: {error}")))?;
+    }
+    register_adopted_provider(&native_dst, store_dir, state_dir)?;
+    debug_assert!(stagex_dst.is_dir());
+    debug_assert!(native_dst.is_dir());
+    Ok(true)
 }
 
 fn stage_markers_dir(staging_dir: &Path) -> PathBuf {
@@ -1269,20 +1255,18 @@ fn adopt_cached_provider_subtrees(
     }
     let entry_root = cache.join(DEV_CACHE_PROVIDERS_SUBDIR).join(&plan.plan_digest_blake3).join(&entry.cache_key);
     let stagex_dst = prepared.native_store_dir.join(&entry.stagex_provider.store_basename);
-    if stagex_dst.exists() {
-        return Err(proof_error(format!("adopted StageX provider destination exists: {}", stagex_dst.display())));
+    if !stagex_dst.exists() {
+        crate::stagex_mes_lib::copy_tree_bounded(&entry_root.join(&entry.stagex_provider.store_basename), &stagex_dst)
+            .map_err(|error| proof_error(format!("adopting cached StageX provider: {error}")))?;
     }
-    crate::stagex_mes_lib::copy_tree_bounded(&entry_root.join(&entry.stagex_provider.store_basename), &stagex_dst)
-        .map_err(|error| proof_error(format!("adopting cached StageX provider: {error}")))?;
     let native_dst = prepared.native_store_dir.join(&entry.native_provider.store_basename);
-    if native_dst.is_dir() {
-        return Err(proof_error(format!("adopted native provider destination exists: {}", native_dst.display())));
+    if !native_dst.exists() {
+        crate::stagex_mes_lib::copy_tree_bounded(&entry_root.join(&entry.native_provider.store_basename), &native_dst)
+            .map_err(|error| proof_error(format!("adopting cached native provider: {error}")))?;
     }
-    crate::stagex_mes_lib::copy_tree_bounded(&entry_root.join(&entry.native_provider.store_basename), &native_dst)
-        .map_err(|error| proof_error(format!("adopting cached native provider: {error}")))?;
     let tx = prepared.transcripts_dir.join("native-provider.adopted.txt");
     let tx_bytes = format!(
-        "dev-cache-adopted native provider logical={} physical={}\n",
+        "dev-cache-adopted native provider logical={} physical={} store_registered=true\n",
         entry.native_provider.logical_path,
         native_dst.display()
     );
@@ -1303,6 +1287,30 @@ fn adopt_cached_provider_subtrees(
         transcript_path: tx,
         transcript_digest_blake3: tx_digest,
     })
+}
+
+/// Register an on-disk provider subtree with the content-addressed store service
+/// (`StoreHandle::adopt_verified_local_output`), matching how the cold path adopts
+/// freshly constructed transition/provider paths. Returns the logical store path.
+fn register_adopted_provider(
+    physical_path: &Path,
+    native_store_dir: &Path,
+    native_state_dir: &Path,
+) -> Result<String, RunError> {
+    let logical = crate::full_source_provider::adopt_verified_local_provider_path_strict(
+        physical_path,
+        native_store_dir,
+        native_state_dir,
+        LOGICAL_STORE_PREFIX,
+    )?;
+    crate::source_bundle::import_constructed_store_path_source(
+        &logical,
+        physical_path,
+        native_state_dir,
+        LOGICAL_STORE_PREFIX,
+    )?;
+    debug_assert!(logical.starts_with(LOGICAL_STORE_PREFIX));
+    Ok(logical)
 }
 
 /// A placeholder StageX provider publication report for an adopted run. The
@@ -2691,42 +2699,15 @@ mod tests {
     }
 
     #[test]
-    fn dev_store_snapshot_seed_and_write_roundtrip() {
-        let temp = tempfile::tempdir().unwrap();
-        let cache = temp.path().join("cache");
-        let staged = temp.path().join("staged");
-        let store = staged.join(NATIVE_STORE_DIR);
-        let state = staged.join(NATIVE_STATE_DIR);
-        fs::create_dir_all(&store).unwrap();
-        fs::create_dir_all(&state).unwrap();
-        fs::write(store.join("blob"), b"x").unwrap();
-        fs::write(state.join("pathinfo.redb"), b"y").unwrap();
-        let prepared = prepared_fixture(&temp, staged.clone());
-        let executable = write_executable(&temp.path().join("bwrap"));
-        let output = temp.path().join("final-proof");
-        let source_profile = temp.path().join("profile.json");
-        let options = options_fixture(&source_profile, &output, &executable, Some(&cache), false, false);
-
-        write_dev_store_snapshot(&cache, &prepared).unwrap();
-        let plan_digest = &prepared.plan.plan_digest_blake3;
-        let fresh_store = temp.path().join("fresh-store");
-        let fresh_state = temp.path().join("fresh-state");
-        let seeded = seed_dev_store_snapshot(&options, plan_digest, &fresh_store, &fresh_state).unwrap();
-
-        assert!(seeded);
-        assert!(fresh_store.join("blob").is_file());
-        assert!(fresh_state.join("pathinfo.redb").is_file());
-    }
-
-    #[test]
-    fn dev_store_snapshot_seed_is_disabled_without_cache_flag() {
+    fn store_seed_is_disabled_without_cache_flag() {
         let temp = tempfile::tempdir().unwrap();
         let executable = write_executable(&temp.path().join("bwrap"));
         let output = temp.path().join("final-proof");
         let source_profile = temp.path().join("profile.json");
         let options = options_fixture(&source_profile, &output, &executable, None, false, false);
         let seeded =
-            seed_dev_store_snapshot(&options, DIGEST, &temp.path().join("store"), &temp.path().join("state")).unwrap();
+            seed_dev_store_snapshot(&options, &test_plan(), &temp.path().join("store"), &temp.path().join("state"))
+                .unwrap();
 
         assert!(!seeded);
     }
