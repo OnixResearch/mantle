@@ -55,6 +55,35 @@ store paths were GC'd on this host.
   still fails on this tree (asserts only on `bootstrap/gcc-4.0-native.ncl`
   content, untouched here; pre-existing).
 
+## Contained real-store dogfood (same turn)
+
+A full multi-hour source-built proof cannot run on this host: bubblewrap is not
+installed and the handoff source closures (`native-source-closure.json`,
+`stagex-source-closure.json`, `rust-source-archives`) are absent on this
+machine. So I ran a small, contained real-store test instead of the full proof.
+
+- Dogfooded the built binary end to end with the new flags: `self-build
+  --source-built-fixed-point ... --dev-provider-cache ... --dev-resume
+  --dev-fast-fail` accepted the flags, passed option validation, hit the
+  fail-closed disk preflight (default 1 TiB bound vs ~16 GB on /tmp), then with
+  `--proof-disk-bytes-max` passed preflight and failed closed cleanly at the
+  missing source profile (`attempt_not_started=true`). Writing it: the new entry
+  path and fail-closed gates work with the real binary.
+- Added and ran a contained REAL-store test
+  `store_service_registration_adopts_real_provider_and_is_observable`: it
+  creates a real state/output store, generates a real signing key, and registers
+  a provider through the dev-cache store path
+  (`register_adopted_provider` -> `adopt_verified_local_provider_path_strict`
+  -> `StoreHandle::adopt_verified_local_output`: ingest, NAR, sign, persist,
+  plus `import_constructed_store_path_source`), then asserts the logical store
+  path and that `pathinfo.redb` persisted. This proves the store-service
+  registration is real and observable, not a plain file copy.
+- `source_built_fixed_point` tests now 46 passed (includes the real-store test);
+  touched files clippy/fmt-clean; `git diff --check` clean.
+
+This remains prior to a full cold->cached->adopt round trip, which still needs
+bubblewrap and the handoff source closures on the run host.
+
 ## Remaining work for full completion
 
 - Store a transition execution-tree snapshot so `--dev-resume` can restart from
