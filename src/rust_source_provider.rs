@@ -3839,15 +3839,27 @@ fn run_smoke_rustc_with_bounded_launch_retry(rustc_path: &Path, rustc_args: &[Os
     unreachable!("the final bounded smoke launch attempt must return an output or error")
 }
 
+fn generated_script_command(script_path: &Path, interpreter: Option<&Path>) -> Command {
+    match interpreter {
+        Some(interpreter) => {
+            let mut command = Command::new(interpreter);
+            command.arg(script_path);
+            command
+        }
+        None => Command::new(script_path),
+    }
+}
+
 fn run_generated_script_with_log(
     script_path: &Path,
     log_path: &Path,
-    clear_environment: bool,
+    full_source_context: Option<&FullSourceRustExecutionContext>,
 ) -> Result<ExitStatus, RustSourceProviderError> {
     if script_path == log_path {
         return Err(RustSourceProviderError::Build("generated script path and build log path must differ".to_string()));
     }
     debug_assert_ne!(script_path, log_path);
+    let interpreter = full_source_context.map(|context| full_source_busybox_applet_path(context, "sh")).transpose()?;
     let log = File::create(log_path)
         .map_err(|err| RustSourceProviderError::Build(format!("create {}: {err}", log_path.display())))?;
     for attempt in 1..=GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS {
@@ -3857,8 +3869,8 @@ fn run_generated_script_with_log(
         let stderr = log
             .try_clone()
             .map_err(|err| RustSourceProviderError::Build(format!("clone {}: {err}", log_path.display())))?;
-        let mut command = Command::new(script_path);
-        if clear_environment {
+        let mut command = generated_script_command(script_path, interpreter.as_deref());
+        if full_source_context.is_some() {
             command.env_clear();
         }
         match command.stdout(stdout).stderr(stderr).status() {
@@ -3890,7 +3902,7 @@ fn run_rustc_stage1_build(
     let status = run_generated_script_with_log(
         &boundary.script_path,
         &boundary.build_log_path,
-        boundary.full_source_context.is_some(),
+        boundary.full_source_context.as_ref(),
     )?;
     if !status.success() {
         let log_tail = fs::read(&boundary.build_log_path)
@@ -3943,7 +3955,7 @@ fn run_rustc_final_build(
     let status = run_generated_script_with_log(
         &boundary.script_path,
         &boundary.build_log_path,
-        boundary.full_source_context.is_some(),
+        boundary.full_source_context.as_ref(),
     )?;
     if !status.success() {
         let log_tail = fs::read(&boundary.build_log_path)
@@ -5001,7 +5013,7 @@ fn run_first_stage_build(
     let status = run_generated_script_with_log(
         &boundary.script_path,
         &boundary.build_log_path,
-        boundary.full_source_context.is_some(),
+        boundary.full_source_context.as_ref(),
     )?;
     if !status.success() {
         let log_tail = fs::read(&boundary.build_log_path)
@@ -8602,6 +8614,20 @@ mod tests {
     const RUST_BOOTSTRAP_PATCH_PLAN_MIN_OPERATIONS: usize = 6;
     #[cfg(unix)]
     const EXECUTABLE_MODE: u32 = 0o755;
+
+    #[test]
+    fn generated_script_command_uses_selected_interpreter_without_ambient_fallback() {
+        let script = Path::new("/proof/attempt/with/a/long/path/generated-stage.sh");
+        let interpreter = Path::new("/verified/host-tools/busybox/bin/sh");
+
+        let direct = generated_script_command(script, None);
+        let interpreted = generated_script_command(script, Some(interpreter));
+
+        assert_eq!(direct.get_program(), script.as_os_str());
+        assert_eq!(direct.get_args().count(), 0);
+        assert_eq!(interpreted.get_program(), interpreter.as_os_str());
+        assert_eq!(interpreted.get_args().collect::<Vec<_>>(), vec![script.as_os_str()]);
+    }
 
     #[cfg(unix)]
     #[test]
