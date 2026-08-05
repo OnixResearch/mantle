@@ -282,6 +282,21 @@ Building derivations (not just compiling crunch) requires:
   All ATerm serialization, hash computation, and path formatting use the
   configured prefix. Different prefixes produce different derivation hashes.
   The `_with_store_dir()` variants in nix_compat handle the plumbing.
+- **Store verify/sign prefix plumbing (2026-08-05)**: `crunch_store::store_verify`
+  once hard-coded `/nix/store` for on-disk NAR checks, and
+  `store_sign`/`store_verify_signatures` fingerprinted with the nix-compat
+  default `/nix/store` while build-time signing
+  (`handle.rs::compute_pathinfo_fingerprint`) uses the configured logical
+  prefix. All three now take explicit parameters: the physical export dir
+  (CLI `--store`) for disk checks and the logical prefix (CLI
+  `--store-prefix`) for fingerprints. `StoreCommandContext.store_dir` is the
+  logical prefix string; `output_dir` is the physical `--store` path — do not
+  mix them up. `overlay.rs::verify_pathinfo_trust` still fingerprints with
+  plain `/nix/store`; fix it when overlay base-layer signing moves to the
+  configured prefix. `mantle store verify` reports intermediate deps as
+  MISSING because intermediates stay in castore and are never exported to
+  disk; verify exported roots individually or expect a non-zero exit on any
+  store that holds intermediates.
 - **CA provisionals**: CA derivations compute input-addressed output paths as
   provisional `$out`. After the build, the content hash determines the final
   path. Both paths have the same name → same length → byte-level self-reference

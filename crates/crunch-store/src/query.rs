@@ -106,12 +106,19 @@ pub async fn store_info(svc: &dyn PathInfoService, path_filter: &str) -> Result<
     Ok(results)
 }
 
-/// Verify NAR hashes of store paths against what's on disk.
+/// Verify NAR hashes of store paths against what's on disk under `store_dir`.
 ///
-/// Optionally filters to paths matching `path_filter`. Returns per-path
-/// results (Ok, Missing, or Mismatch).
-pub async fn store_verify(svc: &dyn PathInfoService, path_filter: Option<&str>) -> Result<Vec<VerifyResult>, Error> {
+/// `store_dir` is the physical directory where build outputs are exported
+/// (the CLI `--store` value), not the logical store prefix. Optionally filters
+/// to paths matching `path_filter`. Returns per-path results (Ok, Missing, or
+/// Mismatch).
+pub async fn store_verify(
+    svc: &dyn PathInfoService,
+    path_filter: Option<&str>,
+    store_dir: &std::path::Path,
+) -> Result<Vec<VerifyResult>, Error> {
     assert!(path_filter.is_none_or(|f| !f.is_empty()), "store_verify: use None instead of empty filter");
+    assert!(!store_dir.as_os_str().is_empty(), "store_verify: store_dir must not be empty");
 
     #[allow(tigerstyle::explicit_defaults)]
     let bs = MemoryBlobService::default();
@@ -139,7 +146,7 @@ pub async fn store_verify(svc: &dyn PathInfoService, path_filter: Option<&str>) 
             continue;
         }
 
-        let abs = std::path::Path::new("/nix/store").join(&sp_str);
+        let abs = store_dir.join(&sp_str);
         if !abs.exists() {
             results.push(VerifyResult::Missing(sp_str));
             continue;
@@ -171,15 +178,22 @@ pub async fn store_verify(svc: &dyn PathInfoService, path_filter: Option<&str>) 
 }
 
 /// Verify PathInfo signatures against trusted public keys.
+///
+/// `store_dir` is the logical store prefix (for example `/mantle/store`)
+/// that was used when the signatures were created. Fingerprints embed the
+/// prefix, so verification with the wrong prefix reports every signature as
+/// untrusted.
 pub async fn store_verify_signatures(
     svc: &dyn PathInfoService,
     path_filter: Option<&str>,
     trusted_keys: &[VerifyingKey],
+    store_dir: &str,
 ) -> Result<Vec<SignatureVerifyResult>, Error> {
-    use nix_compat::narinfo::fingerprint;
+    use nix_compat::narinfo::fingerprint_with_store_dir;
     use nix_compat::store_path::StorePathRef;
 
     assert!(!trusted_keys.is_empty(), "verify_signatures requires at least one trusted key");
+    assert!(!store_dir.is_empty(), "verify_signatures: store_dir must not be empty");
 
     const MAX_VERIFY_SIG_ENTRIES: usize = 1_000_000;
     let mut stream = svc.list();
@@ -198,7 +212,7 @@ pub async fn store_verify_signatures(
 
         let store_path_ref: StorePathRef = pi.store_path.as_ref();
         let refs: Vec<StorePathRef> = pi.references.iter().map(|r| r.as_ref()).collect();
-        let fp = fingerprint(&store_path_ref, &pi.nar_sha256, pi.nar_size, refs.iter());
+        let fp = fingerprint_with_store_dir(&store_path_ref, &pi.nar_sha256, pi.nar_size, refs.iter(), store_dir);
 
         let mut trusted_count: u32 = 0;
         let mut untrusted_names = Vec::with_capacity(pi.signatures.len());
@@ -251,13 +265,15 @@ pub async fn store_sign(
     signing_key: &SigningKey<ed25519_dalek::SigningKey>,
     path_filter: Option<&str>,
     is_sign_all: bool,
+    store_dir: &str,
 ) -> Result<Vec<SignResult>, Error> {
     use nix_compat::narinfo::Signature;
-    use nix_compat::narinfo::fingerprint;
+    use nix_compat::narinfo::fingerprint_with_store_dir;
     use nix_compat::store_path::StorePathRef;
 
     const SIGN_CANDIDATE_COUNT_LIMIT: usize = 4096;
     assert!(!signing_key.name().is_empty(), "signing key name must not be empty");
+    assert!(!store_dir.is_empty(), "store_sign: store_dir must not be empty");
 
     let mut stream = svc.list();
     let mut to_update = Vec::with_capacity(SIGN_CANDIDATE_COUNT_LIMIT);
@@ -294,7 +310,7 @@ pub async fn store_sign(
     for (sp_str, mut pi) in to_update {
         let sp_ref: StorePathRef = pi.store_path.as_ref();
         let refs: Vec<StorePathRef> = pi.references.iter().map(|r| r.as_ref()).collect();
-        let fp = fingerprint(&sp_ref, &pi.nar_sha256, pi.nar_size, refs.iter());
+        let fp = fingerprint_with_store_dir(&sp_ref, &pi.nar_sha256, pi.nar_size, refs.iter(), store_dir);
 
         let sig_ref = signing_key.sign(fp.as_bytes());
         let sig_owned: Signature<String> = sig_ref.to_owned();
@@ -340,6 +356,10 @@ mod tests {
     use snix_store::pathinfoservice::PathInfoService;
 
     use super::*;
+
+    /// Existing test vectors sign with the plain `fingerprint()` helper, which
+    /// embeds the nix-compat default store dir.
+    const TEST_STORE_DIR: &str = nix_compat::store_path::STORE_DIR;
 
     fn test_pathinfo_service() -> LruPathInfoService {
         LruPathInfoService::with_capacity("query-test".to_string(), std::num::NonZeroUsize::new(64).unwrap())
@@ -388,7 +408,7 @@ mod tests {
         let digest = *pi.store_path.digest();
         svc.put(pi).await.unwrap();
 
-        let results = store_sign(&svc, &signing_key, Some("signed-path"), false).await.unwrap();
+        let results = store_sign(&svc, &signing_key, Some("signed-path"), false, TEST_STORE_DIR).await.unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].newly_signed);
         assert!(!results[0].appended);
@@ -412,7 +432,7 @@ mod tests {
         let digest = *pi.store_path.digest();
         svc.put(pi).await.unwrap();
 
-        let results = store_sign(&svc, &signing_key, Some("replace-path"), false).await.unwrap();
+        let results = store_sign(&svc, &signing_key, Some("replace-path"), false, TEST_STORE_DIR).await.unwrap();
         assert_eq!(results.len(), 1);
         assert!(!results[0].newly_signed);
         assert!(!results[0].appended);
@@ -436,7 +456,7 @@ mod tests {
         let digest = *pi.store_path.digest();
         svc.put(pi).await.unwrap();
 
-        let results = store_sign(&svc, &signing_key, Some("append-path"), false).await.unwrap();
+        let results = store_sign(&svc, &signing_key, Some("append-path"), false, TEST_STORE_DIR).await.unwrap();
         assert_eq!(results.len(), 1);
         assert!(!results[0].newly_signed);
         assert!(results[0].appended);
@@ -467,7 +487,7 @@ mod tests {
         let signed_digest = *signed.store_path.digest();
         svc.put(signed).await.unwrap();
 
-        let results = store_sign(&svc, &signing_key, None, true).await.unwrap();
+        let results = store_sign(&svc, &signing_key, None, true, TEST_STORE_DIR).await.unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].store_path.ends_with("-unsigned-path"));
         assert!(results[0].newly_signed);
@@ -490,7 +510,7 @@ mod tests {
         pi.signatures.push(signing_key.sign(fp.as_bytes()).to_owned());
         svc.put(pi).await.unwrap();
 
-        let results = store_verify_signatures(&svc, Some("trusted-path"), &[verifying_key]).await.unwrap();
+        let results = store_verify_signatures(&svc, Some("trusted-path"), &[verifying_key], TEST_STORE_DIR).await.unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].is_trusted());
         assert_eq!(results[0].trusted_count, 1);
@@ -508,11 +528,130 @@ mod tests {
         pi.signatures.push(signing_key.sign(fp.as_bytes()).to_owned());
         svc.put(pi).await.unwrap();
 
-        let results = store_verify_signatures(&svc, Some("untrusted-path"), &[other_verifying_key()]).await.unwrap();
+        let results = store_verify_signatures(&svc, Some("untrusted-path"), &[other_verifying_key()], TEST_STORE_DIR).await.unwrap();
         assert_eq!(results.len(), 1);
         assert!(!results[0].is_trusted());
         assert_eq!(results[0].trusted_count, 0);
         assert_eq!(results[0].total_signatures, 1);
         assert_eq!(results[0].untrusted_names, vec!["cache.example.com-1".to_string()]);
+    }
+
+    /// Compute the NAR hash of an on-disk path the same way `store_verify` does,
+    /// so a positive test can pin the exact expected hash.
+    async fn nar_hash_of_disk_path(path: &std::path::Path) -> ([u8; 32], u64) {
+        #[allow(tigerstyle::explicit_defaults)]
+        let bs = MemoryBlobService::default();
+        let ds = RedbDirectoryService::new_temporary("verify-test".to_string(), RedbDirectoryServiceConfig {
+            path: None,
+            cache_size: None,
+            read_only: false,
+        })
+        .unwrap();
+        let node = ingest_path::<_, _, _, &[u8]>(bs.clone(), ds.clone(), path, None).await.unwrap();
+        let renderer = SimpleRenderer::new(bs, ds);
+        let (nar_size, nar_sha256) = renderer.calculate_nar(&node).await.unwrap();
+        let mut hash = [0u8; 32];
+        hash.copy_from_slice(&nar_sha256);
+        (hash, nar_size)
+    }
+
+    fn file_pathinfo(store_path: StorePath<String>, nar_sha256: [u8; 32], nar_size: u64) -> PathInfo {
+        PathInfo {
+            store_path,
+            node: Node::Symlink {
+                target: SymlinkTarget::try_from("target").unwrap(),
+            },
+            references: vec![],
+            nar_size,
+            nar_sha256,
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn store_verify_ok_for_exported_path_in_custom_store_dir() {
+        let svc = test_pathinfo_service();
+        let store_dir = tempfile::tempdir().unwrap();
+
+        let pi = dummy_pathinfo("verify-ok-path");
+        let sp_str = pi.store_path.to_string();
+        std::fs::write(store_dir.path().join(&sp_str), b"verify-ok").unwrap();
+        let (nar_sha256, nar_size) = nar_hash_of_disk_path(&store_dir.path().join(&sp_str)).await;
+        svc.put(file_pathinfo(pi.store_path, nar_sha256, nar_size)).await.unwrap();
+
+        let results = store_verify(&svc, None, store_dir.path()).await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], VerifyResult::Ok(p) if *p == sp_str));
+    }
+
+    #[tokio::test]
+    async fn store_verify_missing_for_path_not_on_disk_in_custom_store_dir() {
+        let svc = test_pathinfo_service();
+        let store_dir = tempfile::tempdir().unwrap();
+
+        let pi = dummy_pathinfo("verify-missing-path");
+        let sp_str = pi.store_path.to_string();
+        svc.put(pi).await.unwrap();
+
+        let results = store_verify(&svc, None, store_dir.path()).await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], VerifyResult::Missing(p) if *p == sp_str));
+    }
+
+    #[tokio::test]
+    async fn store_verify_mismatch_for_tampered_disk_content() {
+        let svc = test_pathinfo_service();
+        let store_dir = tempfile::tempdir().unwrap();
+
+        let pi = dummy_pathinfo("verify-mismatch-path");
+        let sp_str = pi.store_path.to_string();
+        let good_path = store_dir.path().join(format!("{sp_str}.good"));
+        std::fs::write(&good_path, b"original").unwrap();
+        let (nar_sha256, nar_size) = nar_hash_of_disk_path(&good_path).await;
+        svc.put(file_pathinfo(pi.store_path, nar_sha256, nar_size)).await.unwrap();
+
+        std::fs::write(store_dir.path().join(&sp_str), b"tampered").unwrap();
+
+        let results = store_verify(&svc, None, store_dir.path()).await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], VerifyResult::Mismatch { path, .. } if *path == sp_str));
+    }
+
+    const CUSTOM_PREFIX: &str = "/mantle/store";
+
+    #[tokio::test]
+    async fn store_sign_then_verify_roundtrips_under_custom_prefix() {
+        let svc = test_pathinfo_service();
+        let (signing_key, verifying_key) = test_keypair();
+        let pi = dummy_pathinfo("prefix-roundtrip-path");
+        svc.put(pi).await.unwrap();
+
+        let sign_results = store_sign(&svc, &signing_key, Some("prefix-roundtrip-path"), false, CUSTOM_PREFIX).await.unwrap();
+        assert_eq!(sign_results.len(), 1);
+        assert!(sign_results[0].newly_signed);
+
+        let verify_results =
+            store_verify_signatures(&svc, Some("prefix-roundtrip-path"), &[verifying_key], CUSTOM_PREFIX).await.unwrap();
+        assert_eq!(verify_results.len(), 1);
+        assert!(verify_results[0].is_trusted());
+        assert_eq!(verify_results[0].trusted_count, 1);
+    }
+
+    #[tokio::test]
+    async fn store_verify_signatures_rejects_wrong_prefix() {
+        let svc = test_pathinfo_service();
+        let (signing_key, verifying_key) = test_keypair();
+        let pi = dummy_pathinfo("prefix-mismatch-path");
+        svc.put(pi).await.unwrap();
+
+        store_sign(&svc, &signing_key, Some("prefix-mismatch-path"), false, CUSTOM_PREFIX).await.unwrap();
+
+        let verify_results =
+            store_verify_signatures(&svc, Some("prefix-mismatch-path"), &[verifying_key], TEST_STORE_DIR).await.unwrap();
+        assert_eq!(verify_results.len(), 1);
+        assert!(!verify_results[0].is_trusted());
+        assert_eq!(verify_results[0].trusted_count, 0);
     }
 }
