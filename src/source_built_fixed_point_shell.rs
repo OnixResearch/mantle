@@ -28,7 +28,6 @@ use crate::source_built_fixed_point::SourceBuiltFixedPointPlanInput;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPolicies;
 use crate::source_built_fixed_point::SourceBuiltFixedPointResourceBounds;
 use crate::source_built_fixed_point::SourceContentKind;
-use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
 use crate::source_built_fixed_point_dev_cache::dev_provider_cache_key;
 use crate::source_built_fixed_point_dev_cache::evaluate_fast_fail;
 use crate::source_built_fixed_point_dev_cache::evaluate_provider_cache_lookup;
