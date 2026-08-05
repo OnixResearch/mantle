@@ -21,7 +21,6 @@ use crate::native_toolchain_closure::NativeToolchainClosureOptions;
 use crate::source_built_fixed_point::plan_source_built_fixed_point;
 use crate::source_built_fixed_point::InitialOutputAuthorityState;
 use crate::source_built_fixed_point::ProofHermeticityMode;
-use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
 use crate::source_built_fixed_point::SourceAuthorityInput;
 use crate::source_built_fixed_point::SourceAuthorityRole;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPlan;
@@ -29,6 +28,7 @@ use crate::source_built_fixed_point::SourceBuiltFixedPointPlanInput;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPolicies;
 use crate::source_built_fixed_point::SourceBuiltFixedPointResourceBounds;
 use crate::source_built_fixed_point::SourceContentKind;
+use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
 use crate::source_built_fixed_point_dev_cache::dev_provider_cache_key;
 use crate::source_built_fixed_point_dev_cache::evaluate_fast_fail;
 use crate::source_built_fixed_point_dev_cache::evaluate_provider_cache_lookup;
@@ -591,13 +591,30 @@ fn prepare_attempt(
     let plan = prepare_plan(options, &records, &source_digests, &native_source_authority_manifest)?;
     let plan_path = staging_dir.join(PLAN_FILE);
     write_json_create_new(&plan_path, &plan)?;
-    let native_store_dir = staging_dir.join(NATIVE_STORE_DIR);
-    let native_state_dir = staging_dir.join(NATIVE_STATE_DIR);
+    let (native_store_dir, native_state_dir) = match options.dev_provider_cache {
+        // Dev runs share a persistent content-addressed store so each
+        // successfully built package is a no-op hit on the next dev run.
+        Some(cache) => {
+            let store = cache.join("dev-store");
+            let state = cache.join("dev-state");
+            fs::create_dir_all(&store)
+                .map_err(|error| proof_error(format!("creating dev store {}: {error}", store.display())))?;
+            fs::create_dir_all(&state)
+                .map_err(|error| proof_error(format!("creating dev state {}: {error}", state.display())))?;
+            (store, state)
+        }
+        // Promoted/cold runs use a fresh empty store per attempt.
+        None => {
+            let store = staging_dir.join(NATIVE_STORE_DIR);
+            let state = staging_dir.join(NATIVE_STATE_DIR);
+            fs::create_dir(&store)
+                .map_err(|error| proof_error(format!("creating native store {}: {error}", store.display())))?;
+            fs::create_dir(&state)
+                .map_err(|error| proof_error(format!("creating native state {}: {error}", state.display())))?;
+            (store, state)
+        }
+    };
     let transcripts_dir = staging_dir.join(TRANSCRIPTS_DIR);
-    fs::create_dir(&native_store_dir)
-        .map_err(|error| proof_error(format!("creating native store {}: {error}", native_store_dir.display())))?;
-    fs::create_dir(&native_state_dir)
-        .map_err(|error| proof_error(format!("creating native state {}: {error}", native_state_dir.display())))?;
     fs::create_dir(&transcripts_dir)
         .map_err(|error| proof_error(format!("creating transcripts {}: {error}", transcripts_dir.display())))?;
     crate::source_bundle::import_source_bundle(&profile, &native_state_dir, true)?;
@@ -805,6 +822,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
     enforce_open_file_descriptor_limit(prepared.plan.resource_bounds.open_file_descriptors_max)?;
     validate_runtime_bounds(options, prepared)?;
     let adopt = dev_cache_adoption(options, &prepared.plan)?;
+    let is_dev = options.dev_provider_cache.is_some();
     if adopt {
         record_dev_cache_hit(prepared)?;
     }
@@ -919,7 +937,11 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
     validate_runtime_bounds(options, prepared)?;
     run_cargo_free_fixed_point(options, prepared, &providers)?;
     validate_runtime_bounds(options, prepared)?;
-    if adopt {
+    if is_dev {
+        // Dev runs reuse the persistent content-addressed store and can adopt
+        // cached providers, so they are dev-labeled: populate the provider cache
+        // entry, never write a promoted receipt, never update release aliases.
+        write_dev_provider_cache(options, prepared, &providers)?;
         write_dev_adopted_marker(prepared)?;
         Ok(true)
     } else {
@@ -928,9 +950,6 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
             &prepared.plan,
             &providers,
         )?;
-        if options.dev_provider_cache.is_some() {
-            write_dev_provider_cache(options, prepared, &providers)?;
-        }
         validate_runtime_bounds(options, prepared)?;
         Ok(false)
     }
@@ -1595,8 +1614,9 @@ fn run_native_build(
     let stderr_path = prepared.transcripts_dir.join(format!("{label}.stderr.txt"));
     write_bytes_create_new(&stdout_path, &output.stdout)?;
     write_bytes_create_new(&stderr_path, &output.stderr)?;
-    let report = parse_build_report(label, &output)?;
-    let build_output = require_single_build_output(label, report)?;
+    let allow_cached = options.dev_provider_cache.is_some();
+    let report = parse_build_report(label, &output, allow_cached)?;
+    let build_output = require_single_build_output(label, report, allow_cached)?;
     let transcript_digest_blake3 = crate::protected_exec::blake3_file_hex(&stdout_path)
         .map_err(|error| proof_error(format!("hashing build transcript {}: {error}", stdout_path.display())))?;
     Ok(BuildObservation {
@@ -1657,7 +1677,7 @@ fn native_build_command(
     Ok(command)
 }
 
-fn parse_build_report(label: &str, output: &Output) -> Result<BuildJsonReport, RunError> {
+fn parse_build_report(label: &str, output: &Output, allow_cached: bool) -> Result<BuildJsonReport, RunError> {
     let stdout = std::str::from_utf8(&output.stdout)
         .map_err(|error| proof_error(format!("native build {label} stdout is not UTF-8: {error}")))?;
     if !output.status.success() {
@@ -1681,14 +1701,18 @@ fn parse_build_report(label: &str, output: &Output) -> Result<BuildJsonReport, R
             build_failures_summary(&report.failed)
         )));
     }
-    if report.outcomes.iter().any(|outcome| outcome.cached) {
+    if !allow_cached && report.outcomes.iter().any(|outcome| outcome.cached) {
         return Err(proof_error(format!("native build {label} report contains a cache-hit outcome")));
     }
     debug_assert!(report.failed.is_empty());
     Ok(report)
 }
 
-fn require_single_build_output(label: &str, report: BuildJsonReport) -> Result<BuildJsonOutput, RunError> {
+fn require_single_build_output(
+    label: &str,
+    report: BuildJsonReport,
+    allow_cached: bool,
+) -> Result<BuildJsonOutput, RunError> {
     if report.outcomes.len() != EXPECTED_SINGLE_OUTPUT_COUNT {
         return Err(proof_error(format!(
             "native build {label} must have one root outcome, got {}",
@@ -1697,7 +1721,7 @@ fn require_single_build_output(label: &str, report: BuildJsonReport) -> Result<B
     }
     let mut outcomes = report.outcomes.into_iter();
     let outcome = outcomes.next().expect("validated one outcome");
-    if outcome.cached {
+    if outcome.cached && !allow_cached {
         return Err(proof_error(format!("native build {label} was satisfied from cache")));
     }
     if outcome.outputs.len() != EXPECTED_SINGLE_OUTPUT_COUNT {
@@ -2376,7 +2400,7 @@ mod tests {
             stdout: preflight.into_bytes(),
             stderr: Vec::new(),
         };
-        let parsed_failure = parse_build_report("native-provider", &failed_output).unwrap_err();
+        let parsed_failure = parse_build_report("native-provider", &failed_output, false).unwrap_err();
 
         assert_eq!(
             summary,
