@@ -461,14 +461,14 @@ impl RoutePlanReport {
         }) {
             return Err("route store layer label is invalid".to_string());
         }
-        if let Some(overlay) = overlay.as_ref() {
-            if overlay.bases.len() > MAX_ROUTE_STORE_BASES
+        let overlay_bases_invalid = overlay.as_ref().is_some_and(|overlay| {
+            overlay.bases.len() > MAX_ROUTE_STORE_BASES
                 || overlay.bases.iter().any(|base| {
                     base.layer_index < MIN_ROUTE_STORE_LAYER_INDEX || base.layer_index > MAX_ROUTE_STORE_BASES
                 })
-            {
-                return Err("route overlay base evidence is invalid".to_string());
-            }
+        });
+        if overlay_bases_invalid {
+            return Err("route overlay base evidence is invalid".to_string());
         }
         self.store_overlay = overlay;
         self.selected_store_layers = selected_layers;

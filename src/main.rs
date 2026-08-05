@@ -8932,8 +8932,8 @@ mod tests {
                     receipt_dir,
                     once: true,
                 },
-            } if policy == PathBuf::from("/tmp/policy.json")
-                && receipt_dir == PathBuf::from("/tmp/receipts")
+            } if policy.as_path() == Path::new("/tmp/policy.json")
+                && receipt_dir.as_path() == Path::new("/tmp/receipts")
         ));
     }
 

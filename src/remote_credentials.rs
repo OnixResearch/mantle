@@ -496,7 +496,7 @@ impl RemoteTicket {
     }
 
     #[cfg(test)]
-    pub(crate) fn fixture(
+    pub fn fixture(
         id: &str,
         display_name: &str,
         token: &str,

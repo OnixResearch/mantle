@@ -2355,17 +2355,21 @@ fn load_signing_key(path: &Path) -> Result<SigningKey, Error> {
     Ok(SigningKey::from_bytes(&key))
 }
 
+const HEX_PAIR_BYTES: usize = 2;
+
 fn decode_hex(bytes: &[u8]) -> Result<Vec<u8>, Error> {
-    if !bytes.len().is_multiple_of(2) {
+    if !bytes.len().is_multiple_of(HEX_PAIR_BYTES) {
         return Err(Error::Policy("rustc-wrapper-signing-key-hex-invalid".to_string()));
     }
-    let mut output = Vec::with_capacity(bytes.len() / 2);
-    for pair in bytes.chunks_exact(2) {
-        let high = hex_value(pair[0])?;
-        let low = hex_value(pair[1])?;
+    let mut output = Vec::with_capacity(bytes.len() / HEX_PAIR_BYTES);
+    let (pairs, remainder) = bytes.as_chunks::<HEX_PAIR_BYTES>();
+    debug_assert!(remainder.is_empty());
+    for [high_byte, low_byte] in pairs {
+        let high = hex_value(*high_byte)?;
+        let low = hex_value(*low_byte)?;
         output.push((high << 4) | low);
     }
-    assert_eq!(output.len().checked_mul(2), Some(bytes.len()));
+    assert_eq!(output.len().checked_mul(HEX_PAIR_BYTES), Some(bytes.len()));
     Ok(output)
 }
 

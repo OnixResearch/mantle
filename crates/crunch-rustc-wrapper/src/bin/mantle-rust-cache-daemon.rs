@@ -4,6 +4,7 @@ use crunch_rustc_wrapper::DaemonOptions;
 
 const EXIT_USAGE: i32 = 64;
 const REQUIRED_ARGUMENT_COUNT: usize = 8;
+const OPTION_PAIR_BYTES: usize = 2;
 
 fn main() {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
@@ -40,9 +41,11 @@ fn parse_options(arguments: &[String]) -> Result<DaemonOptions, String> {
 }
 
 fn option_path(arguments: &[String], name: &str) -> Result<PathBuf, String> {
-    for pair in arguments.chunks_exact(2) {
-        if pair[0] == name {
-            return Ok(PathBuf::from(&pair[1]));
+    let (pairs, remainder) = arguments.as_chunks::<OPTION_PAIR_BYTES>();
+    debug_assert!(remainder.is_empty());
+    for [option, value] in pairs {
+        if option == name {
+            return Ok(PathBuf::from(value));
         }
     }
     Err(format!("missing-option:{name}:{}", usage()))

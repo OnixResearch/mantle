@@ -1983,8 +1983,6 @@ fn stable_cache_error(error: &Error) -> String {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
-    use std::io::Read as _;
-    use std::io::Write as _;
     use std::net::TcpListener;
     use std::sync::atomic::AtomicU32;
     use std::sync::atomic::Ordering;
