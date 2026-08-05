@@ -965,7 +965,12 @@ pub fn bootstrap_source_bundle_profile_report(
     manifest: &SourceBundleManifest,
     mode: BootstrapSourceBundleMode,
 ) -> Result<BootstrapSourceBundleProfileReport, RunError> {
-    validate_manifest(manifest)?;
+    // Every caller passes a manifest that either came from `read_source_bundle`
+    // (which already ran full payload validation) or from the in-process
+    // planner (which computes the payload digests it embeds). Decoding and
+    // re-hashing every payload again here doubled the prepare-phase cost of
+    // the source-built fixed-point proof on large profiles.
+    validate_manifest_with_payload_mode(manifest, ManifestPayloadValidation::StructureOnly)?;
     assert_eq!(manifest.format, SOURCE_BUNDLE_FORMAT);
     assert_eq!(manifest.non_claim, SOURCE_BUNDLE_NON_CLAIM);
     let (_, manifest_class) = mode.hydration_authority_classes();
@@ -1066,7 +1071,7 @@ fn plan_source_built_refresh_records(
         .collect::<BTreeMap<_, _>>();
     let mut added_record_count = 0usize;
     for record in supplemental_records {
-        validate_source_record(&record)?;
+        validate_source_record(&record, ManifestPayloadValidation::VerifyPayloads)?;
         if record.store_prefix.as_deref().is_some_and(|prefix| prefix != store_prefix) {
             return Err(RunError::Internal(format!(
                 "supplemental source record '{}' uses a different store prefix",
@@ -1120,7 +1125,7 @@ fn validate_source_built_refresh_profile(manifest: &SourceBundleManifest) -> Res
 }
 
 fn validate_mantle_source_replacement(original: &SourceRecord, replacement: &SourceRecord) -> Result<(), RunError> {
-    validate_source_record(replacement)?;
+    validate_source_record(replacement, ManifestPayloadValidation::VerifyPayloads)?;
     if replacement.kind != original.kind
         || replacement.identity != original.identity
         || replacement.store_prefix != original.store_prefix
@@ -2114,7 +2119,7 @@ fn validate_supplemental_profile_records(input: &BootstrapSourceBundleProfileInp
                 record.identity
             )));
         }
-        validate_source_record(record)?;
+        validate_source_record(record, ManifestPayloadValidation::VerifyPayloads)?;
     }
     Ok(())
 }
@@ -2718,7 +2723,26 @@ pub(crate) fn digest_source_record_content(
     Ok(hasher.finalize().to_hex().to_string())
 }
 
+/// How deeply `validate_manifest` checks regular-file payloads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ManifestPayloadValidation {
+    /// Decode every regular-file payload and verify size and BLAKE3 digest.
+    /// Required at untrusted-input boundaries such as `read_source_bundle`.
+    VerifyPayloads,
+    /// Skip payload decode and digest checks; structural checks still run.
+    /// Only valid for manifests that already passed `VerifyPayloads` or were
+    /// constructed in-process by the planner from verified inputs.
+    StructureOnly,
+}
+
 pub(crate) fn validate_manifest(manifest: &SourceBundleManifest) -> Result<(), RunError> {
+    validate_manifest_with_payload_mode(manifest, ManifestPayloadValidation::VerifyPayloads)
+}
+
+pub(crate) fn validate_manifest_with_payload_mode(
+    manifest: &SourceBundleManifest,
+    payload_mode: ManifestPayloadValidation,
+) -> Result<(), RunError> {
     if manifest.format != SOURCE_BUNDLE_FORMAT {
         return Err(RunError::Internal(format!("unsupported source bundle format {}", manifest.format)));
     }
@@ -2736,7 +2760,7 @@ pub(crate) fn validate_manifest(manifest: &SourceBundleManifest) -> Result<(), R
     validate_manifest_roots(manifest)?;
     validate_manifest_record_order(&manifest.records)?;
     validate_manifest_store_prefix(manifest)?;
-    reject_duplicate_records(&manifest.records)?;
+    reject_duplicate_records(&manifest.records, payload_mode)?;
     let expected = digest_manifest_without_digest(manifest)?;
     if expected != manifest.manifest_blake3 {
         return Err(RunError::Internal("source bundle manifest digest mismatch".to_string()));
@@ -2748,7 +2772,7 @@ fn normalize_source_records(mut records: Vec<SourceRecord>) -> Result<Vec<Source
     records.sort_by_key(record_sort_key);
     let mut normalized = Vec::<SourceRecord>::with_capacity(records.len());
     for record in records {
-        validate_source_record(&record)?;
+        validate_source_record(&record, ManifestPayloadValidation::VerifyPayloads)?;
         let key = record_sort_key(&record);
         if let Some(previous) = normalized.last()
             && record_sort_key(previous) == key
@@ -2798,10 +2822,10 @@ fn validate_manifest_store_prefix(manifest: &SourceBundleManifest) -> Result<(),
     Ok(())
 }
 
-fn reject_duplicate_records(records: &[SourceRecord]) -> Result<(), RunError> {
+fn reject_duplicate_records(records: &[SourceRecord], payload_mode: ManifestPayloadValidation) -> Result<(), RunError> {
     let mut seen = BTreeSet::new();
     for record in records {
-        validate_source_record(record)?;
+        validate_source_record(record, payload_mode)?;
         let key = record_sort_key(record);
         if !seen.insert(key.clone()) {
             return Err(RunError::Internal(format!("duplicate source record {key}")));
@@ -2810,7 +2834,7 @@ fn reject_duplicate_records(records: &[SourceRecord]) -> Result<(), RunError> {
     Ok(())
 }
 
-fn validate_source_record(record: &SourceRecord) -> Result<(), RunError> {
+fn validate_source_record(record: &SourceRecord, payload_mode: ManifestPayloadValidation) -> Result<(), RunError> {
     validate_identity(&record.identity)?;
     validate_adapter_metadata(record.adapter.as_ref())?;
     validate_source_record_payload_encoding(record)?;
@@ -2821,7 +2845,7 @@ fn validate_source_record(record: &SourceRecord) -> Result<(), RunError> {
             "source record metadata exceeds {MAX_SOURCE_RECORD_METADATA_BYTES} bytes"
         )));
     }
-    validate_source_record_files(record)?;
+    validate_source_record_files(record, payload_mode)?;
     let expected_digest = digest_source_record_content(&record.kind, &record.metadata, &record.files)?;
     if expected_digest != record.content_blake3 {
         return Err(RunError::Internal(format!("source record {} content digest mismatch", record.identity)));
@@ -2853,13 +2877,16 @@ fn source_record_uses_tarball_archive_payload(record: &SourceRecord) -> bool {
         == Some(TARBALL_ARCHIVE_PAYLOAD_ENCODING)
 }
 
-fn validate_source_record_files(record: &SourceRecord) -> Result<(), RunError> {
+fn validate_source_record_files(
+    record: &SourceRecord,
+    payload_mode: ManifestPayloadValidation,
+) -> Result<(), RunError> {
     let mut total_bytes = 0u64;
     let mut case_folded_paths = BTreeMap::<String, String>::new();
     let mut previous_key: Option<(&str, Option<u32>)> = None;
     let requires_case_sensitive_paths = matches!(record.kind, SourceRecordKind::BootstrapArchive);
     for file in &record.files {
-        validate_source_file_entry(file)?;
+        validate_source_file_entry(file, payload_mode)?;
         let current_key = (file.path.as_str(), file.chunk_index);
         if previous_key.is_some_and(|previous| previous > current_key) {
             return Err(RunError::Internal(format!(
@@ -2971,14 +2998,14 @@ fn validate_no_symlink_descendants(record: &SourceRecord) -> Result<(), RunError
     Ok(())
 }
 
-fn validate_source_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
+fn validate_source_file_entry(file: &SourceFileEntry, payload_mode: ManifestPayloadValidation) -> Result<(), RunError> {
     validate_source_entry_path(&file.path)?;
     validate_blake3_hex(Blake3HexValidation {
         value: &file.blake3,
         label: "source file digest",
     })?;
     match file.file_type {
-        SourceFileType::Regular => validate_regular_file_entry(file),
+        SourceFileType::Regular => validate_regular_file_entry(file, payload_mode),
         SourceFileType::Symlink => validate_symlink_file_entry(file),
     }
 }
@@ -2987,7 +3014,10 @@ fn validate_source_entry_path(path: &str) -> Result<(), RunError> {
     validate_source_relative_path_text(path)
 }
 
-fn validate_regular_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
+fn validate_regular_file_entry(
+    file: &SourceFileEntry,
+    payload_mode: ManifestPayloadValidation,
+) -> Result<(), RunError> {
     if file.symlink_target.is_some() {
         return Err(RunError::Internal(format!("regular source file {} carries a symlink target", file.path)));
     }
@@ -2999,6 +3029,9 @@ fn validate_regular_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
     }
     if file.chunk_index.is_some() != file.chunk_count.is_some() {
         return Err(RunError::Internal(format!("regular source file {} has incomplete chunk metadata", file.path)));
+    }
+    if payload_mode == ManifestPayloadValidation::StructureOnly {
+        return Ok(());
     }
     let content = decode_regular_file_content(file)?;
     let content_len = u64::try_from(content.len())
@@ -3415,7 +3448,7 @@ fn read_record(path: &Path) -> Result<SourceRecord, RunError> {
         .map_err(|error| RunError::Internal(format!("reading source record {}: {error}", path.display())))?;
     let record = serde_json::from_reader(BufReader::new(file))
         .map_err(|error| RunError::Internal(format!("parsing source record {}: {error}", path.display())))?;
-    validate_source_record(&record)?;
+    validate_source_record(&record, ManifestPayloadValidation::VerifyPayloads)?;
     Ok(record)
 }
 
@@ -3609,7 +3642,7 @@ fn source_fetch_override_for_record(
     record: &SourceRecord,
     source_state_blake3: &str,
 ) -> Result<(crunch_build::FetchSourceOverride, tempfile::TempDir), RunError> {
-    validate_source_record(record)?;
+    validate_source_record(record, ManifestPayloadValidation::VerifyPayloads)?;
     assert!(!record.identity.is_empty());
     assert!(record.files.len() <= MAX_SOURCE_FILES_PER_RECORD);
     let kind = source_fetch_override_kind(record)?;
@@ -3710,7 +3743,7 @@ fn materialize_source_record_for_fetch_override(
 }
 
 fn materialize_tarball_archive_fetch_record(record: &SourceRecord, payload_path: &Path) -> Result<(), RunError> {
-    validate_source_record(record)?;
+    validate_source_record(record, ManifestPayloadValidation::VerifyPayloads)?;
     let url = record
         .metadata
         .get(RECORD_METADATA_URL_KEY)
@@ -3725,7 +3758,7 @@ fn materialize_tarball_archive_fetch_record(record: &SourceRecord, payload_path:
 }
 
 fn materialize_flat_fetch_record_payload(record: &SourceRecord, payload_path: &Path) -> Result<(), RunError> {
-    validate_source_record(record)?;
+    validate_source_record(record, ManifestPayloadValidation::VerifyPayloads)?;
     if record.files.is_empty() {
         return Err(RunError::Internal(format!("flat source record {} has no file payload", record.identity)));
     }
@@ -4200,7 +4233,7 @@ fn imported_record_matches_store_path(record: &SourceRecord, lookup: &StorePathL
 }
 
 pub(crate) fn materialize_source_record_exact_payload(record: &SourceRecord, target: &Path) -> Result<(), RunError> {
-    validate_source_record(record)?;
+    validate_source_record(record, ManifestPayloadValidation::VerifyPayloads)?;
     if record.files.is_empty() {
         return Err(RunError::Internal(format!("source record {} has no materialized payload", record.identity)));
     }
@@ -4236,7 +4269,7 @@ pub(crate) fn materialize_source_record_exact_payload(record: &SourceRecord, tar
 }
 
 pub(crate) fn materialize_source_record_payload(record: &SourceRecord, target: &Path) -> Result<(), RunError> {
-    validate_source_record(record)?;
+    validate_source_record(record, ManifestPayloadValidation::VerifyPayloads)?;
     if record.files.is_empty() {
         return Err(RunError::Internal(format!("source record {} has no materialized payload", record.identity)));
     }
@@ -4291,7 +4324,7 @@ fn prepare_source_output_path(file: &SourceFileEntry, target: &Path) -> Result<P
 }
 
 fn materialize_source_file_entry(file: &SourceFileEntry, target: &Path) -> Result<(), RunError> {
-    validate_source_file_entry(file)?;
+    validate_source_file_entry(file, ManifestPayloadValidation::VerifyPayloads)?;
     if file.chunk_index.is_some() {
         return Err(RunError::Internal(format!("source file chunk {} requires grouped materialization", file.path)));
     }
@@ -5937,6 +5970,70 @@ mod tests {
         assert!(order_err.to_string().contains("canonical order"));
     }
 
+    fn single_file_manifest(temp: &tempfile::TempDir) -> SourceBundleManifest {
+        let payload = temp.path().join("payload.txt");
+        fs::write(&payload, b"payload").unwrap();
+        let spec = SourceSpec {
+            kind: SourceRecordKind::LocalPath,
+            identity: "fixture".to_string(),
+            path: payload,
+            adapter: None,
+        };
+        plan_source_bundle(&[spec], "/mantle/store").unwrap()
+    }
+
+    fn redigest_manifest(manifest: &mut SourceBundleManifest) {
+        manifest.records[0].content_blake3 = digest_source_record_content(
+            &manifest.records[0].kind,
+            &manifest.records[0].metadata,
+            &manifest.records[0].files,
+        )
+        .unwrap();
+        manifest.manifest_blake3 = digest_manifest_without_digest(manifest).unwrap();
+    }
+
+    #[test]
+    fn structure_only_validation_accepts_valid_manifest() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = single_file_manifest(&temp);
+        validate_manifest_with_payload_mode(&manifest, ManifestPayloadValidation::StructureOnly).unwrap();
+    }
+
+    #[test]
+    fn structure_only_validation_skips_payload_digest_but_full_mode_rejects_it() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut tampered = single_file_manifest(&temp);
+        tampered.records[0].files[0].content_hex = Some(HEXLOWER.encode(b"tamper"));
+        tampered.records[0].files[0].size = 6;
+        tampered.records[0].payload_bytes = 6;
+        redigest_manifest(&mut tampered);
+
+        validate_manifest_with_payload_mode(&tampered, ManifestPayloadValidation::StructureOnly).unwrap();
+        let error =
+            validate_manifest_with_payload_mode(&tampered, ManifestPayloadValidation::VerifyPayloads).unwrap_err();
+        assert!(error.to_string().contains("digest mismatch"));
+    }
+
+    #[test]
+    fn structure_only_validation_still_rejects_structural_violations() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut bad = single_file_manifest(&temp);
+        bad.records[0].files[0].symlink_target = Some("payload.txt".to_string());
+        redigest_manifest(&mut bad);
+
+        for mode in [
+            ManifestPayloadValidation::StructureOnly,
+            ManifestPayloadValidation::VerifyPayloads,
+        ] {
+            let error = validate_manifest_with_payload_mode(&bad, mode).unwrap_err();
+            assert!(
+                error.to_string().contains("carries a symlink target"),
+                "mode {mode:?} must reject structural violation"
+            );
+        }
+    }
+
+    #[test]
     #[test]
     fn source_bundle_rejects_tampered_file_payload_and_store_prefix() {
         let temp = tempfile::tempdir().unwrap();
@@ -7420,7 +7517,7 @@ mod tests {
             files,
         };
 
-        let err = validate_source_record(&record).unwrap_err();
+        let err = validate_source_record(&record, ManifestPayloadValidation::VerifyPayloads).unwrap_err();
         assert!(err.to_string().contains("below symlink"));
     }
 }
