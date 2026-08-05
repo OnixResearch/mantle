@@ -105,6 +105,10 @@ name = "benchmark_compare"
 path = "examples/benchmark_compare.rs"
 
 [[example]]
+name = "picolibc_compare"
+path = "examples/picolibc_compare.rs"
+
+[[example]]
 name = "benchmark_eval_smoke"
 path = "examples/benchmark_eval_smoke.rs"
 

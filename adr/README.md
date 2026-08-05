@@ -71,3 +71,4 @@ compatibility surface, crate name, or historical decision.
 | [0062](0062-adapt-ekala-package-maintenance-patterns-without-transferring-authority.md) | Adapt Ekala package-maintenance patterns without transferring authority | Proposed |
 | [0063](0063-keep-chaptered-release-archives-as-receipt-bound-transport.md) | Keep chaptered release archives as receipt-bound transport | Accepted |
 | [0064](0064-explain-store-retention-before-garbage-collection.md) | Explain store retention before garbage collection | Accepted |
+| [0065](0065-reject-picolibc-for-the-stagex-c-runtime.md) | Reject Picolibc for the StageX C runtime | Accepted |

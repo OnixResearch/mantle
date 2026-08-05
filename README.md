@@ -536,6 +536,7 @@ notices.
 
 ## References
 
+- [picolibc/picolibc](https://github.com/picolibc/picolibc) supplies the pinned x86_64 Linux static diagnostic source for the StageX libc comparison research path.
 - [OnixResearch/octet](https://github.com/OnixResearch/octet) owns checked Rust proof and translation execution policy.
 - [OnixResearch/valence](https://github.com/OnixResearch/valence) owns canonical evidence identities, links, roles, and non-claims.
 - [AeneasVerif/aeneas](https://github.com/AeneasVerif/aeneas) and [AeneasVerif/charon](https://github.com/AeneasVerif/charon) provide the current Rust-to-proof-model toolchain reference.

@@ -79,6 +79,8 @@ mod nix_free_demo_bundle;
 // stable.
 #[allow(clippy::large_enum_variant)]
 mod nix_free_demo_cmd;
+mod nix_producer;
+mod nix_producer_shell;
 mod oci_projection;
 mod oci_projection_shell;
 mod oci_registry;
@@ -86,6 +88,10 @@ mod oci_registry_shell;
 #[allow(dead_code)]
 mod offline_cargo;
 mod operator_diagnostics;
+// The comparison report shell lands in task I5 of
+// `evaluate-picolibc-stagex-runtime`; until then only core tests consume it.
+#[allow(dead_code)]
+mod picolibc_comparison;
 mod pin_import;
 #[allow(dead_code)]
 mod portable_receipt;

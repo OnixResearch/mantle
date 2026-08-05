@@ -1,0 +1,47 @@
+{
+  "schema": "mantle-nix-producer-evidence-v1",
+  "backend": "fix",
+  "recorded_at": "2026-08-04",
+  "pins": {
+    "source_repository": "https://github.com/psyclyx/fix.git",
+    "source_revision": "fd675c2e938da6c9f444a00893b6716d66c89927",
+    "source_content_digest": "sha256-qLTYqSdaxPNMsI59PVgOCMVZjBn655xujFeraqxyK/M=",
+    "backend_version": "0.3.0",
+    "mantle_built_binary_blake3": "a8e67ddf32a4b6dab90590bcedf4701297320c302f3be5397ca75dc1d3b7fd50",
+    "reference_nix_version": "upstream-unspecified",
+    "nixpkgs_universe_pin": "upstream-pinned in test/nixpkgs at the source revision"
+  },
+  "upstream_reported": {
+    "source": "psyclyx/fix README and CHANGELOG at the pinned revision",
+    "language_suites": "pinned Lix and snix language suites pass",
+    "nixpkgs_differential": {
+      "universe": "ci/eval/outpaths.nix",
+      "attributes_total": 80586,
+      "attributes_matching_drvpath": 80586,
+      "includes_failure_agreement": true
+    }
+  },
+  "mantle_measured": {
+    "sandbox_build": "zig build --release=fast inside the Mantle bwrap sandbox from the pinned source with signed nixpkgs cache toolchain inputs",
+    "eval_smoke": ["fix eval -E '1 + 2' -> 3", "fix eval -E '{ answer = 6 * 7; }' -A answer -> 42"],
+    "two_node_instantiation_parity": {
+      "expression": "let dep = derivation { name = \"fix-dep\"; ... }; in derivation { name = \"fix-top\"; ... \"${dep}\" ... }",
+      "fix_root_drv": "/nix/store/nbjjgi2b2r3vad3f4fb7ny7wfjcj9z4n-fix-top.drv",
+      "host_nix_root_drv": "/nix/store/nbjjgi2b2r3vad3f4fb7ny7wfjcj9z4n-fix-top.drv",
+      "artifact_diff": "only producer.{identity,kind,revision} differ"
+    }
+  },
+  "toolchain_trust_inputs": {
+    "class": "binary-trust-input",
+    "zig": "nixpkgs cache closure zig-0.16.0 (also pinned as ziglang.org tarball in zig-toolchain.ncl)",
+    "c_libraries": "nixpkgs cache closures libgit2-1.9.4, curl-8.21.0, openssl-3.6.3, zlib-1.3.2, libssh2-1.11.1",
+    "not_source_built": true
+  },
+  "non_claims": [
+    "This record does not claim semantic equivalence between fix and Nix beyond the stated pins.",
+    "Upstream-reported counts describe upstream's own runs, not runs of the Mantle-built binary.",
+    "The Mantle-measured parity covers one two-node expression, not the nixpkgs universe.",
+    "This record does not claim package correctness, realization success, or reproducibility.",
+    "If any pin drifts from current backend facts, every count in this record is stale for the new identity."
+  ]
+}

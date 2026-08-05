@@ -64,6 +64,8 @@ let EligibleRootCommands = std.contract.from_predicate (fun value =>
     "spec show",
     "validate",
     "context",
+    "workflow status",
+    "workflow instructions",
     "doctor",
   ]
 ) in
