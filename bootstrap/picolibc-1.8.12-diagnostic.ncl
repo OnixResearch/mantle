@@ -63,7 +63,9 @@ let tc = import "picolibc-diagnostic-tools.ncl" in
             $BB cat meson-setup.log >&2
             exit 1
           }
-        ninja -C build > ninja-build.log 2>&1 || {
+        # Serialized build keeps the log order deterministic so isolated
+        # rebuilds produce byte-identical outputs including transcripts.
+        ninja -C build -j1 > ninja-build.log 2>&1 || {
           $BB tail -100 ninja-build.log >&2
           exit 1
         }

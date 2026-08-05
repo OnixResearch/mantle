@@ -134,13 +134,52 @@ let NominalIdentityOctetMode = std.contract.from_predicate (fun value =>
   Artifact = {
     id | NonEmptyString,
     generates | NonEmptyString,
+    output_path | NonEmptyString,
+    path_kind | NonEmptyString,
+    stage | NonEmptyString,
+    structural_admission | NonEmptyString,
+    instruction_template | NonEmptyString,
     requires | Array NonEmptyString | default = [],
+    apply_prerequisites | Array NonEmptyString | default = [],
+    constraints | Array NonEmptyString | default = [],
+    skipped | Bool | default = false,
+    skip_satisfies_dependencies | Bool | default = false,
+  },
+
+  WorkflowBounds = {
+    max_artifact_bytes | PositiveNumber,
+    max_artifacts | PositiveNumber,
+    max_constraints | PositiveNumber,
+    max_dependencies | PositiveNumber,
+    max_directory_depth | PositiveNumber,
+    max_directory_entries | PositiveNumber,
+    max_files_per_artifact | PositiveNumber,
+    max_issues | PositiveNumber,
+    max_non_claims | PositiveNumber,
+    max_path_bytes | PositiveNumber,
+    max_template_bytes | PositiveNumber,
+  },
+
+  ReviewObligation = {
+    id | NonEmptyString,
+    artifact_id | NonEmptyString,
+    required_artifacts | Array NonEmptyString | default = [],
+    review_kind | NonEmptyString,
   },
 
   ArtifactSchema = {
     id | NonEmptyString,
     description | NonEmptyString,
     artifacts | Array Artifact,
+    schema_version | NonEmptyString,
+    profile_version | PositiveNumber,
+    spec_effect | NonEmptyString,
+    task_link_class | NonEmptyString,
+    states | NonEmptyArray | Array NonEmptyString,
+    bounds | WorkflowBounds,
+    receipt_fields | Array NonEmptyString,
+    required_non_claims | Array NonEmptyString,
+    review_obligations | Array ReviewObligation | default = [],
   },
 
   Marker = {
@@ -541,11 +580,27 @@ let NominalIdentityOctetMode = std.contract.from_predicate (fun value =>
     required_non_claims | NonEmptyArray | Array NonEmptyString,
   },
 
+  WorkflowProfilePolicy = {
+    allowed_profiles | NonEmptyArray | Array NonEmptyString,
+    default_profile | NonEmptyString,
+    forbidden_selection_sources | Array NonEmptyString | default = [],
+    required_profiles_by_effect | Array NonEmptyString | default = [],
+  },
+
   Policy = {
     name | NonEmptyString,
     version | SupportedPolicyVersion,
     policy_schema_compatibility | PolicySchemaCompatibility,
     schemas | NonEmptyArray | Array ArtifactSchema,
+    workflow_profile_policy | WorkflowProfilePolicy,
+    # Cairn-owned policy sections mirrored verbatim. Mantle does not
+    # customize these today; they are typed Dyn until a local contract
+    # review tightens them.
+    agent_guidance_policy | Dyn,
+    developer_loop_policy | Dyn,
+    document_collaboration_policy | Dyn,
+    generated_agent_workflow_policy | Dyn,
+    machine_contract_policy | Dyn,
     lifecycle_stages | NonEmptyArray | Array Stage,
     task_marker_policy | TaskMarkerPolicy,
     gate_policy | GatePolicy,

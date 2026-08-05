@@ -41,6 +41,15 @@
 // synced requirements implemented there need a small bridge until the coverage
 // rail scans the package root directly.
 
+// Picolibc StageX comparison bridge.
+//
+// r[impl bootstrap_inventory.picolibc_stagex_comparison]
+// r[verify bootstrap_inventory.picolibc_stagex_comparison]
+// The pure comparison core and its tests live in root-package
+// `src/picolibc_comparison.rs`; the report shell is
+// `examples/picolibc_compare.rs`. The diagnostic derivations live under
+// `bootstrap/picolibc-1.8.12-*.ncl`.
+
 // Nix producer adapter contract bridge.
 //
 // r[impl nix_producer_adapter.backend_contract]

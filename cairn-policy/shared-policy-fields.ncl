@@ -188,7 +188,7 @@ let MaxGlobalRegistryArtifactBytes = 4194304 in
       source_identity_field = "source_blake3",
       runtime_nickel_evaluation = false,
       stale_projection_rejected = true,
-      required_fields = ["schema", "lifecycle_store", "references", "source_blake3", "non_claims"],
+      required_fields = ["schema", "lifecycle_store", "references", "context_refs", "artifact_guidance", "operation_guidance", "source_blake3", "non_claims"],
       required_non_claims = ProjectConfigNonClaims,
     },
     root_resolution = {
@@ -201,6 +201,8 @@ let MaxGlobalRegistryArtifactBytes = 4194304 in
         "spec show",
         "validate",
         "context",
+        "workflow status",
+        "workflow instructions",
         "doctor",
       ],
       precedence = [

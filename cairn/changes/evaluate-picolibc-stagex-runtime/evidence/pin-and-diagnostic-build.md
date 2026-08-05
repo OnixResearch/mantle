@@ -1,6 +1,6 @@
 # Pin and diagnostic build evidence (I1, I2)
 
-Date: 2026-08-05. Worktree `.pi/worktrees/evaluate-picolibc-stagex-runtime`, branch `cairn/evaluate-picolibc-stagex-runtime`.
+Date: 2026-08-04. Worktree `.pi/worktrees/evaluate-picolibc-stagex-runtime`, branch `cairn/evaluate-picolibc-stagex-runtime`.
 
 ## Source pin (I1)
 
