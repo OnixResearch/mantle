@@ -1,10 +1,12 @@
 ## Phase 1: Source and diagnostic construction
 
-- [ ] [serial] I1 Pin one Picolibc release and its complete source authority. r[bootstrap_inventory.picolibc_stagex_comparison]
+- [x] [serial] I1 Pin one Picolibc release and its complete source authority. r[bootstrap_inventory.picolibc_stagex_comparison]
+  - Evidence: `evidence/pin-and-diagnostic-build.md`; `bootstrap/picolibc-1.8.12-src.ncl` pins release 1.8.12 with a `--fix`-resolved hash; licenses classified; README reference added.
   - Record the release, URLs, fixed-output hash, source BLAKE3, selected Linux profile, and configuration identity.
   - Classify library, test, and helper licenses. Preserve the required notices.
   - Add the Picolibc repository to the README reference list after source use begins.
-- [ ] [depends:I1] I2 Add a research-only x86_64 Linux static diagnostic under `bootstrap/`. r[bootstrap_inventory.picolibc_stagex_comparison]
+- [x] [depends:I1] I2 Add a research-only x86_64 Linux static diagnostic under `bootstrap/`. r[bootstrap_inventory.picolibc_stagex_comparison]
+  - Evidence: `bootstrap/picolibc-1.8.12-diagnostic.ncl` builds in the sandbox with explicit meson/ninja/gcc/binutils inputs; `evidence/pin-and-diagnostic-build.md` records the output and sandbox findings.
   - Use explicit Meson, Ninja, compiler, linker, archiver, and source inputs.
   - Deny network access and reject host-libc or ambient startup-library dependence.
   - Emit exact compiled-source, generated-file, tool, configuration, output, and license facts.
