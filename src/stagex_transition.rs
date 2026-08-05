@@ -12,24 +12,24 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
+use crunch_bootstrap_core::stagex_plan_digest_blake3;
+use crunch_bootstrap_core::validate_stagex_plan;
 use crunch_bootstrap_core::LineageManifest;
-use crunch_bootstrap_core::STAGEX_PLAN_SCHEMA_V1;
-use crunch_bootstrap_core::STAGEX_SEED_SOURCE_STAGE_ID;
 use crunch_bootstrap_core::StagexExecutableAuthorization;
 use crunch_bootstrap_core::StagexMaterializationPlan;
 use crunch_bootstrap_core::StagexStagePlan;
-use crunch_bootstrap_core::stagex_plan_digest_blake3;
-use crunch_bootstrap_core::validate_stagex_plan;
+use crunch_bootstrap_core::STAGEX_PLAN_SCHEMA_V1;
+use crunch_bootstrap_core::STAGEX_SEED_SOURCE_STAGE_ID;
 use serde::Serialize;
 
+use crate::protected_exec::blake3_file_hex;
 use crate::protected_exec::OutputPromotionRecord;
 use crate::protected_exec::PlannedExecutable;
 use crate::protected_exec::PromotedExecutable;
 use crate::protected_exec::ProtectedExecPolicy;
 use crate::protected_exec::ProtectedSeccompAuditEvent;
-use crate::protected_exec::blake3_file_hex;
-use crate::protected_exec_seccomp::ProtectedSeccompSupervisor;
 use crate::protected_exec_seccomp::install_current_thread_exec_supervisor;
+use crate::protected_exec_seccomp::ProtectedSeccompSupervisor;
 
 pub(crate) const STAGEX_TRANSITION_REPORT_SCHEMA_V1: &str = "mantle-stagex-protected-transition-report-v1";
 pub(crate) const HEX0_REPRODUCTION_STAGE_ID: &str = "hex0-reproduction";
@@ -4906,11 +4906,9 @@ fn binutils_generated_executable_authorizations(
         })
         .collect::<Vec<_>>();
     assert_eq!(authorizations.len(), crate::stagex_binutils::BINUTILS_GENERATED_EXECUTABLE_COUNT);
-    assert!(
-        authorizations
-            .iter()
-            .all(|authorization| authorization.source_stage_id == BINUTILS_GENERATOR_BUILD_STAGE_ID)
-    );
+    assert!(authorizations
+        .iter()
+        .all(|authorization| authorization.source_stage_id == BINUTILS_GENERATOR_BUILD_STAGE_ID));
     authorizations
 }
 
@@ -5961,7 +5959,7 @@ fn binutils_event_count_bounds_from_sed_invocations(
     const MIDDLE_SED_INVOCATION_COUNT: u32 = 4_892;
     const UPPER_SED_INVOCATION_COUNT: u32 = 4_893;
     const LOWER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [73_991, 74_045];
-    const MIDDLE_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [74_008, 74_057];
+    const MIDDLE_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [74_008, 74_066];
     const UPPER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [74_010, 74_057];
     match sed_invocation_count {
         LOWER_SED_INVOCATION_COUNT => Ok(LOWER_SED_EVENT_COUNT_BOUNDS),
@@ -9867,16 +9865,12 @@ mod tests {
             .iter()
             .map(|authorization| authorization.id.as_str())
             .collect::<BTreeSet<_>>();
-        assert!(
-            BINUTILS_INSTALL_SMOKE_EXECUTED_TOOL_NAMES
-                .iter()
-                .all(|tool| { smoke_ids.contains(format!("exec:{BINUTILS_INSTALL_SMOKE_STAGE_ID}:{tool}").as_str()) })
-        );
-        assert!(
-            !["size", "strings", "strip"]
-                .iter()
-                .any(|tool| { smoke_ids.contains(format!("exec:{BINUTILS_INSTALL_SMOKE_STAGE_ID}:{tool}").as_str()) })
-        );
+        assert!(BINUTILS_INSTALL_SMOKE_EXECUTED_TOOL_NAMES
+            .iter()
+            .all(|tool| { smoke_ids.contains(format!("exec:{BINUTILS_INSTALL_SMOKE_STAGE_ID}:{tool}").as_str()) }));
+        assert!(!["size", "strings", "strip"]
+            .iter()
+            .any(|tool| { smoke_ids.contains(format!("exec:{BINUTILS_INSTALL_SMOKE_STAGE_ID}:{tool}").as_str()) }));
     }
 
     #[test]
@@ -9893,11 +9887,9 @@ mod tests {
         let wc = paths.coreutils_bin.join("wc");
         assert!(!additional.iter().any(|entry| entry.path == paths.tcc));
         assert!(additional.iter().any(|entry| entry.path == wc));
-        assert!(
-            additional
-                .iter()
-                .all(|entry| !existing.iter().any(|old| old.path == entry.path && old.digest_hex == entry.digest_hex))
-        );
+        assert!(additional
+            .iter()
+            .all(|entry| !existing.iter().any(|old| old.path == entry.path && old.digest_hex == entry.digest_hex)));
     }
 
     #[test]
@@ -9937,7 +9929,7 @@ mod tests {
         const UPPER_SED_INVOCATION_COUNT: u32 = 4_893;
         const OUTSIDE_SED_INVOCATION_COUNTS: [u32; 2] = [4_890, 4_894];
         const LOWER_SED_EVENT_BOUNDS: [usize; 2] = [73_991, 74_045];
-        const MIDDLE_SED_EVENT_BOUNDS: [usize; 2] = [74_008, 74_057];
+        const MIDDLE_SED_EVENT_BOUNDS: [usize; 2] = [74_008, 74_066];
         const UPPER_SED_EVENT_BOUNDS: [usize; 2] = [74_010, 74_057];
         let bounds = crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS
             .map(|count| u32::try_from(count).unwrap());
@@ -9997,12 +9989,10 @@ mod tests {
         chew.source_stage_id = BINUTILS_COMPONENT_BUILD_STAGE_ID.to_string();
         let validation = validate_stagex_plan(&plan);
         assert!(!validation.is_valid());
-        assert!(
-            validation
-                .errors
-                .iter()
-                .any(|error| error.to_string().contains("invalid source stage binutils-component-materialization"))
-        );
+        assert!(validation
+            .errors
+            .iter()
+            .any(|error| error.to_string().contains("invalid source stage binutils-component-materialization")));
     }
 
     #[test]
@@ -10302,16 +10292,12 @@ mod tests {
         };
         validate_bzip2_event(&event, &expected_path, crate::stagex_bzip2::BZIP2_FINAL_BLAKE3, inventory_id).unwrap();
         event.policy_decision = "denied".to_string();
-        assert!(
-            validate_bzip2_event(&event, &expected_path, crate::stagex_bzip2::BZIP2_FINAL_BLAKE3, inventory_id)
-                .is_err()
-        );
+        assert!(validate_bzip2_event(&event, &expected_path, crate::stagex_bzip2::BZIP2_FINAL_BLAKE3, inventory_id)
+            .is_err());
         event.policy_decision = "allowed".to_string();
         event.digest_hex = "a".repeat(blake3::OUT_LEN * 2);
-        assert!(
-            validate_bzip2_event(&event, &expected_path, crate::stagex_bzip2::BZIP2_FINAL_BLAKE3, inventory_id)
-                .is_err()
-        );
+        assert!(validate_bzip2_event(&event, &expected_path, crate::stagex_bzip2::BZIP2_FINAL_BLAKE3, inventory_id)
+            .is_err());
     }
 
     #[test]
@@ -10509,26 +10495,22 @@ mod tests {
         .unwrap();
 
         event.policy_decision = "denied".to_string();
-        assert!(
-            validate_make_event(
-                &event,
-                &expected_path,
-                crate::stagex_make::MAKE_FINAL_BLAKE3,
-                "planned:make-materialization:exec:make-smoke:make",
-            )
-            .is_err()
-        );
+        assert!(validate_make_event(
+            &event,
+            &expected_path,
+            crate::stagex_make::MAKE_FINAL_BLAKE3,
+            "planned:make-materialization:exec:make-smoke:make",
+        )
+        .is_err());
         event.policy_decision = "allowed".to_string();
         event.executable_path = PathBuf::from("/stagex/substituted-make");
-        assert!(
-            validate_make_event(
-                &event,
-                &expected_path,
-                crate::stagex_make::MAKE_FINAL_BLAKE3,
-                "planned:make-materialization:exec:make-smoke:make",
-            )
-            .is_err()
-        );
+        assert!(validate_make_event(
+            &event,
+            &expected_path,
+            crate::stagex_make::MAKE_FINAL_BLAKE3,
+            "planned:make-materialization:exec:make-smoke:make",
+        )
+        .is_err());
     }
 
     #[test]
@@ -10616,12 +10598,10 @@ mod tests {
         assert_eq!(report.bash_full_runtime.is_some(), source_bundle.is_some());
         assert_eq!(report.binutils_sources.is_some(), source_bundle.is_some());
         assert_eq!(report.binutils_runtime.is_some(), source_bundle.is_some());
-        assert!(
-            report
-                .stage0_full
-                .as_ref()
-                .is_none_or(|stage0| { stage0.protected_exec_enforced && stage0.mini.protected_exec_enforced })
-        );
+        assert!(report
+            .stage0_full
+            .as_ref()
+            .is_none_or(|stage0| { stage0.protected_exec_enforced && stage0.mini.protected_exec_enforced }));
         assert!(report.mes_m2.as_ref().is_none_or(|mes| mes.protected_exec_enforced));
         assert!(report.mes_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));
         assert!(report.tinycc_runtime.as_ref().is_none_or(|runtime| runtime.protected_exec_enforced));

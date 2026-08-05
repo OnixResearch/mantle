@@ -412,6 +412,7 @@ mod tests {
                 disk_bytes_max: 1,
                 protected_exec_events_max: 1,
                 source_records_max: 1,
+                open_file_descriptors_max: 1,
             },
             stages: vec![],
             receipt_contract: crate::source_built_fixed_point::SourceBuiltFixedPointReceiptContract {
