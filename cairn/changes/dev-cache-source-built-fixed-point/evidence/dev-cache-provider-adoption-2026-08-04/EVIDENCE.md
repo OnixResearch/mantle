@@ -180,3 +180,26 @@ and this run's count (74066) falls outside it. The dev cache is not implicated.
 Completing a cold run on this host requires the parent change to calibrate the
 StageX binutils event-count closure for the current graph — careful audit
 bound work, not a dev-cache fix.
+
+## Persistent dev-store incremental reuse (2026-08-04, commit eda2a1ae)
+
+Review point: the dev cache was effectively all-or-nothing (post-completion
+provider snapshot), so a run that died mid-pipeline lost the completed packages.
+This change makes dev runs share a persistent content-addressed store instead.
+
+- Dev runs (`--dev-provider-cache`) use a persistent `<cache>/dev-store` +
+  `<cache>/dev-state` rather than a fresh store per attempt. Because the store
+  is content-addressed, each successfully built package is a no-op hit on the
+  next dev run, so a run killed mid-pipeline keeps its completed work.
+- Dev runs accept cache-hit build outcomes (`parse_build_report` and
+  `require_single_build_output` gain an `allow_cached` flag driven by the dev
+  flag). The promoted cold proof keeps a fresh store and still rejects cache
+  hits.
+- Dev runs are dev-labeled (no promoted receipt, no release alias) because they
+  may reuse cached packages. `write_dev_provider_cache` still publishes the
+  StageX + native provider subtrees so the protected-exec transition can be
+  skipped on adoption.
+
+Validation: `source_built_fixed_point` tests 49 passed; clippy `-D warnings`
+clean on this branch; `rustfmt --check` clean. Not yet exercised end to end
+(the persistent store hits only appear across real repeated dev runs).
