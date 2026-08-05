@@ -316,6 +316,23 @@ EOF
 EOF
       test -s "$out/share/crunch-bootstrap/provider.json"
       echo "full-source provider normalization and runtime admission passed; external BLAKE3/closure admission still required"
+
+      # Native-toolchain metadata for the closure's host/target capability check.
+      $BB mkdir -p "$out/share/mantle-native-toolchain"
+      $BB cat > "$out/share/mantle-native-toolchain/provider.json" <<EOF
+{
+  "schema": "mantle-native-toolchain-provider-v1",
+  "provider_id": "mantle-native-toolchain",
+  "name": "$PROVIDER_NAME",
+  "target": "x86_64-unknown-linux-musl",
+  "host_triple": "x86_64-unknown-linux-musl",
+  "target_triple": "x86_64-unknown-linux-musl",
+  "source_built": true,
+  "capabilities": ["host-native", "target-native"],
+  "non_claims": ["compiler-correctness", "bootstrap-seed-correctness", "independent-rebuild-agreement", "release-reproducibility", "deployment-success", "full-cargo-compatibility"]
+}
+EOF
+      test -s "$out/share/mantle-native-toolchain/provider.json"
     "%
   ],
   inputs = [gcc10, musl, binutils],
