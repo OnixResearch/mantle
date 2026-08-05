@@ -41,6 +41,15 @@
 // synced requirements implemented there need a small bridge until the coverage
 // rail scans the package root directly.
 
+// Nix producer adapter contract bridge.
+//
+// r[impl nix_producer_adapter.backend_contract]
+// r[impl nix_producer_adapter.backend_selection]
+// r[verify nix_producer_adapter.backend_contract]
+// r[verify nix_producer_adapter.backend_selection]
+// The pure `nix-producer-v1` contract core and its positive/negative tests live
+// in root-package `src/nix_producer.rs`; backend shells join it in later tasks.
+
 // Artifact-auth live cutover validation bridge.
 //
 // r[impl mantle.artifact_auth_adoption.live_validation_scope]
@@ -65,13 +74,13 @@
 // r[verify rust_package_planning.unit_execution.topology.castore_result_cache]
 // r[verify rust_package_planning.unit_execution.topology.castore_result_cache.identity]
 // r[verify rust_package_planning.unit_execution.topology.castore_result_cache.local_reuse]
-// r[verify rust_package_planning.unit_execution.topology.castore_result_cache.atomic_materialization]
-// r[verify rust_package_planning.unit_execution.topology.castore_result_cache.retention]
-// r[verify rust_package_planning.unit_execution.topology.castore_result_cache.evidence]
-// r[verify rust_package_planning.unit_execution.topology.castore_result_cache.performance]
-// Focused positive and negative tests cover identity invalidation, local hits,
-// rejected candidates, atomic restore, GC roots, and measured compiler skipping.
-// The evidence does not prove compiler correctness or universal speedup.
+// r[verify rust_package_planning.unit_execution.topology.castore_result_cache.
+// atomic_materialization] r[verify rust_package_planning.unit_execution.topology.
+// castore_result_cache.retention] r[verify rust_package_planning.unit_execution.topology.
+// castore_result_cache.evidence] r[verify rust_package_planning.unit_execution.topology.
+// castore_result_cache.performance] Focused positive and negative tests cover identity
+// invalidation, local hits, rejected candidates, atomic restore, GC roots, and measured compiler
+// skipping. The evidence does not prove compiler correctness or universal speedup.
 
 // Shared Rust unit result bridge.
 //

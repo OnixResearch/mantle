@@ -79,6 +79,8 @@ mod nix_free_demo_bundle;
 // stable.
 #[allow(clippy::large_enum_variant)]
 mod nix_free_demo_cmd;
+mod nix_producer;
+mod nix_producer_shell;
 mod oci_projection;
 mod oci_projection_shell;
 mod oci_registry;

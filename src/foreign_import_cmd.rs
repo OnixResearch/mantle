@@ -48,6 +48,13 @@ use crate::foreign_realization::validate_foreign_realization_admission;
 use crate::foreign_realization::validate_foreign_source_admission;
 use crate::foreign_realization_shell::ForeignRealizationRequest;
 use crate::foreign_realization_shell::realize_foreign_plan;
+use crate::nix_producer::NIX_PRODUCER_CONTRACT_SCHEMA;
+use crate::nix_producer::NixProducerRequest as BackendContractRequest;
+use crate::nix_producer::ProducerBackendKind;
+use crate::nix_producer::ProducerBudget;
+use crate::nix_producer::ProducerTarget;
+use crate::nix_producer_shell::BackendRunConfig;
+use crate::nix_producer_shell::run_backend;
 use crate::source_bundle::ForeignSourcePathBinding;
 use crate::source_bundle::SourceBundleManifest;
 use crate::source_bundle::plan_bound_foreign_source_bundle;
@@ -62,6 +69,7 @@ const AUDIT_COMMAND: &str = "audit";
 const PREPARE_SOURCES_COMMAND: &str = "prepare-sources";
 const PRODUCE_NIX_COMMAND: &str = "produce-nix";
 const PRODUCE_ATERM_COMMAND: &str = "produce-aterm";
+const PRODUCE_BACKEND_COMMAND: &str = "produce-backend";
 const ACCEPTED_VERDICT: &str = "accepted";
 const REJECTED_VERDICT: &str = "rejected";
 const FAILURE_EXIT_CODE: u8 = 1;
@@ -79,6 +87,7 @@ const DRV_SPEC_SEPARATOR: char = '=';
 const SOURCE_BINDING_SEPARATOR: char = '=';
 const DRV_FILE_EXTENSION: &str = "drv";
 const NIX_LOGICAL_STORE_PREFIX: &str = "/nix/store";
+const NIX_LOGICAL_STORE_PREFIX_ROOT: &str = "/";
 pub(crate) const DEFAULT_FOREIGN_JSON_ARTIFACT_BYTES_MAX: u64 = 268_435_456;
 
 #[derive(Subcommand, Debug, Clone)]
@@ -295,6 +304,69 @@ pub(crate) enum ForeignImportAction {
         out_dir: PathBuf,
     },
 
+    /// Run a registered Nix producer backend (fix or host-nix) and lower its `.drv` closure
+    ProduceBackend {
+        /// Backend kind: `fix` or `host-nix`
+        #[arg(long)]
+        backend: String,
+
+        /// Absolute path to the backend binary (Mantle-built fix binary, or nix-instantiate)
+        #[arg(long = "backend-binary")]
+        backend_binary: PathBuf,
+
+        /// Version fact recorded for the backend binary
+        #[arg(long = "backend-version")]
+        backend_version: String,
+
+        /// Nix file to instantiate
+        #[arg(long, conflicts_with = "expr")]
+        file: Option<PathBuf>,
+
+        /// Inline Nix expression text to instantiate
+        #[arg(long)]
+        expr: Option<String>,
+
+        /// Attribute path to select from the evaluated value
+        #[arg(long)]
+        attribute: Option<String>,
+
+        /// String evaluation argument as key=value; repeat for multiple arguments
+        #[arg(long = "arg")]
+        eval_args: Vec<String>,
+
+        /// Package name to write into `foreign-package-index-v1`
+        #[arg(long, default_value = DEFAULT_PACKAGE_NAME)]
+        package: String,
+
+        /// Package system to write into `foreign-package-index-v1`
+        #[arg(long, default_value = DEFAULT_SYSTEM)]
+        system: String,
+
+        /// Owned scratch directory for the run; created when absent
+        #[arg(long = "work-dir")]
+        work_dir: PathBuf,
+
+        /// Wall-time budget in milliseconds for the backend run
+        #[arg(long = "wall-time-ms-max")]
+        wall_time_ms_max: Option<u64>,
+
+        /// Address-space limit in bytes for the backend process
+        #[arg(long = "memory-bytes-max")]
+        memory_bytes_max: Option<u64>,
+
+        /// Total `.drv` closure byte budget
+        #[arg(long = "output-bytes-max")]
+        output_bytes_max: Option<u64>,
+
+        /// `.drv` closure file count budget
+        #[arg(long = "drv-file-count-max")]
+        drv_file_count_max: Option<u32>,
+
+        /// Directory where graph and package-index JSON artifacts are written
+        #[arg(long = "out-dir")]
+        out_dir: PathBuf,
+    },
+
     /// Lower concrete Nix derivation facts into foreign import artifacts
     ProduceNix {
         /// Path to `nix derivation show --recursive --json`-style closure JSON
@@ -409,6 +481,25 @@ struct NixProducerRequest<'a> {
     cache_urls: &'a [String],
     cache_trust_scope: &'a str,
     unsupported_metadata_classes: &'a [String],
+    out_dir: &'a Path,
+    json: bool,
+}
+
+struct BackendProducerCliRequest<'a> {
+    backend: &'a str,
+    backend_binary: &'a Path,
+    backend_version: &'a str,
+    file: Option<&'a Path>,
+    expr: Option<&'a str>,
+    attribute: Option<&'a str>,
+    eval_args: &'a [String],
+    package: &'a str,
+    system: &'a str,
+    work_dir: &'a Path,
+    wall_time_ms_max: Option<u64>,
+    memory_bytes_max: Option<u64>,
+    output_bytes_max: Option<u64>,
+    drv_file_count_max: Option<u32>,
     out_dir: &'a Path,
     json: bool,
 }
@@ -566,6 +657,40 @@ pub(crate) fn cmd_foreign_import(
             cache_urls: &cache_urls,
             cache_trust_scope: &cache_trust_scope,
             unsupported_metadata_classes: &unsupported_metadata_classes,
+            out_dir: &out_dir,
+            json,
+        }),
+        ForeignImportAction::ProduceBackend {
+            backend,
+            backend_binary,
+            backend_version,
+            file,
+            expr,
+            attribute,
+            eval_args,
+            package,
+            system,
+            work_dir,
+            wall_time_ms_max,
+            memory_bytes_max,
+            output_bytes_max,
+            drv_file_count_max,
+            out_dir,
+        } => run_produce_backend(BackendProducerCliRequest {
+            backend: &backend,
+            backend_binary: &backend_binary,
+            backend_version: &backend_version,
+            file: file.as_deref(),
+            expr: expr.as_deref(),
+            attribute: attribute.as_deref(),
+            eval_args: &eval_args,
+            package: &package,
+            system: &system,
+            work_dir: &work_dir,
+            wall_time_ms_max,
+            memory_bytes_max,
+            output_bytes_max,
+            drv_file_count_max,
             out_dir: &out_dir,
             json,
         }),
@@ -1101,6 +1226,127 @@ fn run_produce_aterm(request: AtermProducerRequest<'_>) -> Result<(), RunError> 
     write_json_file(&graph_path, &artifacts.graph)?;
     write_json_file(&index_path, &artifacts.package_index)?;
     emit_report(producer_report(PRODUCE_ATERM_COMMAND, &graph_path, &index_path), request.json)
+}
+
+fn backend_contract_request(
+    request: &BackendProducerCliRequest<'_>,
+) -> Result<BackendContractRequest, ForeignImportCliReport> {
+    debug_assert!(!request.backend.is_empty(), "backend flag is required by clap");
+    let kind = ProducerBackendKind::parse(request.backend).ok_or_else(|| {
+        rejected_report(
+            PRODUCE_BACKEND_COMMAND,
+            diagnostic("unknown-backend", None, "backend must be one of: fix, host-nix"),
+        )
+    })?;
+    let attribute = request.attribute.map(ToOwned::to_owned);
+    let target = match (request.file, request.expr) {
+        (Some(file), None) => ProducerTarget::File {
+            path: file.display().to_string(),
+            attribute,
+        },
+        (None, Some(expr)) => ProducerTarget::Expr {
+            text: expr.to_string(),
+            attribute,
+        },
+        _ => {
+            return Err(rejected_report(
+                PRODUCE_BACKEND_COMMAND,
+                diagnostic("invalid-request", None, "provide exactly one of --file or --expr"),
+            ));
+        }
+    };
+    let mut eval_args: BTreeMap<String, String> = BTreeMap::new();
+    for raw_arg in request.eval_args {
+        let Some((key, value)) = raw_arg.split_once(DRV_SPEC_SEPARATOR) else {
+            return Err(rejected_report(
+                PRODUCE_BACKEND_COMMAND,
+                diagnostic("invalid-request", None, "--arg entries must use key=value form"),
+            ));
+        };
+        eval_args.insert(key.to_string(), value.to_string());
+    }
+    let defaults = ProducerBudget::default();
+    Ok(BackendContractRequest {
+        schema: NIX_PRODUCER_CONTRACT_SCHEMA.to_string(),
+        backend: kind,
+        target,
+        eval_args,
+        system: request.system.to_string(),
+        budget: ProducerBudget {
+            wall_time_ms_max: request.wall_time_ms_max.unwrap_or(defaults.wall_time_ms_max),
+            memory_bytes_max: request.memory_bytes_max.unwrap_or(defaults.memory_bytes_max),
+            output_bytes_max: request.output_bytes_max.unwrap_or(defaults.output_bytes_max),
+            drv_file_count_max: request.drv_file_count_max.unwrap_or(defaults.drv_file_count_max),
+        },
+    })
+}
+
+fn lower_backend_closure(
+    request: &BackendProducerCliRequest<'_>,
+    kind: ProducerBackendKind,
+    success: &crate::nix_producer::ProducerSuccess,
+) -> Result<Result<(PathBuf, PathBuf), ForeignImportCliReport>, RunError> {
+    let drv_dir = PathBuf::from(&success.drv_dir);
+    let inputs = match read_aterm_drv_dir(NIX_LOGICAL_STORE_PREFIX, &drv_dir)? {
+        Ok(inputs) => inputs,
+        Err(report) => return Ok(Err(report)),
+    };
+    let closure = match parse_prefix_aware_aterm_bundle(NIX_LOGICAL_STORE_PREFIX, &inputs) {
+        Ok(closure) => closure,
+        Err(diagnostic) => return Ok(Err(rejected_report(PRODUCE_BACKEND_COMMAND, diagnostic))),
+    };
+    let config = AtermProducerConfig {
+        source_prefix: NIX_LOGICAL_STORE_PREFIX.to_string(),
+        producer_kind: kind.as_str().to_string(),
+        package_name: request.package.to_string(),
+        system: request.system.to_string(),
+        root_derivation: success.root_drv_path.clone(),
+        producer_identity: success.identity.binary_identity.clone(),
+        producer_revision: success.identity.backend_version.clone(),
+        cache_hints: Vec::new(),
+        unsupported_metadata_classes: Vec::new(),
+    };
+    let artifacts = match lower_prefix_aware_aterm_closure(&closure, &config) {
+        Ok(artifacts) => artifacts,
+        Err(diagnostic) => return Ok(Err(rejected_report(PRODUCE_BACKEND_COMMAND, diagnostic))),
+    };
+    fs::create_dir_all(request.out_dir).map_err(|error| {
+        RunError::Internal(format!("creating foreign import artifact directory {}: {error}", request.out_dir.display()))
+    })?;
+    let graph_path = request.out_dir.join(ATERM_GRAPH_FILE);
+    let index_path = request.out_dir.join(ATERM_INDEX_FILE);
+    write_json_file(&graph_path, &artifacts.graph)?;
+    write_json_file(&index_path, &artifacts.package_index)?;
+    Ok(Ok((graph_path, index_path)))
+}
+
+fn run_produce_backend(request: BackendProducerCliRequest<'_>) -> Result<(), RunError> {
+    assert!(!PRODUCE_BACKEND_COMMAND.is_empty(), "backend producer command identity must not be empty");
+    assert!(request.backend_binary.is_absolute(), "backend binary path must be absolute");
+    let contract_request = match backend_contract_request(&request) {
+        Ok(contract_request) => contract_request,
+        Err(report) => return emit_report(report, request.json),
+    };
+    let run_config = BackendRunConfig {
+        binary_path: request.backend_binary.to_path_buf(),
+        version_label: request.backend_version.to_string(),
+        store_read_root: PathBuf::from(NIX_LOGICAL_STORE_PREFIX_ROOT),
+        work_dir: request.work_dir.to_path_buf(),
+    };
+    let success = match run_backend(&contract_request, &run_config) {
+        Ok(success) => success,
+        Err(error) => {
+            return emit_report(
+                rejected_report(PRODUCE_BACKEND_COMMAND, diagnostic(error.class.as_str(), None, &error.detail)),
+                request.json,
+            );
+        }
+    };
+    let (graph_path, index_path) = match lower_backend_closure(&request, contract_request.backend, &success)? {
+        Ok(paths) => paths,
+        Err(report) => return emit_report(report, request.json),
+    };
+    emit_report(producer_report(PRODUCE_BACKEND_COMMAND, &graph_path, &index_path), request.json)
 }
 
 fn producer_cache_hints(cache_urls: &[String], trust_scope: &str) -> Vec<CacheHint> {
