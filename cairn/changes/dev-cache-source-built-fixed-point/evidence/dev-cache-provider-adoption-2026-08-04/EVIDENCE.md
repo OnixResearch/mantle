@@ -148,3 +148,35 @@ blocker surfaced while dogfooding; it sits in the dev-cache worktree to unblock
 the run. A full successful cold proof, and therefore a populated cache and a
 cached->adopt round trip, is not yet achieved; that still needs a valid source
 profile + independent expected digests and a full successful multi-hour run.
+
+## Cold proof run on the parent graph (2026-08-04, task 8569 / detached 115495)
+
+The dev-cache change was rebased onto the parent branch
+(`agent/finish-source-built-fixed-point-20260804`, which carries the equivalent
+interpreter fix `33d04663`), so the branch has the 59/66-record graph plus the
+dev-cache code and the fix together. The cold proof was launched with the v33
+profile (`dcf1b356...`), StageX lineage `e477ab39...`, native provider
+`82b08dcd...`, real bubblewrap, busybox-static, and a 200 GB disk bound.
+
+The first attempt (pueue task 8569) was killed by a pueue daemon restart during
+prepare (the known shared-daemon hazard); it was relaunched detached via setsid
+(pid 115495) so daemon loss cannot interrupt it. It then ran ~1.7 hours:
+
+- prepare parsed the 10.3 GB profile and PASSED the source-union gate (v33
+  matches this branch's graph; no `expected=53, profile=59` mismatch).
+- the StageX transition ran its full protected-exec stage tree (hex0, kaem,
+  mes, musl, tcc, binutils, bash, coreutils, and the rest), which confirms the
+  interpreter fix works in a real run (the busybox sh invocations executed).
+- it then FAILED at the StageX transition audit:
+
+```
+StageX transition failed: invalid StageX protected-exec audit:
+  GNU binutils event count is outside the accepted closure: observed 74066
+```
+
+This is a parent-change StageX protected-exec audit calibration bound: the
+accepted binutils event count closure was calibrated against a different graph,
+and this run's count (74066) falls outside it. The dev cache is not implicated.
+Completing a cold run on this host requires the parent change to calibrate the
+StageX binutils event-count closure for the current graph — careful audit
+bound work, not a dev-cache fix.
