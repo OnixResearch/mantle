@@ -19,6 +19,7 @@ result*
 *.redb
 *.sock
 data/
+/store
 vendor-deps/
 autoresearch.config.json
 
@@ -28,3 +29,4 @@ autoresearch.config.json
 
 # Local agent permissions
 .claude/settings.local.json
+.pi/

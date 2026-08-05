@@ -496,6 +496,11 @@ or global release eligibility.
 
 ## Development
 
+Development builds use a dedicated store on the datapool NVMe disk. The `store`
+symlink at the repository root points to the ZFS dataset `datapool/mantle-store`
+(mounted at `/datapool/mantle-store`). Pass `--store store --state-dir store/state`
+to `mantle build` to keep build outputs on that disk. The symlink is gitignored.
+
 Use the repository-owned quality wrappers from the dev shell:
 
 ```bash
