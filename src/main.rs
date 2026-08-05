@@ -88,6 +88,10 @@ mod oci_registry_shell;
 #[allow(dead_code)]
 mod offline_cargo;
 mod operator_diagnostics;
+// The comparison report shell lands in task I5 of
+// `evaluate-picolibc-stagex-runtime`; until then only core tests consume it.
+#[allow(dead_code)]
+mod picolibc_comparison;
 mod pin_import;
 #[allow(dead_code)]
 mod portable_receipt;
