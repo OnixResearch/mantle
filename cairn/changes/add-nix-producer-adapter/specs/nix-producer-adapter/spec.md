@@ -128,12 +128,19 @@ r[nix_producer_adapter.evaluation_boundary] Nix expression evaluation MUST occur
 - **THEN** they MUST complete from the artifacts alone
 - **AND** they MUST NOT attempt to locate or launch a backend
 
-#### Scenario: Backend command requires a daemon
+#### Scenario: Backend realization command is rejected
 
-- **GIVEN** a backend command that requires a reachable Nix or Lix daemon
+- **GIVEN** a backend command that builds, substitutes, or activates (for example `fix build`, `fix run`, or `fix switch`)
 - **WHEN** the adapter plans its invocation
 - **THEN** it MUST reject that command class
 - **AND** it MUST restrict backends to evaluation and instantiation operations
+
+#### Scenario: Instantiation uses the daemon only as a store-write transport
+
+- **GIVEN** a backend instantiation that writes `.drv` files through a reachable daemon
+- **WHEN** the adapter collects the output
+- **THEN** it MUST copy the concrete `.drv` closure into an owned bounded directory
+- **AND** it MUST admit the closure through Mantle's own ATerm parsing, never through daemon build or query operations
 
 ### Requirement: Bounded backend execution
 

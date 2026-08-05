@@ -14,10 +14,14 @@
 ## Phase 2: Backends behind the contract
 
 - [ ] [serial] I5 Wrap the existing host-Nix producer path as the explicit `host-nix` backend with recorded binary path, version fact, and ambient trust posture. r[nix_producer_adapter.host_nix_backend]
-- [ ] [serial] I6 Pin the `fix` upstream repository and exact revision as a fixed-output Mantle source record. r[nix_producer_adapter.fix_pinned_source]
-- [ ] [serial] I7 Add the pinned Zig binary toolchain as a fixed-output derivation input. r[nix_producer_adapter.fix_mantle_built_toolchain]
-- [ ] [serial] I8 Add the `fix` build derivation with declared libcurl, libgit2, and pkg-config inputs, running `zig build --release=fast` in the Mantle sandbox. r[nix_producer_adapter.fix_mantle_built_toolchain]
-- [ ] [serial] I9 Admit the built `fix` output with signed PathInfo and an artifact attestation. r[nix_producer_adapter.fix_mantle_built_toolchain]
+- [x] [serial] I6 Pin the `fix` upstream repository and exact revision as a fixed-output Mantle source record. r[nix_producer_adapter.fix_pinned_source]
+  - Evidence: `evidence/fix-build-spike.md`; `packages/fix/fix-src.ncl` pins rev `fd675c2e` with a `--fix`-resolved hash.
+- [x] [serial] I7 Add the pinned Zig binary toolchain as a fixed-output derivation input. r[nix_producer_adapter.fix_mantle_built_toolchain]
+  - Evidence: `packages/fix/zig-toolchain.ncl` (tarball pin) and `packages/fix/nixpkgs-toolchain.ncl` (signed cache closures used by the spike build).
+- [x] [serial] I8 Add the `fix` build derivation with declared libcurl, libgit2, and pkg-config inputs, running `zig build --release=fast` in the Mantle sandbox. r[nix_producer_adapter.fix_mantle_built_toolchain]
+  - Evidence: `evidence/fix-build-spike.md`; `packages/fix/fix.ncl` produced `qjj0nm512hrcnivix5fd4wcfsyffkp4s-fix-0.3.0`; eval smoke passed.
+- [x] [serial] I9 Admit the built `fix` output with signed PathInfo and an artifact attestation. r[nix_producer_adapter.fix_mantle_built_toolchain]
+  - Evidence: `mantle attest show` on the built output returns runtime-reference edges to zig, glibc, and libgit2 (`evidence/fix-build-spike.md`).
 - [ ] [serial] I10 Implement the `fix` backend shell that runs evaluation and instantiation into a bounded output directory. r[nix_producer_adapter.backend_contract]
 - [ ] [parallel] I11 Add negative fixtures for host-toolchain leakage, undeclared build inputs, source hash mismatch, and floating revision rejection. r[nix_producer_adapter.validation]
 

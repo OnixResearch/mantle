@@ -50,7 +50,7 @@ The contract core is pure: it validates requests, classifies outcomes, and build
 
 ### Decision: Run backends under a bounded process policy
 
-**Choice:** Each backend shell launches its evaluator through an explicit bounded execution policy with named wall-time, memory, and output-size limits, an owned teardown sequence, and a confined working directory. Evaluation errors, timeouts, malformed `.drv` output, and oversized output fail closed with stable error classes shared across backends. Daemon-requiring commands are rejected at the adapter boundary.
+**Choice:** Each backend shell launches its evaluator through an explicit bounded execution policy with named wall-time, memory, and output-size limits, an owned teardown sequence, and a confined working directory. Evaluation errors, timeouts, malformed `.drv` output, and oversized output fail closed with stable error classes shared across backends. Realization commands (`fix build`, `fix run`, `fix switch`, and host-Nix build equivalents) are rejected at the adapter boundary. Instantiation may use a daemon solely as a `.drv` store-write transport; the adapter copies the concrete closure into an owned bounded directory and admits it through Mantle's own ATerm parsing. Observed fact: `fix instantiate` writes through the daemon protocol and emits no build operations.
 
 **Rationale:** A backend runs a foreign evaluator over arbitrary Nix expressions. Bounded execution caps the blast radius, and shared error classes keep contract conformance testable per backend.
 
