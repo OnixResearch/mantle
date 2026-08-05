@@ -115,7 +115,8 @@ async fn cmd_store_mutation_or_transfer(
         crate::StoreAction::Sign { path, all, signing_key } => {
             let _guard = store_mutation_guard(context.state_dir)?;
             let svc = open_pathinfo_service(context.state_dir, false).await?;
-            cmd_store_sign(&svc, path.as_deref(), all, signing_key.as_deref(), context.state_dir, context.store_dir).await
+            cmd_store_sign(&svc, path.as_deref(), all, signing_key.as_deref(), context.state_dir, context.store_dir)
+                .await
         }
         crate::StoreAction::RepairFinalNar {
             path,
@@ -822,9 +823,10 @@ async fn cmd_store_verify(
     let hash_results = crunch_store::store_verify(svc, request.path_filter, request.store_dir)
         .await
         .map_err(|e| RunError::Internal(format!("{e}")))?;
-    let signature_results = crunch_store::store_verify_signatures(svc, request.path_filter, &trusted_keys, request.store_prefix)
-        .await
-        .map_err(|e| RunError::Internal(format!("{e}")))?;
+    let signature_results =
+        crunch_store::store_verify_signatures(svc, request.path_filter, &trusted_keys, request.store_prefix)
+            .await
+            .map_err(|e| RunError::Internal(format!("{e}")))?;
     let signature_by_path = index_signature_results(signature_results)?;
     debug_assert_eq!(hash_results.len(), signature_by_path.len());
     debug_assert!(u32::try_from(hash_results.len()).is_ok());
