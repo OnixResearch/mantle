@@ -7816,12 +7816,12 @@ fn validate_mes_runtime_audit(
         validate_audit_event(event, &mes_expected)?;
     }
     let compile_events = &events[nyacc_count..];
-    let mut chunks = compile_events.chunks_exact(EXEC_EVENTS_PER_COMPILE);
-    for pair in &mut chunks {
+    let (compile_event_pairs, remainder) = compile_events.as_chunks::<EXEC_EVENTS_PER_COMPILE>();
+    for pair in compile_event_pairs {
         validate_audit_event(&pair[0], &mes_expected)?;
         validate_audit_event(&pair[1], &m1_expected)?;
     }
-    if !chunks.remainder().is_empty() {
+    if !remainder.is_empty() {
         return Err(StagexTransitionError::Audit("Mes runtime compile events do not form mes-m2/M1 pairs".to_string()));
     }
     let observed_compile_count = compile_events.len() / EXEC_EVENTS_PER_COMPILE;

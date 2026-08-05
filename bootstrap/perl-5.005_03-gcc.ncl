@@ -45,9 +45,9 @@ let perl_src = crunch.fetchTarball {
       exit 1
     }
 
-    GCC=$(find_input gcc-4.0.4-musl-cxx-v7)
+    GCC=$(find_input gcc-4.0.4-musl-cxx-v8)
     MUSL=$(find_input musl-1.1.24-gcc-pass5-v1)
-    BINUTILS=$(find_input binutils-2.30-gcc-pass4-v16)
+    BINUTILS=$(find_input binutils-2.30-gcc-pass4-v17)
     BISON=$(find_input bison-2.3-gcc-v9)
     M4=$(find_input m4-1.4.7-gcc-v5)
     PERL_OLD=$(find_input perl-5.004_05-gcc-v5)

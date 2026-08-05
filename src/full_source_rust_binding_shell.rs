@@ -546,7 +546,9 @@ fn sha256_content_hex_parts<'a>(
         part_count = part_count.checked_add(1).ok_or_else(|| {
             RustSourceProviderError::Validate("source archive content part count overflows u64".to_string())
         })?;
-        for pair in content_hex.as_bytes().chunks_exact(HEX_DIGITS_PER_BYTE) {
+        let (byte_pairs, remainder) = content_hex.as_bytes().as_chunks::<HEX_DIGITS_PER_BYTE>();
+        assert!(remainder.is_empty());
+        for pair in byte_pairs {
             let high = hex_digit(pair[0])?;
             let low = hex_digit(pair[1])?;
             decoded.push((high << BITS_PER_HEX_DIGIT) | low);

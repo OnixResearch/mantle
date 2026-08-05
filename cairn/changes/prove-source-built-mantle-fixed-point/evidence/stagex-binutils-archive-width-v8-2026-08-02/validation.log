@@ -1,0 +1,30 @@
+Real object-width convergence (pueue task 7377)
+canonical-elf-blake3=76bbbe9f0a27ff0ba6a3553a51b941215d91215bfd23fa97b9a178ae33607a0b
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2009 filtered out; finished in 0.06s
+
+Archive-core positive and negative tests (pueue task 7380)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 2010 filtered out; finished in 0.00s
+
+Real retained/fresh libiberty convergence (pueue task 7398)
+canonical-stagex-archive-blake3=9e054fcfdd504399c978714e8013154c57eb51951ecbf6ae71b52ab550d3af01
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2013 filtered out; finished in 0.01s
+
+Canonical retained archive identities (pueue task 7345)
+libiberty=9e054fcfdd504399c978714e8013154c57eb51951ecbf6ae71b52ab550d3af01
+zlib=7cfe930119c77ef8bd7f34ec122de1a7f644851183cd7bc82dadc27b6bbb54b4
+bfd=94a9d681cbacecb5edc26a100fd94b860332115f0adf65d89cffeb5a4038144e
+opcodes=d75ecd69a0f592d5b8fa4d9189d3af133c98c369ec5f89939e55371eb72a6dda
+Each focused test passed.
+
+Full identity-observation rail (pueue task 7342)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2014 filtered out; finished in 301.59s
+
+Full enforced binutils rail (pueue task 7371)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2014 filtered out; finished in 314.83s
+
+Post-change focused tests and static checks (pueue task 7414)
+archive core: test result: ok. 3 passed; 0 failed; 2 ignored; 0 measured; 2010 filtered out; finished in 0.00s
+binutils: test result: ok. 33 passed; 0 failed; 8 ignored; 0 measured; 1974 filtered out; finished in 0.00s
+cargo clippy -p mantle --bin mantle --no-deps -- -D warnings: status 0
+cargo fmt --check -p mantle -v: status 0
+git diff --check: status 0

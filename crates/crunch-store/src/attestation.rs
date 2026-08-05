@@ -87,6 +87,20 @@ pub async fn load_artifact_attestation(
     read_canonical_artifact_file(&path).await
 }
 
+pub fn artifact_attestation_matches_pathinfo(
+    store_dir: &str,
+    path_info: &PathInfo,
+    output_name: &str,
+    attestation: &ArtifactAttestation,
+) -> bool {
+    assert!(!store_dir.is_empty(), "store_dir must not be empty");
+    assert!(!output_name.is_empty(), "output_name must not be empty");
+
+    attestation.facts.logical_path == logical_path(&path_info.store_path, store_dir)
+        && attestation.facts.output_name == output_name
+        && attestation.facts.content_digest == nar_sha256_digest(&path_info.nar_sha256)
+}
+
 pub async fn load_or_create_runtime_closure_attestation(
     state_dir: &Path,
     store_dir: &str,

@@ -46,7 +46,7 @@ let busybox_src = crunch.fetchTarball {
 
       PROVIDER=$(find_input full-source-seed-toolchain)
       MAKE=$(find_input make-4.4.1-full-source-gcc10-v1)
-      HEADERS=$(find_input linux-headers-6.6-full-source-gcc10-v2)
+      HEADERS=$(find_input linux-headers-6.6-full-source-gcc10-v3)
       SRC=$(find_input busybox-1.37.0-full-source-src)
       test -x "$PROVIDER/bin/$TARGET-gcc"
       test -x "$MAKE/bin/make"

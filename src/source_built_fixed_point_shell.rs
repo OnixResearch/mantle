@@ -28,6 +28,7 @@ use crate::source_built_fixed_point::SourceBuiltFixedPointPlanInput;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPolicies;
 use crate::source_built_fixed_point::SourceBuiltFixedPointResourceBounds;
 use crate::source_built_fixed_point::SourceContentKind;
+use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
 use crate::source_built_fixed_point_dev_cache::dev_provider_cache_key;
 use crate::source_built_fixed_point_dev_cache::evaluate_fast_fail;
 use crate::source_built_fixed_point_dev_cache::evaluate_provider_cache_lookup;
@@ -94,7 +95,7 @@ pub(crate) const STAGEX_PROVIDER_STORE_BASENAME: &str =
 const STAGEX_PROVIDER_LOGICAL_PATH: &str =
     "/mantle/store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider";
 const STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST: &str =
-    "9e992a41dac86e4e069e3d5dcfdcb9512f2fb572639a3512aa0400895bffb269";
+    "e1039a3c844d709f51586f7afa2aacdbbe92aa224f1e20a778ea80573603ada3";
 const NATIVE_PROVIDER_ID: &str = "full-source-native-provider";
 const NATIVE_ADMISSION_REPORT_FILE: &str = "full-source-provider-admission.json";
 const NATIVE_SOURCE_MANIFEST_FILE: &str = "native-source-closure.json";
@@ -185,6 +186,13 @@ struct MaterializedSourceDigests {
     rust_source_archive_set: String,
     mantle_source: String,
     vendor_inputs: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct OpenFileDescriptorLimitPlan {
+    soft_limit: u64,
+    hard_limit: u64,
+    update_required: bool,
 }
 
 #[derive(Debug)]
@@ -413,6 +421,94 @@ fn validate_disk_capacity(available_bytes: u64, required_bytes: u64) -> Result<(
     Ok(())
 }
 
+fn plan_open_file_descriptor_limit(
+    current_soft_limit: u64,
+    current_hard_limit: u64,
+    required_limit: u64,
+) -> Result<OpenFileDescriptorLimitPlan, String> {
+    if required_limit == 0 {
+        return Err("proof open-file descriptor limit must be nonzero".to_string());
+    }
+    if current_soft_limit > current_hard_limit {
+        return Err(format!(
+            "observed open-file descriptor soft limit {current_soft_limit} exceeds hard limit {current_hard_limit}"
+        ));
+    }
+    if current_hard_limit < required_limit {
+        return Err(format!(
+            "proof requires open-file descriptor limit {required_limit}, but the hard limit is {current_hard_limit}"
+        ));
+    }
+    let plan = OpenFileDescriptorLimitPlan {
+        soft_limit: required_limit,
+        hard_limit: current_hard_limit,
+        update_required: current_soft_limit != required_limit,
+    };
+    assert!(plan.soft_limit > 0);
+    assert!(plan.soft_limit <= plan.hard_limit);
+    Ok(plan)
+}
+
+#[cfg(target_os = "linux")]
+fn read_open_file_descriptor_limits() -> Result<(u64, u64), RunError> {
+    let mut limits = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: `limits` points to initialized writable storage for one `rlimit` value.
+    let status = unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limits) };
+    if status != 0 {
+        return Err(proof_error(format!("reading open-file descriptor limit: {}", std::io::Error::last_os_error())));
+    }
+    if limits.rlim_cur > limits.rlim_max {
+        return Err(proof_error(format!(
+            "observed open-file descriptor soft limit {} exceeds hard limit {}",
+            limits.rlim_cur, limits.rlim_max
+        )));
+    }
+    assert!(limits.rlim_max > 0);
+    assert!(limits.rlim_cur <= limits.rlim_max);
+    Ok((limits.rlim_cur, limits.rlim_max))
+}
+
+#[cfg(target_os = "linux")]
+fn enforce_open_file_descriptor_limit(required_limit: u64) -> Result<(), RunError> {
+    let (current_soft_limit, current_hard_limit) = read_open_file_descriptor_limits()?;
+    let plan =
+        plan_open_file_descriptor_limit(current_soft_limit, current_hard_limit, required_limit).map_err(proof_error)?;
+    if plan.update_required {
+        let limits = libc::rlimit {
+            rlim_cur: plan.soft_limit,
+            rlim_max: plan.hard_limit,
+        };
+        // SAFETY: `limits` is a valid immutable `rlimit` value, and the pure plan
+        // proves that its soft limit is nonzero and no greater than its hard limit.
+        let status = unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limits) };
+        if status != 0 {
+            return Err(proof_error(format!(
+                "setting open-file descriptor limit to {}: {}",
+                plan.soft_limit,
+                std::io::Error::last_os_error()
+            )));
+        }
+    }
+    let (observed_soft_limit, observed_hard_limit) = read_open_file_descriptor_limits()?;
+    if observed_soft_limit != plan.soft_limit || observed_hard_limit != plan.hard_limit {
+        return Err(proof_error(format!(
+            "open-file descriptor limit verification failed: expected soft={} hard={}, observed soft={} hard={}",
+            plan.soft_limit, plan.hard_limit, observed_soft_limit, observed_hard_limit
+        )));
+    }
+    assert_eq!(observed_soft_limit, required_limit);
+    assert!(observed_soft_limit <= observed_hard_limit);
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn enforce_open_file_descriptor_limit(_required_limit: u64) -> Result<(), RunError> {
+    Err(proof_error("source-built fixed-point open-file descriptor enforcement requires Linux".to_string()))
+}
+
 fn prepare_attempt(
     options: &SourceBuiltFixedPointOptions<'_>,
     started_at: Instant,
@@ -597,6 +693,12 @@ fn validate_materialized_source_records(
     }
     let mut profile_by_identity = BTreeMap::new();
     for record in profile_records {
+        if !crate::source_bundle::source_record_is_fetcher_input(record) {
+            return Err(proof_error(format!(
+                "materialized source profile contains non-fetch source authority {}",
+                record.identity
+            )));
+        }
         if profile_by_identity.insert(record.identity.as_str(), *record).is_some() {
             return Err(proof_error(format!(
                 "materialized source profile repeats source identity {}",
@@ -604,13 +706,7 @@ fn validate_materialized_source_records(
             )));
         }
     }
-    if profile_by_identity.len() != expected_by_identity.len() {
-        return Err(proof_error(format!(
-            "materialized source record set differs from the exact native and StageX union: expected={}, profile={}",
-            expected_by_identity.len(),
-            profile_by_identity.len()
-        )));
-    }
+    let expected_record_count = expected_by_identity.len();
     for (identity, expected_record) in expected_by_identity {
         let Some(profile_record) = profile_by_identity.get(identity) else {
             return Err(proof_error(format!("materialized source profile omits bound source identity {identity}")));
@@ -622,6 +718,7 @@ fn validate_materialized_source_records(
         }
     }
     assert!(!profile_records.is_empty());
+    assert!(profile_by_identity.len() >= expected_record_count);
     debug_assert_eq!(native_manifest.store_prefix, stagex_manifest.store_prefix);
     Ok(())
 }
@@ -709,6 +806,7 @@ fn prepare_plan(
         resource_bounds: SourceBuiltFixedPointResourceBounds {
             elapsed_seconds_max: options.elapsed_seconds_max,
             disk_bytes_max: options.disk_bytes_max,
+            open_file_descriptors_max: SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX,
             protected_exec_events_max: options.protected_exec_events_max,
             source_records_max: options.source_records_max,
         },
@@ -721,6 +819,7 @@ fn prepare_plan(
 }
 
 fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAttempt) -> Result<bool, RunError> {
+    enforce_open_file_descriptor_limit(prepared.plan.resource_bounds.open_file_descriptors_max)?;
     validate_runtime_bounds(options, prepared)?;
     let adopt = dev_cache_adoption(options, &prepared.plan)?;
     let is_dev = options.dev_provider_cache.is_some();
@@ -2103,6 +2202,8 @@ mod tests {
     const RETAINED_TRANSITION_EXECUTION_ROOT_ENV: &str = "MANTLE_STAGE_X_TRANSITION_EXECUTION_ROOT";
     const RETAINED_TRANSITION_HANDOFF_ROOT_ENV: &str = "MANTLE_STAGE_X_TRANSITION_HANDOFF_ROOT";
     const RETAINED_TRANSITION_SOURCE_STATE_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SOURCE_STATE";
+    const OPEN_FILE_LIMIT_CHILD_ENV: &str = "MANTLE_TEST_OPEN_FILE_LIMIT_CHILD";
+    const OPEN_FILE_LIMIT_TEST_MAX: u64 = 256;
 
     fn write_stagex_transition_handoff_fixture(execution_root: &Path) {
         for relative in STAGEX_TRANSITION_HANDOFF_DIRECTORIES {
@@ -2117,6 +2218,57 @@ mod tests {
         fs::write(execution_root.join(STAGEX_TRANSITION_AUDIT_FILE), b"[]").unwrap();
         assert!(execution_root.join(STAGEX_TRANSITION_REPORT_FILE).is_file());
         assert!(STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES.iter().all(|path| execution_root.join(path).is_file()));
+    }
+
+    #[test]
+    fn open_file_descriptor_limit_planning_is_bounded_and_fail_closed() {
+        let lower = plan_open_file_descriptor_limit(128, 8_192, OPEN_FILE_LIMIT_TEST_MAX).unwrap();
+        let exact = plan_open_file_descriptor_limit(OPEN_FILE_LIMIT_TEST_MAX, 8_192, OPEN_FILE_LIMIT_TEST_MAX).unwrap();
+        let zero = plan_open_file_descriptor_limit(128, 8_192, 0).unwrap_err();
+        let insufficient = plan_open_file_descriptor_limit(128, 128, OPEN_FILE_LIMIT_TEST_MAX).unwrap_err();
+        let inverted =
+            plan_open_file_descriptor_limit(512, OPEN_FILE_LIMIT_TEST_MAX, OPEN_FILE_LIMIT_TEST_MAX).unwrap_err();
+
+        assert!(lower.update_required);
+        assert!(!exact.update_required);
+        assert_eq!(lower.soft_limit, OPEN_FILE_LIMIT_TEST_MAX);
+        assert!(zero.contains("nonzero"));
+        assert!(insufficient.contains("hard limit"));
+        assert!(inverted.contains("soft limit"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn open_file_descriptor_limit_is_enforced_in_a_subprocess() {
+        let executable = std::env::current_exe().unwrap();
+        let output = Command::new(executable)
+            .args([
+                "--exact",
+                "source_built_fixed_point_shell::tests::open_file_descriptor_limit_child",
+                "--nocapture",
+            ])
+            .env(OPEN_FILE_LIMIT_CHILD_ENV, "1")
+            .output()
+            .unwrap();
+
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(String::from_utf8_lossy(&output.stdout).contains("open-file-limit-child-ok"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn open_file_descriptor_limit_child() {
+        if std::env::var_os(OPEN_FILE_LIMIT_CHILD_ENV).is_none() {
+            return;
+        }
+        let (_, hard_limit) = read_open_file_descriptor_limits().unwrap();
+        assert!(hard_limit >= OPEN_FILE_LIMIT_TEST_MAX);
+        enforce_open_file_descriptor_limit(OPEN_FILE_LIMIT_TEST_MAX).unwrap();
+        let (soft_limit, observed_hard_limit) = read_open_file_descriptor_limits().unwrap();
+
+        assert_eq!(soft_limit, OPEN_FILE_LIMIT_TEST_MAX);
+        assert_eq!(observed_hard_limit, hard_limit);
+        println!("open-file-limit-child-ok");
     }
 
     #[test]
@@ -2466,14 +2618,16 @@ mod tests {
     }
 
     #[test]
-    fn materialized_source_records_match_exact_native_and_stagex_union() {
+    fn materialized_source_records_preserve_bound_union_and_allow_profile_bound_fetches() {
         let temp = tempfile::tempdir().unwrap();
         let native_payload = temp.path().join("native");
         let stagex_payload = temp.path().join("stagex");
         let extra_payload = temp.path().join("extra");
+        let mismatched_native_payload = temp.path().join("mismatched-native");
         fs::write(&native_payload, b"native source").unwrap();
         fs::write(&stagex_payload, b"stagex source").unwrap();
         fs::write(&extra_payload, b"extra source").unwrap();
+        fs::write(&mismatched_native_payload, b"mismatched native source").unwrap();
         let native = crate::source_bundle::plan_source_bundle(
             &[crate::source_bundle::SourceSpec {
                 kind: crate::source_bundle::SourceRecordKind::FixedUrl,
@@ -2504,6 +2658,16 @@ mod tests {
             LOGICAL_STORE_PREFIX,
         )
         .unwrap();
+        let mismatched_native = crate::source_bundle::plan_source_bundle(
+            &[crate::source_bundle::SourceSpec {
+                kind: crate::source_bundle::SourceRecordKind::FixedUrl,
+                identity: "native".to_string(),
+                path: mismatched_native_payload,
+                adapter: None,
+            }],
+            LOGICAL_STORE_PREFIX,
+        )
+        .unwrap();
         let exact = vec![&native.records[0], &stagex.records[0]];
         let mut native_with_constructed_authority = native.clone();
         let mut constructed_authority = native.records[0].clone();
@@ -2523,17 +2687,29 @@ mod tests {
             &native_raw_digest,
         );
         let missing_error = validate_materialized_source_records(&native, &stagex, &[&native.records[0]]).unwrap_err();
-        let extra_error = validate_materialized_source_records(&native, &stagex, &[
+        validate_materialized_source_records(&native, &stagex, &[
             &native.records[0],
             &stagex.records[0],
             &extra.records[0],
+        ])
+        .unwrap();
+        let constructed_error = validate_materialized_source_records(&native, &stagex, &[
+            &native.records[0],
+            &stagex.records[0],
+            &native_with_constructed_authority.records[1],
+        ])
+        .unwrap_err();
+        let mismatch_error = validate_materialized_source_records(&native, &stagex, &[
+            &mismatched_native.records[0],
+            &stagex.records[0],
         ])
         .unwrap_err();
 
         assert_eq!(native_input.digest_blake3, native_raw_digest);
         assert_ne!(native_input.digest_blake3, native.records[0].content_blake3);
-        assert!(missing_error.to_string().contains("exact native and StageX union"));
-        assert!(extra_error.to_string().contains("exact native and StageX union"));
+        assert!(missing_error.to_string().contains("omits bound source identity"));
+        assert!(constructed_error.to_string().contains("non-fetch source authority"));
+        assert!(mismatch_error.to_string().contains("differs from its independently bound manifest"));
     }
 
     #[test]
@@ -2828,6 +3004,7 @@ mod tests {
             resource_bounds: SourceBuiltFixedPointResourceBounds {
                 elapsed_seconds_max: 1,
                 disk_bytes_max: 1,
+                open_file_descriptors_max: OPEN_FILE_LIMIT_TEST_MAX,
                 protected_exec_events_max: 1,
                 source_records_max: 1,
             },

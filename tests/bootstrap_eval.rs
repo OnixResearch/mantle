@@ -113,6 +113,173 @@ fn contract_violations<'a>(source: &str, required: &'a [&'a str], forbidden: &'a
 }
 
 #[test]
+fn full_source_host_tools_bind_the_selected_linux_header_identity() {
+    let headers = eval_bootstrap("linux-headers-6.6-gcc10.ncl");
+    assert_eq!(headers.name, "linux-headers-6.6-full-source-gcc10-v3");
+
+    for (recipe, variable) in [
+        ("busybox-1.37.0-gcc10.ncl", "HEADERS"),
+        ("cmake-3.31.8-gcc10.ncl", "LINUX_HEADERS"),
+        ("python-3.13.5-gcc10.ncl", "LINUX_HEADERS"),
+        ("perl-5.10.1-gcc10.ncl", "LINUX_HEADERS"),
+        ("perl-5.6.2-gcc10.ncl", "LINUX_HEADERS"),
+    ] {
+        let source = std::fs::read_to_string(bootstrap_path(recipe)).unwrap();
+        let selected = format!("{variable}=$(find_input linux-headers-6.6-full-source-gcc10-v3)");
+        let stale = format!("{variable}=$(find_input linux-headers-6.6-full-source-gcc10-v1)");
+        let invalid_source = source.replace(&selected, &stale);
+        let derivation = eval_bootstrap(recipe);
+
+        assert!(source.contains(&selected), "{recipe} does not select {}", headers.name);
+        assert!(!source.contains(&stale), "{recipe} retains a stale Linux-header identity");
+        assert!(!invalid_source.contains(&selected));
+        assert!(invalid_source.contains(&stale));
+        assert!(!derivation.name.is_empty());
+    }
+}
+
+#[test]
+fn gcc_pass3_linker_uses_only_relocatable_stagex_authority() {
+    let source = std::fs::read_to_string(bootstrap_path("gcc-4.0-musl-pass3.ncl")).unwrap();
+    let required = [
+        "name = \"gcc-4.0.4-musl-pass3-v23\"",
+        "linker=\"\\${MANTLE_GCC_LINKER:-$STAGEX/bin/x86_64-linux-musl-ld}\"",
+        "exec \"\\$linker\" \\$link_arguments",
+    ];
+    let forbidden = ["gcc40-pass3-final-ld: $BINUTILS/bin/ld", "gcc-4.0.4-musl-pass3-v22"];
+    let violations = contract_violations(&source, &required, &forbidden);
+    let invalid_source = source.replace(required[1], forbidden[0]);
+    let invalid_violations = contract_violations(&invalid_source, &required, &forbidden);
+    let derivation = eval_bootstrap("gcc-4.0-musl-pass3.ncl");
+
+    assert!(violations.is_empty(), "GCC pass3 linker contract violations: {violations:?}");
+    assert_eq!(invalid_violations, vec![required[1], forbidden[0]]);
+    assert_eq!(derivation.name, "gcc-4.0.4-musl-pass3-v23");
+    assert!(source.contains("let stagex_provider = import \"stagex-provider-proof-input.ncl\""));
+}
+
+#[test]
+fn gcc_pass4_tool_wrappers_use_only_relocatable_stagex_authority() {
+    let source = std::fs::read_to_string(bootstrap_path("gcc-4.0-musl-pass4.ncl")).unwrap();
+    let (_, final_assembler_wrapper) = source.rsplit_once("      $BB cat > \"$out/bin/as\" <<EOF").unwrap();
+    let (_, final_linker_wrapper) = source.rsplit_once("      $BB cat > \"$out/bin/ld\" <<EOF").unwrap();
+    let assembler_required = [
+        "assembler=\"\\${MANTLE_GCC_ASSEMBLER:-$STAGEX/bin/x86_64-linux-musl-as}\"",
+        "exec \"\\$assembler\" \"\\$@\"",
+    ];
+    let assembler_forbidden = ["assembler=\"\\${MANTLE_GCC_ASSEMBLER:-$BINUTILS/bin/as}\""];
+    let linker_required = [
+        "linker=\"\\${MANTLE_GCC_LINKER:-$STAGEX/bin/x86_64-linux-musl-ld}\"",
+        "exec \"\\$linker\" \\$link_arguments",
+    ];
+    let linker_forbidden = ["linker=\"\\${MANTLE_GCC_LINKER:-$BINUTILS/bin/ld}\""];
+    let assembler_violations = contract_violations(final_assembler_wrapper, &assembler_required, &assembler_forbidden);
+    let invalid_assembler = final_assembler_wrapper.replace(assembler_required[0], assembler_forbidden[0]);
+    let linker_violations = contract_violations(final_linker_wrapper, &linker_required, &linker_forbidden);
+    let invalid_linker = final_linker_wrapper.replace(linker_required[0], linker_forbidden[0]);
+    let derivation = eval_bootstrap("gcc-4.0-musl-pass4.ncl");
+
+    assert!(assembler_violations.is_empty(), "GCC pass4 assembler contract: {assembler_violations:?}");
+    assert_eq!(contract_violations(&invalid_assembler, &assembler_required, &assembler_forbidden), vec![
+        assembler_required[0],
+        assembler_forbidden[0]
+    ]);
+    assert!(linker_violations.is_empty(), "GCC pass4 linker contract: {linker_violations:?}");
+    assert_eq!(contract_violations(&invalid_linker, &linker_required, &linker_forbidden), vec![
+        linker_required[0],
+        linker_forbidden[0]
+    ]);
+    assert!(source.contains("name = \"gcc-4.0.4-musl-pass4-v7\""));
+    assert!(!source.contains("gcc-4.0.4-musl-pass4-v6"));
+    assert_eq!(derivation.name, "gcc-4.0.4-musl-pass4-v7");
+    assert!(source.contains("let stagex_provider = import \"stagex-provider-proof-input.ncl\""));
+}
+
+#[test]
+fn gcc_pass5_archives_bind_deterministic_binutils_metadata() {
+    let source = std::fs::read_to_string(bootstrap_path("gcc-4.0-musl-pass5.ncl")).unwrap();
+    let required = [
+        "name = \"gcc-4.0.4-musl-pass5-v2\"",
+        "grep -Fxc 'AR_CREATE_FOR_TARGET = $(AR_FOR_TARGET) $(AR_FLAGS_FOR_TARGET) rc'",
+        "'s|^AR_CREATE_FOR_TARGET = $(AR_FOR_TARGET) $(AR_FLAGS_FOR_TARGET) rc$|AR_CREATE_FOR_TARGET = $(AR_FOR_TARGET) $(AR_FLAGS_FOR_TARGET) rcD|'",
+        "grep -Fxc 'AR_CREATE_FOR_TARGET = $(AR_FOR_TARGET) $(AR_FLAGS_FOR_TARGET) rcD'",
+        "DETERMINISTIC_RANLIB=\"$BINUTILS/bin/ranlib -D\"",
+        "RANLIB_FOR_TARGET=\"$DETERMINISTIC_RANLIB\"",
+    ];
+    let forbidden = [
+        "name = \"gcc-4.0.4-musl-pass5-v1\"",
+        "'s|^AR_CREATE_FOR_TARGET = $(AR_FOR_TARGET) $(AR_FLAGS_FOR_TARGET) rc$|AR_CREATE_FOR_TARGET = $(AR_FOR_TARGET) $(AR_FLAGS_FOR_TARGET) rc|'",
+        "DETERMINISTIC_RANLIB=\"$BINUTILS/bin/ranlib\"",
+    ];
+    let invalid_ar = source.replace(required[2], forbidden[1]);
+    let invalid_ranlib = source.replace(required[4], forbidden[2]);
+    let derivation = eval_bootstrap("gcc-4.0-musl-pass5.ncl");
+
+    assert!(contract_violations(&source, &required, &forbidden).is_empty());
+    assert_eq!(contract_violations(&invalid_ar, &required, &forbidden), vec![required[2], forbidden[1]]);
+    assert_eq!(contract_violations(&invalid_ranlib, &required, &forbidden), vec![required[4], forbidden[2]]);
+    assert_eq!(source.matches(required[1]).count(), 1);
+    assert_eq!(source.matches(required[3]).count(), 1);
+    assert_eq!(source.matches(required[5]).count(), 2);
+    assert_eq!(derivation.name, "gcc-4.0.4-musl-pass5-v2");
+}
+
+#[test]
+fn gcc_built_binutils_defaults_to_deterministic_archives() {
+    let source = std::fs::read_to_string(bootstrap_path("binutils-2.30-gcc.ncl")).unwrap();
+    let required = [
+        "name = \"binutils-2.30-gcc-pass4-v17\"",
+        "--enable-deterministic-archives",
+        "\"$out/bin/ar\" rc \"$ARCHIVE_PROBE/default-first.a\" \"$ARCHIVE_MEMBER\"",
+        "\"$out/bin/ar\" rcU \"$ARCHIVE_PROBE/timestamp-first.a\" \"$ARCHIVE_MEMBER\"",
+        "ERROR: explicit timestamp-sensitive archive probe produced equal archives",
+        "default_archive_mode=deterministic",
+    ];
+    let forbidden = [
+        "name = \"binutils-2.30-gcc-pass4-v16\"",
+        "--disable-deterministic-archives",
+    ];
+    let invalid_flag = source.replacen(required[1], forbidden[1], 1);
+    let derivation = eval_bootstrap("binutils-2.30-gcc.ncl");
+
+    assert!(contract_violations(&source, &required, &forbidden).is_empty());
+    assert_eq!(contract_violations(&invalid_flag, &required, &forbidden), vec![required[1], forbidden[1]]);
+    assert_eq!(source.matches(required[1]).count(), 1);
+    assert!(source.contains("ARCHIVE_DATE_EARLY=200001010000"));
+    assert!(source.contains("ARCHIVE_DATE_LATE=201001010000"));
+    assert_eq!(derivation.name, "binutils-2.30-gcc-pass4-v17");
+}
+
+#[test]
+fn gcc40_cxx_defaults_random_seeds_to_main_input_identity() {
+    let source = std::fs::read_to_string(bootstrap_path("gcc-4.0-musl-cxx.ncl")).unwrap();
+    let required = [
+        "name = \"gcc-4.0.4-musl-cxx-v8\"",
+        "RANDOM_SEED_NEW='      value = crc32_string (0, main_input_filename ? main_input_filename : \"mantle-gcc40-no-input\");'",
+        "RANDOM_SEED_ASSIGN_NEW='      flag_random_seed = random_seed; local_tick = -1;'",
+        "\"$CC1PLUS\" -quiet -O2 \"$WORK/random-seed-probe.cc\" -o \"$WORK/random-seed-default-a.s\"",
+        "-frandom-seed=mantle-negative-a",
+        "ERROR: GCC random-seed negative control produced equal assembly",
+        "default_random_seed=main-input-filename-crc32",
+    ];
+    let forbidden = [
+        "name = \"gcc-4.0.4-musl-cxx-v7\"",
+        "RANDOM_SEED_NEW='      value = local_tick ^ getpid ();'",
+        "RANDOM_SEED_ASSIGN_NEW='      flag_random_seed = random_seed;'",
+    ];
+    let invalid_default = source.replacen(required[1], forbidden[1], 1);
+    let invalid_tick = source.replacen(required[2], forbidden[2], 1);
+    let derivation = eval_bootstrap("gcc-4.0-musl-cxx.ncl");
+
+    assert!(contract_violations(&source, &required, &forbidden).is_empty());
+    assert_eq!(contract_violations(&invalid_default, &required, &forbidden), vec![required[1], forbidden[1]]);
+    assert_eq!(contract_violations(&invalid_tick, &required, &forbidden), vec![required[2], forbidden[2]]);
+    assert_eq!(source.matches(required[1]).count(), 1);
+    assert_eq!(source.matches(required[2]).count(), 1);
+    assert_eq!(derivation.name, "gcc-4.0.4-musl-cxx-v8");
+}
+
+#[test]
 fn eval_make_bootstrap_imports_shared_seed() {
     let drv = eval_bootstrap("make.ncl");
     let input_names = input_derivation_names(&drv);
@@ -675,8 +842,12 @@ fn gcc_native_diagnostic_uses_runtime_tcc_without_autotools_claims() {
     let text = std::fs::read_to_string(bootstrap_path("gcc-4.0-native.ncl")).unwrap();
     let selected_seed = std::fs::read_to_string(bootstrap_path("seed.ncl")).unwrap();
 
-    assert!(text.contains("crunch.derivationFile \"tcc-musl-native.ncl\""));
-    assert!(text.contains("crunch.derivationFile \"musl-1.1.24-native.ncl\""));
+    assert!(text.contains("let stagex_provider = import \"stagex-provider-proof-input.ncl\""));
+    assert!(text.contains("let stagex_transition = import \"stagex-transition-proof-input.ncl\""));
+    assert!(text.contains("STAGEX=$(find_input mantle-stagex-intermediate-provider)"));
+    assert!(text.contains("MUSL=\"$STAGEX/x86_64-linux-musl\""));
+    assert!(!text.contains("crunch.derivationFile \"tcc-musl-native.ncl\""));
+    assert!(!text.contains("crunch.derivationFile \"musl-1.1.24-native.ncl\""));
     assert!(text.contains("Use the release tarball's generated configure"));
     assert!(text.contains("test -f gcc/c-parse.c"));
     assert!(text.contains("ucnid-table.o"));
@@ -755,7 +926,7 @@ fn perl_gcc_generators_keep_normalized_inputs_and_runtime_rails() {
         "-B\"$GCC/bin/\"",
     ];
     let perl_5000_forbidden = [
-        "GCC=$(find_input gcc-4.0.4-musl-pass4-v5)",
+        "GCC=$(find_input gcc-4.0.4-musl-pass4-v7)",
         "MUSL=$(find_input musl-1.1.24-gcc-pass4-v2)",
     ];
     let perl_500503_required = [

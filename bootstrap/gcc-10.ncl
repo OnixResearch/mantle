@@ -38,7 +38,7 @@ let gcc10_src = crunch.derivationFile "gcc-10.5.0-regenerated-source.ncl" in
       }
 
       GCC47=$(find_input gcc-4.7.4-musl-gcc40-v1)
-      BINUTILS=$(find_input binutils-2.30-gcc-pass4-v16)
+      BINUTILS=$(find_input binutils-2.30-gcc-pass4-v17)
       MUSL=$(find_input musl-1.1.24-gcc-pass5-v1)
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)

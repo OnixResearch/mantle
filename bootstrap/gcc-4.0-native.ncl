@@ -69,20 +69,27 @@ let gcc_src = crunch.fetchTarball {
       GAWK="$TRANSITION/gawk-stage/runtime/output"
       STAGEX_COMPAT=/tmp/gcc40-stagex-compat
       TCC="$STAGEX_COMPAT/tcc"
-      TCC_SELFHOST="$TCC"
-      TCC26="$TCC"
+      TCC_SELFHOST="$STAGEX_COMPAT/tcc-selfhost"
+      TCC26="$STAGEX_COMPAT/tcc-0.9.26"
       BINUTILS="$STAGEX_COMPAT/binutils"
       $BB rm -rf "$STAGEX_COMPAT"
-      $BB mkdir -p "$TCC/bin" "$TCC/lib" "$BINUTILS/bin"
+      $BB mkdir -p "$TCC/bin" "$TCC/lib" "$TCC_SELFHOST/bin" "$TCC_SELFHOST/lib" \
+        "$TCC26/bin" "$TCC26/lib" "$BINUTILS/bin"
       $BB ln -s "$STAGEX/bin/x86_64-linux-musl-tcc" "$TCC/bin/tcc"
       $BB ln -s "$STAGEX/lib/tcc" "$TCC/lib/tcc"
+      $BB ln -s "$STAGEX/bin/x86_64-linux-musl-tcc-selfhost" "$TCC_SELFHOST/bin/tcc"
+      $BB ln -s "$STAGEX/lib/tcc" "$TCC_SELFHOST/lib/tcc"
+      $BB ln -s "$STAGEX/bin/x86_64-linux-musl-tcc-0.9.26" "$TCC26/bin/tcc"
+      $BB ln -s "$STAGEX/lib/tcc" "$TCC26/lib/tcc"
       for tool in ar as ld nm objcopy objdump ranlib readelf size strings strip; do
         $BB ln -s "$STAGEX/bin/x86_64-linux-musl-$tool" "$BINUTILS/bin/$tool"
       done
       AUTOMAKE115_SRC=$(find_input automake-1.15.1-config-sub-src)
       SRC=$(find_input gcc-4.0.4-native-src)
       TCC_RUNTIME="$TCC/lib/tcc/libtcc1.a"
+      TCC_RUNTIME_SUPPLEMENT="$TCC/lib/tcc/libtcc1-stagex-provider.o"
       test -s "$TCC_RUNTIME"
+      test -s "$TCC_RUNTIME_SUPPLEMENT"
 
       # Every PATH utility is a declared source-built derivation output. The
       # sandbox shell remains the explicit builder boundary, not a PATH fallback.
@@ -113,12 +120,14 @@ REAL_LD="$BINUTILS/bin/ld"
 MUSL_INCLUDE="$MUSL/include"
 MUSL_LIB="$MUSL/lib"
 TCC_RUNTIME="$TCC/lib/tcc/libtcc1.a"
+TCC_RUNTIME_SUPPLEMENT="$TCC/lib/tcc/libtcc1-stagex-provider.o"
 LINK_COMPAT_OBJECT=/tmp/gcc40-link-compat.o
 PROGNAME_COMPAT_OBJECT=/tmp/gcc40-progname-compat.o
 TEARDOWN_STATUS=$COMPILER_TEARDOWN_STATUS
 mode=link
 output_file=
 source_file=
+compiler_arguments=
 previous=
 for argument in "\$@"; do
   if [ "\$previous" = -o ]; then output_file="\$argument"; fi
@@ -127,6 +136,10 @@ for argument in "\$@"; do
     -E) mode=preprocess ;;
     --version|-V) exec "\$REAL_TCC" -v ;;
     *.c) source_file="\$argument" ;;
+  esac
+  case "\$argument" in
+    -g) ;;
+    *) compiler_arguments="\$compiler_arguments \$argument" ;;
   esac
   previous="\$argument"
 done
@@ -223,6 +236,7 @@ if [ "\$mode" = link ]; then
   link_inputs=
   for argument in "\$@"; do
     case "\$argument" in
+      -lm) link_inputs="\$link_inputs \$MUSL_LIB/libm.a" ;;
       *.o|*.a|-l*|-L*) link_inputs="\$link_inputs \$argument" ;;
     esac
   done
@@ -257,7 +271,8 @@ if [ "\$mode" = link ]; then
   # can fault on larger Autoconf probes. Link those objects with the protected
   # StageX binutils authority instead of reviving a legacy TinyCC derivation.
   "\$REAL_LD" -static -o "\$output_file" "\$MUSL_LIB/crt1.o" \
-    \$link_inputs \$progname_compat_input "\$LINK_COMPAT_OBJECT" "\$MUSL_LIB/libc.a" "\$TCC_RUNTIME"
+    \$link_inputs \$progname_compat_input "\$LINK_COMPAT_OBJECT" "\$MUSL_LIB/libc.a" \
+    "\$TCC_RUNTIME_SUPPLEMENT" "\$TCC_RUNTIME"
   compiler_status=\$?
   echo "gcc40-tcc-wrapper: link status=\$compiler_status" >&2
   if ! { [ "\$compiler_status" -eq 0 ] || [ "\$compiler_status" -eq "\$TEARDOWN_STATUS" ]; } || [ ! -s "\$output_file" ]; then
@@ -270,7 +285,8 @@ if [ "\$mode" = link ]; then
       if { [ "\$compiler_status" -eq 0 ] || [ "\$compiler_status" -eq "\$TEARDOWN_STATUS" ]; } && [ -s "\$scratch_link_object" ]; then
         /bin/busybox chmod u+rw "\$scratch_link_object"
         "\$REAL_LD" -static -o "\$output_file" "\$MUSL_LIB/crt1.o" \
-          \$link_inputs \$progname_compat_input "\$LINK_COMPAT_OBJECT" "\$MUSL_LIB/libc.a" "\$TCC_RUNTIME"
+          \$link_inputs \$progname_compat_input "\$LINK_COMPAT_OBJECT" "\$MUSL_LIB/libc.a" \
+          "\$TCC_RUNTIME_SUPPLEMENT" "\$TCC_RUNTIME"
         compiler_status=\$?
         echo "gcc40-tcc-wrapper: older-object link status=\$compiler_status" >&2
       fi
@@ -284,7 +300,8 @@ if [ "\$mode" = link ]; then
     /bin/busybox rm -f "\$output_file"
     echo "gcc40-tcc-wrapper: retry older compiler for rejected link output=\$output_file" >&2
     "\$REAL_LD" -static -o "\$output_file" "\$MUSL_LIB/crt1.o" \
-      \$link_inputs \$progname_compat_input "\$LINK_COMPAT_OBJECT" "\$MUSL_LIB/libc.a" "\$TCC_RUNTIME"
+      \$link_inputs \$progname_compat_input "\$LINK_COMPAT_OBJECT" "\$MUSL_LIB/libc.a" \
+      "\$TCC_RUNTIME_SUPPLEMENT" "\$TCC_RUNTIME"
     compiler_status=\$?
     echo "gcc40-tcc-wrapper: older link status=\$compiler_status" >&2
   fi
@@ -299,7 +316,8 @@ if [ -z "\$output_file" ] && [ "\$mode" = compile ] && [ -n "\$source_file" ]; t
   source_name=\$(/bin/busybox basename "\$source_file")
   output_file="\${source_name%.c}.o"
 fi
-if [ "\$mode" = compile ] && [ "\${source_file##*/}" = charset.c ]; then
+source_basename="\${source_file##*/}"
+if [ "\$mode" = compile ] && [ "\$source_basename" = charset.c ]; then
   # The source-built frontends crash while retaining the deeply nested GCC
   # include stack for this translation unit.  Preserve the exact preprocessed
   # C as a bounded diagnostic handoff; admission still forbids this bridge.
@@ -330,7 +348,9 @@ if [ "\$mode" = compile ] && [ "\${source_file##*/}" = charset.c ]; then
   echo "gcc40-tcc-wrapper: diagnostic preprocess handoff failed preprocess=\$preprocessor_status compile=\${compiler_status:-not-run}" >&2
   /bin/busybox rm -f "\$preprocessed_source" "\$output_file"
 fi
-"\$REAL_TCC" "\$@"
+# Configure proves that this TinyCC set rejects -g. Pass the remaining exact
+# arguments without the unsupported diagnostic flag.
+"\$REAL_TCC" \$compiler_arguments
 compiler_status=\$?
 if { [ "\$compiler_status" -eq 0 ] || [ "\$compiler_status" -eq "\$TEARDOWN_STATUS" ]; } && [ -n "\$output_file" ] && [ -s "\$output_file" ]; then
   /bin/busybox chmod u+rw "\$output_file"
@@ -339,7 +359,7 @@ fi
 if [ "\$mode" = compile ]; then
   /bin/busybox rm -f "\$output_file"
   echo "gcc40-tcc-wrapper: retry self-host compiler for \$source_file" >&2
-  "\$REAL_CPP_COMPILER" "\$@"
+  "\$REAL_CPP_COMPILER" \$compiler_arguments
   compiler_status=\$?
   if { [ "\$compiler_status" -eq 0 ] || [ "\$compiler_status" -eq "\$TEARDOWN_STATUS" ]; } && [ -s "\$output_file" ]; then
     /bin/busybox chmod u+rw "\$output_file"
@@ -347,7 +367,7 @@ if [ "\$mode" = compile ]; then
   fi
   /bin/busybox rm -f "\$output_file"
   echo "gcc40-tcc-wrapper: retry older compiler for \$source_file" >&2
-  "\$REAL_OLD_COMPILER" "\$@"
+  "\$REAL_OLD_COMPILER" \$compiler_arguments
   compiler_status=\$?
   if { [ "\$compiler_status" -eq 0 ] || [ "\$compiler_status" -eq "\$TEARDOWN_STATUS" ]; } && [ -s "\$output_file" ]; then
     /bin/busybox chmod u+rw "\$output_file"
@@ -358,29 +378,9 @@ exit "\$compiler_status"
 EOF
       $BB chmod 755 "$TCC_WRAPPER"
 
-      # The inherited reduced libtcc1 archive omits the x86_64 unsigned
-      # double-word-to-float helper that TinyCC emits for GCC objects.  Compile
-      # the upstream TinyCC algorithm as an explicit diagnostic link object.
-      # A complete compiler runtime must provide this itself before admission.
+      # The provider runtime supplement owns TinyCC compiler-runtime helpers.
+      # Keep only the reduced-libc process stubs in this diagnostic link object.
       $BB cat > /tmp/gcc40-link-compat.c <<'EOF'
-typedef union {
-  struct { unsigned int low; int high; } words;
-  long long signed_value;
-  unsigned long long unsigned_value;
-} mantle_double_word;
-
-float __floatundisf(unsigned long long value)
-{
-  mantle_double_word bits;
-  long double converted;
-  bits.unsigned_value = value;
-  if (bits.words.high >= 0)
-    return (float) bits.signed_value;
-  converted = (long double) bits.signed_value;
-  converted += 18446744073709551616.0;
-  return (float) converted;
-}
-
 /* Diagnostic-only reduced-libc helpers required while cc1 runs. */
 enum { MANTLE_PAGE_SIZE_BYTES = 4096 };
 int getpagesize(void) { return MANTLE_PAGE_SIZE_BYTES; }
@@ -625,15 +625,16 @@ EOF
 link_arguments=
 for link_argument in "\$@"; do
   case "\$link_argument" in
-    -lgcc|-lgcc_eh|*/libgcc.a|*/libtcc1.a|*/crtbegin*.o|*/crtend*.o|crtbegin*.o|crtend*.o) ;;
+    -lgcc) link_arguments="\$link_arguments \$link_argument" ;;
+    -lgcc_eh|*/libgcc.a|*/libtcc1.a|*/crtbegin*.o|*/crtend*.o|crtbegin*.o|crtend*.o) ;;
     crt1.o|crti.o|crtn.o) link_arguments="\$link_arguments $MUSL/lib/\$link_argument" ;;
     -lc) link_arguments="\$link_arguments /tmp/gcc40-indexed-libc.a" ;;
     -lm) ;;
     *) link_arguments="\$link_arguments \$link_argument" ;;
   esac
 done
-echo "gcc40-ld: $BINUTILS/bin/ld \$link_arguments /tmp/gcc40-link-compat.o" >&2
-exec "$BINUTILS/bin/ld" \$link_arguments /tmp/gcc40-link-compat.o
+echo "gcc40-ld: $BINUTILS/bin/ld \$link_arguments $TCC_RUNTIME_SUPPLEMENT /tmp/gcc40-link-compat.o" >&2
+exec "$BINUTILS/bin/ld" \$link_arguments "$TCC_RUNTIME_SUPPLEMENT" /tmp/gcc40-link-compat.o
 EOF
         $BB chmod 755 gcc/ld
 
@@ -900,12 +901,12 @@ static int sum_values(int count, ...)
 
 int main(void)
 {
-  if (widen_signed(NEGATIVE_VALUE) != NEGATIVE_VALUE) return 1;
-  if (diagnostic_common_global != 0) return 1;
-  if (sum_values(VARARG_COUNT, VARARG_FIRST, VARARG_SECOND, VARARG_THIRD) != VARARG_EXPECTED) return 1;
-  if (__floatundisf(0) != 0.0f) return 1;
-  if (__floatundisf(1) != 1.0f) return 1;
-  if (__floatundisf(MAX_UNSIGNED_WORD) != ROUNDED_MAX_FLOAT) return 1;
+  if (widen_signed(NEGATIVE_VALUE) != NEGATIVE_VALUE) return 11;
+  if (diagnostic_common_global != 0) return 12;
+  if (sum_values(VARARG_COUNT, VARARG_FIRST, VARARG_SECOND, VARARG_THIRD) != VARARG_EXPECTED) return 13;
+  if (__floatundisf(0) != 0.0f) return 14;
+  if (__floatundisf(1) != 1.0f) return 15;
+  if (__floatundisf(MAX_UNSIGNED_WORD) != ROUNDED_MAX_FLOAT) return 16;
   return 0;
 }
 EOF
@@ -916,7 +917,14 @@ EOF
       test -s /tmp/gcc40-native-smoke || { echo "ERROR: native gcc executable smoke missing" >&2; exit 1; }
       smoke_magic=$($BB od -An -tx1 -N4 /tmp/gcc40-native-smoke | $BB tr -d ' ')
       test "$smoke_magic" = "$ELF_MAGIC_HEX" || { echo "ERROR: native gcc smoke is not ELF" >&2; exit 1; }
+      set +e
       /tmp/gcc40-native-smoke
+      smoke_status=$?
+      set -e
+      test "$smoke_status" -eq 0 || {
+        echo "ERROR: native gcc executable smoke failed status=$smoke_status" >&2
+        exit 1
+      }
 
       $BB printf '%s\n' 'int main(' > /tmp/gcc40-native-rejected.c
       $BB rm -f /tmp/gcc40-native-rejected.o

@@ -27,6 +27,7 @@ const SED_BRIDGE_LAUNCHER_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-se
 const SED_BRIDGE_SCRIPT_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-sed-regular-file-bridge.sh");
 const SINGLE_THREAD_SEMAPHORE_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-single-thread-semaphore-compat.c");
 const CONFIGURE_UTILITY_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-configure-utility.c");
+const ARCHIVE_CANONICAL_TEMP_EXTENSION: &str = "mantle-canonical-archive.tmp";
 const YLWRAP_SED_RUNNER_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-ylwrap-sed-runner.c");
 const BINUTILS_AR_RUNNER_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-binutils-ar-runner.sh");
 const ELF_SYMBOL_CANONICALIZER_SOURCE: &[u8] = include_bytes!("../bootstrap/stagex-elf-local-symbol-canonicalizer.c");
@@ -595,15 +596,15 @@ const BINUTILS_COMPONENTS: [(&str, &str, bool, &str); BINUTILS_COMPONENT_COUNT] 
         "libiberty",
         "libiberty.a",
         false,
-        "d19e0d15373a237fe94b0d915f3edba43182343739da15f837c1a9a1ea426236",
+        "9e054fcfdd504399c978714e8013154c57eb51951ecbf6ae71b52ab550d3af01",
     ),
-    ("zlib", "libz.a", false, "b922a8528a2491568debfc87c017514986a44516f43c3865c10a72884bb4eb53"),
-    ("bfd", ".libs/libbfd.a", false, "f45500a900c2294cd23bcd0c7fd013e31a7b4028bce48f765108d7f309169e53"),
+    ("zlib", "libz.a", false, "7cfe930119c77ef8bd7f34ec122de1a7f644851183cd7bc82dadc27b6bbb54b4"),
+    ("bfd", ".libs/libbfd.a", false, "94a9d681cbacecb5edc26a100fd94b860332115f0adf65d89cffeb5a4038144e"),
     (
         "opcodes",
         ".libs/libopcodes.a",
         false,
-        "1f9d0deabd406f82dcabaaddf6faff6b5fdb7475b3e59d000b27b70251200fac",
+        "d75ecd69a0f592d5b8fa4d9189d3af133c98c369ec5f89939e55371eb72a6dda",
     ),
     ("binutils", "size", true, "812bd48e35d078b759192073cb2de2accaf9620c075c2ae24df9329c5623a7dd"),
     ("gas", "as-new", true, "36bb17408403b4fd8283bf80f78410ae76eedb4e1565f0fc6db0f7a8c0a1eac4"),
@@ -1576,6 +1577,9 @@ fn run_component_build(
         )));
     }
     let output = context.source.join(subdirectory).join(expected_output);
+    if !executable {
+        canonicalize_component_archive(&output, subdirectory)?;
+    }
     validate_component_output_with_mode(
         &output,
         subdirectory,
@@ -1586,6 +1590,70 @@ fn run_component_build(
     assert!(stdout.is_file());
     assert!(stderr.is_file());
     Ok(output)
+}
+
+fn canonicalize_component_archive(path: &Path, label: &str) -> Result<(), StagexBinutilsError> {
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| StagexBinutilsError::Materialization(format!("reading {label} archive metadata: {error}")))?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "binutils component {label} archive is not a regular file"
+        )));
+    }
+    let input = crate::stagex_mes_lib::read_bounded_file(path, CONFIGURE_OUTPUT_BYTES_MAX, label)
+        .map_err(StagexBinutilsError::from_runtime)?;
+    let canonical = crate::stagex_archive_core::canonicalize_stagex_archive_elf_members(&input).map_err(|error| {
+        StagexBinutilsError::Materialization(format!("canonicalizing binutils component {label} archive: {error}"))
+    })?;
+    let repeated =
+        crate::stagex_archive_core::canonicalize_stagex_archive_elf_members(&canonical.bytes).map_err(|error| {
+            StagexBinutilsError::Materialization(format!("rechecking binutils component {label} archive: {error}"))
+        })?;
+    if canonical.bytes != repeated.bytes {
+        return Err(StagexBinutilsError::Materialization(format!(
+            "binutils component {label} archive canonicalization is not idempotent"
+        )));
+    }
+    if canonical.bytes != input {
+        publish_component_archive(path, &metadata, &canonical.bytes, label)?;
+    }
+    assert!(canonical.member_count > 0);
+    assert_eq!(canonical.bytes, repeated.bytes);
+    Ok(())
+}
+
+fn publish_component_archive(
+    path: &Path,
+    metadata: &fs::Metadata,
+    bytes: &[u8],
+    label: &str,
+) -> Result<(), StagexBinutilsError> {
+    let staged = path.with_extension(ARCHIVE_CANONICAL_TEMP_EXTENSION);
+    let write_result = (|| -> Result<(), StagexBinutilsError> {
+        let mut file = fs::OpenOptions::new().write(true).create_new(true).open(&staged).map_err(|error| {
+            StagexBinutilsError::Materialization(format!("creating {label} canonical archive: {error}"))
+        })?;
+        file.write_all(bytes).map_err(|error| {
+            StagexBinutilsError::Materialization(format!("writing {label} canonical archive: {error}"))
+        })?;
+        file.set_permissions(metadata.permissions()).map_err(|error| {
+            StagexBinutilsError::Materialization(format!("setting {label} canonical archive mode: {error}"))
+        })?;
+        file.sync_all().map_err(|error| {
+            StagexBinutilsError::Materialization(format!("syncing {label} canonical archive: {error}"))
+        })?;
+        fs::rename(&staged, path).map_err(|error| {
+            StagexBinutilsError::Materialization(format!("publishing {label} canonical archive: {error}"))
+        })?;
+        Ok(())
+    })();
+    if write_result.is_err() && staged.exists() {
+        let _ = fs::remove_file(&staged);
+    }
+    write_result?;
+    assert!(!bytes.is_empty());
+    debug_assert!(!staged.exists());
+    Ok(())
 }
 
 fn make_shell_assignment(
