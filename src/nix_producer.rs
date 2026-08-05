@@ -490,6 +490,77 @@ pub(crate) fn accept_success(
     Ok(ProducerOutcome::Success(success.clone()))
 }
 
+// r[impl nix_producer_adapter.compatibility_evidence]
+
+/// Pins bound into one per-backend compatibility evidence record. Every
+/// field is a typed fact; evidence validity extends exactly to these pins.
+// Receipt integration lands with the release-evidence wiring; until then only
+// unit tests consume this type.
+#[allow(dead_code)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub(crate) struct BackendEvidencePins {
+    pub(crate) backend: ProducerBackendKind,
+    pub(crate) source_revision: String,
+    pub(crate) source_content_digest: String,
+    pub(crate) binary_identity: String,
+    pub(crate) reference_nix_version: String,
+    pub(crate) nixpkgs_universe_pin: String,
+}
+
+/// Freshness of an evidence record against current backend facts.
+#[allow(dead_code)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum EvidenceFreshness {
+    /// Current facts match every recorded pin.
+    Fresh,
+    /// Named fields drifted; old counts must not cover the new identity.
+    Stale { drifted_fields: Vec<String> },
+}
+
+#[allow(dead_code)]
+fn drift_field(drifted: &mut Vec<String>, name: &str, recorded: &str, current: &str) {
+    debug_assert!(!name.is_empty(), "drift field name must not be empty");
+    if recorded != current {
+        drifted.push(name.to_string());
+    }
+}
+
+/// Classify one evidence record against current backend facts. A drifted
+/// backend kind makes every count stale for this backend.
+#[allow(dead_code)]
+pub(crate) fn classify_evidence_freshness(
+    recorded: &BackendEvidencePins,
+    current: &BackendEvidencePins,
+) -> EvidenceFreshness {
+    let mut drifted: Vec<String> = Vec::new();
+    if recorded.backend != current.backend {
+        drifted.push("backend".to_string());
+    }
+    drift_field(&mut drifted, "source_revision", &recorded.source_revision, &current.source_revision);
+    drift_field(
+        &mut drifted,
+        "source_content_digest",
+        &recorded.source_content_digest,
+        &current.source_content_digest,
+    );
+    drift_field(&mut drifted, "binary_identity", &recorded.binary_identity, &current.binary_identity);
+    drift_field(
+        &mut drifted,
+        "reference_nix_version",
+        &recorded.reference_nix_version,
+        &current.reference_nix_version,
+    );
+    drift_field(&mut drifted, "nixpkgs_universe_pin", &recorded.nixpkgs_universe_pin, &current.nixpkgs_universe_pin);
+    if drifted.is_empty() {
+        EvidenceFreshness::Fresh
+    } else {
+        debug_assert!(!drifted.is_empty(), "stale evidence must name drifted fields");
+        EvidenceFreshness::Stale {
+            drifted_fields: drifted,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -738,6 +809,57 @@ mod tests {
         success.drv_dir_total_bytes = request.budget.output_bytes_max + 1;
         let error = accept_success(&success, &request).unwrap_err();
         assert_eq!(error.class, ProducerErrorClass::OutputTooLarge);
+    }
+
+    fn evidence_pins() -> BackendEvidencePins {
+        BackendEvidencePins {
+            backend: ProducerBackendKind::Fix,
+            source_revision: "fd675c2e938da6c9f444a00893b6716d66c89927".to_string(),
+            source_content_digest: "sha256-qLTYqSdaxPNMsI59PVgOCMVZjBn655xujFeraqxyK/M=".to_string(),
+            binary_identity: "a".repeat(BLAKE3_HEX_CHARS),
+            reference_nix_version: "2.35.0".to_string(),
+            nixpkgs_universe_pin: "nixos-25.11-dirty".to_string(),
+        }
+    }
+
+    // r[verify nix_producer_adapter.compatibility_evidence]
+
+    #[test]
+    fn evidence_is_fresh_when_all_pins_match() {
+        let recorded = evidence_pins();
+        let current = evidence_pins();
+        assert_eq!(classify_evidence_freshness(&recorded, &current), EvidenceFreshness::Fresh);
+    }
+
+    #[test]
+    fn evidence_is_stale_on_single_field_drift() {
+        let recorded = evidence_pins();
+        let mut current = evidence_pins();
+        current.binary_identity = "b".repeat(BLAKE3_HEX_CHARS);
+        assert_eq!(classify_evidence_freshness(&recorded, &current), EvidenceFreshness::Stale {
+            drifted_fields: vec!["binary_identity".to_string()]
+        });
+    }
+
+    #[test]
+    fn evidence_is_stale_on_multi_field_drift() {
+        let recorded = evidence_pins();
+        let mut current = evidence_pins();
+        current.source_revision = "0000000000000000000000000000000000000000".to_string();
+        current.nixpkgs_universe_pin = "nixos-26.05".to_string();
+        assert_eq!(classify_evidence_freshness(&recorded, &current), EvidenceFreshness::Stale {
+            drifted_fields: vec!["source_revision".to_string(), "nixpkgs_universe_pin".to_string()]
+        });
+    }
+
+    #[test]
+    fn evidence_is_stale_on_backend_mismatch() {
+        let recorded = evidence_pins();
+        let mut current = evidence_pins();
+        current.backend = ProducerBackendKind::HostNix;
+        assert_eq!(classify_evidence_freshness(&recorded, &current), EvidenceFreshness::Stale {
+            drifted_fields: vec!["backend".to_string()]
+        });
     }
 
     #[test]

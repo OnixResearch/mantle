@@ -43,14 +43,20 @@
 
 ## Phase 4: Evidence and documentation
 
-- [ ] [serial] I17 Record per-backend bounded compatibility evidence with typed pins and agreement counts for the language suites and the nixpkgs differential. r[nix_producer_adapter.compatibility_evidence]
-- [ ] [serial] I18 Add stale-evidence marking when a backend source or binary identity drifts from the recorded evidence pins. r[nix_producer_adapter.compatibility_evidence]
-- [ ] [serial] I19 Document the backend contract, selection policy, per-backend trust postures, the binary-Zig trust input, platform limits, and non-claims. r[nix_producer_adapter.compatibility_evidence]
+- [x] [serial] I17 Record per-backend bounded compatibility evidence with typed pins and agreement counts for the language suites and the nixpkgs differential. r[nix_producer_adapter.compatibility_evidence]
+  - Evidence: `packages/fix/compatibility-evidence.json` (schema `mantle-nix-producer-evidence-v1`, upstream-reported vs Mantle-measured split, non-claims).
+- [x] [serial] I18 Add stale-evidence marking when a backend source or binary identity drifts from the recorded evidence pins. r[nix_producer_adapter.compatibility_evidence]
+  - Evidence: `classify_evidence_freshness` in `src/nix_producer.rs` with fresh, single-drift, multi-drift, and backend-mismatch tests.
+- [x] [serial] I19 Document the backend contract, selection policy, per-backend trust postures, the binary-Zig trust input, platform limits, and non-claims. r[nix_producer_adapter.compatibility_evidence]
+  - Evidence: `packages/fix/README.md`.
 
 ## Phase 5: Parity and validation
 
 - [x] [serial] I20 Add a parity fixture that instantiates one bounded expression through both the `fix` and `host-nix` backends and compares root identities and graph structure. r[nix_producer_adapter.foreign_import_abi_reuse]
   - Evidence: `produce_backend_fix_and_host_nix_emit_parity_artifacts` (env-gated, verified passing); results in `evidence/backend-shell-parity.md`.
-- [ ] [serial] V1 Run the focused contract-core, backend, source-record, build-derivation, and foreign-import tests. Record exact outputs. r[nix_producer_adapter.validation]
-- [ ] [serial] V2 Run formatting and Clippy with warnings denied on touched crates, plus `git diff --check`. r[nix_producer_adapter.validation]
-- [ ] [serial] V3 Run `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .` plus the proposal, design, and tasks gates for this change. Record exact outputs before archive. r[nix_producer_adapter.validation]
+- [x] [serial] V1 Run the focused contract-core, backend, source-record, build-derivation, and foreign-import tests. Record exact outputs. r[nix_producer_adapter.validation]
+  - Evidence: `nix_producer` 36 passed, `foreign_derivation_import` 20 passed, `source_bundle` 85 passed, `foreign_import_cli` 16 passed + 1 env-gated parity test verified with `--ignored`.
+- [x] [serial] V2 Run formatting and Clippy with warnings denied on touched crates, plus `git diff --check`. r[nix_producer_adapter.validation]
+  - Evidence: `cargo fmt -p mantle` clean, `git diff --check` clean, `cargo clippy -p mantle --bin mantle --no-deps` has zero findings in touched files.
+- [x] [serial] V3 Run `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .` plus the proposal, design, and tasks gates for this change. Record exact outputs before archive. r[nix_producer_adapter.validation]
+  - Evidence: validate `"valid": true`; proposal, design, and tasks gates all `"verdict": "PASS"` (2026-08-04).
