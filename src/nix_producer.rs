@@ -16,7 +16,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 pub(crate) const NIX_PRODUCER_CONTRACT_SCHEMA: &str = "nix-producer-v1";
-pub(crate) const DEFAULT_SYSTEM: &str = "x86_64-linux";
 
 const MAX_EXPRESSION_TEXT_BYTES: usize = 1_048_576;
 const MAX_EXPRESSION_PATH_CHARS: usize = 4_096;
@@ -114,9 +113,16 @@ pub(crate) enum ProducerTarget {
 
 /// Named resource bounds for one producer run. Every limit is explicit; the
 /// shell enforces what the host supports and fails closed otherwise.
+///
+/// `memory_bytes_max` is an address-space (`RLIMIT_AS`) bound. A value of 0
+/// disables it. Arena-reserving backends (the fix parallel GC reserves tens
+/// of GiB of virtual space) cannot run under a tight `RLIMIT_AS`, so honest
+/// memory enforcement for them needs a cgroup RSS mechanism that this change
+/// does not provide. A disabled limit must never be reported as enforcement.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct ProducerBudget {
     pub(crate) wall_time_ms_max: u64,
+    /// Address-space bound; 0 disables process-level memory limiting.
     pub(crate) memory_bytes_max: u64,
     pub(crate) output_bytes_max: u64,
     pub(crate) drv_file_count_max: u32,
@@ -126,7 +132,8 @@ impl Default for ProducerBudget {
     fn default() -> Self {
         Self {
             wall_time_ms_max: 300_000,
-            memory_bytes_max: 8_589_934_592,
+            // Disabled by default: RLIMIT_AS breaks arena-reserving backends.
+            memory_bytes_max: 0,
             output_bytes_max: MAX_DRV_DIR_TOTAL_BYTES,
             drv_file_count_max: MAX_DRV_DIR_ENTRY_COUNT,
         }
@@ -327,11 +334,13 @@ pub(crate) fn validate_request(request: &NixProducerRequest) -> Result<(), Produ
         validate_common_chars("eval arg value", value, MAX_EVAL_ARG_VALUE_CHARS)?;
     }
     if request.budget.wall_time_ms_max == 0
-        || request.budget.memory_bytes_max == 0
         || request.budget.output_bytes_max == 0
         || request.budget.drv_file_count_max == 0
     {
-        return Err(ProducerError::new(ProducerErrorClass::InvalidRequest, "budget limits must be positive"));
+        return Err(ProducerError::new(
+            ProducerErrorClass::InvalidRequest,
+            "wall-time, output, and file-count budgets must be positive",
+        ));
     }
     Ok(())
 }
@@ -488,6 +497,8 @@ mod tests {
     // r[verify nix_producer_adapter.backend_contract]
     // r[verify nix_producer_adapter.backend_selection]
 
+    const DEFAULT_SYSTEM: &str = "x86_64-linux";
+
     fn valid_request() -> NixProducerRequest {
         NixProducerRequest {
             schema: NIX_PRODUCER_CONTRACT_SCHEMA.to_string(),
@@ -584,6 +595,13 @@ mod tests {
         request.budget.wall_time_ms_max = 0;
         let error = validate_request(&request).unwrap_err();
         assert_eq!(error.class, ProducerErrorClass::InvalidRequest);
+    }
+
+    #[test]
+    fn request_allows_disabled_memory_limit() {
+        let mut request = valid_request();
+        request.budget.memory_bytes_max = 0;
+        assert!(validate_request(&request).is_ok());
     }
 
     #[test]

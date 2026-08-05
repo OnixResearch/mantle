@@ -73,6 +73,7 @@ The contract core is pure: it validates requests, classifies outcomes, and build
 - Cache-substituted toolchain inputs trust the cache.nixos.org signer set. Operators that reject that trust must use the pinned-tarball source class, which trusts the ziglang.org distribution instead.
 - A second backend doubles some test matrices. Shared contract conformance fixtures keep the cost proportional to backends, not to the product of backends and cases.
 - Backend parity (same expression, two backends) can drift when Nix releases change semantics. Parity fixtures compare against recorded expectations per backend, not a claim that all backends always agree.
+- `RLIMIT_AS` cannot bound arena-reserving backends: the fix parallel GC reserves between 64 GiB and 256 GiB of virtual address space at startup (measured 2026-08-04). The memory budget is therefore an optional address-space bound, disabled by default, and never reported as enforcement. Honest RSS enforcement needs a cgroup mechanism, deferred to follow-up work.
 
 ## Validation
 

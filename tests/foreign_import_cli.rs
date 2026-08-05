@@ -1525,3 +1525,124 @@ fn sandbox_capability_graph() -> Value {
 fn path_str(path: &Path) -> &str {
     path.to_str().expect("test paths should be UTF-8")
 }
+
+// r[verify nix_producer_adapter.foreign_import_abi_reuse]
+// r[verify nix_producer_adapter.backend_selection]
+
+const FIX_BACKEND_ENV: &str = "MANTLE_TEST_FIX_BACKEND_BINARY";
+const NIX_INSTANTIATE_ENV: &str = "MANTLE_TEST_NIX_INSTANTIATE_BINARY";
+const PRODUCE_BACKEND_COMMAND: &str = "produce-backend";
+const PARITY_EXPR: &str = "let dep = derivation { name = \"fix-dep\"; builder = \"/bin/sh\"; system = \"x86_64-linux\"; }; in derivation { name = \"fix-top\"; builder = \"/bin/sh\"; system = \"x86_64-linux\"; args = [ \"-c\" \"echo ${dep} > $out\" ]; }";
+const PARITY_PACKAGE: &str = "fix-top";
+const PRODUCER_IDENTITY_FIELDS: [&str; 3] = ["identity", "kind", "revision"];
+
+#[test]
+fn produce_backend_rejects_unknown_backend() {
+    let temp = TempDir::new().expect("temp dir");
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("foreign-import")
+        .arg(PRODUCE_BACKEND_COMMAND)
+        .arg("--backend")
+        .arg("lix")
+        .arg("--backend-binary")
+        .arg("/bin/false")
+        .arg("--backend-version")
+        .arg("0")
+        .arg("--expr")
+        .arg("1")
+        .arg("--work-dir")
+        .arg(temp.path().join("work"))
+        .arg("--out-dir")
+        .arg(temp.path().join("out"))
+        .output()
+        .expect("run produce-backend");
+    let stdout = String::from_utf8(output.stdout).expect("utf8 report");
+    let report: Value = serde_json::from_str(&stdout).expect("report json");
+    assert_eq!(report["accepted"], Value::Bool(false));
+    assert_eq!(report["diagnostics"][0]["class"], Value::String("unknown-backend".to_string()));
+}
+
+#[test]
+fn produce_backend_rejects_conflicting_target_modes() {
+    let temp = TempDir::new().expect("temp dir");
+    let output = mantle_cmd()
+        .arg("--json")
+        .arg("foreign-import")
+        .arg(PRODUCE_BACKEND_COMMAND)
+        .arg("--backend")
+        .arg("fix")
+        .arg("--backend-binary")
+        .arg("/bin/false")
+        .arg("--backend-version")
+        .arg("0")
+        .arg("--expr")
+        .arg("1")
+        .arg("--file")
+        .arg("/tmp/also-a-file.nix")
+        .arg("--work-dir")
+        .arg(temp.path().join("work"))
+        .arg("--out-dir")
+        .arg(temp.path().join("out"))
+        .output()
+        .expect("run produce-backend");
+    assert!(!output.status.success(), "conflicting target modes must fail");
+}
+
+#[test]
+#[ignore = "requires MANTLE_TEST_FIX_BACKEND_BINARY, MANTLE_TEST_NIX_INSTANTIATE_BINARY, and a reachable Nix daemon"]
+fn produce_backend_fix_and_host_nix_emit_parity_artifacts() {
+    let fix_binary = std::env::var(FIX_BACKEND_ENV).expect("fix backend binary env");
+    let nix_instantiate = std::env::var(NIX_INSTANTIATE_ENV).expect("nix-instantiate env");
+    let temp = TempDir::new().expect("temp dir");
+    for (backend, binary, version) in [
+        ("fix", fix_binary.as_str(), "0.3.0"),
+        ("host-nix", nix_instantiate.as_str(), "host"),
+    ] {
+        let output = mantle_cmd()
+            .arg("--json")
+            .arg("foreign-import")
+            .arg(PRODUCE_BACKEND_COMMAND)
+            .arg("--backend")
+            .arg(backend)
+            .arg("--backend-binary")
+            .arg(binary)
+            .arg("--backend-version")
+            .arg(version)
+            .arg("--expr")
+            .arg(PARITY_EXPR)
+            .arg("--package")
+            .arg(PARITY_PACKAGE)
+            .arg("--work-dir")
+            .arg(temp.path().join(format!("{backend}-work")))
+            .arg("--out-dir")
+            .arg(temp.path().join(format!("{backend}-out")))
+            .output()
+            .expect("run produce-backend");
+        assert!(
+            output.status.success(),
+            "{backend} backend must succeed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let fix_graph = fixture_json_path(&temp.path().join("fix-out").join(ATERM_GRAPH_FILE));
+    let nix_graph = fixture_json_path(&temp.path().join("host-nix-out").join(ATERM_GRAPH_FILE));
+    assert_eq!(
+        fix_graph["root_derivation_ids"], nix_graph["root_derivation_ids"],
+        "backends must agree on root derivation identity"
+    );
+    let fix_identity = fix_graph["producer"]["identity"].as_str().expect("fix identity");
+    assert_eq!(fix_identity.len(), BLAKE3_HEX_CHARS, "fix identity is a BLAKE3 hex digest");
+    let mut fix_stripped = fix_graph.clone();
+    let mut nix_stripped = nix_graph.clone();
+    for field in PRODUCER_IDENTITY_FIELDS {
+        fix_stripped["producer"].as_object_mut().expect("producer object").remove(field);
+        nix_stripped["producer"].as_object_mut().expect("producer object").remove(field);
+    }
+    assert_eq!(fix_stripped, nix_stripped, "backend artifacts must agree modulo producer identity fields");
+}
+
+fn fixture_json_path(path: &Path) -> Value {
+    let text = fs::read_to_string(path).expect("artifact json");
+    serde_json::from_str(&text).expect("parse artifact json")
+}
