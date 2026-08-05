@@ -1,17 +1,17 @@
 use std::fs;
 use std::io::Write as _;
-use std::os::unix::fs::symlink;
 use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::symlink;
 use std::path::Path;
 use std::path::PathBuf;
 
 use serde::Serialize;
 
-use crate::source_bundle::materialize_source_record_for_offline_use;
-use crate::source_bundle::read_source_bundle;
 use crate::source_bundle::SourceFileType;
 use crate::source_bundle::SourceRecord;
 use crate::source_bundle::SourceRecordKind;
+use crate::source_bundle::materialize_source_record_for_offline_use;
+use crate::source_bundle::read_source_bundle;
 
 const SOURCE_RECORD_NAME_KEY: &str = "name";
 const BINUTILS_RECORD_NAME: &str = "binutils-2.30-src";
@@ -1171,10 +1171,12 @@ pub(crate) fn derive_binutils_inventory(
     assert_eq!(report.component_outputs.len(), BINUTILS_COMPONENT_COUNT);
     assert_eq!(report.installed_tools.len(), BINUTILS_REQUIRED_TOOL_COUNT);
     assert!(report.runtime_root.is_absolute());
-    assert!(BINUTILS_GENERATED_EXECUTABLES
-        .iter()
-        .zip(BINUTILS_GENERATED_EXECUTABLE_EVENT_COUNTS.iter())
-        .all(|((label, _, _), (count_label, count))| label == count_label && *count > 0));
+    assert!(
+        BINUTILS_GENERATED_EXECUTABLES
+            .iter()
+            .zip(BINUTILS_GENERATED_EXECUTABLE_EVENT_COUNTS.iter())
+            .all(|((label, _, _), (count_label, count))| label == count_label && *count > 0)
+    );
     assert_eq!(
         report.protected_exec_event_count_bounds,
         BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS.map(|count| u32::try_from(count).unwrap())
@@ -5099,18 +5101,22 @@ mod tests {
         let outcomes = probe_authenticated_configure_matrix(paths.request()).unwrap();
         assert_eq!(outcomes.len(), CONFIGURE_CLASS_COUNT);
         assert!(outcomes.iter().all(|outcome| outcome.exit_code == 0));
-        assert!(CONFIGURE_CLASSES.iter().all(|class| paths
-            .scratch_dir
-            .join("source")
-            .join(class)
-            .join("config.status")
-            .is_file()));
-        assert!(CONFIGURE_CLASSES.iter().all(|class| paths
-            .scratch_dir
-            .join("source")
-            .join(class)
-            .join("Makefile")
-            .is_file()));
+        assert!(
+            CONFIGURE_CLASSES.iter().all(|class| paths
+                .scratch_dir
+                .join("source")
+                .join(class)
+                .join("config.status")
+                .is_file())
+        );
+        assert!(
+            CONFIGURE_CLASSES.iter().all(|class| paths
+                .scratch_dir
+                .join("source")
+                .join(class)
+                .join("Makefile")
+                .is_file())
+        );
         assert!(FILE_RELOCATION_CLASSES.iter().all(|class| {
             !fs::read_to_string(paths.scratch_dir.join("source").join(class).join("configure"))
                 .unwrap()
