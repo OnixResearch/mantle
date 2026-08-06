@@ -60,6 +60,9 @@ const PROOF_STATUS_RUNNING: &str = "running";
 const PROOF_STATUS_FAILED: &str = "failed";
 const PROOF_STATUS_COMPLETE: &str = "complete";
 const STAGEX_TRANSITION_EXECUTION_DIR: &str = "stagex-transition-execution";
+const STAGEX_TRANSITION_HANDOFF_REPLAY_DIR: &str = "stagex-transition-handoff-replay";
+const STAGEX_PROVIDER_REPLAY_DIR: &str = "stagex-provider-replay";
+const STAGEX_PROVIDER_RECEIPT_FILE: &str = "provider-receipt.json";
 pub(crate) const STAGEX_TRANSITION_REPORT_FILE: &str = "transition-report.json";
 pub(crate) const STAGEX_TRANSITION_AUDIT_FILE: &str = "protected-exec-audit.json";
 const STAGEX_TRANSITION_HANDOFF_REPORT_FILE: &str = "stagex-transition-handoff.json";
@@ -878,7 +881,13 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         }
 
         let stagex_transition_root = prepared.native_store_dir.join(STAGEX_TRANSITION_STORE_BASENAME);
-        materialize_stagex_transition_handoff(&stagex_transition_execution_dir, &stagex_transition_root)?;
+        let stagex_transition_replay_root = prepared.staging_dir.join(STAGEX_TRANSITION_HANDOFF_REPLAY_DIR);
+        materialize_or_validate_stagex_transition_handoff(
+            is_dev,
+            &stagex_transition_execution_dir,
+            &stagex_transition_root,
+            &stagex_transition_replay_root,
+        )?;
         let transition_logical_path = crate::full_source_provider::adopt_verified_local_provider_path_strict(
             &stagex_transition_root,
             &prepared.native_store_dir,
@@ -898,15 +907,33 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         )?;
 
         let stagex_provider_root = prepared.native_store_dir.join(STAGEX_PROVIDER_STORE_BASENAME);
+        let reuse_stagex_provider = is_dev && stagex_provider_root.exists();
+        let stagex_provider_replay_root = prepared.staging_dir.join(STAGEX_PROVIDER_REPLAY_DIR);
+        let stagex_provider_output_root = if reuse_stagex_provider {
+            &stagex_provider_replay_root
+        } else {
+            &stagex_provider_root
+        };
         let stagex_provider_result = run_in_isolated_exec_thread("StageX provider publication", || {
             crate::stagex_provider::materialize_stagex_provider(StagexProviderRequest {
                 lineage_manifest_path: &prepared.stagex_lineage,
                 transition_root: &stagex_transition_execution_dir,
-                output_path: &stagex_provider_root,
+                output_path: stagex_provider_output_root,
             })
         })?;
-        let stagex_provider_report = stagex_provider_result
+        let mut stagex_provider_report = stagex_provider_result
             .map_err(|error| proof_error(format!("StageX provider publication failed: {error}")))?;
+        if reuse_stagex_provider {
+            validate_identical_directory_trees("StageX provider", &stagex_provider_replay_root, &stagex_provider_root)?;
+            fs::remove_dir_all(&stagex_provider_replay_root).map_err(|error| {
+                proof_error(format!(
+                    "removing validated StageX provider replay {}: {error}",
+                    stagex_provider_replay_root.display()
+                ))
+            })?;
+            stagex_provider_report.output_path = stagex_provider_root.clone();
+            stagex_provider_report.receipt_path = stagex_provider_root.join(STAGEX_PROVIDER_RECEIPT_FILE);
+        }
         validate_stagex_provider_normalized_identity(&stagex_provider_report.normalized_provider_digest_blake3)?;
         validate_runtime_bounds(options, prepared)?;
         let stagex_logical_path = crate::full_source_provider::adopt_verified_local_provider_path_strict(
@@ -1343,7 +1370,7 @@ fn synthesized_adopted_stagex_report(
         schema: "mantle-stagex-provider-publication-v1",
         provider_kind: "stagex-intermediate-provider",
         output_path: stagex_root.clone(),
-        receipt_path: stagex_root.join("provider-receipt.json"),
+        receipt_path: stagex_root.join(STAGEX_PROVIDER_RECEIPT_FILE),
         normalized_provider_digest_blake3: STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST.to_string(),
         output_digest_blake3: STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST.to_string(),
         final_bundle_digest_blake3: STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST.to_string(),
@@ -1364,6 +1391,54 @@ where
     let value = result.map_err(|_| proof_error(format!("{operation_name} worker panicked")))?;
     assert!(!operation_name.is_empty());
     Ok(value)
+}
+
+fn materialize_or_validate_stagex_transition_handoff(
+    is_dev: bool,
+    execution_root: &Path,
+    handoff_root: &Path,
+    replay_root: &Path,
+) -> Result<(), RunError> {
+    if !is_dev || !handoff_root.exists() {
+        return materialize_stagex_transition_handoff(execution_root, handoff_root);
+    }
+    if replay_root.exists() {
+        return Err(proof_error(format!(
+            "StageX transition replay destination already exists: {}",
+            replay_root.display()
+        )));
+    }
+    materialize_stagex_transition_handoff(execution_root, replay_root)?;
+    validate_identical_directory_trees("StageX transition handoff", replay_root, handoff_root)?;
+    fs::remove_dir_all(replay_root).map_err(|error| {
+        proof_error(format!("removing validated StageX transition replay {}: {error}", replay_root.display()))
+    })?;
+    assert!(handoff_root.is_dir());
+    assert!(!replay_root.exists());
+    Ok(())
+}
+
+fn validate_identical_directory_trees(label: &str, replay_root: &Path, persistent_root: &Path) -> Result<(), RunError> {
+    if label.is_empty() || !replay_root.is_dir() || !persistent_root.is_dir() {
+        return Err(proof_error(format!(
+            "{label} replay comparison requires two directories: replay={} persistent={}",
+            replay_root.display(),
+            persistent_root.display()
+        )));
+    }
+    let replay = crate::release_tree_copy::hash_directory_tree(replay_root)
+        .map_err(|error| proof_error(format!("hashing {label} replay {}: {error}", replay_root.display())))?;
+    let persistent = crate::release_tree_copy::hash_directory_tree(persistent_root)
+        .map_err(|error| proof_error(format!("hashing persistent {label} {}: {error}", persistent_root.display())))?;
+    if replay != persistent {
+        return Err(proof_error(format!(
+            "{label} replay tree mismatch: replay_bytes={} replay_blake3={} persistent_bytes={} persistent_blake3={}",
+            replay.0, replay.1, persistent.0, persistent.1
+        )));
+    }
+    assert_eq!(replay.0, persistent.0);
+    assert_eq!(replay.1, persistent.1);
+    Ok(())
 }
 
 fn materialize_stagex_transition_handoff(execution_root: &Path, handoff_root: &Path) -> Result<(), RunError> {
@@ -2443,6 +2518,29 @@ mod tests {
         assert_eq!(observed_roots, expected_roots);
         assert_eq!(fs::read_link(&excluded_link).unwrap(), original_target);
         assert!(!handoff_root.join("binutils-stage").exists());
+    }
+
+    #[test]
+    fn dev_handoff_reuses_only_an_identical_persistent_tree() {
+        let temp = tempfile::tempdir().unwrap();
+        let execution_root = temp.path().join("execution");
+        let handoff_root = temp.path().join(STAGEX_TRANSITION_STORE_BASENAME);
+        let replay_root = temp.path().join(STAGEX_TRANSITION_HANDOFF_REPLAY_DIR);
+        fs::create_dir(&execution_root).unwrap();
+        write_stagex_transition_handoff_fixture(&execution_root);
+        materialize_stagex_transition_handoff(&execution_root, &handoff_root).unwrap();
+
+        materialize_or_validate_stagex_transition_handoff(true, &execution_root, &handoff_root, &replay_root).unwrap();
+        assert!(handoff_root.is_dir());
+        assert!(!replay_root.exists());
+
+        fs::write(handoff_root.join(STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES[0]), b"substituted-runtime-output")
+            .unwrap();
+        let error =
+            materialize_or_validate_stagex_transition_handoff(true, &execution_root, &handoff_root, &replay_root)
+                .unwrap_err();
+        assert!(error.to_string().contains("StageX transition handoff replay tree mismatch"));
+        assert!(replay_root.is_dir());
     }
 
     #[test]
