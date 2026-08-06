@@ -2885,7 +2885,8 @@ impl StoreHandle {
     /// Adopt a locally materialized output only after its caller independently verifies it.
     ///
     /// The logical path must map to an existing entry in this handle's physical output
-    /// directory. Existing PathInfo entries are never replaced through this seam.
+    /// directory. Existing PathInfo entries are never replaced through this seam;
+    /// an exact signed match is returned only after fresh tree and NAR validation.
     pub async fn adopt_verified_local_output(
         &mut self,
         logical_store_path: &str,
@@ -2897,15 +2898,11 @@ impl StoreHandle {
         assert!(!output_name.is_empty(), "output_name must not be empty");
         let store_path = StorePath::from_absolute_path_with_prefix(logical_store_path.as_bytes(), &self.store_dir)
             .map_err(|error| Error::Store(format!("adoption logical store path {logical_store_path}: {error}")))?;
-        if self
+        let existing = self
             .pathinfo_service
             .get(*store_path.digest())
             .await
-            .map_err(|error| Error::PathInfoService(format!("adoption preflight: {error}")))?
-            .is_some()
-        {
-            return Err(Error::Store(format!("adoption refuses to replace existing PathInfo: {logical_store_path}")));
-        }
+            .map_err(|error| Error::PathInfoService(format!("adoption preflight: {error}")))?;
         let physical_path = Path::new(&self.output_dir_str).join(store_path.to_string());
         let metadata = std::fs::symlink_metadata(&physical_path)
             .map_err(|error| Error::Store(format!("adoption source {}: {error}", physical_path.display())))?;
@@ -2928,6 +2925,10 @@ impl StoreHandle {
             .calculate_nar(&node)
             .await
             .map_err(|error| Error::Store(format!("adoption NAR calculation: {error}")))?;
+        if let Some(existing) = existing {
+            validate_existing_adoption(&existing, &store_path, &node, nar_size, &nar_sha256)?;
+            return Ok(existing);
+        }
         let path_info = signed_adoption_path_info(
             store_path.clone(),
             node.clone(),
@@ -3329,6 +3330,35 @@ fn compute_pathinfo_fingerprint(path_info: &PathInfo, store_dir: &str) -> String
     let store_path_ref: StorePathRef = path_info.store_path.as_ref();
     let references = path_info.references.iter().map(|reference| reference.as_ref()).collect::<Vec<_>>();
     fingerprint_with_store_dir(&store_path_ref, &path_info.nar_sha256, path_info.nar_size, references.iter(), store_dir)
+}
+
+fn validate_existing_adoption(
+    existing: &PathInfo,
+    store_path: &StorePath<String>,
+    observed_node: &Node,
+    observed_nar_size: u64,
+    observed_nar_sha256: &[u8; NAR_SHA256_BYTES],
+) -> Result<(), Error> {
+    if existing.store_path != *store_path {
+        return Err(Error::Store(format!(
+            "adoption PathInfo digest collision: expected {store_path}, found {}",
+            existing.store_path
+        )));
+    }
+    if existing.signatures.is_empty() {
+        return Err(Error::Store(format!("adoption existing PathInfo is unsigned: {store_path}")));
+    }
+    if existing.node != *observed_node {
+        return Err(Error::Store(format!("adoption existing PathInfo node differs from physical tree: {store_path}")));
+    }
+    if existing.nar_size != observed_nar_size || existing.nar_sha256 != *observed_nar_sha256 {
+        return Err(Error::Store(format!(
+            "adoption existing PathInfo NAR facts differ from physical tree: {store_path}"
+        )));
+    }
+    assert_eq!(existing.store_path, *store_path);
+    assert!(!existing.signatures.is_empty());
+    Ok(())
 }
 
 fn signed_adoption_path_info(
@@ -4452,12 +4482,54 @@ mod tests {
         );
 
         let adopted = handle.adopt_verified_local_output(&logical_path, "out", &signing_key, None).await.unwrap();
+        let reused = handle.adopt_verified_local_output(&logical_path, "out", &signing_key, None).await.unwrap();
         let stored = handle.pathinfo_service.get(*store_path.digest()).await.unwrap().unwrap();
 
         assert_eq!(adopted, stored);
+        assert_eq!(reused, stored);
         assert_eq!(adopted.store_path, store_path);
         assert_eq!(adopted.signatures.len(), 1);
         assert!(crate::artifact_attestation_file_path(state_dir.path(), "/nix/store", &store_path).is_file());
+    }
+
+    #[tokio::test]
+    async fn verified_local_output_adoption_rejects_changed_existing_content() {
+        const ADOPTION_DIGEST_BYTE: u8 = 33;
+        const ADOPTION_KEY_BYTE: u8 = 43;
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let store_path = test_output("changed-provider", ADOPTION_DIGEST_BYTE);
+        let physical_path = state_dir.path().join(store_path.to_string());
+        std::fs::create_dir(&physical_path).unwrap();
+        std::fs::write(physical_path.join("provider.txt"), b"verified-provider").unwrap();
+        let logical_path = store_path.to_absolute_path();
+        let signing_key = SigningKey::new(
+            "adoption-test-3".to_string(),
+            ed25519_dalek::SigningKey::from_bytes(&[ADOPTION_KEY_BYTE; NAR_SHA256_BYTES]),
+        );
+        let adopted = handle.adopt_verified_local_output(&logical_path, "out", &signing_key, None).await.unwrap();
+        std::fs::write(physical_path.join("provider.txt"), b"substituted-provider").unwrap();
+
+        let error = handle
+            .adopt_verified_local_output(&logical_path, "out", &signing_key, None)
+            .await
+            .unwrap_err()
+            .to_string();
+        let stored = handle.pathinfo_service.get(*store_path.digest()).await.unwrap().unwrap();
+
+        assert!(error.contains("node differs from physical tree"));
+        assert_eq!(stored, adopted);
+        assert_ne!(
+            stored.node,
+            ingest_path::<_, _, _, &[u8]>(
+                handle.blob_service.clone(),
+                handle.directory_service.clone(),
+                &physical_path,
+                None,
+            )
+            .await
+            .unwrap()
+        );
     }
 
     #[tokio::test]
