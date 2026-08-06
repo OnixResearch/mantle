@@ -26,7 +26,7 @@
       flake = false;
     };
     artifactAuthSource = {
-      url = "git+https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git?rev=799459346d5416fbd7b9f55840a7371441b55afa";
+      url = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1";
       flake = false;
     };
     secretSpecSource = {
@@ -92,11 +92,17 @@
 
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
         cargoManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
-        artifactAuthRevision = "799459346d5416fbd7b9f55840a7371441b55afa";
-        artifactAuthRepository = "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git";
+        artifactAuthRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1";
+        artifactAuthRepository = "ssh://git@github.com/OnixResearch/onix-artifact.git";
         artifactAuthExpectedPackages = [
           "artifact-auth-core"
           "artifact-auth-ed25519"
+        ];
+        artifactSourceExpectedMembers = [
+          "crates/artifact-auth-core"
+          "crates/artifact-auth-ed25519"
+          "crates/artifact-binding-core"
+          "crates/artifact-transfer-core"
         ];
         artifactAuthCoreManifest = builtins.fromTOML (
           builtins.readFile ./crates/crunch-action-result-core/Cargo.toml
@@ -120,8 +126,9 @@
             && artifactAuthSource.rev == artifactAuthRevision
             && map (package: package.name) artifactAuthLockPackages == artifactAuthExpectedPackages
             && builtins.all (package: package.source == artifactAuthExpectedLockSource) artifactAuthLockPackages
-            && builtins.elem "crates/artifact-auth-core" artifactAuthWorkspace.workspace.members
-            && builtins.elem "crates/artifact-auth-ed25519" artifactAuthWorkspace.workspace.members
+            &&
+              builtins.sort builtins.lessThan artifactAuthWorkspace.workspace.members
+              == builtins.sort builtins.lessThan artifactSourceExpectedMembers
             && artifactAuthWorkspace.workspace.package.license == "MIT OR Apache-2.0"
           ) "Mantle artifact-auth Cargo/Nix source identity, package set, or license drifted";
           true;
@@ -1134,9 +1141,21 @@
                 expected_receipt_hash="$(tr -d '\n' < evidence/radicle/artifact-auth-cutover-v1.blake3)"
                 test "$receipt_hash" = "$expected_receipt_hash"
 
-                source_url='https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git'
-                source_rev='799459346d5416fbd7b9f55840a7371441b55afa'
-                source_nar_hash='sha256-nEgz2FtVuDesX95yyxidp0vhjxL4INB6Ve8rkpLyJk0='
+                nickel typecheck evidence/source/artifact-workspace-migration-v1.ncl
+                nickel typecheck lib/artifact-source-migration-receipt.ncl
+                nickel export --format json tests/artifact-source-migration.ncl > "$TMPDIR/migration-tests.json"
+                grep -Fq '"tests": true' "$TMPDIR/migration-tests.json"
+                nickel export --format json evidence/source/artifact-workspace-migration-v1.ncl > "$TMPDIR/migration.json"
+                jq -S . "$TMPDIR/migration.json" > "$TMPDIR/migration.normalized.json"
+                jq -S . evidence/source/artifact-workspace-migration-v1.json > "$TMPDIR/migration-evidence.normalized.json"
+                cmp "$TMPDIR/migration.normalized.json" "$TMPDIR/migration-evidence.normalized.json"
+                migration_hash="$(b3sum evidence/source/artifact-workspace-migration-v1.json | cut -d ' ' -f 1)"
+                expected_migration_hash="$(tr -d '\n' < evidence/source/artifact-workspace-migration-v1.blake3)"
+                test "$migration_hash" = "$expected_migration_hash"
+
+                source_url='ssh://git@github.com/OnixResearch/onix-artifact.git'
+                source_rev='c932138d880ddf4c2967f4c024b489b5c0022bf1'
+                source_nar_hash='sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU='
                 wrong_source_rev='1111111111111111111111111111111111111111'
                 expected_flake_source="git+$source_url?rev=$source_rev"
                 wrong_flake_source="git+$source_url?rev=$wrong_source_rev"
@@ -1172,18 +1191,6 @@
                   exit 1
                 fi
 
-                for binding in \
-                  'cargo.core_manifest_blake3:crates/crunch-action-result-core/Cargo.toml' \
-                  'cargo.shell_manifest_blake3:crates/crunch-build/Cargo.toml' \
-                  'cargo.lock_blake3:Cargo.lock' \
-                  'nix.lock_blake3:flake.lock'; do
-                  field="''${binding%%:*}"
-                  path="''${binding#*:}"
-                  expected="$(jq -r ".$field" evidence/radicle/artifact-auth-cutover-v1.json)"
-                  actual="$(b3sum "$path" | cut -d ' ' -f 1)"
-                  test "$actual" = "$expected"
-                done
-
                 jq -e \
                   --arg url "$source_url" \
                   --arg rev "$source_rev" \
@@ -1196,15 +1203,20 @@
                    and $source.locked.narHash == $nar_hash' \
                   flake.lock >/dev/null
 
+                radicle_host='git.onix.computer'
+                radicle_rid='z4JGYYW7WsesXUq7MXVdx16Fawu2f'
                 github_host='github.com'
-                forbidden_source="$github_host/OnixResearch/artifact-auth"
-                if rg -F "$forbidden_source" \
-                  crates/crunch-action-result-core/Cargo.toml \
-                  crates/crunch-build/Cargo.toml \
-                  Cargo.lock flake.nix flake.lock; then
-                  echo 'executable artifact-auth GitHub fallback remains' >&2
-                  exit 1
-                fi
+                for forbidden_source in \
+                  "$radicle_host/$radicle_rid" \
+                  "$github_host/OnixResearch/artifact-auth"; do
+                  if rg -F "$forbidden_source" \
+                    crates/crunch-action-result-core/Cargo.toml \
+                    crates/crunch-build/Cargo.toml \
+                    Cargo.lock flake.nix flake.lock; then
+                    echo "executable predecessor source remains: $forbidden_source" >&2
+                    exit 1
+                  fi
+                done
 
                 touch "$out"
               '';

@@ -1,6 +1,6 @@
 # Artifact-auth compatibility for action results
 
-Mantle pins `artifact-auth-core` and `artifact-auth-ed25519` from the governed public Radicle HTTPS source `https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git` at revision `799459346d5416fbd7b9f55840a7371441b55afa`. Cargo and the non-flake Nix input must resolve that full revision. Flake evaluation requires exactly that two-package set, rejects source mismatch or an incompatible standalone license, and makes Crane vendor the exact reviewed input without a sibling checkout. There is no executable GitHub fallback.
+Mantle pins `artifact-auth-core` and `artifact-auth-ed25519` from `OnixResearch/onix-artifact` at revision `c932138d880ddf4c2967f4c024b489b5c0022bf1`. Cargo and the non-flake Nix input must resolve that revision. Flake evaluation checks the complete four-package source workspace and limits Mantle's consumer graph to the two authentication packages. It rejects mixed sources, sibling paths, widened graphs, and incompatible licensing. The predecessor Radicle source remains historical evidence only.
 
 ## Pure dual-run boundary
 
@@ -38,10 +38,10 @@ All three pilots reject legacy-preimage signature reuse and retain rollback. Man
 
 ## Update and rollback
 
-1. Review the candidate standalone release and `config/consumers/mantle.ncl`.
+1. Review the candidate Artifact revision and package boundaries.
 2. Change exact Cargo and Nix revisions together.
-3. Regenerate `Cargo.lock` with Cargo and `flake.lock` with Nix; never edit either lock manually.
-4. Run action-result positive/negative tests, strict first-party Clippy/Tiger Style, Cairn validation, source checks, and `nix flake check`.
+3. Regenerate `Cargo.lock` with Cargo and `flake.lock` with Nix. Never edit either lock manually.
+4. Run positive and negative action-result, source, Clippy, Tiger Style, Cairn, and Nix checks.
 
 Runtime rollback stops supplying standalone observations and continues legacy candidate admission. Dependency rollback restores the last reviewed Cargo/Nix declarations as one VCS change, regenerates both locks with their owning tools, and preserves the compatibility evidence explaining the rejection.
 

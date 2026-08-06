@@ -3,18 +3,18 @@
     "artifactAuthSource": {
       "flake": false,
       "locked": {
-        "lastModified": 1784395143,
-        "narHash": "sha256-nEgz2FtVuDesX95yyxidp0vhjxL4INB6Ve8rkpLyJk0=",
+        "lastModified": 1785173333,
+        "narHash": "sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU=",
         "ref": "refs/heads/main",
-        "rev": "799459346d5416fbd7b9f55840a7371441b55afa",
-        "revCount": 5,
+        "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
+        "revCount": 17,
         "type": "git",
-        "url": "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git"
+        "url": "ssh://git@github.com/OnixResearch/onix-artifact.git"
       },
       "original": {
-        "rev": "799459346d5416fbd7b9f55840a7371441b55afa",
+        "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
         "type": "git",
-        "url": "https://git.onix.computer/z4JGYYW7WsesXUq7MXVdx16Fawu2f.git"
+        "url": "ssh://git@github.com/OnixResearch/onix-artifact.git"
       }
     },
     "cairn": {
