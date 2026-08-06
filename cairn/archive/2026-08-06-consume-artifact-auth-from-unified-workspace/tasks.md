@@ -5,4 +5,4 @@
 - [x] [parallel] Add pure positive and negative source admission for repository, revision, workspace membership, consumer graph, license, NAR, and source-byte drift. r[mantle.artifact_auth_adoption.radicle_transport] r[mantle.artifact_auth_adoption.fallback]
 - [x] [parallel] Add typed migration evidence and update source documentation with historical-source and rollback boundaries. r[mantle.artifact_auth_adoption.radicle_evidence] r[mantle.artifact_auth_adoption.live_validation_scope]
 - [x] [serial] Run focused Cargo, Nickel, Nix, formatting, Clippy, and Cairn checks without changing Rust implementation behavior. r[mantle.artifact_auth_adoption.behavior]
-- [ ] [serial] Sync the accepted specification and archive only after all source and validation evidence agrees. r[mantle.artifact_auth_adoption.radicle_evidence]
+- [x] [serial] Sync the accepted specification and archive only after all source and validation evidence agrees. r[mantle.artifact_auth_adoption.radicle_evidence]
