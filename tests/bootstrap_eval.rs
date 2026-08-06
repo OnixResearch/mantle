@@ -877,6 +877,11 @@ fn full_source_provider_records_authenticated_closure_and_is_selected() {
     assert!(candidate.contains("\"release_generated_sources\": []"));
     assert!(candidate.contains("--sysroot=\"\\$sysroot\""));
     assert!(!candidate.contains("-isystem \"\\$sysroot/include\""));
+    assert!(candidate.contains("$BB ln -sf \"$PUBLIC_TARGET-gcc\" \"$out/bin/cc\""));
+    assert!(candidate.contains("$BB cp \"$PROVIDER_LIB/$host_file\" \"$out/lib/$host_file\""));
+    assert!(candidate.contains("$BB cp \"$PROVIDER_LIB/libgcc_eh.a\" \"$out/lib/libunwind.a\""));
+    assert!(candidate.contains("$BB cp \"$PROVIDER_LIB/libgcc_eh.a\" \"$PROVIDER_LIB/libunwind.a\""));
+    assert!(!candidate.contains("touch \"$out/lib/libunwind.a\""));
     assert!(candidate.contains("NEEDED.*\\[libc.so\\]"));
     assert!(!candidate.contains("blocked-pending-authenticated-closure"));
     assert!(!candidate.contains("/mantle/store/"));

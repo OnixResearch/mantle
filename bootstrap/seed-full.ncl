@@ -317,6 +317,28 @@ EOF
       test -s "$out/share/crunch-bootstrap/provider.json"
       echo "full-source provider normalization and runtime admission passed; external BLAKE3/closure admission still required"
 
+      # Materialize the NativeProvider host-root layout this provider
+      # advertises (host-native + target-native). The single musl GCC
+      # toolchain serves as both host and target compiler, so expose the
+      # flat host chain under $out/lib and bin/cc, and name GCC's unwind
+      # archive as the closure's libunwind.a members. The compiler still
+      # links through --sysroot, so these copies satisfy the closure
+      # manifest without changing how the toolchain is used.
+      test -x "$out/bin/$PUBLIC_TARGET-gcc"
+      $BB ln -sf "$PUBLIC_TARGET-gcc" "$out/bin/cc"
+      for host_file in crt1.o libgcc_s.so.1 libc.so; do
+        test -s "$PROVIDER_LIB/$host_file"
+        $BB cp "$PROVIDER_LIB/$host_file" "$out/lib/$host_file"
+      done
+      test -s "$PROVIDER_LIB/libgcc_eh.a"
+      $BB cp "$PROVIDER_LIB/libgcc_eh.a" "$out/lib/libunwind.a"
+      $BB cp "$PROVIDER_LIB/libgcc_eh.a" "$PROVIDER_LIB/libunwind.a"
+      test -s "$out/lib/libunwind.a"
+      test -s "$PROVIDER_LIB/libunwind.a"
+      test -s "$out/lib/libc.so"
+      test -s "$out/lib/crt1.o"
+      test -e "$out/bin/cc"
+
       # Native-toolchain metadata for the closure's host/target capability check.
       $BB mkdir -p "$out/share/mantle-native-toolchain"
       $BB cat > "$out/share/mantle-native-toolchain/provider.json" <<EOF
