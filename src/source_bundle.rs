@@ -4550,8 +4550,21 @@ pub(crate) fn import_constructed_store_path_source(
     let materialized = materialize_source_record_from_path(&planned, physical_path, false)?;
     let manifest = assemble_source_bundle(vec![materialized], store_prefix)?;
     let report = import_source_bundle(&manifest, state_dir, true)?;
-    assert_eq!(report.imported_count, 1);
-    debug_assert!(report.pinned);
+    let accepted_count = report
+        .imported_count
+        .checked_add(report.skipped_present_count)
+        .ok_or_else(|| RunError::Internal("constructed source import count overflow".to_string()))?;
+    if accepted_count != 1 || report.records.len() != 1 || !report.pinned {
+        return Err(RunError::Internal(format!(
+            "constructed source import expected one pinned record, got imported={} skipped={} records={} pinned={}",
+            report.imported_count,
+            report.skipped_present_count,
+            report.records.len(),
+            report.pinned
+        )));
+    }
+    assert_eq!(accepted_count, 1);
+    assert!(report.pinned);
     Ok(report)
 }
 
@@ -7043,6 +7056,32 @@ mod tests {
         assert_eq!(second.skipped_present_count, 1);
         let verify = verify_source_bundle_state(&manifest, &state_dir).unwrap();
         assert_eq!(verify.ready_class, SourceReadiness::Ready);
+    }
+
+    #[test]
+    fn constructed_store_path_import_skips_only_identical_content() {
+        let temp = tempfile::tempdir().unwrap();
+        let physical_path = temp.path().join("constructed-provider");
+        let state_dir = temp.path().join("state");
+        fs::create_dir(&physical_path).unwrap();
+        fs::write(physical_path.join("provider.txt"), b"verified-provider").unwrap();
+        let logical_path = "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-constructed-provider";
+
+        let first =
+            import_constructed_store_path_source(logical_path, &physical_path, &state_dir, "/mantle/store").unwrap();
+        let second =
+            import_constructed_store_path_source(logical_path, &physical_path, &state_dir, "/mantle/store").unwrap();
+        fs::write(physical_path.join("provider.txt"), b"substituted-provider").unwrap();
+        let changed =
+            import_constructed_store_path_source(logical_path, &physical_path, &state_dir, "/mantle/store").unwrap();
+
+        assert_eq!(first.imported_count, 1);
+        assert_eq!(first.skipped_present_count, 0);
+        assert_eq!(second.imported_count, 0);
+        assert_eq!(second.skipped_present_count, 1);
+        assert_eq!(changed.imported_count, 1);
+        assert_eq!(changed.skipped_present_count, 0);
+        assert_ne!(first.records[0].content_blake3, changed.records[0].content_blake3);
     }
 
     #[test]
