@@ -457,6 +457,32 @@ pub(crate) fn materialize_stagex_provider(
     })
 }
 
+pub(crate) fn observe_normalized_provider_payload_digest(provider_root: &Path) -> Result<String, StagexProviderError> {
+    if !provider_root.is_dir() {
+        return Err(StagexProviderError::Provider(format!(
+            "normalized provider payload root is not a directory: {}",
+            provider_root.display()
+        )));
+    }
+    let payload = observe_provider_payload(provider_root)?;
+    let digest = normalized_provider_payload_digest_from_observations(&payload)?;
+    assert_eq!(digest.len(), blake3::OUT_LEN.saturating_mul(2));
+    assert!(!payload.is_empty());
+    Ok(digest)
+}
+
+fn normalized_provider_payload_digest_from_observations(
+    payload: &[ProviderPayloadObservation],
+) -> Result<String, StagexProviderError> {
+    if payload.is_empty() {
+        return Err(StagexProviderError::Provider("normalized provider payload is empty".to_string()));
+    }
+    let digest = digest_serialized(NORMALIZED_PROVIDER_DIGEST_DOMAIN, &payload)?;
+    assert_eq!(digest.len(), blake3::OUT_LEN.saturating_mul(2));
+    assert!(!digest.is_empty());
+    Ok(digest)
+}
+
 fn materialize_and_validate_staging(
     request: &StagexProviderRequest<'_>,
     evidence: &TransitionEvidence,
@@ -465,7 +491,7 @@ fn materialize_and_validate_staging(
     copy_provider_payload(request.transition_root, staging_path, evidence)?;
     let validation = validate_relocated_provider_runtime(staging_path, request.transition_root)?;
     let payload = observe_provider_payload(staging_path)?;
-    let normalized_provider_digest_blake3 = digest_serialized(NORMALIZED_PROVIDER_DIGEST_DOMAIN, &payload)?;
+    let normalized_provider_digest_blake3 = normalized_provider_payload_digest_from_observations(&payload)?;
     let provider_validation_report_digest_blake3 =
         digest_serialized(PROVIDER_VALIDATION_REPORT_DIGEST_DOMAIN, &validation)?;
     let metadata = provider_metadata(
@@ -2197,7 +2223,7 @@ fn independently_validate_staging(
 ) -> Result<(), StagexProviderError> {
     validate_static_provider_payload(staging, evidence)?;
     let payload = observe_provider_payload(staging)?;
-    let normalized = digest_serialized(NORMALIZED_PROVIDER_DIGEST_DOMAIN, &payload)?;
+    let normalized = normalized_provider_payload_digest_from_observations(&payload)?;
     if normalized != expected_receipt.lineage.normalized_provider_digest_blake3 {
         return Err(StagexProviderError::Provider("independent provider payload digest mismatch".to_string()));
     }
@@ -2737,6 +2763,28 @@ mod tests {
         assert_ne!(selection.expected_digest_blake3, crate::stagex_tinycc::TINYCC_FINAL_BLAKE3);
         assert_ne!(selection.transition_relative_path, TRANSITION_SELFHOST_TCC_RELATIVE_PATH);
         assert_ne!(selection.transition_relative_path, TRANSITION_TCC26_RELATIVE_PATH);
+    }
+
+    #[test]
+    fn normalized_provider_payload_digest_is_stable_and_payload_sensitive() {
+        let payload = vec![ProviderPayloadObservation {
+            artifact_id: "compiler".to_string(),
+            relative_path: "bin/tcc".to_string(),
+            kind: "file".to_string(),
+            bytes_len: 1,
+            digest_blake3: DIGEST_A.to_string(),
+        }];
+        let first = normalized_provider_payload_digest_from_observations(&payload).unwrap();
+        let second = normalized_provider_payload_digest_from_observations(&payload).unwrap();
+        let mut changed = payload.clone();
+        changed[0].digest_blake3 = DIGEST_B.to_string();
+        let changed_digest = normalized_provider_payload_digest_from_observations(&changed).unwrap();
+        let empty_error = normalized_provider_payload_digest_from_observations(&[]).unwrap_err();
+
+        assert_eq!(first, second);
+        assert_ne!(first, changed_digest);
+        assert!(empty_error.to_string().contains("payload is empty"));
+        assert_eq!(first.len(), blake3::OUT_LEN.saturating_mul(2));
     }
 
     #[test]

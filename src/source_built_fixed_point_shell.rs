@@ -921,20 +921,22 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
                 output_path: stagex_provider_output_root,
             })
         })?;
-        let mut stagex_provider_report = stagex_provider_result
+        let stagex_provider_report = stagex_provider_result
             .map_err(|error| proof_error(format!("StageX provider publication failed: {error}")))?;
-        if reuse_stagex_provider {
-            validate_identical_directory_trees("StageX provider", &stagex_provider_replay_root, &stagex_provider_root)?;
-            fs::remove_dir_all(&stagex_provider_replay_root).map_err(|error| {
-                proof_error(format!(
-                    "removing validated StageX provider replay {}: {error}",
-                    stagex_provider_replay_root.display()
-                ))
-            })?;
-            stagex_provider_report.output_path = stagex_provider_root.clone();
-            stagex_provider_report.receipt_path = stagex_provider_root.join(STAGEX_PROVIDER_RECEIPT_FILE);
-        }
         validate_stagex_provider_normalized_identity(&stagex_provider_report.normalized_provider_digest_blake3)?;
+        if reuse_stagex_provider {
+            // Provider receipts bind current-run transition evidence. Keep the replay for receipts,
+            // and compare the reusable runtime payload through its normalized identity.
+            let persistent_digest =
+                crate::stagex_provider::observe_normalized_provider_payload_digest(&stagex_provider_root)
+                    .map_err(|error| proof_error(format!("observing persistent StageX provider payload: {error}")))?;
+            validate_reusable_stagex_provider_identity(
+                &stagex_provider_report.normalized_provider_digest_blake3,
+                &persistent_digest,
+            )?;
+            assert!(stagex_provider_replay_root.is_dir());
+            assert!(stagex_provider_root.is_dir());
+        }
         validate_runtime_bounds(options, prepared)?;
         let stagex_logical_path = crate::full_source_provider::adopt_verified_local_provider_path_strict(
             &stagex_provider_root,
@@ -1569,6 +1571,20 @@ fn validate_stagex_provider_normalized_identity(observed_digest_blake3: &str) ->
     }
     assert_eq!(observed_digest_blake3.len(), BLAKE3_HEX_LENGTH);
     debug_assert!(observed_digest_blake3.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    Ok(())
+}
+
+fn validate_reusable_stagex_provider_identity(
+    replay_digest_blake3: &str,
+    persistent_digest_blake3: &str,
+) -> Result<(), RunError> {
+    if replay_digest_blake3 != persistent_digest_blake3 {
+        return Err(proof_error(format!(
+            "StageX provider replay payload mismatch: replay_blake3={replay_digest_blake3} persistent_blake3={persistent_digest_blake3}"
+        )));
+    }
+    assert_eq!(replay_digest_blake3.len(), BLAKE3_HEX_LENGTH);
+    assert_eq!(persistent_digest_blake3.len(), BLAKE3_HEX_LENGTH);
     Ok(())
 }
 
@@ -2586,6 +2602,20 @@ mod tests {
         let substituted = validate_stagex_provider_normalized_identity(DIGEST).unwrap_err();
 
         assert!(substituted.to_string().contains("normalized provider digest mismatch"));
+        assert_ne!(STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST, DIGEST);
+    }
+
+    #[test]
+    fn stagex_provider_cache_reuses_only_the_same_normalized_payload() {
+        validate_reusable_stagex_provider_identity(
+            STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST,
+            STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST,
+        )
+        .unwrap();
+        let mismatch =
+            validate_reusable_stagex_provider_identity(STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST, DIGEST).unwrap_err();
+
+        assert!(mismatch.to_string().contains("StageX provider replay payload mismatch"));
         assert_ne!(STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST, DIGEST);
     }
 
