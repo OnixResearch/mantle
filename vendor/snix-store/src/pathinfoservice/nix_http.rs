@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::TryStreamExt;
 use futures::stream::BoxStream;
+use futures::TryStreamExt;
 use nix_compat::narinfo::NarInfo;
 use nix_compat::narinfo::Signature;
 use nix_compat::narinfo::{self};
@@ -16,15 +16,15 @@ use snix_castore::composition::ServiceBuilder;
 use snix_castore::directoryservice::DirectoryService;
 use tokio::io::AsyncRead;
 use tokio::io::{self};
-use tracing::Span;
 use tracing::instrument;
 use tracing::warn;
+use tracing::Span;
 use url::Url;
 
 use super::PathInfo;
 use super::PathInfoService;
-use crate::nar::NarIngestionError;
 use crate::nar::ingest_nar_and_hash;
+use crate::nar::NarIngestionError;
 use crate::pathinfoservice;
 
 /// NixHTTPPathInfoService acts as a bridge in between the Nix HTTP Binary cache
@@ -127,6 +127,16 @@ impl<BS, DS> NixHTTPPathInfoService<BS, DS> {
     }
 }
 
+fn validate_requested_store_path_digest(requested_digest: [u8; 20], observed_digest: [u8; 20]) -> Result<(), Error> {
+    if requested_digest != observed_digest {
+        return Err(Error::StorePathDigestMismatch {
+            requested_digest,
+            observed_digest,
+        });
+    }
+    Ok(())
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("wrong arguments: {0}")]
@@ -146,6 +156,11 @@ pub enum Error {
     ParseNARInfo(nix_compat::narinfo::Error),
     #[error("no valid signature found")]
     NoValidSignature,
+    #[error("narinfo store path digest does not match the requested digest")]
+    StorePathDigestMismatch {
+        requested_digest: [u8; 20],
+        observed_digest: [u8; 20],
+    },
     #[error("failed to request NAR, status {0}")]
     FailedToRequestNAR(reqwest::StatusCode),
     #[error("unsupported NAR compression: {0}")]
@@ -180,6 +195,7 @@ where
             return Ok(None);
         };
         let narinfo = self.parse_and_verify_narinfo(&narinfo_str)?;
+        validate_requested_store_path_digest(digest, *narinfo.store_path.digest())?;
         let span = Span::current();
 
         // To construct the full PathInfo, we also need to populate the node field,
@@ -267,6 +283,7 @@ where
             return Ok(None);
         };
         let narinfo = self.parse_and_verify_narinfo(&narinfo_str)?;
+        validate_requested_store_path_digest(digest, *narinfo.store_path.digest())?;
         Ok(Some(narinfo.references.iter().map(StorePath::to_owned).collect()))
     }
 
@@ -413,10 +430,10 @@ mod tests {
     use std::io::Write;
     use std::net::TcpListener;
     use std::net::TcpStream;
-    use std::sync::Arc;
-    use std::sync::Mutex;
     use std::sync::atomic::AtomicBool;
     use std::sync::atomic::Ordering;
+    use std::sync::Arc;
+    use std::sync::Mutex;
     use std::thread;
     use std::thread::JoinHandle;
     use std::time::Duration;
@@ -427,10 +444,12 @@ mod tests {
     use snix_castore::directoryservice::RedbDirectoryServiceConfig;
     use url::Url;
 
+    use super::default_store_dir;
+    use super::validate_requested_store_path_digest;
+    use super::Error;
     use super::NixHTTPPathInfoService;
     use super::NixHTTPPathInfoServiceConfig;
     use super::NixHTTPPathInfoServiceParams;
-    use super::default_store_dir;
     use crate::pathinfoservice::PathInfoService;
 
     const TEST_NARINFO: &str = r#"StorePath: /nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-net-tools-1.60_p20170221182432
@@ -563,16 +582,29 @@ Sig: hydra.other.net-1:JXQ3Z/PXf0EZSFkFioa4FbyYpbbTbHlFBtZf4VqU0tuMTWzhMD7p9Q7ac
         )
         .unwrap();
         assert!(default_service.parse_and_verify_narinfo(&body).is_err());
-        assert!(
-            test_service_config("http://127.0.0.1/".parse().unwrap())
-                .with_store_dir("relative".to_string())
-                .is_err()
-        );
-        assert!(
-            test_service_config("http://127.0.0.1/".parse().unwrap())
-                .with_store_dir("/mantle/store/".to_string())
-                .is_err()
-        );
+        assert!(test_service_config("http://127.0.0.1/".parse().unwrap())
+            .with_store_dir("relative".to_string())
+            .is_err());
+        assert!(test_service_config("http://127.0.0.1/".parse().unwrap())
+            .with_store_dir("/mantle/store/".to_string())
+            .is_err());
+    }
+
+    #[test]
+    fn requested_store_path_digest_validation_accepts_only_an_exact_match() {
+        let store_path = test_store_path();
+        assert!(validate_requested_store_path_digest(*store_path.digest(), *store_path.digest()).is_ok());
+
+        let wrong_digest = [0u8; 20];
+        let error =
+            validate_requested_store_path_digest(wrong_digest, *store_path.digest()).expect_err("digest mismatch");
+        assert!(matches!(
+            error,
+            Error::StorePathDigestMismatch {
+                requested_digest,
+                observed_digest,
+            } if requested_digest == wrong_digest && observed_digest == *store_path.digest()
+        ));
     }
 
     #[tokio::test]
@@ -593,6 +625,48 @@ Sig: hydra.other.net-1:JXQ3Z/PXf0EZSFkFioa4FbyYpbbTbHlFBtZf4VqU0tuMTWzhMD7p9Q7ac
             .expect("narinfo refs");
 
         assert_eq!(refs, vec![test_reference_path()]);
+        let counts = counts.lock().expect("request counts");
+        assert_eq!(counts.narinfo_gets, 1);
+        assert_eq!(counts.nar_gets, 0);
+        drop(counts);
+        stop_test_server(&base_url, stop, handle);
+    }
+
+    #[tokio::test]
+    async fn get_references_rejects_mismatched_store_path_before_nar_fetch() {
+        let (base_url, counts, stop, handle) = spawn_test_server(TEST_NARINFO);
+        let config = test_service_config(base_url.clone());
+        let blob_service = MemoryBlobService::default();
+        let directory_service =
+            RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default())
+                .expect("directory service");
+        let service = NixHTTPPathInfoService::try_build("test".to_string(), config, blob_service, directory_service)
+            .expect("nix http service");
+
+        let wrong_digest = [0u8; 20];
+        let error = service.get_references(wrong_digest).await.expect_err("digest mismatch");
+        assert!(error.to_string().contains("narinfo store path digest does not match"));
+        let counts = counts.lock().expect("request counts");
+        assert_eq!(counts.narinfo_gets, 1);
+        assert_eq!(counts.nar_gets, 0);
+        drop(counts);
+        stop_test_server(&base_url, stop, handle);
+    }
+
+    #[tokio::test]
+    async fn get_rejects_mismatched_store_path_before_nar_fetch() {
+        let (base_url, counts, stop, handle) = spawn_test_server(TEST_NARINFO);
+        let config = test_service_config(base_url.clone());
+        let blob_service = MemoryBlobService::default();
+        let directory_service =
+            RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default())
+                .expect("directory service");
+        let service = NixHTTPPathInfoService::try_build("test".to_string(), config, blob_service, directory_service)
+            .expect("nix http service");
+
+        let wrong_digest = [0u8; 20];
+        let error = service.get(wrong_digest).await.expect_err("digest mismatch");
+        assert!(error.to_string().contains("narinfo store path digest does not match"));
         let counts = counts.lock().expect("request counts");
         assert_eq!(counts.narinfo_gets, 1);
         assert_eq!(counts.nar_gets, 0);

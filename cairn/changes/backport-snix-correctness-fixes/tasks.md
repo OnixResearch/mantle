@@ -6,7 +6,8 @@
   - Evidence: `adr/0054-select-snix-backports-by-mantle-compatibility-boundary.md` and `adr/README.md`.
 - [x] [serial] I2 Record the reviewed Gerrit changes, upstream status, local impact, selected work, deferrals, rejection reasons, and reopen triggers. r[vendored_snix.selective_backport_policy]
   - Evidence: `cairn/changes/backport-snix-correctness-fixes/evidence/upstream-review.md`.
-- [ ] [serial] V1 Before implementation, run the focused baseline commands below and record exact output in `evidence/baseline-tests.md`. r[vendored_snix.selective_backport_policy]
+- [x] [serial] V1 Before implementation, run the focused baseline commands below and record exact output in `evidence/baseline-tests.md`. r[vendored_snix.selective_backport_policy]
+  - Evidence: `evidence/baseline-tests.md` records 86 `snix-store`, 252 `snix-castore`, 0 `snix-tracing`, and 338 `crunch-store` library tests passing.
   - `SNIX_BUILD_SANDBOX_SHELL=/bin/sh nix develop -c cargo test -p snix-store --lib`
   - `SNIX_BUILD_SANDBOX_SHELL=/bin/sh nix develop -c cargo test -p snix-castore --lib`
   - `SNIX_BUILD_SANDBOX_SHELL=/bin/sh nix develop -c cargo test -p snix-tracing --lib`
@@ -14,7 +15,8 @@
 
 ## Phase 2: Remote cache identity and transport
 
-- [ ] [serial] I3 Add a pure requested-digest comparator and enforce it in the Snix HTTP PathInfo service before a mismatched response can return to its caller. r[cache_substitution.requested_path_identity]
+- [x] [serial] I3 Add a pure requested-digest comparator and enforce it in the Snix HTTP PathInfo service before a mismatched response can return to its caller. r[cache_substitution.requested_path_identity]
+  - Evidence: `evidence/requested-digest-service-guard-2026-08-08.md` records the pure comparator, pre-NAR guards, positive and negative tests, and focused validation.
 - [ ] [serial] I4 Enforce the same decision in Mantle’s remote-substitution finalization shell before PathInfo persistence, sidecars, castore registration, export, root registration, advisory publication, or success reporting. r[cache_substitution.requested_path_identity]
 - [ ] [parallel] I5 Add positive and negative service tests for a matching signed narinfo, a valid signed narinfo for another path, malformed metadata, and zero returned PathInfo on mismatch. r[cache_substitution.requested_path_identity]
 - [ ] [parallel] I6 Add a mutation-counting substitution test that proves an alternative service cannot cause writes or side effects with mismatched PathInfo. r[cache_substitution.requested_path_identity]
