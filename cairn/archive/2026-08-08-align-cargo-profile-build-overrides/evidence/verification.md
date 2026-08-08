@@ -19,6 +19,8 @@ Does Mantle apply Cargo's built-in build-override defaults to host work and reco
 - Task `12665` reran the pure-core suite, dual-use checks, Clippy, rustfmt, and whitespace validation after final cleanup. All passed.
 - Task `12670` reran the completed task gate, full Cairn validation, and whitespace validation. All passed.
 - Task `12676` ran the sync dry run, sync execution, and post-sync Cairn validation. All passed.
+- Task `12685` ran post-archive Cairn validation against the final archive. It passed.
+- The exact output is in `evidence/post-archive-validation.txt`.
 - Topology self-probe task `12629` wrote `/tmp/mantle-profile-build-override-self-probe/receipt.json`.
 - The self-probe stopped at the existing `native-host-unit-graph-blocked` blocker with no unit executions.
 - The earlier profile-codegen self-probe had the same blocker and no unit executions.
