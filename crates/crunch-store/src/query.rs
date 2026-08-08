@@ -510,7 +510,8 @@ mod tests {
         pi.signatures.push(signing_key.sign(fp.as_bytes()).to_owned());
         svc.put(pi).await.unwrap();
 
-        let results = store_verify_signatures(&svc, Some("trusted-path"), &[verifying_key], TEST_STORE_DIR).await.unwrap();
+        let results =
+            store_verify_signatures(&svc, Some("trusted-path"), &[verifying_key], TEST_STORE_DIR).await.unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].is_trusted());
         assert_eq!(results[0].trusted_count, 1);
@@ -528,7 +529,9 @@ mod tests {
         pi.signatures.push(signing_key.sign(fp.as_bytes()).to_owned());
         svc.put(pi).await.unwrap();
 
-        let results = store_verify_signatures(&svc, Some("untrusted-path"), &[other_verifying_key()], TEST_STORE_DIR).await.unwrap();
+        let results = store_verify_signatures(&svc, Some("untrusted-path"), &[other_verifying_key()], TEST_STORE_DIR)
+            .await
+            .unwrap();
         assert_eq!(results.len(), 1);
         assert!(!results[0].is_trusted());
         assert_eq!(results[0].trusted_count, 0);
@@ -628,12 +631,15 @@ mod tests {
         let pi = dummy_pathinfo("prefix-roundtrip-path");
         svc.put(pi).await.unwrap();
 
-        let sign_results = store_sign(&svc, &signing_key, Some("prefix-roundtrip-path"), false, CUSTOM_PREFIX).await.unwrap();
+        let sign_results =
+            store_sign(&svc, &signing_key, Some("prefix-roundtrip-path"), false, CUSTOM_PREFIX).await.unwrap();
         assert_eq!(sign_results.len(), 1);
         assert!(sign_results[0].newly_signed);
 
         let verify_results =
-            store_verify_signatures(&svc, Some("prefix-roundtrip-path"), &[verifying_key], CUSTOM_PREFIX).await.unwrap();
+            store_verify_signatures(&svc, Some("prefix-roundtrip-path"), &[verifying_key], CUSTOM_PREFIX)
+                .await
+                .unwrap();
         assert_eq!(verify_results.len(), 1);
         assert!(verify_results[0].is_trusted());
         assert_eq!(verify_results[0].trusted_count, 1);
@@ -649,7 +655,9 @@ mod tests {
         store_sign(&svc, &signing_key, Some("prefix-mismatch-path"), false, CUSTOM_PREFIX).await.unwrap();
 
         let verify_results =
-            store_verify_signatures(&svc, Some("prefix-mismatch-path"), &[verifying_key], TEST_STORE_DIR).await.unwrap();
+            store_verify_signatures(&svc, Some("prefix-mismatch-path"), &[verifying_key], TEST_STORE_DIR)
+                .await
+                .unwrap();
         assert_eq!(verify_results.len(), 1);
         assert!(!verify_results[0].is_trusted());
         assert_eq!(verify_results[0].trusted_count, 0);
