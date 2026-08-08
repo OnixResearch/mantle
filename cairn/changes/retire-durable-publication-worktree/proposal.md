@@ -2,15 +2,15 @@
 
 ## Why
 
-The isolated Mantle adoption worktree must remain until canonical promotion is archived and remotely visible. This separate Cairn removes the lifecycle cycle from the promotion change.
+The named cleanup target was already absent and unregistered when the archived promotion became visible on remote `main`. Substituting a different worktree would violate the exact-path safety boundary.
 
 ## What Changes
 
-- Continue from a separate finalizer checkout.
-- Reject dirty, unpublished, wrong-path, and active-operation cases.
-- Remove only `/home/brittonr/git/OnixResearch/.pi/worktrees/mantle-durable-publication` through the version-control worktree command.
-- Preserve Mantle's original dirty checkout and every unrelated worktree.
+- Record the remote prerequisite and exact target-absence facts from a separate finalizer checkout.
+- Bind the observation to a BLAKE3 digest and a typed Nickel receipt.
+- Archive this operational change as obsolete without synchronizing its proposed product requirements.
+- Do not run worktree removal, recursive deletion, or branch deletion.
 
 ## Impact
 
-This change removes one eligible local worktree. It does not delete branches, rewrite history, alter remote state, or touch the original dirty checkout.
+This change records a no-op closure. It does not remove a worktree, delete a branch, rewrite history, alter product behavior, or make a cleanup-success claim.

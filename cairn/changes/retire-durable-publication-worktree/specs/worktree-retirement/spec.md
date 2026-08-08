@@ -1,5 +1,9 @@
 # Mantle Worktree Retirement Specification Delta
 
+## Status
+
+This proposal is obsolete and is not synchronized. The exact cleanup target was already absent and unregistered before execution, so no removal capability was accepted.
+
 ## ADDED Requirements
 
 ### Requirement: Promotion prerequisites
