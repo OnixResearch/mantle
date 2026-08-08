@@ -2,6 +2,8 @@
 
 use fuse_backend_rs::abi::fuse_abi::Attr;
 
+pub(super) const VALID_NLINK: u32 = 1;
+
 /// The [Attr] describing the root
 pub const ROOT_FILE_ATTR: Attr = Attr {
     ino: fuse_backend_rs::api::filesystem::ROOT_ID,
@@ -15,7 +17,7 @@ pub const ROOT_FILE_ATTR: Attr = Attr {
     atimensec: 0,
     mtimensec: 0,
     ctimensec: 0,
-    nlink: 0,
+    nlink: VALID_NLINK,
     uid: 0,
     gid: 0,
     rdev: 0,

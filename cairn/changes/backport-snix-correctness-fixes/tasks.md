@@ -32,9 +32,12 @@
 
 ## Phase 3: Castore and FUSE correctness
 
-- [ ] [serial] I10 Repair the pure castore directory-size calculation so each entry and node contribution is counted once with bounded arithmetic. r[vendored_snix.castore_metadata]
-- [ ] [serial] I11 Map castore node kinds to FUSE `DT_*` values for `readdir` and set the adopted valid nonzero `nlink` attributes. r[vendored_snix.castore_metadata]
-- [ ] [parallel] I12 Add positive and negative tests for empty and mixed directories, directory-size regression values, every supported FUSE node kind, and guards against `S_IF*` entry types or zero link counts. r[vendored_snix.castore_metadata]
+- [x] [serial] I10 Repair the pure castore directory-size calculation so each entry and node contribution is counted once with bounded arithmetic. r[vendored_snix.castore_metadata]
+  - Evidence: `evidence/castore-fuse-2026-08-08.md` records the pure checked sum and regression tests.
+- [x] [serial] I11 Map castore node kinds to FUSE `DT_*` values for `readdir` and set the adopted valid nonzero `nlink` attributes. r[vendored_snix.castore_metadata]
+  - Evidence: `evidence/castore-fuse-2026-08-08.md` records the FUSE entry and attribute changes.
+- [x] [parallel] I12 Add positive and negative tests for empty and mixed directories, directory-size regression values, every supported FUSE node kind, and guards against `S_IF*` entry types or zero link counts. r[vendored_snix.castore_metadata]
+  - Evidence: `evidence/castore-fuse-2026-08-08.md` records all required positive and negative cases and passing feature-enabled tests.
 
 ## Phase 4: Store services and operational alignment
 

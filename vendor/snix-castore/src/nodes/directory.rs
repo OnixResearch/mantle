@@ -39,17 +39,19 @@ impl Directory {
 
     /// The size of a directory is the number of all regular and symlink elements,
     /// the number of directory elements, and their size fields.
+    // r[impl vendored_snix.castore_metadata]
     pub fn size(&self) -> u64 {
-        // It's impossible to create a Directory where the size overflows, because we
-        // check before every add() that the size won't overflow.
-        (self.nodes.len() as u64)
-            + self
-                .nodes()
-                .map(|(_name, n)| match n {
-                    Node::Directory { size, .. } => 1 + size,
+        // Construction rejects every insertion that would overflow this sum.
+        self.nodes
+            .values()
+            .try_fold(0u64, |total, node| {
+                let child_size = match node {
+                    Node::Directory { size, .. } => size.checked_add(1)?,
                     Node::File { .. } | Node::Symlink { .. } => 1,
-                })
-                .sum::<u64>()
+                };
+                total.checked_add(child_size)
+            })
+            .expect("validated Directory size must fit in u64")
     }
 
     /// Calculates the digest of a Directory, which is the blake3 hash of a
@@ -125,6 +127,48 @@ mod test {
     use crate::DirectoryError;
     use crate::PathComponent;
     use crate::fixtures::DUMMY_DIGEST;
+
+    #[test]
+    fn size_counts_each_mixed_entry_once() {
+        // r[verify vendored_snix.castore_metadata]
+        const CHILD_DIRECTORY_SIZE: u64 = 4;
+        const EXPECTED_MIXED_SIZE: u64 = 7;
+
+        let directory = Directory::try_from_iter([
+            ("dir".try_into().unwrap(), Node::Directory {
+                digest: *DUMMY_DIGEST,
+                size: CHILD_DIRECTORY_SIZE,
+            }),
+            ("file".try_into().unwrap(), Node::File {
+                digest: *DUMMY_DIGEST,
+                size: 1,
+                executable: false,
+            }),
+            ("link".try_into().unwrap(), Node::Symlink {
+                target: "target".try_into().unwrap(),
+            }),
+        ])
+        .unwrap();
+
+        assert_eq!(Directory::new().size(), 0);
+        assert_eq!(directory.size(), EXPECTED_MIXED_SIZE);
+    }
+
+    #[test]
+    fn size_does_not_duplicate_directory_entry_contribution() {
+        // r[verify vendored_snix.castore_metadata]
+        const CHILD_DIRECTORY_SIZE: u64 = 4;
+        const EXPECTED_PARENT_SIZE: u64 = 5;
+
+        let directory = Directory::try_from_iter([("dir".try_into().unwrap(), Node::Directory {
+            digest: *DUMMY_DIGEST,
+            size: CHILD_DIRECTORY_SIZE,
+        })])
+        .unwrap();
+
+        assert_eq!(directory.size(), EXPECTED_PARENT_SIZE);
+        assert_ne!(directory.size(), EXPECTED_PARENT_SIZE + 1);
+    }
 
     #[test]
     fn from_iter_single() {

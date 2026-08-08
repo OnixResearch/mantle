@@ -42,6 +42,7 @@ use tracing::instrument;
 use tracing::warn;
 
 use self::file_attr::ROOT_FILE_ATTR;
+use self::file_attr::VALID_NLINK;
 use self::inode_tracker::InodeTracker;
 use self::inodes::DirectoryInodeData;
 use self::inodes::InodeData;
@@ -281,37 +282,7 @@ where
     /// Helper function, converting a [InodeData] to [Attr],
     /// applying uid/gid override if configured.
     fn inode_data_to_attr(&self, inode_data: &InodeData, ino: u64) -> Attr {
-        let mode = match inode_data {
-            InodeData::Regular(_, _, false) => libc::S_IFREG | 0o444,
-            // executable
-            InodeData::Regular(_, _, true) => libc::S_IFREG | 0o555,
-            InodeData::Symlink(_) => libc::S_IFLNK | 0o444,
-            InodeData::Directory(_) => libc::S_IFDIR | 0o555,
-        };
-        // libc::S_IFREG, libc::S_IFLNK & libc::S_IFDIR are u32 on Linux and u16 on MacOS
-        #[cfg(target_os = "macos")]
-        let mode = mode as u32;
-        let mut attr = Attr {
-            ino,
-            // FUTUREWORK: play with this numbers, as it affects read sizes for client applications.
-            blocks: 1024,
-            size: match inode_data {
-                InodeData::Regular(_, size, _) => *size,
-                InodeData::Symlink(target) => target.len() as u64,
-                InodeData::Directory(DirectoryInodeData::Sparse(_, size)) => *size,
-                InodeData::Directory(DirectoryInodeData::Populated(_, children)) => children.len() as u64,
-            },
-            mode,
-            mtime: 1, // Everything in /nix/store must have timestamp "1".
-            ..Default::default()
-        };
-
-        if let Some((uid, gid)) = self.settings.uid_gid_override {
-            attr.uid = uid;
-            attr.gid = gid;
-        }
-
-        attr
+        inode_data_to_attr(inode_data, ino, self.settings.uid_gid_override)
     }
 }
 fn attr_to_fuse_entry(attr: Attr) -> Entry {
@@ -324,19 +295,50 @@ fn attr_to_fuse_entry(attr: Attr) -> Entry {
     }
 }
 
-/// Returns the u32 fuse type
-fn node_to_fuse_type(node: &Node) -> u32 {
-    #[allow(clippy::let_and_return)]
-    let ty = match node {
-        Node::Directory { .. } => libc::S_IFDIR,
-        Node::File { .. } => libc::S_IFREG,
-        Node::Symlink { .. } => libc::S_IFLNK,
-    };
-    // libc::S_IFDIR is u32 on Linux and u16 on MacOS
-    #[cfg(target_os = "macos")]
-    let ty = ty as u32;
+// r[impl vendored_snix.castore_metadata]
+fn inode_data_to_attr(inode_data: &InodeData, ino: u64, uid_gid_override: Option<(u32, u32)>) -> Attr {
+    const FUSE_BLOCK_COUNT: u64 = 1024;
+    const STORE_MTIME_SECONDS: u64 = 1;
 
-    ty
+    let mode = match inode_data {
+        InodeData::Regular(_, _, false) => libc::S_IFREG | 0o444,
+        InodeData::Regular(_, _, true) => libc::S_IFREG | 0o555,
+        InodeData::Symlink(_) => libc::S_IFLNK | 0o444,
+        InodeData::Directory(_) => libc::S_IFDIR | 0o555,
+    };
+    #[cfg(target_os = "macos")]
+    let mode = mode as u32;
+    let mut attr = Attr {
+        ino,
+        blocks: FUSE_BLOCK_COUNT,
+        size: match inode_data {
+            InodeData::Regular(_, size, _) => *size,
+            InodeData::Symlink(target) => target.len() as u64,
+            InodeData::Directory(DirectoryInodeData::Sparse(_, size)) => *size,
+            InodeData::Directory(DirectoryInodeData::Populated(_, children)) => children.len() as u64,
+        },
+        mode,
+        mtime: STORE_MTIME_SECONDS,
+        nlink: VALID_NLINK,
+        ..Default::default()
+    };
+
+    if let Some((uid, gid)) = uid_gid_override {
+        attr.uid = uid;
+        attr.gid = gid;
+    }
+
+    attr
+}
+
+/// Returns the u32 FUSE directory-entry type.
+// r[impl vendored_snix.castore_metadata]
+fn node_to_fuse_type(node: &Node) -> u32 {
+    match node {
+        Node::Directory { .. } => libc::DT_DIR as u32,
+        Node::File { .. } => libc::DT_REG as u32,
+        Node::Symlink { .. } => libc::DT_LNK as u32,
+    }
 }
 
 const XATTR_NAME_DIRECTORY_DIGEST: &[u8] = b"user.snix.castore.directory.digest";
@@ -882,6 +884,69 @@ where
             Err(io::Error::from_raw_os_error(libc::ERANGE))
         } else {
             Ok(ListxattrReply::Names(xattrs_names.to_vec()))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ROOT_FILE_ATTR;
+    use super::VALID_NLINK;
+    use super::inode_data_to_attr;
+    use super::node_to_fuse_type;
+    use crate::Node;
+    use crate::fixtures::DUMMY_DIGEST;
+    use crate::fs::inodes::InodeData;
+
+    const SUPPORTED_NODE_KIND_COUNT: usize = 3;
+
+    fn supported_nodes() -> [Node; SUPPORTED_NODE_KIND_COUNT] {
+        [
+            Node::Directory {
+                digest: *DUMMY_DIGEST,
+                size: 0,
+            },
+            Node::File {
+                digest: *DUMMY_DIGEST,
+                size: 1,
+                executable: false,
+            },
+            Node::Symlink {
+                target: "target".try_into().unwrap(),
+            },
+        ]
+    }
+
+    #[test]
+    fn fuse_directory_entry_types_cover_supported_nodes() {
+        // r[verify vendored_snix.castore_metadata]
+        let [directory, file, symlink] = supported_nodes();
+
+        assert_eq!(node_to_fuse_type(&directory), libc::DT_DIR as u32);
+        assert_eq!(node_to_fuse_type(&file), libc::DT_REG as u32);
+        assert_eq!(node_to_fuse_type(&symlink), libc::DT_LNK as u32);
+    }
+
+    #[test]
+    fn fuse_directory_entry_types_are_not_stat_modes() {
+        // r[verify vendored_snix.castore_metadata]
+        let [directory, file, symlink] = supported_nodes();
+
+        assert_ne!(node_to_fuse_type(&directory), libc::S_IFDIR as u32);
+        assert_ne!(node_to_fuse_type(&file), libc::S_IFREG as u32);
+        assert_ne!(node_to_fuse_type(&symlink), libc::S_IFLNK as u32);
+    }
+
+    #[test]
+    fn fuse_attributes_have_valid_nonzero_link_counts() {
+        // r[verify vendored_snix.castore_metadata]
+        assert_ne!(ROOT_FILE_ATTR.nlink, 0);
+        assert_eq!(ROOT_FILE_ATTR.nlink, VALID_NLINK);
+
+        for node in supported_nodes() {
+            let attr = inode_data_to_attr(&InodeData::from_node(&node), 1, None);
+            assert_ne!(attr.nlink, 0);
+            assert_eq!(attr.nlink, VALID_NLINK);
         }
     }
 }
