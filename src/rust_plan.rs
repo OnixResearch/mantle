@@ -1843,7 +1843,8 @@ fn capture_rust_plan_with_oracle(
         .map_err(|err| RunError::Internal(format!("cargo build --unit-graph did not emit valid JSON: {err}")))?;
 
     let lock_packages = parse_lockfile_packages(&options.root)?;
-    let source_closure = summarize_source_closure(&metadata.packages, &lock_packages)?;
+    let source_closure_packages = cargo_packages_with_declared_git_manifests(&options.root, &metadata.packages);
+    let source_closure = summarize_source_closure(&source_closure_packages, &lock_packages)?;
     let lockfile = lockfile_identity(&options.root)?;
     let native_registry_source_planning =
         summarize_native_registry_source_planning(&options.root, &metadata.packages, &lock_packages, &lockfile)?;
@@ -2427,6 +2428,33 @@ fn native_lock_source_cargo_packages(root: &Path, lock_packages: &[LockPackage])
     packages.sort_by(|left, right| left.id.cmp(&right.id));
     packages.dedup_by(|left, right| left.id == right.id);
     packages
+}
+
+fn cargo_packages_with_declared_git_manifests(root: &Path, packages: &[CargoPackage]) -> Vec<CargoPackage> {
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
+    let mut vendor_blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    let vendor_roots = declared_vendor_roots(root, &mut vendor_blockers);
+    debug_assert!(vendor_blockers.len() <= MAX_SOURCE_TREE_ENTRIES);
+    packages
+        .iter()
+        .map(|package| {
+            if source_kind(package.source.as_deref()) != SourceKind::Git {
+                return package.clone();
+            }
+            let manifest_path = locate_declared_vendor_manifest(DeclaredVendorManifestInputs {
+                vendor_roots: &vendor_roots,
+                name: &package.name,
+                version: &package.version,
+            });
+            let Some(manifest_path) = manifest_path else {
+                return package.clone();
+            };
+            let mut normalized = package.clone();
+            normalized.manifest_path = normalize_path_string(&manifest_path);
+            normalized
+        })
+        .collect()
 }
 
 fn native_lock_source_cargo_package(vendor_roots: &[PathBuf], package: &LockPackage) -> Option<CargoPackage> {
@@ -25452,6 +25480,57 @@ unix_dep = { path = "../unix-dep" }
         assert_eq!(registry_planning.comparison_status, "blocked");
         assert!(registry_planning.sources.is_empty());
         assert!(registry_planning.blockers.iter().any(|blocker| blocker.class == "missing-declared-vendor-root"));
+    }
+
+    #[test]
+    fn declared_vendor_git_manifest_normalizes_cargo_source_closure_input() {
+        let dir = TempDir::new().unwrap();
+        let captured_manifest = dir.path().join("cargo-git/package/Cargo.toml");
+        let vendor_manifest = dir.path().join("vendor-deps/git-package/Cargo.toml");
+        std::fs::create_dir_all(captured_manifest.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(vendor_manifest.parent().unwrap()).unwrap();
+        std::fs::write(&captured_manifest, "[package]\nname = 'git-package'\nversion = '0.1.0'\n").unwrap();
+        std::fs::write(&vendor_manifest, "[package]\nname = 'git-package'\nversion = '0.1.0'\n").unwrap();
+        let package = CargoPackage {
+            id: "git+https://example.invalid/repo.git#git-package@0.1.0".to_string(),
+            name: "git-package".to_string(),
+            version: "0.1.0".to_string(),
+            source: Some("git+https://example.invalid/repo.git#abcdef123456".to_string()),
+            manifest_path: normalize_path_string(&captured_manifest),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
+        };
+
+        let normalized = cargo_packages_with_declared_git_manifests(dir.path(), std::slice::from_ref(&package));
+
+        assert_eq!(normalized.len(), 1);
+        assert_eq!(normalized[0].manifest_path, normalize_path_string(&vendor_manifest));
+        assert_eq!(normalized[0].id, package.id);
+        assert_ne!(normalized[0].manifest_path, package.manifest_path);
+    }
+
+    #[test]
+    fn missing_declared_vendor_git_manifest_preserves_captured_source_path() {
+        let dir = TempDir::new().unwrap();
+        let captured_manifest = dir.path().join("cargo-git/package/Cargo.toml");
+        std::fs::create_dir_all(captured_manifest.parent().unwrap()).unwrap();
+        std::fs::write(&captured_manifest, "[package]\nname = 'git-package'\nversion = '0.1.0'\n").unwrap();
+        let package = CargoPackage {
+            id: "git+https://example.invalid/repo.git#git-package@0.1.0".to_string(),
+            name: "git-package".to_string(),
+            version: "0.1.0".to_string(),
+            source: Some("git+https://example.invalid/repo.git#abcdef123456".to_string()),
+            manifest_path: normalize_path_string(&captured_manifest),
+            targets: Vec::new(),
+            features: BTreeMap::new(),
+        };
+
+        let normalized = cargo_packages_with_declared_git_manifests(dir.path(), std::slice::from_ref(&package));
+
+        assert_eq!(normalized.len(), 1);
+        assert_eq!(normalized[0].manifest_path, package.manifest_path);
+        assert_eq!(normalized[0].id, package.id);
+        assert!(dir.path().join("vendor-deps").exists() == false);
     }
 
     #[test]
