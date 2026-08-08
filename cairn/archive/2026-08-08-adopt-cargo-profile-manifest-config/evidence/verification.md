@@ -19,6 +19,11 @@ Does Mantle apply only the root Cargo profile table, resolve custom profiles and
 - The oracle receipt is `/tmp/mantle-profile-oracle-receipt-final.json`.
 - The receipt selected profile `fast`, reported matched package, target-unit, and host-unit comparisons, and emitted `opt-level=1` and `codegen-units=8` in the planned rustc arguments.
 - No new Cargo-oracle mismatch was found.
+- Task `12860` ran the completed task gate and full Cairn validation. Both passed.
+- Task `12863` ran the sync dry run, sync execution, and post-sync Cairn validation. All passed.
+- Task `12866` ran the archive dry run and archive execution. Both passed.
+- Final post-archive Cairn validation passed.
+- The exact final output is in `evidence/post-archive-validation.txt`.
 
 ## Decision
 
@@ -32,4 +37,4 @@ Mantle agent.
 
 ## Next action
 
-Run the Cairn task and repository validation gates, then sync and archive the change.
+Keep the accepted profile requirements and recorded non-claims aligned with future Rust planning changes.
