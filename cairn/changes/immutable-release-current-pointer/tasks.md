@@ -10,4 +10,5 @@
 - [x] [parallel] Add positive cases for an immutable object, a matching identity, a valid pointer switch, and a rollback. r[mantle.release.verification]
 - [x] [parallel] Add negative cases for a mutated published object, an identity mismatch, and a pointer to a missing object. r[mantle.release.verification]
 - [x] [parallel] Add boundary cases that reject an overwrite and a deployment or readiness claim. r[mantle.release.verification]
-- [ ] [serial] Run package, workspace, Clippy, Cairn, and Nix checks, then document non-claims. r[mantle.release.verification]
+- [x] [serial] Run package, workspace, Clippy, Cairn, and Nix checks, then document non-claims. r[mantle.release.verification]
+  - Evidence: `evidence/verification.md` records passing focused release tests, scoped Clippy, Cairn gates, Tracey coverage, broad-check blockers, and release-layout non-claims.
