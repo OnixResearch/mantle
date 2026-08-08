@@ -565,6 +565,16 @@ let PolicyFieldSetDigest = "2d86abb8cbcb43323f4bdf81870ee963fcdc34ef5bf815eabc5b
         marker_verbs = ["impl", "verify", "depends", "related"],
       },
       {
+        id = "immutable-release-pointer",
+        requirement_sources = [
+          { root = "cairn/specs/immutable-release-pointer/spec.md", source_kind = "accepted_specs", extensions = ["md"] },
+        ],
+        evidence_sources = [
+          { root = "tools/immutable_release_pointer_tracey_refs.rs", source_kind = "rust_source", extensions = ["rs"] },
+        ],
+        marker_verbs = ["impl", "verify", "depends", "related"],
+      },
+      {
         id = "content-bound-release-requirements",
         requirement_sources = [
           { root = "cairn/archive/2026-07-27-bind-release-requirement-evidence/specs/release-provenance/spec.md", source_kind = "requirements_doc", extensions = ["md"] },

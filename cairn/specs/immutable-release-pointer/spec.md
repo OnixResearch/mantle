@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Define an immutable, content-addressed release layout with a single current pointer and rollback by identity for Mantle.
+Defines the `immutable-release-pointer` capability.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Released objects are immutable
 

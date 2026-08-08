@@ -5125,6 +5125,33 @@
             "extensions": [
               "rs"
             ],
+            "root": "tools/immutable_release_pointer_tracey_refs.rs",
+            "source_kind": "rust_source"
+          }
+        ],
+        "id": "immutable-release-pointer",
+        "marker_verbs": [
+          "impl",
+          "verify",
+          "depends",
+          "related"
+        ],
+        "requirement_sources": [
+          {
+            "extensions": [
+              "md"
+            ],
+            "root": "cairn/specs/immutable-release-pointer/spec.md",
+            "source_kind": "accepted_specs"
+          }
+        ]
+      },
+      {
+        "evidence_sources": [
+          {
+            "extensions": [
+              "rs"
+            ],
             "root": "tools/content_bound_release_requirement_tracey_refs.rs",
             "source_kind": "rust_source"
           }
