@@ -12,7 +12,16 @@ const MAX_STDLIB_SEARCH_ANCESTORS: usize = 12;
 /// The embedded stdlib files.
 const STDLIB_FILES: &[(&str, &str)] = &[
     ("lib.ncl", include_str!("../../../lib/lib.ncl")),
+    ("artifact-auth-cutover-receipt.ncl", include_str!("../../../lib/artifact-auth-cutover-receipt.ncl")),
+    (
+        "artifact-source-migration-receipt.ncl",
+        include_str!("../../../lib/artifact-source-migration-receipt.ncl"),
+    ),
     ("contracts.ncl", include_str!("../../../lib/contracts.ncl")),
+    (
+        "durable-file-publication-adoption-receipt.ncl",
+        include_str!("../../../lib/durable-file-publication-adoption-receipt.ncl"),
+    ),
     ("derivation.ncl", include_str!("../../../lib/derivation.ncl")),
     ("fetch.ncl", include_str!("../../../lib/fetch.ncl")),
     ("fixed_output.ncl", include_str!("../../../lib/fixed_output.ncl")),
