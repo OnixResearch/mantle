@@ -20,6 +20,8 @@ Does Mantle apply built-in Cargo profile settings to each supported rustc path a
 - Task `12463` checked `src/cargo_profile.rs` and `src/rust_plan.rs` directly with rustfmt. It passed.
 - Task `12463` also ran `git diff --check`. It passed.
 - Task `12497` ran first-party Clippy for the Mantle binary with `-D warnings`. It passed.
+- Task `12494` ran the completed task gate and full Cairn validation. Both passed.
+- Task `12513` ran the sync dry run, sync execution, and post-sync Cairn validation. All passed.
 - Baseline self-probe task `12461` wrote `/tmp/mantle-profile-codegen-origin-self-probe/receipt.json`.
 - Post-change self-probe task `12458` wrote `/tmp/mantle-profile-codegen-self-probe/receipt.json`.
 - Both self-probes stopped before unit execution with `native-host-unit-graph-blocked`.
