@@ -25,24 +25,6 @@ WHEN the shell runs the attempt
 THEN it MUST construct the StageX provider and full-source native provider from scratch
 AND it MUST never read or adopt any cached provider output.
 
-### Requirement: Dev runs can snapshot and resume from a completed stage
-
-r[source_built_fixed_point_improved_iteration.dev_stage_resume] On a dev run the shell MUST persist a completion marker (stage id plus the stage output or principal digest) into the staging directory as each stage completes. When a dev run passes an explicit resume flag, the shell MUST verify each saved marker's recorded digest against a fresh replay of the current sources before trusting it, and MUST resume at the first incomplete stage rather than restarting from empty authority. The promoted cold run MUST NOT reuse a prior stage and MUST always start from empty authority.
-
-#### Scenario: Resume continues after a killed stage
-
-GIVEN a dev run was killed after completing the StageX transition and records a valid completion marker AND a later dev run passes the resume flag
-WHEN the later attempt verifies the marker against the current source replay
-THEN it MUST resume at the StageX provider-publication stage
-AND it MUST NOT restart the StageX transition.
-
-#### Scenario: Mutated or stale marker forces a restart
-
-GIVEN a dev run passes the resume flag AND a saved completion marker's recorded digest does not match a fresh replay of the current sources
-WHEN the shell validates the marker
-THEN it MUST reject the marker and restart that stage from scratch
-AND it MUST NOT skip the stage based on the untrusted marker.
-
 ### Requirement: Content-addressed store snapshot seeds a dev run
 
 r[source_built_fixed_point_improved_iteration.dev_store_snapshot] After a completed dev run the shell MUST snapshot the native store and state into the cache keyed by plan digest, and on the next dev run for the same plan digest it MUST seed the fresh staging store from that snapshot so unchanged content-addressed store paths are reused rather than rebuilt. The snapshot MUST only be used on dev runs and MUST be bounded by the existing disk-bytes proof preflight.
