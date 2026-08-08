@@ -26,6 +26,7 @@ use tracing_indicatif::writer;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
 use tracing_subscriber::Registry;
+use tracing_subscriber::layer::Filter;
 use tracing_subscriber::layer::Identity;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt as _;
@@ -318,14 +319,10 @@ impl TracingBuilder {
             }),
         );
 
-        let layered = layered.with_filter(construct_filter(self.level.to_owned()));
+        let layered =
+            apply_filter_to_combined_layers(additional_layer, layered, construct_filter(self.level.to_owned()));
 
-        tracing_subscriber::registry()
-            // TODO: if additional_layer has global filters, there is a risk that it will disable the "default" ones,
-            // while it could be solved by registering `additional_layer` last, it requires boxing `additional_layer`.
-            .with(additional_layer)
-            .with(layered)
-            .try_init()?;
+        tracing_subscriber::registry().with(layered).try_init()?;
 
         Ok(TracingHandle {
             stdout_writer,
@@ -464,6 +461,20 @@ impl<L: LogLevel> TracingArgs<L> {
     }
 }
 
+// r[impl vendored_snix.operational_alignment]
+fn apply_filter_to_combined_layers<L1, L2, F>(
+    additional_layer: L1,
+    configured_layers: L2,
+    filter: F,
+) -> impl Layer<Registry>
+where
+    L1: Layer<Registry> + Send + Sync + 'static,
+    L2: Layer<Registry> + Send + Sync + 'static,
+    F: Filter<Registry> + Send + Sync + 'static,
+{
+    additional_layer.and_then(configured_layers).with_filter(filter)
+}
+
 /// Helper assembling a filter filtering events for the [ChosenLevel].
 fn construct_filter<S>(level: ChosenLevel) -> impl tracing_subscriber::layer::Filter<S> {
     let mut b = EnvFilter::builder();
@@ -475,4 +486,59 @@ fn construct_filter<S>(level: ChosenLevel) -> impl tracing_subscriber::layer::Fi
         f = f.add_directive(level.to_owned().into());
     }
     f
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    use tracing::Event;
+    use tracing::Subscriber;
+    use tracing_subscriber::EnvFilter;
+    use tracing_subscriber::Layer;
+    use tracing_subscriber::Registry;
+    use tracing_subscriber::layer::Context;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    use super::apply_filter_to_combined_layers;
+
+    #[derive(Clone)]
+    struct EventCounter {
+        count: Arc<AtomicUsize>,
+    }
+
+    impl<S> Layer<S> for EventCounter
+    where S: Subscriber
+    {
+        fn on_event(&self, _event: &Event<'_>, _ctx: Context<'_, S>) {
+            self.count.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn env_filter_applies_to_format_and_additional_layers() {
+        // r[verify vendored_snix.operational_alignment]
+        let format_count = Arc::new(AtomicUsize::new(0));
+        let additional_count = Arc::new(AtomicUsize::new(0));
+        let layers = apply_filter_to_combined_layers(
+            EventCounter {
+                count: additional_count.clone(),
+            },
+            EventCounter {
+                count: format_count.clone(),
+            },
+            EnvFilter::new("info"),
+        );
+        let subscriber = Registry::default().with(layers);
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::debug!("disabled event");
+            tracing::info!("enabled event");
+        });
+
+        assert_eq!(format_count.load(Ordering::SeqCst), 1);
+        assert_eq!(additional_count.load(Ordering::SeqCst), 1);
+    }
 }

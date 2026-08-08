@@ -41,19 +41,29 @@
 
 ## Phase 4: Store services and operational alignment
 
-- [ ] [serial] I13 Move redb write-transaction creation, mutation, and commit into the blocking worker with owned database state. r[vendored_snix.store_service_behavior]
-- [ ] [serial] I14 Implement `PathInfoCache::list()` by delegating to the writable near service only. r[vendored_snix.store_service_behavior]
-- [ ] [parallel] I15 Add service tests for successful near writes and listing, empty near state, far-only records, a panic-on-list far service, redb error propagation, and concurrent async callers. r[vendored_snix.store_service_behavior]
-- [ ] [serial] I16 Adopt the maintained filesystem-ingestion buffer and copy path without restoring the removed fixed buffer constant. r[vendored_snix.operational_alignment]
-- [ ] [serial] I17 Apply `EnvFilter` to the combined tracing layers and preserve progress and non-format layer behavior. r[vendored_snix.operational_alignment]
-- [ ] [parallel] I18 Add focused ingestion and tracing tests for normal files, empty files, copy errors, enabled events, disabled events, and non-format layer visibility. r[vendored_snix.operational_alignment]
-- [ ] [serial] I19 Recheck the virtiofs used-length and read-only redb-builder triggers. If either path is active, backport and test its fix. Otherwise, update the ledger with current evidence and keep the deferral. r[vendored_snix.selective_backport_policy]
-- [ ] [parallel] I20 Add implementation and test requirement references. Use first-party adapter references and `tools/tracey_refs.rs` bridge references where Tracey does not scan vendored paths. r[vendored_snix.selective_backport_policy]
+- [x] [serial] I13 Move redb write-transaction creation, mutation, and commit into the blocking worker with owned database state. r[vendored_snix.store_service_behavior]
+  - Evidence: `evidence/store-operational-2026-08-08.md` records the owned database state and blocking transaction boundary.
+- [x] [serial] I14 Implement `PathInfoCache::list()` by delegating to the writable near service only. r[vendored_snix.store_service_behavior]
+  - Evidence: `evidence/store-operational-2026-08-08.md` records near-only listing and the panic-on-list far fixture.
+- [x] [parallel] I15 Add service tests for successful near writes and listing, empty near state, far-only records, a panic-on-list far service, redb error propagation, and concurrent async callers. r[vendored_snix.store_service_behavior]
+  - Evidence: `evidence/store-operational-2026-08-08.md` records every required service case and focused results.
+- [x] [serial] I16 Adopt the maintained filesystem-ingestion buffer and copy path without restoring the removed fixed buffer constant. r[vendored_snix.operational_alignment]
+  - Evidence: `evidence/store-operational-2026-08-08.md` records `copy_buf` with the default bounded reader.
+- [x] [serial] I17 Apply `EnvFilter` to the combined tracing layers and preserve progress and non-format layer behavior. r[vendored_snix.operational_alignment]
+  - Evidence: `evidence/store-operational-2026-08-08.md` records filter placement and unchanged progress-layer construction.
+- [x] [parallel] I18 Add focused ingestion and tracing tests for normal files, empty files, copy errors, enabled events, disabled events, and non-format layer visibility. r[vendored_snix.operational_alignment]
+  - Evidence: `evidence/store-operational-2026-08-08.md` records all required positive and negative tests.
+- [x] [serial] I19 Recheck the virtiofs used-length and read-only redb-builder triggers. If either path is active, backport and test its fix. Otherwise, update the ledger with current evidence and keep the deferral. r[vendored_snix.selective_backport_policy]
+  - Evidence: `evidence/store-operational-2026-08-08.md` and `evidence/upstream-review.md` record both current deferrals and reopen triggers.
+- [x] [parallel] I20 Add implementation and test requirement references. Use first-party adapter references and `tools/tracey_refs.rs` bridge references where Tracey does not scan vendored paths. r[vendored_snix.selective_backport_policy]
+  - Evidence: first-party remote-cache references live in `crates/crunch-store`; vendored references live beside implementation and tests; `tools/tracey_refs.rs` bridges each vendored requirement.
 
 ## Phase 5: Validation and lifecycle evidence
 
-- [ ] [serial] V2 After implementation, rerun every V1 command and record exact output in `evidence/focused-tests.md`. r[cache_substitution.requested_path_identity] r[cache_substitution.transport_normalization] r[vendored_snix.castore_metadata] r[vendored_snix.store_service_behavior] r[vendored_snix.operational_alignment]
-- [ ] [serial] V3 Run the package checks below and record exact output in `evidence/package-checks.md`. r[vendored_snix.selective_backport_policy]
+- [x] [serial] V2 After implementation, rerun every V1 command and record exact output in `evidence/focused-tests.md`. r[cache_substitution.requested_path_identity] r[cache_substitution.transport_normalization] r[vendored_snix.castore_metadata] r[vendored_snix.store_service_behavior] r[vendored_snix.operational_alignment]
+  - Evidence: `evidence/focused-tests.md` records 94 `snix-store`, 259 `snix-castore`, 1 `snix-tracing`, and 345 `crunch-store` passing tests.
+- [x] [serial] V3 Run the package checks below and record exact output in `evidence/package-checks.md`. r[vendored_snix.selective_backport_policy]
+  - Evidence: `evidence/package-checks.md` records exit status 0 for both exact commands.
   - `SNIX_BUILD_SANDBOX_SHELL=/bin/sh nix develop -c cargo check -p snix-store -p snix-castore -p snix-tracing -p crunch-store`
   - `SNIX_BUILD_SANDBOX_SHELL=/bin/sh nix develop -c cargo fmt --check -p snix-store -p snix-castore -p snix-tracing -p crunch-store -v`
 - [ ] [serial] V4 Run the lifecycle commands below and record exact output in `evidence/lifecycle-gates.md`. r[vendored_snix.selective_backport_policy]

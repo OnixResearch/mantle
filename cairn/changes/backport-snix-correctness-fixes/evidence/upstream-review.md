@@ -24,15 +24,15 @@ Which current Snix changes repair behavior present in Mantle’s adapted vendor 
 | [31495](https://cl.snix.dev/c/snix/+/31495) | Merged | `vendor/snix-castore/src/fs/mod.rs` | Adapt | Set the adopted valid nonzero link count and test every supported node kind. |
 | [31306](https://cl.snix.dev/c/snix/+/31306) | Merged | `vendor/snix-castore/src/directoryservice/redb.rs` | Adapt | Create and use the write transaction inside `spawn_blocking` with owned database state. |
 | [30571](https://cl.snix.dev/c/snix/+/30571) | Open | `vendor/snix-store/src/pathinfoservice/cache.rs` | Adapt | List the writable near service only. This keeps signing and mutation scope local. Do not claim upstream acceptance. |
-| [31150](https://cl.snix.dev/c/snix/+/31150) | Merged | `vendor/snix-castore/src/import/fs.rs` | Adapt | Use the maintained default buffered copy path and remove the stale fixed oversized buffer. |
-| [31157](https://cl.snix.dev/c/snix/+/31157) | Merged | `vendor/snix-tracing/src/lib.rs` | Adapt | Apply the environment filter to the combined layers while preserving Mantle progress behavior. |
+| [31157](https://cl.snix.dev/c/snix/+/31157) | Merged | `vendor/snix-castore/src/import/fs.rs` | Adapt | Use `copy_buf` with the maintained default bounded reader capacity instead of adding an unevidenced fixed oversized buffer. |
+| [31150](https://cl.snix.dev/c/snix/+/31150) | Merged | `vendor/snix-tracing/src/lib.rs` | Adapt | Apply the environment filter to Mantle's combined layers while preserving progress and additional-layer behavior. |
 
 ## Deferred or rejected changes
 
 | Gerrit change | Upstream status observed | Disposition | Reason and reopen trigger |
 |---|---|---|---|
-| [31448](https://cl.snix.dev/c/snix/+/31448) | Merged | Deferred | Mantle does not use the affected virtiofs queue path. Reopen when that backend becomes a supported runtime route or local inspection finds an active caller. |
-| [31272](https://cl.snix.dev/c/snix/+/31272) | Merged | Deferred | Current read-only redb opens do not supply non-default builder configuration. Reopen when Mantle configures that path or tests expose a difference. |
+| [31448](https://cl.snix.dev/c/snix/+/31448) | Merged | Deferred, rechecked 2026-08-08 | No non-vendor manifest enables the affected virtiofs route, and no local used-length call is present. Reopen when that backend becomes a supported runtime route or local inspection finds an active caller. |
+| [31272](https://cl.snix.dev/c/snix/+/31272) | Merged | Deferred, rechecked 2026-08-08 | Current read-only redb opens use `redb::Database::builder().open_read_only(path)` without non-default builder configuration. Reopen when Mantle configures that path or tests expose a difference. |
 | [30386](https://cl.snix.dev/c/snix/+/30386) | Open | Deferred | The defensive wire-reader assertion is useful but is outside the selected correctness paths. Reopen with a focused daemon or wire-reader maintenance change. |
 | [31487](https://cl.snix.dev/c/snix/+/31487) | Open | Deferred | The concurrent blob uploader refactor had unresolved review discussion. Reopen after merge and after a local bounded-concurrency design review. |
 | [30598](https://cl.snix.dev/c/snix/+/30598) | Open | Deferred | Mantle-owned code does not use the affected OCI build backend. Reopen when that backend gains a supported Mantle caller. |

@@ -910,3 +910,17 @@
 // failures, CAS import, signed output admission, and scheduler non-authority.
 // Hardware composition remains intentionally unclaimed until the prerequisite
 // `prove-hardware-simulation-build-flow` change provides that lane.
+
+// Selected vendored Snix backport bridge.
+//
+// r[impl vendored_snix.selective_backport_policy]
+// r[verify vendored_snix.selective_backport_policy]
+// r[impl vendored_snix.castore_metadata]
+// r[verify vendored_snix.castore_metadata]
+// r[impl vendored_snix.store_service_behavior]
+// r[verify vendored_snix.store_service_behavior]
+// r[impl vendored_snix.operational_alignment]
+// r[verify vendored_snix.operational_alignment]
+// Implementation and positive/negative tests live under vendored Snix paths,
+// which Tracey does not scan. The active Cairn change ledger and evidence bind
+// those adaptations to the selected upstream behavior and local claim limits.

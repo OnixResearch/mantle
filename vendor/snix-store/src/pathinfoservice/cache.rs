@@ -1,10 +1,6 @@
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use async_stream::try_stream;
 use async_trait::async_trait;
-use futures::StreamExt;
-use futures::TryStreamExt;
 use futures::stream::BoxStream;
 use nix_compat::nixbase32;
 use snix_castore::composition::CompositionContext;
@@ -18,13 +14,11 @@ use super::PathInfo;
 use super::PathInfoService;
 use crate::pathinfoservice;
 
-const MAX_COMPOSED_LIST_ENTRIES: usize = 1_000_000;
-
 /// Asks near first, if not found, asks far.
 /// If found in there, returns it, and *inserts* it into
 /// near (unless `read_only_far` is true).
 /// There is no negative cache.
-/// Inserts always target near. Listings merge layers without backfill.
+/// Inserts and listings always target the writable near service.
 pub struct Cache<PS1, PS2> {
     instance_name: String,
     near: PS1,
@@ -95,48 +89,13 @@ where
         self.near.put(path_info).await
     }
 
+    // r[impl vendored_snix.store_service_behavior]
     fn list(&self) -> BoxStream<'static, Result<PathInfo, pathinfoservice::Error>> {
-        self.list_with_layer().map_ok(|read| read.value).boxed()
+        self.near.list()
     }
 
     fn list_with_layer(&self) -> BoxStream<'static, Result<LayeredRead<PathInfo>, pathinfoservice::Error>> {
-        let mut near = self.near.list_with_layer();
-        let mut far = self.far.list_with_layer();
-        Box::pin(try_stream! {
-            let mut observed = BTreeMap::new();
-            while let Some(read) = near.try_next().await.map_err(Error::NearGet)? {
-                let digest = *read.value.store_path.digest();
-                let path = read.value.store_path.to_string();
-                if let Some(previous) = observed.insert(digest, path.clone()) {
-                    if previous != path {
-                        Err(Error::DigestCollision { previous, current: path })?;
-                    }
-                    continue;
-                }
-                if observed.len() > MAX_COMPOSED_LIST_ENTRIES {
-                    Err(Error::ListLimit { limit: MAX_COMPOSED_LIST_ENTRIES })?;
-                }
-                yield read;
-            }
-            while let Some(read) = far.try_next().await.map_err(Error::FarGet)? {
-                let digest = *read.value.store_path.digest();
-                let path = read.value.store_path.to_string();
-                if let Some(previous) = observed.get(&digest) {
-                    if previous != &path {
-                        Err(Error::DigestCollision {
-                            previous: previous.clone(),
-                            current: path,
-                        })?;
-                    }
-                    continue;
-                }
-                observed.insert(digest, path);
-                if observed.len() > MAX_COMPOSED_LIST_ENTRIES {
-                    Err(Error::ListLimit { limit: MAX_COMPOSED_LIST_ENTRIES })?;
-                }
-                yield read.shift_far().map_err(Error::LayerIndex)?;
-            }
-        })
+        self.near.list_with_layer()
     }
 }
 
@@ -162,10 +121,6 @@ pub enum Error {
     FarGet(#[source] pathinfoservice::Error),
     #[error("tracking far service provenance: {0}")]
     LayerIndex(#[source] snix_castore::service_provenance::LayerIndexOverflow),
-    #[error("composed PathInfo listing exceeds {limit} entries")]
-    ListLimit { limit: usize },
-    #[error("composed PathInfo listing has one digest for both {previous} and {current}")]
-    DigestCollision { previous: String, current: String },
 }
 
 impl TryFrom<url::Url> for CacheConfig {
@@ -198,13 +153,32 @@ impl ServiceBuilder for CacheConfig {
 mod test {
     use std::num::NonZeroUsize;
 
+    use async_trait::async_trait;
     use futures::TryStreamExt;
+    use futures::stream::BoxStream;
     use nix_compat::store_path::StorePath;
 
     use crate::fixtures::PATH_INFO;
     use crate::pathinfoservice::LruPathInfoService;
     use crate::pathinfoservice::PathInfoService;
     use crate::utils::gen_test_pathinfo_service;
+
+    struct PanicOnListService;
+
+    #[async_trait]
+    impl PathInfoService for PanicOnListService {
+        async fn get(&self, _digest: [u8; 20]) -> Result<Option<super::PathInfo>, crate::pathinfoservice::Error> {
+            Ok(None)
+        }
+
+        async fn put(&self, path_info: super::PathInfo) -> Result<super::PathInfo, crate::pathinfoservice::Error> {
+            Ok(path_info)
+        }
+
+        fn list(&self) -> BoxStream<'static, Result<super::PathInfo, crate::pathinfoservice::Error>> {
+            panic!("far service list must not be called")
+        }
+    }
 
     /// Helper function setting up an instance of a Cache PathInfoService.
     async fn create_pathinfoservice() -> super::Cache<LruPathInfoService, impl PathInfoService> {
@@ -252,7 +226,8 @@ mod test {
     }
 
     #[tokio::test]
-    async fn no_backfill_listing_merges_precedence_and_exact_layers() {
+    async fn listing_exposes_writable_near_service_only() {
+        // r[verify vendored_snix.store_service_behavior]
         const LIST_CAPACITY: usize = 2;
         const STORE_PATH_DIGEST_BYTES: usize = 20;
         const FAR_DIGEST_BYTE: u8 = 17;
@@ -260,20 +235,29 @@ mod test {
         let mut far_only = PATH_INFO.clone();
         far_only.store_path =
             StorePath::from_name_and_digest_fixed("far-only", [FAR_DIGEST_BYTE; STORE_PATH_DIGEST_BYTES]).unwrap();
-        far.put(PATH_INFO.clone()).await.unwrap();
-        far.put(far_only.clone()).await.unwrap();
+        far.put(far_only).await.unwrap();
         let near = LruPathInfoService::with_capacity("near".into(), NonZeroUsize::new(LIST_CAPACITY).unwrap());
-        near.put(PATH_INFO.clone()).await.unwrap();
         let svc = super::Cache::new_no_backfill("root".into(), near, far);
 
-        let mut reads = svc.list_with_layer().try_collect::<Vec<_>>().await.unwrap();
-        reads.sort_by(|left, right| left.value.store_path.cmp(&right.value.store_path));
+        assert!(svc.list().try_collect::<Vec<_>>().await.unwrap().is_empty());
+        svc.put(PATH_INFO.clone()).await.unwrap();
+        let reads = svc.list_with_layer().try_collect::<Vec<_>>().await.unwrap();
 
-        assert_eq!(reads.len(), LIST_CAPACITY);
-        let near_read = reads.iter().find(|read| read.value == *PATH_INFO).unwrap();
-        let far_read = reads.iter().find(|read| read.value == far_only).unwrap();
-        assert_eq!(near_read.layer_index, 0);
-        assert_eq!(far_read.layer_index, 1);
-        assert!(svc.near.get(*far_read.value.store_path.digest()).await.unwrap().is_none());
+        assert_eq!(reads.len(), 1);
+        assert_eq!(reads[0].value, *PATH_INFO);
+        assert_eq!(reads[0].layer_index, 0);
+    }
+
+    #[tokio::test]
+    async fn listing_never_calls_far_service() {
+        // r[verify vendored_snix.store_service_behavior]
+        let near = LruPathInfoService::with_capacity("near".into(), NonZeroUsize::new(1).unwrap());
+        let svc = super::Cache::new("root".into(), near, PanicOnListService);
+
+        let listed = svc.list().try_collect::<Vec<_>>().await.unwrap();
+        let layered = svc.list_with_layer().try_collect::<Vec<_>>().await.unwrap();
+
+        assert!(listed.is_empty());
+        assert!(layered.is_empty());
     }
 }

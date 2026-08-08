@@ -181,13 +181,14 @@ where
     });
 
     let mut writer = blob_service.open_write().await;
+    // r[impl vendored_snix.operational_alignment]
     let copied_size = if let Some(reference_scanner) = reference_scanner {
         let mut reader = ReferenceReader::new(reference_scanner, BufReader::new(reader));
-        tokio::io::copy(&mut reader, &mut writer)
+        tokio::io::copy_buf(&mut reader, &mut writer)
             .await
             .map_err(|e| Error::BlobRead(path.as_ref().to_path_buf(), e))?
     } else {
-        tokio::io::copy(&mut BufReader::new(reader), &mut writer)
+        tokio::io::copy_buf(&mut BufReader::new(reader), &mut writer)
             .await
             .map_err(|e| Error::BlobRead(path.as_ref().to_path_buf(), e))?
     };
@@ -232,8 +233,95 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
+    use std::pin::Pin;
+    use std::task::Context;
+    use std::task::Poll;
+
+    use async_trait::async_trait;
+    use tokio::io::AsyncWrite;
+
     use super::*;
+    use crate::blobservice::BlobReader;
+    use crate::blobservice::BlobWriter;
     use crate::blobservice::MemoryBlobService;
+
+    struct CopyErrorWriter;
+
+    impl AsyncWrite for CopyErrorWriter {
+        fn poll_write(self: Pin<&mut Self>, _cx: &mut Context<'_>, _buf: &[u8]) -> Poll<std::io::Result<usize>> {
+            Poll::Ready(Err(std::io::Error::other("injected copy failure")))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    #[async_trait]
+    impl BlobWriter for CopyErrorWriter {
+        async fn close(&mut self) -> std::io::Result<B3Digest> {
+            Err(std::io::Error::other("copy failure must stop before close"))
+        }
+    }
+
+    #[derive(Clone)]
+    struct CopyErrorBlobService;
+
+    #[async_trait]
+    impl BlobService for CopyErrorBlobService {
+        async fn has(&self, _digest: &B3Digest) -> std::io::Result<bool> {
+            Ok(false)
+        }
+
+        async fn open_read(&self, _digest: &B3Digest) -> std::io::Result<Option<Box<dyn BlobReader>>> {
+            Ok(None)
+        }
+
+        async fn open_write(&self) -> Box<dyn BlobWriter> {
+            Box::new(CopyErrorWriter)
+        }
+    }
+
+    #[tokio::test]
+    async fn upload_blob_copies_normal_and_empty_files() {
+        // r[verify vendored_snix.operational_alignment]
+        let tmp = tempfile::tempdir().unwrap();
+        let normal_path = tmp.path().join("normal");
+        let empty_path = tmp.path().join("empty");
+        let normal_bytes = b"normal file";
+        std::fs::write(&normal_path, normal_bytes).unwrap();
+        std::fs::write(&empty_path, b"").unwrap();
+        let blob_service = MemoryBlobService::default();
+
+        let normal_digest =
+            upload_blob::<_, &[u8]>(blob_service.clone(), &normal_path, normal_bytes.len().try_into().unwrap(), None)
+                .await
+                .unwrap();
+        let empty_digest = upload_blob::<_, &[u8]>(blob_service.clone(), &empty_path, 0, None).await.unwrap();
+
+        assert_eq!(normal_digest, blake3::hash(normal_bytes).into());
+        assert_eq!(empty_digest, blake3::hash(&[]).into());
+        assert!(blob_service.has(&normal_digest).await.unwrap());
+        assert!(blob_service.has(&empty_digest).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn upload_blob_propagates_copy_error_before_finalize() {
+        // r[verify vendored_snix.operational_alignment]
+        const DATA_SIZE_BYTES: u64 = 4;
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("copy-error");
+        std::fs::write(&path, b"data").unwrap();
+
+        let error = upload_blob::<_, &[u8]>(CopyErrorBlobService, &path, DATA_SIZE_BYTES, None).await.unwrap_err();
+
+        assert!(matches!(error, Error::BlobRead(_, _)));
+        assert!(!matches!(error, Error::BlobFinalize(_, _)));
+    }
 
     #[tokio::test]
     async fn upload_blob_rejects_short_read_against_expected_size() {

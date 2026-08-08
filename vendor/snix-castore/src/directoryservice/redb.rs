@@ -215,14 +215,14 @@ impl DirectoryService for RedbDirectoryService {
     #[instrument(skip_all)]
     fn put_multiple_start(&self) -> Box<dyn DirectoryPutter + '_> {
         Box::new(RedbDirectoryPutter {
-            db: &self.db,
+            db: self.db.clone(),
             builder: Some(DirectoryGraphBuilder::new_leaves_to_root()),
         })
     }
 }
 
-pub struct RedbDirectoryPutter<'a> {
-    db: &'a Db,
+pub struct RedbDirectoryPutter {
+    db: Arc<Db>,
 
     /// The directories (inside the directory validator) that we insert later,
     /// or None, if they were already inserted.
@@ -230,7 +230,7 @@ pub struct RedbDirectoryPutter<'a> {
 }
 
 #[async_trait]
-impl DirectoryPutter for RedbDirectoryPutter<'_> {
+impl DirectoryPutter for RedbDirectoryPutter {
     #[instrument(level = "trace", skip_all, fields(directory.digest=%directory.digest()), err)]
     async fn put(&mut self, directory: Directory) -> Result<(), super::Error> {
         let builder = self.builder.as_mut().ok_or_else(|| Error::DirectoryPutterAlreadyClosed)?;
@@ -245,28 +245,28 @@ impl DirectoryPutter for RedbDirectoryPutter<'_> {
         let builder = self.builder.take().ok_or_else(|| Error::DirectoryPutterAlreadyClosed)?;
 
         // Insert all directories as a batch.
-        let root_digest = tokio::task::spawn_blocking({
-            let txn = self.db.begin_write()?;
-            move || {
-                // Retrieve the validated directories.
-                let directory_graph = builder.build().map_err(Error::DirectoryOrdering)?;
-                let root_digest = directory_graph.root().digest();
+        let db = self.db.clone();
+        // r[impl vendored_snix.store_service_behavior]
+        let root_digest = tokio::task::spawn_blocking(move || {
+            let txn = db.begin_write()?;
+            // Retrieve the validated directories.
+            let directory_graph = builder.build().map_err(Error::DirectoryOrdering)?;
+            let root_digest = directory_graph.root().digest();
 
-                // Looping over all the verified directories, queuing them up for a
-                // batch insertion.
-                {
-                    let mut table = txn.open_table(DIRECTORY_TABLE)?;
-                    for directory in directory_graph.drain_leaves_to_root() {
-                        table.insert(
-                            directory.digest().as_ref(),
-                            postcard::to_stdvec(&proto::Directory::from(directory)).expect("serialize"),
-                        )?;
-                    }
+            // Looping over all the verified directories, queuing them up for a
+            // batch insertion.
+            {
+                let mut table = txn.open_table(DIRECTORY_TABLE)?;
+                for directory in directory_graph.drain_leaves_to_root() {
+                    table.insert(
+                        directory.digest().as_ref(),
+                        postcard::to_stdvec(&proto::Directory::from(directory)).expect("serialize"),
+                    )?;
                 }
-                txn.commit()?;
-
-                Ok::<_, Error>(root_digest)
             }
+            txn.commit()?;
+
+            Ok::<_, Error>(root_digest)
         })
         .await??;
 
@@ -379,6 +379,69 @@ mod tests {
     use crate::directoryservice::RedbDirectoryService;
     use crate::directoryservice::RedbDirectoryServiceConfig;
     use crate::fixtures::DIRECTORY_A;
+
+    #[tokio::test]
+    async fn batch_put_runs_transaction_in_blocking_worker() {
+        // r[verify vendored_snix.store_service_behavior]
+        let service =
+            RedbDirectoryService::new_temporary("batch".to_string(), RedbDirectoryServiceConfig::default()).unwrap();
+        let mut putter = service.put_multiple_start();
+        putter.put(DIRECTORY_A.clone()).await.unwrap();
+
+        let root_digest = putter.close().await.unwrap();
+
+        assert_eq!(root_digest, DIRECTORY_A.digest());
+        assert_eq!(service.get(&root_digest).await.unwrap(), Some(DIRECTORY_A.clone()));
+    }
+
+    #[tokio::test]
+    async fn batch_put_propagates_read_only_transaction_error() {
+        // r[verify vendored_snix.store_service_behavior]
+        let tempdir = TempDir::new().unwrap();
+        let path = tempdir.path().join("read-only-batch.redb");
+        let config = RedbDirectoryServiceConfig {
+            path: Some(path),
+            cache_size: None,
+            read_only: false,
+        };
+        drop(RedbDirectoryService::new("rw".to_string(), config.clone()).await.unwrap());
+        let service = RedbDirectoryService::new("ro".to_string(), RedbDirectoryServiceConfig {
+            read_only: true,
+            ..config
+        })
+        .await
+        .unwrap();
+        let mut putter = service.put_multiple_start();
+        putter.put(DIRECTORY_A.clone()).await.unwrap();
+
+        let error = putter.close().await.unwrap_err();
+
+        assert!(error.to_string().contains("database opened read-only"));
+        assert!(service.get(&DIRECTORY_A.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn concurrent_batch_put_callers_complete_without_blocking_runtime() {
+        // r[verify vendored_snix.store_service_behavior]
+        const CONCURRENT_CALLER_COUNT: usize = 4;
+        let service =
+            RedbDirectoryService::new_temporary("concurrent".to_string(), RedbDirectoryServiceConfig::default())
+                .unwrap();
+        let mut tasks = Vec::with_capacity(CONCURRENT_CALLER_COUNT);
+        for _ in 0..CONCURRENT_CALLER_COUNT {
+            let service = service.clone();
+            tasks.push(tokio::spawn(async move {
+                let mut putter = service.put_multiple_start();
+                putter.put(DIRECTORY_A.clone()).await.unwrap();
+                putter.close().await.unwrap()
+            }));
+        }
+
+        for task in tasks {
+            assert_eq!(task.await.unwrap(), DIRECTORY_A.digest());
+        }
+        assert!(service.get(&DIRECTORY_A.digest()).await.unwrap().is_some());
+    }
 
     #[tokio::test]
     async fn reopen_as_read_only() {
