@@ -367,6 +367,7 @@ fn validate_optional_previous_identity(identity: &Option<String>) -> Result<(), 
 fn validate_metadata(metadata: &[ReleaseMetadataField]) -> Result<(), ReleaseEvidenceError> {
     let count = u32::try_from(metadata.len())
         .map_err(|_| validation_error("immutable release metadata field count overflowed u32".to_string()))?;
+    debug_assert_eq!(usize::try_from(count).ok(), Some(metadata.len()));
     if count == 0 || count > RELEASE_METADATA_FIELDS_MAX {
         return Err(validation_error(format!(
             "immutable release metadata field count must be from 1 through {RELEASE_METADATA_FIELDS_MAX}"
@@ -382,6 +383,7 @@ fn validate_metadata(metadata: &[ReleaseMetadataField]) -> Result<(), ReleaseEvi
             )));
         }
     }
+    debug_assert_eq!(names.len(), metadata.len());
     Ok(())
 }
 
@@ -390,9 +392,9 @@ fn validate_metadata_field(field: &ReleaseMetadataField) -> Result<(), ReleaseEv
         return Err(validation_error("immutable release metadata names and values must not be empty".to_string()));
     }
     for (label, value) in [("name", &field.name), ("value", &field.value)] {
-        let length = u32::try_from(value.len())
+        let length_bytes = u32::try_from(value.len())
             .map_err(|_| validation_error(format!("immutable release metadata {label} length overflowed u32")))?;
-        if length > RELEASE_METADATA_TEXT_BYTES_MAX {
+        if length_bytes > RELEASE_METADATA_TEXT_BYTES_MAX {
             return Err(validation_error(format!(
                 "immutable release metadata {label} exceeds {RELEASE_METADATA_TEXT_BYTES_MAX} bytes"
             )));
