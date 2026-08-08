@@ -239,6 +239,15 @@
 // r[impl mantle.release_provenance.bundle_publication.validation]
 // r[verify mantle.release_provenance.bundle_publication.validation.visibility]
 
+// Immutable release object and current-pointer contract.
+// Implementation and tests: `crates/crunch-release-core/src/immutable_release.rs`
+// and `src/release_current_pointer.rs`.
+// r[impl mantle.release.object]
+// r[impl mantle.release.pointer]
+// r[impl mantle.release.evidence]
+// r[impl mantle.release.boundary]
+// r[verify mantle.release.verification]
+
 // Genuine deterministic rebuild admission.
 // Implementation and tests: `crates/crunch-release-core/src/genuine_rebuild.rs`,
 // `src/release_reproducibility.rs`, and release verification/witness fixtures.

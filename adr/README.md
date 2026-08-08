@@ -78,3 +78,4 @@ compatibility surface, crate name, or historical decision.
 | [0069](0069-derive-gcc40-random-seeds-from-main-input-identity.md) | Derive GCC 4.0 random seeds from main input identity | Accepted |
 | [0070](0070-bind-source-fixed-point-to-root-action-trust-report.md) | Bind the source fixed point to a root action trust report | Proposed |
 | [0071](0071-adopt-nix-archive-at-the-filesystem-nar-boundary.md) | Adopt nix-archive at the filesystem NAR boundary | Proposed |
+| [0072](0072-bind-immutable-release-objects-to-one-current-pointer.md) | Bind immutable release objects to one current pointer | Accepted |

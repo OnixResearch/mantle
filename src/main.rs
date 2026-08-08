@@ -119,6 +119,8 @@ mod release_capability;
 mod release_chapter_transport;
 mod release_cmd;
 #[allow(dead_code)]
+mod release_current_pointer;
+#[allow(dead_code)]
 mod release_evidence;
 mod release_nix_witness;
 mod release_publication;
