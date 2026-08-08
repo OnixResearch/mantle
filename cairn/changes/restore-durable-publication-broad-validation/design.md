@@ -2,19 +2,19 @@
 
 ## Context
 
-Mantle's `cleanSourceWith` keeps `tests/fixtures` but not repository-level `fixtures/semantic-operation`. Rust tests and checked semantic identity inputs require those files in Nix builds.
+Mantle's `cleanSourceWith` keeps `tests/fixtures` but not repository-level `fixtures/content-bound-requirements`. Rust compile-time includes and checked evidence inputs require those files in Nix builds.
 
-The bootstrap inventory previously reached zero live findings. New lifecycle and source text can be counted when it uses blocker vocabulary without current evidence-backed classification. Vendored `fuse-backend-rs` fails Clippy when dependencies are linted. Pinned Octet reports `crates/crunch-eval/src/../../../lib/remote-builders.ncl` as an invalid diagnostic path.
+The bootstrap inventory currently reports 115 live findings across bridge-output, compiler/runtime crash-boundary, and placeholder/deferred classes. These findings are full-source blockers, not lifecycle-text false positives. Vendored `fuse-backend-rs` fails Clippy when dependencies are linted. Historical Octet evidence reported `crates/crunch-eval/src/../../../lib/remote-builders.ncl` as an invalid diagnostic path. Canonical Octet `d87153a1bbfe4c3469b2dee6fb5512eafa812d88` now completes the same owner command without that diagnostic.
 
 ## Decisions
 
 ### Derive the required source closure explicitly
 
-Add the exact semantic fixture root or derive required non-Cargo inputs from checked references. Add a negative check that removes the root and proves Nix-built tests fail.
+Add only the exact content-bound requirement fixture root. Factor the source predicate so a negative Nix check can remove that root and prove a compile-time include fails with a bounded missing-input diagnostic.
 
 ### Preserve blocker-inventory truth
 
-Classify only reviewed metadata or source contexts. A suppression must bind exact content and reason. Live blockers and promotion claims remain fatal.
+Keep the 115 current findings actionable and record their exact classes and counts. Classify only reviewed metadata or source contexts. A suppression must bind exact content and reason. Live blockers and promotion claims remain fatal.
 
 ### Split product lint from dependency audit
 
@@ -22,7 +22,7 @@ Product-owned Clippy uses `--no-deps` and remains strict. Vendored dependency fa
 
 ### Fix Octet at the owning boundary
 
-Prefer a producer-supported normalized diagnostic path. If Mantle changes the capability locator, keep repository identity and file resolution exact. Do not bypass Octet or accept parent traversal.
+Use canonical Octet revision `d87153a1bbfe4c3469b2dee6fb5512eafa812d88` as the accepted owner contract and run its ordinary `cargo-octet check` path. Do not patch Mantle around the checker, bypass Octet, or accept an unbounded traversal path.
 
 ### Re-run broad rails sequentially
 

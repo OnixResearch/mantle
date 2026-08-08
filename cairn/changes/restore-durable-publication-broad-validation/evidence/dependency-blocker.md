@@ -2,7 +2,9 @@
 
 Date: 2026-08-08
 
-`restore-durable-publication-broad-validation` depends on `promote-durable-publication-adoption`. The promotion contract is not currently satisfiable.
+Status: resolved by canonical promotion `aa577374516e6b15c3c4ef59c71c74410c0d0fab` and archive commit `bd614a7fd6fa90a49e278cf5b683edc17fe518f6`.
+
+`restore-durable-publication-broad-validation` depends on `promote-durable-publication-adoption`. The observations below record why the original promotion contract was not satisfiable.
 
 ## Mantle ancestry
 
@@ -38,4 +40,10 @@ The broad-validation tasks remain unchecked. No specification sync or archive mu
 
 An owner must revise or replace the stale promotion contract. The decision must define an authorized integration method for the accepted Mantle implementation and identify the canonical Onix Core ordering milestone. Broad validation can continue only after that prerequisite is complete.
 
-This evidence does not claim adoption, promotion, broad validation success, or release readiness.
+This evidence does not claim broad validation success or release readiness.
+
+## Resolution
+
+The user authorized a reviewed merge candidate. Mantle canonical `main` now contains both the prior canonical history and accepted adoption `d1f3d6d96e2b0d9cd8497cd89b8e5a93d4a7dfaf` through merge `aa577374516e6b15c3c4ef59c71c74410c0d0fab`. Promotion was synchronized and archived by `bd614a7fd6fa90a49e278cf5b683edc17fe518f6`.
+
+Onix Core canonical `main` is `bc4629c9e766d3db82e4dab9fe8c166c360b8435` and contains accepted admission `b8387cd7d59fa3b0d4ea67646352dd27c4f7d7ed`. The broad-validation prerequisite is satisfied.

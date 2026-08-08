@@ -191,43 +191,55 @@
         # bootstrap blocker inventory gate also needs scripts/ and OpenSpec
         # bootstrap text so flake checks inspect the same repo-controlled sources
         # as the local script.
+        # r[impl mantle.durable_publication_validation.source_closure]
+        contentBoundRequirementFixtureRoot = toString ./fixtures/content-bound-requirements;
+        isContentBoundRequirementFixture =
+          pathString:
+          pathString == contentBoundRequirementFixtureRoot
+          || pkgs.lib.hasPrefix "${contentBoundRequirementFixtureRoot}/" pathString;
+        sourceFilter =
+          path: type:
+          let
+            rootPath = toString ./.;
+            pathString = toString path;
+            gitMetadataPath = "${rootPath}/.git";
+          in
+          pathString != gitMetadataPath
+          && !pkgs.lib.hasPrefix "${gitMetadataPath}/" pathString
+          && (
+            (craneLib.filterCargoSources path type)
+            || pathString == toString ./README.md
+            || pathString == toString ./flake.nix
+            || pkgs.lib.hasPrefix "${toString ./.github/workflows}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./lib}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./bootstrap}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./builders}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./cairn-policy/evidence}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./cairn/archive}/" pathString
+            || pathString == toString ./config
+            || pkgs.lib.hasPrefix "${toString ./config}/" pathString
+            || builtins.elem pathString catalogExamplePaths
+            || pathString == toString ./examples/catalog.ncl
+            || pathString == toString ./examples/README.md
+            || pathString == toString ./examples/project/README.md
+            || pkgs.lib.hasPrefix "${toString ./examples/projects}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./examples/transcripts}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./schemas/machine-contracts}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./tests/fixtures}/" pathString
+            || isContentBoundRequirementFixture pathString
+            || pkgs.lib.hasPrefix "${toString ./packages/kernelscript-experiment}/" pathString
+            || pathString == toString ./nix/kernelscript-experiment.nix
+            || pkgs.lib.hasPrefix "${toString ./docs}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./scripts}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./openspec}/" pathString
+          );
         src = pkgs.lib.cleanSourceWith {
           src = ./.;
-          filter =
-            path: type:
-            let
-              rootPath = toString ./.;
-              pathString = toString path;
-              gitMetadataPath = "${rootPath}/.git";
-            in
-            pathString != gitMetadataPath
-            && !pkgs.lib.hasPrefix "${gitMetadataPath}/" pathString
-            && (
-              (craneLib.filterCargoSources path type)
-              || pathString == toString ./README.md
-              || pathString == toString ./flake.nix
-              || pkgs.lib.hasPrefix "${toString ./.github/workflows}/" pathString
-              || pkgs.lib.hasPrefix "${toString ./lib}/" pathString
-              || pkgs.lib.hasPrefix "${toString ./bootstrap}/" pathString
-              || pkgs.lib.hasPrefix "${toString ./builders}/" pathString
-              || pkgs.lib.hasPrefix "${toString ./cairn-policy/evidence}/" pathString
-              || pkgs.lib.hasPrefix "${toString ./cairn/archive}/" pathString
-              || pathString == toString ./config
-              || pkgs.lib.hasPrefix "${toString ./config}/" pathString
-              || builtins.elem pathString catalogExamplePaths
-              || pathString == toString ./examples/catalog.ncl
-              || pathString == toString ./examples/README.md
-              || pathString == toString ./examples/project/README.md
-              || pkgs.lib.hasPrefix "${toString ./examples/projects}/" pathString
-              || pkgs.lib.hasPrefix "${toString ./examples/transcripts}/" pathString
-              || pkgs.lib.hasPrefix "${toString ./schemas/machine-contracts}/" pathString
-              || pkgs.lib.hasPrefix "${toString ./tests/fixtures}/" pathString
-              || pkgs.lib.hasPrefix "${toString ./packages/kernelscript-experiment}/" pathString
-              || pathString == toString ./nix/kernelscript-experiment.nix
-              || pkgs.lib.hasPrefix "${toString ./docs}/" pathString
-              || pkgs.lib.hasPrefix "${toString ./scripts}/" pathString
-              || pkgs.lib.hasPrefix "${toString ./openspec}/" pathString
-            );
+          filter = sourceFilter;
+        };
+        srcWithoutContentBoundRequirements = pkgs.lib.cleanSourceWith {
+          src = ./.;
+          filter = path: type: sourceFilter path type && !isContentBoundRequirementFixture (toString path);
         };
 
         cargoVendorDir = craneLib.vendorCargoDeps {
@@ -1003,6 +1015,56 @@
               cp "$TMPDIR/actual.sorted.json" "$out/source-pin.json"
             '';
 
+        # r[verify mantle.durable_publication_validation.source_closure]
+        contentBoundRequirementSourceClosure =
+          pkgs.runCommand "mantle-content-bound-requirement-source-closure"
+            {
+              nativeBuildInputs = [ rustToolchain ];
+              positiveSource = src;
+              negativeSource = srcWithoutContentBoundRequirements;
+            }
+            ''
+              set -eu
+              fixture_root="fixtures/content-bound-requirements"
+              required_fixtures="
+                $fixture_root/cairn-registry.json
+                $fixture_root/integration-receipt.json
+                $fixture_root/integration-receipt.ncl
+                $fixture_root/mantle-registry.json
+                $fixture_root/mantle-requirement-ref.json
+                $fixture_root/requirement-ref.json
+                $fixture_root/mantle-root/cairn/specs/release-provenance/spec.md
+                $fixture_root/mantle-root/cairn-policy/generated/cairn-policy.json
+              "
+
+              for fixture in $required_fixtures; do
+                test -f "$positiveSource/$fixture"
+                test ! -e "$negativeSource/$fixture"
+              done
+
+              compile_fixture="$fixture_root/mantle-registry.json"
+              cat > "$TMPDIR/positive.rs" <<EOF
+              const FIXTURE: &str = include_str!("$positiveSource/$compile_fixture");
+              fn main() { assert!(!FIXTURE.is_empty()); }
+              EOF
+              rustc "$TMPDIR/positive.rs" -o "$TMPDIR/positive"
+              "$TMPDIR/positive"
+
+              cat > "$TMPDIR/negative.rs" <<EOF
+              const FIXTURE: &str = include_str!("$negativeSource/$compile_fixture");
+              fn main() { assert!(!FIXTURE.is_empty()); }
+              EOF
+              if rustc "$TMPDIR/negative.rs" -o "$TMPDIR/negative" 2> "$TMPDIR/negative.stderr"; then
+                echo "negative source unexpectedly compiled without required fixture" >&2
+                exit 1
+              fi
+              grep -F "$compile_fixture" "$TMPDIR/negative.stderr" > /dev/null
+              grep -F "No such file or directory" "$TMPDIR/negative.stderr" > /dev/null
+
+              mkdir -p "$out"
+              cp "$TMPDIR/negative.stderr" "$out/negative-missing-input.stderr"
+            '';
+
         contentBoundRequirementEvidence =
           pkgs.runCommand "mantle-content-bound-requirement-evidence"
             {
@@ -1080,6 +1142,7 @@
           mantle-transcript-quality = mantleTranscriptQuality;
           bootstrap-blocker-inventory = bootstrapBlockerInventory;
           nickel-export-core-pin = nickelExportCorePin;
+          content-bound-requirement-source-closure = contentBoundRequirementSourceClosure;
           content-bound-requirement-evidence = contentBoundRequirementEvidence;
           store-retention-policy =
             pkgs.runCommand "mantle-store-retention-policy"

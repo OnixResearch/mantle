@@ -25544,7 +25544,7 @@ unix_dep = { path = "../unix-dep" }
         assert_eq!(normalized.len(), 1);
         assert_eq!(normalized[0].manifest_path, package.manifest_path);
         assert_eq!(normalized[0].id, package.id);
-        assert!(dir.path().join("vendor-deps").exists() == false);
+        assert!(!dir.path().join("vendor-deps").exists());
     }
 
     #[test]

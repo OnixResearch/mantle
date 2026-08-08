@@ -6,12 +6,12 @@
 
 r[mantle.durable_publication_validation.source_closure]
 
-Mantle's filtered Nix source MUST include every repository-level semantic-operation fixture required by compiled tests. It MUST NOT widen to unrelated secrets, build outputs, VCS metadata, or ambient files.
+Mantle's filtered Nix source MUST include every repository-level content-bound requirement fixture required by compiled tests and checked evidence inputs. It MUST NOT widen to unrelated secrets, build outputs, VCS metadata, or ambient files.
 
 #### Scenario: Required fixture is present
 
 - GIVEN the filtered source used by the Nix package
-- WHEN semantic-operation tests resolve their checked fixtures
+- WHEN content-bound requirement tests resolve their checked fixtures
 - THEN every required fixture MUST be present.
 
 #### Scenario: Fixture root is omitted
@@ -42,7 +42,7 @@ Bootstrap inventory suppressions MUST bind exact reviewed context and reason. Li
 
 r[mantle.durable_publication_validation.tools]
 
-Mantle-owned Clippy MUST remain warning-free with dependencies excluded. Vendored dependency failures MUST remain visible in a separate audit. Octet diagnostic paths MUST be normalized without parent traversal or checker bypass.
+Mantle-owned Clippy MUST remain warning-free with dependencies excluded. Vendored dependency failures MUST remain visible in a separate audit. The accepted Octet owner check MUST complete without the former invalid parent-traversal diagnostic and without a checker bypass.
 
 #### Scenario: Product-owned lint passes
 

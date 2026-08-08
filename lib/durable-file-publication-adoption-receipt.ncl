@@ -18,7 +18,7 @@ let _expected = {
   package_version = "0.1.0",
   cargo_manifest_blake3 = "dad0080d2387b21be3f4d630804b2eb182f6c041c2c2fc9db80ac25a688331a0",
   cargo_lock_blake3 = "176b8277620f6ee9f53145dffee31e0d7171c169ddb0fff4dd890fbb66af8be7",
-  flake_blake3 = "ad10b9979a08974993a2bae7e372a9d61d917bade0c7f8b96a8c3b948787c823",
+  flake_blake3 = "022b8e2a24a9c1cd8b2e9e9f2a6926c7c34ee5b98aa3f697176e2970ed847ce0",
   flake_lock_blake3 = "f0499958c3d22062fff3ae74311d706b7820ad8b89f3e5809f25d6386f72e4cc",
   nar_hash = "sha256-fKxZ+3rzWzVuawILnmpiYCCe8PT/z6usopFMbr2KFbI=",
 }
