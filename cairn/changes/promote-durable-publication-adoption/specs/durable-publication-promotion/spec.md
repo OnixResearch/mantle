@@ -2,21 +2,21 @@
 
 ## ADDED Requirements
 
-### Requirement: Reviewed Mantle candidate
+### Requirement: Reviewed Mantle merge candidate
 
 r[mantle.durable_publication_promotion.candidate]
 
-One exact promotion candidate hash MUST descend from accepted Mantle commit `d1f3d6d96e2b0d9cd8497cd89b8e5a93d4a7dfaf`. The fetched canonical target MUST be an ancestor. Every later candidate commit MUST be reviewed and limited to the named Cairn planning and evidence roots before promotion.
+One exact promotion candidate MUST preserve current canonical `main` and accepted Mantle commit `d1f3d6d96e2b0d9cd8497cd89b8e5a93d4a7dfaf` as ancestors. The candidate MUST use the fetched canonical target as its first-parent history and the accepted commit as its reviewed second-parent history. First-parent changes MUST remain limited to the named promotion lifecycle paths, the three adoption receipt files under `evidence/radicle/`, and `lib/durable-file-publication-adoption-receipt.ncl`. Receipt and validator changes MUST update only the canonical BLAKE3 bindings and receipt digest while preserving all accepted producer, mapping, authority, validation, and non-claim fields.
 
-#### Scenario: Candidate remains a fast-forward
+#### Scenario: Candidate preserves both histories
 
 - GIVEN fresh Mantle remote refs
-- WHEN candidate ancestry is evaluated
+- WHEN merge-candidate ancestry is evaluated
 - THEN the candidate MUST contain the canonical target and accepted Mantle commit.
 
-#### Scenario: Target or candidate ancestry drifts
+#### Scenario: Target, accepted ancestry, or path scope drifts
 
-- GIVEN a divergent target or candidate that omits the accepted commit
+- GIVEN a candidate that omits either history or changes a non-lifecycle first-parent path
 - WHEN promotion is evaluated
 - THEN mutation MUST remain blocked.
 
@@ -24,17 +24,17 @@ One exact promotion candidate hash MUST descend from accepted Mantle commit `d1f
 
 r[mantle.durable_publication_promotion.ordering]
 
-Mantle promotion MUST require Onix Core canonical `main` to contain accepted admission commit `b8387cd7d59fa3b0d4ea67646352dd27c4f7d7ed`.
+Mantle promotion MUST require Onix Core canonical `main` to contain reconciliation archive commit `bc4629c9e766d3db82e4dab9fe8c166c360b8435` and accepted admission commit `b8387cd7d59fa3b0d4ea67646352dd27c4f7d7ed`.
 
-#### Scenario: Producer milestone is canonical
+#### Scenario: Producer reconciliation is canonical
 
 - GIVEN a fresh Onix Core remote observation
-- WHEN its canonical branch contains the accepted admission commit
+- WHEN canonical `main` contains both required commits
 - THEN Mantle promotion MAY continue.
 
-#### Scenario: Producer milestone is feature-only
+#### Scenario: Producer reconciliation or admission is feature-only
 
-- GIVEN the accepted Onix Core commit is absent from canonical `main`
+- GIVEN either required Onix Core commit is absent from canonical `main`
 - WHEN Mantle promotion checks ordering
 - THEN Mantle promotion MUST stop.
 
@@ -42,7 +42,7 @@ Mantle promotion MUST require Onix Core canonical `main` to contain accepted adm
 
 r[mantle.durable_publication_promotion.safe_push]
 
-The shell MUST use a normal fast-forward push after an immediate fetch and explicit authorization. It MUST NOT force-push, rewrite history, create a pull request, or silently merge remote changes.
+The shell MUST use a normal fast-forward push after an immediate fetch and explicit authorization. It MUST NOT force-push, rewrite history, create a pull request, or silently change the reviewed merge result.
 
 #### Scenario: Authorized fast-forward succeeds
 
@@ -60,7 +60,7 @@ The shell MUST use a normal fast-forward push after an immediate fetch and expli
 
 r[mantle.durable_publication_promotion.validation]
 
-Evidence MUST bind candidate and remote identities, producer-order observation, focused adoption checks, package probe, test results, traceability, push result, and final remote commit.
+Evidence MUST bind candidate and parent identities, producer-order observation, first-parent path scope, focused adoption checks, package probe, test results, traceability, push result, and final remote commit. Focused adoption checks MUST pass. Exact pre-existing broad failures MAY remain only when first-parent path evidence proves that the candidate did not change the affected implementation surface and the evidence records each failure without a success claim.
 
 #### Scenario: Complete promotion evidence passes
 
@@ -70,6 +70,6 @@ Evidence MUST bind candidate and remote identities, producer-order observation, 
 
 #### Scenario: Broad blockers are hidden or focused checks are missing
 
-- GIVEN omitted focused results or inaccurate broad-check claims
+- GIVEN omitted focused results, a new broad failure, an affected implementation path, or inaccurate broad-check claims
 - WHEN evidence is reviewed
 - THEN the change MUST remain incomplete.

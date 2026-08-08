@@ -2,19 +2,19 @@
 
 ## Why
 
-Mantle accepted the shared durable publisher at `d1f3d6d96e2b0d9cd8497cd89b8e5a93d4a7dfaf`. The published feature branch is one commit ahead of `origin/main`, and `origin/main` at `7875ec1c8b80662f183b76194ae4ef8e3cd52a28` is its ancestor.
+Mantle accepted durable publication at `d1f3d6d96e2b0d9cd8497cd89b8e5a93d4a7dfaf`, but canonical `main` advanced on a separate history. Current `main` already contains a newer equivalent adoption tree and evidence. The accepted commit is still not an ancestor, so canonical history does not preserve the reviewed acceptance lineage.
 
 ## What Changes
 
-- Require the accepted Mantle commit as a promotion ancestor.
-- Confirm that Onix Core canonical `main` contains its accepted Radicle admission first.
-- Re-run focused adoption, package, test, formatting, Clippy, Tiger Style, Nickel, and Cairn checks.
+- Build one reviewed merge candidate with current canonical `main` as the first parent and the accepted adoption commit as the second parent.
+- Keep the newer canonical form for duplicate files and limit first-parent changes to this promotion lifecycle package plus the adoption receipt and validator's refreshed canonical file bindings.
+- Require Onix Core canonical `main` to contain reconciliation archive `bc4629c9e766d3db82e4dab9fe8c166c360b8435` and accepted admission commit `b8387cd7d59fa3b0d4ea67646352dd27c4f7d7ed`.
+- Re-run focused adoption, package, formatting, product Clippy, Tiger Style, Nickel, Nix, Cairn, and traceability checks. Require focused adoption checks to pass. Record only exact pre-existing broad failures that the successor broad-validation change owns.
 - Advance Mantle `main` only through an authorized normal fast-forward push.
-- Verify the remote result. A separate dependent Cairn owns cleanup after archive publication.
 
 ## Impact
 
-This change moves accepted work onto the canonical branch. It does not alter publication mechanics, rollback policy, source pins, product manifests, or release authority.
+This change preserves accepted ancestry on the canonical branch. It does not alter publication mechanics, rollback policy, source pins, product manifests, or release authority.
 
 ## Non-claims
 
