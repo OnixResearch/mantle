@@ -85,4 +85,5 @@
   - `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design adopt-nix-archive-nar-boundary --root .`
   - `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks adopt-nix-archive-nar-boundary --root .`
   - `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- tracey coverage --root .`
-- [ ] [serial] V6 Run the relevant Nix checks, sync the accepted requirements, archive the change, and record post-archive validation. r[store_transports.nix_archive_parity]
+- [x] [serial] V6 Run the relevant Nix checks, sync the accepted requirements, archive the change, and record post-archive validation. r[store_transports.nix_archive_parity]
+  - Evidence: `evidence/nix-checks.md` records the passing focused Nix format check and bounded broad-check blockers. The archive operation syncs the accepted requirements; post-archive validation is appended after the move.
