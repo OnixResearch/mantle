@@ -66,10 +66,12 @@
   - Evidence: `evidence/package-checks.md` records exit status 0 for both exact commands.
   - `SNIX_BUILD_SANDBOX_SHELL=/bin/sh nix develop -c cargo check -p snix-store -p snix-castore -p snix-tracing -p crunch-store`
   - `SNIX_BUILD_SANDBOX_SHELL=/bin/sh nix develop -c cargo fmt --check -p snix-store -p snix-castore -p snix-tracing -p crunch-store -v`
-- [ ] [serial] V4 Run the lifecycle commands below and record exact output in `evidence/lifecycle-gates.md`. r[vendored_snix.selective_backport_policy]
+- [x] [serial] V4 Run the lifecycle commands below and record exact output in `evidence/lifecycle-gates.md`. r[vendored_snix.selective_backport_policy]
+  - Evidence: `evidence/lifecycle-gates.md` records exit status 0 for all commands, PASS for proposal/design/tasks, and Tracey coverage 155/155.
   - `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .`
   - `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate proposal backport-snix-correctness-fixes --root .`
   - `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design backport-snix-correctness-fixes --root .`
   - `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks backport-snix-correctness-fixes --root .`
   - `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- tracey coverage --root .`
-- [ ] [serial] V5 Review the final diff against the upstream ledger. Record each selected CL as adapted with test evidence, or retain a justified non-complete disposition. r[vendored_snix.selective_backport_policy]
+- [x] [serial] V5 Review the final diff against the upstream ledger. Record each selected CL as adapted with test evidence, or retain a justified non-complete disposition. r[vendored_snix.selective_backport_policy]
+  - Evidence: `evidence/final-upstream-disposition-2026-08-08.md` records all ten selected CLs, open-status limits, and retained deferrals.
