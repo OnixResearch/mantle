@@ -653,6 +653,27 @@
 // `mantle-action-receipt-v1` receipts plus bounded JSON rendering; verified by
 // receipt determinism/non-claim tests and archived change evidence.
 
+// Filesystem NAR adapter bridge.
+//
+// r[impl store_transports.nix_archive_boundary]
+// r[impl store_transports.nix_archive_filesystem_observation]
+// r[impl store_transports.nix_archive_parity]
+// r[impl store_transports.nix_archive_castore_separation]
+// r[impl project_workflows.nix_archive_recursive_hashing]
+// The shared adapter and pure cutover gate live in `crates/crunch-nar`.
+// Store verification uses the adapter in `crates/crunch-store/src/query.rs`.
+// Recursive project hashing uses it in root `src/project_resolve.rs`.
+// Castore transport paths retain the Snix streamed renderer and ingest APIs.
+//
+// r[verify store_transports.nix_archive_boundary]
+// r[verify store_transports.nix_archive_filesystem_observation]
+// r[verify store_transports.nix_archive_parity]
+// r[verify store_transports.nix_archive_castore_separation]
+// r[verify project_workflows.nix_archive_recursive_hashing]
+// Positive and negative adapter, parity, store, project, dependency-guard,
+// generated-tree, optional Nix-oracle, and large-stream tests cover this split.
+// The checks prove selected observations only, not NAR implementation correctness.
+//
 // Project input retention bridge.
 //
 // r[impl project_workflows.input_retention_roots]

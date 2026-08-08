@@ -1,8 +1,9 @@
 [source.crates-io]
 replace-with = "vendored-sources"
 
-[source."git+https://github.com/tvlfyi/wu-manber.git"]
-git = "https://github.com/tvlfyi/wu-manber.git"
+[source."git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f"]
+git = "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git"
+rev = "951c27f59003cea9bfdb40ed4d89653d50fada1f"
 replace-with = "vendored-sources"
 
 [source."git+https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49"]
@@ -10,9 +11,13 @@ git = "https://github.com/OnixResearch/nickel-export"
 rev = "257fafc1c746f1faf156207043a4c826bfb16d49"
 replace-with = "vendored-sources"
 
-[source."git+ssh://git@github.com/OnixResearch/artifact-auth.git?rev=799459346d5416fbd7b9f55840a7371441b55afa"]
-git = "ssh://git@github.com/OnixResearch/artifact-auth.git"
-rev = "799459346d5416fbd7b9f55840a7371441b55afa"
+[source."git+https://github.com/tvlfyi/wu-manber.git"]
+git = "https://github.com/tvlfyi/wu-manber.git"
+replace-with = "vendored-sources"
+
+[source."git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1"]
+git = "ssh://git@github.com/OnixResearch/onix-artifact.git"
+rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1"
 replace-with = "vendored-sources"
 
 [source.vendored-sources]

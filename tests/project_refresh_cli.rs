@@ -2,6 +2,8 @@ use std::io::Read;
 use std::io::Write;
 use std::net::TcpListener;
 use std::net::TcpStream;
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
@@ -13,6 +15,8 @@ use std::thread;
 use std::time::Duration;
 
 use assert_cmd::Command;
+use crunch_nar::CaseHackPolicy;
+use crunch_nar::FilesystemNarRequest;
 use crunch_project::HashAlgo;
 use crunch_project::LockEntry;
 use crunch_project::LockedHash;
@@ -23,13 +27,6 @@ use digest::Digest;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use nix_compat::nixhash::NixHash;
-use snix_castore::Node;
-use snix_castore::blobservice::MemoryBlobService;
-use snix_castore::directoryservice::RedbDirectoryService;
-use snix_castore::directoryservice::RedbDirectoryServiceConfig;
-use snix_castore::import::fs::ingest_path;
-use snix_store::nar::write_nar;
-use snix_store::utils::AsyncIoBridge;
 use tempfile::TempDir;
 use tempfile::tempdir;
 
@@ -38,6 +35,7 @@ const HTTP_READ_BUFFER_BYTES: usize = 4096;
 const COMMAND_TIMEOUT_MS: u32 = 100;
 const COMMAND_OUTPUT_LIMIT_BYTES: u32 = 8;
 const COMMAND_SUCCESS_STATUS: i32 = 0;
+const TEST_RECURSIVE_NAR_BYTES_MAX: u64 = 16_777_216;
 const TRUST_TEST_KEYPAIR: &str =
     "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
 
@@ -179,46 +177,19 @@ fn checkout_git_tree(repo: &Path, rev: &str) -> TempDir {
 }
 
 fn compute_recursive_hash(path: &Path, algo: HashAlgo) -> String {
-    let root = path.to_path_buf();
-    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
-    rt.block_on(async move {
-        let blob_service = MemoryBlobService::default();
-        let directory_service =
-            RedbDirectoryService::new_temporary("test-refresh".to_string(), RedbDirectoryServiceConfig::default())
-                .unwrap();
-        let node = ingest_path::<_, _, _, &[u8]>(blob_service.clone(), directory_service.clone(), &root, None)
-            .await
-            .unwrap();
-        nar_hash_to_sri(&node, algo, blob_service, directory_service).await
-    })
-}
-
-async fn nar_hash_to_sri(
-    node: &Node,
-    algo: HashAlgo,
-    blob_service: MemoryBlobService,
-    directory_service: RedbDirectoryService,
-) -> String {
-    let hash = match algo {
-        HashAlgo::Sha256 => {
-            let mut hasher = sha2::Sha256::new();
-            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service).await.unwrap();
-            let digest: [u8; 32] = hasher.finalize().into();
-            NixHash::Sha256(digest)
-        }
-        HashAlgo::Sha512 => {
-            let mut hasher = sha2::Sha512::new();
-            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service).await.unwrap();
-            let digest: [u8; 64] = hasher.finalize().into();
-            NixHash::Sha512(Box::new(digest))
-        }
-        HashAlgo::Blake3 => {
-            let mut hasher = blake3::Hasher::new();
-            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service).await.unwrap();
-            NixHash::Blake3(*blake3::Hasher::finalize(&hasher).as_bytes())
-        }
+    let algorithm = match algo {
+        HashAlgo::Sha256 => nix_compat::nixhash::HashAlgo::Sha256,
+        HashAlgo::Sha512 => nix_compat::nixhash::HashAlgo::Sha512,
+        HashAlgo::Blake3 => nix_compat::nixhash::HashAlgo::Blake3,
     };
-    hash.to_sri_string()
+    let observation = crunch_nar::observe_path(
+        path,
+        FilesystemNarRequest::new(algorithm, CaseHackPolicy::native(), TEST_RECURSIVE_NAR_BYTES_MAX),
+    )
+    .unwrap();
+    assert_eq!(observation.algorithm, algorithm);
+    assert!(observation.nar_size > 0);
+    observation.digest.to_sri_string()
 }
 
 fn flat_sha256_sri(bytes: &[u8]) -> String {
@@ -257,16 +228,42 @@ fn input_trust_policy_ncl(signature_path: &str, trusted_public_key: &str) -> Str
     )
 }
 
+fn create_unreadable_tarball(parent: &Path) -> PathBuf {
+    const UNREADABLE_MODE: u32 = 0o000;
+    const PAYLOAD: &[u8] = b"unreadable source\n";
+    let tarball = parent.join("unreadable.tar.gz");
+    let file = std::fs::File::create(&tarball).unwrap();
+    let encoder = GzEncoder::new(file, Compression::default());
+    let mut builder = tar::Builder::new(encoder);
+    let mut header = tar::Header::new_gnu();
+    header.set_path("unreadable-1.0/secret").unwrap();
+    header.set_mode(UNREADABLE_MODE);
+    header.set_size(u64::try_from(PAYLOAD.len()).unwrap());
+    header.set_cksum();
+    builder.append(&header, PAYLOAD).unwrap();
+    builder.finish().unwrap();
+    assert!(tarball.is_file());
+    assert!(tarball.metadata().unwrap().len() > 0);
+    tarball
+}
+
 fn create_tarball(parent: &Path) -> (PathBuf, PathBuf) {
+    const EXECUTABLE_MODE: u32 = 0o700;
+    const NON_UTF8_MEMBER: &[u8] = b"member-\xff-name";
     let source_dir = parent.join("tar-src");
     std::fs::create_dir_all(source_dir.join("nested")).unwrap();
     std::fs::write(source_dir.join("nested/hello.txt"), "hello tarball\n").unwrap();
     std::fs::write(source_dir.join("root.txt"), "root\n").unwrap();
+    std::fs::write(source_dir.join("run.sh"), "#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::set_permissions(source_dir.join("run.sh"), std::fs::Permissions::from_mode(EXECUTABLE_MODE)).unwrap();
+    std::os::unix::fs::symlink("root.txt", source_dir.join("root-link")).unwrap();
+    std::fs::write(source_dir.join(std::ffi::OsStr::from_bytes(NON_UTF8_MEMBER)), b"raw name").unwrap();
 
     let tarball = parent.join("hello.tar.gz");
     let file = std::fs::File::create(&tarball).unwrap();
     let encoder = GzEncoder::new(file, Compression::default());
     let mut builder = tar::Builder::new(encoder);
+    builder.follow_symlinks(false);
     builder.append_dir_all("hello-1.0", &source_dir).unwrap();
     builder.finish().unwrap();
 
@@ -343,6 +340,69 @@ fn refresh_tarball_uses_unpacked_tree_hash_not_archive_bytes() {
     let flat_archive = flat_sha256_sri(&std::fs::read(&tarball).unwrap());
     assert_eq!(lock.inputs["hello-src"].hash.value, expected_tree);
     assert_ne!(lock.inputs["hello-src"].hash.value, flat_archive);
+}
+
+// r[verify project_workflows.nix_archive_recursive_hashing]
+#[test]
+fn refresh_tarball_supports_each_recursive_hash_algorithm() {
+    let algorithms = [
+        ("sha256", HashAlgo::Sha256),
+        ("sha512", HashAlgo::Sha512),
+        ("blake3", HashAlgo::Blake3),
+    ];
+    for (symbol, algorithm) in algorithms {
+        let directory = TempDir::new().unwrap();
+        init_project(directory.path());
+        let (tarball, source_dir) = create_tarball(directory.path());
+        let tarball_url = format!("file://{}", tarball.display());
+        let manifest = format!(
+            r#"{{
+  version = "1.0.0",
+  inputs = [{{
+    name = "source-{symbol}",
+    kind = {{ type = "tarball", url = {} }},
+    hash = {{ algo = '{symbol} }},
+  }}],
+  patches = [],
+}}
+"#,
+            quoted(&tarball_url),
+        );
+        write_project_files(directory.path(), &manifest, &Lockfile::new());
+        crunch().arg("refresh").current_dir(directory.path()).assert().success();
+        let lock = read_lock(directory.path());
+        let input_name = format!("source-{symbol}");
+        assert_eq!(lock.inputs[&input_name].hash.algo, algorithm);
+        assert_eq!(lock.inputs[&input_name].hash.value, compute_recursive_hash(&source_dir, algorithm));
+    }
+}
+
+// r[verify project_workflows.nix_archive_recursive_hashing]
+#[test]
+fn failed_recursive_observation_does_not_mutate_lock_or_generated_inputs() {
+    let directory = TempDir::new().unwrap();
+    init_project(directory.path());
+    let tarball = create_unreadable_tarball(directory.path());
+    let tarball_url = format!("file://{}", tarball.display());
+    let manifest = format!(
+        r#"{{
+  version = "1.0.0",
+  inputs = [{{ name = "unreadable", kind = {{ type = "tarball", url = {} }} }}],
+  patches = [],
+}}
+"#,
+        quoted(&tarball_url),
+    );
+    write_project_files(directory.path(), &manifest, &Lockfile::new());
+    let lock_before = std::fs::read_to_string(directory.path().join("mantle.lock")).unwrap();
+    let inputs_before = std::fs::read_to_string(directory.path().join(".mantle/inputs.ncl")).unwrap();
+
+    crunch().arg("refresh").current_dir(directory.path()).assert().failure();
+
+    let lock_after = std::fs::read_to_string(directory.path().join("mantle.lock")).unwrap();
+    let inputs_after = std::fs::read_to_string(directory.path().join(".mantle/inputs.ncl")).unwrap();
+    assert_eq!(lock_after, lock_before);
+    assert_eq!(inputs_after, inputs_before);
 }
 
 #[test]

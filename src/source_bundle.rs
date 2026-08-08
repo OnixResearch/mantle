@@ -6047,7 +6047,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn source_bundle_rejects_tampered_file_payload_and_store_prefix() {
         let temp = tempfile::tempdir().unwrap();
         let payload = temp.path().join("payload.txt");

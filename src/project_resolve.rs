@@ -7,6 +7,8 @@ use std::process::Stdio;
 use std::thread;
 use std::time::Duration;
 
+use crunch_nar::CaseHackPolicy;
+use crunch_nar::FilesystemNarRequest;
 use crunch_project::CommandFreshnessProbe;
 use crunch_project::DarcsSelector;
 use crunch_project::FRESHNESS_PROBE_VERSION;
@@ -35,17 +37,6 @@ use crunch_project::normalize_freshness_observation;
 use crunch_project::trust_signature_payload;
 use digest::Digest;
 use nix_compat::nixhash::NixHash;
-use snix_castore::Node;
-use snix_castore::blobservice::BlobService;
-use snix_castore::blobservice::MemoryBlobServiceConfig;
-use snix_castore::composition::CompositionContext;
-use snix_castore::composition::REG;
-use snix_castore::composition::ServiceBuilder;
-use snix_castore::directoryservice::RedbDirectoryService;
-use snix_castore::directoryservice::RedbDirectoryServiceConfig;
-use snix_castore::import::fs::ingest_path;
-use snix_store::nar::write_nar;
-use snix_store::utils::AsyncIoBridge;
 use tempfile::tempdir;
 
 const MIB_BYTES: u64 = 1_048_576;
@@ -64,6 +55,10 @@ const GIT_REV_HEX_BYTES: usize = 40;
 const BLAKE3_HEX_BYTES: usize = 64;
 const PROJECT_READ_BUFFER_BYTES: usize = 65_536;
 const PROJECT_READ_CHUNK_COUNT_MAX: u32 = 65_537;
+const PROJECT_RECURSIVE_NAR_BYTES_MAX: u64 = 8_589_934_592;
+const _: () = {
+    assert!(PROJECT_RECURSIVE_NAR_BYTES_MAX > MAX_TREE_BYTES);
+};
 const FRESHNESS_DIGEST_PREFIX: &str = "blake3:";
 const HTTP_JSON_POINTER_ROOT: &str = "";
 const MAX_PROJECT_TRUST_SIGNATURE_BYTES: u64 = 16_384;
@@ -1305,68 +1300,25 @@ fn read_into_hasher<R: Read, H: Digest>(
     )))
 }
 
+// r[impl project_workflows.nix_archive_recursive_hashing]
 fn hash_recursive_path(path: &Path, algo: &HashAlgo) -> Result<String, crunch_project::Error> {
-    let root = path.to_path_buf();
-    debug_assert_eq!(root.as_path(), path);
-    debug_assert_eq!(root.is_absolute(), path.is_absolute());
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|err| crunch_project::Error::Manifest(format!("creating hash runtime: {err}")))?;
-    rt.block_on(async move {
-        let blob_service = MemoryBlobServiceConfig {}
-            .build("project-refresh", &CompositionContext::blank(&REG))
-            .await
-            .map_err(|err| crunch_project::Error::Manifest(format!("creating temporary blob service: {err}")))?;
-        let directory_service =
-            RedbDirectoryService::new_temporary("project-refresh".to_string(), RedbDirectoryServiceConfig {
-                path: None,
-                cache_size: None,
-                read_only: false,
-            })
-            .map_err(|err| crunch_project::Error::Manifest(format!("creating temporary directory service: {err}")))?;
-        let node = ingest_path::<_, _, _, &[u8]>(blob_service.clone(), directory_service.clone(), &root, None)
-            .await
-            .map_err(|err| crunch_project::Error::Manifest(format!("ingesting {}: {err}", root.display())))?;
-        nar_hash_to_sri(&node, algo, blob_service, directory_service).await
-    })
+    assert!(!path.as_os_str().is_empty(), "recursive project hash path must not be empty");
+    let algorithm = project_nar_algorithm(algo);
+    let request = FilesystemNarRequest::new(algorithm, CaseHackPolicy::native(), PROJECT_RECURSIVE_NAR_BYTES_MAX);
+    let observation = crunch_nar::observe_path(path, request).map_err(|error| {
+        crunch_project::Error::Manifest(format!("observing recursive NAR for {}: {error}", path.display()))
+    })?;
+    assert_eq!(observation.algorithm, algorithm);
+    assert!(observation.nar_size <= PROJECT_RECURSIVE_NAR_BYTES_MAX);
+    Ok(observation.digest.to_sri_string())
 }
 
-async fn nar_hash_to_sri(
-    node: &Node,
-    algo: &HashAlgo,
-    blob_service: std::sync::Arc<dyn BlobService>,
-    directory_service: RedbDirectoryService,
-) -> Result<String, crunch_project::Error> {
-    let nix_hash = match algo {
-        HashAlgo::Sha256 => {
-            let mut hasher = sha2::Sha256::new();
-            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service)
-                .await
-                .map_err(|err| crunch_project::Error::Manifest(format!("writing NAR: {err}")))?;
-            let hash: [u8; 32] = hasher.finalize().into();
-            NixHash::Sha256(hash)
-        }
-        HashAlgo::Sha512 => {
-            let mut hasher = sha2::Sha512::new();
-            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service)
-                .await
-                .map_err(|err| crunch_project::Error::Manifest(format!("writing NAR: {err}")))?;
-            let hash: [u8; 64] = hasher.finalize().into();
-            NixHash::Sha512(Box::new(hash))
-        }
-        HashAlgo::Blake3 => {
-            let mut hasher = blake3::Hasher::new();
-            write_nar(AsyncIoBridge(&mut hasher), node, blob_service, directory_service)
-                .await
-                .map_err(|err| crunch_project::Error::Manifest(format!("writing NAR: {err}")))?;
-            NixHash::Blake3(*blake3::Hasher::finalize(&hasher).as_bytes())
-        }
-    };
-    let sri = nix_hash.to_sri_string();
-    debug_assert!(!sri.is_empty());
-    debug_assert!(sri.contains('-'));
-    Ok(sri)
+fn project_nar_algorithm(algo: &HashAlgo) -> nix_compat::nixhash::HashAlgo {
+    match algo {
+        HashAlgo::Sha256 => nix_compat::nixhash::HashAlgo::Sha256,
+        HashAlgo::Sha512 => nix_compat::nixhash::HashAlgo::Sha512,
+        HashAlgo::Blake3 => nix_compat::nixhash::HashAlgo::Blake3,
+    }
 }
 
 fn ensure_tree_within_limits(path: &Path) -> Result<(), crunch_project::Error> {

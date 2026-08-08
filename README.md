@@ -524,6 +524,7 @@ Useful documentation:
 - [Remote credential operations](docs/remote-credentials.md)
 - [Mantle naming rules](docs/mantle-naming.md)
 - [Durable file publication adoption](docs/durable-file-publication-adoption.md)
+- [Filesystem and castore NAR boundary](docs/nix-archive-nar-boundary.md)
 
 ## Requirements
 
@@ -557,3 +558,4 @@ notices.
 - [ekala-project/eka-ci](https://github.com/ekala-project/eka-ci) provides base-to-head package-impact and closure-diff design references. Forge credentials and CI presentation remain outside Mantle.
 - [ekala-project/ekapkgs-update](https://github.com/ekala-project/ekapkgs-update) provides source-adapter, version-policy, OSV, and Repology design references. Mantle preserves explicit unavailable states and reimplements policy in its functional core.
 - [fzakaria/stage0-bazel](https://github.com/fzakaria/stage0-bazel) provides an MIT-licensed root action-audit and trust-report design reference. Mantle retains BLAKE3 identity, producer-linked authority, seccomp enforcement, and evidence authority.
+- [cachix/nix-archive](https://github.com/cachix/nix-archive) provides reviewed byte-safe NAR encoding, hashing, decoding, and restoration APIs. Mantle retains castore, PathInfo, trust, transport, publication, and release authority.

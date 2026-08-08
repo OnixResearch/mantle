@@ -1549,6 +1549,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-nar"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "data-encoding",
+ "digest 0.10.7",
+ "md-5 0.10.6",
+ "nix-archive",
+ "nix-compat",
+ "serde",
+ "sha1",
+ "sha2",
+ "snix-castore",
+ "snix-store",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "crunch-overlay-core"
 version = "0.1.0"
 dependencies = [
@@ -1722,6 +1742,7 @@ dependencies = [
  "crunch-attestation",
  "crunch-delta",
  "crunch-gc-core",
+ "crunch-nar",
  "crunch-overlay-core",
  "crunch-repair-core",
  "data-encoding",
@@ -4764,6 +4785,7 @@ dependencies = [
  "crunch-hardware-simulation",
  "crunch-hardware-simulation-core",
  "crunch-kernelscript-core",
+ "crunch-nar",
  "crunch-pipeline",
  "crunch-project",
  "crunch-release-core",
@@ -5202,6 +5224,18 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
+]
+
+[[package]]
+name = "nix-archive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70e73d0af2e2dce844911f162414cb04cda4bca5a4847328a71034b244a6acf1"
+dependencies = [
+ "libc",
+ "rustix 1.1.4",
+ "sha2",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -6003,7 +6037,7 @@ version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "343d3bd7056eda839b03204e68deff7d1b13aba7af2b2fd16890697274262ee7"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -6074,7 +6108,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe500dc80e757a75e1e8fb7290e448d62dfba3105ece1d058579cb00b58151cd"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "prost 0.14.3",
  "prost-build",
  "prost-types",

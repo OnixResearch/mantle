@@ -1068,6 +1068,62 @@ fn store_repair_final_nar_dry_run_then_execute_is_explicit_and_idempotent() {
     assert!(!config.path().join("signing-key").exists());
 }
 
+// r[verify store_transports.nix_archive_filesystem_observation]
+#[test]
+fn store_verify_cli_uses_filesystem_nar_observation_and_reports_tampering() {
+    const SIGNING_KEY_TEXT: &str = "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==\n";
+    const ORIGINAL_TARGET: &str = "target";
+    const TAMPERED_TARGET: &str = "tampered-target";
+    let state = tempfile::tempdir().unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let key_file = state.path().join("verify.key");
+    std::fs::write(&key_file, SIGNING_KEY_TEXT).unwrap();
+    let (logical_path, original) = seed_stale_final_nar_pathinfo(state.path());
+    crunch_cmd()
+        .env("CRUNCH_STATE_DIR", state.path())
+        .arg("--store")
+        .arg(store.path())
+        .arg("store")
+        .arg("repair-final-nar")
+        .arg(&logical_path)
+        .arg("--execute")
+        .arg("--signing-key")
+        .arg(&key_file)
+        .assert()
+        .success();
+    let path_filter = original.store_path.to_string();
+    let physical_path = store.path().join(&path_filter);
+    std::os::unix::fs::symlink(ORIGINAL_TARGET, &physical_path).unwrap();
+    assert!(!store.path().join(ORIGINAL_TARGET).exists());
+    assert!(!store.path().join(TAMPERED_TARGET).exists());
+
+    crunch_cmd()
+        .env("CRUNCH_STATE_DIR", state.path())
+        .arg("--store")
+        .arg(store.path())
+        .arg("store")
+        .arg("verify")
+        .arg(&path_filter)
+        .arg("--trust-unsigned")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("OK"));
+
+    std::fs::remove_file(&physical_path).unwrap();
+    std::os::unix::fs::symlink(TAMPERED_TARGET, &physical_path).unwrap();
+    crunch_cmd()
+        .env("CRUNCH_STATE_DIR", state.path())
+        .arg("--store")
+        .arg(store.path())
+        .arg("store")
+        .arg("verify")
+        .arg(&path_filter)
+        .arg("--trust-unsigned")
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("MISMATCH"));
+}
+
 #[test]
 fn store_repair_final_nar_enables_archive_export_after_execution() {
     const SIGNING_KEY_TEXT: &str = "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==\n";

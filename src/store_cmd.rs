@@ -922,8 +922,10 @@ fn print_store_verify_result(
             path,
             stored_hash,
             actual_hash,
+            stored_size,
+            actual_size,
         } => {
-            println!("MISMATCH {path}  stored={stored_hash}  actual={actual_hash}");
+            println!("MISMATCH {path}  stored={stored_hash}:{stored_size}  actual={actual_hash}:{actual_size}");
             Ok(true)
         }
     }

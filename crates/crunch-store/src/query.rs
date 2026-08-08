@@ -3,15 +3,12 @@
 //! These operate on a PathInfoService and are independent of the build
 //! engine. Callable from the CLI or as a library.
 
+use crunch_nar::CaseHackPolicy;
+use crunch_nar::FilesystemNarRequest;
 use futures::StreamExt;
 use nix_compat::narinfo::SigningKey;
 use nix_compat::narinfo::VerifyingKey;
-use snix_castore::blobservice::MemoryBlobService;
-use snix_castore::directoryservice::RedbDirectoryService;
-use snix_castore::directoryservice::RedbDirectoryServiceConfig;
-use snix_castore::import::fs::ingest_path;
-use snix_store::nar::NarCalculationService;
-use snix_store::nar::SimpleRenderer;
+use nix_compat::nixhash::HashAlgo;
 use snix_store::pathinfoservice::PathInfoService;
 
 use crate::Error;
@@ -39,6 +36,8 @@ pub enum VerifyResult {
         path: String,
         stored_hash: String,
         actual_hash: String,
+        stored_size: u64,
+        actual_size: u64,
     },
 }
 
@@ -112,24 +111,20 @@ pub async fn store_info(svc: &dyn PathInfoService, path_filter: &str) -> Result<
 /// (the CLI `--store` value), not the logical store prefix. Optionally filters
 /// to paths matching `path_filter`. Returns per-path results (Ok, Missing, or
 /// Mismatch).
+// r[impl store_transports.nix_archive_filesystem_observation]
+// r[impl store_transports.nix_archive_boundary]
 pub async fn store_verify(
     svc: &dyn PathInfoService,
     path_filter: Option<&str>,
     store_dir: &std::path::Path,
 ) -> Result<Vec<VerifyResult>, Error> {
-    assert!(path_filter.is_none_or(|f| !f.is_empty()), "store_verify: use None instead of empty filter");
-    assert!(!store_dir.as_os_str().is_empty(), "store_verify: store_dir must not be empty");
-
-    #[allow(tigerstyle::explicit_defaults)]
-    let bs = MemoryBlobService::default();
-    let ds = RedbDirectoryService::new_temporary("verify".to_string(), RedbDirectoryServiceConfig {
-        path: None,
-        cache_size: None,
-        read_only: false,
-    })
-    .map_err(|e| Error::DirectoryService(format!("{e}")))?;
-
     const MAX_VERIFY_ENTRIES: u32 = 1_000_000;
+    const STORE_VERIFY_NAR_BYTES_MAX: u64 = 17_592_186_044_416;
+    assert!(
+        path_filter.is_none_or(|filter| !filter.is_empty()),
+        "store_verify: use None instead of empty filter"
+    );
+    assert!(!store_dir.as_os_str().is_empty(), "store_verify: store_dir must not be empty");
     let mut stream = svc.list();
     let mut scanned_count: u32 = 0;
     let mut results = Vec::with_capacity(64);
@@ -137,43 +132,44 @@ pub async fn store_verify(
     for _ in 0..MAX_VERIFY_ENTRIES {
         let Some(result) = stream.next().await else { break };
         scanned_count = scanned_count.saturating_add(1);
-        let pi = result.map_err(|e| Error::PathInfoService(format!("listing: {e}")))?;
-        let sp_str = pi.store_path.to_string();
-
-        if let Some(filter) = path_filter
-            && !sp_str.contains(filter)
-        {
+        let path_info = result.map_err(|error| Error::PathInfoService(format!("listing: {error}")))?;
+        let logical_path = path_info.store_path.to_string();
+        if path_filter.is_some_and(|filter| !logical_path.contains(filter)) {
             continue;
         }
-
-        let abs = store_dir.join(&sp_str);
-        if !abs.exists() {
-            results.push(VerifyResult::Missing(sp_str));
-            continue;
+        let physical_path = store_dir.join(&logical_path);
+        match std::fs::symlink_metadata(&physical_path) {
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                results.push(VerifyResult::Missing(logical_path));
+                continue;
+            }
+            Err(error) => {
+                return Err(Error::Store(format!(
+                    "inspecting filesystem NAR root {}: {error}",
+                    physical_path.display()
+                )));
+            }
         }
-
-        let node = ingest_path::<_, _, _, &[u8]>(bs.clone(), ds.clone(), &abs, None)
+        let request = FilesystemNarRequest::new(HashAlgo::Sha256, CaseHackPolicy::native(), STORE_VERIFY_NAR_BYTES_MAX);
+        let observation = crunch_nar::observe_path_blocking(physical_path, request)
             .await
-            .map_err(|e| Error::Store(format!("ingest {sp_str}: {e}")))?;
-
-        let renderer = SimpleRenderer::new(bs.clone(), ds.clone());
-        let (_nar_size, nar_sha256) =
-            renderer.calculate_nar(&node).await.map_err(|e| Error::Store(format!("NAR calc: {e}")))?;
-
-        if nar_sha256 == pi.nar_sha256 {
-            results.push(VerifyResult::Ok(sp_str));
+            .map_err(|error| Error::Store(format!("filesystem NAR observation for {logical_path}: {error}")))?;
+        let actual_hash = observation.digest.digest_as_bytes();
+        if actual_hash == path_info.nar_sha256 && observation.nar_size == path_info.nar_size {
+            results.push(VerifyResult::Ok(logical_path));
         } else {
             results.push(VerifyResult::Mismatch {
-                path: sp_str,
-                stored_hash: data_encoding::HEXLOWER.encode(&pi.nar_sha256),
-                actual_hash: data_encoding::HEXLOWER.encode(&nar_sha256),
+                path: logical_path,
+                stored_hash: data_encoding::HEXLOWER.encode(&path_info.nar_sha256),
+                actual_hash: data_encoding::HEXLOWER.encode(actual_hash),
+                stored_size: path_info.nar_size,
+                actual_size: observation.nar_size,
             });
         }
     }
-    if let Ok(n) = u64::try_from(results.len()) {
-        assert!(n <= u64::from(scanned_count), "verify results cannot exceed scanned paths");
-    }
-
+    assert!(results.len() <= usize::try_from(scanned_count).unwrap_or(usize::MAX));
+    assert!(scanned_count <= MAX_VERIFY_ENTRIES);
     Ok(results)
 }
 
@@ -348,6 +344,8 @@ pub async fn store_sign(
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
     use nix_compat::store_path::StorePath;
     use snix_castore::Node;
     use snix_castore::SymlinkTarget;
@@ -542,20 +540,17 @@ mod tests {
     /// Compute the NAR hash of an on-disk path the same way `store_verify` does,
     /// so a positive test can pin the exact expected hash.
     async fn nar_hash_of_disk_path(path: &std::path::Path) -> ([u8; 32], u64) {
-        #[allow(tigerstyle::explicit_defaults)]
-        let bs = MemoryBlobService::default();
-        let ds = RedbDirectoryService::new_temporary("verify-test".to_string(), RedbDirectoryServiceConfig {
-            path: None,
-            cache_size: None,
-            read_only: false,
-        })
+        const TEST_NAR_BYTES_MAX: u64 = 1_048_576;
+        let observation = crunch_nar::observe_path_blocking(
+            path.to_path_buf(),
+            FilesystemNarRequest::new(HashAlgo::Sha256, CaseHackPolicy::native(), TEST_NAR_BYTES_MAX),
+        )
+        .await
         .unwrap();
-        let node = ingest_path::<_, _, _, &[u8]>(bs.clone(), ds.clone(), path, None).await.unwrap();
-        let renderer = SimpleRenderer::new(bs, ds);
-        let (nar_size, nar_sha256) = renderer.calculate_nar(&node).await.unwrap();
-        let mut hash = [0u8; 32];
-        hash.copy_from_slice(&nar_sha256);
-        (hash, nar_size)
+        let hash: [u8; 32] = observation.digest.digest_as_bytes().try_into().unwrap();
+        assert_eq!(observation.algorithm, HashAlgo::Sha256);
+        assert!(observation.nar_size > 0);
+        (hash, observation.nar_size)
     }
 
     fn file_pathinfo(store_path: StorePath<String>, nar_sha256: [u8; 32], nar_size: u64) -> PathInfo {
@@ -573,6 +568,7 @@ mod tests {
         }
     }
 
+    // r[verify store_transports.nix_archive_filesystem_observation]
     #[tokio::test]
     async fn store_verify_ok_for_exported_path_in_custom_store_dir() {
         let svc = test_pathinfo_service();
@@ -603,23 +599,52 @@ mod tests {
         assert!(matches!(&results[0], VerifyResult::Missing(p) if *p == sp_str));
     }
 
+    // r[verify store_transports.nix_archive_filesystem_observation]
     #[tokio::test]
     async fn store_verify_mismatch_for_tampered_disk_content() {
         let svc = test_pathinfo_service();
         let store_dir = tempfile::tempdir().unwrap();
-
-        let pi = dummy_pathinfo("verify-mismatch-path");
-        let sp_str = pi.store_path.to_string();
-        let good_path = store_dir.path().join(format!("{sp_str}.good"));
+        let path_info = dummy_pathinfo("verify-mismatch-path");
+        let logical_path = path_info.store_path.to_string();
+        let good_path = store_dir.path().join(format!("{logical_path}.good"));
         std::fs::write(&good_path, b"original").unwrap();
         let (nar_sha256, nar_size) = nar_hash_of_disk_path(&good_path).await;
-        svc.put(file_pathinfo(pi.store_path, nar_sha256, nar_size)).await.unwrap();
-
-        std::fs::write(store_dir.path().join(&sp_str), b"tampered").unwrap();
+        svc.put(file_pathinfo(path_info.store_path, nar_sha256, nar_size)).await.unwrap();
+        std::fs::write(store_dir.path().join(&logical_path), b"tampered and larger").unwrap();
 
         let results = store_verify(&svc, None, store_dir.path()).await.unwrap();
         assert_eq!(results.len(), 1);
-        assert!(matches!(&results[0], VerifyResult::Mismatch { path, .. } if *path == sp_str));
+        assert!(matches!(
+            &results[0],
+            VerifyResult::Mismatch {
+                path,
+                stored_size,
+                actual_size,
+                ..
+            } if *path == logical_path && stored_size != actual_size
+        ));
+    }
+
+    // r[verify store_transports.nix_archive_filesystem_observation]
+    #[tokio::test]
+    async fn store_verify_read_failure_does_not_persist_pathinfo() {
+        const UNREADABLE_MODE: u32 = 0o000;
+        const RESTORED_MODE: u32 = 0o600;
+        let svc = test_pathinfo_service();
+        let store_dir = tempfile::tempdir().unwrap();
+        let path_info = dummy_pathinfo("verify-read-failure-path");
+        let digest = *path_info.store_path.digest();
+        let logical_path = path_info.store_path.to_string();
+        svc.put(path_info).await.unwrap();
+        let physical_path = store_dir.path().join(&logical_path);
+        std::fs::write(&physical_path, b"unreadable").unwrap();
+        std::fs::set_permissions(&physical_path, std::fs::Permissions::from_mode(UNREADABLE_MODE)).unwrap();
+
+        let result = store_verify(&svc, None, store_dir.path()).await;
+        std::fs::set_permissions(&physical_path, std::fs::Permissions::from_mode(RESTORED_MODE)).unwrap();
+        let retained = svc.get(digest).await.unwrap();
+        assert!(result.is_err());
+        assert!(retained.is_some());
     }
 
     const CUSTOM_PREFIX: &str = "/mantle/store";

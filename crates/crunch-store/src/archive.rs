@@ -1832,6 +1832,41 @@ mod tests {
         assert!(paths.contains(&second.store_path.to_string()));
     }
 
+    // r[verify store_transports.nix_archive_castore_separation]
+    #[tokio::test]
+    async fn large_archive_payload_stays_on_the_chunked_castore_ingest_path() {
+        const BUFFER_MULTIPLIER: usize = 8;
+        const LARGE_PAYLOAD_BYTES: usize = ARCHIVE_IO_BUFFER_BYTES * BUFFER_MULTIPLIER + 1;
+        const INPUT_CHUNK_BYTES: usize = 4_096;
+        const PAYLOAD_BYTE: u8 = 0x5a;
+        let source_temp = tempfile::tempdir().unwrap();
+        let source_store = open_test_store(source_temp.path(), "/mantle/store").await;
+        let payload = vec![PAYLOAD_BYTE; LARGE_PAYLOAD_BYTES];
+        let path_info = signed_pathinfo(&source_store, "large-stream", &payload).await;
+        source_store.pathinfo_service().put(path_info.clone()).await.unwrap();
+        let mut archive = Vec::new();
+        export_store_archive(&source_store, std::slice::from_ref(&path_info), &mut archive, &ArchiveExportOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+
+        let destination_temp = tempfile::tempdir().unwrap();
+        let destination_store = open_test_store(destination_temp.path(), "/mantle/store").await;
+        let mut reader = ChunkedAsyncRead::new(archive, INPUT_CHUNK_BYTES);
+        let report = import_store_archive(&destination_store, &mut reader, &ArchiveImportOptions {
+            trust_unsigned: false,
+            trusted_public_keys: vec![test_keypair().1],
+            materialize: false,
+        })
+        .await
+        .unwrap();
+        let retained = destination_store.pathinfo_service().get(*path_info.store_path.digest()).await.unwrap();
+        assert_eq!(report.imported_count, 1);
+        assert!(report.total_payload_bytes > u64::try_from(LARGE_PAYLOAD_BYTES).unwrap());
+        assert!(retained.is_some());
+    }
+
     #[test]
     fn pathinfo_fixture_service_is_bounded() {
         const {

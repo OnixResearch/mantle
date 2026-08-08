@@ -403,6 +403,7 @@ Building derivations (not just compiling crunch) requires:
   repo-local deterministic compatibility test between crunch-store wire
   constants and `crunch-delta`'s protocol-v1 helpers when changing
   chunk-profile or endpoint defaults.
+- **Filesystem NAR boundary**: `crates/crunch-nar` owns direct filesystem NAR observations through exact `nix-archive = 0.1.0`. Physical store verification and recursive project hashing use this adapter. Castore, native archive, Nario, HTTP cache, remote build, Rust cache, repair, and output-persistence paths stay on streamed Snix `write_nar`, `SimpleRenderer`, or `ingest_nar_and_hash`. Run `nix develop -c cargo -Zscript scripts/check-nar-boundary.rs` after boundary changes. Production decode and restore remain deferred.
 - **BLAKE3 everywhere**: `HashAlgo::Blake3` + `NixHash::Blake3` in nix-compat,
   `NAR_BLAKE3`/`FLAT_BLAKE3` in pathinfo.proto, blake3 branches in
   `nar_hash()`/`hash_blob()`/`verify_flat_hash()`/`HashingReader`. The

@@ -37,6 +37,11 @@ fn block_after<'a>(source: &'a str, marker: &str) -> Option<&'a str> {
     None
 }
 
+fn production_prefix(source: &str) -> &str {
+    const TEST_MODULE_MARKER: &str = "#[cfg(test)]\nmod tests {";
+    source.split_once(TEST_MODULE_MARKER).map_or(source, |(production, _)| production)
+}
+
 fn test_only_constructor_is_scoped(source: &str, constructor: &str) -> bool {
     let Some(offset) = source.find(constructor) else {
         return false;
@@ -96,6 +101,7 @@ fn validate_authority_sources(build: &str, pipeline: &str, capability: &str) -> 
         }
     }
 
+    let pipeline_production = production_prefix(pipeline);
     for raw_access in [
         ".blob_service()",
         ".directory_service()",
@@ -105,7 +111,7 @@ fn validate_authority_sources(build: &str, pipeline: &str, capability: &str) -> 
         "Arc<dyn DirectoryService>",
         "Arc<dyn PathInfoService>",
     ] {
-        if pipeline.contains(raw_access) {
+        if pipeline_production.contains(raw_access) {
             findings.insert(AuthorityFinding {
                 code: "pipeline-raw-service-access",
                 surface: "crunch-pipeline",
@@ -117,7 +123,7 @@ fn validate_authority_sources(build: &str, pipeline: &str, capability: &str) -> 
         ".find(&expected.store_path)",
         ".register_if_present(",
     ] {
-        if !pipeline.contains(required) {
+        if !pipeline_production.contains(required) {
             findings.insert(AuthorityFinding {
                 code: "pipeline-retained-capability-missing",
                 surface: "crunch-pipeline",
@@ -195,7 +201,11 @@ fn source_policy_rejects_each_authority_escape() {
     let broad_builder = BUILD_SOURCE.replace("store: crunch_store::BuildStore", "store: crunch_store::StoreHandle");
     let raw_builder = format!("{BUILD_SOURCE}\nfn escaped() {{ self.store.blob_service(); }}\n");
     let handle_escape = format!("{BUILD_SOURCE}\npub fn store_handle() {{}}\n");
-    let raw_pipeline = format!("{PIPELINE_SOURCE}\nfn escaped() {{ store.blob_service(); }}\n");
+    let raw_pipeline = PIPELINE_SOURCE.replacen(
+        "#[cfg(test)]\nmod tests {",
+        "fn escaped() { store.blob_service(); }\n#[cfg(test)]\nmod tests {",
+        1,
+    );
     let raw_capability = format!("{CAPABILITY_SOURCE}\npub fn blob_service() {{}}\n");
     let admin_build_store =
         CAPABILITY_SOURCE.replace("impl BuildStore {", "impl BuildStore { fn garbage_collect(&mut self) {}");

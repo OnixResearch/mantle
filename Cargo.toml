@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "crates/crunch-action-result-core",
+  "crates/crunch-nar",
   "crates/crunch-rust-cache-core",
   "crates/crunch-rust-cache",
   "crates/crunch-rustc-wrapper",
@@ -53,6 +54,7 @@ cargo_check_args = ["--lib"]
 default_scope = [
   "-p", "mantle",
   "-p", "crunch-action-result-core",
+  "-p", "crunch-nar",
   "-p", "mantlepkgs-core",
   "-p", "crunch-attestation",
   "-p", "crunch-attestation-core",
@@ -145,6 +147,7 @@ name = "shared_action_result_publish"
 path = "examples/projects/shared-action-result-roundtrip/publish.rs"
 
 [dependencies]
+crunch-nar = { path = "crates/crunch-nar" }
 crunch-pipeline = { path = "crates/crunch-pipeline" }
 crunch-eval = { path = "crates/crunch-eval" }
 nickel-export-core = { git = "https://github.com/OnixResearch/nickel-export", rev = "257fafc1c746f1faf156207043a4c826bfb16d49" }

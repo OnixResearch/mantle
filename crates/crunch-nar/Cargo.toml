@@ -1,0 +1,27 @@
+[package]
+name = "crunch-nar"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+blake3 = "=1.8.2"
+data-encoding = "2.6"
+digest = "=0.10.7"
+md-5 = "0.10.6"
+nix-archive = "=0.1.0"
+nix-compat = { path = "../../vendor/nix-compat", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+sha1 = "0.10.6"
+sha2 = "0.10.8"
+thiserror = "2.0"
+tokio = { version = "1", features = ["rt"] }
+
+[dev-dependencies]
+snix-castore = { path = "../../vendor/snix-castore" }
+snix-store = { path = "../../vendor/snix-store" }
+tempfile = "3"
+tokio = { version = "1", features = ["full"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
