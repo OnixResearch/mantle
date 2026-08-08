@@ -58,6 +58,20 @@
 // ambient-environment isolation, profile identity, receipt policy, unknown
 // names, and unsupported settings.
 
+// Cargo profile build-override bridge.
+//
+// r[impl rust_package_planning.profile_build_override_defaults]
+// r[impl rust_package_planning.profile_build_override_scope]
+// The pure default and validation core lives in `src/cargo_profile.rs`.
+// Native and Cargo-derived host units, host dependencies, build-script child
+// environments, dual-use detection, and receipts are wired in `src/rust_plan.rs`.
+//
+// r[verify rust_package_planning.profile_build_override_defaults]
+// r[verify rust_package_planning.profile_build_override_scope]
+// Positive tests cover all built-in profiles, host and host-dependency rustc
+// paths, Cargo-derived host units, and recorded dual-use decisions. Negative
+// tests reject legacy values, ambient overrides, and missing dual-use records.
+
 // Picolibc StageX comparison bridge.
 //
 // r[impl bootstrap_inventory.picolibc_stagex_comparison]

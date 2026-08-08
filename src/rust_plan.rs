@@ -32,10 +32,19 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
+#[cfg(test)]
+use crate::cargo_profile::BUILD_SCRIPT_DEBUG_ENV;
+#[cfg(test)]
+use crate::cargo_profile::BUILD_SCRIPT_NUM_JOBS_ENV;
+#[cfg(test)]
+use crate::cargo_profile::BUILD_SCRIPT_OPT_LEVEL_ENV;
 use crate::cargo_profile::CargoProfilePolicy;
 use crate::cargo_profile::profile_codegen_args;
 use crate::cargo_profile::profile_metadata_material;
+use crate::cargo_profile::resolve_build_override_policy;
 use crate::cargo_profile::resolve_profile_policy;
+use crate::cargo_profile::resolve_unit_profile_policy;
+use crate::cargo_profile::validate_build_override_environment;
 use crate::errors::RunError;
 
 const RECEIPT_SCHEMA_VERSION: u32 = 1;
@@ -92,9 +101,8 @@ const HOST_DEPENDENCY_EXECUTION_KIND: &str = "host-dependency";
 const HOST_DEPENDENCY_CRATE_KIND: &str = "host-lib";
 const HOST_DEPENDENCY_MODE: &str = "host-build";
 const HOST_DEPENDENCY_UNIT_ID_SUFFIX: &str = ":host-dependency";
-const BUILD_SCRIPT_OPT_LEVEL_ENV: &str = "OPT_LEVEL";
-const BUILD_SCRIPT_DEBUG_ENV: &str = "DEBUG";
-const BUILD_SCRIPT_NUM_JOBS_ENV: &str = "NUM_JOBS";
+const PROFILE_BUILD_OVERRIDE_ENV: &str = "MANTLE_CARGO_PROFILE_BUILD_OVERRIDE";
+const PROFILE_BUILD_OVERRIDE_DUAL_USE_ENV: &str = "MANTLE_CARGO_PROFILE_BUILD_OVERRIDE_DUAL_USE";
 const CARGO_PROFILE_RELEASE: &str = "release";
 const CARGO_PROFILE_TEST: &str = "test";
 const CARGO_PROFILE_BENCH: &str = "bench";
@@ -105,6 +113,7 @@ const CARGO_DEBUG_INFO_FULL: u8 = 2;
 const CARGO_CODEGEN_UNITS_DEV: u16 = 256;
 const CARGO_CODEGEN_UNITS_RELEASE: u16 = 16;
 const PROFILE_CODEGEN_SETTING_COUNT: usize = 5;
+const RUSTC_CODEGEN_ARGUMENT_PAIR_WIDTH: usize = 2;
 const CARGO_DEBUG_TRUE: &str = "true";
 const CARGO_DEBUG_FALSE: &str = "false";
 const MANTLE_DETERMINISTIC_NUM_JOBS: &str = "1";
@@ -2064,18 +2073,54 @@ fn resolved_profile_policy(profile: &str) -> CargoProfilePolicy {
     policy
 }
 
-fn append_profile_codegen_args(args: &mut Vec<String>, profile: &str) {
+fn append_profile_codegen_args(args: &mut Vec<String>, profile: &str, use_build_override: bool, dual_use: bool) {
     debug_assert!(!args.is_empty());
     debug_assert!(!profile.is_empty());
-    let policy = resolved_profile_policy(profile);
-    args.extend(profile_codegen_args(&policy.settings));
+    let policy = resolve_unit_profile_policy(profile, use_build_override, dual_use)
+        .expect("validated Cargo profile must resolve");
+    let settings = policy.build_override.as_ref().map_or(&policy.settings, |build_override| &build_override.settings);
+    args.extend(profile_codegen_args(settings));
 }
 
-fn profile_policy_for_receipt(profile: &str) -> Option<CargoProfilePolicy> {
-    if profile.is_empty() {
-        return None;
+fn unit_uses_profile_build_override(execution_kind: &str) -> bool {
+    execution_kind == HOST_EXECUTION_KIND || execution_kind == HOST_DEPENDENCY_EXECUTION_KIND
+}
+
+fn profile_build_override_dual_use(unit: &RustUnitDerivationSummary) -> Result<bool, RunError> {
+    debug_assert!(!unit.unit_id.is_empty());
+    debug_assert!(!unit.execution_kind.is_empty());
+    if !unit_uses_profile_build_override(&unit.execution_kind) {
+        return Ok(false);
     }
-    Some(resolved_profile_policy(profile))
+    if unit.derivation.env.get(PROFILE_BUILD_OVERRIDE_ENV).map(String::as_str) != Some(CARGO_DEBUG_TRUE) {
+        return Err(RunError::Internal(format!(
+            "profile-build-override-parity: unit {} is missing its build-override record",
+            unit.unit_id
+        )));
+    }
+    let Some(value) = unit.derivation.env.get(PROFILE_BUILD_OVERRIDE_DUAL_USE_ENV) else {
+        return Err(RunError::Internal(format!(
+            "profile-build-override-parity: unit {} is missing its dual-use decision",
+            unit.unit_id
+        )));
+    };
+    value.parse::<bool>().map_err(|_| {
+        RunError::Internal(format!(
+            "profile-build-override-parity: unit {} has invalid dual-use decision `{value}`",
+            unit.unit_id
+        ))
+    })
+}
+
+fn profile_policy_for_receipt(unit: &RustUnitDerivationSummary) -> Result<Option<CargoProfilePolicy>, RunError> {
+    if unit.profile.is_empty() {
+        return Ok(None);
+    }
+    let use_build_override = unit_uses_profile_build_override(&unit.execution_kind);
+    let dual_use = profile_build_override_dual_use(unit)?;
+    let policy = resolve_unit_profile_policy(&unit.profile, use_build_override, dual_use)
+        .map_err(|error| RunError::Internal(error.to_string()))?;
+    Ok(Some(policy))
 }
 
 fn native_path_cargo_packages(root: &Path, options: &RustPlanOptions) -> Result<Vec<CargoPackage>, RunError> {
@@ -6257,24 +6302,12 @@ fn target_feature_env_from_triple(active_target: &str) -> &str {
     }
 }
 
-fn build_script_profile_env(profile: &str) -> BTreeMap<String, String> {
+fn build_script_profile_env(profile: &str, dual_use: bool) -> BTreeMap<String, String> {
     debug_assert!(!profile.is_empty());
-    let is_release_like = matches!(profile, CARGO_PROFILE_RELEASE | CARGO_PROFILE_BENCH);
-    let opt_level = if is_release_like {
-        CARGO_OPT_LEVEL_RELEASE
-    } else {
-        CARGO_OPT_LEVEL_DEBUG
-    };
-    let debug = if is_release_like {
-        CARGO_DEBUG_FALSE
-    } else {
-        CARGO_DEBUG_TRUE
-    };
-    BTreeMap::from([
-        (BUILD_SCRIPT_OPT_LEVEL_ENV.to_string(), opt_level.to_string()),
-        (BUILD_SCRIPT_DEBUG_ENV.to_string(), debug.to_string()),
-        (BUILD_SCRIPT_NUM_JOBS_ENV.to_string(), MANTLE_DETERMINISTIC_NUM_JOBS.to_string()),
-    ])
+    let policy = resolve_build_override_policy(profile, dual_use).expect("validated Cargo profile must resolve");
+    validate_build_override_environment(profile, Some(dual_use), &policy.environment)
+        .expect("resolved Cargo build-override environment must validate");
+    policy.environment
 }
 
 fn build_script_target_cfg_env(active_target: &str) -> BTreeMap<String, String> {
@@ -9164,6 +9197,26 @@ fn replace_rustc_metadata_arg(args: &mut [String], metadata: &str) {
     debug_assert!(is_replaced);
 }
 
+fn replace_profile_codegen_args(args: &mut [String], profile: &str, dual_use: bool) {
+    debug_assert!(!args.is_empty());
+    debug_assert!(!profile.is_empty());
+    let policy = resolve_build_override_policy(profile, dual_use).expect("validated Cargo profile must resolve");
+    let replacements = profile_codegen_args(&policy.settings);
+    let mut replaced_count = 0usize;
+    for replacement in replacements.chunks_exact(RUSTC_CODEGEN_ARGUMENT_PAIR_WIDTH) {
+        debug_assert_eq!(replacement[0], RUSTC_CODEGEN_OPTION_FLAG);
+        let key = replacement[1].split_once('=').expect("profile codegen argument has a key").0;
+        for arg in args.iter_mut() {
+            if arg.starts_with(key) && arg.as_bytes().get(key.len()) == Some(&b'=') {
+                *arg = replacement[1].clone();
+                replaced_count = replaced_count.saturating_add(1);
+                break;
+            }
+        }
+    }
+    debug_assert_eq!(replaced_count, PROFILE_CODEGEN_SETTING_COUNT);
+}
+
 struct RetaggedRustcMetadataInputs<'a> {
     base_metadata: &'a str,
     execution_kind: &'a str,
@@ -9516,6 +9569,7 @@ struct NativeRustcArgsInputs<'a> {
     selected_features: &'a [String],
     crate_types: &'a [String],
     dependencies: &'a [RustDependencyArtifact],
+    execution_kind: &'a str,
     is_proc_macro: bool,
     needs_linker: bool,
 }
@@ -9539,7 +9593,12 @@ fn native_rustc_args(
         args.push("--crate-type".to_string());
         args.push(crate_type);
     }
-    append_profile_codegen_args(&mut args, &options.profile);
+    append_profile_codegen_args(
+        &mut args,
+        &options.profile,
+        unit_uses_profile_build_override(inputs.execution_kind),
+        false,
+    );
     let rustc_metadata_hash = rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
         package_id: inputs.package_id,
         target_name: inputs.target_name,
@@ -9596,6 +9655,7 @@ fn native_rust_env(
     env.insert("PACKAGE_ID".to_string(), inputs.package_id.to_string());
     env.insert("PROFILE".to_string(), options.profile.clone());
     env.insert("SOURCE_CLOSURE_DIGEST".to_string(), execution_source_closure_digest(source_closure, options));
+    append_profile_build_override_markers(&mut env, inputs.execution_kind, false);
     append_cargo_package_env(&mut env, inputs.cargo_package_env);
     env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), inputs.package_name.to_string());
     env.insert(
@@ -9643,6 +9703,7 @@ fn native_target_rustc_args_inputs(unit: &NativeRustUnitSummary) -> NativeRustcA
         selected_features: &unit.selected_features,
         crate_types: &unit.crate_types,
         dependencies: &unit.dependency_artifacts,
+        execution_kind: TARGET_EXECUTION_KIND,
         is_proc_macro: false,
         needs_linker: unit.target_kind == "bin",
     }
@@ -9661,6 +9722,7 @@ fn native_host_rustc_args_inputs(unit: &NativeHostUnitSummary) -> NativeRustcArg
         selected_features: &unit.selected_features,
         crate_types: &unit.crate_types,
         dependencies: &unit.dependency_artifacts,
+        execution_kind: HOST_EXECUTION_KIND,
         is_proc_macro: unit.target_kind == "proc-macro",
         needs_linker: true,
     }
@@ -9794,6 +9856,8 @@ fn add_host_dependency_derivations(derivations: &mut Vec<RustUnitDerivationSumma
     let target_libs_by_package = target_lib_derivation_ids_by_package(derivations);
     let required_target_ids =
         host_dependency_target_unit_ids(derivations, &target_libs_by_unit_id, &target_libs_by_package);
+    let dual_use_target_ids =
+        target_dependency_target_unit_ids(derivations, &target_libs_by_unit_id, &target_libs_by_package);
     if required_target_ids.is_empty() {
         return;
     }
@@ -9819,7 +9883,8 @@ fn add_host_dependency_derivations(derivations: &mut Vec<RustUnitDerivationSumma
         let Some(target_unit) = target_libs_by_unit_id.get(&target_id) else {
             continue;
         };
-        let host_unit = host_dependency_derivation(target_unit, &host_id_by_target_id, &host_id_by_package);
+        let dual_use = dual_use_target_ids.contains(&target_id);
+        let host_unit = host_dependency_derivation(target_unit, &host_id_by_target_id, &host_id_by_package, dual_use);
         derivations.push(host_unit);
     }
 }
@@ -9895,6 +9960,26 @@ fn host_dependency_target_unit_ids(
     required
 }
 
+fn target_dependency_target_unit_ids(
+    derivations: &[RustUnitDerivationSummary],
+    target_libs_by_unit_id: &BTreeMap<String, RustUnitDerivationSummary>,
+    target_libs_by_package: &BTreeMap<String, String>,
+) -> BTreeSet<String> {
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
+    let mut dual_use = BTreeSet::new();
+    for unit in derivations.iter().filter(|unit| is_supported_target_unit(unit)) {
+        for dependency in &unit.dependency_artifacts {
+            if let Some(unit_id) =
+                target_lib_unit_id_for_dependency(dependency, target_libs_by_unit_id, target_libs_by_package)
+            {
+                dual_use.insert(unit_id);
+            }
+        }
+    }
+    dual_use
+}
+
 fn enqueue_host_dependency_targets(
     dependencies: &[RustDependencyArtifact],
     target_libs_by_unit_id: &BTreeMap<String, RustUnitDerivationSummary>,
@@ -9927,6 +10012,7 @@ fn host_dependency_derivation(
     target_unit: &RustUnitDerivationSummary,
     host_id_by_target_id: &BTreeMap<String, String>,
     host_id_by_package: &BTreeMap<String, String>,
+    dual_use: bool,
 ) -> RustUnitDerivationSummary {
     debug_assert!(is_supported_target_unit(target_unit));
     debug_assert_eq!(target_unit.target_kind, "lib");
@@ -9941,6 +10027,7 @@ fn host_dependency_derivation(
         mode: HOST_DEPENDENCY_MODE,
     });
     replace_rustc_metadata_arg(&mut host_unit.derivation.args, &host_unit.rustc_metadata_hash);
+    replace_profile_codegen_args(&mut host_unit.derivation.args, &host_unit.profile, dual_use);
     host_unit.rustc_args_digest_blake3 =
         blake3::hash(host_unit.derivation.args.join("\0").as_bytes()).to_hex().to_string();
     host_unit.derivation.name = format!("{}-host", target_unit.derivation.name);
@@ -9950,6 +10037,7 @@ fn host_dependency_derivation(
         .env
         .insert(RUST_UNIT_EXECUTION_KIND_ENV.to_string(), HOST_DEPENDENCY_EXECUTION_KIND.to_string());
     host_unit.derivation.env.insert("MODE".to_string(), HOST_DEPENDENCY_MODE.to_string());
+    append_profile_build_override_markers(&mut host_unit.derivation.env, HOST_DEPENDENCY_EXECUTION_KIND, dual_use);
     remap_dependency_artifacts_to_host_variants(
         &mut host_unit.dependency_artifacts,
         host_id_by_target_id,
@@ -10303,7 +10391,12 @@ fn cargo_unit_rustc_args(
         args.push("--crate-type".to_string());
         args.push(crate_type);
     }
-    append_profile_codegen_args(&mut args, &options.profile);
+    append_profile_codegen_args(
+        &mut args,
+        &options.profile,
+        unit_uses_profile_build_override(&facts.execution_kind),
+        false,
+    );
     if (is_host_target_kind(&facts.target_kind) || facts.target_kind == "bin")
         && let Some(linker) = resolve_tool_path("cc")
     {
@@ -10344,6 +10437,7 @@ fn cargo_unit_env(
         ("PROFILE".to_string(), options.profile.clone()),
         ("SOURCE_CLOSURE_DIGEST".to_string(), execution_source_closure_digest(source_closure, options)),
     ]);
+    append_profile_build_override_markers(&mut env, &facts.execution_kind, false);
     insert_deterministic_release_compile_env(&mut env, options);
     if let Some(target) = options.targets.first() {
         env.insert("TARGET".to_string(), target.clone());
@@ -12450,7 +12544,7 @@ fn dev_dependency_test_rustc_args(
         "--crate-type".to_string(),
         "bin".to_string(),
     ];
-    append_profile_codegen_args(&mut args, CARGO_PROFILE_TEST);
+    append_profile_codegen_args(&mut args, CARGO_PROFILE_TEST, false, false);
     if let Some(linker) = resolve_tool_path("cc") {
         args.push(RUSTC_CODEGEN_OPTION_FLAG.to_string());
         args.push(format!("linker={}", normalize_path_string(&linker)));
@@ -14613,7 +14707,7 @@ fn build_script_child_env(
     env.insert(BUILD_SCRIPT_HOST_ENV.to_string(), host_target_triple());
     let target = unit.derivation.env.get(BUILD_SCRIPT_TARGET_ENV).cloned().unwrap_or_else(host_target_triple);
     append_build_script_target_cfg_env(&mut env, &target);
-    append_build_script_profile_env(&mut env, &unit.profile);
+    append_build_script_profile_env(&mut env, &unit.profile, false);
     env.insert(BUILD_SCRIPT_TARGET_ENV.to_string(), target);
     env.insert(BUILD_SCRIPT_PROFILE_ENV.to_string(), unit.profile.clone());
     if let Some(root) = package_root {
@@ -14646,11 +14740,19 @@ fn append_build_script_target_cfg_env(env: &mut BTreeMap<String, String>, target
     }
 }
 
-fn append_build_script_profile_env(env: &mut BTreeMap<String, String>, profile: &str) {
-    for (key, value) in build_script_profile_env(profile) {
+fn append_build_script_profile_env(env: &mut BTreeMap<String, String>, profile: &str, dual_use: bool) {
+    for (key, value) in build_script_profile_env(profile, dual_use) {
         debug_assert!(!key.is_empty());
         env.insert(key, value);
     }
+}
+
+fn append_profile_build_override_markers(env: &mut BTreeMap<String, String>, execution_kind: &str, dual_use: bool) {
+    if !unit_uses_profile_build_override(execution_kind) {
+        return;
+    }
+    env.insert(PROFILE_BUILD_OVERRIDE_ENV.to_string(), true.to_string());
+    env.insert(PROFILE_BUILD_OVERRIDE_DUAL_USE_ENV.to_string(), dual_use.to_string());
 }
 
 fn run_build_script_metadata(
@@ -17181,7 +17283,7 @@ fn dev_dependency_lib_derivation(
         "--crate-type".to_string(),
         "lib".to_string(),
     ];
-    append_profile_codegen_args(&mut args, CARGO_PROFILE_TEST);
+    append_profile_codegen_args(&mut args, CARGO_PROFILE_TEST, false, false);
     let rustc_metadata_hash = rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
         package_id: &package.package_id,
         target_name: &target.name,
@@ -17660,7 +17762,7 @@ fn finalized_execution_receipt(
         local_cache: None,
         shared_cache: None,
         compiler_policy,
-        profile_policy: profile_policy_for_receipt(&unit.profile),
+        profile_policy: profile_policy_for_receipt(unit)?,
         blocker,
         diagnostic_context: None,
         replay_evidence: None,
@@ -18576,10 +18678,18 @@ mod tests {
         };
         let rustc_metadata_hash =
             test_source_digest(&format!("metadata-{index}")).value[..RUSTC_METADATA_HEX_CHARS].to_string();
-        let rustc_args = vec![
+        let mut rustc_args = vec![
             RUSTC_CODEGEN_OPTION_FLAG.to_string(),
             format!("{RUSTC_METADATA_ARG_PREFIX}{rustc_metadata_hash}"),
         ];
+        append_profile_codegen_args(
+            &mut rustc_args,
+            DEFAULT_CARGO_PROFILE,
+            unit_uses_profile_build_override(execution_kind),
+            false,
+        );
+        let mut env = BTreeMap::new();
+        append_profile_build_override_markers(&mut env, execution_kind, false);
         RustUnitDerivationSummary {
             unit_id: rust_unit_id(RustUnitIdInputs {
                 index,
@@ -18608,7 +18718,7 @@ mod tests {
                 system: "x86_64-linux".to_string(),
                 args: rustc_args,
                 outputs: vec!["out".to_string()],
-                env: BTreeMap::new(),
+                env,
                 inputs: Vec::new(),
                 addressing_mode: "content-addressed".to_string(),
             },
@@ -19201,12 +19311,13 @@ mod tests {
         );
         assert_profile_codegen_args(
             &release_host.derivation.args,
-            CARGO_OPT_LEVEL_RELEASE,
+            CARGO_OPT_LEVEL_DEBUG,
             CARGO_DEBUG_INFO_NONE,
             false,
             false,
-            CARGO_CODEGEN_UNITS_RELEASE,
+            CARGO_CODEGEN_UNITS_DEV,
         );
+        assert_eq!(release_host.derivation.env.get(PROFILE_BUILD_OVERRIDE_DUAL_USE_ENV).unwrap(), CARGO_DEBUG_FALSE);
         assert_ne!(dev_target.rustc_args_digest_blake3, release_target.rustc_args_digest_blake3);
     }
 
@@ -19241,6 +19352,22 @@ mod tests {
             CARGO_CODEGEN_UNITS_RELEASE,
         );
         assert_eq!(metadata.len(), RUSTC_METADATA_HEX_CHARS);
+
+        let mut host_facts = facts;
+        host_facts.target_kind = "proc-macro".to_string();
+        host_facts.execution_kind = HOST_EXECUTION_KIND.to_string();
+        host_facts.crate_types = vec!["proc-macro".to_string()];
+        let (host_args, host_metadata) = cargo_unit_rustc_args(&host_facts, &[], &source_closure, &release_options);
+        assert_profile_codegen_args(
+            &host_args,
+            CARGO_OPT_LEVEL_DEBUG,
+            CARGO_DEBUG_INFO_NONE,
+            false,
+            false,
+            CARGO_CODEGEN_UNITS_DEV,
+        );
+        assert_eq!(host_metadata.len(), RUSTC_METADATA_HEX_CHARS);
+        assert_ne!(args, host_args);
     }
 
     #[test]
@@ -20836,16 +20963,22 @@ rust-version = "1.80"
     }
 
     #[test]
-    fn build_script_profile_env_derives_dev_and_release_defaults() {
-        let dev_env = build_script_profile_env(DEFAULT_CARGO_PROFILE);
-        let release_env = build_script_profile_env(CARGO_PROFILE_RELEASE);
+    fn build_script_profile_env_derives_build_override_defaults() {
+        for profile in [
+            DEFAULT_CARGO_PROFILE,
+            CARGO_PROFILE_TEST,
+            CARGO_PROFILE_RELEASE,
+            CARGO_PROFILE_BENCH,
+        ] {
+            let env = build_script_profile_env(profile, false);
 
-        assert_eq!(dev_env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_DEBUG);
-        assert_eq!(dev_env.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_TRUE);
-        assert_eq!(dev_env.get(BUILD_SCRIPT_NUM_JOBS_ENV).unwrap(), MANTLE_DETERMINISTIC_NUM_JOBS);
-        assert_eq!(release_env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_RELEASE);
-        assert_eq!(release_env.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_FALSE);
-        assert_eq!(release_env.get(BUILD_SCRIPT_NUM_JOBS_ENV).unwrap(), MANTLE_DETERMINISTIC_NUM_JOBS);
+            assert_eq!(env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_DEBUG);
+            assert_eq!(env.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_FALSE);
+            assert_eq!(env.get(BUILD_SCRIPT_NUM_JOBS_ENV).unwrap(), MANTLE_DETERMINISTIC_NUM_JOBS);
+        }
+
+        let dual_use_dev = build_script_profile_env(DEFAULT_CARGO_PROFILE, true);
+        assert_eq!(dual_use_dev.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_TRUE);
     }
 
     #[test]
@@ -20934,7 +21067,7 @@ rust-version = "1.80"
 
         let env = build_script_child_env(&unit, &options, &out_dir, None, None);
 
-        assert_eq!(env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_RELEASE);
+        assert_eq!(env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_DEBUG);
         assert_eq!(env.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_FALSE);
         assert_eq!(env.get(BUILD_SCRIPT_NUM_JOBS_ENV).unwrap(), MANTLE_DETERMINISTIC_NUM_JOBS);
         assert_ne!(env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), AMBIENT_OPT_LEVEL_VALUE);
@@ -20982,7 +21115,7 @@ rust-version = "1.80"
         assert_eq!(env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV).unwrap(), &normalize_path_string(&package_root));
         assert_eq!(env.get(BUILD_SCRIPT_CARGO_PKG_NAME_ENV).unwrap(), &package_name);
         assert_eq!(env.get(CARGO_PKG_VERSION_ENV).unwrap(), "9.8.7");
-        assert_eq!(env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_RELEASE);
+        assert_eq!(env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_DEBUG);
         assert_eq!(env.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_FALSE);
         assert_eq!(env.get(BUILD_SCRIPT_NUM_JOBS_ENV).unwrap(), MANTLE_DETERMINISTIC_NUM_JOBS);
         assert_eq!(env.get(CARGO_CFG_TARGET_ARCH_ENV).unwrap(), "wasm32");
@@ -21012,7 +21145,7 @@ rust-version = "1.80"
         assert_eq!(env.get(BUILD_SCRIPT_TARGET_ENV).unwrap(), &host_target_triple());
         assert_eq!(env.get(BUILD_SCRIPT_PROFILE_ENV).unwrap(), DEFAULT_CARGO_PROFILE);
         assert_eq!(env.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_DEBUG);
-        assert_eq!(env.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_TRUE);
+        assert_eq!(env.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_FALSE);
         assert_eq!(env.get(BUILD_SCRIPT_NUM_JOBS_ENV).unwrap(), MANTLE_DETERMINISTIC_NUM_JOBS);
     }
 
@@ -22351,6 +22484,15 @@ rust-version = "1.80"
         assert_eq!(host_dependency.selected_triple, host_target_triple());
         assert_ne!(host_dependency.rustc_metadata_hash, target_dependency_metadata);
         assert_eq!(host_dependency.target_kind, "lib");
+        assert_eq!(host_dependency.derivation.env.get(PROFILE_BUILD_OVERRIDE_DUAL_USE_ENV).unwrap(), CARGO_DEBUG_TRUE);
+        assert_profile_codegen_args(
+            &host_dependency.derivation.args,
+            CARGO_OPT_LEVEL_DEBUG,
+            CARGO_DEBUG_INFO_FULL,
+            true,
+            true,
+            CARGO_CODEGEN_UNITS_DEV,
+        );
         assert_eq!(host_dependency.derivation.env.get("CRATE_KIND").unwrap(), HOST_DEPENDENCY_CRATE_KIND);
         assert_eq!(
             host_dependency.derivation.env.get(RUST_UNIT_EXECUTION_KIND_ENV).unwrap(),
@@ -22366,6 +22508,90 @@ rust-version = "1.80"
             untouched_target_consumer.dependency_artifacts[0].producer_unit_id.as_deref(),
             Some(target_dependency_unit_id.as_str())
         );
+    }
+
+    #[test]
+    fn host_only_dependency_uses_non_dual_build_override() {
+        let dependency_id = "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59";
+        let host_consumer_id = "registry+https://github.com/rust-lang/crates.io-index#host-only@1.0.0";
+        let target_dependency = test_rust_derivation(0, dependency_id, "lib", TARGET_EXECUTION_KIND, Vec::new());
+        let host_dependency_id = host_dependency_unit_id(&target_dependency.unit_id);
+        let host_consumer = test_rust_derivation(1, host_consumer_id, "custom-build", HOST_EXECUTION_KIND, vec![
+            RustDependencyArtifact {
+                package_id: dependency_id.to_string(),
+                name: "cc".to_string(),
+                producer_unit_id: Some(target_dependency.unit_id.clone()),
+                artifact: format!("artifact:{dependency_id}:cc"),
+            },
+        ]);
+        let mut derivations = vec![target_dependency, host_consumer];
+
+        add_host_dependency_derivations(&mut derivations);
+
+        let host_dependency = derivations
+            .iter()
+            .find(|unit| unit.unit_id == host_dependency_id)
+            .expect("host dependency clone exists");
+        assert_eq!(host_dependency.derivation.env.get(PROFILE_BUILD_OVERRIDE_DUAL_USE_ENV).unwrap(), CARGO_DEBUG_FALSE);
+        assert_profile_codegen_args(
+            &host_dependency.derivation.args,
+            CARGO_OPT_LEVEL_DEBUG,
+            CARGO_DEBUG_INFO_NONE,
+            true,
+            true,
+            CARGO_CODEGEN_UNITS_DEV,
+        );
+    }
+
+    #[test]
+    fn finalized_receipt_records_dual_use_build_override() {
+        let mut unit = test_rust_derivation(
+            0,
+            "registry+https://github.com/rust-lang/crates.io-index#shared@1.0.0",
+            "lib",
+            HOST_DEPENDENCY_EXECUTION_KIND,
+            Vec::new(),
+        );
+        unit.derivation.env.insert(PROFILE_BUILD_OVERRIDE_DUAL_USE_ENV.to_string(), true.to_string());
+        replace_profile_codegen_args(&mut unit.derivation.args, &unit.profile, true);
+        unit.rustc_args_digest_blake3 = blake3::hash(unit.derivation.args.join("\0").as_bytes()).to_hex().to_string();
+
+        let receipt = finalized_execution_receipt(FinalizedExecutionReceiptInputs {
+            unit: &unit,
+            execution_status: "success",
+            rebuild_reason: "test",
+            toolchain: missing_toolchain_identity(),
+            environment_digest_blake3: TEST_DIGEST_B.to_string(),
+            dependency_artifact_digests: Vec::new(),
+            host_artifact_digests: Vec::new(),
+            output_artifact_digests: Vec::new(),
+            compiler_policy: None,
+            blocker: None,
+        })
+        .unwrap();
+
+        let profile_policy = receipt.profile_policy.expect("profile policy is receipt-bound");
+        let build_override = profile_policy.build_override.expect("build override is receipt-bound");
+        assert!(build_override.dual_use);
+        assert_eq!(build_override.settings.debuginfo, CARGO_DEBUG_INFO_FULL);
+        assert_eq!(build_override.environment.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), CARGO_DEBUG_TRUE);
+    }
+
+    #[test]
+    fn unrecorded_host_dependency_dual_use_fails_receipt_validation() {
+        let mut unit = test_rust_derivation(
+            0,
+            "registry+https://github.com/rust-lang/crates.io-index#missing-record@1.0.0",
+            "lib",
+            HOST_DEPENDENCY_EXECUTION_KIND,
+            Vec::new(),
+        );
+        unit.derivation.env.remove(PROFILE_BUILD_OVERRIDE_DUAL_USE_ENV);
+
+        let error = profile_policy_for_receipt(&unit).unwrap_err();
+
+        assert!(error.to_string().contains("profile-build-override-parity"));
+        assert!(error.to_string().contains("dual-use decision"));
     }
 
     #[test]
@@ -22399,6 +22625,7 @@ rust-version = "1.80"
         assert_eq!(profile_policy.selected_profile, DEFAULT_CARGO_PROFILE);
         assert!(!profile_policy.incremental);
         assert_eq!(profile_policy.settings.codegen_units, CARGO_CODEGEN_UNITS_DEV);
+        assert!(profile_policy.build_override.is_none());
     }
 
     #[test]

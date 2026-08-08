@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -11,6 +13,9 @@ const CARGO_DEBUG_INFO_FULL: u8 = 2;
 const CARGO_DEBUG_INFO_NONE: u8 = 0;
 const CARGO_CODEGEN_UNITS_INCREMENTAL: u16 = 256;
 const CARGO_CODEGEN_UNITS_NON_INCREMENTAL: u16 = 16;
+const CARGO_BUILD_OVERRIDE_CODEGEN_UNITS: u16 = 256;
+const CARGO_BUILD_OVERRIDE_NUM_JOBS: u16 = 1;
+const CARGO_BUILD_OVERRIDE_NUM_JOBS_VALUE: &str = "1";
 const CARGO_LTO_FALSE: &str = "false";
 const CARGO_PANIC_UNWIND: &str = "unwind";
 const CARGO_STRIP_NONE: &str = "none";
@@ -24,6 +29,11 @@ const RUSTC_CODEGEN_ARGUMENT_PAIR_WIDTH: usize = 2;
 const PROFILE_CODEGEN_ARGUMENT_COUNT: usize = PROFILE_CODEGEN_SETTING_COUNT * RUSTC_CODEGEN_ARGUMENT_PAIR_WIDTH;
 const UNKNOWN_PROFILE_CLASS: &str = "unknown-profile";
 const UNSUPPORTED_PROFILE_SURFACE_CLASS: &str = "unsupported-profile-surface";
+const PROFILE_BUILD_OVERRIDE_PARITY_CLASS: &str = "profile-build-override-parity";
+
+pub(crate) const BUILD_SCRIPT_OPT_LEVEL_ENV: &str = "OPT_LEVEL";
+pub(crate) const BUILD_SCRIPT_DEBUG_ENV: &str = "DEBUG";
+pub(crate) const BUILD_SCRIPT_NUM_JOBS_ENV: &str = "NUM_JOBS";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct CargoProfileSettings {
@@ -45,6 +55,15 @@ pub(crate) struct CargoProfilePolicy {
     pub(crate) selected_profile: String,
     pub(crate) settings: CargoProfileSettings,
     pub(crate) incremental: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) build_override: Option<CargoBuildOverridePolicy>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct CargoBuildOverridePolicy {
+    pub(crate) dual_use: bool,
+    pub(crate) settings: CargoProfileSettings,
+    pub(crate) environment: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,6 +119,68 @@ pub(crate) fn resolve_builtin_profile(name: &str) -> Result<CargoProfileSettings
             message: format!("Cargo profile `{name}` is not a supported built-in profile"),
         }),
     }
+}
+
+pub(crate) fn resolve_build_override_policy(
+    name: &str,
+    dual_use: bool,
+) -> Result<CargoBuildOverridePolicy, CargoProfileError> {
+    const { assert!(CARGO_BUILD_OVERRIDE_CODEGEN_UNITS > 0) };
+    const { assert!(CARGO_BUILD_OVERRIDE_NUM_JOBS > 0) };
+    let target_settings = resolve_builtin_profile(name)?;
+    let mut settings = target_settings.clone();
+    settings.opt_level = CARGO_OPT_LEVEL_DEV.to_string();
+    settings.codegen_units = CARGO_BUILD_OVERRIDE_CODEGEN_UNITS;
+    if !dual_use {
+        settings.debuginfo = CARGO_DEBUG_INFO_NONE;
+    }
+    let environment = BTreeMap::from([
+        (BUILD_SCRIPT_OPT_LEVEL_ENV.to_string(), settings.opt_level.clone()),
+        (BUILD_SCRIPT_DEBUG_ENV.to_string(), (settings.debuginfo > CARGO_DEBUG_INFO_NONE).to_string()),
+        (BUILD_SCRIPT_NUM_JOBS_ENV.to_string(), CARGO_BUILD_OVERRIDE_NUM_JOBS.to_string()),
+    ]);
+    validate_build_override_environment(name, Some(dual_use), &environment)?;
+    Ok(CargoBuildOverridePolicy {
+        dual_use,
+        settings,
+        environment,
+    })
+}
+
+pub(crate) fn validate_build_override_environment(
+    name: &str,
+    dual_use: Option<bool>,
+    environment: &BTreeMap<String, String>,
+) -> Result<(), CargoProfileError> {
+    const { assert!(CARGO_BUILD_OVERRIDE_CODEGEN_UNITS > 0) };
+    const { assert!(CARGO_BUILD_OVERRIDE_NUM_JOBS > 0) };
+    let Some(dual_use) = dual_use else {
+        return Err(CargoProfileError {
+            class: PROFILE_BUILD_OVERRIDE_PARITY_CLASS,
+            message: "Cargo build-override environment is missing its dual-use decision".to_string(),
+        });
+    };
+    let target_settings = resolve_builtin_profile(name)?;
+    let expected_debug = if dual_use && target_settings.debuginfo > CARGO_DEBUG_INFO_NONE {
+        "true"
+    } else {
+        "false"
+    };
+    let expected = [
+        (BUILD_SCRIPT_OPT_LEVEL_ENV, CARGO_OPT_LEVEL_DEV),
+        (BUILD_SCRIPT_DEBUG_ENV, expected_debug),
+        (BUILD_SCRIPT_NUM_JOBS_ENV, CARGO_BUILD_OVERRIDE_NUM_JOBS_VALUE),
+    ];
+    for (key, expected_value) in expected {
+        let actual = environment.get(key).map(String::as_str);
+        if actual != Some(expected_value) {
+            return Err(CargoProfileError {
+                class: PROFILE_BUILD_OVERRIDE_PARITY_CLASS,
+                message: format!("Cargo build-override environment `{key}` is {actual:?}; expected `{expected_value}`"),
+            });
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn profile_codegen_args(settings: &CargoProfileSettings) -> Vec<String> {
@@ -163,7 +244,20 @@ pub(crate) fn resolve_profile_policy(name: &str) -> Result<CargoProfilePolicy, C
         selected_profile: name.to_string(),
         settings,
         incremental: MANTLE_INCREMENTAL_DISABLED,
+        build_override: None,
     })
+}
+
+pub(crate) fn resolve_unit_profile_policy(
+    name: &str,
+    use_build_override: bool,
+    dual_use: bool,
+) -> Result<CargoProfilePolicy, CargoProfileError> {
+    let mut policy = resolve_profile_policy(name)?;
+    if use_build_override {
+        policy.build_override = Some(resolve_build_override_policy(name, dual_use)?);
+    }
+    Ok(policy)
 }
 
 #[cfg(test)]
@@ -195,6 +289,60 @@ mod tests {
         assert_eq!(unknown.class, UNKNOWN_PROFILE_CLASS);
         assert!(empty.message.contains("``"));
         assert!(unknown.message.contains("production"));
+    }
+
+    #[test]
+    fn build_override_defaults_cover_all_profiles_and_dual_use() {
+        for name in [
+            CARGO_PROFILE_DEV,
+            CARGO_PROFILE_TEST,
+            CARGO_PROFILE_RELEASE,
+            CARGO_PROFILE_BENCH,
+        ] {
+            let host_only = resolve_build_override_policy(name, false).unwrap();
+            let repeated = resolve_build_override_policy(name, false).unwrap();
+
+            assert_eq!(host_only, repeated);
+            assert_eq!(host_only.settings.opt_level, CARGO_OPT_LEVEL_DEV);
+            assert_eq!(host_only.settings.codegen_units, CARGO_BUILD_OVERRIDE_CODEGEN_UNITS);
+            assert_eq!(host_only.settings.debuginfo, CARGO_DEBUG_INFO_NONE);
+            assert_eq!(host_only.environment.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), "false");
+            assert_eq!(host_only.environment.get(BUILD_SCRIPT_NUM_JOBS_ENV).unwrap(), "1");
+        }
+
+        let release = resolve_build_override_policy(CARGO_PROFILE_RELEASE, false).unwrap();
+        let dev = resolve_build_override_policy(CARGO_PROFILE_DEV, false).unwrap();
+        let dual_use_dev = resolve_build_override_policy(CARGO_PROFILE_DEV, true).unwrap();
+        assert_ne!(release.environment.get(BUILD_SCRIPT_OPT_LEVEL_ENV).unwrap(), CARGO_OPT_LEVEL_RELEASE);
+        assert_ne!(dev.environment.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), "true");
+        assert_eq!(dual_use_dev.settings.debuginfo, CARGO_DEBUG_INFO_FULL);
+        assert_eq!(dual_use_dev.environment.get(BUILD_SCRIPT_DEBUG_ENV).unwrap(), "true");
+    }
+
+    #[test]
+    fn malformed_or_unrecorded_build_override_environment_fails_closed() {
+        let old_release = BTreeMap::from([
+            (BUILD_SCRIPT_OPT_LEVEL_ENV.to_string(), CARGO_OPT_LEVEL_RELEASE.to_string()),
+            (BUILD_SCRIPT_DEBUG_ENV.to_string(), "false".to_string()),
+            (BUILD_SCRIPT_NUM_JOBS_ENV.to_string(), "1".to_string()),
+        ]);
+        let old_dev = BTreeMap::from([
+            (BUILD_SCRIPT_OPT_LEVEL_ENV.to_string(), CARGO_OPT_LEVEL_DEV.to_string()),
+            (BUILD_SCRIPT_DEBUG_ENV.to_string(), "true".to_string()),
+            (BUILD_SCRIPT_NUM_JOBS_ENV.to_string(), "1".to_string()),
+        ]);
+
+        let release_error =
+            validate_build_override_environment(CARGO_PROFILE_RELEASE, Some(false), &old_release).unwrap_err();
+        let dev_error = validate_build_override_environment(CARGO_PROFILE_DEV, Some(false), &old_dev).unwrap_err();
+        let missing_record = validate_build_override_environment(CARGO_PROFILE_DEV, None, &old_dev).unwrap_err();
+
+        assert_eq!(release_error.class, PROFILE_BUILD_OVERRIDE_PARITY_CLASS);
+        assert_eq!(dev_error.class, PROFILE_BUILD_OVERRIDE_PARITY_CLASS);
+        assert_eq!(missing_record.class, PROFILE_BUILD_OVERRIDE_PARITY_CLASS);
+        assert!(release_error.message.contains(BUILD_SCRIPT_OPT_LEVEL_ENV));
+        assert!(dev_error.message.contains(BUILD_SCRIPT_DEBUG_ENV));
+        assert!(missing_record.message.contains("dual-use"));
     }
 
     #[test]
