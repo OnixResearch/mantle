@@ -18,4 +18,4 @@
 
 - [x] [serial] V4 Run `nix flake check -L` and record success or the next exact independent blocker. r[mantle.durable_publication_validation.broad_rail]
 - [x] [parallel] V5 Run Cairn validation, gates, and focused traceability. r[mantle.durable_publication_validation.evidence]
-- [ ] [serial] V6 Synchronize the accepted specification and archive only after the evidence records all remaining blockers and non-claims. r[mantle.durable_publication_validation.evidence]
+- [x] [serial] V6 Synchronize the accepted specification and archive only after the evidence records all remaining blockers and non-claims. r[mantle.durable_publication_validation.evidence]
