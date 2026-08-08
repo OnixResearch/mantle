@@ -4206,6 +4206,7 @@ fn summarize_native_package_target_planning_from_inputs(
     };
     let mut selected_features_by_package = selected_features_by_package_from_unit_graph(inputs.unit_graph);
     let selected_package_ids = selected_package_ids_from_unit_graph(inputs.unit_graph);
+    let workspace_member_set = workspace_members.iter().cloned().collect::<BTreeSet<_>>();
     let mut blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     let manifest_paths = native_package_manifest_paths(&inputs, &selected_package_ids, &mut blockers);
     let mut native_packages = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
@@ -4239,6 +4240,7 @@ fn summarize_native_package_target_planning_from_inputs(
                     source_closure: inputs.source_closure,
                     registry_sources: native_registry_source_planning,
                     git_sources: native_git_source_planning,
+                    workspace_members: &workspace_member_set,
                     queued_manifest_paths: &mut queued_manifest_paths,
                     visited_manifest_paths: &mut visited_manifest_paths,
                     selected_features_by_package: &mut selected_features_by_package,
@@ -4289,6 +4291,7 @@ struct DependencyFeatureQueueContext<'a> {
     source_closure: &'a SourceClosureSummary,
     registry_sources: &'a NativeRegistrySourcePlanningSummary,
     git_sources: &'a NativeGitSourcePlanningSummary,
+    workspace_members: &'a BTreeSet<String>,
     queued_manifest_paths: &'a mut VecDeque<PathBuf>,
     visited_manifest_paths: &'a mut BTreeSet<String>,
     selected_features_by_package: &'a mut BTreeMap<String, Vec<String>>,
@@ -4312,7 +4315,8 @@ fn queue_native_dependency_manifest_paths(
             return;
         }
     };
-    let has_bounded_dev_test = manifest.test.iter().any(|test| !test.harness);
+    let has_bounded_dev_test =
+        package_uses_bounded_dev_dependencies(&package.package_id, context.workspace_members, &manifest.test);
     let mut dependencies =
         package.path_dependencies.iter().chain(package.build_dependencies.iter()).collect::<Vec<_>>();
     if has_bounded_dev_test {
@@ -4340,6 +4344,16 @@ fn queue_native_dependency_manifest_paths(
     }
     queue_target_cfg_dependency_feature_requests(package, &manifest.target, &dependencies, context, blockers);
     queue_parent_feature_dependency_requests(package, &manifest.features, &dependencies, context, blockers);
+}
+
+fn package_uses_bounded_dev_dependencies(
+    package_id: &str,
+    workspace_members: &BTreeSet<String>,
+    tests: &[NativeManifestTest],
+) -> bool {
+    debug_assert!(!package_id.is_empty());
+    debug_assert!(workspace_members.len() <= MAX_SOURCE_TREE_ENTRIES);
+    workspace_members.contains(package_id) && tests.iter().any(|test| !test.harness)
 }
 
 fn queue_target_cfg_dependency_feature_requests(
@@ -25531,6 +25545,31 @@ unix_dep = { path = "../unix-dep" }
         assert_eq!(normalized[0].manifest_path, package.manifest_path);
         assert_eq!(normalized[0].id, package.id);
         assert!(dir.path().join("vendor-deps").exists() == false);
+    }
+
+    #[test]
+    fn bounded_dev_dependency_selection_is_workspace_scoped() {
+        let workspace_package_id = "path+file:///workspace#app@0.1.0";
+        let registry_package_id = "registry+https://github.com/rust-lang/crates.io-index#digest@0.10.7";
+        let workspace_members = BTreeSet::from([workspace_package_id.to_string()]);
+        let bounded_tests = vec![NativeManifestTest {
+            name: Some("bounded".to_string()),
+            path: Some("tests/bounded.rs".to_string()),
+            harness: false,
+        }];
+        let cargo_harness_tests = vec![NativeManifestTest {
+            name: Some("ordinary".to_string()),
+            path: Some("tests/ordinary.rs".to_string()),
+            harness: true,
+        }];
+
+        assert!(package_uses_bounded_dev_dependencies(workspace_package_id, &workspace_members, &bounded_tests,));
+        assert!(!package_uses_bounded_dev_dependencies(registry_package_id, &workspace_members, &bounded_tests,));
+        assert!(!package_uses_bounded_dev_dependencies(
+            workspace_package_id,
+            &workspace_members,
+            &cargo_harness_tests,
+        ));
     }
 
     #[test]
