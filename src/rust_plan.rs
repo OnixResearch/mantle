@@ -32,6 +32,10 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::cargo_profile::CargoProfilePolicy;
+use crate::cargo_profile::profile_codegen_args;
+use crate::cargo_profile::profile_metadata_material;
+use crate::cargo_profile::resolve_profile_policy;
 use crate::errors::RunError;
 
 const RECEIPT_SCHEMA_VERSION: u32 = 1;
@@ -92,9 +96,15 @@ const BUILD_SCRIPT_OPT_LEVEL_ENV: &str = "OPT_LEVEL";
 const BUILD_SCRIPT_DEBUG_ENV: &str = "DEBUG";
 const BUILD_SCRIPT_NUM_JOBS_ENV: &str = "NUM_JOBS";
 const CARGO_PROFILE_RELEASE: &str = "release";
+const CARGO_PROFILE_TEST: &str = "test";
 const CARGO_PROFILE_BENCH: &str = "bench";
 const CARGO_OPT_LEVEL_DEBUG: &str = "0";
 const CARGO_OPT_LEVEL_RELEASE: &str = "3";
+const CARGO_DEBUG_INFO_NONE: u8 = 0;
+const CARGO_DEBUG_INFO_FULL: u8 = 2;
+const CARGO_CODEGEN_UNITS_DEV: u16 = 256;
+const CARGO_CODEGEN_UNITS_RELEASE: u16 = 16;
+const PROFILE_CODEGEN_SETTING_COUNT: usize = 5;
 const CARGO_DEBUG_TRUE: &str = "true";
 const CARGO_DEBUG_FALSE: &str = "false";
 const MANTLE_DETERMINISTIC_NUM_JOBS: &str = "1";
@@ -1017,6 +1027,8 @@ pub(crate) struct RustUnitExecutionReceipt {
     pub(crate) shared_cache: Option<SharedRustCacheReport>,
     #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) compiler_policy: Option<RustCompilerPolicyExecutionReceipt>,
+    #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
+    pub(crate) profile_policy: Option<CargoProfilePolicy>,
     pub(crate) blocker: Option<RustUnitExecutionBlocker>,
     #[serde(default = "serde_default_none", skip_serializing_if = "Option::is_none")]
     pub(crate) diagnostic_context: Option<RustUnitDiagnosticContext>,
@@ -2045,6 +2057,27 @@ pub(crate) fn default_profile() -> String {
     DEFAULT_CARGO_PROFILE.to_string()
 }
 
+fn resolved_profile_policy(profile: &str) -> CargoProfilePolicy {
+    debug_assert!(!profile.is_empty());
+    let policy = resolve_profile_policy(profile).expect("validated Cargo profile must resolve");
+    debug_assert_eq!(policy.selected_profile, profile);
+    policy
+}
+
+fn append_profile_codegen_args(args: &mut Vec<String>, profile: &str) {
+    debug_assert!(!args.is_empty());
+    debug_assert!(!profile.is_empty());
+    let policy = resolved_profile_policy(profile);
+    args.extend(profile_codegen_args(&policy.settings));
+}
+
+fn profile_policy_for_receipt(profile: &str) -> Option<CargoProfilePolicy> {
+    if profile.is_empty() {
+        return None;
+    }
+    Some(resolved_profile_policy(profile))
+}
+
 fn native_path_cargo_packages(root: &Path, options: &RustPlanOptions) -> Result<Vec<CargoPackage>, RunError> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
@@ -2391,9 +2424,7 @@ fn validate_options(options: &RustPlanOptions) -> Result<(), RunError> {
     if !options.root.is_dir() {
         return Err(RunError::Internal(format!("Rust plan root is not a directory: {}", options.root.display())));
     }
-    if options.profile.trim().is_empty() {
-        return Err(RunError::Internal("Rust plan profile must not be empty".to_string()));
-    }
+    resolve_profile_policy(&options.profile).map_err(|error| RunError::Internal(error.to_string()))?;
     if options.all_features && !options.features.is_empty() {
         return Err(RunError::Internal("--all-features cannot be combined with --features".to_string()));
     }
@@ -9427,6 +9458,7 @@ struct RustcMetadataDisambiguatorInputs<'a> {
     target_name: &'a str,
     target_kind: &'a str,
     mode: &'a str,
+    profile: &'a str,
     source_digest: &'a SourceDigest,
     selected_features: &'a [String],
     crate_types: &'a [String],
@@ -9438,6 +9470,7 @@ fn rustc_unit_metadata_disambiguator(inputs: RustcMetadataDisambiguatorInputs<'_
         target_name,
         target_kind,
         mode,
+        profile,
         source_digest,
         selected_features,
         crate_types,
@@ -9446,7 +9479,10 @@ fn rustc_unit_metadata_disambiguator(inputs: RustcMetadataDisambiguatorInputs<'_
     debug_assert!(!target_name.is_empty());
     debug_assert!(!target_kind.is_empty());
     debug_assert!(!mode.is_empty());
+    debug_assert!(!profile.is_empty());
     debug_assert!(!source_digest.value.is_empty());
+    let profile_policy = resolved_profile_policy(profile);
+    let profile_material = profile_metadata_material(profile, &profile_policy.settings);
     let mut features = selected_features.to_vec();
     features.sort();
     let mut crate_types = crate_types.to_vec();
@@ -9456,6 +9492,7 @@ fn rustc_unit_metadata_disambiguator(inputs: RustcMetadataDisambiguatorInputs<'_
         target_name,
         target_kind,
         mode,
+        profile_material.as_str(),
         source_digest.algorithm.as_str(),
         source_digest.value.as_str(),
         &features.join(","),
@@ -9502,11 +9539,13 @@ fn native_rustc_args(
         args.push("--crate-type".to_string());
         args.push(crate_type);
     }
+    append_profile_codegen_args(&mut args, &options.profile);
     let rustc_metadata_hash = rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
         package_id: inputs.package_id,
         target_name: inputs.target_name,
         target_kind: inputs.target_kind,
         mode: inputs.mode,
+        profile: &options.profile,
         source_digest: inputs.source_digest,
         selected_features: inputs.selected_features,
         crate_types: inputs.crate_types,
@@ -10264,6 +10303,7 @@ fn cargo_unit_rustc_args(
         args.push("--crate-type".to_string());
         args.push(crate_type);
     }
+    append_profile_codegen_args(&mut args, &options.profile);
     if (is_host_target_kind(&facts.target_kind) || facts.target_kind == "bin")
         && let Some(linker) = resolve_tool_path("cc")
     {
@@ -10275,6 +10315,7 @@ fn cargo_unit_rustc_args(
         target_name: &facts.target_name,
         target_kind: &facts.target_kind,
         mode: &facts.mode,
+        profile: &options.profile,
         source_digest: &facts.source_digest,
         selected_features: &facts.selected_features,
         crate_types: &facts.crate_types,
@@ -12409,6 +12450,7 @@ fn dev_dependency_test_rustc_args(
         "--crate-type".to_string(),
         "bin".to_string(),
     ];
+    append_profile_codegen_args(&mut args, CARGO_PROFILE_TEST);
     if let Some(linker) = resolve_tool_path("cc") {
         args.push(RUSTC_CODEGEN_OPTION_FLAG.to_string());
         args.push(format!("linker={}", normalize_path_string(&linker)));
@@ -12419,6 +12461,7 @@ fn dev_dependency_test_rustc_args(
         target_name: &plan.test_name,
         target_kind: "test",
         mode: "test",
+        profile: CARGO_PROFILE_TEST,
         source_digest: &plan.package.source_digest,
         selected_features: &[],
         crate_types: &crate_types,
@@ -12443,7 +12486,7 @@ fn dev_dependency_test_unit(
         ("CRATE_KIND".to_string(), "test".to_string()),
         ("MODE".to_string(), "test".to_string()),
         ("PACKAGE_ID".to_string(), plan.package.package_id.clone()),
-        ("PROFILE".to_string(), DEFAULT_CARGO_PROFILE.to_string()),
+        ("PROFILE".to_string(), CARGO_PROFILE_TEST.to_string()),
     ]);
     RustUnitDerivationSummary {
         unit_id,
@@ -12455,7 +12498,7 @@ fn dev_dependency_test_unit(
         rustc_metadata_hash,
         crate_types: vec!["bin".to_string()],
         mode: "test".to_string(),
-        profile: DEFAULT_CARGO_PROFILE.to_string(),
+        profile: CARGO_PROFILE_TEST.to_string(),
         source_digest: plan.package.source_digest.clone(),
         dependency_artifacts: state.dependency_artifacts.clone(),
         consumed_host_artifacts: Vec::new(),
@@ -17138,11 +17181,13 @@ fn dev_dependency_lib_derivation(
         "--crate-type".to_string(),
         "lib".to_string(),
     ];
+    append_profile_codegen_args(&mut args, CARGO_PROFILE_TEST);
     let rustc_metadata_hash = rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
         package_id: &package.package_id,
         target_name: &target.name,
         target_kind: "lib",
         mode: "build",
+        profile: CARGO_PROFILE_TEST,
         source_digest: &package.source_digest,
         selected_features: &[],
         crate_types: &["lib".to_string()],
@@ -17153,7 +17198,7 @@ fn dev_dependency_lib_derivation(
     env.insert("CRATE_KIND".to_string(), "lib".to_string());
     env.insert("MODE".to_string(), "build".to_string());
     env.insert("PACKAGE_ID".to_string(), package.package_id.clone());
-    env.insert("PROFILE".to_string(), DEFAULT_CARGO_PROFILE.to_string());
+    env.insert("PROFILE".to_string(), CARGO_PROFILE_TEST.to_string());
     Ok(RustUnitDerivationSummary {
         unit_id,
         package_id: package.package_id.clone(),
@@ -17164,7 +17209,7 @@ fn dev_dependency_lib_derivation(
         rustc_metadata_hash,
         crate_types: vec!["lib".to_string()],
         mode: "build".to_string(),
-        profile: DEFAULT_CARGO_PROFILE.to_string(),
+        profile: CARGO_PROFILE_TEST.to_string(),
         source_digest: package.source_digest.clone(),
         dependency_artifacts: Vec::new(),
         consumed_host_artifacts: Vec::new(),
@@ -17615,6 +17660,7 @@ fn finalized_execution_receipt(
         local_cache: None,
         shared_cache: None,
         compiler_policy,
+        profile_policy: profile_policy_for_receipt(&unit.profile),
         blocker,
         diagnostic_context: None,
         replay_evidence: None,
@@ -18127,6 +18173,9 @@ mod tests {
 
     const PROFILE_ENV_CHILD_PROBE_ENV: &str = "MANTLE_PROFILE_ENV_CHILD_PROBE";
     const PROFILE_ENV_CHILD_PROBE_VALUE: &str = "present";
+    const PROFILE_CODEGEN_CHILD_PROBE_ENV: &str = "MANTLE_PROFILE_CODEGEN_CHILD_PROBE";
+    const AMBIENT_RUSTFLAGS_ENV: &str = "RUSTFLAGS";
+    const AMBIENT_RUSTFLAGS_VALUE: &str = "-C opt-level=1 -C debuginfo=1";
     const AMBIENT_OPT_LEVEL_VALUE: &str = "ambient-opt-level";
     const AMBIENT_DEBUG_VALUE: &str = "ambient-debug";
     const AMBIENT_NUM_JOBS_VALUE: &str = "999";
@@ -18870,6 +18919,27 @@ mod tests {
             .map(|window| window[1].as_str())
     }
 
+    fn assert_profile_codegen_args(
+        args: &[String],
+        opt_level: &str,
+        debuginfo: u8,
+        debug_assertions: bool,
+        overflow_checks: bool,
+        codegen_units: u16,
+    ) {
+        let expected = [
+            format!("opt-level={opt_level}"),
+            format!("debuginfo={debuginfo}"),
+            format!("debug-assertions={debug_assertions}"),
+            format!("overflow-checks={overflow_checks}"),
+            format!("codegen-units={codegen_units}"),
+        ];
+        for value in &expected {
+            assert!(has_ordered_arg_pair(args, RUSTC_CODEGEN_OPTION_FLAG, value));
+        }
+        assert_eq!(expected.len(), PROFILE_CODEGEN_SETTING_COUNT);
+    }
+
     fn rust_plan_source_contains_process_global_env_mutation(source: &str) -> bool {
         let set_var_call = format!("{PROCESS_GLOBAL_ENV_PREFIX}{PROCESS_GLOBAL_ENV_SET_FN}");
         if source.contains(&set_var_call) {
@@ -19075,6 +19145,7 @@ mod tests {
             target_name: "getrandom",
             target_kind: "lib",
             mode: "build",
+            profile: DEFAULT_CARGO_PROFILE,
             source_digest: &source_digest,
             selected_features: &features,
             crate_types: &crate_types,
@@ -19084,6 +19155,7 @@ mod tests {
             target_name: "getrandom",
             target_kind: "lib",
             mode: "build",
+            profile: DEFAULT_CARGO_PROFILE,
             source_digest: &source_digest,
             selected_features: &features,
             crate_types: &crate_types,
@@ -19094,6 +19166,204 @@ mod tests {
         assert!(first.bytes().all(|byte| byte.is_ascii_hexdigit()));
         assert!(second.bytes().all(|byte| byte.is_ascii_hexdigit()));
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn native_target_and_host_builders_emit_profile_codegen_flags() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "path+file://profile#profile@0.1.0";
+        let target = test_native_rust_unit(package_id, "profile", "lib", dir.path());
+        let host = test_native_host_unit(package_id, "profile-macro", "proc-macro", dir.path());
+        let source_closure = test_source_closure_with_kind(package_id, "profile", SourceKind::Path);
+        let dev_options = options(dir.path());
+        let mut release_options = options(dir.path());
+        release_options.profile = CARGO_PROFILE_RELEASE.to_string();
+
+        let dev_target = native_unit_derivation(&target, Vec::new(), &source_closure, &dev_options);
+        let release_target = native_unit_derivation(&target, Vec::new(), &source_closure, &release_options);
+        let release_host = native_host_unit_derivation(&host, &source_closure, &release_options);
+
+        assert_profile_codegen_args(
+            &dev_target.derivation.args,
+            CARGO_OPT_LEVEL_DEBUG,
+            CARGO_DEBUG_INFO_FULL,
+            true,
+            true,
+            CARGO_CODEGEN_UNITS_DEV,
+        );
+        assert_profile_codegen_args(
+            &release_target.derivation.args,
+            CARGO_OPT_LEVEL_RELEASE,
+            CARGO_DEBUG_INFO_NONE,
+            false,
+            false,
+            CARGO_CODEGEN_UNITS_RELEASE,
+        );
+        assert_profile_codegen_args(
+            &release_host.derivation.args,
+            CARGO_OPT_LEVEL_RELEASE,
+            CARGO_DEBUG_INFO_NONE,
+            false,
+            false,
+            CARGO_CODEGEN_UNITS_RELEASE,
+        );
+        assert_ne!(dev_target.rustc_args_digest_blake3, release_target.rustc_args_digest_blake3);
+    }
+
+    #[test]
+    fn cargo_unit_builder_emits_profile_codegen_flags() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "path+file://cargo-profile#cargo-profile@0.1.0";
+        let facts = CargoUnitFacts {
+            package_id: package_id.to_string(),
+            target_name: "cargo-profile".to_string(),
+            target_kind: "lib".to_string(),
+            execution_kind: TARGET_EXECUTION_KIND.to_string(),
+            crate_types: vec!["lib".to_string()],
+            edition: "2021".to_string(),
+            source_path: dir.path().join("src/lib.rs").display().to_string(),
+            selected_features: Vec::new(),
+            mode: "build".to_string(),
+            source_digest: test_source_digest(package_id),
+        };
+        let source_closure = test_source_closure_with_kind(package_id, "cargo-profile", SourceKind::Path);
+        let mut release_options = options(dir.path());
+        release_options.profile = CARGO_PROFILE_RELEASE.to_string();
+
+        let (args, metadata) = cargo_unit_rustc_args(&facts, &[], &source_closure, &release_options);
+
+        assert_profile_codegen_args(
+            &args,
+            CARGO_OPT_LEVEL_RELEASE,
+            CARGO_DEBUG_INFO_NONE,
+            false,
+            false,
+            CARGO_CODEGEN_UNITS_RELEASE,
+        );
+        assert_eq!(metadata.len(), RUSTC_METADATA_HEX_CHARS);
+    }
+
+    #[test]
+    fn dev_dependency_builders_emit_profile_codegen_flags() {
+        let dir = TempDir::new().unwrap();
+        let package_id = "path+file://dev-profile#dev-profile@0.1.0";
+        let package = test_native_package(package_id, "dev-profile", "lib", Vec::new());
+        let test_source = dir.path().join("profile_test.rs");
+        fs::write(&test_source, "fn main() {}\n").unwrap();
+        let plan = DevDependencyTestPlan {
+            package: &package,
+            test_name: "profile_test".to_string(),
+            test_source,
+        };
+
+        let lib = dev_dependency_lib_derivation(&package, "dev-profile").unwrap();
+        let (test_args, metadata) = dev_dependency_test_rustc_args(&plan, &[]);
+
+        assert_profile_codegen_args(
+            &lib.derivation.args,
+            CARGO_OPT_LEVEL_DEBUG,
+            CARGO_DEBUG_INFO_FULL,
+            true,
+            true,
+            CARGO_CODEGEN_UNITS_DEV,
+        );
+        assert_profile_codegen_args(
+            &test_args,
+            CARGO_OPT_LEVEL_DEBUG,
+            CARGO_DEBUG_INFO_FULL,
+            true,
+            true,
+            CARGO_CODEGEN_UNITS_DEV,
+        );
+        assert_eq!(metadata.len(), RUSTC_METADATA_HEX_CHARS);
+    }
+
+    #[test]
+    fn profile_codegen_builders_ignore_ambient_rustflags() {
+        let output = Command::new(std::env::current_exe().expect("test binary path is available"))
+            .arg("rust_plan::tests::profile_codegen_child_ignores_ambient_rustflags_probe")
+            .arg("--exact")
+            .arg("--nocapture")
+            .env(PROFILE_CODEGEN_CHILD_PROBE_ENV, PROFILE_ENV_CHILD_PROBE_VALUE)
+            .env(AMBIENT_RUSTFLAGS_ENV, AMBIENT_RUSTFLAGS_VALUE)
+            .output()
+            .expect("child test process runs");
+
+        assert!(
+            output.status.success(),
+            "child stdout:\n{}\nchild stderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn profile_codegen_child_ignores_ambient_rustflags_probe() {
+        if std::env::var(PROFILE_CODEGEN_CHILD_PROBE_ENV).as_deref() != Ok(PROFILE_ENV_CHILD_PROBE_VALUE) {
+            return;
+        }
+        assert_eq!(std::env::var(AMBIENT_RUSTFLAGS_ENV).unwrap(), AMBIENT_RUSTFLAGS_VALUE);
+        let dir = TempDir::new().unwrap();
+        let package_id = "path+file://ambient-profile#ambient-profile@0.1.0";
+        let unit = test_native_rust_unit(package_id, "ambient-profile", "lib", dir.path());
+        let source_closure = test_source_closure_with_kind(package_id, "ambient-profile", SourceKind::Path);
+        let mut release_options = options(dir.path());
+        release_options.profile = CARGO_PROFILE_RELEASE.to_string();
+
+        let derivation = native_unit_derivation(&unit, Vec::new(), &source_closure, &release_options);
+
+        assert_profile_codegen_args(
+            &derivation.derivation.args,
+            CARGO_OPT_LEVEL_RELEASE,
+            CARGO_DEBUG_INFO_NONE,
+            false,
+            false,
+            CARGO_CODEGEN_UNITS_RELEASE,
+        );
+        assert!(!derivation.derivation.args.contains(&"opt-level=1".to_string()));
+        assert!(!derivation.derivation.args.contains(&"debuginfo=1".to_string()));
+    }
+
+    #[test]
+    fn profile_changes_metadata_identity_for_identical_crate_facts() {
+        let source_digest = test_source_digest("profile-identity");
+        let crate_types = vec!["lib".to_string()];
+        let dev = rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
+            package_id: "path+file://same#same@0.1.0",
+            target_name: "same",
+            target_kind: "lib",
+            mode: "build",
+            profile: DEFAULT_CARGO_PROFILE,
+            source_digest: &source_digest,
+            selected_features: &[],
+            crate_types: &crate_types,
+        });
+        let release = rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
+            package_id: "path+file://same#same@0.1.0",
+            target_name: "same",
+            target_kind: "lib",
+            mode: "build",
+            profile: CARGO_PROFILE_RELEASE,
+            source_digest: &source_digest,
+            selected_features: &[],
+            crate_types: &crate_types,
+        });
+
+        assert_eq!(dev.len(), RUSTC_METADATA_HEX_CHARS);
+        assert_eq!(release.len(), RUSTC_METADATA_HEX_CHARS);
+        assert_ne!(dev, release);
+    }
+
+    #[test]
+    fn unknown_profile_fails_before_planning() {
+        let dir = TempDir::new().unwrap();
+        let mut plan_options = options(dir.path());
+        plan_options.profile = "production".to_string();
+
+        let error = validate_options(&plan_options).unwrap_err().to_string();
+
+        assert!(error.contains("unknown-profile"));
+        assert!(error.contains("production"));
     }
 
     #[test]
@@ -19112,6 +19382,7 @@ mod tests {
                 target_name: &unit.target_name,
                 target_kind: &unit.target_kind,
                 mode: &unit.mode,
+                profile: &unit.profile,
                 source_digest: &unit.source_digest,
                 selected_features: &unit.selected_features,
                 crate_types: &unit.crate_types,
@@ -19374,6 +19645,7 @@ mod tests {
                 target_name: &unit.target_name,
                 target_kind: &unit.target_kind,
                 mode: &unit.mode,
+                profile: &unit.profile,
                 source_digest: &unit.source_digest,
                 selected_features: &unit.selected_features,
                 crate_types: &unit.crate_types,
@@ -22123,6 +22395,10 @@ rust-version = "1.80"
         assert_eq!(receipt.rustc_metadata_hash, unit.rustc_metadata_hash);
         assert_eq!(receipt.toolchain_policy_digest_blake3, TEST_DIGEST_A);
         assert_eq!(receipt.artifact_identity_digest_blake3.len(), BLAKE3_HEX_CHARS);
+        let profile_policy = receipt.profile_policy.expect("profile policy is receipt-bound");
+        assert_eq!(profile_policy.selected_profile, DEFAULT_CARGO_PROFILE);
+        assert!(!profile_policy.incremental);
+        assert_eq!(profile_policy.settings.codegen_units, CARGO_CODEGEN_UNITS_DEV);
     }
 
     #[test]

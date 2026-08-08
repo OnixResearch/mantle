@@ -41,6 +41,23 @@
 // synced requirements implemented there need a small bridge until the coverage
 // rail scans the package root directly.
 
+// Cargo profile codegen bridge.
+//
+// r[impl rust_package_planning.profile_defaults_table]
+// r[impl rust_package_planning.profile_codegen_flags]
+// r[impl rust_package_planning.profile_unit_identity]
+// r[impl rust_package_planning.profile_determinism_policy]
+// The pure profile model lives in `src/cargo_profile.rs`. The rustc argument,
+// identity, and receipt adapters live in `src/rust_plan.rs`.
+//
+// r[verify rust_package_planning.profile_defaults_table]
+// r[verify rust_package_planning.profile_codegen_flags]
+// r[verify rust_package_planning.profile_unit_identity]
+// r[verify rust_package_planning.profile_determinism_policy]
+// Positive and negative tests cover built-in inheritance, explicit flags,
+// ambient-environment isolation, profile identity, receipt policy, unknown
+// names, and unsupported settings.
+
 // Picolibc StageX comparison bridge.
 //
 // r[impl bootstrap_inventory.picolibc_stagex_comparison]
