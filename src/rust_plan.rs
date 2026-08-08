@@ -38,13 +38,23 @@ use crate::cargo_profile::BUILD_SCRIPT_DEBUG_ENV;
 use crate::cargo_profile::BUILD_SCRIPT_NUM_JOBS_ENV;
 #[cfg(test)]
 use crate::cargo_profile::BUILD_SCRIPT_OPT_LEVEL_ENV;
+use crate::cargo_profile::CargoBuildOverridePolicy;
 use crate::cargo_profile::CargoProfilePolicy;
+use crate::cargo_profile::CargoProfileSettings;
+use crate::cargo_profile::build_override_environment_from_settings;
 use crate::cargo_profile::profile_codegen_args;
 use crate::cargo_profile::profile_metadata_material;
 use crate::cargo_profile::resolve_build_override_policy;
 use crate::cargo_profile::resolve_profile_policy;
 use crate::cargo_profile::resolve_unit_profile_policy;
 use crate::cargo_profile::validate_build_override_environment;
+use crate::cargo_profile_manifest::CargoProfileTable;
+use crate::cargo_profile_manifest::CargoProfileUnitRole;
+use crate::cargo_profile_manifest::dependency_profile_non_claims;
+use crate::cargo_profile_manifest::parse_profile_table;
+use crate::cargo_profile_manifest::resolve_profile;
+use crate::cargo_profile_manifest::select_command_profile;
+use crate::cargo_profile_manifest::select_unit_profile;
 use crate::errors::RunError;
 
 const RECEIPT_SCHEMA_VERSION: u32 = 1;
@@ -103,6 +113,9 @@ const HOST_DEPENDENCY_MODE: &str = "host-build";
 const HOST_DEPENDENCY_UNIT_ID_SUFFIX: &str = ":host-dependency";
 const PROFILE_BUILD_OVERRIDE_ENV: &str = "MANTLE_CARGO_PROFILE_BUILD_OVERRIDE";
 const PROFILE_BUILD_OVERRIDE_DUAL_USE_ENV: &str = "MANTLE_CARGO_PROFILE_BUILD_OVERRIDE_DUAL_USE";
+const PROFILE_POLICY_ENV: &str = "MANTLE_CARGO_PROFILE_POLICY";
+const PROFILE_HOST_POLICY_ENV: &str = "MANTLE_CARGO_PROFILE_HOST_POLICY";
+const PROFILE_DUAL_HOST_POLICY_ENV: &str = "MANTLE_CARGO_PROFILE_DUAL_HOST_POLICY";
 const CARGO_PROFILE_RELEASE: &str = "release";
 const CARGO_PROFILE_TEST: &str = "test";
 const CARGO_PROFILE_BENCH: &str = "bench";
@@ -263,6 +276,8 @@ pub(crate) struct RustPlanOptions {
     pub(crate) rustc: PathBuf,
     pub(crate) targets: Vec<String>,
     pub(crate) profile: String,
+    pub(crate) profile_table: CargoProfileTable,
+    pub(crate) workspace_members: BTreeSet<String>,
     pub(crate) features: Vec<String>,
     pub(crate) all_features: bool,
     pub(crate) no_default_features: bool,
@@ -1834,8 +1849,10 @@ fn capture_rust_plan_with_oracle(
         summarize_native_registry_source_planning(&options.root, &metadata.packages, &lock_packages, &lockfile)?;
     let native_git_source_planning =
         summarize_native_git_source_planning(&metadata.packages, &lock_packages, &lockfile, &source_closure)?;
+    let mut planning_options = options.clone();
+    planning_options.workspace_members = metadata.workspace_members.iter().cloned().collect();
     let native_layers = summarize_native_planning_layers(NativePlanningInputs {
-        options,
+        options: &planning_options,
         unit_graph: &unit_graph_value,
         packages: &metadata.packages,
         workspace_members: &metadata.workspace_members,
@@ -1886,7 +1903,15 @@ fn capture_rust_plan_without_cargo(options: &RustPlanOptions) -> Result<RustPlan
     let lockfile_facts = parse_lockfile_facts(&options.root)?;
     let lock_packages = lock_packages_from_facts(&lockfile_facts);
     let native_path_packages = native_path_cargo_packages(&options.root, options)?;
-    let workspace_members = native_path_packages.iter().map(|package| package.id.clone()).collect::<Vec<_>>();
+    let workspace_manifest_paths = native_workspace_manifest_paths(&options.root, &mut Vec::new())
+        .into_iter()
+        .map(|path| normalize_path_string(&path))
+        .collect::<BTreeSet<_>>();
+    let workspace_members = native_path_packages
+        .iter()
+        .filter(|package| workspace_manifest_paths.contains(&package.manifest_path))
+        .map(|package| package.id.clone())
+        .collect::<Vec<_>>();
     let lock_source_packages = native_reachable_lock_source_cargo_packages(
         &options.root,
         &lockfile_facts,
@@ -1909,8 +1934,10 @@ fn capture_rust_plan_without_cargo(options: &RustPlanOptions) -> Result<RustPlan
     let native_git_source_planning =
         summarize_native_git_source_planning(&native_cargo_packages, &lock_packages, &lockfile, &source_closure)?;
     let unit_graph_value = empty_native_unit_graph_value();
+    let mut planning_options = options.clone();
+    planning_options.workspace_members = workspace_members.iter().cloned().collect();
     let native_layers = summarize_native_planning_layers(NativePlanningInputs {
-        options,
+        options: &planning_options,
         unit_graph: &unit_graph_value,
         packages: &native_cargo_packages,
         workspace_members: &workspace_members,
@@ -2063,7 +2090,21 @@ pub(crate) fn print_rust_plan_patch_source_topology_execution_receipt(
 }
 
 pub(crate) fn default_profile() -> String {
-    DEFAULT_CARGO_PROFILE.to_string()
+    select_command_profile("build", false, None).expect("built-in build command profile resolves")
+}
+
+pub(crate) fn load_root_profile_table(root: &Path) -> Result<CargoProfileTable, RunError> {
+    let manifest_path = root.join("Cargo.toml");
+    let manifest = match fs::read_to_string(&manifest_path) {
+        Ok(manifest) => manifest,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(CargoProfileTable::default()),
+        Err(error) => return Err(RunError::Internal(format!("reading {}: {error}", manifest_path.display()))),
+    };
+    parse_profile_table(&manifest).map_err(|error| RunError::Internal(error.to_string()))
+}
+
+fn selected_root_profile(options: &RustPlanOptions) -> Result<CargoProfileSettings, RunError> {
+    resolve_profile(&options.profile_table, &options.profile).map_err(|error| RunError::Internal(error.to_string()))
 }
 
 fn resolved_profile_policy(profile: &str) -> CargoProfilePolicy {
@@ -2080,6 +2121,105 @@ fn append_profile_codegen_args(args: &mut Vec<String>, profile: &str, use_build_
         .expect("validated Cargo profile must resolve");
     let settings = policy.build_override.as_ref().map_or(&policy.settings, |build_override| &build_override.settings);
     args.extend(profile_codegen_args(settings));
+}
+
+fn resolved_unit_manifest_profile(
+    options: &RustPlanOptions,
+    source_closure: &SourceClosureSummary,
+    package_id: &str,
+    package_name: Option<&str>,
+    package_root: Option<&str>,
+    execution_kind: &str,
+    dual_use: bool,
+) -> CargoProfilePolicy {
+    let table = &options.profile_table;
+    let source = source_closure.sources.iter().find(|source| source.package_id == package_id);
+    let package_name = package_name.or_else(|| source.map(|source| source.name.as_str())).unwrap_or(package_id);
+    let package_root = package_root
+        .map(Path::new)
+        .or_else(|| source.and_then(|source| Path::new(&source.manifest_path).parent()));
+    let is_workspace_path = source.is_none_or(|source| source.kind == SourceKind::Path);
+    let fallback_member = is_workspace_path && package_root.is_some_and(|root| root.starts_with(&options.root));
+    let is_workspace_member = if options.workspace_members.is_empty() {
+        fallback_member
+    } else {
+        options.workspace_members.contains(package_id)
+    };
+    let use_build_override = unit_uses_profile_build_override(execution_kind);
+    let role = if use_build_override {
+        CargoProfileUnitRole::Host { dual_use }
+    } else {
+        CargoProfileUnitRole::Target
+    };
+    let selected = select_unit_profile(table, &options.profile, role, package_name, is_workspace_member)
+        .expect("validated root Cargo profile must select each unit");
+    let base = resolve_profile(table, &options.profile).expect("validated root Cargo profile must resolve");
+    let build_override = use_build_override.then(|| CargoBuildOverridePolicy {
+        dual_use,
+        environment: build_override_environment_from_settings(&selected),
+        settings: selected.clone(),
+    });
+    CargoProfilePolicy {
+        selected_profile: options.profile.clone(),
+        settings: if use_build_override { base } else { selected },
+        incremental: false,
+        build_override,
+    }
+}
+
+fn append_resolved_profile_codegen_args(args: &mut Vec<String>, settings: &CargoProfileSettings) {
+    debug_assert!(!args.is_empty());
+    debug_assert!(!settings.opt_level.is_empty());
+    args.extend(profile_codegen_args(settings));
+}
+
+struct RecordedProfilePolicyInputs<'a> {
+    package_id: &'a str,
+    package_name: Option<&'a str>,
+    package_root: Option<&'a str>,
+    execution_kind: &'a str,
+}
+
+fn append_recorded_profile_policies(
+    env: &mut BTreeMap<String, String>,
+    inputs: RecordedProfilePolicyInputs<'_>,
+    source_closure: &SourceClosureSummary,
+    options: &RustPlanOptions,
+) {
+    let current = resolved_unit_manifest_profile(
+        options,
+        source_closure,
+        inputs.package_id,
+        inputs.package_name,
+        inputs.package_root,
+        inputs.execution_kind,
+        false,
+    );
+    let host = resolved_unit_manifest_profile(
+        options,
+        source_closure,
+        inputs.package_id,
+        inputs.package_name,
+        inputs.package_root,
+        HOST_DEPENDENCY_EXECUTION_KIND,
+        false,
+    );
+    let dual_host = resolved_unit_manifest_profile(
+        options,
+        source_closure,
+        inputs.package_id,
+        inputs.package_name,
+        inputs.package_root,
+        HOST_DEPENDENCY_EXECUTION_KIND,
+        true,
+    );
+    for (key, policy) in [
+        (PROFILE_POLICY_ENV, current),
+        (PROFILE_HOST_POLICY_ENV, host),
+        (PROFILE_DUAL_HOST_POLICY_ENV, dual_host),
+    ] {
+        env.insert(key.to_string(), serde_json::to_string(&policy).expect("Cargo profile policy serializes"));
+    }
 }
 
 fn unit_uses_profile_build_override(execution_kind: &str) -> bool {
@@ -2118,6 +2258,15 @@ fn profile_policy_for_receipt(unit: &RustUnitDerivationSummary) -> Result<Option
     }
     let use_build_override = unit_uses_profile_build_override(&unit.execution_kind);
     let dual_use = profile_build_override_dual_use(unit)?;
+    if let Some(serialized) = unit.derivation.env.get(PROFILE_POLICY_ENV) {
+        let mut policy = serde_json::from_str::<CargoProfilePolicy>(serialized).map_err(|error| {
+            RunError::Internal(format!("invalid recorded Cargo profile policy for unit {}: {error}", unit.unit_id))
+        })?;
+        if let Some(build_override) = policy.build_override.as_mut() {
+            build_override.dual_use = dual_use;
+        }
+        return Ok(Some(policy));
+    }
     let policy = resolve_unit_profile_policy(&unit.profile, use_build_override, dual_use)
         .map_err(|error| RunError::Internal(error.to_string()))?;
     Ok(Some(policy))
@@ -2469,7 +2618,7 @@ fn validate_options(options: &RustPlanOptions) -> Result<(), RunError> {
     if !options.root.is_dir() {
         return Err(RunError::Internal(format!("Rust plan root is not a directory: {}", options.root.display())));
     }
-    resolve_profile_policy(&options.profile).map_err(|error| RunError::Internal(error.to_string()))?;
+    selected_root_profile(options)?;
     if options.all_features && !options.features.is_empty() {
         return Err(RunError::Internal("--all-features cannot be combined with --features".to_string()));
     }
@@ -3966,6 +4115,24 @@ fn finalize_native_package_target_planning(
         "blocked".to_string()
     };
     let digest_blake3 = native_package_target_digest(&inputs.native_packages, &inputs.blockers, &comparison_status)?;
+    let root_manifest = normalize_path_string(&inputs.options.root.join("Cargo.toml"));
+    let dependency_manifests = inputs
+        .native_packages
+        .iter()
+        .filter(|package| package.manifest_path != root_manifest)
+        .map(|package| {
+            fs::read_to_string(&package.manifest_path)
+                .map_err(|error| RunError::Internal(format!("reading {}: {error}", package.manifest_path)))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let dependency_manifest_refs = dependency_manifests.iter().map(String::as_str).collect::<Vec<_>>();
+    let mut non_claims = vec![
+        "bounded-lib-bin-path-fragment-only".to_string(),
+        "not-full-cargo-feature-resolution".to_string(),
+        "not-full-cargo-compatibility".to_string(),
+        "not-cargo-free-build-scheduling".to_string(),
+    ];
+    non_claims.extend(dependency_profile_non_claims(&dependency_manifest_refs));
     Ok(NativePackageTargetPlanningSummary {
         ready: inputs.blockers.is_empty(),
         comparison_status,
@@ -3973,12 +4140,7 @@ fn finalize_native_package_target_planning(
         digest_blake3,
         packages: inputs.native_packages,
         blockers: inputs.blockers,
-        non_claims: vec![
-            "bounded-lib-bin-path-fragment-only".to_string(),
-            "not-full-cargo-feature-resolution".to_string(),
-            "not-full-cargo-compatibility".to_string(),
-            "not-cargo-free-build-scheduling".to_string(),
-        ],
+        non_claims,
     })
 }
 
@@ -9201,7 +9363,13 @@ fn replace_profile_codegen_args(args: &mut [String], profile: &str, dual_use: bo
     debug_assert!(!args.is_empty());
     debug_assert!(!profile.is_empty());
     let policy = resolve_build_override_policy(profile, dual_use).expect("validated Cargo profile must resolve");
-    let replacements = profile_codegen_args(&policy.settings);
+    replace_profile_codegen_args_with_settings(args, &policy.settings);
+}
+
+fn replace_profile_codegen_args_with_settings(args: &mut [String], settings: &CargoProfileSettings) {
+    debug_assert!(!args.is_empty());
+    debug_assert!(!settings.opt_level.is_empty());
+    let replacements = profile_codegen_args(settings);
     let mut replaced_count = 0usize;
     for replacement in replacements.chunks_exact(RUSTC_CODEGEN_ARGUMENT_PAIR_WIDTH) {
         debug_assert_eq!(replacement[0], RUSTC_CODEGEN_OPTION_FLAG);
@@ -9221,6 +9389,7 @@ struct RetaggedRustcMetadataInputs<'a> {
     base_metadata: &'a str,
     execution_kind: &'a str,
     mode: &'a str,
+    profile_material: &'a str,
 }
 
 fn retagged_rustc_metadata_hash(inputs: RetaggedRustcMetadataInputs<'_>) -> String {
@@ -9228,11 +9397,13 @@ fn retagged_rustc_metadata_hash(inputs: RetaggedRustcMetadataInputs<'_>) -> Stri
         base_metadata,
         execution_kind,
         mode,
+        profile_material,
     } = inputs;
     debug_assert!(!base_metadata.is_empty());
     debug_assert!(!execution_kind.is_empty());
     debug_assert!(!mode.is_empty());
-    let material = [base_metadata, execution_kind, mode].join("\0");
+    debug_assert!(!profile_material.is_empty());
+    let material = [base_metadata, execution_kind, mode, profile_material].join("\0");
     let hex = blake3::hash(material.as_bytes()).to_hex().to_string();
     debug_assert!(hex.len() >= RUSTC_METADATA_HEX_CHARS);
     hex[..RUSTC_METADATA_HEX_CHARS].to_string()
@@ -9518,6 +9689,14 @@ struct RustcMetadataDisambiguatorInputs<'a> {
 }
 
 fn rustc_unit_metadata_disambiguator(inputs: RustcMetadataDisambiguatorInputs<'_>) -> String {
+    let settings = resolved_profile_policy(inputs.profile).settings;
+    rustc_unit_metadata_disambiguator_with_settings(inputs, &settings)
+}
+
+fn rustc_unit_metadata_disambiguator_with_settings(
+    inputs: RustcMetadataDisambiguatorInputs<'_>,
+    settings: &CargoProfileSettings,
+) -> String {
     let RustcMetadataDisambiguatorInputs {
         package_id,
         target_name,
@@ -9534,8 +9713,7 @@ fn rustc_unit_metadata_disambiguator(inputs: RustcMetadataDisambiguatorInputs<'_
     debug_assert!(!mode.is_empty());
     debug_assert!(!profile.is_empty());
     debug_assert!(!source_digest.value.is_empty());
-    let profile_policy = resolved_profile_policy(profile);
-    let profile_material = profile_metadata_material(profile, &profile_policy.settings);
+    let profile_material = profile_metadata_material(profile, settings);
     let mut features = selected_features.to_vec();
     features.sort();
     let mut crate_types = crate_types.to_vec();
@@ -9559,6 +9737,8 @@ fn rustc_unit_metadata_disambiguator(inputs: RustcMetadataDisambiguatorInputs<'_
 
 struct NativeRustcArgsInputs<'a> {
     package_id: &'a str,
+    package_name: &'a str,
+    package_root: &'a str,
     target_name: &'a str,
     target_kind: &'a str,
     crate_name: &'a str,
@@ -9593,22 +9773,33 @@ fn native_rustc_args(
         args.push("--crate-type".to_string());
         args.push(crate_type);
     }
-    append_profile_codegen_args(
-        &mut args,
-        &options.profile,
-        unit_uses_profile_build_override(inputs.execution_kind),
+    let profile_policy = resolved_unit_manifest_profile(
+        options,
+        source_closure,
+        inputs.package_id,
+        Some(inputs.package_name),
+        Some(inputs.package_root),
+        inputs.execution_kind,
         false,
     );
-    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
-        package_id: inputs.package_id,
-        target_name: inputs.target_name,
-        target_kind: inputs.target_kind,
-        mode: inputs.mode,
-        profile: &options.profile,
-        source_digest: inputs.source_digest,
-        selected_features: inputs.selected_features,
-        crate_types: inputs.crate_types,
-    });
+    let profile_settings = profile_policy
+        .build_override
+        .as_ref()
+        .map_or(&profile_policy.settings, |build_override| &build_override.settings);
+    append_resolved_profile_codegen_args(&mut args, profile_settings);
+    let rustc_metadata_hash = rustc_unit_metadata_disambiguator_with_settings(
+        RustcMetadataDisambiguatorInputs {
+            package_id: inputs.package_id,
+            target_name: inputs.target_name,
+            target_kind: inputs.target_kind,
+            mode: inputs.mode,
+            profile: &options.profile,
+            source_digest: inputs.source_digest,
+            selected_features: inputs.selected_features,
+            crate_types: inputs.crate_types,
+        },
+        profile_settings,
+    );
     append_rustc_metadata_args(&mut args, &rustc_metadata_hash);
     append_rustc_feature_cfg_args(&mut args, inputs.selected_features);
     append_cap_lints_args(&mut args, inputs.package_id, source_closure);
@@ -9656,6 +9847,17 @@ fn native_rust_env(
     env.insert("PROFILE".to_string(), options.profile.clone());
     env.insert("SOURCE_CLOSURE_DIGEST".to_string(), execution_source_closure_digest(source_closure, options));
     append_profile_build_override_markers(&mut env, inputs.execution_kind, false);
+    append_recorded_profile_policies(
+        &mut env,
+        RecordedProfilePolicyInputs {
+            package_id: inputs.package_id,
+            package_name: Some(inputs.package_name),
+            package_root: Some(inputs.package_root),
+            execution_kind: inputs.execution_kind,
+        },
+        source_closure,
+        options,
+    );
     append_cargo_package_env(&mut env, inputs.cargo_package_env);
     env.insert(BUILD_SCRIPT_CARGO_PKG_NAME_ENV.to_string(), inputs.package_name.to_string());
     env.insert(
@@ -9693,6 +9895,8 @@ fn native_derivation_inputs(
 fn native_target_rustc_args_inputs(unit: &NativeRustUnitSummary) -> NativeRustcArgsInputs<'_> {
     NativeRustcArgsInputs {
         package_id: &unit.package_id,
+        package_name: &unit.package_name,
+        package_root: &unit.package_root,
         target_name: &unit.target_name,
         target_kind: &unit.target_kind,
         crate_name: &unit.crate_name,
@@ -9712,6 +9916,8 @@ fn native_target_rustc_args_inputs(unit: &NativeRustUnitSummary) -> NativeRustcA
 fn native_host_rustc_args_inputs(unit: &NativeHostUnitSummary) -> NativeRustcArgsInputs<'_> {
     NativeRustcArgsInputs {
         package_id: &unit.package_id,
+        package_name: &unit.package_name,
+        package_root: &unit.package_root,
         target_name: &unit.target_name,
         target_kind: &unit.target_kind,
         crate_name: &unit.crate_name,
@@ -10021,13 +10227,35 @@ fn host_dependency_derivation(
     host_unit.execution_kind = HOST_DEPENDENCY_EXECUTION_KIND.to_string();
     host_unit.selected_triple = host_target_triple();
     host_unit.mode = HOST_DEPENDENCY_MODE.to_string();
+    let host_policy_key = if dual_use {
+        PROFILE_DUAL_HOST_POLICY_ENV
+    } else {
+        PROFILE_HOST_POLICY_ENV
+    };
+    let recorded_host_policy = host_unit
+        .derivation
+        .env
+        .get(host_policy_key)
+        .and_then(|serialized| serde_json::from_str::<CargoProfilePolicy>(serialized).ok());
+    let fallback_policy =
+        resolve_unit_profile_policy(&host_unit.profile, true, dual_use).expect("validated Cargo profile must resolve");
+    let policy = recorded_host_policy.as_ref().unwrap_or(&fallback_policy);
+    let settings = policy.build_override.as_ref().map_or(&policy.settings, |build_override| &build_override.settings);
+    let profile_material = profile_metadata_material(&host_unit.profile, settings);
     host_unit.rustc_metadata_hash = retagged_rustc_metadata_hash(RetaggedRustcMetadataInputs {
         base_metadata: &target_unit.rustc_metadata_hash,
         execution_kind: HOST_DEPENDENCY_EXECUTION_KIND,
         mode: HOST_DEPENDENCY_MODE,
+        profile_material: &profile_material,
     });
     replace_rustc_metadata_arg(&mut host_unit.derivation.args, &host_unit.rustc_metadata_hash);
-    replace_profile_codegen_args(&mut host_unit.derivation.args, &host_unit.profile, dual_use);
+    replace_profile_codegen_args_with_settings(&mut host_unit.derivation.args, settings);
+    if let Some(policy) = recorded_host_policy {
+        host_unit.derivation.env.insert(
+            PROFILE_POLICY_ENV.to_string(),
+            serde_json::to_string(&policy).expect("Cargo profile policy serializes"),
+        );
+    }
     host_unit.rustc_args_digest_blake3 =
         blake3::hash(host_unit.derivation.args.join("\0").as_bytes()).to_hex().to_string();
     host_unit.derivation.name = format!("{}-host", target_unit.derivation.name);
@@ -10391,28 +10619,39 @@ fn cargo_unit_rustc_args(
         args.push("--crate-type".to_string());
         args.push(crate_type);
     }
-    append_profile_codegen_args(
-        &mut args,
-        &options.profile,
-        unit_uses_profile_build_override(&facts.execution_kind),
+    let profile_policy = resolved_unit_manifest_profile(
+        options,
+        source_closure,
+        &facts.package_id,
+        None,
+        None,
+        &facts.execution_kind,
         false,
     );
+    let profile_settings = profile_policy
+        .build_override
+        .as_ref()
+        .map_or(&profile_policy.settings, |build_override| &build_override.settings);
+    append_resolved_profile_codegen_args(&mut args, profile_settings);
     if (is_host_target_kind(&facts.target_kind) || facts.target_kind == "bin")
         && let Some(linker) = resolve_tool_path("cc")
     {
         args.push(RUSTC_CODEGEN_OPTION_FLAG.to_string());
         args.push(rustc_linker_arg(&linker, options));
     }
-    let rustc_metadata_hash = rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
-        package_id: &facts.package_id,
-        target_name: &facts.target_name,
-        target_kind: &facts.target_kind,
-        mode: &facts.mode,
-        profile: &options.profile,
-        source_digest: &facts.source_digest,
-        selected_features: &facts.selected_features,
-        crate_types: &facts.crate_types,
-    });
+    let rustc_metadata_hash = rustc_unit_metadata_disambiguator_with_settings(
+        RustcMetadataDisambiguatorInputs {
+            package_id: &facts.package_id,
+            target_name: &facts.target_name,
+            target_kind: &facts.target_kind,
+            mode: &facts.mode,
+            profile: &options.profile,
+            source_digest: &facts.source_digest,
+            selected_features: &facts.selected_features,
+            crate_types: &facts.crate_types,
+        },
+        profile_settings,
+    );
     append_rustc_metadata_args(&mut args, &rustc_metadata_hash);
     append_rustc_feature_cfg_args(&mut args, &facts.selected_features);
     append_cap_lints_args(&mut args, &facts.package_id, source_closure);
@@ -10438,6 +10677,17 @@ fn cargo_unit_env(
         ("SOURCE_CLOSURE_DIGEST".to_string(), execution_source_closure_digest(source_closure, options)),
     ]);
     append_profile_build_override_markers(&mut env, &facts.execution_kind, false);
+    append_recorded_profile_policies(
+        &mut env,
+        RecordedProfilePolicyInputs {
+            package_id: &facts.package_id,
+            package_name: None,
+            package_root: None,
+            execution_kind: &facts.execution_kind,
+        },
+        source_closure,
+        options,
+    );
     insert_deterministic_release_compile_env(&mut env, options);
     if let Some(target) = options.targets.first() {
         env.insert("TARGET".to_string(), target.clone());
@@ -14707,7 +14957,7 @@ fn build_script_child_env(
     env.insert(BUILD_SCRIPT_HOST_ENV.to_string(), host_target_triple());
     let target = unit.derivation.env.get(BUILD_SCRIPT_TARGET_ENV).cloned().unwrap_or_else(host_target_triple);
     append_build_script_target_cfg_env(&mut env, &target);
-    append_build_script_profile_env(&mut env, &unit.profile, false);
+    append_recorded_build_script_profile_env(&mut env, unit);
     env.insert(BUILD_SCRIPT_TARGET_ENV.to_string(), target);
     env.insert(BUILD_SCRIPT_PROFILE_ENV.to_string(), unit.profile.clone());
     if let Some(root) = package_root {
@@ -14744,6 +14994,22 @@ fn append_build_script_profile_env(env: &mut BTreeMap<String, String>, profile: 
     for (key, value) in build_script_profile_env(profile, dual_use) {
         debug_assert!(!key.is_empty());
         env.insert(key, value);
+    }
+}
+
+fn append_recorded_build_script_profile_env(env: &mut BTreeMap<String, String>, unit: &RustUnitDerivationSummary) {
+    let recorded = unit
+        .derivation
+        .env
+        .get(PROFILE_POLICY_ENV)
+        .and_then(|serialized| serde_json::from_str::<CargoProfilePolicy>(serialized).ok())
+        .and_then(|policy| policy.build_override);
+    if let Some(build_override) = recorded {
+        for (key, value) in build_override.environment {
+            env.insert(key, value);
+        }
+    } else {
+        append_build_script_profile_env(env, &unit.profile, false);
     }
 }
 
@@ -18353,6 +18619,8 @@ mod tests {
             rustc: PathBuf::from("rustc"),
             targets: vec!["x86_64-unknown-linux-gnu".to_string()],
             profile: default_profile(),
+            profile_table: load_root_profile_table(root).unwrap(),
+            workspace_members: BTreeSet::new(),
             features: vec!["b".to_string(), "a".to_string()],
             all_features: false,
             no_default_features: true,
@@ -19322,6 +19590,69 @@ mod tests {
     }
 
     #[test]
+    fn root_manifest_custom_profile_reaches_codegen_identity_build_env_and_receipt() {
+        const CUSTOM_CODEGEN_UNITS: u16 = 7;
+        const CHANGED_CODEGEN_UNITS: u16 = 8;
+        let dir = TempDir::new().unwrap();
+        let package_id = "path+file://profile#profile@0.1.0";
+        let target = test_native_rust_unit(package_id, "profile", "lib", dir.path());
+        let host = test_native_host_unit(package_id, "profile-macro", "proc-macro", dir.path());
+        let source_closure = test_source_closure_with_kind(package_id, "profile", SourceKind::Path);
+        let manifest = format!(
+            "[profile.fast]\ninherits = 'dev'\nopt-level = 1\n\
+             [profile.fast.package.profile]\ncodegen-units = {CUSTOM_CODEGEN_UNITS}\n\
+             [profile.fast.build-override]\nopt-level = 2\ndebug = false\n"
+        );
+        std::fs::write(dir.path().join("Cargo.toml"), &manifest).unwrap();
+        let mut plan_options = options(dir.path());
+        plan_options.profile = "fast".to_string();
+
+        let target_derivation = native_unit_derivation(&target, Vec::new(), &source_closure, &plan_options);
+        let host_derivation = native_host_unit_derivation(&host, &source_closure, &plan_options);
+        let target_policy = profile_policy_for_receipt(&target_derivation).unwrap().unwrap();
+        let host_policy = profile_policy_for_receipt(&host_derivation).unwrap().unwrap();
+
+        assert_profile_codegen_args(
+            &target_derivation.derivation.args,
+            "1",
+            CARGO_DEBUG_INFO_FULL,
+            true,
+            true,
+            CUSTOM_CODEGEN_UNITS,
+        );
+        assert_profile_codegen_args(
+            &host_derivation.derivation.args,
+            "2",
+            CARGO_DEBUG_INFO_NONE,
+            true,
+            true,
+            CARGO_CODEGEN_UNITS_DEV,
+        );
+        assert_eq!(target_policy.selected_profile, "fast");
+        assert_eq!(target_policy.settings.codegen_units, CUSTOM_CODEGEN_UNITS);
+        assert_eq!(
+            host_policy.build_override.as_ref().unwrap().environment.get(BUILD_SCRIPT_OPT_LEVEL_ENV),
+            Some(&"2".to_string())
+        );
+        assert_eq!(
+            host_policy.build_override.as_ref().unwrap().environment.get(BUILD_SCRIPT_DEBUG_ENV),
+            Some(&CARGO_DEBUG_FALSE.to_string())
+        );
+
+        let changed_manifest = manifest.replace(
+            &format!("codegen-units = {CUSTOM_CODEGEN_UNITS}"),
+            &format!("codegen-units = {CHANGED_CODEGEN_UNITS}"),
+        );
+        std::fs::write(dir.path().join("Cargo.toml"), changed_manifest).unwrap();
+        let mut changed_options = options(dir.path());
+        changed_options.profile = "fast".to_string();
+        let changed = native_unit_derivation(&target, Vec::new(), &source_closure, &changed_options);
+
+        assert_ne!(target_derivation.rustc_metadata_hash, changed.rustc_metadata_hash);
+        assert_ne!(target_derivation.rustc_args_digest_blake3, changed.rustc_args_digest_blake3);
+    }
+
+    #[test]
     fn cargo_unit_builder_emits_profile_codegen_flags() {
         let dir = TempDir::new().unwrap();
         let package_id = "path+file://cargo-profile#cargo-profile@0.1.0";
@@ -19765,18 +20096,22 @@ mod tests {
         let unit = test_native_host_unit(package_id, "spez", "proc-macro", dir.path());
         let source_closure = test_source_closure_with_kind(package_id, "spez", SourceKind::Registry);
         let derivation = native_host_unit_derivation(&unit, &source_closure, &options(dir.path()));
+        let host_settings = resolve_build_override_policy(&unit.profile, false).unwrap().settings;
         let expected = format!(
             "{RUSTC_METADATA_ARG_PREFIX}{}",
-            rustc_unit_metadata_disambiguator(RustcMetadataDisambiguatorInputs {
-                package_id: &unit.package_id,
-                target_name: &unit.target_name,
-                target_kind: &unit.target_kind,
-                mode: &unit.mode,
-                profile: &unit.profile,
-                source_digest: &unit.source_digest,
-                selected_features: &unit.selected_features,
-                crate_types: &unit.crate_types,
-            })
+            rustc_unit_metadata_disambiguator_with_settings(
+                RustcMetadataDisambiguatorInputs {
+                    package_id: &unit.package_id,
+                    target_name: &unit.target_name,
+                    target_kind: &unit.target_kind,
+                    mode: &unit.mode,
+                    profile: &unit.profile,
+                    source_digest: &unit.source_digest,
+                    selected_features: &unit.selected_features,
+                    crate_types: &unit.crate_types,
+                },
+                &host_settings
+            )
         );
 
         assert_eq!(rustc_metadata_arg(&derivation.derivation.args), Some(expected.as_str()));

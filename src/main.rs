@@ -27,6 +27,7 @@ mod cairn_release_handoff;
 mod cargo_free_self_build;
 mod cargo_import;
 mod cargo_profile;
+mod cargo_profile_manifest;
 mod early_native_row_receipt;
 mod early_native_row_receipt_shell;
 mod elf_local_symbol_core;
@@ -7078,12 +7079,15 @@ fn capture_rust_plan_command(request: RustPlanCaptureRequest<'_>) -> Result<Capt
         request.compiler_policy_provider_manifest.map(Path::to_path_buf),
         request.compiler_policy_provider_manifest_digest.map(str::to_string),
     )?;
+    let profile_table = rust_plan::load_root_profile_table(&request.root)?;
     let options = rust_plan::RustPlanOptions {
         root: request.root,
         cargo: request.cargo.to_path_buf(),
         rustc: request.rustc.to_path_buf(),
         targets: request.targets.to_vec(),
         profile: request.profile.to_string(),
+        profile_table,
+        workspace_members: std::collections::BTreeSet::new(),
         features: request.features.to_vec(),
         all_features: request.all_features,
         no_default_features: request.no_default_features,

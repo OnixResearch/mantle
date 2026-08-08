@@ -8,12 +8,16 @@ use sha2::Digest;
 use sha2::Sha256;
 use toml::Value;
 
+use crate::cargo_profile_manifest::parse_profile_table;
+use crate::cargo_profile_manifest::resolve_profile;
+use crate::cargo_profile_manifest::select_command_profile;
 use crate::errors::RunError;
 
 pub const CARGO_IMPORT_PLAN_SCHEMA: &str = "mantle-cargo-import-plan-v1";
 const DEFAULT_PROJECT_FILE: &str = "mantle-project.ncl";
 const DEFAULT_INPUTS_FILE: &str = ".mantle/inputs.ncl";
 const DEFAULT_TARGET_TRIPLE: &str = "x86_64-unknown-linux-musl";
+#[cfg(test)]
 const DEFAULT_PROFILE: &str = "release";
 const SOURCE_FIELD_SUFFIX: &str = "_src";
 const RUST_FIELD_NAME: &str = "rust";
@@ -59,7 +63,7 @@ impl Default for CargoImportOptions {
             project_file: DEFAULT_PROJECT_FILE.to_string(),
             inputs_file: DEFAULT_INPUTS_FILE.to_string(),
             target_triple: DEFAULT_TARGET_TRIPLE.to_string(),
-            profile: DEFAULT_PROFILE.to_string(),
+            profile: select_command_profile("install", false, None).expect("built-in install command profile resolves"),
         }
     }
 }
@@ -219,6 +223,7 @@ pub fn run_cargo_import(options: CargoImportShellOptions<'_>) -> Result<(), RunE
         project_file: options.project_file,
         inputs_file: options.inputs_file,
     })?;
+    validate_root_profile(options.root, options.profile)?;
     let plan = build_cargo_import_plan(facts, CargoImportOptions {
         selected_package: options.selected_package.map(ToOwned::to_owned),
         selected_binary: options.selected_binary.map(ToOwned::to_owned),
@@ -345,8 +350,8 @@ fn validate_import_options(options: &CargoImportOptions, blockers: &mut Vec<Carg
     if options.target_triple.split('-').filter(|segment| !segment.is_empty()).count() < MIN_TARGET_SEGMENTS {
         blockers.push(blocker("unsupported-target-triple", "target triple must be explicit"));
     }
-    if !matches!(options.profile.as_str(), "debug" | "release") {
-        blockers.push(blocker("unsupported-profile", "import scaffold supports debug or release profiles"));
+    if options.profile.is_empty() {
+        blockers.push(blocker("unsupported-profile", "import profile must not be empty"));
     }
     debug_assert!(blockers.len() >= blocker_count_before);
     debug_assert!(blockers[blocker_count_before..].iter().all(|blocker| !blocker.class.is_empty()));
@@ -851,6 +856,15 @@ fn blocker(class: &str, message: impl ToString) -> CargoImportBlocker {
         class: class.to_string(),
         message: message.to_string(),
     }
+}
+
+fn validate_root_profile(root: &Path, profile: &str) -> Result<(), RunError> {
+    let manifest_path = root.join("Cargo.toml");
+    let manifest = std::fs::read_to_string(&manifest_path)
+        .map_err(|error| RunError::Internal(format!("reading {}: {error}", manifest_path.display())))?;
+    let table = parse_profile_table(&manifest).map_err(|error| RunError::Internal(error.to_string()))?;
+    resolve_profile(&table, profile).map_err(|error| RunError::Internal(error.to_string()))?;
+    Ok(())
 }
 
 fn load_workspace_facts(request: WorkspaceFactLoadRequest<'_>) -> Result<CargoWorkspaceFacts, RunError> {
@@ -1471,6 +1485,18 @@ mod tests {
             packages,
             existing_files: Vec::new(),
         }
+    }
+
+    #[test]
+    fn cargo_import_uses_shared_root_profile_resolution() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Cargo.toml"), "[profile.fast]\ninherits = 'release'\nopt-level = 2\n").unwrap();
+
+        validate_root_profile(dir.path(), "fast").unwrap();
+        let error = validate_root_profile(dir.path(), "missing").unwrap_err();
+
+        assert!(error.to_string().contains("unknown-profile"));
+        assert!(error.to_string().contains("missing"));
     }
 
     #[test]

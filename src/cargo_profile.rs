@@ -125,26 +125,37 @@ pub(crate) fn resolve_build_override_policy(
     name: &str,
     dual_use: bool,
 ) -> Result<CargoBuildOverridePolicy, CargoProfileError> {
+    let target_settings = resolve_builtin_profile(name)?;
+    let policy = build_override_policy_from_settings(target_settings, dual_use);
+    validate_build_override_environment(name, Some(dual_use), &policy.environment)?;
+    Ok(policy)
+}
+
+pub(crate) fn build_override_policy_from_settings(
+    mut settings: CargoProfileSettings,
+    dual_use: bool,
+) -> CargoBuildOverridePolicy {
     const { assert!(CARGO_BUILD_OVERRIDE_CODEGEN_UNITS > 0) };
     const { assert!(CARGO_BUILD_OVERRIDE_NUM_JOBS > 0) };
-    let target_settings = resolve_builtin_profile(name)?;
-    let mut settings = target_settings.clone();
     settings.opt_level = CARGO_OPT_LEVEL_DEV.to_string();
     settings.codegen_units = CARGO_BUILD_OVERRIDE_CODEGEN_UNITS;
     if !dual_use {
         settings.debuginfo = CARGO_DEBUG_INFO_NONE;
     }
-    let environment = BTreeMap::from([
-        (BUILD_SCRIPT_OPT_LEVEL_ENV.to_string(), settings.opt_level.clone()),
-        (BUILD_SCRIPT_DEBUG_ENV.to_string(), (settings.debuginfo > CARGO_DEBUG_INFO_NONE).to_string()),
-        (BUILD_SCRIPT_NUM_JOBS_ENV.to_string(), CARGO_BUILD_OVERRIDE_NUM_JOBS.to_string()),
-    ]);
-    validate_build_override_environment(name, Some(dual_use), &environment)?;
-    Ok(CargoBuildOverridePolicy {
+    let environment = build_override_environment_from_settings(&settings);
+    CargoBuildOverridePolicy {
         dual_use,
         settings,
         environment,
-    })
+    }
+}
+
+pub(crate) fn build_override_environment_from_settings(settings: &CargoProfileSettings) -> BTreeMap<String, String> {
+    BTreeMap::from([
+        (BUILD_SCRIPT_OPT_LEVEL_ENV.to_string(), settings.opt_level.clone()),
+        (BUILD_SCRIPT_DEBUG_ENV.to_string(), (settings.debuginfo > CARGO_DEBUG_INFO_NONE).to_string()),
+        (BUILD_SCRIPT_NUM_JOBS_ENV.to_string(), CARGO_BUILD_OVERRIDE_NUM_JOBS.to_string()),
+    ])
 }
 
 pub(crate) fn validate_build_override_environment(

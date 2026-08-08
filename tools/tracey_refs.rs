@@ -72,6 +72,25 @@
 // paths, Cargo-derived host units, and recorded dual-use decisions. Negative
 // tests reject legacy values, ambient overrides, and missing dual-use records.
 
+// Cargo manifest profile bridge.
+//
+// r[impl rust_package_planning.profile_root_manifest_authority]
+// r[impl rust_package_planning.profile_custom_inheritance]
+// r[impl rust_package_planning.profile_package_overrides]
+// r[impl rust_package_planning.profile_selection]
+// The pure root-table parser, inheritance resolver, override selector, and
+// command selector live in `src/cargo_profile_manifest.rs`. Rust planning and
+// Cargo import use that core from `src/rust_plan.rs` and `src/cargo_import.rs`.
+//
+// r[verify rust_package_planning.profile_root_manifest_authority]
+// r[verify rust_package_planning.profile_custom_inheritance]
+// r[verify rust_package_planning.profile_package_overrides]
+// r[verify rust_package_planning.profile_selection]
+// Positive tests cover root settings, custom inheritance, package precedence,
+// command defaults, rustc flags, metadata identity, build environments, and
+// receipts. Negative tests reject missing parents, cycles, unknown settings,
+// invalid values, forbidden overrides, and version-qualified package specs.
+
 // Picolibc StageX comparison bridge.
 //
 // r[impl bootstrap_inventory.picolibc_stagex_comparison]
