@@ -8,5 +8,7 @@
 ## Phase 2: Foundation validation
 
 - [x] [serial] V1 Add positive and negative tests for provider adoption, receipt mismatch, persistent store reuse, fast-fail, disabled cold paths, and non-authorizing transcripts. r[source_built_fixed_point_improved_iteration.dev_provider_cache] r[source_built_fixed_point_improved_iteration.dev_store_snapshot] r[source_built_fixed_point_improved_iteration.dev_fast_fail_baseline]
-- [ ] [serial] V2 Run focused source-built fixed-point and CLI tests, leaf formatting, focused Clippy, and `git diff --check`. Record exact output in the change evidence. r[source_built_fixed_point_improved_iteration.dev_provider_cache]
-- [ ] [serial] V3 Record the scope split, make sure that the promoted path stays cache-disabled in focused tests, and run Cairn validation plus all three gates. r[source_built_fixed_point_improved_iteration.dev_provider_cache]
+- [x] [serial] V2 Run focused source-built fixed-point and CLI tests, leaf formatting, focused Clippy, and `git diff --check`. Record exact output in the change evidence. r[source_built_fixed_point_improved_iteration.dev_provider_cache]
+  - Evidence: `evidence/foundation-split-validation-2026-08-08.md` records 51 source-built fixed-point tests and 12 CLI tests passing, Clippy passing, leaf formatting passing after import-order repair, and `git diff --check` passing.
+- [x] [serial] V3 Record the scope split, make sure that the promoted path stays cache-disabled in focused tests, and run Cairn validation plus all three gates. r[source_built_fixed_point_improved_iteration.dev_provider_cache]
+  - Evidence: `evidence/foundation-split-validation-2026-08-08.md` records the successor boundary, the focused cold-path guard, repository validation, and all three PASS gate verdicts.
