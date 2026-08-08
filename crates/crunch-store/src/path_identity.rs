@@ -1,6 +1,27 @@
+use nix_compat::store_path::DIGEST_SIZE;
 use nix_compat::store_path::StorePath;
 use nix_compat::store_path::build_ca_path_with_store_dir;
 use snix_store::path_info::PathInfo;
+
+const REMOTE_PATHINFO_IDENTITY_MISMATCH: &str = "remote-pathinfo-request-identity-mismatch";
+
+/// Require returned remote metadata to carry the requested store-path digest.
+// r[impl cache_substitution.requested_path_identity]
+pub(crate) fn require_requested_path_identity(
+    requested_digest: [u8; DIGEST_SIZE],
+    requested_path: &StorePath<String>,
+    observed: &PathInfo,
+) -> Result<(), String> {
+    assert_eq!(requested_digest, *requested_path.digest(), "requested digest must match the requested store path");
+    assert!(!requested_path.name().is_empty(), "requested store path name must not be empty");
+    if requested_digest == *observed.store_path.digest() {
+        return Ok(());
+    }
+    Err(format!(
+        "{REMOTE_PATHINFO_IDENTITY_MISMATCH}: requested {requested_path}, observed {}",
+        observed.store_path
+    ))
+}
 
 /// Require any declared CA metadata to derive the signed logical store path.
 pub(crate) fn require_ca_path_identity(path_info: &PathInfo, store_dir: &str) -> Result<(), String> {
@@ -47,7 +68,6 @@ mod tests {
     use super::*;
 
     const SHA256_DIGEST_BYTES: usize = 32;
-    const STORE_PATH_DIGEST_BYTES: usize = 20;
     const CA_HASH_BYTE: u8 = 0xA5;
     const WRONG_CA_HASH_BYTE: u8 = 0x5A;
     const STORE_DIR: &str = "/mantle/store";
@@ -70,12 +90,67 @@ mod tests {
     }
 
     #[test]
+    fn matching_requested_path_digest_is_accepted() {
+        // r[verify cache_substitution.requested_path_identity]
+        let requested_path = StorePath::from_name_and_digest_fixed("requested", [CA_HASH_BYTE; DIGEST_SIZE])
+            .expect("valid requested store path");
+        let observed_path = StorePath::from_name_and_digest_fixed("observed", [CA_HASH_BYTE; DIGEST_SIZE])
+            .expect("valid observed store path");
+        let observed = PathInfo {
+            store_path: observed_path,
+            node: Node::Symlink {
+                target: SymlinkTarget::try_from("target").unwrap(),
+            },
+            references: Vec::new(),
+            nar_size: 1,
+            nar_sha256: [1; SHA256_DIGEST_BYTES],
+            signatures: Vec::new(),
+            deriver: None,
+            ca: None,
+        };
+
+        assert!(require_requested_path_identity(*requested_path.digest(), &requested_path, &observed).is_ok());
+        assert_eq!(requested_path.digest(), observed.store_path.digest());
+    }
+
+    #[test]
+    fn different_requested_path_digest_is_rejected() {
+        // r[verify cache_substitution.requested_path_identity]
+        let requested_path = StorePath::from_name_and_digest_fixed("requested", [CA_HASH_BYTE; DIGEST_SIZE])
+            .expect("valid requested store path");
+        let observed_path = StorePath::from_name_and_digest_fixed("observed", [WRONG_CA_HASH_BYTE; DIGEST_SIZE])
+            .expect("valid observed store path");
+        let observed = PathInfo {
+            store_path: observed_path,
+            node: Node::Symlink {
+                target: SymlinkTarget::try_from("target").unwrap(),
+            },
+            references: Vec::new(),
+            nar_size: 1,
+            nar_sha256: [1; SHA256_DIGEST_BYTES],
+            signatures: Vec::new(),
+            deriver: None,
+            ca: None,
+        };
+
+        let error = require_requested_path_identity(*requested_path.digest(), &requested_path, &observed).unwrap_err();
+        assert_eq!(
+            error,
+            format!(
+                "{REMOTE_PATHINFO_IDENTITY_MISMATCH}: requested {requested_path}, observed {}",
+                observed.store_path
+            )
+        );
+        assert_ne!(requested_path.digest(), observed.store_path.digest());
+    }
+
+    #[test]
     fn marker_normalized_ca_path_is_accepted() {
         let ca_hash = CAHash::Nar(NixHash::Sha256([CA_HASH_BYTE; SHA256_DIGEST_BYTES]));
         let path_info = path_info(ca_hash);
 
         assert!(require_ca_path_identity(&path_info, STORE_DIR).is_ok());
-        assert_eq!(path_info.store_path.digest().len(), STORE_PATH_DIGEST_BYTES);
+        assert_eq!(path_info.store_path.digest().len(), DIGEST_SIZE);
     }
 
     #[test]

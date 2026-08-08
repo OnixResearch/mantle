@@ -18,6 +18,7 @@ use nix_compat::derivation::Derivation;
 use nix_compat::narinfo::SigningKey;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::narinfo::fingerprint_with_store_dir;
+use nix_compat::store_path::DIGEST_SIZE;
 use nix_compat::store_path::StorePath;
 use nix_compat::store_path::StorePathRef;
 use reqwest::StatusCode;
@@ -79,6 +80,7 @@ use crate::metadata_cache::check_metadata_validity;
 use crate::metadata_cache::metadata_cache_key;
 use crate::metadata_cache::new_metadata_entry;
 use crate::overlay::StoreOverlayState;
+use crate::path_identity::require_requested_path_identity;
 use crate::roots;
 
 const NAR_SHA256_BYTES: usize = 32;
@@ -443,7 +445,7 @@ pub struct VerifiedSourceIngestRequest<'a> {
 
 #[derive(Debug, Clone, Copy)]
 struct RemoteSubstitutionRequest<'a> {
-    digest: [u8; 20],
+    digest: [u8; DIGEST_SIZE],
     output_path: &'a StorePath<String>,
     output_name: &'a str,
     is_root: bool,
@@ -2570,13 +2572,16 @@ impl StoreHandle {
     /// r[impl cache_substitution.ordered_substituters]
     pub async fn try_substitute_remote(
         &mut self,
-        digest: [u8; 20],
+        digest: [u8; DIGEST_SIZE],
         output_path: &StorePath<String>,
         output_name: &str,
         is_root: bool,
         root_source: Option<GcRootSource>,
     ) -> Result<Option<PathInfo>, Error> {
         assert!(!output_name.is_empty(), "output_name must not be empty");
+        if digest != *output_path.digest() {
+            return Err(Error::Cache(format!("remote-substitution-request-digest-mismatch: output {output_path}")));
+        }
         let request = RemoteSubstitutionRequest {
             digest,
             output_path,
@@ -2736,6 +2741,9 @@ impl StoreHandle {
 
         match remote.get(request.digest).await {
             Ok(Some(remote_pi)) => {
+                // r[impl cache_substitution.requested_path_identity]
+                require_requested_path_identity(request.digest, request.output_path, &remote_pi)
+                    .map_err(Error::Cache)?;
                 trace_info!(
                     path = %request.output_path,
                     output = %request.output_name,
@@ -3571,6 +3579,7 @@ mod tests {
     use std::sync::Arc;
     use std::sync::Mutex;
     use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
     use std::thread;
     use std::thread::JoinHandle;
@@ -3591,6 +3600,52 @@ mod tests {
 
     use super::*;
     use crate::layer::StoreLayer;
+
+    #[derive(Debug)]
+    struct MutationCountingPathInfoService {
+        response: Option<PathInfo>,
+        get_count: AtomicUsize,
+        put_count: AtomicUsize,
+    }
+
+    impl MutationCountingPathInfoService {
+        fn new(response: Option<PathInfo>) -> Self {
+            assert!(response.as_ref().is_none_or(|path_info| !path_info.store_path.name().is_empty()));
+            Self {
+                response,
+                get_count: AtomicUsize::new(0),
+                put_count: AtomicUsize::new(0),
+            }
+        }
+
+        fn get_count(&self) -> usize {
+            self.get_count.load(Ordering::SeqCst)
+        }
+
+        fn put_count(&self) -> usize {
+            self.put_count.load(Ordering::SeqCst)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl PathInfoService for MutationCountingPathInfoService {
+        async fn get(
+            &self,
+            _digest: [u8; DIGEST_SIZE],
+        ) -> Result<Option<PathInfo>, snix_store::pathinfoservice::Error> {
+            self.get_count.fetch_add(1, Ordering::SeqCst);
+            Ok(self.response.clone())
+        }
+
+        async fn put(&self, path_info: PathInfo) -> Result<PathInfo, snix_store::pathinfoservice::Error> {
+            self.put_count.fetch_add(1, Ordering::SeqCst);
+            Ok(path_info)
+        }
+
+        fn list(&self) -> futures::stream::BoxStream<'static, Result<PathInfo, snix_store::pathinfoservice::Error>> {
+            futures::stream::empty().boxed()
+        }
+    }
 
     #[test]
     fn remote_trusted_key_parser_accepts_indexed_keys_and_rejects_duplicate_indexes() {
@@ -6246,6 +6301,77 @@ mod tests {
             full_handle.built_outputs.get(&full_exported),
             "accepted delta and full substitutions should populate the same built-output metadata"
         );
+    }
+
+    #[tokio::test]
+    async fn mismatched_remote_pathinfo_causes_no_substitution_mutations() {
+        // r[verify cache_substitution.requested_path_identity]
+        const REQUESTED_DIGEST_BYTE: u8 = 40;
+        const OBSERVED_DIGEST_BYTE: u8 = 41;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let requested_path = test_output("requested-output", REQUESTED_DIGEST_BYTE);
+        let observed_path = test_output("different-output", OBSERVED_DIGEST_BYTE);
+        let remote_path_info = signed_pathinfo(observed_path.clone());
+        let local = Arc::new(MutationCountingPathInfoService::new(None));
+        let remote = Arc::new(MutationCountingPathInfoService::new(Some(remote_path_info)));
+        let blob_service = Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>;
+        let directory_service = Arc::new(
+            RedbDirectoryService::new_temporary(
+                "mismatched-remote-pathinfo".to_string(),
+                RedbDirectoryServiceConfig::default(),
+            )
+            .unwrap(),
+        ) as Arc<dyn DirectoryService>;
+        let mut handle = StoreHandle::from_services_with_store_dir(
+            StoreHandleServices {
+                blob_service,
+                directory_service,
+                pathinfo_service: local.clone(),
+                remote_pathinfo: Some(remote.clone()),
+                state_dir: state_dir.path().to_path_buf(),
+                output_dir_str: state_dir.path().display().to_string(),
+                publishers: Vec::new(),
+            },
+            "/nix/store".to_string(),
+        );
+        let expected_request_error =
+            format!("cache: remote-substitution-request-digest-mismatch: output {requested_path}");
+        let expected_error = format!(
+            "cache: remote-pathinfo-request-identity-mismatch: requested {requested_path}, observed {observed_path}"
+        );
+        let exported_path = requested_path.to_absolute_path_with_prefix(&handle.output_dir_str);
+
+        let request_error = handle
+            .try_substitute_remote(
+                [OBSERVED_DIGEST_BYTE; DIGEST_SIZE],
+                &requested_path,
+                "out",
+                true,
+                Some(GcRootSource::Build),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(request_error.to_string(), expected_request_error);
+        assert_eq!(remote.get_count(), 0);
+
+        let error = handle
+            .try_substitute_remote(*requested_path.digest(), &requested_path, "out", true, Some(GcRootSource::Build))
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.to_string(), expected_error);
+        assert_eq!(remote.get_count(), 1);
+        assert_eq!(remote.put_count(), 0);
+        assert_eq!(local.put_count(), 0);
+        assert!(handle.output_nodes.is_empty());
+        assert!(handle.built_outputs.is_empty());
+        assert!(handle.output_substitution_reports.is_empty());
+        assert!(handle.advisory_metadata_cache.is_empty());
+        assert!(!Path::new(&exported_path).exists());
+        assert!(roots::list_roots(state_dir.path()).unwrap().is_empty());
+        assert!(!crate::artifact_attestation_file_path(state_dir.path(), "/nix/store", &observed_path).exists());
+        assert!(!state_dir.path().join("advisory-meta-cache.json").exists());
     }
 
     #[tokio::test]
