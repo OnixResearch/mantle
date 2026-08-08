@@ -19,12 +19,16 @@
   - Evidence: `evidence/requested-digest-service-guard-2026-08-08.md` records the pure comparator, pre-NAR guards, positive and negative tests, and focused validation.
 - [x] [serial] I4 Enforce the same decision in Mantle’s remote-substitution finalization shell before PathInfo persistence, sidecars, castore registration, export, root registration, advisory publication, or success reporting. r[cache_substitution.requested_path_identity]
   - Evidence: `evidence/requested-digest-shell-guard-2026-08-08.md` records the pure first-party guard, stable error, side-effect ordering, and focused validation.
-- [ ] [parallel] I5 Add positive and negative service tests for a matching signed narinfo, a valid signed narinfo for another path, malformed metadata, and zero returned PathInfo on mismatch. r[cache_substitution.requested_path_identity]
+- [x] [parallel] I5 Add positive and negative service tests for a matching signed narinfo, a valid signed narinfo for another path, malformed metadata, and zero returned PathInfo on mismatch. r[cache_substitution.requested_path_identity]
+  - Evidence: `evidence/remote-transport-2026-08-08.md` records the local HTTP fixtures and passing Snix service tests.
 - [x] [parallel] I6 Add a mutation-counting substitution test that proves an alternative service cannot cause writes or side effects with mismatched PathInfo. r[cache_substitution.requested_path_identity]
   - Evidence: `evidence/requested-digest-shell-guard-2026-08-08.md` records zero local or remote writes, sidecars, exports, roots, advisory entries, and success reports.
-- [ ] [serial] I7 Normalize binary-cache base URLs as directory bases before endpoint joins while preserving existing credential and query handling. r[cache_substitution.transport_normalization]
-- [ ] [serial] I8 Enable multi-member zstd decoding in the vendored Nix HTTP path and Mantle’s `crunch-store` pull path. r[cache_substitution.transport_normalization]
-- [ ] [parallel] I9 Add positive and negative URL and zstd fixtures for base paths with and without a trailing slash, concatenated frames, a truncated later frame, malformed input, and bounded rejection without partial admission. r[cache_substitution.transport_normalization]
+- [x] [serial] I7 Normalize binary-cache base URLs as directory bases before endpoint joins while preserving existing credential and query handling. r[cache_substitution.transport_normalization]
+  - Evidence: `evidence/remote-transport-2026-08-08.md` records directory-base normalization and URL fixtures.
+- [x] [serial] I8 Enable multi-member zstd decoding in the vendored Nix HTTP path and Mantle’s `crunch-store` pull path. r[cache_substitution.transport_normalization]
+  - Evidence: `evidence/remote-transport-2026-08-08.md` records both multi-frame decoder paths and bounded rejection behavior.
+- [x] [parallel] I9 Add positive and negative URL and zstd fixtures for base paths with and without a trailing slash, concatenated frames, a truncated later frame, malformed input, and bounded rejection without partial admission. r[cache_substitution.transport_normalization]
+  - Evidence: `evidence/remote-transport-2026-08-08.md` records every required URL and zstd case and zero local `PathInfo` after rejection.
 
 ## Phase 3: Castore and FUSE correctness
 

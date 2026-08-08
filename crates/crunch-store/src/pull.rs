@@ -17,6 +17,7 @@ use snix_castore::Node;
 use snix_store::nar::ingest_nar_and_hash;
 use snix_store::path_info::PathInfo;
 use snix_store::pathinfoservice::PathInfoService;
+use tokio::io::AsyncBufRead;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncReadExt;
 use tokio_util::io::StreamReader;
@@ -186,6 +187,15 @@ fn validate_http_cache_url(cache_url: &Url) -> Result<(), Error> {
     Ok(())
 }
 
+// r[impl cache_substitution.transport_normalization]
+fn multi_frame_zstd_decoder<R>(reader: R) -> async_compression::tokio::bufread::ZstdDecoder<R>
+where R: AsyncBufRead {
+    let mut decoder = async_compression::tokio::bufread::ZstdDecoder::new(reader);
+    decoder.multiple_members(true);
+    decoder
+}
+
+// r[impl cache_substitution.transport_normalization]
 fn normalize_http_cache_base_url(cache_url: &Url) -> Url {
     let mut normalized = cache_url.clone();
     normalized.set_query(None);
@@ -933,7 +943,7 @@ async fn ingest_http_nar(
         Some("bzip2") => Box::new(async_compression::tokio::bufread::BzDecoder::new(response_reader)),
         Some("gzip") => Box::new(async_compression::tokio::bufread::GzipDecoder::new(response_reader)),
         Some("xz") => Box::new(async_compression::tokio::bufread::XzDecoder::new(response_reader)),
-        Some("zstd") => Box::new(async_compression::tokio::bufread::ZstdDecoder::new(response_reader)),
+        Some("zstd") => Box::new(multi_frame_zstd_decoder(response_reader)),
         Some(compression) => {
             tracing::warn!(requested_path = %requested_path_text, "unsupported HTTP NAR compression: {compression}");
             result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
@@ -3245,6 +3255,175 @@ mod tests {
             .unwrap();
             assert_eq!(report.imported_count, 1, "compression={compression}");
         }
+    }
+
+    #[tokio::test]
+    async fn http_pull_consumes_all_zstd_frames() {
+        // r[verify cache_substitution.transport_normalization]
+        const ZSTD_FRAME_COUNT: usize = 2;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-zstd-frames")).await;
+        let pi = make_signed_pathinfo(&push_store, "http-zstd-frames", b"zstd frames").await;
+        let cache_dir = tmp.path().join("cache-zstd-frames");
+        export_paths_to_cache_dir(&push_store, &[pi.clone()], &cache_dir, &PushOptions { trust_unsigned: false })
+            .await
+            .unwrap();
+        let nar_hash_b32 = nixbase32::encode(&pi.nar_sha256);
+        let original_nar = std::fs::read(cache_dir.join("nar").join(format!("{nar_hash_b32}.nar"))).unwrap();
+        let split_index = original_nar.len().checked_div(ZSTD_FRAME_COUNT).unwrap();
+        let mut compressed_nar = compress_zstd(&original_nar[..split_index]);
+        compressed_nar.extend_from_slice(&compress_zstd(&original_nar[split_index..]));
+        let compressed_name = format!("{nar_hash_b32}.nar.zstd");
+        let mut routes = cache_routes(&cache_dir);
+        routes.insert(format!("/nar/{compressed_name}"), HttpResponse::ok_bytes(compressed_nar.clone()));
+        let narinfo_text = read_narinfo_text(&cache_dir, &pi.store_path);
+        let narinfo_text = replace_narinfo_field(&narinfo_text, "URL", &format!("nar/{compressed_name}"));
+        let narinfo_text = replace_narinfo_field(&narinfo_text, "Compression", "zstd");
+        let narinfo_text =
+            replace_narinfo_field(&narinfo_text, "FileHash", &format!("sha256:{}", nix_base32_sha256(&compressed_nar)));
+        let narinfo_text = replace_narinfo_field(&narinfo_text, "FileSize", &compressed_nar.len().to_string());
+        routes.insert(format!("/{}", narinfo_file_name(&pi.store_path)), HttpResponse::ok_text(narinfo_text));
+        let server = HttpTestServer::spawn(routes);
+        let pull_store = open_test_store(&tmp.path().join("pull-zstd-frames")).await;
+
+        let report = import_paths_from_http_cache(
+            &pull_store,
+            &server.base_url,
+            std::slice::from_ref(&pi.store_path),
+            &default_pull_options(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(report.imported_count, 1);
+        assert!(pull_store.pathinfo_service().get(*pi.store_path.digest()).await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn http_pull_rejects_truncated_later_zstd_frame_without_pathinfo() {
+        // r[verify cache_substitution.transport_normalization]
+        const ZSTD_FRAME_COUNT: usize = 2;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-zstd-truncated")).await;
+        let pi = make_signed_pathinfo(&push_store, "http-zstd-truncated", b"zstd truncated").await;
+        let cache_dir = tmp.path().join("cache-zstd-truncated");
+        export_paths_to_cache_dir(&push_store, &[pi.clone()], &cache_dir, &PushOptions { trust_unsigned: false })
+            .await
+            .unwrap();
+        let nar_hash_b32 = nixbase32::encode(&pi.nar_sha256);
+        let original_nar = std::fs::read(cache_dir.join("nar").join(format!("{nar_hash_b32}.nar"))).unwrap();
+        let split_index = original_nar.len().checked_div(ZSTD_FRAME_COUNT).unwrap();
+        let mut compressed_nar = compress_zstd(&original_nar[..split_index]);
+        let second_frame = compress_zstd(&original_nar[split_index..]);
+        let truncated_length = second_frame.len().checked_div(ZSTD_FRAME_COUNT).unwrap();
+        compressed_nar.extend_from_slice(&second_frame[..truncated_length]);
+        let compressed_name = format!("{nar_hash_b32}.nar.zstd");
+        let mut routes = cache_routes(&cache_dir);
+        routes.insert(format!("/nar/{compressed_name}"), HttpResponse::ok_bytes(compressed_nar.clone()));
+        let narinfo_text = read_narinfo_text(&cache_dir, &pi.store_path);
+        let narinfo_text = replace_narinfo_field(&narinfo_text, "URL", &format!("nar/{compressed_name}"));
+        let narinfo_text = replace_narinfo_field(&narinfo_text, "Compression", "zstd");
+        let narinfo_text =
+            replace_narinfo_field(&narinfo_text, "FileHash", &format!("sha256:{}", nix_base32_sha256(&compressed_nar)));
+        let narinfo_text = replace_narinfo_field(&narinfo_text, "FileSize", &compressed_nar.len().to_string());
+        routes.insert(format!("/{}", narinfo_file_name(&pi.store_path)), HttpResponse::ok_text(narinfo_text));
+        let server = HttpTestServer::spawn(routes);
+        let pull_store = open_test_store(&tmp.path().join("pull-zstd-truncated")).await;
+
+        let report = import_paths_from_http_cache(
+            &pull_store,
+            &server.base_url,
+            std::slice::from_ref(&pi.store_path),
+            &default_pull_options(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(report.imported_count, 0);
+        assert_eq!(report.skipped_hash_mismatch_count, 1);
+        assert!(pull_store.pathinfo_service().get(*pi.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn http_pull_rejects_malformed_zstd_without_pathinfo() {
+        // r[verify cache_substitution.transport_normalization]
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-zstd-malformed")).await;
+        let pi = make_signed_pathinfo(&push_store, "http-zstd-malformed", b"zstd malformed").await;
+        let cache_dir = tmp.path().join("cache-zstd-malformed");
+        export_paths_to_cache_dir(&push_store, &[pi.clone()], &cache_dir, &PushOptions { trust_unsigned: false })
+            .await
+            .unwrap();
+        let nar_hash_b32 = nixbase32::encode(&pi.nar_sha256);
+        let malformed_nar = b"not-a-zstd-frame".to_vec();
+        let compressed_name = format!("{nar_hash_b32}.nar.zstd");
+        let mut routes = cache_routes(&cache_dir);
+        routes.insert(format!("/nar/{compressed_name}"), HttpResponse::ok_bytes(malformed_nar.clone()));
+        let narinfo_text = read_narinfo_text(&cache_dir, &pi.store_path);
+        let narinfo_text = replace_narinfo_field(&narinfo_text, "URL", &format!("nar/{compressed_name}"));
+        let narinfo_text = replace_narinfo_field(&narinfo_text, "Compression", "zstd");
+        let narinfo_text =
+            replace_narinfo_field(&narinfo_text, "FileHash", &format!("sha256:{}", nix_base32_sha256(&malformed_nar)));
+        let narinfo_text = replace_narinfo_field(&narinfo_text, "FileSize", &malformed_nar.len().to_string());
+        routes.insert(format!("/{}", narinfo_file_name(&pi.store_path)), HttpResponse::ok_text(narinfo_text));
+        let server = HttpTestServer::spawn(routes);
+        let pull_store = open_test_store(&tmp.path().join("pull-zstd-malformed")).await;
+
+        let report = import_paths_from_http_cache(
+            &pull_store,
+            &server.base_url,
+            std::slice::from_ref(&pi.store_path),
+            &default_pull_options(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(report.imported_count, 0);
+        assert_eq!(report.skipped_hash_mismatch_count, 1);
+        assert!(pull_store.pathinfo_service().get(*pi.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn http_pull_rejects_decoded_zstd_bytes_beyond_nar_limit() {
+        // r[verify cache_substitution.transport_normalization]
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-zstd-over-limit")).await;
+        let pi = make_signed_pathinfo(&push_store, "http-zstd-over-limit", b"zstd over limit").await;
+        let cache_dir = tmp.path().join("cache-zstd-over-limit");
+        export_paths_to_cache_dir(&push_store, &[pi.clone()], &cache_dir, &PushOptions { trust_unsigned: false })
+            .await
+            .unwrap();
+        let nar_hash_b32 = nixbase32::encode(&pi.nar_sha256);
+        let original_nar = std::fs::read(cache_dir.join("nar").join(format!("{nar_hash_b32}.nar"))).unwrap();
+        let mut compressed_nar = compress_zstd(&original_nar);
+        compressed_nar.extend_from_slice(&compress_zstd(b"extra"));
+        let compressed_name = format!("{nar_hash_b32}.nar.zstd");
+        let mut routes = cache_routes(&cache_dir);
+        routes.insert(format!("/nar/{compressed_name}"), HttpResponse::ok_bytes(compressed_nar.clone()));
+        let narinfo_text = read_narinfo_text(&cache_dir, &pi.store_path);
+        let narinfo_text = replace_narinfo_field(&narinfo_text, "URL", &format!("nar/{compressed_name}"));
+        let narinfo_text = replace_narinfo_field(&narinfo_text, "Compression", "zstd");
+        let narinfo_text =
+            replace_narinfo_field(&narinfo_text, "FileHash", &format!("sha256:{}", nix_base32_sha256(&compressed_nar)));
+        let narinfo_text = replace_narinfo_field(&narinfo_text, "FileSize", &compressed_nar.len().to_string());
+        routes.insert(format!("/{}", narinfo_file_name(&pi.store_path)), HttpResponse::ok_text(narinfo_text));
+        let server = HttpTestServer::spawn(routes);
+        let pull_store = open_test_store(&tmp.path().join("pull-zstd-over-limit")).await;
+
+        let report = import_paths_from_http_cache(
+            &pull_store,
+            &server.base_url,
+            std::slice::from_ref(&pi.store_path),
+            &default_pull_options(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(report.imported_count, 0);
+        assert_eq!(report.skipped_hash_mismatch_count, 1);
+        assert!(pull_store.pathinfo_service().get(*pi.store_path.digest()).await.unwrap().is_none());
     }
 
     #[tokio::test]

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::stream::BoxStream;
 use futures::TryStreamExt;
+use futures::stream::BoxStream;
 use nix_compat::narinfo::NarInfo;
 use nix_compat::narinfo::Signature;
 use nix_compat::narinfo::{self};
@@ -14,17 +14,18 @@ use snix_castore::blobservice::BlobService;
 use snix_castore::composition::CompositionContext;
 use snix_castore::composition::ServiceBuilder;
 use snix_castore::directoryservice::DirectoryService;
+use tokio::io::AsyncBufRead;
 use tokio::io::AsyncRead;
 use tokio::io::{self};
+use tracing::Span;
 use tracing::instrument;
 use tracing::warn;
-use tracing::Span;
 use url::Url;
 
 use super::PathInfo;
 use super::PathInfoService;
-use crate::nar::ingest_nar_and_hash;
 use crate::nar::NarIngestionError;
+use crate::nar::ingest_nar_and_hash;
 use crate::pathinfoservice;
 
 /// NixHTTPPathInfoService acts as a bridge in between the Nix HTTP Binary cache
@@ -72,7 +73,7 @@ impl<BS, DS> NixHTTPPathInfoService<BS, DS> {
 
         Ok(Self {
             instance_name,
-            base_url: config.base_url,
+            base_url: normalize_binary_cache_base_url(config.base_url),
             store_dir: config.params.store_dir,
             http_client: reqwest_middleware::ClientBuilder::new(
                 reqwest::Client::builder()
@@ -125,6 +126,26 @@ impl<BS, DS> NixHTTPPathInfoService<BS, DS> {
 
         Ok(narinfo)
     }
+}
+
+// r[impl cache_substitution.transport_normalization]
+fn normalize_binary_cache_base_url(mut base_url: Url) -> Url {
+    assert!(base_url.has_host(), "binary cache base URL must have a host");
+    assert!(!base_url.cannot_be_a_base(), "binary cache URL must support relative joins");
+    if !base_url.path().ends_with('/') {
+        let mut path = base_url.path().to_string();
+        path.push('/');
+        base_url.set_path(&path);
+    }
+    base_url
+}
+
+// r[impl cache_substitution.transport_normalization]
+fn multi_frame_zstd_decoder<R>(reader: R) -> async_compression::tokio::bufread::ZstdDecoder<R>
+where R: AsyncBufRead {
+    let mut decoder = async_compression::tokio::bufread::ZstdDecoder::new(reader);
+    decoder.multiple_members(true);
+    decoder
 }
 
 fn validate_requested_store_path_digest(requested_digest: [u8; 20], observed_digest: [u8; 20]) -> Result<(), Error> {
@@ -226,21 +247,20 @@ where
         }));
 
         // handle decompression, depending on the compression field.
-        let mut r: Box<dyn AsyncRead + Send + Unpin> =
-            match narinfo.compression {
-                None => Box::new(r) as Box<dyn AsyncRead + Send + Unpin>,
-                Some("bzip2") => {
-                    Box::new(async_compression::tokio::bufread::BzDecoder::new(r)) as Box<dyn AsyncRead + Send + Unpin>
-                }
-                Some("gzip") => Box::new(async_compression::tokio::bufread::GzipDecoder::new(r))
-                    as Box<dyn AsyncRead + Send + Unpin>,
-                Some("xz") => {
-                    Box::new(async_compression::tokio::bufread::XzDecoder::new(r)) as Box<dyn AsyncRead + Send + Unpin>
-                }
-                Some("zstd") => Box::new(async_compression::tokio::bufread::ZstdDecoder::new(r))
-                    as Box<dyn AsyncRead + Send + Unpin>,
-                Some(comp_str) => Err(Error::UnsupportedNARCompression(comp_str.to_owned()))?,
-            };
+        let mut r: Box<dyn AsyncRead + Send + Unpin> = match narinfo.compression {
+            None => Box::new(r) as Box<dyn AsyncRead + Send + Unpin>,
+            Some("bzip2") => {
+                Box::new(async_compression::tokio::bufread::BzDecoder::new(r)) as Box<dyn AsyncRead + Send + Unpin>
+            }
+            Some("gzip") => {
+                Box::new(async_compression::tokio::bufread::GzipDecoder::new(r)) as Box<dyn AsyncRead + Send + Unpin>
+            }
+            Some("xz") => {
+                Box::new(async_compression::tokio::bufread::XzDecoder::new(r)) as Box<dyn AsyncRead + Send + Unpin>
+            }
+            Some("zstd") => Box::new(multi_frame_zstd_decoder(r)) as Box<dyn AsyncRead + Send + Unpin>,
+            Some(comp_str) => Err(Error::UnsupportedNARCompression(comp_str.to_owned()))?,
+        };
 
         let (root_node, nar_hash, nar_size) =
             ingest_nar_and_hash(self.blob_service.clone(), &self.directory_service, &mut r, &narinfo.ca)
@@ -430,10 +450,10 @@ mod tests {
     use std::io::Write;
     use std::net::TcpListener;
     use std::net::TcpStream;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::atomic::Ordering;
     use std::sync::Arc;
     use std::sync::Mutex;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
     use std::thread;
     use std::thread::JoinHandle;
     use std::time::Duration;
@@ -444,14 +464,17 @@ mod tests {
     use snix_castore::directoryservice::RedbDirectoryServiceConfig;
     use url::Url;
 
-    use super::default_store_dir;
-    use super::validate_requested_store_path_digest;
     use super::Error;
     use super::NixHTTPPathInfoService;
     use super::NixHTTPPathInfoServiceConfig;
     use super::NixHTTPPathInfoServiceParams;
+    use super::default_store_dir;
+    use super::multi_frame_zstd_decoder;
+    use super::normalize_binary_cache_base_url;
+    use super::validate_requested_store_path_digest;
     use crate::pathinfoservice::PathInfoService;
 
+    const CACHE_NIXOS_PUBLIC_KEY: &str = "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=";
     const TEST_NARINFO: &str = r#"StorePath: /nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-net-tools-1.60_p20170221182432
 URL: nar/1094wph9z4nwlgvsd53abfz8i117ykiv5dwnq9nnhz846s7xqd7d.nar.xz
 Compression: xz
@@ -554,6 +577,52 @@ Sig: hydra.other.net-1:JXQ3Z/PXf0EZSFkFioa4FbyYpbbTbHlFBtZf4VqU0tuMTWzhMD7p9Q7ac
     }
 
     #[test]
+    fn cache_base_normalization_preserves_subpaths_for_endpoint_joins() {
+        // r[verify cache_substitution.transport_normalization]
+        let without_slash: Url = "https://cache.example.test/nested/cache".parse().unwrap();
+        let with_slash: Url = "https://cache.example.test/nested/cache/".parse().unwrap();
+        let normalized_without_slash = normalize_binary_cache_base_url(without_slash);
+        let normalized_with_slash = normalize_binary_cache_base_url(with_slash);
+
+        assert_eq!(normalized_without_slash, normalized_with_slash);
+        assert_eq!(
+            normalized_without_slash.join("path.narinfo").unwrap().as_str(),
+            "https://cache.example.test/nested/cache/path.narinfo"
+        );
+    }
+
+    #[tokio::test]
+    async fn zstd_decoder_consumes_all_frames_and_rejects_a_malformed_later_frame() {
+        // r[verify cache_substitution.transport_normalization]
+        use tokio::io::AsyncReadExt;
+
+        async fn compress_frame(bytes: &[u8]) -> Vec<u8> {
+            assert!(!bytes.is_empty(), "zstd test frame input must not be empty");
+            let mut encoder = async_compression::tokio::bufread::ZstdEncoder::new(tokio::io::BufReader::new(bytes));
+            let mut compressed = Vec::new();
+            encoder.read_to_end(&mut compressed).await.unwrap();
+            assert!(!compressed.is_empty(), "zstd test frame output must not be empty");
+            compressed
+        }
+
+        let first = compress_frame(b"first-").await;
+        let second = compress_frame(b"second").await;
+        let mut complete = first.clone();
+        complete.extend_from_slice(&second);
+        let mut decoder = multi_frame_zstd_decoder(tokio::io::BufReader::new(complete.as_slice()));
+        let mut decoded = Vec::new();
+        decoder.read_to_end(&mut decoded).await.unwrap();
+
+        assert_eq!(decoded, b"first-second");
+        let mut malformed = first;
+        malformed.extend_from_slice(b"not-a-zstd-frame");
+        let mut decoder = multi_frame_zstd_decoder(tokio::io::BufReader::new(malformed.as_slice()));
+        let mut rejected = Vec::new();
+        assert!(decoder.read_to_end(&mut rejected).await.is_err());
+        assert_ne!(rejected, b"first-second");
+    }
+
+    #[test]
     fn narinfo_parsing_uses_the_configured_store_directory() {
         const MANTLE_STORE_DIR: &str = "/mantle/store";
         let body = TEST_NARINFO.replace(nix_compat::store_path::STORE_DIR, MANTLE_STORE_DIR);
@@ -582,12 +651,16 @@ Sig: hydra.other.net-1:JXQ3Z/PXf0EZSFkFioa4FbyYpbbTbHlFBtZf4VqU0tuMTWzhMD7p9Q7ac
         )
         .unwrap();
         assert!(default_service.parse_and_verify_narinfo(&body).is_err());
-        assert!(test_service_config("http://127.0.0.1/".parse().unwrap())
-            .with_store_dir("relative".to_string())
-            .is_err());
-        assert!(test_service_config("http://127.0.0.1/".parse().unwrap())
-            .with_store_dir("/mantle/store/".to_string())
-            .is_err());
+        assert!(
+            test_service_config("http://127.0.0.1/".parse().unwrap())
+                .with_store_dir("relative".to_string())
+                .is_err()
+        );
+        assert!(
+            test_service_config("http://127.0.0.1/".parse().unwrap())
+                .with_store_dir("/mantle/store/".to_string())
+                .is_err()
+        );
     }
 
     #[test]
@@ -605,6 +678,58 @@ Sig: hydra.other.net-1:JXQ3Z/PXf0EZSFkFioa4FbyYpbbTbHlFBtZf4VqU0tuMTWzhMD7p9Q7ac
                 observed_digest,
             } if requested_digest == wrong_digest && observed_digest == *store_path.digest()
         ));
+    }
+
+    #[tokio::test]
+    async fn matching_signed_narinfo_returns_references() {
+        // r[verify cache_substitution.requested_path_identity]
+        let (base_url, counts, stop, handle) = spawn_test_server(TEST_NARINFO);
+        let mut config = test_service_config(base_url.clone());
+        config.params.trusted_public_keys = vec![CACHE_NIXOS_PUBLIC_KEY.to_string()];
+        let service = NixHTTPPathInfoService::try_build(
+            "signed-match".to_string(),
+            config,
+            MemoryBlobService::default(),
+            RedbDirectoryService::new_temporary("signed-match".to_string(), RedbDirectoryServiceConfig::default())
+                .unwrap(),
+        )
+        .unwrap();
+
+        let references = service
+            .get_references(*test_store_path().digest())
+            .await
+            .expect("signed narinfo")
+            .expect("matching PathInfo references");
+
+        assert_eq!(references, vec![test_reference_path()]);
+        let counts = counts.lock().unwrap();
+        assert_eq!(counts.narinfo_gets, 1);
+        assert_eq!(counts.nar_gets, 0);
+        drop(counts);
+        stop_test_server(&base_url, stop, handle);
+    }
+
+    #[tokio::test]
+    async fn malformed_narinfo_returns_no_pathinfo_and_fetches_no_nar() {
+        // r[verify cache_substitution.requested_path_identity]
+        let (base_url, counts, stop, handle) = spawn_test_server("malformed narinfo");
+        let service = NixHTTPPathInfoService::try_build(
+            "malformed".to_string(),
+            test_service_config(base_url.clone()),
+            MemoryBlobService::default(),
+            RedbDirectoryService::new_temporary("malformed".to_string(), RedbDirectoryServiceConfig::default())
+                .unwrap(),
+        )
+        .unwrap();
+
+        let error = service.get(*test_store_path().digest()).await.expect_err("malformed metadata must fail");
+
+        assert!(error.to_string().contains("unable to parse NARInfo"));
+        let counts = counts.lock().unwrap();
+        assert_eq!(counts.narinfo_gets, 1);
+        assert_eq!(counts.nar_gets, 0);
+        drop(counts);
+        stop_test_server(&base_url, stop, handle);
     }
 
     #[tokio::test]
@@ -634,8 +759,10 @@ Sig: hydra.other.net-1:JXQ3Z/PXf0EZSFkFioa4FbyYpbbTbHlFBtZf4VqU0tuMTWzhMD7p9Q7ac
 
     #[tokio::test]
     async fn get_references_rejects_mismatched_store_path_before_nar_fetch() {
+        // r[verify cache_substitution.requested_path_identity]
         let (base_url, counts, stop, handle) = spawn_test_server(TEST_NARINFO);
-        let config = test_service_config(base_url.clone());
+        let mut config = test_service_config(base_url.clone());
+        config.params.trusted_public_keys = vec![CACHE_NIXOS_PUBLIC_KEY.to_string()];
         let blob_service = MemoryBlobService::default();
         let directory_service =
             RedbDirectoryService::new_temporary("test".to_string(), RedbDirectoryServiceConfig::default())
