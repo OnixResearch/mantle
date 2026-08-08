@@ -12,4 +12,4 @@
 - [x] [serial] I4 Record explicit authorization for the exact merge candidate and canonical target. r[mantle.durable_publication_promotion.safe_push]
 - [x] [serial] I5 Advance Mantle `origin/main` through a normal fast-forward push of that exact candidate. r[mantle.durable_publication_promotion.safe_push]
 - [x] [serial] V2 Re-fetch and verify the exact remote candidate, both Mantle ancestors, durable RID, producer reconciliation, and durable revision. r[mantle.durable_publication_promotion.validation]
-- [ ] [serial] V3 Synchronize the accepted specification and archive the completed change with receipts. r[mantle.durable_publication_promotion.validation]
+- [x] [serial] V3 Synchronize the accepted specification and archive the completed change with receipts. r[mantle.durable_publication_promotion.validation]

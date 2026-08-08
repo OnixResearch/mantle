@@ -77,3 +77,14 @@ Mantle `origin/main` contains the reviewed adoption commit. The durable RID rema
 ## Non-claims
 
 This promotion proves reviewed ancestry, bounded receipt freshness, focused adoption validation, and non-destructive canonical placement. It does not prove the three bootstrap-parity tests, repository formatting, whole-tree Tiger Style, whole-Mantle correctness, fixed-point success, full-source completion, or release eligibility.
+
+## Archive validation
+
+Legacy Cairn created `cairn/archive/1970-01-01-promote-durable-publication-adoption`. The operator renamed it to `cairn/archive/2026-08-08-promote-durable-publication-adoption` to record the session date, as required by the repository archive procedure.
+
+Exact post-archive command output is in:
+
+- `evidence/post-archive-validation.json`
+- `evidence/post-archive-tracey.json`
+
+The strict validation output has `"valid": true`. The Tracey output has `"verdict": "pass"` and reports 155 of 155 requirements referenced.
