@@ -8,7 +8,8 @@ This final change is promotion-only. It consumes completed native parity rows, a
 
 - Make bootstrap parity consume the completed row-specific, StageX, and v2 self-build receipts and report complete axes only when every axis-specific requirement is independently satisfied.
 - Add an independent verifier for the promoted evidence bundle and mutation-style negative fixtures for every authority and digest edge.
-- Export release evidence and operator summaries with exact bounded claims and non-claims.
+- Require the fixed-point root action trust plan and planned-versus-observed execution reconciliation. Reject partial action lists, path-only generated authority, and unmatched execution.
+- Export release evidence and operator summaries with exact bounded claims, action-trust counts, blockers, and non-claims.
 - Keep full-bootstrap promotion independent from build-witness quorum while making promoted evidence available to later optional-witness or explicit quorum evaluation.
 - Preserve compatibility row/schema identifiers unless a separately versioned migration is required.
 
@@ -21,5 +22,5 @@ This final change is promotion-only. It consumes completed native parity rows, a
 
 ## Impact
 
-- **Files**: `src/bootstrap_parity.rs`, parity CLI/tests, bootstrap evidence receipts/checkers, release evidence, operator documentation, README status, and lifecycle evidence.
-- **Testing**: parity require modes; independent bundle verification; tamper/stale/mixed-authority fixtures; release checks; machine contracts; Cairn/Tracey/Nix gates.
+- **Files**: `src/bootstrap_parity.rs`, parity and trust-report CLI/tests, bootstrap evidence receipts/checkers, release evidence, operator documentation, README status, and lifecycle evidence.
+- **Testing**: parity require modes; independent bundle and action-trust verification; tamper, stale, mixed-authority, incomplete-action, and unmatched-execution fixtures; release checks; machine contracts; Cairn/Tracey/Nix gates.

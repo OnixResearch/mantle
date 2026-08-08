@@ -20,7 +20,7 @@ let automake115_src = crunch.fetchTarball {
 } in
 
 {
-  name = "gcc-4.0.4-musl-cxx-v7",
+  name = "gcc-4.0.4-musl-cxx-v8",
   builder = "/bin/sh",
   args = [
     "-c",
@@ -42,7 +42,7 @@ let automake115_src = crunch.fetchTarball {
 
       SEED_GCC=$(find_input gcc-4.0.4-musl-pass6-v1)
       MUSL=$(find_input musl-1.1.24-gcc-pass5-v1)
-      BINUTILS=$(find_input binutils-2.30-gcc-pass4-v16)
+      BINUTILS=$(find_input binutils-2.30-gcc-pass4-v17)
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
       BISON=$(find_input bison-3.4.1-gcc-v2)
@@ -143,6 +143,19 @@ EOF
       test -f gcc/c-parse.c || { echo "ERROR: shipped C parser missing" >&2; exit 1; }
       test -f gcc/gengtype-yacc.y || { echo "ERROR: gengtype grammar missing" >&2; exit 1; }
       test -f gcc/gengtype-lex.l || { echo "ERROR: gengtype scanner missing" >&2; exit 1; }
+
+      RANDOM_SEED_SOURCE=gcc/toplev.c
+      RANDOM_SEED_OLD='      value = local_tick ^ getpid ();'
+      RANDOM_SEED_NEW='      value = crc32_string (0, main_input_filename ? main_input_filename : "mantle-gcc40-no-input");'
+      RANDOM_SEED_ASSIGN_OLD='      flag_random_seed = random_seed;'
+      RANDOM_SEED_ASSIGN_NEW='      flag_random_seed = random_seed; local_tick = -1;'
+      test "$($BB grep -Fxc "$RANDOM_SEED_OLD" "$RANDOM_SEED_SOURCE")" -eq 1
+      test "$($BB grep -Fxc "$RANDOM_SEED_ASSIGN_OLD" "$RANDOM_SEED_SOURCE")" -eq 1
+      $BB sed -i "s|$RANDOM_SEED_OLD|$RANDOM_SEED_NEW|" "$RANDOM_SEED_SOURCE"
+      $BB sed -i "s|$RANDOM_SEED_ASSIGN_OLD|$RANDOM_SEED_ASSIGN_NEW|" "$RANDOM_SEED_SOURCE"
+      test "$($BB grep -Fxc "$RANDOM_SEED_NEW" "$RANDOM_SEED_SOURCE")" -eq 1
+      test "$($BB grep -Fxc "$RANDOM_SEED_ASSIGN_NEW" "$RANDOM_SEED_SOURCE")" -eq 1
+      test "$($BB grep -Fxc "$RANDOM_SEED_OLD" "$RANDOM_SEED_SOURCE")" -eq 0
 
       M4="$M4TOOL/bin/m4" BISON_PKGDATADIR="$BISON/share/bison" \
         "$BISON/bin/bison" -d -o gcc/gengtype-yacc.c gcc/gengtype-yacc.y
@@ -271,6 +284,10 @@ EOF
       $BB cp "$WORK/src/gcc/gengtype-lex.c" "$GENERATED_SOURCE_DIR/gengtype-lex.c"
       $BB cp "$WORK/src/configure" "$GENERATED_SOURCE_DIR/configure-autoconf-2.13"
       $BB cp "$WORK/src/gcc/configure" "$GENERATED_SOURCE_DIR/gcc-configure-autoconf-2.59"
+      $BB printf '%s\n' \
+        'default_random_seed=main-input-filename-crc32' \
+        'default_random_seed_local_tick=disabled' \
+        > "$GENERATED_SOURCE_DIR/random-seed-determinism.txt"
       for generator in genattrtab genoutput genemit genrecog genextract gengtype; do
         test -x "$WORK/build/gcc/build/$generator"
         $BB cp "$WORK/build/gcc/build/$generator" "$GENERATOR_DIR/$generator"
@@ -295,6 +312,24 @@ EOF
       test -x "$out/libexec/gcc/$TARGET/$GCC_VERSION/cc1"
       test -x "$out/libexec/gcc/$TARGET/$GCC_VERSION/cc1plus"
       test -s "$out/lib/gcc/$TARGET/$GCC_VERSION/libgcc.a"
+
+      CC1PLUS="$out/libexec/gcc/$TARGET/$GCC_VERSION/cc1plus"
+      $BB cat > "$WORK/random-seed-probe.cc" <<'EOF'
+namespace { struct state { static int value; }; int state::value = 42; }
+int read_value() { return state::value; }
+EOF
+      "$CC1PLUS" -quiet -O2 "$WORK/random-seed-probe.cc" -o "$WORK/random-seed-default-a.s"
+      "$CC1PLUS" -quiet -O2 "$WORK/random-seed-probe.cc" -o "$WORK/random-seed-default-b.s"
+      $BB cmp "$WORK/random-seed-default-a.s" "$WORK/random-seed-default-b.s"
+      "$CC1PLUS" -quiet -O2 -frandom-seed=mantle-negative-a \
+        "$WORK/random-seed-probe.cc" -o "$WORK/random-seed-explicit-a.s"
+      "$CC1PLUS" -quiet -O2 -frandom-seed=mantle-negative-b \
+        "$WORK/random-seed-probe.cc" -o "$WORK/random-seed-explicit-b.s"
+      if $BB cmp "$WORK/random-seed-explicit-a.s" "$WORK/random-seed-explicit-b.s"; then
+        echo "ERROR: GCC random-seed negative control produced equal assembly" >&2
+        exit 1
+      fi
+
       LIBSTDCXX=$($BB find "$out" -type f -name libstdc++.a | $BB head -n 1)
       LIBSUPCXX=$($BB find "$out" -type f -name libsupc++.a | $BB head -n 1)
       test -n "$LIBSTDCXX"

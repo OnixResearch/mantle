@@ -496,6 +496,11 @@ or global release eligibility.
 
 ## Development
 
+Development builds use a dedicated store on the datapool NVMe disk. The `store`
+symlink at the repository root points to the ZFS dataset `datapool/mantle-store`
+(mounted at `/datapool/mantle-store`). Pass `--store store --state-dir store/state`
+to `mantle build` to keep build outputs on that disk. The symlink is gitignored.
+
 Use the repository-owned quality wrappers from the dev shell:
 
 ```bash
@@ -551,3 +556,4 @@ notices.
 - [ekala-project/corepkgs](https://github.com/ekala-project/corepkgs) provides package-domain, explicit-variant, deterministic-index, and separate-test design references. Mantle retains package identity, build, validation, and evidence authority.
 - [ekala-project/eka-ci](https://github.com/ekala-project/eka-ci) provides base-to-head package-impact and closure-diff design references. Forge credentials and CI presentation remain outside Mantle.
 - [ekala-project/ekapkgs-update](https://github.com/ekala-project/ekapkgs-update) provides source-adapter, version-policy, OSV, and Repology design references. Mantle preserves explicit unavailable states and reimplements policy in its functional core.
+- [fzakaria/stage0-bazel](https://github.com/fzakaria/stage0-bazel) provides an MIT-licensed root action-audit and trust-report design reference. Mantle retains BLAKE3 identity, producer-linked authority, seccomp enforcement, and evidence authority.

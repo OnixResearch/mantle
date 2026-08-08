@@ -16,15 +16,21 @@ The current parity report correctly keeps every axis incomplete. It also exposes
 
 **Rationale:** Promotion should not combine a trust change with gratuitous API churn.
 
+### Decision: require root action trust evidence from the fixed-point domain
+
+**Choice:** Promotion requires the complete fixed-point action trust plan, observed execution reconciliation, and their v2 receipt links. It rejects incomplete adapters, path-only generated authority, producerless executables, unknown or missing events, digest or producer drift, count-bound violations, remote execution, and cache-only completion. The report complements the StageX seccomp audit and cannot replace it.
+
+**Rationale:** StageX has detailed protected execution evidence, while the six-stage fixed-point summary spans the full proof. Promotion needs an explicit link between these levels before it can emit a full-bootstrap claim.
+
 ### Decision: add a second implementation for bundle verification
 
-**Choice:** A standalone Rust checker reads the exported promoted bundle, recomputes BLAKE3 bindings, verifies cross-receipt identities and status, and rejects path-dependent or target-authority evidence. Positive and negative fixtures cover each edge.
+**Choice:** A standalone Rust checker reads the exported promoted bundle, recomputes BLAKE3 bindings, verifies cross-receipt identities and status, recomputes action-trust counts and planned-versus-observed coverage, and rejects path-dependent or target-authority evidence. Positive and negative fixtures cover each edge.
 
 **Rationale:** The producer and parity collector sharing one code path would leave correlated serialization/validation defects unchecked.
 
 ### Decision: derive claims from completed axes
 
-**Choice:** Human and JSON reports name the exact completed axes and evidence. “Full bootstrap” is emitted only for the defined StageX-to-Mantle fixed-point scope. Compiler correctness, seed correctness, kernel isolation, independent rebuild agreement, release reproducibility, deployment, and full Cargo compatibility remain non-claims.
+**Choice:** Human and JSON reports name the exact completed axes, evidence, planned action count, observed event count, unmatched count, and action-trust blockers. “Full bootstrap” is emitted only for the defined StageX-to-Mantle fixed-point scope. Compiler correctness, seed correctness, kernel isolation, independent rebuild agreement, release reproducibility, deployment, and full Cargo compatibility remain non-claims.
 
 **Rationale:** A strong bounded claim is more useful than an ambiguous universal one.
 
@@ -43,5 +49,7 @@ The current parity report correctly keeps every axis incomplete. It also exposes
 ## Risks / Trade-offs
 
 - Independent verification can expose producer/checker disagreement late; that disagreement blocks promotion.
+- Complete action lists can be large. The promoted schema must retain deterministic order and explicit count limits.
+- A missing native-provider or Rust-unit adapter blocks promotion instead of producing a partial report.
 - Existing external consumers may rely on compatibility row names, so versioning must be deliberate.
 - The final report remains scoped and will not imply formal correctness.

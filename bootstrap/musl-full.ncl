@@ -43,7 +43,7 @@ let musl_src = crunch.fetchTarball {
       }
 
       GCC=$(find_input gcc-10.5.0-musl-gcc47-v2)
-      BINUTILS=$(find_input binutils-2.30-gcc-pass4-v16)
+      BINUTILS=$(find_input binutils-2.30-gcc-pass4-v17)
       MUSL_OLD=$(find_input musl-1.1.24-gcc-pass5-v1)
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)

@@ -64,6 +64,7 @@ use crate::StoreAuditKind;
 use crate::StoreFallbackMode;
 use crate::StoredArtifactAttestation;
 use crate::StoredClosureAttestation;
+use crate::attestation::artifact_attestation_matches_pathinfo;
 use crate::attestation::load_artifact_attestation;
 use crate::attestation::load_or_create_runtime_closure_attestation;
 use crate::attestation::persist_artifact_attestation;
@@ -1597,8 +1598,7 @@ impl StoreHandle {
                     // r[impl cache_substitution.castore_completeness]
                     let has_content = self.castore_has_complete_content(&path_info.node).await?;
                     if has_content {
-                        persist_artifact_attestation(&self.state_dir, &self.store_dir, &path_info, output_name, None)
-                            .await?;
+                        self.persist_artifact_attestation_without_evidence_loss(&path_info, output_name, None).await?;
                         self.export_output_if_needed(&output_path, &path_info.node, is_root).await?;
                         if layered_path_info.layer.is_overlay() {
                             self.output_nodes.insert(output_path.clone(), path_info.node.clone());
@@ -2885,7 +2885,8 @@ impl StoreHandle {
     /// Adopt a locally materialized output only after its caller independently verifies it.
     ///
     /// The logical path must map to an existing entry in this handle's physical output
-    /// directory. Existing PathInfo entries are never replaced through this seam.
+    /// directory. Existing PathInfo entries are never replaced through this seam;
+    /// an exact signed match is returned only after fresh tree and NAR validation.
     pub async fn adopt_verified_local_output(
         &mut self,
         logical_store_path: &str,
@@ -2897,15 +2898,11 @@ impl StoreHandle {
         assert!(!output_name.is_empty(), "output_name must not be empty");
         let store_path = StorePath::from_absolute_path_with_prefix(logical_store_path.as_bytes(), &self.store_dir)
             .map_err(|error| Error::Store(format!("adoption logical store path {logical_store_path}: {error}")))?;
-        if self
+        let existing = self
             .pathinfo_service
             .get(*store_path.digest())
             .await
-            .map_err(|error| Error::PathInfoService(format!("adoption preflight: {error}")))?
-            .is_some()
-        {
-            return Err(Error::Store(format!("adoption refuses to replace existing PathInfo: {logical_store_path}")));
-        }
+            .map_err(|error| Error::PathInfoService(format!("adoption preflight: {error}")))?;
         let physical_path = Path::new(&self.output_dir_str).join(store_path.to_string());
         let metadata = std::fs::symlink_metadata(&physical_path)
             .map_err(|error| Error::Store(format!("adoption source {}: {error}", physical_path.display())))?;
@@ -2928,6 +2925,10 @@ impl StoreHandle {
             .calculate_nar(&node)
             .await
             .map_err(|error| Error::Store(format!("adoption NAR calculation: {error}")))?;
+        if let Some(existing) = existing {
+            validate_existing_adoption(&existing, &store_path, &node, nar_size, &nar_sha256)?;
+            return Ok(existing);
+        }
         let path_info = signed_adoption_path_info(
             store_path.clone(),
             node.clone(),
@@ -2974,9 +2975,7 @@ impl StoreHandle {
             .put(req.path_info.clone())
             .await
             .map_err(|e| Error::Store(format!("persisting PathInfo: {e}")))?;
-        persist_artifact_attestation(
-            &self.state_dir,
-            &self.store_dir,
+        self.persist_artifact_attestation_without_evidence_loss(
             &req.path_info,
             req.output_name,
             req.provenance.as_ref(),
@@ -3008,6 +3007,30 @@ impl StoreHandle {
         }
 
         Ok(req.path_info)
+    }
+
+    async fn persist_artifact_attestation_without_evidence_loss(
+        &self,
+        path_info: &PathInfo,
+        output_name: &str,
+        provenance: Option<&ArtifactProvenance>,
+    ) -> Result<(), Error> {
+        assert!(!output_name.is_empty(), "output_name must not be empty");
+
+        let preserve_existing = match provenance {
+            Some(_) => false,
+            None => match load_artifact_attestation(&self.state_dir, &path_info.store_path, &self.store_dir).await? {
+                Some(stored) => {
+                    artifact_attestation_matches_pathinfo(&self.store_dir, path_info, output_name, &stored.attestation)
+                }
+                None => false,
+            },
+        };
+        if preserve_existing {
+            return Ok(());
+        }
+        persist_artifact_attestation(&self.state_dir, &self.store_dir, path_info, output_name, provenance).await?;
+        Ok(())
     }
 
     async fn export_output_if_needed(
@@ -3309,6 +3332,35 @@ fn compute_pathinfo_fingerprint(path_info: &PathInfo, store_dir: &str) -> String
     fingerprint_with_store_dir(&store_path_ref, &path_info.nar_sha256, path_info.nar_size, references.iter(), store_dir)
 }
 
+fn validate_existing_adoption(
+    existing: &PathInfo,
+    store_path: &StorePath<String>,
+    observed_node: &Node,
+    observed_nar_size: u64,
+    observed_nar_sha256: &[u8; NAR_SHA256_BYTES],
+) -> Result<(), Error> {
+    if existing.store_path != *store_path {
+        return Err(Error::Store(format!(
+            "adoption PathInfo digest collision: expected {store_path}, found {}",
+            existing.store_path
+        )));
+    }
+    if existing.signatures.is_empty() {
+        return Err(Error::Store(format!("adoption existing PathInfo is unsigned: {store_path}")));
+    }
+    if existing.node != *observed_node {
+        return Err(Error::Store(format!("adoption existing PathInfo node differs from physical tree: {store_path}")));
+    }
+    if existing.nar_size != observed_nar_size || existing.nar_sha256 != *observed_nar_sha256 {
+        return Err(Error::Store(format!(
+            "adoption existing PathInfo NAR facts differ from physical tree: {store_path}"
+        )));
+    }
+    assert_eq!(existing.store_path, *store_path);
+    assert!(!existing.signatures.is_empty());
+    Ok(())
+}
+
 fn signed_adoption_path_info(
     store_path: StorePath<String>,
     node: Node,
@@ -3538,6 +3590,7 @@ mod tests {
     use tokio::io::AsyncWriteExt;
 
     use super::*;
+    use crate::layer::StoreLayer;
 
     #[test]
     fn remote_trusted_key_parser_accepts_indexed_keys_and_rejects_duplicate_indexes() {
@@ -4232,6 +4285,154 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn check_cache_preserves_current_detailed_artifact_attestation() {
+        const OUTPUT_DIGEST_BYTE: u8 = 54;
+        const DERIVER_DIGEST_BYTE: u8 = 55;
+        const SOURCE_DIGEST_BYTE: u8 = 56;
+        const INPUT_DIGEST_BYTE: u8 = 57;
+        const EXPECTED_BUILD_INPUT_EDGE_COUNT: usize = 2;
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let output_path = test_output("cache-provenance", OUTPUT_DIGEST_BYTE);
+        let mut path_info = signed_pathinfo(output_path.clone());
+        path_info.deriver = Some(test_output("cache-provenance.drv", DERIVER_DIGEST_BYTE));
+        handle.pathinfo_service.put(path_info.clone()).await.unwrap();
+
+        let detailed = persist_artifact_attestation(
+            state_dir.path(),
+            "/nix/store",
+            &path_info,
+            "out",
+            Some(&ArtifactProvenance {
+                claims: None,
+                input_sources: vec![test_output("source", SOURCE_DIGEST_BYTE)],
+                input_artifacts: vec![test_output("input", INPUT_DIGEST_BYTE)],
+                store_layer: StoreLayer::Overlay,
+            }),
+        )
+        .await
+        .unwrap();
+        let attestation_path = crate::artifact_attestation_file_path(state_dir.path(), "/nix/store", &output_path);
+        let bytes_before_cache_hit = std::fs::read(&attestation_path).unwrap();
+        let mut outputs = std::collections::BTreeMap::new();
+        outputs.insert("out".to_string(), nix_compat::derivation::Output {
+            path: Some(output_path.clone()),
+            ca_hash: None,
+        });
+        let derivation = Derivation {
+            arguments: vec![],
+            builder: "/bin/sh".to_string(),
+            environment: std::collections::BTreeMap::new(),
+            input_derivations: std::collections::BTreeMap::new(),
+            input_sources: std::collections::BTreeSet::new(),
+            outputs,
+            system: "x86_64-linux".to_string(),
+        };
+
+        let cached = handle
+            .check_cache(&test_output("cache-provenance.drv", DERIVER_DIGEST_BYTE), &derivation, false, None)
+            .await
+            .unwrap();
+        let after_cache_hit = handle.get_artifact_attestation(&output_path).await.unwrap().unwrap();
+        let bytes_after_cache_hit = std::fs::read(&attestation_path).unwrap();
+
+        assert!(cached.is_some());
+        assert_eq!(bytes_after_cache_hit, bytes_before_cache_hit);
+        assert_eq!(after_cache_hit.digest, detailed.digest);
+        assert_eq!(
+            after_cache_hit
+                .attestation
+                .edges
+                .iter()
+                .filter(|edge| edge.kind == crunch_attestation::EdgeKind::BuildInput)
+                .count(),
+            EXPECTED_BUILD_INPUT_EDGE_COUNT
+        );
+    }
+
+    #[tokio::test]
+    async fn action_result_admission_preserves_current_detailed_artifact_attestation() {
+        const OUTPUT_DIGEST_BYTE: u8 = 60;
+        const DERIVER_DIGEST_BYTE: u8 = 61;
+        const INPUT_DIGEST_BYTE: u8 = 62;
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let output_path = test_output("action-result-provenance", OUTPUT_DIGEST_BYTE);
+        let mut path_info = signed_pathinfo(output_path.clone());
+        path_info.deriver = Some(test_output("action-result-provenance.drv", DERIVER_DIGEST_BYTE));
+        persist_artifact_attestation(
+            state_dir.path(),
+            "/nix/store",
+            &path_info,
+            "out",
+            Some(&ArtifactProvenance {
+                claims: None,
+                input_sources: Vec::new(),
+                input_artifacts: vec![test_output("action-result-input", INPUT_DIGEST_BYTE)],
+                store_layer: StoreLayer::Overlay,
+            }),
+        )
+        .await
+        .unwrap();
+        let attestation_path = crate::artifact_attestation_file_path(state_dir.path(), "/nix/store", &output_path);
+        let bytes_before_admission = std::fs::read(&attestation_path).unwrap();
+        let outputs = BTreeMap::from([("out".to_string(), path_info)]);
+
+        handle.admit_action_result_outputs(&outputs, false, None).await.unwrap();
+
+        let bytes_after_admission = std::fs::read(&attestation_path).unwrap();
+        let admitted = handle.get_artifact_attestation(&output_path).await.unwrap().unwrap();
+        assert_eq!(bytes_after_admission, bytes_before_admission);
+        assert!(admitted.attestation.edges.iter().any(|edge| edge.kind == crunch_attestation::EdgeKind::BuildInput));
+    }
+
+    #[tokio::test]
+    async fn check_cache_replaces_stale_artifact_attestation_facts() {
+        const OUTPUT_DIGEST_BYTE: u8 = 58;
+        const STALE_NAR_HASH_BYTE: u8 = 59;
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let output_path = test_output("stale-cache-attestation", OUTPUT_DIGEST_BYTE);
+        let mut stale_path_info = signed_pathinfo(output_path.clone());
+        stale_path_info.nar_sha256 = [STALE_NAR_HASH_BYTE; NAR_SHA256_BYTES];
+        let stale = persist_artifact_attestation(state_dir.path(), "/nix/store", &stale_path_info, "out", None)
+            .await
+            .unwrap();
+        let current_path_info = signed_pathinfo(output_path.clone());
+        handle.pathinfo_service.put(current_path_info.clone()).await.unwrap();
+
+        let mut outputs = std::collections::BTreeMap::new();
+        outputs.insert("out".to_string(), nix_compat::derivation::Output {
+            path: Some(output_path.clone()),
+            ca_hash: None,
+        });
+        let derivation = Derivation {
+            arguments: vec![],
+            builder: "/bin/sh".to_string(),
+            environment: std::collections::BTreeMap::new(),
+            input_derivations: std::collections::BTreeMap::new(),
+            input_sources: std::collections::BTreeSet::new(),
+            outputs,
+            system: "x86_64-linux".to_string(),
+        };
+
+        let cached = handle
+            .check_cache(&test_output("stale-cache-attestation.drv", OUTPUT_DIGEST_BYTE), &derivation, false, None)
+            .await
+            .unwrap();
+        let after_cache_hit = handle.get_artifact_attestation(&output_path).await.unwrap().unwrap();
+
+        assert!(cached.is_some());
+        assert_ne!(after_cache_hit.digest, stale.digest);
+        assert!(artifact_attestation_matches_pathinfo(
+            "/nix/store",
+            &current_path_info,
+            "out",
+            &after_cache_hit.attestation,
+        ));
+    }
+
+    #[tokio::test]
     async fn check_cache_accepts_ca_mapping_with_custom_store_prefix() {
         let state_dir = tempfile::tempdir().unwrap();
         let mut handle = test_handle_with_store_dir(state_dir.path(), "/crunch/store");
@@ -4281,12 +4482,54 @@ mod tests {
         );
 
         let adopted = handle.adopt_verified_local_output(&logical_path, "out", &signing_key, None).await.unwrap();
+        let reused = handle.adopt_verified_local_output(&logical_path, "out", &signing_key, None).await.unwrap();
         let stored = handle.pathinfo_service.get(*store_path.digest()).await.unwrap().unwrap();
 
         assert_eq!(adopted, stored);
+        assert_eq!(reused, stored);
         assert_eq!(adopted.store_path, store_path);
         assert_eq!(adopted.signatures.len(), 1);
         assert!(crate::artifact_attestation_file_path(state_dir.path(), "/nix/store", &store_path).is_file());
+    }
+
+    #[tokio::test]
+    async fn verified_local_output_adoption_rejects_changed_existing_content() {
+        const ADOPTION_DIGEST_BYTE: u8 = 33;
+        const ADOPTION_KEY_BYTE: u8 = 43;
+        let state_dir = tempfile::tempdir().unwrap();
+        let mut handle = test_handle(state_dir.path());
+        let store_path = test_output("changed-provider", ADOPTION_DIGEST_BYTE);
+        let physical_path = state_dir.path().join(store_path.to_string());
+        std::fs::create_dir(&physical_path).unwrap();
+        std::fs::write(physical_path.join("provider.txt"), b"verified-provider").unwrap();
+        let logical_path = store_path.to_absolute_path();
+        let signing_key = SigningKey::new(
+            "adoption-test-3".to_string(),
+            ed25519_dalek::SigningKey::from_bytes(&[ADOPTION_KEY_BYTE; NAR_SHA256_BYTES]),
+        );
+        let adopted = handle.adopt_verified_local_output(&logical_path, "out", &signing_key, None).await.unwrap();
+        std::fs::write(physical_path.join("provider.txt"), b"substituted-provider").unwrap();
+
+        let error = handle
+            .adopt_verified_local_output(&logical_path, "out", &signing_key, None)
+            .await
+            .unwrap_err()
+            .to_string();
+        let stored = handle.pathinfo_service.get(*store_path.digest()).await.unwrap().unwrap();
+
+        assert!(error.contains("node differs from physical tree"));
+        assert_eq!(stored, adopted);
+        assert_ne!(
+            stored.node,
+            ingest_path::<_, _, _, &[u8]>(
+                handle.blob_service.clone(),
+                handle.directory_service.clone(),
+                &physical_path,
+                None,
+            )
+            .await
+            .unwrap()
+        );
     }
 
     #[tokio::test]

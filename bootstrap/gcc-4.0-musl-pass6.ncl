@@ -44,9 +44,9 @@ let automake115_src = crunch.fetchTarball {
         exit 1
       }
 
-      SEED_GCC=$(find_input gcc-4.0.4-musl-pass5-v1)
+      SEED_GCC=$(find_input gcc-4.0.4-musl-pass5-v2)
       MUSL=$(find_input musl-1.1.24-gcc-pass5-v1)
-      BINUTILS=$(find_input binutils-2.30-gcc-pass4-v16)
+      BINUTILS=$(find_input binutils-2.30-gcc-pass4-v17)
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
       SRC=$(find_input gcc-4.0.4-native-src)

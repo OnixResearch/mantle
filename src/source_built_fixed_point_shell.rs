@@ -18,9 +18,9 @@ use crate::cargo_free_self_build::CargoFreeSelfBuildOptions;
 use crate::errors::RunError;
 use crate::full_source_rust_binding_shell::FullSourceRustHostToolMaterializationRequest;
 use crate::native_toolchain_closure::NativeToolchainClosureOptions;
-use crate::source_built_fixed_point::plan_source_built_fixed_point;
 use crate::source_built_fixed_point::InitialOutputAuthorityState;
 use crate::source_built_fixed_point::ProofHermeticityMode;
+use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
 use crate::source_built_fixed_point::SourceAuthorityInput;
 use crate::source_built_fixed_point::SourceAuthorityRole;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPlan;
@@ -28,23 +28,24 @@ use crate::source_built_fixed_point::SourceBuiltFixedPointPlanInput;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPolicies;
 use crate::source_built_fixed_point::SourceBuiltFixedPointResourceBounds;
 use crate::source_built_fixed_point::SourceContentKind;
+use crate::source_built_fixed_point::plan_source_built_fixed_point;
+use crate::source_built_fixed_point_dev_cache::DEV_CACHE_ENTRY_FILE;
+use crate::source_built_fixed_point_dev_cache::DevCachePolicies;
+use crate::source_built_fixed_point_dev_cache::DevProviderCacheEntry;
+use crate::source_built_fixed_point_dev_cache::DevProviderCacheLookup;
+use crate::source_built_fixed_point_dev_cache::FAST_FAIL_SCHEMA;
+use crate::source_built_fixed_point_dev_cache::FastFailDecision;
+use crate::source_built_fixed_point_dev_cache::StageCompletionMarker;
+use crate::source_built_fixed_point_dev_cache::StageMarkerValidation;
 use crate::source_built_fixed_point_dev_cache::dev_provider_cache_key;
 use crate::source_built_fixed_point_dev_cache::evaluate_fast_fail;
 use crate::source_built_fixed_point_dev_cache::evaluate_provider_cache_lookup;
 use crate::source_built_fixed_point_dev_cache::validate_stage_marker;
-use crate::source_built_fixed_point_dev_cache::DevCachePolicies;
-use crate::source_built_fixed_point_dev_cache::DevProviderCacheEntry;
-use crate::source_built_fixed_point_dev_cache::DevProviderCacheLookup;
-use crate::source_built_fixed_point_dev_cache::FastFailDecision;
-use crate::source_built_fixed_point_dev_cache::StageCompletionMarker;
-use crate::source_built_fixed_point_dev_cache::StageMarkerValidation;
-use crate::source_built_fixed_point_dev_cache::DEV_CACHE_ENTRY_FILE;
-use crate::source_built_fixed_point_dev_cache::FAST_FAIL_SCHEMA;
+use crate::source_bundle::SourceBuiltFixedPointProfileRecords;
+use crate::source_bundle::SourceRecord;
 use crate::source_bundle::assemble_source_bundle;
 use crate::source_bundle::materialize_source_record_payload;
 use crate::source_bundle::source_built_fixed_point_profile_records;
-use crate::source_bundle::SourceBuiltFixedPointProfileRecords;
-use crate::source_bundle::SourceRecord;
 use crate::stagex_provider::StagexProviderRequest;
 use crate::stagex_transition::StagexTransitionRequest;
 
@@ -59,6 +60,9 @@ const PROOF_STATUS_RUNNING: &str = "running";
 const PROOF_STATUS_FAILED: &str = "failed";
 const PROOF_STATUS_COMPLETE: &str = "complete";
 const STAGEX_TRANSITION_EXECUTION_DIR: &str = "stagex-transition-execution";
+const STAGEX_TRANSITION_HANDOFF_REPLAY_DIR: &str = "stagex-transition-handoff-replay";
+const STAGEX_PROVIDER_REPLAY_DIR: &str = "stagex-provider-replay";
+const STAGEX_PROVIDER_RECEIPT_FILE: &str = "provider-receipt.json";
 pub(crate) const STAGEX_TRANSITION_REPORT_FILE: &str = "transition-report.json";
 pub(crate) const STAGEX_TRANSITION_AUDIT_FILE: &str = "protected-exec-audit.json";
 const STAGEX_TRANSITION_HANDOFF_REPORT_FILE: &str = "stagex-transition-handoff.json";
@@ -94,7 +98,7 @@ pub(crate) const STAGEX_PROVIDER_STORE_BASENAME: &str =
 const STAGEX_PROVIDER_LOGICAL_PATH: &str =
     "/mantle/store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider";
 const STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST: &str =
-    "9e992a41dac86e4e069e3d5dcfdcb9512f2fb572639a3512aa0400895bffb269";
+    "e1039a3c844d709f51586f7afa2aacdbbe92aa224f1e20a778ea80573603ada3";
 const NATIVE_PROVIDER_ID: &str = "full-source-native-provider";
 const NATIVE_ADMISSION_REPORT_FILE: &str = "full-source-provider-admission.json";
 const NATIVE_SOURCE_MANIFEST_FILE: &str = "native-source-closure.json";
@@ -185,6 +189,13 @@ struct MaterializedSourceDigests {
     rust_source_archive_set: String,
     mantle_source: String,
     vendor_inputs: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct OpenFileDescriptorLimitPlan {
+    soft_limit: u64,
+    hard_limit: u64,
+    update_required: bool,
 }
 
 #[derive(Debug)]
@@ -413,6 +424,94 @@ fn validate_disk_capacity(available_bytes: u64, required_bytes: u64) -> Result<(
     Ok(())
 }
 
+fn plan_open_file_descriptor_limit(
+    current_soft_limit: u64,
+    current_hard_limit: u64,
+    required_limit: u64,
+) -> Result<OpenFileDescriptorLimitPlan, String> {
+    if required_limit == 0 {
+        return Err("proof open-file descriptor limit must be nonzero".to_string());
+    }
+    if current_soft_limit > current_hard_limit {
+        return Err(format!(
+            "observed open-file descriptor soft limit {current_soft_limit} exceeds hard limit {current_hard_limit}"
+        ));
+    }
+    if current_hard_limit < required_limit {
+        return Err(format!(
+            "proof requires open-file descriptor limit {required_limit}, but the hard limit is {current_hard_limit}"
+        ));
+    }
+    let plan = OpenFileDescriptorLimitPlan {
+        soft_limit: required_limit,
+        hard_limit: current_hard_limit,
+        update_required: current_soft_limit != required_limit,
+    };
+    assert!(plan.soft_limit > 0);
+    assert!(plan.soft_limit <= plan.hard_limit);
+    Ok(plan)
+}
+
+#[cfg(target_os = "linux")]
+fn read_open_file_descriptor_limits() -> Result<(u64, u64), RunError> {
+    let mut limits = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: `limits` points to initialized writable storage for one `rlimit` value.
+    let status = unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limits) };
+    if status != 0 {
+        return Err(proof_error(format!("reading open-file descriptor limit: {}", std::io::Error::last_os_error())));
+    }
+    if limits.rlim_cur > limits.rlim_max {
+        return Err(proof_error(format!(
+            "observed open-file descriptor soft limit {} exceeds hard limit {}",
+            limits.rlim_cur, limits.rlim_max
+        )));
+    }
+    assert!(limits.rlim_max > 0);
+    assert!(limits.rlim_cur <= limits.rlim_max);
+    Ok((limits.rlim_cur, limits.rlim_max))
+}
+
+#[cfg(target_os = "linux")]
+fn enforce_open_file_descriptor_limit(required_limit: u64) -> Result<(), RunError> {
+    let (current_soft_limit, current_hard_limit) = read_open_file_descriptor_limits()?;
+    let plan =
+        plan_open_file_descriptor_limit(current_soft_limit, current_hard_limit, required_limit).map_err(proof_error)?;
+    if plan.update_required {
+        let limits = libc::rlimit {
+            rlim_cur: plan.soft_limit,
+            rlim_max: plan.hard_limit,
+        };
+        // SAFETY: `limits` is a valid immutable `rlimit` value, and the pure plan
+        // proves that its soft limit is nonzero and no greater than its hard limit.
+        let status = unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limits) };
+        if status != 0 {
+            return Err(proof_error(format!(
+                "setting open-file descriptor limit to {}: {}",
+                plan.soft_limit,
+                std::io::Error::last_os_error()
+            )));
+        }
+    }
+    let (observed_soft_limit, observed_hard_limit) = read_open_file_descriptor_limits()?;
+    if observed_soft_limit != plan.soft_limit || observed_hard_limit != plan.hard_limit {
+        return Err(proof_error(format!(
+            "open-file descriptor limit verification failed: expected soft={} hard={}, observed soft={} hard={}",
+            plan.soft_limit, plan.hard_limit, observed_soft_limit, observed_hard_limit
+        )));
+    }
+    assert_eq!(observed_soft_limit, required_limit);
+    assert!(observed_soft_limit <= observed_hard_limit);
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn enforce_open_file_descriptor_limit(_required_limit: u64) -> Result<(), RunError> {
+    Err(proof_error("source-built fixed-point open-file descriptor enforcement requires Linux".to_string()))
+}
+
 fn prepare_attempt(
     options: &SourceBuiltFixedPointOptions<'_>,
     started_at: Instant,
@@ -597,6 +696,12 @@ fn validate_materialized_source_records(
     }
     let mut profile_by_identity = BTreeMap::new();
     for record in profile_records {
+        if !crate::source_bundle::source_record_is_fetcher_input(record) {
+            return Err(proof_error(format!(
+                "materialized source profile contains non-fetch source authority {}",
+                record.identity
+            )));
+        }
         if profile_by_identity.insert(record.identity.as_str(), *record).is_some() {
             return Err(proof_error(format!(
                 "materialized source profile repeats source identity {}",
@@ -604,13 +709,7 @@ fn validate_materialized_source_records(
             )));
         }
     }
-    if profile_by_identity.len() != expected_by_identity.len() {
-        return Err(proof_error(format!(
-            "materialized source record set differs from the exact native and StageX union: expected={}, profile={}",
-            expected_by_identity.len(),
-            profile_by_identity.len()
-        )));
-    }
+    let expected_record_count = expected_by_identity.len();
     for (identity, expected_record) in expected_by_identity {
         let Some(profile_record) = profile_by_identity.get(identity) else {
             return Err(proof_error(format!("materialized source profile omits bound source identity {identity}")));
@@ -622,6 +721,7 @@ fn validate_materialized_source_records(
         }
     }
     assert!(!profile_records.is_empty());
+    assert!(profile_by_identity.len() >= expected_record_count);
     debug_assert_eq!(native_manifest.store_prefix, stagex_manifest.store_prefix);
     Ok(())
 }
@@ -709,6 +809,7 @@ fn prepare_plan(
         resource_bounds: SourceBuiltFixedPointResourceBounds {
             elapsed_seconds_max: options.elapsed_seconds_max,
             disk_bytes_max: options.disk_bytes_max,
+            open_file_descriptors_max: SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX,
             protected_exec_events_max: options.protected_exec_events_max,
             source_records_max: options.source_records_max,
         },
@@ -721,6 +822,7 @@ fn prepare_plan(
 }
 
 fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAttempt) -> Result<bool, RunError> {
+    enforce_open_file_descriptor_limit(prepared.plan.resource_bounds.open_file_descriptors_max)?;
     validate_runtime_bounds(options, prepared)?;
     let adopt = dev_cache_adoption(options, &prepared.plan)?;
     let is_dev = options.dev_provider_cache.is_some();
@@ -779,7 +881,13 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         }
 
         let stagex_transition_root = prepared.native_store_dir.join(STAGEX_TRANSITION_STORE_BASENAME);
-        materialize_stagex_transition_handoff(&stagex_transition_execution_dir, &stagex_transition_root)?;
+        let stagex_transition_replay_root = prepared.staging_dir.join(STAGEX_TRANSITION_HANDOFF_REPLAY_DIR);
+        materialize_or_validate_stagex_transition_handoff(
+            is_dev,
+            &stagex_transition_execution_dir,
+            &stagex_transition_root,
+            &stagex_transition_replay_root,
+        )?;
         let transition_logical_path = crate::full_source_provider::adopt_verified_local_provider_path_strict(
             &stagex_transition_root,
             &prepared.native_store_dir,
@@ -799,16 +907,36 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         )?;
 
         let stagex_provider_root = prepared.native_store_dir.join(STAGEX_PROVIDER_STORE_BASENAME);
+        let reuse_stagex_provider = is_dev && stagex_provider_root.exists();
+        let stagex_provider_replay_root = prepared.staging_dir.join(STAGEX_PROVIDER_REPLAY_DIR);
+        let stagex_provider_output_root = if reuse_stagex_provider {
+            &stagex_provider_replay_root
+        } else {
+            &stagex_provider_root
+        };
         let stagex_provider_result = run_in_isolated_exec_thread("StageX provider publication", || {
             crate::stagex_provider::materialize_stagex_provider(StagexProviderRequest {
                 lineage_manifest_path: &prepared.stagex_lineage,
                 transition_root: &stagex_transition_execution_dir,
-                output_path: &stagex_provider_root,
+                output_path: stagex_provider_output_root,
             })
         })?;
         let stagex_provider_report = stagex_provider_result
             .map_err(|error| proof_error(format!("StageX provider publication failed: {error}")))?;
         validate_stagex_provider_normalized_identity(&stagex_provider_report.normalized_provider_digest_blake3)?;
+        if reuse_stagex_provider {
+            // Provider receipts bind current-run transition evidence. Keep the replay for receipts,
+            // and compare the reusable runtime payload through its normalized identity.
+            let persistent_digest =
+                crate::stagex_provider::observe_normalized_provider_payload_digest(&stagex_provider_root)
+                    .map_err(|error| proof_error(format!("observing persistent StageX provider payload: {error}")))?;
+            validate_reusable_stagex_provider_identity(
+                &stagex_provider_report.normalized_provider_digest_blake3,
+                &persistent_digest,
+            )?;
+            assert!(stagex_provider_replay_root.is_dir());
+            assert!(stagex_provider_root.is_dir());
+        }
         validate_runtime_bounds(options, prepared)?;
         let stagex_logical_path = crate::full_source_provider::adopt_verified_local_provider_path_strict(
             &stagex_provider_root,
@@ -1244,7 +1372,7 @@ fn synthesized_adopted_stagex_report(
         schema: "mantle-stagex-provider-publication-v1",
         provider_kind: "stagex-intermediate-provider",
         output_path: stagex_root.clone(),
-        receipt_path: stagex_root.join("provider-receipt.json"),
+        receipt_path: stagex_root.join(STAGEX_PROVIDER_RECEIPT_FILE),
         normalized_provider_digest_blake3: STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST.to_string(),
         output_digest_blake3: STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST.to_string(),
         final_bundle_digest_blake3: STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST.to_string(),
@@ -1265,6 +1393,54 @@ where
     let value = result.map_err(|_| proof_error(format!("{operation_name} worker panicked")))?;
     assert!(!operation_name.is_empty());
     Ok(value)
+}
+
+fn materialize_or_validate_stagex_transition_handoff(
+    is_dev: bool,
+    execution_root: &Path,
+    handoff_root: &Path,
+    replay_root: &Path,
+) -> Result<(), RunError> {
+    if !is_dev || !handoff_root.exists() {
+        return materialize_stagex_transition_handoff(execution_root, handoff_root);
+    }
+    if replay_root.exists() {
+        return Err(proof_error(format!(
+            "StageX transition replay destination already exists: {}",
+            replay_root.display()
+        )));
+    }
+    materialize_stagex_transition_handoff(execution_root, replay_root)?;
+    validate_identical_directory_trees("StageX transition handoff", replay_root, handoff_root)?;
+    fs::remove_dir_all(replay_root).map_err(|error| {
+        proof_error(format!("removing validated StageX transition replay {}: {error}", replay_root.display()))
+    })?;
+    assert!(handoff_root.is_dir());
+    assert!(!replay_root.exists());
+    Ok(())
+}
+
+fn validate_identical_directory_trees(label: &str, replay_root: &Path, persistent_root: &Path) -> Result<(), RunError> {
+    if label.is_empty() || !replay_root.is_dir() || !persistent_root.is_dir() {
+        return Err(proof_error(format!(
+            "{label} replay comparison requires two directories: replay={} persistent={}",
+            replay_root.display(),
+            persistent_root.display()
+        )));
+    }
+    let replay = crate::release_tree_copy::hash_directory_tree(replay_root)
+        .map_err(|error| proof_error(format!("hashing {label} replay {}: {error}", replay_root.display())))?;
+    let persistent = crate::release_tree_copy::hash_directory_tree(persistent_root)
+        .map_err(|error| proof_error(format!("hashing persistent {label} {}: {error}", persistent_root.display())))?;
+    if replay != persistent {
+        return Err(proof_error(format!(
+            "{label} replay tree mismatch: replay_bytes={} replay_blake3={} persistent_bytes={} persistent_blake3={}",
+            replay.0, replay.1, persistent.0, persistent.1
+        )));
+    }
+    assert_eq!(replay.0, persistent.0);
+    assert_eq!(replay.1, persistent.1);
+    Ok(())
 }
 
 fn materialize_stagex_transition_handoff(execution_root: &Path, handoff_root: &Path) -> Result<(), RunError> {
@@ -1395,6 +1571,20 @@ fn validate_stagex_provider_normalized_identity(observed_digest_blake3: &str) ->
     }
     assert_eq!(observed_digest_blake3.len(), BLAKE3_HEX_LENGTH);
     debug_assert!(observed_digest_blake3.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    Ok(())
+}
+
+fn validate_reusable_stagex_provider_identity(
+    replay_digest_blake3: &str,
+    persistent_digest_blake3: &str,
+) -> Result<(), RunError> {
+    if replay_digest_blake3 != persistent_digest_blake3 {
+        return Err(proof_error(format!(
+            "StageX provider replay payload mismatch: replay_blake3={replay_digest_blake3} persistent_blake3={persistent_digest_blake3}"
+        )));
+    }
+    assert_eq!(replay_digest_blake3.len(), BLAKE3_HEX_LENGTH);
+    assert_eq!(persistent_digest_blake3.len(), BLAKE3_HEX_LENGTH);
     Ok(())
 }
 
@@ -2103,6 +2293,8 @@ mod tests {
     const RETAINED_TRANSITION_EXECUTION_ROOT_ENV: &str = "MANTLE_STAGE_X_TRANSITION_EXECUTION_ROOT";
     const RETAINED_TRANSITION_HANDOFF_ROOT_ENV: &str = "MANTLE_STAGE_X_TRANSITION_HANDOFF_ROOT";
     const RETAINED_TRANSITION_SOURCE_STATE_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SOURCE_STATE";
+    const OPEN_FILE_LIMIT_CHILD_ENV: &str = "MANTLE_TEST_OPEN_FILE_LIMIT_CHILD";
+    const OPEN_FILE_LIMIT_TEST_MAX: u64 = 256;
 
     fn write_stagex_transition_handoff_fixture(execution_root: &Path) {
         for relative in STAGEX_TRANSITION_HANDOFF_DIRECTORIES {
@@ -2117,6 +2309,57 @@ mod tests {
         fs::write(execution_root.join(STAGEX_TRANSITION_AUDIT_FILE), b"[]").unwrap();
         assert!(execution_root.join(STAGEX_TRANSITION_REPORT_FILE).is_file());
         assert!(STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES.iter().all(|path| execution_root.join(path).is_file()));
+    }
+
+    #[test]
+    fn open_file_descriptor_limit_planning_is_bounded_and_fail_closed() {
+        let lower = plan_open_file_descriptor_limit(128, 8_192, OPEN_FILE_LIMIT_TEST_MAX).unwrap();
+        let exact = plan_open_file_descriptor_limit(OPEN_FILE_LIMIT_TEST_MAX, 8_192, OPEN_FILE_LIMIT_TEST_MAX).unwrap();
+        let zero = plan_open_file_descriptor_limit(128, 8_192, 0).unwrap_err();
+        let insufficient = plan_open_file_descriptor_limit(128, 128, OPEN_FILE_LIMIT_TEST_MAX).unwrap_err();
+        let inverted =
+            plan_open_file_descriptor_limit(512, OPEN_FILE_LIMIT_TEST_MAX, OPEN_FILE_LIMIT_TEST_MAX).unwrap_err();
+
+        assert!(lower.update_required);
+        assert!(!exact.update_required);
+        assert_eq!(lower.soft_limit, OPEN_FILE_LIMIT_TEST_MAX);
+        assert!(zero.contains("nonzero"));
+        assert!(insufficient.contains("hard limit"));
+        assert!(inverted.contains("soft limit"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn open_file_descriptor_limit_is_enforced_in_a_subprocess() {
+        let executable = std::env::current_exe().unwrap();
+        let output = Command::new(executable)
+            .args([
+                "--exact",
+                "source_built_fixed_point_shell::tests::open_file_descriptor_limit_child",
+                "--nocapture",
+            ])
+            .env(OPEN_FILE_LIMIT_CHILD_ENV, "1")
+            .output()
+            .unwrap();
+
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(String::from_utf8_lossy(&output.stdout).contains("open-file-limit-child-ok"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn open_file_descriptor_limit_child() {
+        if std::env::var_os(OPEN_FILE_LIMIT_CHILD_ENV).is_none() {
+            return;
+        }
+        let (_, hard_limit) = read_open_file_descriptor_limits().unwrap();
+        assert!(hard_limit >= OPEN_FILE_LIMIT_TEST_MAX);
+        enforce_open_file_descriptor_limit(OPEN_FILE_LIMIT_TEST_MAX).unwrap();
+        let (soft_limit, observed_hard_limit) = read_open_file_descriptor_limits().unwrap();
+
+        assert_eq!(soft_limit, OPEN_FILE_LIMIT_TEST_MAX);
+        assert_eq!(observed_hard_limit, hard_limit);
+        println!("open-file-limit-child-ok");
     }
 
     #[test]
@@ -2294,6 +2537,29 @@ mod tests {
     }
 
     #[test]
+    fn dev_handoff_reuses_only_an_identical_persistent_tree() {
+        let temp = tempfile::tempdir().unwrap();
+        let execution_root = temp.path().join("execution");
+        let handoff_root = temp.path().join(STAGEX_TRANSITION_STORE_BASENAME);
+        let replay_root = temp.path().join(STAGEX_TRANSITION_HANDOFF_REPLAY_DIR);
+        fs::create_dir(&execution_root).unwrap();
+        write_stagex_transition_handoff_fixture(&execution_root);
+        materialize_stagex_transition_handoff(&execution_root, &handoff_root).unwrap();
+
+        materialize_or_validate_stagex_transition_handoff(true, &execution_root, &handoff_root, &replay_root).unwrap();
+        assert!(handoff_root.is_dir());
+        assert!(!replay_root.exists());
+
+        fs::write(handoff_root.join(STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES[0]), b"substituted-runtime-output")
+            .unwrap();
+        let error =
+            materialize_or_validate_stagex_transition_handoff(true, &execution_root, &handoff_root, &replay_root)
+                .unwrap_err();
+        assert!(error.to_string().contains("StageX transition handoff replay tree mismatch"));
+        assert!(replay_root.is_dir());
+    }
+
+    #[test]
     #[ignore = "requires retained completed StageX transition"]
     fn projects_and_imports_retained_stagex_transition_handoff() {
         let execution_root = PathBuf::from(std::env::var(RETAINED_TRANSITION_EXECUTION_ROOT_ENV).unwrap());
@@ -2336,6 +2602,20 @@ mod tests {
         let substituted = validate_stagex_provider_normalized_identity(DIGEST).unwrap_err();
 
         assert!(substituted.to_string().contains("normalized provider digest mismatch"));
+        assert_ne!(STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST, DIGEST);
+    }
+
+    #[test]
+    fn stagex_provider_cache_reuses_only_the_same_normalized_payload() {
+        validate_reusable_stagex_provider_identity(
+            STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST,
+            STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST,
+        )
+        .unwrap();
+        let mismatch =
+            validate_reusable_stagex_provider_identity(STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST, DIGEST).unwrap_err();
+
+        assert!(mismatch.to_string().contains("StageX provider replay payload mismatch"));
         assert_ne!(STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST, DIGEST);
     }
 
@@ -2466,14 +2746,16 @@ mod tests {
     }
 
     #[test]
-    fn materialized_source_records_match_exact_native_and_stagex_union() {
+    fn materialized_source_records_preserve_bound_union_and_allow_profile_bound_fetches() {
         let temp = tempfile::tempdir().unwrap();
         let native_payload = temp.path().join("native");
         let stagex_payload = temp.path().join("stagex");
         let extra_payload = temp.path().join("extra");
+        let mismatched_native_payload = temp.path().join("mismatched-native");
         fs::write(&native_payload, b"native source").unwrap();
         fs::write(&stagex_payload, b"stagex source").unwrap();
         fs::write(&extra_payload, b"extra source").unwrap();
+        fs::write(&mismatched_native_payload, b"mismatched native source").unwrap();
         let native = crate::source_bundle::plan_source_bundle(
             &[crate::source_bundle::SourceSpec {
                 kind: crate::source_bundle::SourceRecordKind::FixedUrl,
@@ -2504,6 +2786,16 @@ mod tests {
             LOGICAL_STORE_PREFIX,
         )
         .unwrap();
+        let mismatched_native = crate::source_bundle::plan_source_bundle(
+            &[crate::source_bundle::SourceSpec {
+                kind: crate::source_bundle::SourceRecordKind::FixedUrl,
+                identity: "native".to_string(),
+                path: mismatched_native_payload,
+                adapter: None,
+            }],
+            LOGICAL_STORE_PREFIX,
+        )
+        .unwrap();
         let exact = vec![&native.records[0], &stagex.records[0]];
         let mut native_with_constructed_authority = native.clone();
         let mut constructed_authority = native.records[0].clone();
@@ -2523,17 +2815,29 @@ mod tests {
             &native_raw_digest,
         );
         let missing_error = validate_materialized_source_records(&native, &stagex, &[&native.records[0]]).unwrap_err();
-        let extra_error = validate_materialized_source_records(&native, &stagex, &[
+        validate_materialized_source_records(&native, &stagex, &[
             &native.records[0],
             &stagex.records[0],
             &extra.records[0],
+        ])
+        .unwrap();
+        let constructed_error = validate_materialized_source_records(&native, &stagex, &[
+            &native.records[0],
+            &stagex.records[0],
+            &native_with_constructed_authority.records[1],
+        ])
+        .unwrap_err();
+        let mismatch_error = validate_materialized_source_records(&native, &stagex, &[
+            &mismatched_native.records[0],
+            &stagex.records[0],
         ])
         .unwrap_err();
 
         assert_eq!(native_input.digest_blake3, native_raw_digest);
         assert_ne!(native_input.digest_blake3, native.records[0].content_blake3);
-        assert!(missing_error.to_string().contains("exact native and StageX union"));
-        assert!(extra_error.to_string().contains("exact native and StageX union"));
+        assert!(missing_error.to_string().contains("omits bound source identity"));
+        assert!(constructed_error.to_string().contains("non-fetch source authority"));
+        assert!(mismatch_error.to_string().contains("differs from its independently bound manifest"));
     }
 
     #[test]
@@ -2828,6 +3132,7 @@ mod tests {
             resource_bounds: SourceBuiltFixedPointResourceBounds {
                 elapsed_seconds_max: 1,
                 disk_bytes_max: 1,
+                open_file_descriptors_max: OPEN_FILE_LIMIT_TEST_MAX,
                 protected_exec_events_max: 1,
                 source_records_max: 1,
             },

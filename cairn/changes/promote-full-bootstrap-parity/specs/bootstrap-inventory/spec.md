@@ -2,7 +2,7 @@
 
 ### Requirement: Full bootstrap parity promotion is evidence-derived
 
-r[bootstrap_inventory.full_bootstrap_parity_promotion] Mantle MUST emit a completed full-bootstrap parity claim only when independent current evidence validates every required native-toolchain row, the complete StageX lineage provider, and a source-built Mantle `mantle-deterministic-proof-receipt-v2` fixed point under one consistent source, provider, closure, and authority identity.
+r[bootstrap_inventory.full_bootstrap_parity_promotion] Mantle MUST emit a completed full-bootstrap parity claim only when independent current evidence validates every required native-toolchain row, the complete StageX lineage provider, and a source-built Mantle `mantle-deterministic-proof-receipt-v2` fixed point under one consistent source, provider, closure, authority, root action trust, and observed execution identity.
 
 #### Scenario: each parity domain validates independently
 
@@ -18,11 +18,18 @@ WHEN StageX and Mantle self-build evidence is evaluated
 THEN the lineage and v2 fixed-point receipts MUST agree on audited seed, source state, lineage graph, selected provider, native/Rust closure, protected execution, authority plan, effect policy, and stage inputs
 AND scaffold lineage, v1 proof, imported provider authority, fallback events, unapproved reads/effects, mixed identities, or stage digest mismatch MUST keep the relevant axes incomplete.
 
+#### Scenario: root action trust evidence is complete
+
+GIVEN native parity rows and the StageX lineage are complete
+WHEN Mantle evaluates the source-built fixed-point domain
+THEN the bound root action trust plan and observed execution reconciliation MUST cover every reachable action, fixed or producer-linked executable authority, input authority, output, local-only execution rule, and event-count bound
+AND an incomplete adapter, generated-path classification without producer identity, unknown or missing execution event, digest or producer drift, remote execution, cache-only completion, or count-bound violation MUST keep promotion incomplete.
+
 #### Scenario: independent verifier accepts the bundle
 
 GIVEN Mantle exports a promoted bootstrap evidence bundle
 WHEN the standalone verifier reads it outside the producer output tree
-THEN the verifier MUST recompute BLAKE3 relationships, validate every required schema and cross-receipt edge, reject target-authority and absolute-path dependence, and reproduce the promoted bounded status
+THEN the verifier MUST recompute BLAKE3 relationships, action-trust counts, planned-versus-observed execution coverage, every required schema, and every cross-receipt edge; reject target-authority and absolute-path dependence; and reproduce the promoted bounded status
 AND producer status fields alone MUST NOT authorize acceptance.
 
 #### Scenario: bootstrap promotion does not require witness quorum
@@ -43,5 +50,5 @@ AND it MUST NOT emit the bounded full-bootstrap success claim.
 
 GIVEN all required axes and the independent verifier pass
 WHEN human, JSON, release, or operator documentation reports full bootstrap
-THEN the claim MUST define its scope as the recorded StageX-seed-to-source-built-Mantle fixed point and identify sources, providers, closure, authority, platform, stages, audits, and digests
+THEN the claim MUST define its scope as the recorded StageX-seed-to-source-built-Mantle fixed point and identify sources, providers, closure, authority, root action trust, planned and observed execution counts, platform, stages, audits, and digests
 AND it MUST explicitly disclaim compiler correctness, seed correctness, kernel isolation, independent rebuild agreement, bit-for-bit release reproducibility, deployment success, and full Cargo compatibility.

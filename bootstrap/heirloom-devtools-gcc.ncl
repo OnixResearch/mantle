@@ -26,7 +26,7 @@ let heirloom_src = crunch.fetchTarball {
     STAGE0=$(find_input stage0-posix)
     GCC=$(find_input gcc-4.0.4-musl-pass6-v1)
     MUSL=$(find_input musl-1.1.24-gcc-pass5-v1)
-    BINUTILS=$(find_input binutils-2.30-gcc-pass4-v16)
+    BINUTILS=$(find_input binutils-2.30-gcc-pass4-v17)
     SRC=$(find_input heirloom-devtools-070527-src)
 
     WORK=/tmp/heirloom-devtools-gcc

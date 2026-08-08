@@ -748,9 +748,11 @@ mod tests {
             "/nix/store",
         )
         .unwrap();
-        let mut derivation = Derivation::default();
-        derivation.builder = "/bin/should-not-run".to_string();
-        derivation.arguments = vec!["--must-not-survive".to_string()];
+        let mut derivation = Derivation {
+            builder: "/bin/should-not-run".to_string(),
+            arguments: vec!["--must-not-survive".to_string()],
+            ..Default::default()
+        };
         derivation.input_derivations.insert(input_derivation, BTreeSet::from(["out".to_string()]));
         derivation.input_sources.insert(input_source);
 

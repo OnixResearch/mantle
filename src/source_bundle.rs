@@ -29,11 +29,14 @@ pub const SOURCE_BUNDLE_FORMAT: &str = "mantle-source-bundle-v1";
 pub const SOURCE_OFFLINE_PREFLIGHT_FORMAT: &str = "mantle-source-offline-preflight-v1";
 pub const BOOTSTRAP_SOURCE_PROFILE_FORMAT: &str = "mantle-bootstrap-source-profile-v1";
 pub const SELF_BUILD_HYDRATION_REPORT_FORMAT: &str = "mantle-self-build-source-hydration-v1";
+pub const MANTLE_SOURCE_REFRESH_REPORT_FORMAT: &str = "mantle-source-built-profile-refresh-v1";
 pub const SOURCE_BUNDLE_VERSION: u32 = 1;
 pub const SOURCE_BUNDLE_NON_CLAIM: &str =
     "source bundle evidence proves declared source/input availability and identity only";
 pub const BOOTSTRAP_SOURCE_PROFILE_NON_CLAIM: &str =
     "bootstrap source profile proves source/input availability and identity only";
+pub const MANTLE_SOURCE_REFRESH_NON_CLAIM: &str =
+    "profile refresh proves bounded record preservation and source identity only, not proof completion";
 pub const SOURCE_NEXT_ACTION_EXPORT_IMPORT_PIN: &str = "mantle source bundle export --build-root <root.ncl> --to <bundle.json>; mantle source bundle import --from <bundle.json> --pin";
 pub const SOURCE_NEXT_ACTION_REEXPORT_IMPORT_PIN: &str = "mantle source bundle export --build-root <root.ncl> --to <bundle.json>; mantle source bundle import --from <bundle.json> --pin";
 pub const SOURCE_NEXT_ACTION_PIN_IMPORTED: &str = "mantle source bundle import --from <bundle.json> --pin";
@@ -141,6 +144,7 @@ const SOURCE_STATE_DIR: &str = "source-bundles";
 const SOURCE_RECORDS_DIR: &str = "records";
 const SOURCE_PINS_DIR: &str = "pins";
 const TEMP_FILE_EXTENSION: &str = "tmp";
+const SOURCE_REFRESH_TEMP_FILE_EXTENSION: &str = "source-refresh-tmp";
 const HYDRATION_STAGING_PREFIX: &str = ".mantle-self-build-hydration-";
 const VENDOR_DEPS_DIR_NAME: &str = "vendor-deps";
 
@@ -378,6 +382,18 @@ pub struct BootstrapSourceBundleProfileReport {
     pub manifest_blake3: String,
     pub required_record_count: u32,
     pub provider_kind: String,
+    pub non_claim: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MantleSourceRefreshReport {
+    pub format: &'static str,
+    pub input_manifest_blake3: String,
+    pub output_manifest_blake3: String,
+    pub previous_mantle_source_blake3: String,
+    pub replacement_mantle_source_blake3: String,
+    pub preserved_record_count: u32,
+    pub added_record_count: u32,
     pub non_claim: &'static str,
 }
 
@@ -949,7 +965,12 @@ pub fn bootstrap_source_bundle_profile_report(
     manifest: &SourceBundleManifest,
     mode: BootstrapSourceBundleMode,
 ) -> Result<BootstrapSourceBundleProfileReport, RunError> {
-    validate_manifest(manifest)?;
+    // Every caller passes a manifest that either came from `read_source_bundle`
+    // (which already ran full payload validation) or from the in-process
+    // planner (which computes the payload digests it embeds). Decoding and
+    // re-hashing every payload again here doubled the prepare-phase cost of
+    // the source-built fixed-point proof on large profiles.
+    validate_manifest_with_payload_mode(manifest, ManifestPayloadValidation::StructureOnly)?;
     assert_eq!(manifest.format, SOURCE_BUNDLE_FORMAT);
     assert_eq!(manifest.non_claim, SOURCE_BUNDLE_NON_CLAIM);
     let (_, manifest_class) = mode.hydration_authority_classes();
@@ -972,6 +993,173 @@ pub fn bootstrap_source_bundle_profile_report(
         required_record_count: checked_u32(manifest.records.len(), "bootstrap profile record count")?,
         provider_kind,
         non_claim: BOOTSTRAP_SOURCE_PROFILE_NON_CLAIM,
+    })
+}
+
+// r[impl bootstrap_inventory.source_built_mantle_fixed_point]
+pub fn plan_source_built_mantle_source_refresh(
+    manifest: SourceBundleManifest,
+    replacement: SourceRecord,
+    supplemental_records: Vec<SourceRecord>,
+) -> Result<(SourceBundleManifest, MantleSourceRefreshReport), RunError> {
+    validate_source_built_refresh_profile(&manifest)?;
+    let original = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)?.clone();
+    validate_mantle_source_replacement(&original, &replacement)?;
+    let input_manifest_blake3 = manifest.manifest_blake3.clone();
+    let store_prefix = manifest.store_prefix.clone();
+    let original_record_count = manifest.records.len();
+    let preserved_record_count = original_record_count
+        .checked_sub(1)
+        .ok_or_else(|| RunError::Internal("source-built profile has no records to preserve".to_string()))?;
+    let (records, added_record_count) = plan_source_built_refresh_records(
+        manifest.records,
+        &original.identity,
+        replacement.clone(),
+        supplemental_records,
+        &store_prefix,
+    )?;
+    let refreshed = assemble_source_bundle(records, &store_prefix)?;
+    validate_source_built_refresh_profile(&refreshed)?;
+    let expected_record_count = original_record_count
+        .checked_add(added_record_count)
+        .ok_or_else(|| RunError::Internal("refreshed source record count overflow".to_string()))?;
+    assert_eq!(refreshed.records.len(), expected_record_count);
+    assert_ne!(original.content_blake3, "");
+    assert_ne!(replacement.content_blake3, "");
+    let report = MantleSourceRefreshReport {
+        format: MANTLE_SOURCE_REFRESH_REPORT_FORMAT,
+        input_manifest_blake3,
+        output_manifest_blake3: refreshed.manifest_blake3.clone(),
+        previous_mantle_source_blake3: original.content_blake3,
+        replacement_mantle_source_blake3: replacement.content_blake3,
+        preserved_record_count: checked_u32(preserved_record_count, "preserved source record count")?,
+        added_record_count: checked_u32(added_record_count, "added source record count")?,
+        non_claim: MANTLE_SOURCE_REFRESH_NON_CLAIM,
+    };
+    Ok((refreshed, report))
+}
+
+fn plan_source_built_refresh_records(
+    records: Vec<SourceRecord>,
+    mantle_source_identity: &str,
+    replacement: SourceRecord,
+    supplemental_records: Vec<SourceRecord>,
+    store_prefix: &str,
+) -> Result<(Vec<SourceRecord>, usize), RunError> {
+    let mut replacement_count = 0usize;
+    let mut refreshed = records
+        .into_iter()
+        .map(|record| {
+            if record.identity == mantle_source_identity {
+                replacement_count = replacement_count.saturating_add(1);
+                replacement.clone()
+            } else {
+                record
+            }
+        })
+        .collect::<Vec<_>>();
+    if replacement_count != 1 {
+        return Err(RunError::Internal(format!(
+            "source-built profile refresh replaced {replacement_count} Mantle source records instead of one"
+        )));
+    }
+
+    let mut record_indexes = refreshed
+        .iter()
+        .enumerate()
+        .map(|(index, record)| (record.identity.clone(), index))
+        .collect::<BTreeMap<_, _>>();
+    let mut added_record_count = 0usize;
+    for record in supplemental_records {
+        validate_source_record(&record, ManifestPayloadValidation::VerifyPayloads)?;
+        if record.store_prefix.as_deref().is_some_and(|prefix| prefix != store_prefix) {
+            return Err(RunError::Internal(format!(
+                "supplemental source record '{}' uses a different store prefix",
+                record.identity
+            )));
+        }
+        if record.metadata.contains_key(RECORD_METADATA_PROFILE_CLASS_KEY) || !source_record_is_fetcher_input(&record) {
+            return Err(RunError::Internal(format!(
+                "supplemental source record '{}' is not unclassified fetch-source authority",
+                record.identity
+            )));
+        }
+        if let Some(index) = record_indexes.get(&record.identity) {
+            if refreshed[*index] != record {
+                return Err(RunError::Internal(format!(
+                    "supplemental source identity '{}' conflicts with the verified profile",
+                    record.identity
+                )));
+            }
+            continue;
+        }
+        if refreshed.len() >= MAX_SOURCE_RECORDS {
+            return Err(RunError::Internal(format!("refreshed source record count exceeds {MAX_SOURCE_RECORDS}")));
+        }
+        record_indexes.insert(record.identity.clone(), refreshed.len());
+        refreshed.push(record);
+        added_record_count = added_record_count
+            .checked_add(1)
+            .ok_or_else(|| RunError::Internal("added source record count overflow".to_string()))?;
+    }
+    assert_eq!(refreshed.len(), record_indexes.len());
+    Ok((refreshed, added_record_count))
+}
+
+fn validate_source_built_refresh_profile(manifest: &SourceBundleManifest) -> Result<(), RunError> {
+    source_built_fixed_point_profile_records(manifest)?;
+    for record in &manifest.records {
+        if !record.metadata.contains_key(RECORD_METADATA_PROFILE_CLASS_KEY) {
+            continue;
+        }
+        if record.metadata.get(RECORD_METADATA_PROFILE_MODE_KEY).map(String::as_str)
+            != Some(BootstrapSourceBundleMode::SourceBuiltFixedPoint.as_str())
+        {
+            return Err(RunError::Internal(
+                "source-built profile refresh requires every classified record to use source-built-fixed-point mode"
+                    .to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_mantle_source_replacement(original: &SourceRecord, replacement: &SourceRecord) -> Result<(), RunError> {
+    validate_source_record(replacement, ManifestPayloadValidation::VerifyPayloads)?;
+    if replacement.kind != original.kind
+        || replacement.identity != original.identity
+        || replacement.store_prefix != original.store_prefix
+        || replacement.adapter != original.adapter
+        || replacement.metadata != original.metadata
+    {
+        return Err(RunError::Internal(
+            "Mantle source refresh replacement changes profile authority metadata".to_string(),
+        ));
+    }
+    if replacement.files.is_empty() {
+        return Err(RunError::Internal("Mantle source refresh replacement has no files".to_string()));
+    }
+    assert_eq!(replacement.kind, SourceRecordKind::LocalPath);
+    assert_eq!(
+        replacement.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str),
+        Some(BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)
+    );
+    Ok(())
+}
+
+fn source_built_mantle_source_record(
+    source_path: &Path,
+    identity: &str,
+    store_prefix: &str,
+) -> Result<SourceRecord, RunError> {
+    bootstrap_profile_record(BootstrapProfileRecordRequest {
+        kind: SourceRecordKind::LocalPath,
+        identity: identity.to_string(),
+        path: source_path,
+        mode: BootstrapSourceBundleMode::SourceBuiltFixedPoint,
+        class: BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE,
+        provider_metadata: None,
+        store_prefix,
     })
 }
 
@@ -1333,6 +1521,46 @@ pub fn write_source_bundle(path: &Path, manifest: &SourceBundleManifest) -> Resu
     assert!(path.is_file());
     debug_assert!(fs::metadata(path).is_ok_and(|metadata| metadata.len() > 0));
     Ok(())
+}
+
+fn write_source_bundle_no_replace(path: &Path, manifest: &SourceBundleManifest) -> Result<(), RunError> {
+    validate_manifest(manifest)?;
+    let parent = path.parent().filter(|candidate| !candidate.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let stage = path.with_extension(SOURCE_REFRESH_TEMP_FILE_EXTENSION);
+    if stage == path {
+        return Err(RunError::Internal("source bundle output and staging paths must differ".to_string()));
+    }
+    let file =
+        fs::OpenOptions::new().write(true).create_new(true).open(&stage).map_err(|error| {
+            RunError::Internal(format!("creating source bundle stage {}: {error}", stage.display()))
+        })?;
+    let write_result = (|| -> Result<(), RunError> {
+        let mut writer = BufWriter::new(file);
+        serde_json::to_writer_pretty(&mut writer, manifest)
+            .map_err(|error| RunError::Internal(format!("serializing source bundle: {error}")))?;
+        writer
+            .write_all(b"\n")
+            .map_err(|error| RunError::Internal(format!("writing source bundle stage {}: {error}", stage.display())))?;
+        writer.flush().map_err(|error| {
+            RunError::Internal(format!("flushing source bundle stage {}: {error}", stage.display()))
+        })?;
+        writer
+            .get_ref()
+            .sync_all()
+            .map_err(|error| RunError::Internal(format!("syncing source bundle stage {}: {error}", stage.display())))?;
+        drop(writer);
+        crate::linux_rename::rename_path_no_replace(&stage, path).map_err(|error| {
+            RunError::Internal(format!("publishing source bundle {} without replacement: {error}", path.display()))
+        })?;
+        fs::File::open(parent).and_then(|directory| directory.sync_all()).map_err(|error| {
+            RunError::Internal(format!("syncing source bundle parent {}: {error}", parent.display()))
+        })?;
+        Ok(())
+    })();
+    if write_result.is_err() {
+        let _ = fs::remove_file(&stage);
+    }
+    write_result
 }
 
 pub fn read_source_bundle(path: &Path) -> Result<SourceBundleManifest, RunError> {
@@ -1891,7 +2119,7 @@ fn validate_supplemental_profile_records(input: &BootstrapSourceBundleProfileInp
                 record.identity
             )));
         }
-        validate_source_record(record)?;
+        validate_source_record(record, ManifestPayloadValidation::VerifyPayloads)?;
     }
     Ok(())
 }
@@ -2495,7 +2723,26 @@ pub(crate) fn digest_source_record_content(
     Ok(hasher.finalize().to_hex().to_string())
 }
 
+/// How deeply `validate_manifest` checks regular-file payloads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ManifestPayloadValidation {
+    /// Decode every regular-file payload and verify size and BLAKE3 digest.
+    /// Required at untrusted-input boundaries such as `read_source_bundle`.
+    VerifyPayloads,
+    /// Skip payload decode and digest checks; structural checks still run.
+    /// Only valid for manifests that already passed `VerifyPayloads` or were
+    /// constructed in-process by the planner from verified inputs.
+    StructureOnly,
+}
+
 pub(crate) fn validate_manifest(manifest: &SourceBundleManifest) -> Result<(), RunError> {
+    validate_manifest_with_payload_mode(manifest, ManifestPayloadValidation::VerifyPayloads)
+}
+
+pub(crate) fn validate_manifest_with_payload_mode(
+    manifest: &SourceBundleManifest,
+    payload_mode: ManifestPayloadValidation,
+) -> Result<(), RunError> {
     if manifest.format != SOURCE_BUNDLE_FORMAT {
         return Err(RunError::Internal(format!("unsupported source bundle format {}", manifest.format)));
     }
@@ -2513,7 +2760,7 @@ pub(crate) fn validate_manifest(manifest: &SourceBundleManifest) -> Result<(), R
     validate_manifest_roots(manifest)?;
     validate_manifest_record_order(&manifest.records)?;
     validate_manifest_store_prefix(manifest)?;
-    reject_duplicate_records(&manifest.records)?;
+    reject_duplicate_records(&manifest.records, payload_mode)?;
     let expected = digest_manifest_without_digest(manifest)?;
     if expected != manifest.manifest_blake3 {
         return Err(RunError::Internal("source bundle manifest digest mismatch".to_string()));
@@ -2525,7 +2772,7 @@ fn normalize_source_records(mut records: Vec<SourceRecord>) -> Result<Vec<Source
     records.sort_by_key(record_sort_key);
     let mut normalized = Vec::<SourceRecord>::with_capacity(records.len());
     for record in records {
-        validate_source_record(&record)?;
+        validate_source_record(&record, ManifestPayloadValidation::VerifyPayloads)?;
         let key = record_sort_key(&record);
         if let Some(previous) = normalized.last()
             && record_sort_key(previous) == key
@@ -2575,10 +2822,10 @@ fn validate_manifest_store_prefix(manifest: &SourceBundleManifest) -> Result<(),
     Ok(())
 }
 
-fn reject_duplicate_records(records: &[SourceRecord]) -> Result<(), RunError> {
+fn reject_duplicate_records(records: &[SourceRecord], payload_mode: ManifestPayloadValidation) -> Result<(), RunError> {
     let mut seen = BTreeSet::new();
     for record in records {
-        validate_source_record(record)?;
+        validate_source_record(record, payload_mode)?;
         let key = record_sort_key(record);
         if !seen.insert(key.clone()) {
             return Err(RunError::Internal(format!("duplicate source record {key}")));
@@ -2587,7 +2834,7 @@ fn reject_duplicate_records(records: &[SourceRecord]) -> Result<(), RunError> {
     Ok(())
 }
 
-fn validate_source_record(record: &SourceRecord) -> Result<(), RunError> {
+fn validate_source_record(record: &SourceRecord, payload_mode: ManifestPayloadValidation) -> Result<(), RunError> {
     validate_identity(&record.identity)?;
     validate_adapter_metadata(record.adapter.as_ref())?;
     validate_source_record_payload_encoding(record)?;
@@ -2598,7 +2845,7 @@ fn validate_source_record(record: &SourceRecord) -> Result<(), RunError> {
             "source record metadata exceeds {MAX_SOURCE_RECORD_METADATA_BYTES} bytes"
         )));
     }
-    validate_source_record_files(record)?;
+    validate_source_record_files(record, payload_mode)?;
     let expected_digest = digest_source_record_content(&record.kind, &record.metadata, &record.files)?;
     if expected_digest != record.content_blake3 {
         return Err(RunError::Internal(format!("source record {} content digest mismatch", record.identity)));
@@ -2630,13 +2877,16 @@ fn source_record_uses_tarball_archive_payload(record: &SourceRecord) -> bool {
         == Some(TARBALL_ARCHIVE_PAYLOAD_ENCODING)
 }
 
-fn validate_source_record_files(record: &SourceRecord) -> Result<(), RunError> {
+fn validate_source_record_files(
+    record: &SourceRecord,
+    payload_mode: ManifestPayloadValidation,
+) -> Result<(), RunError> {
     let mut total_bytes = 0u64;
     let mut case_folded_paths = BTreeMap::<String, String>::new();
     let mut previous_key: Option<(&str, Option<u32>)> = None;
     let requires_case_sensitive_paths = matches!(record.kind, SourceRecordKind::BootstrapArchive);
     for file in &record.files {
-        validate_source_file_entry(file)?;
+        validate_source_file_entry(file, payload_mode)?;
         let current_key = (file.path.as_str(), file.chunk_index);
         if previous_key.is_some_and(|previous| previous > current_key) {
             return Err(RunError::Internal(format!(
@@ -2748,14 +2998,14 @@ fn validate_no_symlink_descendants(record: &SourceRecord) -> Result<(), RunError
     Ok(())
 }
 
-fn validate_source_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
+fn validate_source_file_entry(file: &SourceFileEntry, payload_mode: ManifestPayloadValidation) -> Result<(), RunError> {
     validate_source_entry_path(&file.path)?;
     validate_blake3_hex(Blake3HexValidation {
         value: &file.blake3,
         label: "source file digest",
     })?;
     match file.file_type {
-        SourceFileType::Regular => validate_regular_file_entry(file),
+        SourceFileType::Regular => validate_regular_file_entry(file, payload_mode),
         SourceFileType::Symlink => validate_symlink_file_entry(file),
     }
 }
@@ -2764,7 +3014,10 @@ fn validate_source_entry_path(path: &str) -> Result<(), RunError> {
     validate_source_relative_path_text(path)
 }
 
-fn validate_regular_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
+fn validate_regular_file_entry(
+    file: &SourceFileEntry,
+    payload_mode: ManifestPayloadValidation,
+) -> Result<(), RunError> {
     if file.symlink_target.is_some() {
         return Err(RunError::Internal(format!("regular source file {} carries a symlink target", file.path)));
     }
@@ -2776,6 +3029,9 @@ fn validate_regular_file_entry(file: &SourceFileEntry) -> Result<(), RunError> {
     }
     if file.chunk_index.is_some() != file.chunk_count.is_some() {
         return Err(RunError::Internal(format!("regular source file {} has incomplete chunk metadata", file.path)));
+    }
+    if payload_mode == ManifestPayloadValidation::StructureOnly {
+        return Ok(());
     }
     let content = decode_regular_file_content(file)?;
     let content_len = u64::try_from(content.len())
@@ -3192,7 +3448,7 @@ fn read_record(path: &Path) -> Result<SourceRecord, RunError> {
         .map_err(|error| RunError::Internal(format!("reading source record {}: {error}", path.display())))?;
     let record = serde_json::from_reader(BufReader::new(file))
         .map_err(|error| RunError::Internal(format!("parsing source record {}: {error}", path.display())))?;
-    validate_source_record(&record)?;
+    validate_source_record(&record, ManifestPayloadValidation::VerifyPayloads)?;
     Ok(record)
 }
 
@@ -3386,7 +3642,7 @@ fn source_fetch_override_for_record(
     record: &SourceRecord,
     source_state_blake3: &str,
 ) -> Result<(crunch_build::FetchSourceOverride, tempfile::TempDir), RunError> {
-    validate_source_record(record)?;
+    validate_source_record(record, ManifestPayloadValidation::VerifyPayloads)?;
     assert!(!record.identity.is_empty());
     assert!(record.files.len() <= MAX_SOURCE_FILES_PER_RECORD);
     let kind = source_fetch_override_kind(record)?;
@@ -3487,7 +3743,7 @@ fn materialize_source_record_for_fetch_override(
 }
 
 fn materialize_tarball_archive_fetch_record(record: &SourceRecord, payload_path: &Path) -> Result<(), RunError> {
-    validate_source_record(record)?;
+    validate_source_record(record, ManifestPayloadValidation::VerifyPayloads)?;
     let url = record
         .metadata
         .get(RECORD_METADATA_URL_KEY)
@@ -3502,7 +3758,7 @@ fn materialize_tarball_archive_fetch_record(record: &SourceRecord, payload_path:
 }
 
 fn materialize_flat_fetch_record_payload(record: &SourceRecord, payload_path: &Path) -> Result<(), RunError> {
-    validate_source_record(record)?;
+    validate_source_record(record, ManifestPayloadValidation::VerifyPayloads)?;
     if record.files.is_empty() {
         return Err(RunError::Internal(format!("flat source record {} has no file payload", record.identity)));
     }
@@ -3977,7 +4233,7 @@ fn imported_record_matches_store_path(record: &SourceRecord, lookup: &StorePathL
 }
 
 pub(crate) fn materialize_source_record_exact_payload(record: &SourceRecord, target: &Path) -> Result<(), RunError> {
-    validate_source_record(record)?;
+    validate_source_record(record, ManifestPayloadValidation::VerifyPayloads)?;
     if record.files.is_empty() {
         return Err(RunError::Internal(format!("source record {} has no materialized payload", record.identity)));
     }
@@ -4013,7 +4269,7 @@ pub(crate) fn materialize_source_record_exact_payload(record: &SourceRecord, tar
 }
 
 pub(crate) fn materialize_source_record_payload(record: &SourceRecord, target: &Path) -> Result<(), RunError> {
-    validate_source_record(record)?;
+    validate_source_record(record, ManifestPayloadValidation::VerifyPayloads)?;
     if record.files.is_empty() {
         return Err(RunError::Internal(format!("source record {} has no materialized payload", record.identity)));
     }
@@ -4068,7 +4324,7 @@ fn prepare_source_output_path(file: &SourceFileEntry, target: &Path) -> Result<P
 }
 
 fn materialize_source_file_entry(file: &SourceFileEntry, target: &Path) -> Result<(), RunError> {
-    validate_source_file_entry(file)?;
+    validate_source_file_entry(file, ManifestPayloadValidation::VerifyPayloads)?;
     if file.chunk_index.is_some() {
         return Err(RunError::Internal(format!("source file chunk {} requires grouped materialization", file.path)));
     }
@@ -4294,8 +4550,21 @@ pub(crate) fn import_constructed_store_path_source(
     let materialized = materialize_source_record_from_path(&planned, physical_path, false)?;
     let manifest = assemble_source_bundle(vec![materialized], store_prefix)?;
     let report = import_source_bundle(&manifest, state_dir, true)?;
-    assert_eq!(report.imported_count, 1);
-    debug_assert!(report.pinned);
+    let accepted_count = report
+        .imported_count
+        .checked_add(report.skipped_present_count)
+        .ok_or_else(|| RunError::Internal("constructed source import count overflow".to_string()))?;
+    if accepted_count != 1 || report.records.len() != 1 || !report.pinned {
+        return Err(RunError::Internal(format!(
+            "constructed source import expected one pinned record, got imported={} skipped={} records={} pinned={}",
+            report.imported_count,
+            report.skipped_present_count,
+            report.records.len(),
+            report.pinned
+        )));
+    }
+    assert_eq!(accepted_count, 1);
+    assert!(report.pinned);
     Ok(report)
 }
 
@@ -4424,6 +4693,48 @@ fn cmd_bootstrap_profile(
     print_bootstrap_profile_report(&profile_receipt, context.is_json_output)
 }
 
+fn cmd_refresh_mantle_source(
+    from: &Path,
+    mantle_source: &Path,
+    include_bundles: &[PathBuf],
+    to: &Path,
+    context: &SourceBundleCliContext<'_>,
+) -> Result<(), RunError> {
+    if from == to {
+        return Err(RunError::Internal("source-built profile refresh input and output paths must differ".to_string()));
+    }
+    let manifest = read_source_bundle(from)?;
+    let original = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)?;
+    let replacement = source_built_mantle_source_record(mantle_source, &original.identity, &manifest.store_prefix)?;
+    let supplemental_records = read_refresh_supplemental_bundle_records(include_bundles)?;
+    let (refreshed, report) = plan_source_built_mantle_source_refresh(manifest, replacement, supplemental_records)?;
+    write_source_bundle_no_replace(to, &refreshed)?;
+    print_mantle_source_refresh_report(&report, context.is_json_output)
+}
+
+fn read_refresh_supplemental_bundle_records(paths: &[PathBuf]) -> Result<Vec<SourceRecord>, RunError> {
+    let mut records = Vec::new();
+    for path in paths {
+        let manifest = read_source_bundle(path)?;
+        records
+            .try_reserve(manifest.records.len())
+            .map_err(|error| RunError::Internal(format!("reserving refresh source records: {error}")))?;
+        for record in manifest.records {
+            if record.metadata.contains_key(RECORD_METADATA_PROFILE_CLASS_KEY) {
+                return Err(RunError::Internal(format!(
+                    "refresh bundle {} contains classified authority '{}'",
+                    path.display(),
+                    record.identity
+                )));
+            }
+            if source_record_is_fetcher_input(&record) {
+                records.push(record);
+            }
+        }
+    }
+    merge_identical_source_records(records)
+}
+
 fn read_supplemental_bundle_records(paths: &[PathBuf]) -> Result<Vec<SourceRecord>, RunError> {
     let mut records = Vec::new();
     for path in paths {
@@ -4503,6 +4814,12 @@ fn cmd_source_bundle(action: crate::SourceBundleAction, context: &SourceBundleCl
             },
             context,
         ),
+        crate::SourceBundleAction::RefreshMantleSource {
+            from,
+            mantle_source,
+            include_bundles,
+            to,
+        } => cmd_refresh_mantle_source(&from, &mantle_source, &include_bundles, &to, context),
         crate::SourceBundleAction::List { from } => cmd_list_source_bundle(&from, context),
         crate::SourceBundleAction::Import { from, pin } => cmd_import_source_bundle(&from, pin, context),
         crate::SourceBundleAction::HydrateSelfBuild {
@@ -4895,6 +5212,25 @@ fn print_bootstrap_profile_report(
         report.required_record_count,
         report.manifest_blake3,
         report.provider_kind
+    );
+    eprintln!("non_claim={}", report.non_claim);
+    Ok(())
+}
+
+fn print_mantle_source_refresh_report(report: &MantleSourceRefreshReport, json_output: bool) -> Result<(), RunError> {
+    if json_output {
+        println!("{}", render_json(report)?);
+        return Ok(());
+    }
+    println!(
+        "format={} input_manifest_blake3={} output_manifest_blake3={} previous_mantle_source_blake3={} replacement_mantle_source_blake3={} preserved_records={} added_records={}",
+        report.format,
+        report.input_manifest_blake3,
+        report.output_manifest_blake3,
+        report.previous_mantle_source_blake3,
+        report.replacement_mantle_source_blake3,
+        report.preserved_record_count,
+        report.added_record_count,
     );
     eprintln!("non_claim={}", report.non_claim);
     Ok(())
@@ -5647,6 +5983,70 @@ mod tests {
         assert!(order_err.to_string().contains("canonical order"));
     }
 
+    fn single_file_manifest(temp: &tempfile::TempDir) -> SourceBundleManifest {
+        let payload = temp.path().join("payload.txt");
+        fs::write(&payload, b"payload").unwrap();
+        let spec = SourceSpec {
+            kind: SourceRecordKind::LocalPath,
+            identity: "fixture".to_string(),
+            path: payload,
+            adapter: None,
+        };
+        plan_source_bundle(&[spec], "/mantle/store").unwrap()
+    }
+
+    fn redigest_manifest(manifest: &mut SourceBundleManifest) {
+        manifest.records[0].content_blake3 = digest_source_record_content(
+            &manifest.records[0].kind,
+            &manifest.records[0].metadata,
+            &manifest.records[0].files,
+        )
+        .unwrap();
+        manifest.manifest_blake3 = digest_manifest_without_digest(manifest).unwrap();
+    }
+
+    #[test]
+    fn structure_only_validation_accepts_valid_manifest() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = single_file_manifest(&temp);
+        validate_manifest_with_payload_mode(&manifest, ManifestPayloadValidation::StructureOnly).unwrap();
+    }
+
+    #[test]
+    fn structure_only_validation_skips_payload_digest_but_full_mode_rejects_it() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut tampered = single_file_manifest(&temp);
+        tampered.records[0].files[0].content_hex = Some(HEXLOWER.encode(b"tamper"));
+        tampered.records[0].files[0].size = 6;
+        tampered.records[0].payload_bytes = 6;
+        redigest_manifest(&mut tampered);
+
+        validate_manifest_with_payload_mode(&tampered, ManifestPayloadValidation::StructureOnly).unwrap();
+        let error =
+            validate_manifest_with_payload_mode(&tampered, ManifestPayloadValidation::VerifyPayloads).unwrap_err();
+        assert!(error.to_string().contains("digest mismatch"));
+    }
+
+    #[test]
+    fn structure_only_validation_still_rejects_structural_violations() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut bad = single_file_manifest(&temp);
+        bad.records[0].files[0].symlink_target = Some("payload.txt".to_string());
+        redigest_manifest(&mut bad);
+
+        for mode in [
+            ManifestPayloadValidation::StructureOnly,
+            ManifestPayloadValidation::VerifyPayloads,
+        ] {
+            let error = validate_manifest_with_payload_mode(&bad, mode).unwrap_err();
+            assert!(
+                error.to_string().contains("carries a symlink target"),
+                "mode {mode:?} must reject structural violation"
+            );
+        }
+    }
+
+    #[test]
     #[test]
     fn source_bundle_rejects_tampered_file_payload_and_store_prefix() {
         let temp = tempfile::tempdir().unwrap();
@@ -6056,6 +6456,158 @@ mod tests {
         assert_eq!(manifest.records[hydration.provider_archive_record_index].identity, "stagex-seed");
         assert_eq!(manifest.records[hydration.provider_manifest_record_index].identity, "stagex-lineage");
         assert!(!manifest.records.iter().any(|record| record.identity.contains("imported-provider")));
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
+    #[test]
+    fn source_built_mantle_source_refresh_preserves_every_other_record() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = source_built_fixed_point_profile_fixture(temp.path());
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let original_records = manifest.records.clone();
+        let original = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap().clone();
+        let replacement_root = temp.path().join("replacement-mantle-source");
+        write_fixture(&replacement_root);
+        fs::write(replacement_root.join("src/main.txt"), b"refreshed Mantle source").unwrap();
+        let replacement =
+            source_built_mantle_source_record(&replacement_root, &original.identity, &manifest.store_prefix).unwrap();
+        let supplemental_payload = temp.path().join("host-tool-source.tar");
+        fs::write(&supplemental_payload, b"host tool source").unwrap();
+        let supplemental_fetcher = fixed_fetcher("host-tool-source", &file_url(&supplemental_payload));
+        let supplemental_root = root_derivation(vec![crunch_glue::Input::Derivation(Box::new(supplemental_fetcher))]);
+        let supplemental_plan = plan_source_bundle_from_derivations(
+            &[("host-tool-source".to_string(), supplemental_root)],
+            &[],
+            &manifest.store_prefix,
+        )
+        .unwrap();
+        let supplemental =
+            materialized_record_from_payload(&supplemental_plan.records[0], &supplemental_payload, false);
+
+        let (refreshed, report) =
+            plan_source_built_mantle_source_refresh(manifest, replacement.clone(), vec![supplemental.clone()]).unwrap();
+
+        assert_ne!(report.input_manifest_blake3, report.output_manifest_blake3);
+        assert_ne!(report.previous_mantle_source_blake3, report.replacement_mantle_source_blake3);
+        assert_eq!(report.replacement_mantle_source_blake3, replacement.content_blake3);
+        assert_eq!(report.preserved_record_count as usize, original_records.len() - 1);
+        assert_eq!(report.added_record_count, 1);
+        assert!(refreshed.records.contains(&supplemental));
+        for record in original_records.iter().filter(|record| record.identity != original.identity) {
+            assert!(refreshed.records.contains(record));
+        }
+        assert_eq!(
+            require_single_profile_record(&refreshed, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)
+                .unwrap()
+                .content_blake3,
+            replacement.content_blake3
+        );
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
+    #[test]
+    fn source_built_mantle_source_refresh_rejects_missing_and_duplicate_authority() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = source_built_fixed_point_profile_fixture(temp.path());
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let original = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap().clone();
+        let mut missing_records = manifest.records.clone();
+        missing_records.retain(|record| record.identity != original.identity);
+        let missing = assemble_source_bundle(missing_records, &manifest.store_prefix).unwrap();
+
+        let missing_error = plan_source_built_mantle_source_refresh(missing, original.clone(), Vec::new()).unwrap_err();
+
+        assert!(missing_error.to_string().contains("missing record class mantle-source"));
+
+        let mut duplicate_record = original.clone();
+        duplicate_record.identity = "duplicate-mantle-source-tree".to_string();
+        let mut duplicate_records = manifest.records.clone();
+        duplicate_records.push(duplicate_record);
+        let duplicate = assemble_source_bundle(duplicate_records, &manifest.store_prefix).unwrap();
+
+        let duplicate_error = plan_source_built_mantle_source_refresh(duplicate, original, Vec::new()).unwrap_err();
+
+        assert!(duplicate_error.to_string().contains("duplicate record class mantle-source"));
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
+    #[test]
+    fn source_built_mantle_source_refresh_rejects_wrong_profile_mode() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = source_built_fixed_point_profile_fixture(temp.path());
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let replacement =
+            require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap().clone();
+        let mut records = manifest.records.clone();
+        let classified = records
+            .iter_mut()
+            .find(|record| {
+                record.metadata.get(RECORD_METADATA_PROFILE_CLASS_KEY).map(String::as_str)
+                    == Some(BOOTSTRAP_PROFILE_CLASS_VENDOR_DEPS)
+            })
+            .unwrap();
+        classified.metadata.insert(
+            RECORD_METADATA_PROFILE_MODE_KEY.to_string(),
+            BootstrapSourceBundleMode::SelfBuildProof.as_str().to_string(),
+        );
+        classified.content_blake3 =
+            digest_source_record_content(&classified.kind, &classified.metadata, &classified.files).unwrap();
+        let wrong_mode = assemble_source_bundle(records, &manifest.store_prefix).unwrap();
+
+        let error = plan_source_built_mantle_source_refresh(wrong_mode, replacement, Vec::new()).unwrap_err();
+
+        assert!(error.to_string().contains("every classified record"));
+        assert!(error.to_string().contains("source-built-fixed-point mode"));
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
+    #[test]
+    fn source_built_mantle_source_refresh_rejects_supplemental_authority_drift() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = source_built_fixed_point_profile_fixture(temp.path());
+        let manifest = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let replacement =
+            require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap().clone();
+
+        let classified_error =
+            plan_source_built_mantle_source_refresh(manifest.clone(), replacement.clone(), vec![replacement.clone()])
+                .unwrap_err();
+
+        assert!(classified_error.to_string().contains("not unclassified fetch-source authority"));
+
+        let mut conflict = manifest
+            .records
+            .iter()
+            .find(|record| {
+                !record.metadata.contains_key(RECORD_METADATA_PROFILE_CLASS_KEY)
+                    && source_record_is_fetcher_input(record)
+            })
+            .unwrap()
+            .clone();
+        conflict.metadata.insert("conflict-probe".to_string(), "true".to_string());
+        conflict.content_blake3 =
+            digest_source_record_content(&conflict.kind, &conflict.metadata, &conflict.files).unwrap();
+
+        let conflict_error =
+            plan_source_built_mantle_source_refresh(manifest, replacement, vec![conflict]).unwrap_err();
+
+        assert!(conflict_error.to_string().contains("conflicts with the verified profile"));
+    }
+
+    #[test]
+    fn source_bundle_no_replace_publication_preserves_existing_destination() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = plan_empty_source_bundle("/mantle/store").unwrap();
+        let published = temp.path().join("published.json");
+        write_source_bundle_no_replace(&published, &manifest).unwrap();
+        assert_eq!(read_source_bundle(&published).unwrap(), manifest);
+
+        fs::write(&published, b"existing destination").unwrap();
+        let error = write_source_bundle_no_replace(&published, &manifest).unwrap_err();
+
+        assert!(error.to_string().contains("without replacement"));
+        assert_eq!(fs::read(&published).unwrap(), b"existing destination");
+        assert!(!published.with_extension(SOURCE_REFRESH_TEMP_FILE_EXTENSION).exists());
     }
 
     // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
@@ -6504,6 +7056,32 @@ mod tests {
         assert_eq!(second.skipped_present_count, 1);
         let verify = verify_source_bundle_state(&manifest, &state_dir).unwrap();
         assert_eq!(verify.ready_class, SourceReadiness::Ready);
+    }
+
+    #[test]
+    fn constructed_store_path_import_skips_only_identical_content() {
+        let temp = tempfile::tempdir().unwrap();
+        let physical_path = temp.path().join("constructed-provider");
+        let state_dir = temp.path().join("state");
+        fs::create_dir(&physical_path).unwrap();
+        fs::write(physical_path.join("provider.txt"), b"verified-provider").unwrap();
+        let logical_path = "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-constructed-provider";
+
+        let first =
+            import_constructed_store_path_source(logical_path, &physical_path, &state_dir, "/mantle/store").unwrap();
+        let second =
+            import_constructed_store_path_source(logical_path, &physical_path, &state_dir, "/mantle/store").unwrap();
+        fs::write(physical_path.join("provider.txt"), b"substituted-provider").unwrap();
+        let changed =
+            import_constructed_store_path_source(logical_path, &physical_path, &state_dir, "/mantle/store").unwrap();
+
+        assert_eq!(first.imported_count, 1);
+        assert_eq!(first.skipped_present_count, 0);
+        assert_eq!(second.imported_count, 0);
+        assert_eq!(second.skipped_present_count, 1);
+        assert_eq!(changed.imported_count, 1);
+        assert_eq!(changed.skipped_present_count, 0);
+        assert_ne!(first.records[0].content_blake3, changed.records[0].content_blake3);
     }
 
     #[test]
@@ -6978,7 +7556,7 @@ mod tests {
             files,
         };
 
-        let err = validate_source_record(&record).unwrap_err();
+        let err = validate_source_record(&record, ManifestPayloadValidation::VerifyPayloads).unwrap_err();
         assert!(err.to_string().contains("below symlink"));
     }
 }

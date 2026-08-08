@@ -72,3 +72,8 @@ compatibility surface, crate name, or historical decision.
 | [0063](0063-keep-chaptered-release-archives-as-receipt-bound-transport.md) | Keep chaptered release archives as receipt-bound transport | Accepted |
 | [0064](0064-explain-store-retention-before-garbage-collection.md) | Explain store retention before garbage collection | Accepted |
 | [0065](0065-reject-picolibc-for-the-stagex-c-runtime.md) | Reject Picolibc for the StageX C runtime | Accepted |
+| [0066](0066-select-the-stagex-provider-compiler-by-bounded-workload.md) | Select the StageX provider compiler by bounded workload | Accepted |
+| [0067](0067-bind-source-fixed-point-open-file-limits-in-the-proof-plan.md) | Bind source fixed-point open-file limits in the proof plan | Accepted |
+| [0068](0068-default-to-deterministic-archives-in-gcc-built-binutils.md) | Default to deterministic archives in GCC-built binutils | Accepted |
+| [0069](0069-derive-gcc40-random-seeds-from-main-input-identity.md) | Derive GCC 4.0 random seeds from main input identity | Accepted |
+| [0070](0070-bind-source-fixed-point-to-root-action-trust-report.md) | Bind the source fixed point to a root action trust report | Proposed |

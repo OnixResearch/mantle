@@ -36,12 +36,12 @@ pub(crate) const PROVIDER_METADATA_RELATIVE_PATH: &str = "share/crunch-bootstrap
 pub(crate) const PROVIDER_RECEIPT_RELATIVE_PATH: &str = "share/crunch-bootstrap/stagex-lineage-receipt.json";
 pub(crate) const PROVIDER_VALIDATION_RELATIVE_PATH: &str = "share/crunch-bootstrap/stagex-provider-validation.json";
 
-const PROVIDER_SCHEMA: &str = "mantle-stagex-intermediate-provider-v1";
-const PROVIDER_VALIDATION_SCHEMA: &str = "mantle-stagex-provider-validation-v1";
+const PROVIDER_SCHEMA: &str = "mantle-stagex-intermediate-provider-v2";
+const PROVIDER_VALIDATION_SCHEMA: &str = "mantle-stagex-provider-validation-v2";
 const PROVIDER_KIND: &str = "stagex-lineage";
 const PROVIDER_NAME: &str = "mantle-stagex-intermediate-toolchain";
 const PROVIDER_TARGET: &str = "x86_64-linux-musl";
-const PROVIDER_COMPILER_KIND: &str = "tinycc-0.9.27-selfhost";
+const PROVIDER_COMPILER_KIND: &str = "tinycc-0.9.27-protected-v2";
 const PROVIDER_BOUNDED_CLAIM: &str =
     "Intermediate StageX provider publication from the protected TinyCC/native-musl/binutils closure.";
 const STAGE_REPORT_OUTPUT_BINDING: &str = "Live artifacts use observed BLAKE3 identities. Exact allowlisted report-only observations use a domain-separated BLAKE3 projection over the artifact ID, plan digest, and complete transition-report digest.";
@@ -60,15 +60,58 @@ const TRANSITION_AUDIT_FILE_NAME: &str = "protected-exec-audit.json";
 const TRANSITION_STATUS_COMPLETE: &str = "complete";
 const PROVIDER_STAGE_SUFFIX: &str = ".stagex-provider-staging";
 const PROVIDER_TCC_RELATIVE_PATH: &str = "bin/x86_64-linux-musl-tcc";
+const PROVIDER_SELFHOST_TCC_RELATIVE_PATH: &str = "bin/x86_64-linux-musl-tcc-selfhost";
+const PROVIDER_TCC26_RELATIVE_PATH: &str = "bin/x86_64-linux-musl-tcc-0.9.26";
 const PROVIDER_TCC_RUNTIME_RELATIVE_PATH: &str = "lib/tcc";
+const PROVIDER_TCC_RUNTIME_SUPPLEMENT_RELATIVE_PATH: &str = "lib/tcc/libtcc1-stagex-provider.o";
 const PROVIDER_TCC_SOURCE_RELATIVE_PATH: &str = "share/mantle-stagex/tcc-source-patched";
 const PROVIDER_MUSL_INCLUDE_RELATIVE_PATH: &str = "x86_64-linux-musl/include";
 const PROVIDER_MUSL_LIB_RELATIVE_PATH: &str = "x86_64-linux-musl/lib";
 const PROVIDER_BINUTILS_INCLUDE_RELATIVE_PATH: &str = "x86_64-linux-musl/include-binutils";
 const PROVIDER_BINUTILS_LD_RELATIVE_PATH: &str = "x86_64-linux-musl/lib/ldscripts";
-const TRANSITION_TCC_RELATIVE_PATH: &str = "tcc-musl-selfhost-stage/runtime/output/bin/tcc-0.9.27-musl-selfhost";
-const TRANSITION_TCC_RUNTIME_RELATIVE_PATH: &str = "tcc-musl-selfhost-stage/runtime/output/lib/tcc";
-const TRANSITION_TCC_SOURCE_RELATIVE_PATH: &str = "tcc-musl-selfhost-stage/runtime/output/share/tcc-source-patched";
+const TRANSITION_TCC_RELATIVE_PATH: &str = "tcc-musl-v2-stage/runtime/output/bin/tcc-0.9.27-musl-v2";
+const TRANSITION_SELFHOST_TCC_RELATIVE_PATH: &str =
+    "tcc-musl-selfhost-stage/runtime/output/bin/tcc-0.9.27-musl-selfhost";
+const TRANSITION_TCC26_RELATIVE_PATH: &str = "tinycc-stage/runtime/output/bin/tcc-0.9.26";
+const TRANSITION_TCC_RUNTIME_RELATIVE_PATH: &str = "tcc-musl-v2-stage/runtime/output/lib/tcc";
+const TRANSITION_TCC_SOURCE_RELATIVE_PATH: &str = "tcc-musl-v2-stage/runtime/output/share/tcc-source";
+const TRANSITION_TCC_RUNTIME_SOURCE_RELATIVE_PATH: &str = "tcc-musl-v2-stage/runtime/tcc-0.9.27/lib/libtcc1.c";
+const TRANSITION_TCC_RUNTIME_SOURCE_BLAKE3: &str = "e04b53a0d8d68011ff2f3582bb7cd080ded137e9134d45697e3fb01027850aae";
+const TCC_RUNTIME_SUPPLEMENT_TRANSFORM_ID: &str = "tcc-libtcc1-floatundisf-signed-half-sticky-v3";
+const TCC_FLOATUNDISF_UPSTREAM_SOURCE: &str = concat!(
+    "float __floatundisf(unsigned long long a)\n",
+    "{\n",
+    "    DWunion uu;",
+    " \n",
+    "    XFtype r;\n",
+    "\n",
+    "    uu.ll = a;\n",
+    "    if (uu.s.high >= 0) {\n",
+    "        return (float)uu.ll;\n",
+    "    } else {\n",
+    "        r = (XFtype)uu.ll;\n",
+    "        r += 18446744073709551616.0;\n",
+    "        return (float)r;\n",
+    "    }\n",
+    "}\n",
+);
+const TCC_FLOATUNDISF_BOUNDED_SOURCE: &str = r#"float __floatundisf(unsigned long long value)
+{
+    DWunion words;
+    const unsigned long long low_bit_mask = 1ULL;
+    unsigned long long positive_half;
+    float rounded_half;
+
+    words.ll = value;
+    if (words.s.high >= 0) {
+        return (float)words.ll;
+    }
+
+    positive_half = (value >> 1) | (value & low_bit_mask);
+    rounded_half = (float)(long long)positive_half;
+    return rounded_half + rounded_half;
+}
+"#;
 const TRANSITION_MUSL_INCLUDE_RELATIVE_PATH: &str = "musl-native-stage/runtime/output/include";
 const TRANSITION_MUSL_LIB_RELATIVE_PATH: &str = "musl-native-stage/runtime/output/lib";
 const TRANSITION_BINUTILS_ROOT_RELATIVE_PATH: &str =
@@ -93,11 +136,12 @@ const PROVIDER_FILE_BYTES_MAX: u64 = 64 * 1_024 * 1_024;
 const PROVIDER_OUTPUT_COUNT_MAX: usize = 512;
 const TRANSITION_AUDIT_EVENT_COUNT_MAX: usize = 131_072;
 const PROVIDER_VALIDATION_EVENT_COUNT_MAX: usize = 64;
-const PROVIDER_VALIDATION_EVENT_COUNT_EXPECTED: usize = 7;
+const PROVIDER_VALIDATION_EVENT_COUNT_EXPECTED: usize = 8;
 const PROTECTED_EXEC_SYSCALL_COUNT: usize = 2;
 const PROTECTED_EXEC_SYSCALLS: [&str; PROTECTED_EXEC_SYSCALL_COUNT] = ["execve", "execveat"];
 const PROVIDER_VALIDATION_PLANNED_EXECUTABLE_COUNT: usize = 3;
 const PROVIDER_VALIDATION_EXECUTABLE_SEQUENCE: [&str; PROVIDER_VALIDATION_EVENT_COUNT_EXPECTED] = [
+    "bin/x86_64-linux-musl-tcc",
     "bin/x86_64-linux-musl-tcc",
     ".validation/tcc-positive",
     "bin/x86_64-linux-musl-tcc",
@@ -107,6 +151,7 @@ const PROVIDER_VALIDATION_EXECUTABLE_SEQUENCE: [&str; PROVIDER_VALIDATION_EVENT_
     ".validation/binutils-positive",
 ];
 const PROVIDER_VALIDATION_AUTHORIZATION_SEQUENCE: [&str; PROVIDER_VALIDATION_EVENT_COUNT_EXPECTED] = [
+    "planned:stagex-provider-normalization:exec:provider-validation:tcc",
     "planned:stagex-provider-normalization:exec:provider-validation:tcc",
     "promoted:provider-relocation-smoke:.validation/tcc-positive",
     "planned:stagex-provider-normalization:exec:provider-validation:tcc",
@@ -129,11 +174,28 @@ const RUNTIME_SMOKE_EXPECTED_EXIT: i32 = 42;
 const PROVIDER_ROLE_COUNT: usize = 4;
 const PROJECTED_BINUTILS_OUTPUT_COUNT: usize = 3;
 const BINUTILS_GENERATED_SOURCE_OUTPUT_COUNT: usize = 22;
-const PROVIDER_PAYLOAD_BASE_COUNT: usize = 7;
+const PROVIDER_PAYLOAD_BASE_COUNT: usize = 9;
 const TCC_SMOKE_SOURCE: &[u8] = b"int main(void) { return 42; }\n";
 const BINUTILS_SMOKE_SOURCE: &[u8] = b".global _start\n.text\n_start:\n  mov $60, %rax\n  mov $42, %rdi\n  syscall\n";
 const BINUTILS_NEGATIVE_SOURCE: &[u8] = b".mantle-invalid-directive\n";
 const EMPTY_INPUT: &[u8] = b"";
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ProviderCompilerSelection {
+    transition_artifact_id: &'static str,
+    transition_relative_path: &'static str,
+    expected_digest_blake3: &'static str,
+    compiler_kind: &'static str,
+}
+
+const fn provider_compiler_selection() -> ProviderCompilerSelection {
+    ProviderCompilerSelection {
+        transition_artifact_id: "tcc-musl-v2",
+        transition_relative_path: TRANSITION_TCC_RELATIVE_PATH,
+        expected_digest_blake3: crate::stagex_tcc_musl_v2::COMPILER_BLAKE3,
+        compiler_kind: PROVIDER_COMPILER_KIND,
+    }
+}
+
 const NATIVE_LIBRARY_NAMES: &[&str] = &[
     "crt1.o",
     "crti.o",
@@ -285,6 +347,10 @@ struct ProviderValidationReport {
     status: String,
     audit_digest_blake3: String,
     events: Vec<ProviderValidationEvent>,
+    runtime_supplement_compile: bool,
+    runtime_supplement_source_digest_blake3: String,
+    runtime_supplement_transform_id: String,
+    runtime_supplement_transformed_source_digest_blake3: String,
     positive_tcc_compile: bool,
     negative_tcc_rejection: bool,
     positive_binutils_execution_status: i32,
@@ -391,6 +457,32 @@ pub(crate) fn materialize_stagex_provider(
     })
 }
 
+pub(crate) fn observe_normalized_provider_payload_digest(provider_root: &Path) -> Result<String, StagexProviderError> {
+    if !provider_root.is_dir() {
+        return Err(StagexProviderError::Provider(format!(
+            "normalized provider payload root is not a directory: {}",
+            provider_root.display()
+        )));
+    }
+    let payload = observe_provider_payload(provider_root)?;
+    let digest = normalized_provider_payload_digest_from_observations(&payload)?;
+    assert_eq!(digest.len(), blake3::OUT_LEN.saturating_mul(2));
+    assert!(!payload.is_empty());
+    Ok(digest)
+}
+
+fn normalized_provider_payload_digest_from_observations(
+    payload: &[ProviderPayloadObservation],
+) -> Result<String, StagexProviderError> {
+    if payload.is_empty() {
+        return Err(StagexProviderError::Provider("normalized provider payload is empty".to_string()));
+    }
+    let digest = digest_serialized(NORMALIZED_PROVIDER_DIGEST_DOMAIN, &payload)?;
+    assert_eq!(digest.len(), blake3::OUT_LEN.saturating_mul(2));
+    assert!(!digest.is_empty());
+    Ok(digest)
+}
+
 fn materialize_and_validate_staging(
     request: &StagexProviderRequest<'_>,
     evidence: &TransitionEvidence,
@@ -399,7 +491,7 @@ fn materialize_and_validate_staging(
     copy_provider_payload(request.transition_root, staging_path, evidence)?;
     let validation = validate_relocated_provider_runtime(staging_path, request.transition_root)?;
     let payload = observe_provider_payload(staging_path)?;
-    let normalized_provider_digest_blake3 = digest_serialized(NORMALIZED_PROVIDER_DIGEST_DOMAIN, &payload)?;
+    let normalized_provider_digest_blake3 = normalized_provider_payload_digest_from_observations(&payload)?;
     let provider_validation_report_digest_blake3 =
         digest_serialized(PROVIDER_VALIDATION_REPORT_DIGEST_DOMAIN, &validation)?;
     let metadata = provider_metadata(
@@ -773,9 +865,28 @@ fn copy_provider_payload(
     staging: &Path,
     evidence: &TransitionEvidence,
 ) -> Result<(), StagexProviderError> {
-    let tcc =
-        require_observed_component(evidence, "tcc-musl-selfhost", &transition_root.join(TRANSITION_TCC_RELATIVE_PATH))?;
+    let compiler = provider_compiler_selection();
+    let tcc = require_observed_component(
+        evidence,
+        compiler.transition_artifact_id,
+        &transition_root.join(compiler.transition_relative_path),
+    )?;
+    if tcc.digest_blake3 != compiler.expected_digest_blake3 {
+        return Err(StagexProviderError::Provider("selected TinyCC digest changed".to_string()));
+    }
     copy_file_create_new(&tcc.path, &staging.join(PROVIDER_TCC_RELATIVE_PATH), true)?;
+    let selfhost = require_observed_component(
+        evidence,
+        "tcc-musl-selfhost",
+        &transition_root.join(TRANSITION_SELFHOST_TCC_RELATIVE_PATH),
+    )?;
+    copy_file_create_new(&selfhost.path, &staging.join(PROVIDER_SELFHOST_TCC_RELATIVE_PATH), true)?;
+    let tcc26 =
+        require_observed_component(evidence, "tinycc-0.9.26", &transition_root.join(TRANSITION_TCC26_RELATIVE_PATH))?;
+    if tcc26.digest_blake3 != crate::stagex_tinycc::TINYCC_FINAL_BLAKE3 {
+        return Err(StagexProviderError::Provider("TinyCC 0.9.26 fallback digest changed".to_string()));
+    }
+    copy_file_create_new(&tcc26.path, &staging.join(PROVIDER_TCC26_RELATIVE_PATH), true)?;
     copy_tree_create_new(
         &transition_root.join(TRANSITION_TCC_RUNTIME_RELATIVE_PATH),
         &staging.join(PROVIDER_TCC_RUNTIME_RELATIVE_PATH),
@@ -869,10 +980,30 @@ fn validate_native_library_set(root: &Path) -> Result<(), StagexProviderError> {
 }
 
 fn validate_static_provider_payload(staging: &Path, evidence: &TransitionEvidence) -> Result<(), StagexProviderError> {
+    let compiler = provider_compiler_selection();
     let tcc_digest = require_regular_executable_elf(&staging.join(PROVIDER_TCC_RELATIVE_PATH))?;
-    let expected_tcc = evidence.observed_outputs.get("tcc-musl-selfhost").expect("copied TCC has prior observation");
-    if tcc_digest != expected_tcc.digest_blake3 {
-        return Err(StagexProviderError::Provider("relocated TinyCC digest changed".to_string()));
+    let expected_tcc = evidence
+        .observed_outputs
+        .get(compiler.transition_artifact_id)
+        .expect("copied TCC has prior observation");
+    if tcc_digest != expected_tcc.digest_blake3 || tcc_digest != compiler.expected_digest_blake3 {
+        return Err(StagexProviderError::Provider("relocated selected TinyCC digest changed".to_string()));
+    }
+    let selfhost_digest = require_regular_executable_elf(&staging.join(PROVIDER_SELFHOST_TCC_RELATIVE_PATH))?;
+    let expected_selfhost = evidence
+        .observed_outputs
+        .get("tcc-musl-selfhost")
+        .expect("copied self-hosted TCC has prior observation");
+    if selfhost_digest != expected_selfhost.digest_blake3 || selfhost_digest == tcc_digest {
+        return Err(StagexProviderError::Provider(
+            "relocated self-hosted TinyCC changed or replaced the selected compiler".to_string(),
+        ));
+    }
+    let tcc26_digest = require_regular_executable_elf(&staging.join(PROVIDER_TCC26_RELATIVE_PATH))?;
+    let expected_tcc26 =
+        evidence.observed_outputs.get("tinycc-0.9.26").expect("copied TinyCC 0.9.26 has prior observation");
+    if tcc26_digest != expected_tcc26.digest_blake3 || tcc26_digest != crate::stagex_tinycc::TINYCC_FINAL_BLAKE3 {
+        return Err(StagexProviderError::Provider("relocated TinyCC 0.9.26 fallback changed".to_string()));
     }
     for tool in BINUTILS_TOOL_NAMES {
         let path = staging.join("bin").join(format!("{PROVIDER_TARGET}-{tool}"));
@@ -892,6 +1023,8 @@ fn validate_static_provider_payload(staging: &Path, evidence: &TransitionEvidenc
     validate_required_file(&staging.join(PROVIDER_MUSL_LIB_RELATIVE_PATH).join("libc.a"), "native libc")?;
     assert_eq!(BINUTILS_TOOL_NAMES.len(), crate::stagex_binutils::BINUTILS_REQUIRED_TOOLS.len());
     assert_eq!(tcc_digest, expected_tcc.digest_blake3);
+    assert_eq!(selfhost_digest, expected_selfhost.digest_blake3);
+    assert_eq!(tcc26_digest, expected_tcc26.digest_blake3);
     Ok(())
 }
 
@@ -948,6 +1081,7 @@ fn validate_relocated_provider_runtime(
 ) -> Result<ProviderValidationReport, StagexProviderError> {
     let validation_root = prepare_provider_validation_root(staging)?;
     let supervisor = install_provider_validation_supervisor(staging, transition_root)?;
+    let runtime_supplement_identity = materialize_tcc_runtime_supplement(staging, transition_root, &validation_root)?;
     run_tcc_positive_smoke(staging, &validation_root, &supervisor)?;
     let negative_tcc_rejection = run_tcc_negative_smoke(staging, &validation_root)?;
     run_binutils_positive_smoke(staging, &validation_root)?;
@@ -979,6 +1113,10 @@ fn validate_relocated_provider_runtime(
         status: TRANSITION_STATUS_COMPLETE.to_string(),
         audit_digest_blake3,
         events: projected,
+        runtime_supplement_compile: true,
+        runtime_supplement_source_digest_blake3: runtime_supplement_identity.upstream_digest_blake3,
+        runtime_supplement_transform_id: TCC_RUNTIME_SUPPLEMENT_TRANSFORM_ID.to_string(),
+        runtime_supplement_transformed_source_digest_blake3: runtime_supplement_identity.transformed_digest_blake3,
         positive_tcc_compile: true,
         negative_tcc_rejection,
         positive_binutils_execution_status: positive_status,
@@ -986,6 +1124,9 @@ fn validate_relocated_provider_runtime(
         fallback_events: Vec::new(),
     };
     validate_provider_validation_report(&report)?;
+    assert!(report.runtime_supplement_compile);
+    assert_eq!(report.runtime_supplement_source_digest_blake3, TRANSITION_TCC_RUNTIME_SOURCE_BLAKE3);
+    assert_eq!(report.runtime_supplement_transform_id, TCC_RUNTIME_SUPPLEMENT_TRANSFORM_ID);
     assert!(report.positive_tcc_compile);
     assert!(report.fallback_events.is_empty());
     Ok(report)
@@ -1079,6 +1220,111 @@ fn install_provider_validation_supervisor(
     assert_eq!(planned.len(), PROVIDER_VALIDATION_PLANNED_EXECUTABLE_COUNT);
     assert!(seed.is_file());
     Ok(supervisor)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RuntimeSupplementSourceIdentity {
+    upstream_digest_blake3: String,
+    transformed_digest_blake3: String,
+}
+
+fn transform_tcc_runtime_source(source: &str) -> Result<String, String> {
+    let upstream_count = source.matches(TCC_FLOATUNDISF_UPSTREAM_SOURCE).count();
+    if upstream_count != 1 {
+        return Err(format!("expected one upstream __floatundisf definition, observed {upstream_count}"));
+    }
+    if source.contains(TCC_FLOATUNDISF_BOUNDED_SOURCE) {
+        return Err("bounded __floatundisf definition already exists".to_string());
+    }
+    let transformed = source.replacen(TCC_FLOATUNDISF_UPSTREAM_SOURCE, TCC_FLOATUNDISF_BOUNDED_SOURCE, 1);
+    assert!(!transformed.contains(TCC_FLOATUNDISF_UPSTREAM_SOURCE));
+    assert!(transformed.contains(TCC_FLOATUNDISF_BOUNDED_SOURCE));
+    Ok(transformed)
+}
+
+fn materialize_tcc_runtime_supplement(
+    staging: &Path,
+    transition_root: &Path,
+    validation: &Path,
+) -> Result<RuntimeSupplementSourceIdentity, StagexProviderError> {
+    let tcc = staging.join(PROVIDER_TCC_RELATIVE_PATH);
+    let transition_source = transition_root.join(TRANSITION_TCC_RUNTIME_SOURCE_RELATIVE_PATH);
+    let source_digest_blake3 = blake3_file_hex(&transition_source)
+        .map_err(|error| StagexProviderError::Runtime(format!("hashing TCC runtime source: {error}")))?;
+    if source_digest_blake3 != TRANSITION_TCC_RUNTIME_SOURCE_BLAKE3 {
+        return Err(StagexProviderError::Runtime("provider TinyCC runtime source digest changed".to_string()));
+    }
+    let source_bytes = read_bounded_file(&transition_source, PROVIDER_FILE_BYTES_MAX, "TCC runtime source")?;
+    let source_text = std::str::from_utf8(&source_bytes)
+        .map_err(|error| StagexProviderError::Runtime(format!("decoding TCC runtime source: {error}")))?;
+    let transformed_source = transform_tcc_runtime_source(source_text).map_err(StagexProviderError::Runtime)?;
+    let transformed_digest_blake3 = blake3::hash(transformed_source.as_bytes()).to_hex().to_string();
+    let source = validation.join("libtcc1.c");
+    let output = staging.join(PROVIDER_TCC_RUNTIME_SUPPLEMENT_RELATIVE_PATH);
+    if output.exists() {
+        return Err(StagexProviderError::Runtime(
+            "provider TinyCC runtime supplement destination already exists".to_string(),
+        ));
+    }
+    let mut source_file = File::options().write(true).create_new(true).open(&source).map_err(|error| {
+        StagexProviderError::Runtime(format!("creating transformed TCC runtime source {}: {error}", source.display()))
+    })?;
+    source_file.write_all(transformed_source.as_bytes()).map_err(|error| {
+        StagexProviderError::Runtime(format!("writing transformed TCC runtime source {}: {error}", source.display()))
+    })?;
+    source_file.sync_all().map_err(|error| {
+        StagexProviderError::Runtime(format!("syncing transformed TCC runtime source {}: {error}", source.display()))
+    })?;
+    drop(source_file);
+    let arguments = [
+        "-c".to_string(),
+        "libtcc1.c".to_string(),
+        "-o".to_string(),
+        utf8_path(&output, "TCC runtime supplement")?.to_string(),
+    ];
+    crate::stagex_mes_lib::run_bounded_process(
+        &tcc,
+        &arguments,
+        validation,
+        &BTreeMap::new(),
+        &validation.join("runtime-supplement.stderr.txt"),
+    )
+    .map_err(|error| StagexProviderError::Runtime(error.to_string()))?;
+    let output_metadata = fs::symlink_metadata(&output)
+        .map_err(|error| StagexProviderError::Runtime(format!("reading TCC runtime supplement metadata: {error}")))?;
+    if !output_metadata.is_file() || output_metadata.file_type().is_symlink() {
+        return Err(StagexProviderError::Runtime("TCC runtime supplement is not a regular file".to_string()));
+    }
+    fs::set_permissions(&output, fs::Permissions::from_mode(PROVIDER_DATA_MODE)).map_err(|error| {
+        StagexProviderError::Runtime(format!("setting initial TCC runtime supplement mode: {error}"))
+    })?;
+    canonicalize_runtime_supplement(&output)?;
+    assert!(source.is_file());
+    assert!(output.is_file());
+    assert_eq!(blake3::hash(transformed_source.as_bytes()).to_hex().to_string(), transformed_digest_blake3);
+    Ok(RuntimeSupplementSourceIdentity {
+        upstream_digest_blake3: source_digest_blake3,
+        transformed_digest_blake3,
+    })
+}
+
+fn canonicalize_runtime_supplement(path: &Path) -> Result<(), StagexProviderError> {
+    let bytes = read_bounded_file(path, PROVIDER_FILE_BYTES_MAX, "TCC runtime supplement")?;
+    let canonical = crate::elf_local_symbol_core::canonicalize_local_elf_symbol_names(&bytes)
+        .map_err(|error| StagexProviderError::Runtime(format!("canonicalizing TCC runtime supplement: {error}")))?;
+    fs::write(path, &canonical.bytes).map_err(|error| {
+        StagexProviderError::Runtime(format!("writing canonical TCC runtime supplement {}: {error}", path.display()))
+    })?;
+    fs::set_permissions(path, fs::Permissions::from_mode(PROVIDER_DATA_MODE)).map_err(|error| {
+        StagexProviderError::Runtime(format!("setting TCC runtime supplement mode {}: {error}", path.display()))
+    })?;
+    let canonical_bytes = read_bounded_file(path, PROVIDER_FILE_BYTES_MAX, "canonical TCC runtime supplement")?;
+    if canonical_bytes.get(..ELF_MAGIC_BYTES) != Some(ELF_MAGIC) {
+        return Err(StagexProviderError::Runtime("TCC runtime supplement is not ELF".to_string()));
+    }
+    assert_eq!(canonical_bytes, canonical.bytes);
+    assert!(path.is_file());
+    Ok(())
 }
 
 fn run_tcc_positive_smoke(
@@ -1299,9 +1545,20 @@ fn validate_provider_validation_report(report: &ProviderValidationReport) -> Res
     if audit_digest != report.audit_digest_blake3 {
         return Err(StagexProviderError::Receipt("provider validation report audit digest mismatch".to_string()));
     }
-    if !report.positive_tcc_compile || !report.negative_tcc_rejection || !report.negative_assembler_rejection {
+    if !report.runtime_supplement_compile
+        || report.runtime_supplement_source_digest_blake3 != TRANSITION_TCC_RUNTIME_SOURCE_BLAKE3
+        || report.runtime_supplement_transform_id != TCC_RUNTIME_SUPPLEMENT_TRANSFORM_ID
+        || validate_blake3(
+            &report.runtime_supplement_transformed_source_digest_blake3,
+            "provider transformed runtime source digest",
+        )
+        .is_err()
+        || !report.positive_tcc_compile
+        || !report.negative_tcc_rejection
+        || !report.negative_assembler_rejection
+    {
         return Err(StagexProviderError::Receipt(
-            "provider validation report lacks a required positive or negative result".to_string(),
+            "provider validation report lacks a required result or runtime source identity".to_string(),
         ));
     }
     if report.positive_binutils_execution_status != RUNTIME_SMOKE_EXPECTED_EXIT {
@@ -1334,7 +1591,9 @@ fn portable_validation_authorization_id(
 
 fn observe_provider_payload(staging: &Path) -> Result<Vec<ProviderPayloadObservation>, StagexProviderError> {
     let mut specifications = vec![
-        ("stagex-selfhosted-tinycc".to_string(), PROVIDER_TCC_RELATIVE_PATH.to_string()),
+        ("stagex-protected-tinycc".to_string(), PROVIDER_TCC_RELATIVE_PATH.to_string()),
+        ("stagex-selfhosted-tinycc".to_string(), PROVIDER_SELFHOST_TCC_RELATIVE_PATH.to_string()),
+        ("stagex-tinycc-0.9.26".to_string(), PROVIDER_TCC26_RELATIVE_PATH.to_string()),
         ("stagex-tinycc-runtime".to_string(), PROVIDER_TCC_RUNTIME_RELATIVE_PATH.to_string()),
         ("stagex-tinycc-patched-source".to_string(), PROVIDER_TCC_SOURCE_RELATIVE_PATH.to_string()),
         ("stagex-native-musl-headers".to_string(), PROVIDER_MUSL_INCLUDE_RELATIVE_PATH.to_string()),
@@ -1400,19 +1659,24 @@ fn provider_metadata(
     provider_validation_report_digest_blake3: &str,
     normalized_provider_digest_blake3: &str,
 ) -> ProviderMetadata {
-    let retained_tools = std::iter::once(format!("{PROVIDER_TARGET}-tcc"))
-        .chain(BINUTILS_TOOL_NAMES.iter().map(|tool| format!("{PROVIDER_TARGET}-{tool}")))
-        .collect::<Vec<_>>();
+    let retained_tools = [
+        format!("{PROVIDER_TARGET}-tcc"),
+        format!("{PROVIDER_TARGET}-tcc-selfhost"),
+        format!("{PROVIDER_TARGET}-tcc-0.9.26"),
+    ]
+    .into_iter()
+    .chain(BINUTILS_TOOL_NAMES.iter().map(|tool| format!("{PROVIDER_TARGET}-{tool}")))
+    .collect::<Vec<_>>();
     let provider_roles = provider_role_names();
     assert_eq!(provider_roles.len(), PROVIDER_ROLE_COUNT);
-    assert_eq!(retained_tools.len(), BINUTILS_TOOL_NAMES.len().saturating_add(1));
+    assert_eq!(retained_tools.len(), BINUTILS_TOOL_NAMES.len().saturating_add(3));
     ProviderMetadata {
         schema: PROVIDER_SCHEMA.to_string(),
-        provider_id: "stagex-lineage-intermediate-v1".to_string(),
+        provider_id: "stagex-lineage-intermediate-v2".to_string(),
         provider_kind: PROVIDER_KIND.to_string(),
         name: PROVIDER_NAME.to_string(),
         target: PROVIDER_TARGET.to_string(),
-        compiler_kind: PROVIDER_COMPILER_KIND.to_string(),
+        compiler_kind: provider_compiler_selection().compiler_kind.to_string(),
         lineage_manifest_digest_blake3: evidence.manifest_digest_blake3.clone(),
         transition_plan_digest_blake3: evidence.plan_digest_blake3.clone(),
         transition_report_digest_blake3: evidence.report_digest_blake3.clone(),
@@ -1424,7 +1688,9 @@ fn provider_metadata(
         retained_tools,
         provider_roles,
         notes: vec![
-            "Intermediate protected StageX provider built from self-hosted TinyCC, native musl 1.1.24, and binutils 2.30.".to_string(),
+            "Intermediate protected StageX provider selects the TinyCC 0.9.27 v2 compiler that TinyCC 0.9.26 produced for conventional C compilation.".to_string(),
+            "Provider normalization compiles the upstream TinyCC libtcc1 source into a canonical runtime supplement under protected execution authority.".to_string(),
+            "The provider retains the self-hosted TinyCC and TinyCC 0.9.26 as protected fallback artifacts for bounded GCC source compilation.".to_string(),
             "This provider is not the final native GCC provider and does not claim compiler correctness or Mantle self-build completion.".to_string(),
             "Binutils were configured for x86_64-unknown-linux-gnu and are exposed under the StageX musl target prefix only for the validated static bootstrap boundary.".to_string(),
         ],
@@ -1445,9 +1711,14 @@ fn observe_provider_roles(
     payload: &[ProviderPayloadObservation],
 ) -> Result<Vec<ProviderRoleObservation>, StagexProviderError> {
     let payload_by_id = payload.iter().map(|item| (item.artifact_id.as_str(), item)).collect::<BTreeMap<_, _>>();
-    let tool_ids = std::iter::once("stagex-selfhosted-tinycc".to_string())
-        .chain(BINUTILS_TOOL_NAMES.iter().map(|tool| format!("stagex-binutils-{tool}")))
-        .collect::<Vec<_>>();
+    let tool_ids = [
+        "stagex-protected-tinycc".to_string(),
+        "stagex-selfhosted-tinycc".to_string(),
+        "stagex-tinycc-0.9.26".to_string(),
+    ]
+    .into_iter()
+    .chain(BINUTILS_TOOL_NAMES.iter().map(|tool| format!("stagex-binutils-{tool}")))
+    .collect::<Vec<_>>();
     let header_ids = vec![
         "stagex-native-musl-headers".to_string(),
         "stagex-binutils-headers".to_string(),
@@ -1952,7 +2223,7 @@ fn independently_validate_staging(
 ) -> Result<(), StagexProviderError> {
     validate_static_provider_payload(staging, evidence)?;
     let payload = observe_provider_payload(staging)?;
-    let normalized = digest_serialized(NORMALIZED_PROVIDER_DIGEST_DOMAIN, &payload)?;
+    let normalized = normalized_provider_payload_digest_from_observations(&payload)?;
     if normalized != expected_receipt.lineage.normalized_provider_digest_blake3 {
         return Err(StagexProviderError::Provider("independent provider payload digest mismatch".to_string()));
     }
@@ -2443,6 +2714,8 @@ mod tests {
     const DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const NON_UTF8_FIXTURE_BYTE: u8 = 0xff;
+    const VALIDATION_REORDER_LEFT_INDEX: usize = 1;
+    const VALIDATION_REORDER_RIGHT_INDEX: usize = 2;
 
     fn validation_event(path: &str, authorization_id: &str) -> ProviderValidationEvent {
         ProviderValidationEvent {
@@ -2467,12 +2740,51 @@ mod tests {
             status: TRANSITION_STATUS_COMPLETE.to_string(),
             audit_digest_blake3,
             events,
+            runtime_supplement_compile: true,
+            runtime_supplement_source_digest_blake3: TRANSITION_TCC_RUNTIME_SOURCE_BLAKE3.to_string(),
+            runtime_supplement_transform_id: TCC_RUNTIME_SUPPLEMENT_TRANSFORM_ID.to_string(),
+            runtime_supplement_transformed_source_digest_blake3: DIGEST_B.to_string(),
             positive_tcc_compile: true,
             negative_tcc_rejection: true,
             positive_binutils_execution_status: RUNTIME_SMOKE_EXPECTED_EXIT,
             negative_assembler_rejection: true,
             fallback_events: Vec::new(),
         }
+    }
+
+    #[test]
+    fn provider_compiler_selection_uses_the_regex_capable_protected_predecessor() {
+        let selection = provider_compiler_selection();
+        assert_eq!(selection.transition_artifact_id, "tcc-musl-v2");
+        assert_eq!(selection.transition_relative_path, TRANSITION_TCC_RELATIVE_PATH);
+        assert_eq!(selection.expected_digest_blake3, crate::stagex_tcc_musl_v2::COMPILER_BLAKE3);
+        assert_eq!(selection.compiler_kind, PROVIDER_COMPILER_KIND);
+        assert_ne!(selection.expected_digest_blake3, crate::stagex_tcc_selfhost::COMPILER_BLAKE3);
+        assert_ne!(selection.expected_digest_blake3, crate::stagex_tinycc::TINYCC_FINAL_BLAKE3);
+        assert_ne!(selection.transition_relative_path, TRANSITION_SELFHOST_TCC_RELATIVE_PATH);
+        assert_ne!(selection.transition_relative_path, TRANSITION_TCC26_RELATIVE_PATH);
+    }
+
+    #[test]
+    fn normalized_provider_payload_digest_is_stable_and_payload_sensitive() {
+        let payload = vec![ProviderPayloadObservation {
+            artifact_id: "compiler".to_string(),
+            relative_path: "bin/tcc".to_string(),
+            kind: "file".to_string(),
+            bytes_len: 1,
+            digest_blake3: DIGEST_A.to_string(),
+        }];
+        let first = normalized_provider_payload_digest_from_observations(&payload).unwrap();
+        let second = normalized_provider_payload_digest_from_observations(&payload).unwrap();
+        let mut changed = payload.clone();
+        changed[0].digest_blake3 = DIGEST_B.to_string();
+        let changed_digest = normalized_provider_payload_digest_from_observations(&changed).unwrap();
+        let empty_error = normalized_provider_payload_digest_from_observations(&[]).unwrap_err();
+
+        assert_eq!(first, second);
+        assert_ne!(first, changed_digest);
+        assert!(empty_error.to_string().contains("payload is empty"));
+        assert_eq!(first.len(), blake3::OUT_LEN.saturating_mul(2));
     }
 
     #[test]
@@ -2493,10 +2805,43 @@ mod tests {
     #[test]
     fn provider_validation_report_rejects_false_negative_result() {
         let mut report = complete_validation_report();
-        report.negative_tcc_rejection = false;
+        report.runtime_supplement_compile = false;
         let error = validate_provider_validation_report(&report).unwrap_err();
         assert!(matches!(error, StagexProviderError::Receipt(_)));
         assert!(error.to_string().contains("lacks a required"));
+    }
+
+    #[test]
+    fn provider_validation_report_rejects_runtime_source_substitution() {
+        let mut report = complete_validation_report();
+        report.runtime_supplement_source_digest_blake3 = DIGEST_A.to_string();
+        let error = validate_provider_validation_report(&report).unwrap_err();
+        assert!(matches!(error, StagexProviderError::Receipt(_)));
+        assert!(error.to_string().contains("runtime source identity"));
+    }
+
+    #[test]
+    fn provider_validation_report_rejects_runtime_transform_substitution() {
+        let mut report = complete_validation_report();
+        report.runtime_supplement_transform_id = "unreviewed-transform".to_string();
+        let error = validate_provider_validation_report(&report).unwrap_err();
+        assert!(matches!(error, StagexProviderError::Receipt(_)));
+        assert!(error.to_string().contains("runtime source identity"));
+    }
+
+    #[test]
+    fn runtime_source_transform_replaces_one_authenticated_function() {
+        let source = format!("prefix\n{TCC_FLOATUNDISF_UPSTREAM_SOURCE}suffix\n");
+        let transformed = transform_tcc_runtime_source(&source).unwrap();
+        assert!(!transformed.contains(TCC_FLOATUNDISF_UPSTREAM_SOURCE));
+        assert_eq!(transformed.matches(TCC_FLOATUNDISF_BOUNDED_SOURCE).count(), 1);
+    }
+
+    #[test]
+    fn runtime_source_transform_rejects_missing_or_repeated_function() {
+        let repeated = format!("{TCC_FLOATUNDISF_UPSTREAM_SOURCE}{TCC_FLOATUNDISF_UPSTREAM_SOURCE}");
+        assert!(transform_tcc_runtime_source("unrelated source").is_err());
+        assert!(transform_tcc_runtime_source(&repeated).is_err());
     }
 
     #[test]
@@ -2686,6 +3031,7 @@ mod tests {
     #[test]
     fn report_bound_outputs_do_not_include_provider_component_artifacts() {
         assert!(REPORT_BOUND_OUTPUT_IDS.contains(&"stage0-full-sha256-verification"));
+        assert!(!REPORT_BOUND_OUTPUT_IDS.contains(&"tcc-musl-v2"));
         assert!(!REPORT_BOUND_OUTPUT_IDS.contains(&"tcc-musl-selfhost"));
         assert!(!REPORT_BOUND_OUTPUT_IDS.contains(&"musl-native-libc"));
     }
@@ -2719,7 +3065,7 @@ mod tests {
             .zip(PROVIDER_VALIDATION_AUTHORIZATION_SEQUENCE)
             .map(|(path, authorization_id)| validation_event(path, authorization_id))
             .collect::<Vec<_>>();
-        events.swap(0, 1);
+        events.swap(VALIDATION_REORDER_LEFT_INDEX, VALIDATION_REORDER_RIGHT_INDEX);
         let error = validate_provider_validation_event_sequence(&events).unwrap_err();
         assert!(matches!(error, StagexProviderError::Runtime(_)));
         assert!(error.to_string().contains("order mismatch"));

@@ -36,8 +36,8 @@ let musl_src = crunch.derivationFile "musl-1.1.24-src.ncl" in
         exit 1
       }
 
-      GCC=$(find_input gcc-4.0.4-musl-pass5-v1)
-      BINUTILS=$(find_input binutils-2.30-gcc-pass4-v16)
+      GCC=$(find_input gcc-4.0.4-musl-pass5-v2)
+      BINUTILS=$(find_input binutils-2.30-gcc-pass4-v17)
       MAKE=$(find_input make-3.82-tcc)
       STAGE0=$(find_input stage0-posix)
       SRC=$(find_input musl-1.1.24-src)

@@ -28,11 +28,29 @@ The hydrated full-source-provider proof reaches matching Mantle binaries but ins
 
 **Rationale:** Success with a fallback event would recreate the trust edge this proof exists to remove.
 
+### Decision: plan the complete action trust graph before execution
+
+**Choice:** The pure proof core derives one root-scoped action trust plan from the selected proof root. Each reachable action names its broad stage, producer actions, fixed or produced executable authorities, input authorities, outputs, local-only execution rule, event-count bounds, and resource limits. An incomplete adapter or action list blocks execution.
+
+**Rationale:** A six-stage summary cannot expose an undeclared child tool or missing producer edge before a long proof starts. A complete pre-execution list provides a cheap failure point without weakening runtime enforcement.
+
+### Decision: bind generated executables to producers, not paths
+
+**Choice:** A fixed executable carries a reviewed BLAKE3 identity. A generated executable carries its producer action and output identity, then receives an observed BLAKE3 before execution. A store path, output prefix, executable name, or generated-directory location cannot grant authority by itself.
+
+**Rationale:** Path classification can mislabel copied, stale, or attacker-selected files as generated output. The producer relationship and observed content identity preserve the existing Mantle trust model.
+
+### Decision: reconcile planned and observed execution
+
+**Choice:** The proof shell maps protected-exec and build execution records back to planned actions. It rejects unknown events, missing required events, digest drift, producer drift, count-bound violations, remote execution, and cache-only completion. The operator trust report is a view over these bound records, not a separate authority source. ADR 0070 records this boundary.
+
+**Rationale:** Static review and runtime interception cover different failure modes. Their explicit reconciliation makes the useful action-audit shape visible without replacing seccomp evidence.
+
 ### Decision: use the v2 content-bound proof contract
 
-**Choice:** Emit a `mantle-deterministic-proof-receipt-v2` receipt containing the canonical source/rebuild descriptor, authority plan, provider/closure identities, stage plans, run roots, approved read identities, effect-policy results, stage output digests, and proof bundle digest.
+**Choice:** Emit a `mantle-deterministic-proof-receipt-v2` receipt containing the canonical source/rebuild descriptor, authority plan, provider/closure identities, stage plans, action-trust plan, observed execution reconciliation, run roots, approved read identities, effect-policy results, stage output digests, and proof bundle digest.
 
-**Rationale:** The current parity verifier intentionally rejects the historical v1 receipt.
+**Rationale:** The current parity verifier intentionally rejects the historical v1 receipt. The new action-trust identities must also be content-bound rather than inferred from producer status.
 
 ### Decision: make mismatch and failure durable
 
@@ -43,5 +61,8 @@ The hydrated full-source-provider proof reaches matching Mantle binaries but ins
 ## Risks / Trade-offs
 
 - A clean proof can run for many hours and require substantial disk; preflight must bound both before construction.
+- Native-provider and Rust-unit adapters can expose incomplete action descriptions. The proof must stop instead of emitting a partial report.
+- Generated build scripts require producer-linked authority and a digest observation before execution.
+- The complete action list and observations can be large, so schemas and event counts need explicit limits.
 - Stage1 may expose native-topology behavior not covered by prior one-shot proofs.
 - Matching binaries prove a bounded fixed point, not compiler correctness or independent reproducibility.

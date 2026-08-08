@@ -50,7 +50,7 @@ let python_src = crunch.fetchTarball {
 
       PROVIDER=$(find_input full-source-seed-toolchain)
       MAKE=$(find_input make-4.4.1-full-source-gcc10-v1)
-      LINUX_HEADERS=$(find_input linux-headers-6.6-full-source-gcc10-v1)
+      LINUX_HEADERS=$(find_input linux-headers-6.6-full-source-gcc10-v3)
       BUSYBOX=$(find_input busybox-1.37.0-full-source-gcc10-v1)
       SRC=$(find_input python-3.13.5-src)
       SOURCE_ROOT="$SRC"

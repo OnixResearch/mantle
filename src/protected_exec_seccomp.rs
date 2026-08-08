@@ -930,6 +930,7 @@ mod linux {
         const CHILD_MODE_VAR: &str = "CRUNCH_TEST_SECCOMP_CHILD_MODE";
         const LISTENER_ISOLATION_CHILD_MODE: &str = "listener-isolation";
         const FRESH_LISTENER_WORKER_COUNT: usize = 2;
+        const _: () = assert!(FRESH_LISTENER_WORKER_COUNT > 1);
         const AUDIT_FLUSH_WAIT_MS: u64 = 50;
         const DIAGNOSTIC_TEST_EVENT_COUNT: usize = 2;
         const ORPHAN_EXEC_DELAY_US: libc::useconds_t = 100_000;
@@ -1368,7 +1369,6 @@ mod linux {
             let status = Command::new("/usr/bin/env").env_clear().status().unwrap();
 
             assert!(status.success());
-            assert!(FRESH_LISTENER_WORKER_COUNT > 1);
         }
 
         fn run_allow_child() {
