@@ -101,7 +101,8 @@ mod tests {
         let release = sample_release();
         let policy = ReleasePolicy::new(0, "witness_identity".to_string(), Vec::new(), Vec::new());
         let result = evaluate_policy(&release, &[], &policy, &ReleaseRevocations::empty()).unwrap();
-        assert_eq!(result.trust_tier.final_class, crunch_attestation_core::FinalClass::QuorumSatisfied);
+        assert_eq!(result.witness_quorum_status, crunch_attestation_core::IndependentAgreementStatus::NotRequired);
+        assert_eq!(result.trust_tier.final_class, crunch_attestation_core::FinalClass::SelfProofValid);
     }
 
     #[test]
