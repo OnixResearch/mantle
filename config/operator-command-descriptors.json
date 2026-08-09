@@ -3522,6 +3522,66 @@
     "supports_json": true
   },
   {
+    "path": "store composition",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Plan or realize an experimental frontend-neutral castore composition root",
+    "supports_json": true
+  },
+  {
+    "path": "store composition plan",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--from",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Validate a bounded generic projection and report canonical identities",
+    "supports_json": true
+  },
+  {
+    "path": "store composition realize",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--from",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--receipt-out",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Realize a validated composition from complete local castore roots",
+    "supports_json": true
+  },
+  {
     "path": "store gc",
     "aliases": [],
     "flags": [

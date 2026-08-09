@@ -2888,6 +2888,30 @@ pub enum StoreAction {
         #[command(subcommand)]
         action: StoreArchiveAction,
     },
+    /// Plan or realize an experimental frontend-neutral castore composition root
+    Composition {
+        #[command(subcommand)]
+        action: StoreCompositionAction,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum StoreCompositionAction {
+    /// Validate a bounded generic projection and report canonical identities
+    Plan {
+        /// JSON composition request
+        #[arg(long)]
+        from: PathBuf,
+    },
+    /// Realize a validated composition from complete local castore roots
+    Realize {
+        /// JSON composition request
+        #[arg(long)]
+        from: PathBuf,
+        /// Atomic realization receipt output
+        #[arg(long)]
+        receipt_out: PathBuf,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -3620,6 +3644,14 @@ fn store_command_label(action: &StoreAction) -> &'static str {
         StoreAction::Push { .. } => "store.push",
         StoreAction::Pull { .. } => "store.pull",
         StoreAction::Archive { action } => store_archive_command_label(action),
+        StoreAction::Composition { action } => store_composition_command_label(action),
+    }
+}
+
+fn store_composition_command_label(action: &StoreCompositionAction) -> &'static str {
+    match action {
+        StoreCompositionAction::Plan { .. } => "store.composition.plan",
+        StoreCompositionAction::Realize { .. } => "store.composition.realize",
     }
 }
 

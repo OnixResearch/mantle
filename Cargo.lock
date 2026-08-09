@@ -1439,6 +1439,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-composition-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "serde",
+]
+
+[[package]]
 name = "crunch-delta"
 version = "0.1.0"
 dependencies = [
@@ -1740,6 +1748,7 @@ dependencies = [
  "bzip2 0.6.1",
  "crunch-action-result-core",
  "crunch-attestation",
+ "crunch-composition-core",
  "crunch-delta",
  "crunch-gc-core",
  "crunch-nar",
@@ -4779,6 +4788,7 @@ dependencies = [
  "crunch-attestation",
  "crunch-bootstrap-core",
  "crunch-build",
+ "crunch-composition-core",
  "crunch-delta",
  "crunch-eval",
  "crunch-glue",

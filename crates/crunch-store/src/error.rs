@@ -13,6 +13,9 @@ pub enum Error {
     #[error("directory service: {0}")]
     DirectoryService(String),
 
+    #[error("composition: {0}")]
+    Composition(String),
+
     #[error("pathinfo service: {0}")]
     PathInfoService(String),
 

@@ -13,6 +13,9 @@ const PATHINFO_INITIAL_CAPACITY: usize = 256;
 const MAX_FOREIGN_RECEIPT_ROOT_PATHS: usize = 64;
 const MAX_FOREIGN_REALIZATION_RECEIPT_BYTES: u64 = 16_777_216;
 const FOREIGN_REALIZATION_RECEIPT_READ_LIMIT: u64 = MAX_FOREIGN_REALIZATION_RECEIPT_BYTES + 1;
+const COMPOSITION_REQUEST_BYTES_MAX: u64 = 1_048_576;
+const COMPOSITION_REQUEST_READ_LIMIT: u64 = COMPOSITION_REQUEST_BYTES_MAX + 1;
+const COMPOSITION_REQUEST_INITIAL_CAPACITY: usize = 8_192;
 
 use crate::build_cmd::load_configured_trusted_public_keys;
 use crate::build_cmd::load_or_generate_signing_keypair;
@@ -170,6 +173,7 @@ async fn cmd_store_mutation_or_transfer(
             .await
         }
         crate::StoreAction::Archive { action } => cmd_store_archive(action, context).await,
+        crate::StoreAction::Composition { action } => cmd_store_composition(action, context).await,
         crate::StoreAction::List
         | crate::StoreAction::Info { .. }
         | crate::StoreAction::Roots { .. }
@@ -1305,6 +1309,75 @@ fn print_pull_report(report: &crunch_store::PullReport) {
         report.skipped_parse_error_count,
         report.total_nar_bytes,
     );
+}
+
+async fn cmd_store_composition(
+    action: crate::StoreCompositionAction,
+    context: StoreCommandContext<'_>,
+) -> Result<(), RunError> {
+    match action {
+        crate::StoreCompositionAction::Plan { from } => {
+            let request = read_composition_request(&from)?;
+            let prepared = crunch_store::plan_composition_request(&request)
+                .map_err(|error| RunError::Internal(error.to_string()))?;
+            print_composition_plan(&prepared, context.is_json_output)
+        }
+        crate::StoreCompositionAction::Realize { from, receipt_out } => {
+            let request = read_composition_request(&from)?;
+            let _guard = store_mutation_guard(context.state_dir)?;
+            let store = open_store(context).await?;
+            let receipt = crunch_store::realize_composition(&store, &request)
+                .await
+                .map_err(|error| RunError::Internal(error.to_string()))?;
+            crate::source_bundle::write_json_atomically(&receipt_out, &receipt, "composition realization receipt")?;
+            print_composition_receipt(&receipt, context.is_json_output)
+        }
+    }
+}
+
+fn read_composition_request(path: &Path) -> Result<crunch_composition_core::CompositionRequest, RunError> {
+    let file = fs::File::open(path)
+        .map_err(|error| RunError::Internal(format!("opening composition request {}: {error}", path.display())))?;
+    let mut bytes = Vec::with_capacity(COMPOSITION_REQUEST_INITIAL_CAPACITY);
+    file.take(COMPOSITION_REQUEST_READ_LIMIT)
+        .read_to_end(&mut bytes)
+        .map_err(|error| RunError::Internal(format!("reading composition request {}: {error}", path.display())))?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > COMPOSITION_REQUEST_BYTES_MAX {
+        return Err(RunError::Internal(format!("composition request exceeds {COMPOSITION_REQUEST_BYTES_MAX} bytes")));
+    }
+    serde_json::from_slice(&bytes)
+        .map_err(|error| RunError::Internal(format!("parsing composition request {}: {error}", path.display())))
+}
+
+fn print_composition_plan(
+    prepared: &crunch_composition_core::PreparedComposition,
+    is_json_output: bool,
+) -> Result<(), RunError> {
+    if is_json_output {
+        return print_json_report(prepared, "serializing composition plan");
+    }
+    println!(
+        "COMPOSITION_PLAN plan_ref={} policy_ref={} bindings={} decisions={} experimental=true",
+        prepared.plan_ref,
+        prepared.realization_policy_ref,
+        prepared.bindings.len(),
+        prepared.collision_decisions.len(),
+    );
+    Ok(())
+}
+
+fn print_composition_receipt(
+    receipt: &crunch_composition_core::RealizationReceipt,
+    is_json_output: bool,
+) -> Result<(), RunError> {
+    if is_json_output {
+        return print_json_report(receipt, "serializing composition receipt");
+    }
+    println!(
+        "COMPOSITION_ROOT plan_ref={} policy_ref={} root={} receipt_ref={} experimental=true",
+        receipt.plan_ref, receipt.realization_policy_ref, receipt.resulting_root.digest_blake3, receipt.receipt_ref,
+    );
+    Ok(())
 }
 
 async fn cmd_store_archive(

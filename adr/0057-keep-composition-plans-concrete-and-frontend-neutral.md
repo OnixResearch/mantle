@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -76,3 +76,9 @@ Mantle gains a reusable object-composition primitive without becoming a system m
 The plan and realization-policy formats must remain versioned and bounded. Explicit conflict decisions add work for callers, but they make replacements inspectable and deterministic.
 
 The initial root cannot claim full Unix filesystem fidelity, ABI compatibility, dependency completeness, safe execution, bootability, deployment success, or release eligibility.
+
+## Implementation
+
+`crates/crunch-composition-core` owns the no-std semantic model, BLAKE3 identities, path validation, merge planning, limits, and receipt preimage. `crates/crunch-store/src/composition.rs` owns complete castore loading, leaves-to-root persistence, and result recheck. `mantle store composition plan|realize` is the bounded experimental shell.
+
+`docs/composition-roots.md` defines the operator contract and metadata support matrix. `config/composition-roots/authority.ncl` records the reviewed schemas, default limits, forbidden frontend fields, unsupported metadata classes, and non-claim.

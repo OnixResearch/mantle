@@ -6678,6 +6678,117 @@
       ]
     },
     {
+      "canonical": "store composition",
+      "compatibility_spellings": [],
+      "compatibility_state": "canonical",
+      "exit_classes": [
+        "policy-rejection",
+        "success",
+        "usage"
+      ],
+      "flags": [
+        "--base-store",
+        "--help",
+        "--json",
+        "--log-level",
+        "--nix-compat",
+        "--state-dir",
+        "--store",
+        "--store-prefix",
+        "--verbose",
+        "-h",
+        "-v"
+      ],
+      "kind": "command",
+      "machine_schema": "mantle-command-json-v1",
+      "migration_reference": null,
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-cli",
+      "removal_gate": null,
+      "role": "experimental-command",
+      "support_tier": "advanced",
+      "supported_operations": [
+        "invoke",
+        "read-help"
+      ]
+    },
+    {
+      "canonical": "store composition plan",
+      "compatibility_spellings": [],
+      "compatibility_state": "canonical",
+      "exit_classes": [
+        "policy-rejection",
+        "success",
+        "usage"
+      ],
+      "flags": [
+        "--base-store",
+        "--from",
+        "--help",
+        "--json",
+        "--log-level",
+        "--nix-compat",
+        "--state-dir",
+        "--store",
+        "--store-prefix",
+        "--verbose",
+        "-h",
+        "-v"
+      ],
+      "kind": "command",
+      "machine_schema": "mantle-composition-plan-v1",
+      "migration_reference": null,
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-cli",
+      "removal_gate": null,
+      "role": "experimental-command",
+      "support_tier": "advanced",
+      "supported_operations": [
+        "invoke",
+        "read-help"
+      ]
+    },
+    {
+      "canonical": "store composition realize",
+      "compatibility_spellings": [],
+      "compatibility_state": "canonical",
+      "exit_classes": [
+        "policy-rejection",
+        "success",
+        "usage"
+      ],
+      "flags": [
+        "--base-store",
+        "--from",
+        "--help",
+        "--json",
+        "--log-level",
+        "--nix-compat",
+        "--receipt-out",
+        "--state-dir",
+        "--store",
+        "--store-prefix",
+        "--verbose",
+        "-h",
+        "-v"
+      ],
+      "kind": "command",
+      "machine_schema": "mantle-composition-receipt-v1",
+      "migration_reference": null,
+      "mutation": "store-state",
+      "network": "none",
+      "owner": "mantle-cli",
+      "removal_gate": null,
+      "role": "experimental-command",
+      "support_tier": "advanced",
+      "supported_operations": [
+        "invoke",
+        "read-help"
+      ]
+    },
+    {
       "canonical": "store gc",
       "compatibility_spellings": [],
       "compatibility_state": "canonical",

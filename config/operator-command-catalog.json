@@ -1,6 +1,6 @@
 {
   "schema": "mantle-operator-command-catalog-v1",
-  "identity_blake3": "595f254e7659b2d4dce4c02c1503a040a94d3b9a2a752b4a819c9ea1c33ea07a",
+  "identity_blake3": "9fc4cc6767d912ca399916c84694cd2b37bcad65ce9996b3f7f3020dfd1f0a65",
   "entries": [
     {
       "descriptor": {
@@ -9911,6 +9911,183 @@
           "usage"
         ],
         "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "store composition",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Plan or realize an experimental frontend-neutral castore composition root",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "store composition",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "experimental-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "store composition plan",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--from",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Validate a bounded generic projection and report canonical identities",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "store composition plan",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "experimental-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--from",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-composition-plan-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "store composition realize",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--from",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--receipt-out",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Realize a validated composition from complete local castore roots",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "store composition realize",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "experimental-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "store-state",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--from",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--receipt-out",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-composition-receipt-v1",
         "migration_reference": null,
         "removal_gate": null
       }

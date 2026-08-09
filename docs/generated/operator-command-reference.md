@@ -1,6 +1,6 @@
 # Mantle command reference
 
-Catalog BLAKE3: `595f254e7659b2d4dce4c02c1503a040a94d3b9a2a752b4a819c9ea1c33ea07a`
+Catalog BLAKE3: `9fc4cc6767d912ca399916c84694cd2b37bcad65ce9996b3f7f3020dfd1f0a65`
 
 ## Daily commands
 
@@ -1355,6 +1355,33 @@ List archive contents without importing
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
+
+### `mantle store composition`
+
+Plan or realize an experimental frontend-neutral castore composition root
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle store composition plan`
+
+Validate a bounded generic projection and report canonical identities
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-composition-plan-v1`
+
+### `mantle store composition realize`
+
+Realize a validated composition from complete local castore roots
+
+- Mutation: `store-state`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-composition-receipt-v1`
 
 ### `mantle store gc`
 

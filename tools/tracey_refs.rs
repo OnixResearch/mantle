@@ -1,5 +1,33 @@
 // Mantle Tracey coverage bridge.
 //
+// Frontend-neutral composition-root bridge.
+//
+// r[impl composition_roots.frontend_neutral_plan]
+// r[impl composition_roots.canonical_plan_identity]
+// r[impl composition_roots.pure_bounded_core]
+// r[impl composition_roots.logical_path_safety]
+// r[impl composition_roots.explicit_conflicts]
+// r[impl composition_roots.castore_realization]
+// r[impl composition_roots.realization_receipt]
+// r[impl composition_roots.optional_adapters]
+// r[impl composition_roots.experimental_boundary]
+// The pure no-std core lives in `crates/crunch-composition-core`. The bounded
+// castore shell and experimental CLI live in `crates/crunch-store` and the root
+// package. They do not interpret frontend package or deployment semantics.
+//
+// r[verify composition_roots.frontend_neutral_plan]
+// r[verify composition_roots.canonical_plan_identity]
+// r[verify composition_roots.pure_bounded_core]
+// r[verify composition_roots.logical_path_safety]
+// r[verify composition_roots.explicit_conflicts]
+// r[verify composition_roots.castore_realization]
+// r[verify composition_roots.realization_receipt]
+// r[verify composition_roots.optional_adapters]
+// r[verify composition_roots.experimental_boundary]
+// Positive and negative core, boundary, castore, and CLI tests cover canonical
+// identity, explicit conflicts, named bounds, completeness, failed persistence,
+// root recheck, raw frontend-intent rejection, and receipt non-claims.
+//
 // Nario v2 read-compatibility bridge.
 //
 // r[impl store_transports.nario_v2_read_compatibility]

@@ -335,6 +335,9 @@ Mantle keeps build observations separate from stronger claims:
   They do not prove local rebuild compatibility, package correctness, evaluator parity, or reproducibility.
 - [Nario v2 read compatibility](docs/nario-v2-import.md) lists and imports exact
   Determinate Nix store records. It does not import recipes or Nix evaluation meaning.
+- [Experimental composition roots](docs/composition-roots.md) merge exact castore
+  directory roots with canonical BLAKE3 plan identity and explicit conflict decisions.
+  They do not select packages, execute, activate, deploy, or prove release eligibility.
 - Foreign provenance audits scan signed castore facts under explicit limits.
   The scanner handles bounded gzip and zstd streams and normalizes safe store
   suffixes. Unknown executable bytes still fail closed.
