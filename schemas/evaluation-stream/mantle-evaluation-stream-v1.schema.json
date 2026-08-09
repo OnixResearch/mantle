@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/evaluation-stream/v1",
+  "title": "Mantle evaluation stream record v1",
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "bounded_text": {
+      "type": "string",
+      "maxLength": 4096,
+      "x-mantle-length-unit": "utf8-bytes"
+    },
+    "root_label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "x-mantle-length-unit": "utf8-bytes"
+    },
+    "failure_scope": {
+      "type": ["string", "null"],
+      "enum": ["root-scoped", "shared-fatal", "cancellation", "coordinator-failure", null]
+    },
+    "terminal_state": {
+      "type": "string",
+      "enum": ["succeeded", "failed", "worker-lost", "cancelled", "not-started"]
+    },
+    "terminal_phase": {
+      "type": "string",
+      "enum": ["evaluation", "conversion", "build", "coordination"]
+    },
+    "diagnostic": {
+      "type": ["string", "null"],
+      "maxLength": 16384,
+      "x-mantle-length-unit": "utf8-bytes"
+    },
+    "reference": {
+      "type": ["string", "null"],
+      "maxLength": 4096,
+      "x-mantle-length-unit": "utf8-bytes"
+    },
+    "root_projection": {
+      "type": "object",
+      "required": [
+        "sequence",
+        "root_id",
+        "root_label",
+        "terminal_state",
+        "terminal_phase",
+        "failure_scope",
+        "diagnostic",
+        "diagnostic_truncated",
+        "result_ref",
+        "cache_ref",
+        "build_ref"
+      ],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "root_id": { "$ref": "#/$defs/digest" },
+        "root_label": { "$ref": "#/$defs/root_label" },
+        "terminal_state": { "$ref": "#/$defs/terminal_state" },
+        "terminal_phase": { "$ref": "#/$defs/terminal_phase" },
+        "failure_scope": { "$ref": "#/$defs/failure_scope" },
+        "diagnostic": { "$ref": "#/$defs/diagnostic" },
+        "diagnostic_truncated": { "type": "boolean" },
+        "result_ref": { "$ref": "#/$defs/reference" },
+        "cache_ref": { "$ref": "#/$defs/reference" },
+        "build_ref": { "$ref": "#/$defs/reference" }
+      },
+      "additionalProperties": false
+    },
+    "counts": {
+      "type": "object",
+      "required": ["succeeded", "failed", "worker_lost", "cancelled", "not_started"],
+      "properties": {
+        "succeeded": { "type": "integer", "minimum": 0, "maximum": 65536 },
+        "failed": { "type": "integer", "minimum": 0, "maximum": 65536 },
+        "worker_lost": { "type": "integer", "minimum": 0, "maximum": 65536 },
+        "cancelled": { "type": "integer", "minimum": 0, "maximum": 65536 },
+        "not_started": { "type": "integer", "minimum": 0, "maximum": 65536 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "schema",
+        "kind",
+        "run_id",
+        "source_blake3",
+        "evaluator_cohort",
+        "selector",
+        "selected_root_count",
+        "compatibility_mode"
+      ],
+      "properties": {
+        "schema": { "type": "string", "const": "mantle-evaluation-stream-v1" },
+        "kind": { "type": "string", "const": "run-start" },
+        "run_id": { "$ref": "#/$defs/digest" },
+        "source_blake3": { "$ref": "#/$defs/digest" },
+        "evaluator_cohort": { "$ref": "#/$defs/bounded_text" },
+        "selector": { "$ref": "#/$defs/bounded_text" },
+        "selected_root_count": { "type": "integer", "minimum": 1, "maximum": 65536 },
+        "compatibility_mode": {
+          "type": "string",
+          "const": "stream-v1-introduction-plus-one-subsequent-minor-release"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["schema", "kind", "run_id", "sequence", "root_id", "root_label"],
+      "properties": {
+        "schema": { "type": "string", "const": "mantle-evaluation-stream-v1" },
+        "kind": { "type": "string", "const": "root-discovered" },
+        "run_id": { "$ref": "#/$defs/digest" },
+        "sequence": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "root_id": { "$ref": "#/$defs/digest" },
+        "root_label": { "$ref": "#/$defs/root_label" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "schema",
+        "kind",
+        "run_id",
+        "sequence",
+        "root_id",
+        "root_label",
+        "terminal_state",
+        "terminal_phase",
+        "failure_scope",
+        "diagnostic",
+        "diagnostic_truncated",
+        "result_ref",
+        "cache_ref",
+        "build_ref"
+      ],
+      "properties": {
+        "schema": { "type": "string", "const": "mantle-evaluation-stream-v1" },
+        "kind": { "type": "string", "const": "root-terminal" },
+        "run_id": { "$ref": "#/$defs/digest" },
+        "sequence": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "root_id": { "$ref": "#/$defs/digest" },
+        "root_label": { "$ref": "#/$defs/root_label" },
+        "terminal_state": { "$ref": "#/$defs/terminal_state" },
+        "terminal_phase": { "$ref": "#/$defs/terminal_phase" },
+        "failure_scope": { "$ref": "#/$defs/failure_scope" },
+        "diagnostic": { "$ref": "#/$defs/diagnostic" },
+        "diagnostic_truncated": { "type": "boolean" },
+        "result_ref": { "$ref": "#/$defs/reference" },
+        "cache_ref": { "$ref": "#/$defs/reference" },
+        "build_ref": { "$ref": "#/$defs/reference" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "schema",
+        "kind",
+        "run_id",
+        "disposition",
+        "selected_root_count",
+        "terminal_root_count",
+        "counts",
+        "roots"
+      ],
+      "properties": {
+        "schema": { "type": "string", "const": "mantle-evaluation-stream-v1" },
+        "kind": { "type": "string", "const": "run-summary" },
+        "run_id": { "$ref": "#/$defs/digest" },
+        "disposition": { "type": "string", "enum": ["success", "partial", "failed", "cancelled"] },
+        "selected_root_count": { "type": "integer", "minimum": 1, "maximum": 65536 },
+        "terminal_root_count": { "type": "integer", "minimum": 1, "maximum": 65536 },
+        "counts": { "$ref": "#/$defs/counts" },
+        "roots": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 65536,
+          "items": { "$ref": "#/$defs/root_projection" }
+        }
+      },
+      "additionalProperties": false
+    }
+  ]
+}

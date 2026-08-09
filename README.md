@@ -557,6 +557,7 @@ notices.
 
 ## References
 
+- [NixOS/nix-eval-jobs](https://github.com/NixOS/nix-eval-jobs) provides the reviewed independent-job and JSON-lines behavior reference. Mantle retains root, identity, wire, execution, and evidence authority.
 - [picolibc/picolibc](https://github.com/picolibc/picolibc) supplies the pinned x86_64 Linux static diagnostic source for the StageX libc comparison research path.
 - [OnixResearch/octet](https://github.com/OnixResearch/octet) owns checked Rust proof and translation execution policy.
 - [OnixResearch/valence](https://github.com/OnixResearch/valence) owns canonical evidence identities, links, roles, and non-claims.
