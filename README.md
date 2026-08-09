@@ -86,19 +86,14 @@ The current compatibility identifier for that report is
 
 ## Core workflows
 
-| Workflow | Entry point |
-|---|---|
-| Evaluate, plan, and build | `mantle eval`, `mantle build --plan`, `mantle build` |
-| Develop and execute packages | `mantle shell`, `mantle run` |
-| Manage declared project inputs | `mantle init`, `mantle check`, `mantle refresh`, `mantle upgrade` |
-| Inspect and move local state | `mantle store`, `mantle source bundle`, `mantle receipt bundle` |
-| Inspect evidence | `mantle graph`, `mantle why`, `mantle attest`, `mantle release` |
-| Use specialized boundaries | `mantle remote`, `mantle artifact`, `mantle wasm-component`, `mantle foreign-import` |
-| Exercise verification lanes | `mantle rust-plan`, `mantle bootstrap`, `mantle self-build`, `mantle nix-free-demo` |
+Use the checked [canonical operator workflow](docs/generated/canonical-operator-workflow.md)
+for the short daily path. Use the generated
+[command reference](docs/generated/operator-command-reference.md) for support tiers,
+mutation classes, network classes, exit classes, and machine-output contracts.
 
-Run `mantle <command> --help` for the authoritative options. Common operator
-loops and output contracts are documented in
-[`docs/operator-workflows.md`](docs/operator-workflows.md).
+Clap remains authoritative for parser behavior. The typed Nickel inventory owns
+reviewed operator policy. `docs/operator-workflows.md` contains longer runbooks
+that supplement the checked catalog.
 
 ## Store model
 

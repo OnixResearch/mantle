@@ -7,6 +7,12 @@
 use std::fmt;
 use std::process::ExitCode;
 
+use crate::operator_contract::FailureFacts;
+use crate::operator_contract::RemediationRecord;
+use crate::operator_contract::classify_remediation;
+use crate::operator_contract::render_remediation_human;
+use crate::operator_contract::render_remediation_json;
+
 const REPORTED_EXIT_CODE_KIND: &str = "reported";
 
 /// Top-level error from running a crunch command.
@@ -57,26 +63,15 @@ impl RunError {
 
     /// Format as a human-readable error string for stderr.
     pub fn format_human(&self) -> String {
-        match self {
+        let base = match self {
             RunError::Eval(msg) => format!("error: evaluation failed\n{msg}"),
-            RunError::Build(msg) => {
-                let body = extract_build_body(msg);
-                let suggestions = build_suggestions(msg);
-                if suggestions.is_empty() {
-                    format!("error: build failed\n{body}")
-                } else {
-                    format!("error: build failed\n{body}\n\nsuggestions:\n{suggestions}")
-                }
-            }
-            RunError::Internal(msg) => {
-                let suggestions = internal_suggestions(msg);
-                if suggestions.is_empty() {
-                    format!("error: {msg}")
-                } else {
-                    format!("error: {msg}\n\nsuggestions:\n{suggestions}")
-                }
-            }
-            RunError::Reported(_) => String::new(),
+            RunError::Build(msg) => format!("error: build failed\n{}", extract_build_body(msg)),
+            RunError::Internal(msg) => format!("error: {msg}"),
+            RunError::Reported(_) => return String::new(),
+        };
+        match self.remediation() {
+            Some(record) => format!("{base}\n\n{}", render_remediation_human(&record)),
+            None => base,
         }
     }
 
@@ -86,22 +81,44 @@ impl RunError {
             return String::new();
         }
 
-        // Manual formatting to avoid pulling serde into this module for
-        // a three-field object. The message is escaped for JSON safety.
-        let escaped = self
-            .message()
-            .replace('\\', "\\\\")
-            .replace('"', "\\\"")
-            .replace('\n', "\\n")
-            .replace('\r', "\\r")
-            .replace('\t', "\\t");
         let code: u8 = match self {
             RunError::Eval(_) => 2,
             RunError::Build(_) => 1,
             RunError::Internal(_) => 3,
-            RunError::Reported(_) => 4, // reported errors should have been handled before JSON formatting
+            RunError::Reported(_) => 4,
         };
-        format!(r#"{{"error":"{}","code":{},"kind":"{}"}}"#, escaped, code, self.kind())
+        let Some(record) = self.remediation() else {
+            let escaped = self
+                .message()
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('\n', "\\n")
+                .replace('\r', "\\r")
+                .replace('\t', "\\t");
+            return format!(r#"{{"error":"{}","code":{},"kind":"{}"}}"#, escaped, code, self.kind());
+        };
+        let remediation_json = render_remediation_json(&record).expect("remediation record must serialize");
+        let remediation_value: serde_json::Value =
+            serde_json::from_str(&remediation_json).expect("rendered remediation must be valid JSON");
+        let value = serde_json::json!({
+            "error": self.message(),
+            "code": code,
+            "kind": self.kind(),
+            "remediation": remediation_value,
+        });
+        serde_json::to_string(&value).expect("error envelope must serialize")
+    }
+
+    fn remediation(&self) -> Option<RemediationRecord> {
+        if matches!(self, RunError::Reported(_)) {
+            return None;
+        }
+        classify_remediation(FailureFacts {
+            kind: self.kind(),
+            message: self.message(),
+            safe_subject: None,
+            remote_route_eligible: false,
+        })
     }
 }
 
@@ -133,70 +150,6 @@ fn extract_build_body(msg: &str) -> &str {
     // If the io-error is just "nonzero exit code", that's unhelpful.
     // Return it as-is (the suggestions will add guidance).
     msg
-}
-
-/// Produce newline-separated suggestions for common build failures.
-#[allow(tigerstyle::unbounded_collection_growth)] // bounded by fixed number of pattern matches below
-fn build_suggestions(msg: &str) -> String {
-    debug_assert!(!msg.is_empty());
-    let mut suggestions = Vec::with_capacity(8);
-    let lower = msg.to_lowercase();
-    debug_assert_eq!(lower.len(), msg.len());
-
-    if lower.contains("nonzero exit code") {
-        suggestions.push("  - Check the build log: ls $XDG_STATE_HOME/crunch/logs/ (or ~/.local/state/crunch/logs/)");
-        suggestions.push("  - Run with --verbose / --log-level=debug to see sandbox details");
-    }
-
-    if lower.contains("bwrap") && lower.contains("can't") {
-        suggestions.push("  - bwrap namespace setup failed. Check that unprivileged user namespaces are enabled:");
-        suggestions.push("    sysctl kernel.unprivileged_userns_clone  (should be 1)");
-    }
-
-    if lower.contains("source input not found in store") || lower.contains("sourcenotfound") {
-        suggestions.push("  - A store path referenced by your derivation doesn't exist on disk");
-        suggestions.push("  - Re-run `crunch bootstrap` to regenerate seed.ncl with current store paths");
-        suggestions.push("  - If using Nix seeds, pin paths as GC roots to prevent collection");
-        suggestions.push("  - Or use `crunch bootstrap --fetch` to avoid Nix store dependencies entirely");
-    }
-
-    if lower.contains("fod hash mismatch") {
-        suggestions.push("  - The fixed-output derivation produced content with a different hash than declared");
-        suggestions.push("  - Update the hash in your .ncl file, or check that the fetcher is deterministic");
-    }
-
-    if lower.contains("builds are not supported") || lower.contains("only supported on linux") {
-        suggestions.push("  - Building requires Linux with bubblewrap (bwrap) installed");
-        suggestions.push("  - Install bwrap: https://github.com/containers/bubblewrap");
-        suggestions.push("  - Or run `crunch self-build` to bootstrap bwrap from source");
-    }
-
-    if lower.contains("output not produced by build") {
-        suggestions.push("  - The builder script didn't write to all declared output paths");
-        suggestions.push("  - Make sure your build script creates $out (and any other declared outputs)");
-    }
-
-    suggestions.join("\n")
-}
-
-/// Suggestions for internal (non-build) errors.
-fn internal_suggestions(msg: &str) -> String {
-    let mut suggestions = Vec::new();
-    let lower = msg.to_lowercase();
-
-    if lower.contains("store directory") && lower.contains("does not exist") {
-        suggestions.push("  - The default store is /nix/store. Create it or pass --store <path>");
-    }
-
-    if lower.contains("stdlib") {
-        suggestions.push("  - crunch can't find its stdlib. Check your installation or set CRUNCH_STDLIB_DIR");
-    }
-
-    if lower.contains("failed to run nix") || lower.contains("failed to resolve") {
-        suggestions.push("  - Make sure nix or nix-build is on your PATH, or use `crunch bootstrap --fetch` instead");
-    }
-
-    suggestions.join("\n")
 }
 
 #[cfg(test)]
@@ -301,16 +254,16 @@ mod tests {
     fn build_nonzero_exit_suggests_logs() {
         let e = RunError::Build("my-pkg: nonzero exit code".into());
         let s = e.format_human();
-        assert!(s.contains("crunch/logs/"), "should mention log dir: {s}");
-        assert!(s.contains("--verbose"), "should suggest verbose: {s}");
+        assert!(s.contains("mantle log"), "should name the canonical log command: {s}");
+        assert!(s.contains("mutation: none"), "should state mutation behavior: {s}");
     }
 
     #[test]
-    fn build_source_not_found_suggests_bootstrap() {
+    fn build_source_not_found_suggests_source_plan() {
         let e = RunError::Build("source input not found in store: /nix/store/xxx-bash".into());
         let s = e.format_human();
-        assert!(s.contains("crunch bootstrap"), "should suggest bootstrap: {s}");
-        assert!(s.contains("GC roots"), "should mention GC roots: {s}");
+        assert!(s.contains("mantle source bundle plan"), "should name the canonical source command: {s}");
+        assert!(s.contains("network: none"), "should state network behavior: {s}");
     }
 
     #[test]
@@ -321,10 +274,10 @@ mod tests {
     }
 
     #[test]
-    fn build_not_linux_suggests_bwrap() {
+    fn build_not_linux_suggests_doctor() {
         let e = RunError::Build("building is only supported on Linux".into());
         let s = e.format_human();
-        assert!(s.contains("bubblewrap"), "should mention bwrap: {s}");
+        assert!(s.contains("mantle doctor"), "should name the canonical preflight command: {s}");
     }
 
     #[test]
@@ -349,17 +302,16 @@ mod tests {
     }
 
     #[test]
-    fn internal_nix_missing_suggests_install() {
+    fn internal_nix_missing_suggests_canonical_fetch() {
         let e = RunError::Internal("failed to run nix: No such file".into());
         let s = e.format_human();
-        assert!(s.contains("bootstrap --fetch"), "should suggest fetch bootstrap: {s}");
+        assert!(s.contains("mantle bootstrap --fetch"), "should name the canonical fetch command: {s}");
     }
 
     #[test]
     fn no_suggestions_for_generic_build_error() {
         let e = RunError::Build("something unexpected".into());
         let s = e.format_human();
-        // Should not contain "suggestions:" since nothing matched
-        assert!(!s.contains("suggestions:"), "generic errors should have no suggestions: {s}");
+        assert!(!s.contains("remediation:"), "generic errors should have no invented action: {s}");
     }
 }

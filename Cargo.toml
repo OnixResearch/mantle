@@ -102,6 +102,10 @@ path = "src/main.rs"
 name = "crunch"
 path = "src/main.rs"
 
+[[bin]]
+name = "generate-operator-command-contract"
+path = "tools/generate_operator_command_contract.rs"
+
 [[example]]
 name = "benchmark_compare"
 path = "examples/benchmark_compare.rs"

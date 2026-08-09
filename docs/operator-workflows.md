@@ -2,17 +2,13 @@
 
 This page complements the top-level README.
 
-Current operator-facing command families:
+Use the checked [canonical workflow](generated/canonical-operator-workflow.md)
+for the short daily path. Use the generated
+[command reference](generated/operator-command-reference.md) for the complete
+public command catalog and its side-effect contracts.
 
-- `mantle doctor`
-- `mantle build` / `mantle build --plan`
-- `mantle shell` / `mantle develop`
-- `mantle run`
-- `mantle attest`
-- `mantle release`
-
-Use `mantle --help` for the full command list. Use this page for the common
-operator loops.
+Clap owns parser behavior. The typed Nickel inventory owns reviewed support and
+compatibility policy. Use this page only for longer operator runbooks.
 
 ## Validation tiers
 

@@ -9,8 +9,14 @@ use predicates::prelude::*;
 use sha2::Digest as _;
 use tempfile::TempDir;
 
+const PUBLIC_COMMAND_COUNT_MIN: usize = 160;
+
 fn crunch() -> Command {
     Command::cargo_bin("crunch").unwrap()
+}
+
+fn contract_generator() -> Command {
+    Command::cargo_bin("generate-operator-command-contract").unwrap()
 }
 
 fn write_executable(dir: &Path, name: &str, body: &str) {
@@ -652,4 +658,49 @@ fn doctor_failure_names_missing_prerequisite_and_profile() {
 
     assert_eq!(count_entries(&store_dir), 0, "doctor must not mutate store dir");
     assert_eq!(count_entries(&state_dir), 0, "doctor must not mutate state dir");
+}
+
+#[test]
+fn operator_contract_exports_sorted_public_clap_paths() {
+    let output = crunch()
+        .arg("__operator-contract")
+        .arg("--mode")
+        .arg("raw-descriptors")
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let descriptors: Vec<serde_json::Value> = serde_json::from_slice(&output).unwrap();
+    let paths = descriptors.iter().map(|descriptor| descriptor["path"].as_str().unwrap()).collect::<Vec<_>>();
+
+    assert!(paths.len() >= PUBLIC_COMMAND_COUNT_MIN);
+    assert!(paths.windows(2).all(|pair| pair[0] < pair[1]));
+    assert!(paths.contains(&"doctor"));
+    assert!(paths.contains(&"attest show"));
+    assert!(!paths.iter().any(|path| path.contains("__operator-contract")));
+    assert!(!paths.iter().any(|path| path.split_whitespace().any(|part| part == "help")));
+}
+
+#[test]
+fn operator_contract_checked_files_match_clap_and_policy() {
+    crunch()
+        .arg("__operator-contract")
+        .arg("--mode")
+        .arg("check")
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("operator command contract: PASS"));
+}
+
+#[test]
+fn operator_contract_generator_runs_positive_and_negative_self_test() {
+    contract_generator()
+        .arg("--self-test")
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("generator self-test: PASS"));
 }

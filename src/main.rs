@@ -89,6 +89,7 @@ mod oci_registry;
 mod oci_registry_shell;
 #[allow(dead_code)]
 mod offline_cargo;
+mod operator_contract;
 mod operator_diagnostics;
 // The comparison report shell lands in task I5 of
 // `evaluate-picolibc-stagex-runtime`; until then only core tests consume it.
@@ -289,6 +290,8 @@ const UNIX_EXECUTE_BITS: u32 = 0o111;
 use build_cmd::BuildOutputMode;
 use build_cmd::build_import_paths;
 use build_cmd::state_dir;
+use clap::Command as ClapCommand;
+use clap::CommandFactory;
 use clap::Parser;
 use clap::Subcommand;
 use clap::ValueEnum;
@@ -363,6 +366,15 @@ enum RustSharedCacheMode {
     Off,
     Read,
     ReadWrite,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum OperatorContractMode {
+    RawDescriptors,
+    Catalog,
+    Reference,
+    Workflow,
+    Check,
 }
 
 #[derive(Subcommand, Debug)]
@@ -512,6 +524,14 @@ enum Command {
         /// Workflow profile to check
         #[arg(long, value_enum, default_value = "build")]
         profile: DoctorProfile,
+    },
+
+    /// Internal command-graph export for the checked operator catalog.
+    #[command(name = "__operator-contract", hide = true)]
+    OperatorContract {
+        /// Select the internal export or freshness operation.
+        #[arg(long, value_enum)]
+        mode: OperatorContractMode,
     },
 
     /// Import external project metadata into Mantle-owned build files
@@ -3218,6 +3238,7 @@ fn command_label(command: &Command) -> &'static str {
         Command::Build { .. } => "build",
         Command::WasmComponent { .. } => "wasm-component.build",
         Command::Doctor { .. } => "doctor",
+        Command::OperatorContract { .. } => "operator-contract",
         Command::Import { .. } => "import",
         Command::Filegen { action } => filegen_command_label(action),
         Command::Graph { .. } => "graph",
@@ -3254,6 +3275,141 @@ fn command_label(command: &Command) -> &'static str {
         Command::Develop { .. } => "develop",
         Command::Run { .. } => "run",
     }
+}
+
+fn clap_command_descriptors() -> Result<Vec<operator_contract::CommandDescriptor>, RunError> {
+    let mut root = Args::command();
+    root.build();
+    let mut descriptors = Vec::with_capacity(operator_contract::COMMAND_SURFACE_COUNT_MAX);
+    collect_public_command_descriptors("", &root, &mut descriptors)?;
+    descriptors.sort_by(|left, right| left.path.cmp(&right.path));
+    if descriptors.is_empty() {
+        return Err(RunError::Internal("operator command graph has no public commands".to_string()));
+    }
+    if descriptors.len() > operator_contract::COMMAND_SURFACE_COUNT_MAX {
+        return Err(RunError::Internal(format!(
+            "operator command graph exceeds {} public commands",
+            operator_contract::COMMAND_SURFACE_COUNT_MAX
+        )));
+    }
+    Ok(descriptors)
+}
+
+fn collect_public_command_descriptors(
+    parent_path: &str,
+    command: &ClapCommand,
+    descriptors: &mut Vec<operator_contract::CommandDescriptor>,
+) -> Result<(), RunError> {
+    const CLAP_GENERATED_HELP_SUBCOMMAND: &str = "help";
+
+    for child in command.get_subcommands() {
+        if child.is_hide_set() || child.get_name() == CLAP_GENERATED_HELP_SUBCOMMAND {
+            continue;
+        }
+        if descriptors.len() == operator_contract::COMMAND_SURFACE_COUNT_MAX {
+            return Err(RunError::Internal("operator command graph reached its public command limit".to_string()));
+        }
+        let path = join_command_path(parent_path, child.get_name());
+        let aliases = child.get_all_aliases().map(|alias| join_command_path(parent_path, alias)).collect();
+        let flags = public_command_flags(child);
+        let supports_json = flags.iter().any(|flag| flag == "--json");
+        let help = child.get_about().map(ToString::to_string).unwrap_or_else(|| "No public help summary.".to_string());
+        descriptors.push(operator_contract::CommandDescriptor {
+            path: path.clone(),
+            aliases,
+            flags,
+            help,
+            supports_json,
+        });
+        collect_public_command_descriptors(&path, child, descriptors)?;
+    }
+    Ok(())
+}
+
+fn join_command_path(parent_path: &str, name: &str) -> String {
+    if parent_path.is_empty() {
+        return name.to_string();
+    }
+    format!("{parent_path} {name}")
+}
+
+fn public_command_flags(command: &ClapCommand) -> Vec<String> {
+    let mut flags = Vec::with_capacity(operator_contract::COMMAND_FLAG_COUNT_MAX);
+    for argument in command.get_arguments() {
+        if argument.is_hide_set() {
+            continue;
+        }
+        if let Some(long) = argument.get_long() {
+            flags.push(format!("--{long}"));
+        }
+        if let Some(short) = argument.get_short() {
+            flags.push(format!("-{short}"));
+        }
+    }
+    flags.sort();
+    flags.dedup();
+    flags
+}
+
+fn run_operator_contract(mode: OperatorContractMode) -> Result<(), RunError> {
+    let descriptors = clap_command_descriptors()?;
+    if matches!(mode, OperatorContractMode::RawDescriptors) {
+        return print_operator_json(&descriptors, "operator command descriptors");
+    }
+
+    let inventory: operator_contract::OperatorInventory =
+        serde_json::from_str(include_str!("../config/operator-surfaces.json"))
+            .map_err(|error| RunError::Internal(format!("parsing checked operator inventory: {error}")))?;
+    let catalog = operator_contract::build_command_catalog(&descriptors, &inventory)
+        .map_err(|error| RunError::Internal(format!("operator command contract: {error}")))?;
+    match mode {
+        OperatorContractMode::RawDescriptors => unreachable!("raw mode returned before catalog construction"),
+        OperatorContractMode::Catalog => print_operator_json(&catalog, "operator command catalog"),
+        OperatorContractMode::Reference => {
+            print!("{}", operator_contract::render_command_reference(&catalog));
+            Ok(())
+        }
+        OperatorContractMode::Workflow => {
+            let workflow = operator_contract::render_canonical_workflow(&catalog)
+                .map_err(|error| RunError::Internal(format!("operator workflow: {error}")))?;
+            print!("{workflow}");
+            Ok(())
+        }
+        OperatorContractMode::Check => check_operator_generated_files(&catalog),
+    }
+}
+
+fn print_operator_json<T: serde::Serialize>(value: &T, label: &str) -> Result<(), RunError> {
+    assert!(!label.is_empty(), "operator JSON label must not be empty");
+    let rendered = serde_json::to_string_pretty(value)
+        .map_err(|error| RunError::Internal(format!("rendering {label}: {error}")))?;
+    println!("{rendered}");
+    Ok(())
+}
+
+fn check_operator_generated_files(catalog: &operator_contract::CommandCatalog) -> Result<(), RunError> {
+    let expected_catalog = serde_json::to_string_pretty(catalog)
+        .map_err(|error| RunError::Internal(format!("rendering operator command catalog: {error}")))?
+        + "\n";
+    let expected_reference = operator_contract::render_command_reference(catalog);
+    let expected_workflow = operator_contract::render_canonical_workflow(catalog)
+        .map_err(|error| RunError::Internal(format!("operator workflow: {error}")))?;
+    check_generated_file("config/operator-command-catalog.json", &expected_catalog)?;
+    check_generated_file("docs/generated/operator-command-reference.md", &expected_reference)?;
+    check_generated_file("docs/generated/canonical-operator-workflow.md", &expected_workflow)?;
+    println!("operator command contract: PASS (commands={})", catalog.entries.len());
+    Ok(())
+}
+
+fn check_generated_file(path: &str, expected: &str) -> Result<(), RunError> {
+    assert!(!path.is_empty(), "generated file path must not be empty");
+    assert!(!expected.is_empty(), "generated file content must not be empty");
+    let actual = fs::read_to_string(path)
+        .map_err(|error| RunError::Internal(format!("reading generated operator file {path}: {error}")))?;
+    if actual != expected {
+        return Err(RunError::Internal(format!("stale generated operator file: {path}")));
+    }
+    Ok(())
 }
 
 fn filegen_command_label(action: &FilegenCommandAction) -> &'static str {
@@ -3603,6 +3759,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
     debug_assert_eq!(ctx.json, args.json);
     match &args.command {
         Command::Doctor { profile } => run_doctor_command(ctx, *profile),
+        Command::OperatorContract { mode } => run_operator_contract(*mode),
         Command::Graph { root, graph_file } => run_semantic_graph_command(
             ctx,
             SemanticGraphCommandInput::new(SemanticGraphQueryKind::Graph, root, graph_file.as_deref()),

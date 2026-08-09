@@ -249,6 +249,20 @@ async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanRepo
     })
 }
 
+fn state_dir_is_empty(state_dir: &Path) -> Result<bool, RunError> {
+    let mut entries = match std::fs::read_dir(state_dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(true),
+        Err(error) => {
+            return Err(RunError::Internal(format!(
+                "reading planning state directory {}: {error}",
+                state_dir.display()
+            )));
+        }
+    };
+    Ok(entries.next().is_none())
+}
+
 fn eval_error_is_build(err: &crunch_eval::Error) -> bool {
     let mut current = err;
     for _depth in 0..MAX_LABELED_EVAL_ERROR_DEPTH {
@@ -546,6 +560,7 @@ struct PlanStore {
     output_lookup: crunch_store::OutputLookup,
     build_service_store: crunch_store::BuildServiceStore,
     action_results: crunch_store::ActionResultPort,
+    _ephemeral_state: Option<tempfile::TempDir>,
 }
 
 impl PlanStore {
@@ -556,8 +571,19 @@ impl PlanStore {
         base_state_dirs: &[PathBuf],
         substituter_urls: &[String],
     ) -> Result<Self, RunError> {
+        let ephemeral_state = if state_dir_is_empty(state_dir)? {
+            Some(
+                tempfile::Builder::new()
+                    .prefix("mantle-build-plan-state-")
+                    .tempdir()
+                    .map_err(|error| RunError::Internal(format!("creating ephemeral planning state: {error}")))?,
+            )
+        } else {
+            None
+        };
+        let planning_state_dir = ephemeral_state.as_ref().map_or(state_dir, tempfile::TempDir::path);
         let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
-            state_dir: state_dir.to_path_buf(),
+            state_dir: planning_state_dir.to_path_buf(),
             output_dir: output_dir.to_path_buf(),
             remote_cache_urls: substituter_urls.to_vec(),
             fallback_mode: crunch_store::StoreFallbackMode::Practical,
@@ -572,6 +598,7 @@ impl PlanStore {
             output_lookup: parts.output_lookup,
             build_service_store: parts.build_service_store,
             action_results: parts.action_results,
+            _ephemeral_state: ephemeral_state,
         })
     }
 
@@ -946,6 +973,20 @@ mod tests {
             diagnostics: Vec::new(),
             non_claims: vec!["index-presence-is-not-output-trust".to_string()],
         }
+    }
+
+    #[test]
+    fn planning_state_detects_missing_empty_and_populated_directories() {
+        let root = tempfile::tempdir().unwrap();
+        let missing = root.path().join("missing");
+        let empty = root.path().join("empty");
+        std::fs::create_dir(&empty).unwrap();
+
+        assert!(state_dir_is_empty(&missing).unwrap());
+        assert!(state_dir_is_empty(&empty).unwrap());
+
+        std::fs::write(empty.join("pathinfo.redb"), b"fixture").unwrap();
+        assert!(!state_dir_is_empty(&empty).unwrap());
     }
 
     #[test]

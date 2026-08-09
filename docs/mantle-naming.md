@@ -8,8 +8,8 @@ requires that spelling.
 ## Replace stale prose
 
 Use Mantle for the product, build tool, operator workflows, proof summaries,
-status output, and examples. New docs should not describe the project as Crunch
-unless the same line also names a legacy or compatibility reason.
+status output, and examples. New docs must use Mantle. Use the legacy product
+name only when the same line states the exact compatibility or history reason.
 
 ## Preserve exact identifiers
 
@@ -24,6 +24,30 @@ Do not rename these without a separate compatibility change:
 - historical or archived evidence, including pre-rename transcripts;
 - embedded bootstrap evidence markers whose spelling is part of checked evidence,
   such as `CRUNCH bridge TinyCC builtin va_list`.
+
+## Compatibility transitions
+
+The typed inventory in `config/operator-surfaces.ncl` records each supported
+operation and removal gate. Do not change a compatibility state from prose
+alone.
+
+A transition to `compatibility-read-only` requires all of this evidence:
+
+- the canonical replacement is accepted and documented;
+- supported readers still pass positive and malformed-input fixtures;
+- supported writers no longer emit the old form, or the inventory records why
+  production must continue;
+- a consumer inventory and a rollback procedure exist.
+
+A transition to `historical-only` requires all of this evidence:
+
+- no supported command reads, writes, or emits the identifier;
+- repository and downstream consumer searches have bounded receipts;
+- archived artifacts keep their original bytes and provenance;
+- the accepted migration includes rollback and retention decisions.
+
+If this evidence is incomplete, keep the current compatibility state. Do not
+remove or silently reclassify the identifier.
 
 ## Guard and fixtures
 
