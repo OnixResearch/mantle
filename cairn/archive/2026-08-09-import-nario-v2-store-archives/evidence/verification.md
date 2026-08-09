@@ -1990,3 +1990,1270 @@ FINAL_STATUS=0
 # Broad-check boundary
 
 `nix run .#tigerstyle -- check -- --manifest-path crates/crunch-store/Cargo.toml --lib` did not reach the Nario target. It failed first on existing findings in `crates/crunch-gc-core` and `crates/crunch-overlay-core`. This change does not claim whole-tree Tiger Style success. `git diff origin/main -- crates/crunch-gc-core crates/crunch-overlay-core` is empty. Focused first-party Clippy with warnings denied passed above.
+
+# Archive execution
+
+## nix run path:/home/brittonr/git/OnixResearch/.pi/worktrees/cairn-legacy-layout-e5ee2a6#cairn -- archive import-nario-v2-store-archives --root .
+
+```text
+{
+  "actions": [
+    {
+      "description": "move active change to archive: import-nario-v2-store-archives",
+      "kind": "archive_change",
+      "path": "./cairn/changes/import-nario-v2-store-archives"
+    }
+  ],
+  "blocked": false,
+  "change": "import-nario-v2-store-archives",
+  "dry_run": true,
+  "input_hash": "1a10a0457a66b7907f9bf1001d1ddeb17128e908c20bbe7a82839996eb785f90",
+  "layout": "cairn",
+  "mutated": false,
+  "mutation_manifest": null,
+  "plan_hash": "f3411a0fb838a64e0b4232be240dd7b30c3589f2633e57e33d8fd4ce16e0773d",
+  "policy": "mantle-default",
+  "policy_hash": "810cfa56991a9d1f10038ca79bf9a7a0996a2ee756c4e62324f1cd3f8628c848",
+  "reasons": [],
+  "receipt_hash": "2c65818d8d757fae1053f6aa6a18209e9119715b9662a015789600144af08936"
+}
+
+```
+
+exit_status: 0
+
+## env CAIRN_ARCHIVE_DATE=2026-08-09 nix run path:/home/brittonr/git/OnixResearch/.pi/worktrees/cairn-legacy-layout-e5ee2a6#cairn -- archive import-nario-v2-store-archives --root . --execute
+
+```text
+{
+  "actions": [
+    {
+      "description": "move active change to archive: import-nario-v2-store-archives",
+      "kind": "archive_change",
+      "path": "./cairn/archive/2026-08-09-import-nario-v2-store-archives"
+    }
+  ],
+  "blocked": false,
+  "change": "import-nario-v2-store-archives",
+  "dry_run": false,
+  "input_hash": "1a10a0457a66b7907f9bf1001d1ddeb17128e908c20bbe7a82839996eb785f90",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "805c23c41bcdf6ef2cd170b83d515db986da5ec567c7f17d22f1ac496b3f8969",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-09-import-nario-v2-store-archives/design.md"
+        },
+        {
+          "content_hash": "20a8c4e66ce049462e54bf6c659bb4cf5872fb8b6f24d0fba1e8b0c70d9f4e04",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-09-import-nario-v2-store-archives/evidence/baseline.md"
+        },
+        {
+          "content_hash": "d7d15a58c2da2aeaa578563c3ab7446d6a5458910d3c5dcb75cea393cfaa1b8b",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-09-import-nario-v2-store-archives/evidence/format-boundary-review.md"
+        },
+        {
+          "content_hash": "9cf9295cd5bb370fe2b5abe3ee29417216e66709464cbe6558212c1083805ec1",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-09-import-nario-v2-store-archives/evidence/producer-fixture.md"
+        },
+        {
+          "content_hash": "a977752dd499bc8bca98c3e7a5176f987eb0fad0c4520f7f54f986af4ff93615",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-09-import-nario-v2-store-archives/evidence/scaffold-validation.md"
+        },
+        {
+          "content_hash": "5ce43886d0489acbe79c2724a9c96743e2ed8907ef7ba0301816d224423db016",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-09-import-nario-v2-store-archives/evidence/verification.md"
+        },
+        {
+          "content_hash": "921a27b267a39c16e6ab7bf33ae00527e568e68e62716406602deacd01a33042",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-09-import-nario-v2-store-archives/proposal.md"
+        },
+        {
+          "content_hash": "fb433b425690e93b043a59591a401cddf7c3ad3f9b3d9437065213035194c8e4",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-09-import-nario-v2-store-archives/specs/foreign-derivation-import/spec.md"
+        },
+        {
+          "content_hash": "b8deb2f1fc457755eaa1be738a1f106ad2e6de3cf8d3c521fbbd72b9f6942b66",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-09-import-nario-v2-store-archives/specs/store-transports/spec.md"
+        },
+        {
+          "content_hash": "78f6a970e6a03530f5dc8f00634e6529008d05a5899b216ea43ce3c9ceeb5610",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-09-import-nario-v2-store-archives/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./cairn/changes/import-nario-v2-store-archives"
+        }
+      ],
+      "manifest_hash": "645c34d44fc8bf911fce69e70986ebbb0f18f4c906224a302017a9baeeb4da2e"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "805c23c41bcdf6ef2cd170b83d515db986da5ec567c7f17d22f1ac496b3f8969",
+          "exists": true,
+          "path": "./cairn/changes/import-nario-v2-store-archives/design.md"
+        },
+        {
+          "content_hash": "20a8c4e66ce049462e54bf6c659bb4cf5872fb8b6f24d0fba1e8b0c70d9f4e04",
+          "exists": true,
+          "path": "./cairn/changes/import-nario-v2-store-archives/evidence/baseline.md"
+        },
+        {
+          "content_hash": "d7d15a58c2da2aeaa578563c3ab7446d6a5458910d3c5dcb75cea393cfaa1b8b",
+          "exists": true,
+          "path": "./cairn/changes/import-nario-v2-store-archives/evidence/format-boundary-review.md"
+        },
+        {
+          "content_hash": "9cf9295cd5bb370fe2b5abe3ee29417216e66709464cbe6558212c1083805ec1",
+          "exists": true,
+          "path": "./cairn/changes/import-nario-v2-store-archives/evidence/producer-fixture.md"
+        },
+        {
+          "content_hash": "a977752dd499bc8bca98c3e7a5176f987eb0fad0c4520f7f54f986af4ff93615",
+          "exists": true,
+          "path": "./cairn/changes/import-nario-v2-store-archives/evidence/scaffold-validation.md"
+        },
+        {
+          "content_hash": "5ce43886d0489acbe79c2724a9c96743e2ed8907ef7ba0301816d224423db016",
+          "exists": true,
+          "path": "./cairn/changes/import-nario-v2-store-archives/evidence/verification.md"
+        },
+        {
+          "content_hash": "921a27b267a39c16e6ab7bf33ae00527e568e68e62716406602deacd01a33042",
+          "exists": true,
+          "path": "./cairn/changes/import-nario-v2-store-archives/proposal.md"
+        },
+        {
+          "content_hash": "fb433b425690e93b043a59591a401cddf7c3ad3f9b3d9437065213035194c8e4",
+          "exists": true,
+          "path": "./cairn/changes/import-nario-v2-store-archives/specs/foreign-derivation-import/spec.md"
+        },
+        {
+          "content_hash": "b8deb2f1fc457755eaa1be738a1f106ad2e6de3cf8d3c521fbbd72b9f6942b66",
+          "exists": true,
+          "path": "./cairn/changes/import-nario-v2-store-archives/specs/store-transports/spec.md"
+        },
+        {
+          "content_hash": "78f6a970e6a03530f5dc8f00634e6529008d05a5899b216ea43ce3c9ceeb5610",
+          "exists": true,
+          "path": "./cairn/changes/import-nario-v2-store-archives/tasks.md"
+        }
+      ],
+      "manifest_hash": "f4c48260a0801c68e1afd5e581dd1b14ac3830ed7fc27e4a2b678595f725a2d2"
+    },
+    "kind": "archive",
+    "manifest_hash": "5bf7b800e1bffae8e5415a4fec5b41445fdec042d2c503de4d78614781da2696"
+  },
+  "plan_hash": "d78e5b2cc9c8aa043f0fb35d6dee59bd940ac5becde217404753534e424e668b",
+  "policy": "mantle-default",
+  "policy_hash": "810cfa56991a9d1f10038ca79bf9a7a0996a2ee756c4e62324f1cd3f8628c848",
+  "reasons": [],
+  "receipt_hash": "60fc3d07174799fa7e2f20c0a8c924ea8ef3f5f1acdb49e2afee3bd2e5d03aeb"
+}
+
+```
+
+exit_status: 0
+
+FINAL_STATUS=0
+
+# Post-archive validation
+
+## nix run path:/home/brittonr/git/OnixResearch/.pi/worktrees/cairn-legacy-layout-e5ee2a6#cairn -- validate --root .
+
+```text
+{
+  "change_issues": [],
+  "changes": 12,
+  "findings": [],
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_findings": [],
+  "spec_issues": [],
+  "spec_substance": [
+    {
+      "path": "./cairn/changes/add-dev-cache-cross-run-resume/specs/source-built-fixed-point-improved-iteration/spec.md",
+      "requirement_blocks": 2,
+      "scenario_blocks": 5,
+      "substantive_requirement_blocks": 2
+    },
+    {
+      "path": "./cairn/changes/add-evidence-driven-resource-policy/specs/remote-builds/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 15,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/changes/add-frontend-neutral-composition-roots/specs/composition-roots/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 22,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/changes/add-nix-remote-service-gateway/specs/remote-builds/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 15,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./cairn/changes/adopt-bounded-tree/specs/bounded-tree-adoption/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 12,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./cairn/changes/bind-source-observations-and-monotonic-ingest/specs/release-provenance/spec.md",
+      "requirement_blocks": 2,
+      "scenario_blocks": 4,
+      "substantive_requirement_blocks": 2
+    },
+    {
+      "path": "./cairn/changes/bind-source-observations-and-monotonic-ingest/specs/source-transports/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 10,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./cairn/changes/bind-source-review-evidence-to-releases/specs/verification-evidence/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 9,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./cairn/changes/enforce-evaluator-resource-budgets/specs/evaluation-performance/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./cairn/changes/extend-nominal-types-to-trust-boundaries/specs/build-correctness/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/changes/promote-full-bootstrap-parity/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 7,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./cairn/changes/prove-source-built-mantle-fixed-point/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 7,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./cairn/changes/verify-remote-admission-with-trellis/specs/remote-builds/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 10,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./cairn/specs/artifact-auth-adoption/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 15,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/artifact-auth-operational-receipt/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 10,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./cairn/specs/artifact-auth-shell-verification/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 5,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./cairn/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 13,
+      "scenario_blocks": 61,
+      "substantive_requirement_blocks": 13
+    },
+    {
+      "path": "./cairn/specs/build-correctness/spec.md",
+      "requirement_blocks": 37,
+      "scenario_blocks": 84,
+      "substantive_requirement_blocks": 37
+    },
+    {
+      "path": "./cairn/specs/build-scheduling/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/specs/build-tool-boundary/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 23,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/cache-substitution/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 36,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/durable-file-publication-adoption/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 15,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/specs/durable-publication-promotion/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 8,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./cairn/specs/durable-publication-validation/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 10,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./cairn/specs/examples/spec.md",
+      "requirement_blocks": 11,
+      "scenario_blocks": 24,
+      "substantive_requirement_blocks": 11
+    },
+    {
+      "path": "./cairn/specs/external-batch-dispatchers/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 18,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/fix-nix-producer/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./cairn/specs/flake-source-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 1,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./cairn/specs/foreign-derivation-import/spec.md",
+      "requirement_blocks": 40,
+      "scenario_blocks": 124,
+      "substantive_requirement_blocks": 40
+    },
+    {
+      "path": "./cairn/specs/gcc40-bridge/spec.md",
+      "requirement_blocks": 2,
+      "scenario_blocks": 6,
+      "substantive_requirement_blocks": 2
+    },
+    {
+      "path": "./cairn/specs/hardware-simulation-builds/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 17,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/i386-tinycc27/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 4,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./cairn/specs/immutable-release-pointer/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 7,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./cairn/specs/kani-toolchain-evidence/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 11,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/specs/kernel-bundle-oci/spec.md",
+      "requirement_blocks": 14,
+      "scenario_blocks": 30,
+      "substantive_requirement_blocks": 14
+    },
+    {
+      "path": "./cairn/specs/kernelscript-experiment/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./cairn/specs/machine-artifact-contracts/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 9,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/mantlepkgs-catalog-structure/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 13,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/specs/mantlepkgs-impact-evidence/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 13,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/specs/mantlepkgs-update-plans/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 15,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./cairn/specs/mantlepkgs/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./cairn/specs/nickel-export-infrastructure/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 12,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./cairn/specs/nix-producer-adapter/spec.md",
+      "requirement_blocks": 11,
+      "scenario_blocks": 24,
+      "substantive_requirement_blocks": 11
+    },
+    {
+      "path": "./cairn/specs/operator-diagnostics/spec.md",
+      "requirement_blocks": 18,
+      "scenario_blocks": 42,
+      "substantive_requirement_blocks": 18
+    },
+    {
+      "path": "./cairn/specs/portable-build-receipts/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./cairn/specs/project-workflows/spec.md",
+      "requirement_blocks": 25,
+      "scenario_blocks": 83,
+      "substantive_requirement_blocks": 25
+    },
+    {
+      "path": "./cairn/specs/realization-routing/spec.md",
+      "requirement_blocks": 17,
+      "scenario_blocks": 37,
+      "substantive_requirement_blocks": 17
+    },
+    {
+      "path": "./cairn/specs/release-provenance/spec.md",
+      "requirement_blocks": 76,
+      "scenario_blocks": 116,
+      "substantive_requirement_blocks": 76
+    },
+    {
+      "path": "./cairn/specs/remote-builds/spec.md",
+      "requirement_blocks": 44,
+      "scenario_blocks": 129,
+      "substantive_requirement_blocks": 44
+    },
+    {
+      "path": "./cairn/specs/rust-package-planning/spec.md",
+      "requirement_blocks": 145,
+      "scenario_blocks": 486,
+      "substantive_requirement_blocks": 145
+    },
+    {
+      "path": "./cairn/specs/rustc-cache-adapter/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./cairn/specs/source-built-fixed-point-improved-iteration/spec.md",
+      "requirement_blocks": 3,
+      "scenario_blocks": 7,
+      "substantive_requirement_blocks": 3
+    },
+    {
+      "path": "./cairn/specs/source-transports/spec.md",
+      "requirement_blocks": 12,
+      "scenario_blocks": 25,
+      "substantive_requirement_blocks": 12
+    },
+    {
+      "path": "./cairn/specs/spacewasm-reference-materialization/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./cairn/specs/store-lifecycle/spec.md",
+      "requirement_blocks": 20,
+      "scenario_blocks": 39,
+      "substantive_requirement_blocks": 20
+    },
+    {
+      "path": "./cairn/specs/store-transports/spec.md",
+      "requirement_blocks": 16,
+      "scenario_blocks": 46,
+      "substantive_requirement_blocks": 16
+    },
+    {
+      "path": "./cairn/specs/vendored-snix-integration/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 11,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./cairn/specs/verification-evidence/spec.md",
+      "requirement_blocks": 59,
+      "scenario_blocks": 172,
+      "substantive_requirement_blocks": 59
+    },
+    {
+      "path": "./cairn/specs/wasm-component-builds/spec.md",
+      "requirement_blocks": 14,
+      "scenario_blocks": 25,
+      "substantive_requirement_blocks": 14
+    }
+  ],
+  "specs_validated": 59,
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-dev-cache-cross-run-resume/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 14,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-dev-cache-cross-run-resume/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 13,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-dev-cache-cross-run-resume/specs/source-built-fixed-point-improved-iteration/spec.md",
+      "requirement_blocks": 2,
+      "scenario_blocks": 5,
+      "substantive_lines": 26,
+      "substantive_requirement_blocks": 2,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 8,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-dev-cache-cross-run-resume/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 8,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 8,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 8
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-evidence-driven-resource-policy/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 40,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-evidence-driven-resource-policy/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 22,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-evidence-driven-resource-policy/specs/remote-builds/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 15,
+      "substantive_lines": 66,
+      "substantive_requirement_blocks": 7,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 33,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-evidence-driven-resource-policy/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 33,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 33,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 33
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-frontend-neutral-composition-roots/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 50,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-frontend-neutral-composition-roots/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 24,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-frontend-neutral-composition-roots/specs/composition-roots/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 22,
+      "substantive_lines": 98,
+      "substantive_requirement_blocks": 9,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 22,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-frontend-neutral-composition-roots/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 23,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 22,
+      "task_done": 1,
+      "task_in_progress": 0,
+      "task_todo": 21
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-nix-remote-service-gateway/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 36,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-nix-remote-service-gateway/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 22,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-nix-remote-service-gateway/specs/remote-builds/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 15,
+      "substantive_lines": 66,
+      "substantive_requirement_blocks": 8,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 31,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/add-nix-remote-service-gateway/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 31,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 31,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 31
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/adopt-bounded-tree/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 18,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/adopt-bounded-tree/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 12,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/adopt-bounded-tree/specs/bounded-tree-adoption/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 12,
+      "substantive_lines": 42,
+      "substantive_requirement_blocks": 6,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 12,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/adopt-bounded-tree/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 12,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 12,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 12
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/bind-source-observations-and-monotonic-ingest/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 34,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/bind-source-observations-and-monotonic-ingest/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 22,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/bind-source-observations-and-monotonic-ingest/specs/release-provenance/spec.md",
+      "requirement_blocks": 2,
+      "scenario_blocks": 4,
+      "substantive_lines": 18,
+      "substantive_requirement_blocks": 2,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/bind-source-observations-and-monotonic-ingest/specs/source-transports/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 10,
+      "substantive_lines": 45,
+      "substantive_requirement_blocks": 5,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 21,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/bind-source-observations-and-monotonic-ingest/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 21,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 21,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 21
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/bind-source-review-evidence-to-releases/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 26,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/bind-source-review-evidence-to-releases/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 19,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/bind-source-review-evidence-to-releases/specs/verification-evidence/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 9,
+      "substantive_lines": 38,
+      "substantive_requirement_blocks": 1,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 18,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/bind-source-review-evidence-to-releases/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 18,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 18,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 18
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/enforce-evaluator-resource-budgets/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 33,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/enforce-evaluator-resource-budgets/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 21,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/enforce-evaluator-resource-budgets/specs/evaluation-performance/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 16,
+      "substantive_lines": 72,
+      "substantive_requirement_blocks": 8,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 22,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/enforce-evaluator-resource-budgets/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 22,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 22,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 22
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/extend-nominal-types-to-trust-boundaries/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 45,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/extend-nominal-types-to-trust-boundaries/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 27,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/extend-nominal-types-to-trust-boundaries/specs/build-correctness/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 14,
+      "substantive_lines": 64,
+      "substantive_requirement_blocks": 7,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 26,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/extend-nominal-types-to-trust-boundaries/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 34,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 26,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 26
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/promote-full-bootstrap-parity/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 20,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/promote-full-bootstrap-parity/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 14,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/promote-full-bootstrap-parity/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 7,
+      "substantive_lines": 29,
+      "substantive_requirement_blocks": 1,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 10,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/promote-full-bootstrap-parity/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 10,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 10,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 10
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/prove-source-built-mantle-fixed-point/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 25,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/prove-source-built-mantle-fixed-point/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 13,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/prove-source-built-mantle-fixed-point/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 7,
+      "substantive_lines": 29,
+      "substantive_requirement_blocks": 1,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 8,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/prove-source-built-mantle-fixed-point/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 10,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 8,
+      "task_done": 2,
+      "task_in_progress": 0,
+      "task_todo": 6
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/verify-remote-admission-with-trellis/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 29,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/verify-remote-admission-with-trellis/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 21,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/verify-remote-admission-with-trellis/specs/remote-builds/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 10,
+      "substantive_lines": 45,
+      "substantive_requirement_blocks": 5,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 19,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/verify-remote-admission-with-trellis/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 19,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 19,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 19
+    }
+  ],
+  "substance_findings": [],
+  "substance_issues": [],
+  "valid": true
+}
+
+```
+
+exit_status: 0
+
+## nix run path:/home/brittonr/git/OnixResearch/.pi/worktrees/cairn-legacy-layout-e5ee2a6#cairn -- tracey coverage --root .
+
+```text
+traceability coverage ok: 155/155 referenced (profile mantle-default)
+
+```
+
+exit_status: 0
+
+## git diff --check
+
+```text
+
+```
+
+exit_status: 0
+
+FINAL_STATUS=0
