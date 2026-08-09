@@ -1500,6 +1500,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-evaluation-stream-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "proptest",
+]
+
+[[package]]
 name = "crunch-gc-core"
 version = "0.1.0"
 dependencies = [

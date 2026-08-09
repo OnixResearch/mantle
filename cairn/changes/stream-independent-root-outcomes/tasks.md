@@ -13,12 +13,18 @@
 
 ## Phase 2: Pure outcome and projection cores
 
-- [ ] [serial] I5 Define bounded selected-root, sequence, failure-scope, root-outcome, run-disposition, summary, and stream-record types. r[evaluation_streaming.complete_root_outcomes] r[evaluation_streaming.failure_scope]
-- [ ] [serial] I6 Implement pure root-set admission, terminal transition checks, duplicate rejection, and complete-summary accounting. r[evaluation_streaming.complete_root_outcomes]
-- [ ] [serial] I7 Implement pure failure-scope classification and remaining-root classification for shared fatal errors and cancellation. r[evaluation_streaming.failure_scope] r[evaluation_streaming.cancellation_and_output]
-- [ ] [serial] I8 Implement deterministic sequence assignment, canonical ordering, and domain-separated BLAKE3 identity preimages. r[evaluation_streaming.deterministic_identity_and_order]
-- [ ] [serial] I9 Implement pure stream projection values, terminal disposition, and process-status selection without JSON or I/O helpers. r[evaluation_streaming.partial_run_disposition] r[evaluation_streaming.core_shell_boundary]
-- [ ] [parallel] I10 Add property tests for terminal exclusivity, complete accounting, stable ordering, schedule independence, checked bounds, and equivalent-fact replay. r[evaluation_streaming.validation]
+- [x] [serial] I5 Define bounded selected-root, sequence, failure-scope, root-outcome, run-disposition, summary, and stream-record types. r[evaluation_streaming.complete_root_outcomes] r[evaluation_streaming.failure_scope]
+  Evidence: `crunch-evaluation-stream-core` defines the validated `no_std` types and named limits.
+- [x] [serial] I6 Implement pure root-set admission, terminal transition checks, duplicate rejection, and complete-summary accounting. r[evaluation_streaming.complete_root_outcomes]
+  Evidence: `OutcomeLedger` rejects invalid transitions and creates a summary only after every selected root is terminal.
+- [x] [serial] I7 Implement pure failure-scope classification and remaining-root classification for shared fatal errors and cancellation. r[evaluation_streaming.failure_scope] r[evaluation_streaming.cancellation_and_output]
+  Evidence: focused tests cover root-scoped, shared-fatal, cancellation, and coordinator-failure decisions.
+- [x] [serial] I8 Implement deterministic sequence assignment, canonical ordering, and domain-separated BLAKE3 identity preimages. r[evaluation_streaming.deterministic_identity_and_order]
+  Evidence: known-answer and schedule-independence tests bind the documented root and run identity framing.
+- [x] [serial] I9 Implement pure stream projection values, terminal disposition, and process-status selection without JSON or I/O helpers. r[evaluation_streaming.partial_run_disposition] r[evaluation_streaming.core_shell_boundary]
+  Evidence: pure projection and process-status tests pass, and production code has no `std`, JSON, async, or I/O dependency.
+- [x] [parallel] I10 Add property tests for terminal exclusivity, complete accounting, stable ordering, schedule independence, checked bounds, and equivalent-fact replay. r[evaluation_streaming.validation]
+  Evidence: `evidence/pure-outcome-core.md` records five property tests that cover all six required properties.
 
 ## Phase 3: Pipeline and worker integration
 

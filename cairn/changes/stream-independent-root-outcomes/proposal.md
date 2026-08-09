@@ -38,6 +38,6 @@ The design adapts selected concepts from `NixOS/nix-eval-jobs` revision `a0cd022
 ## Impact
 
 - **Affected specs:** new `evaluation-streaming` capability.
-- **Planned files:** `crunch-eval`, `crunch-pipeline`, CLI projection code, machine schemas, fixtures, and documentation.
+- **Planned files:** `crunch-evaluation-stream-core`, `crunch-eval`, `crunch-pipeline`, CLI projection code, machine schemas, fixtures, and documentation.
 - **Compatibility:** existing aggregate output remains available during a bounded migration period.
 - **Testing:** baseline tests, pure outcome tests, pipeline tests, CLI stream fixtures, machine-contract checks, and Cairn gates.

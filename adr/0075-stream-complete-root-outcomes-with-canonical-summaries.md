@@ -25,6 +25,8 @@ This behavior omits independent work and gives machine consumers no complete roo
 
 Mantle will add the `mantle-evaluation-stream-v1` NDJSON contract. Stream mode will write only complete machine records to stdout.
 
+The `crunch-evaluation-stream-core` `no_std` crate will own bounded outcome, transition, identity, summary, projection, and process-status decisions. Shell crates will retain evaluator, worker, JSON, output, and process effects.
+
 The record kinds are `run-start`, `root-discovered`, `root-terminal`, and `run-summary`. The final writable record must be one `run-summary`.
 
 Mantle will assign each admitted root a source-order sequence and a domain-separated BLAKE3 identity before parallel dispatch. Live terminal records can use completion order. The summary will use source order.

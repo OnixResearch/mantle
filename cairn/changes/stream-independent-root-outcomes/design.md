@@ -102,9 +102,9 @@ A broken output stream cannot become successful completion. The shell cancels or
 
 ### Decision: Keep decisions pure and I/O thin
 
-**Choice:** Pure cores own root-set admission, transition checks, failure-scope decisions, summary construction, canonical ordering, and wire projection values.
+**Choice:** The `crunch-evaluation-stream-core` `no_std` crate owns root-set admission, transition checks, failure-scope decisions, summary construction, canonical ordering, and wire projection values.
 
-Shells own evaluator calls, worker channels, clocks, cancellation signals, stdout, stderr, JSON encoding, flushing, and process status.
+Shells own evaluator calls, worker channels, clocks, cancellation signals, stdout, stderr, JSON encoding, flushing, and process exit.
 
 **Rationale:** Outcome behavior remains testable without workers, files, or output streams.
 
