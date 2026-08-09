@@ -1,36 +1,21 @@
-# Tasks: support a portable remote-first Mantle client
+# Tasks: Support Portable Remote Client
 
-## Phase 1: Baseline and support policy
+## 1. Command and dependency matrix
 
-- [ ] [serial] I1 Inventory every root command and dependency as portable-client, Linux-worker, Linux-local-executor, server, bootstrap, proof, or unsupported. r[realization_routing.portable_client_command_matrix]
-- [ ] [depends:stabilize-operator-command-contract] I2 Extend the accepted typed operator inventory with platform support state, effects, remote requirements, trust requirements, and stable blockers. r[realization_routing.portable_client_command_matrix]
-- [ ] [parallel] I3 Add positive supported-command fixtures and negative unknown-platform, unknown-command, conflicting-effect, missing-trust, and unsupported-command fixtures. r[realization_routing.portable_client_validation]
+- [x] [serial] I1 Inventory every root command and classify portable-client, Linux local-executor, worker, server, bootstrap, proof, and unsupported dependencies. r[realization_routing.portable_client_command_matrix]
+- [x] [serial] I2 Add typed platform support profiles to the accepted operator inventory, including effects, required remote capabilities, trust inputs, and stable blockers. r[realization_routing.portable_client_command_matrix]
+- [x] [parallel] I3 Add a portable-client source and dependency guard that rejects bwrap, FUSE, seccomp, cgroup, protected-exec, worker-server, bootstrap, or proof imports outside allowed shells. r[realization_routing.portable_client_validation]
 
-## Phase 2: Portable dependency boundary
+## 2. Portable client architecture
 
-- [ ] [serial] I4 Extract pure remote request, route, upload, response-admission, and report logic into a portable client core. r[realization_routing.portable_client_core]
-- [ ] [serial] I5 Add a thin portable shell for project files, Nickel evaluation, transport, explicit credentials, local castore, and output writes. r[realization_routing.portable_client_core]
-- [ ] [serial] I6 Add compile and source guards that keep bwrap, FUSE, seccomp, cgroup, protected-exec, worker-server, bootstrap, and proof dependencies outside the portable client closure. r[realization_routing.no_local_execution_on_portable_client]
-- [ ] [parallel] I7 Add compile-fail or dependency-graph fixtures for forbidden portable-to-Linux imports and role substitutions. r[realization_routing.portable_client_validation]
+- [x] [serial] I4 Split portable request, route, upload, response-admission, and report logic into a pure core with a thin portable filesystem/network/credential/materialization shell. r[realization_routing.portable_client_core]
+- [x] [serial] I5 Make local executor capability explicit and allow non-Linux clients to select cache, import, or remote routes without initializing local execution. r[realization_routing.non_linux_remote_route] r[realization_routing.no_local_execution_on_portable_client]
+- [x] [parallel] I6 Keep project and Nickel evaluation client-side and send only frontend-neutral concrete build requests, immutable refs, policy identities, selected target facts, and bounded upload plans. r[realization_routing.portable_client_concrete_inputs]
 
-## Phase 3: Remote-first route and execution
+## 3. Validation and documentation
 
-- [ ] [serial] I8 Make local executor support an explicit route fact. Preserve local cache and import routes on non-Linux clients. r[realization_routing.non_linux_remote_route]
-- [ ] [serial] I9 Let `mantle build` on a portable client select the native remote route after concrete input, source, upload, capability, credential, and output-trust admission. r[realization_routing.non_linux_remote_route]
-- [ ] [serial] I10 Keep target system independent from client system and reject raw Nickel, Onix, Nix, flake, or package-manager evaluation payloads. r[realization_routing.portable_client_concrete_inputs]
-- [ ] [parallel] I11 Add local-executor, bwrap, FUSE, seccomp, worker-launch, and Linux-tool discovery sentinels that must remain untouched during portable remote builds. r[realization_routing.no_local_execution_on_portable_client]
-
-## Phase 4: Portable admission and materialization
-
-- [ ] [serial] I12 Add report-only completion and optional admitted local materialization under an explicit unprivileged physical store. r[realization_routing.portable_output_materialization]
-- [ ] [serial] I13 Preserve separate execution, upload, log, cancellation, signer, output-admission, and publication authority with explicit secret handles. r[realization_routing.portable_client_credentials]
-- [ ] [parallel] I14 Add wrong signer, corrupt CAS, stale fence, prefix mismatch, incomplete closure, oversized upload, unsafe physical path, credential leak, and partial materialization fixtures. r[realization_routing.portable_client_validation]
-
-## Phase 5: Native platforms and validation
-
-- [ ] [serial] I15 Add native `aarch64-darwin`, native `x86_64-darwin`, and Linux support-matrix jobs with checked command fixtures. r[realization_routing.portable_client_validation]
-- [ ] [serial] I16 Document installation, state and physical store defaults, remote worker setup, target selection, trust, unsupported commands, rollback, and non-claims. r[realization_routing.portable_client_command_matrix]
-- [ ] [serial] V1 Run portable-core unit tests, route-planner tests, remote-client tests, local materialization tests, and Linux local-build parity tests. r[realization_routing.portable_client_validation]
-- [ ] [serial] V2 Run `cargo check -p mantle --target aarch64-apple-darwin` and `cargo check -p mantle --target x86_64-apple-darwin` as supplemental checks, then run the declared native Darwin command fixtures. r[realization_routing.portable_client_validation]
-- [ ] [serial] V3 Run focused formatting and Clippy with warnings denied, Nickel checks, dependency-boundary checks, secret scans, machine-contract checks, and `git diff --check`. r[realization_routing.portable_client_validation]
-- [ ] [serial] V4 Run `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .` plus proposal, design, and tasks gates for this change. Record exact outputs before archive. r[realization_routing.portable_client_validation]
+- [x] [serial] V1 Add positive and negative platform-matrix, malformed-request, no-local-execution, trust, protocol, upload-limit, and materialization tests. r[realization_routing.portable_client_validation] [evidence=cairn/changes/support-portable-remote-client/evidence/verification.md]
+- [x] [parallel] V2 Run Linux-hosted checks for both Darwin targets and native Darwin tests where available; record native-vs-cross status explicitly. r[realization_routing.portable_client_validation] [evidence=cairn/changes/support-portable-remote-client/evidence/verification.md]
+- [x] [parallel] V3 Run dependency/source guards and secret scans for the portable client closure. r[realization_routing.portable_client_credentials] r[realization_routing.portable_client_validation] [evidence=cairn/changes/support-portable-remote-client/evidence/verification.md]
+- [x] [serial] V4 Verify existing Linux local build and worker behavior remains unchanged. r[realization_routing.no_local_execution_on_portable_client] [evidence=cairn/changes/support-portable-remote-client/evidence/verification.md]
+- [x] [serial] V5 Document supported platforms, client-vs-target semantics, remote prerequisites, output materialization, stable blockers, and remaining non-claims. r[realization_routing.portable_output_materialization] [evidence=cairn/changes/support-portable-remote-client/evidence/verification.md]

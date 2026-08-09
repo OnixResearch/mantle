@@ -1,0 +1,9 @@
+[package]
+name = "mantle-portable-client-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }

@@ -1,4 +1,591 @@
 {
+  "platform_profiles": [
+    {
+      "blocker": null,
+      "command_root": "build",
+      "darwin_support": "remote-required",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": true,
+        "starts_processes": false,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": true,
+      "role": "portable-remote-build",
+      "trusted_builder_key_required": true
+    },
+    {
+      "blocker": "command requires the Linux local executor",
+      "command_root": "wasm-component",
+      "darwin_support": "unsupported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": true,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "linux-local-executor",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "doctor",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": false,
+        "uses_network": false,
+        "writes_files": false
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "__operator-contract",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": false,
+        "uses_network": false,
+        "writes_files": false
+      },
+      "remote_capability_required": false,
+      "role": "internal",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "import",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": true,
+        "starts_processes": false,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "filegen",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": true,
+        "starts_processes": false,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "graph",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": false,
+        "uses_network": false,
+        "writes_files": false
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "why",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": false,
+        "uses_network": false,
+        "writes_files": false
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "dependents",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": false,
+        "uses_network": false,
+        "writes_files": false
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "refactor",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": true,
+        "starts_processes": false,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": "proof execution is outside the portable client boundary",
+      "command_root": "transcript",
+      "darwin_support": "unsupported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": true,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "proof",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": "bootstrap execution is outside the portable client boundary",
+      "command_root": "stage0-inventory",
+      "darwin_support": "unsupported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": true,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "bootstrap",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": "proof execution is outside the portable client boundary",
+      "command_root": "nix-free-demo",
+      "darwin_support": "unsupported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": true,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "proof",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": "command requires the Linux local executor",
+      "command_root": "foreign-import",
+      "darwin_support": "unsupported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": true,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "linux-local-executor",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": "command requires the Linux local executor",
+      "command_root": "mantlepkgs",
+      "darwin_support": "unsupported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": true,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "linux-local-executor",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "eval",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": false,
+        "uses_network": false,
+        "writes_files": false
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "export",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": true,
+        "starts_processes": false,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": "bootstrap execution is outside the portable client boundary",
+      "command_root": "bootstrap",
+      "darwin_support": "unsupported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": true,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "bootstrap",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "log",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": false,
+        "uses_network": false,
+        "writes_files": false
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "store",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": true,
+        "starts_processes": false,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "source",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": true,
+        "starts_processes": false,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "receipt",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": true,
+        "starts_processes": false,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": "server operations require Linux; client operations remain available",
+      "command_root": "remote",
+      "darwin_support": "mixed",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": true,
+        "starts_processes": false,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "remote-mixed",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": "command requires a Linux worker or server",
+      "command_root": "__remote-secret-worker",
+      "darwin_support": "unsupported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": true,
+        "starts_processes": true,
+        "uses_network": false,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "linux-worker-server",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "artifact",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": true,
+        "starts_processes": false,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "attest",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": true,
+        "starts_processes": false,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": "proof execution is outside the portable client boundary",
+      "command_root": "release",
+      "darwin_support": "unsupported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": true,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "proof",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "init",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": true,
+        "starts_processes": false,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "check",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": false,
+        "uses_network": false,
+        "writes_files": false
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "show",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": false,
+        "uses_network": false,
+        "writes_files": false
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "refresh",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": true,
+        "starts_processes": false,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "list-stale",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": false,
+        "uses_network": false,
+        "writes_files": false
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": null,
+      "command_root": "upgrade",
+      "darwin_support": "supported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": true,
+        "starts_processes": false,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "portable-client",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": "proof execution is outside the portable client boundary",
+      "command_root": "self-build",
+      "darwin_support": "unsupported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": true,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "proof",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": "command requires a Linux worker or server",
+      "command_root": "rust-cache",
+      "darwin_support": "unsupported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": true,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "linux-worker-server",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": "command requires the Linux local executor",
+      "command_root": "rust-plan",
+      "darwin_support": "unsupported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": true,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "linux-local-executor",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": "command requires the Linux local executor",
+      "command_root": "shell",
+      "darwin_support": "unsupported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": true,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "linux-local-executor",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": "command requires the Linux local executor",
+      "command_root": "develop",
+      "darwin_support": "unsupported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": true,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "linux-local-executor",
+      "trusted_builder_key_required": false
+    },
+    {
+      "blocker": "command requires the Linux local executor",
+      "command_root": "run",
+      "darwin_support": "unsupported",
+      "effects": {
+        "reads_files": true,
+        "requires_trust_material": false,
+        "starts_processes": true,
+        "uses_network": true,
+        "writes_files": true
+      },
+      "remote_capability_required": false,
+      "role": "linux-local-executor",
+      "trusted_builder_key_required": false
+    }
+  ],
   "schema": "mantle-operator-surface-inventory-v1",
   "surfaces": [
     {

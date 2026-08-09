@@ -80,6 +80,7 @@ fn production_stdio_resumes_missing_chunks_and_imports_output() {
     let store_dir = root.path().join("store");
     let output_source = root.path().join("output-source.bin");
     let build_file = root.path().join("remote-production.ncl");
+    let local_route_sentinel = root.path().join("client-local-route-entered");
     fs::create_dir_all(&state_dir).expect("state dir");
     fs::create_dir_all(&store_dir).expect("store dir");
     fs::write(&output_source, patterned_bytes(OUTPUT_BYTES)).expect("output source");
@@ -89,10 +90,12 @@ fn production_stdio_resumes_missing_chunks_and_imports_output() {
     write_fetch_derivation(&build_file, &output_source);
 
     let interrupted = remote_build_command(&state_dir, &store_dir, &build_file)
+        .env("MANTLE_TEST_LOCAL_ROUTE_SENTINEL", &local_route_sentinel)
         .env(INTERRUPT_ENV, INTERRUPT_AFTER_CHUNKS)
         .output()
         .expect("run interrupted production transfer");
     assert!(!interrupted.status.success(), "first run must interrupt after a durable chunk");
+    assert!(!local_route_sentinel.exists(), "remote preflight must not enter the client local route");
     let interrupted_stderr = String::from_utf8_lossy(&interrupted.stderr);
     assert!(
         interrupted_stderr.contains("remote-production-transfer-interrupted-after-checkpoint"),
@@ -158,9 +161,11 @@ fn production_stdio_resumes_missing_chunks_and_imports_output() {
     assert!(partial.transferred_bytes > 0, "partial checkpoint records transferred bytes");
 
     let resumed = remote_build_command(&state_dir, &store_dir, &build_file)
+        .env("MANTLE_TEST_LOCAL_ROUTE_SENTINEL", &local_route_sentinel)
         .output()
         .expect("run resumed production transfer");
     assert!(resumed.status.success(), "resume stderr={}", String::from_utf8_lossy(&resumed.stderr));
+    assert!(!local_route_sentinel.exists(), "remote success must not enter the client local route");
     let report: Value = serde_json::from_slice(&resumed.stdout).expect("production build JSON report");
     let substitution = &report["outcomes"][0]["outputs"][0]["substitution"];
     assert_eq!(substitution["mode"], "streaming");

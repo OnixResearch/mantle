@@ -3171,6 +3171,11 @@ impl RunContext {
 }
 
 fn run(args: Args) -> Result<(), RunError> {
+    run_for_platform(args, current_platform_family())
+}
+
+fn run_for_platform(args: Args, platform: mantle_portable_client_core::PlatformFamily) -> Result<(), RunError> {
+    enforce_portable_command_admission(platform, &args.command)?;
     if let Command::RemoteSecretWorker {
         manifest,
         profile,
@@ -3183,6 +3188,95 @@ fn run(args: Args) -> Result<(), RunError> {
     let ctx = build_run_context(&args);
     emit_runtime_fingerprint(&args, &ctx)?;
     dispatch_command(&args, &ctx)
+}
+
+fn mark_test_local_route_entry() -> Result<(), RunError> {
+    #[cfg(debug_assertions)]
+    if let Some(path) = std::env::var_os("MANTLE_TEST_LOCAL_ROUTE_SENTINEL") {
+        std::fs::write(path, b"local-route-entered\n")
+            .map_err(|error| RunError::Internal(format!("writing local-route test sentinel: {error}")))?;
+    }
+    Ok(())
+}
+
+fn current_platform_family() -> mantle_portable_client_core::PlatformFamily {
+    if cfg!(target_os = "linux") {
+        return mantle_portable_client_core::PlatformFamily::Linux;
+    }
+    if cfg!(target_os = "macos") {
+        return mantle_portable_client_core::PlatformFamily::Darwin;
+    }
+    mantle_portable_client_core::PlatformFamily::Other
+}
+
+fn enforce_portable_command_admission(
+    platform: mantle_portable_client_core::PlatformFamily,
+    command: &Command,
+) -> Result<(), RunError> {
+    let root = command_root(command);
+    let facts = command_admission_facts(command);
+    mantle_portable_client_core::admit_command(platform, root, facts)
+        .map(|_| ())
+        .map_err(|blocker| RunError::Internal(format!("{}: {}", blocker.code, blocker.detail)))
+}
+
+fn command_admission_facts(command: &Command) -> mantle_portable_client_core::AdmissionFacts {
+    let remote_route_selected = match command {
+        Command::Build { builder, plan, .. } => builder.is_some() || *plan,
+        _ => false,
+    };
+    let remote_operation_is_client = match command {
+        Command::Remote { action } => !matches!(action, RemoteAction::Serve { .. }),
+        _ => false,
+    };
+    mantle_portable_client_core::AdmissionFacts {
+        remote_route_selected,
+        remote_operation_is_client,
+    }
+}
+
+fn command_root(command: &Command) -> &'static str {
+    match command {
+        Command::Build { .. } => "build",
+        Command::WasmComponent { .. } => "wasm-component",
+        Command::Doctor { .. } => "doctor",
+        Command::OperatorContract { .. } => "__operator-contract",
+        Command::Import { .. } => "import",
+        Command::Filegen { .. } => "filegen",
+        Command::Graph { .. } => "graph",
+        Command::Why { .. } => "why",
+        Command::Dependents { .. } => "dependents",
+        Command::Refactor { .. } => "refactor",
+        Command::Transcript { .. } => "transcript",
+        Command::Stage0Inventory { .. } => "stage0-inventory",
+        Command::NixFreeDemo { .. } => "nix-free-demo",
+        Command::ForeignImport { .. } => "foreign-import",
+        Command::Mantlepkgs { .. } => "mantlepkgs",
+        Command::Eval { .. } => "eval",
+        Command::Export { .. } => "export",
+        Command::Bootstrap { .. } => "bootstrap",
+        Command::Log { .. } => "log",
+        Command::Store { .. } => "store",
+        Command::Source { .. } => "source",
+        Command::Receipt { .. } => "receipt",
+        Command::Remote { .. } => "remote",
+        Command::RemoteSecretWorker { .. } => "__remote-secret-worker",
+        Command::Artifact { .. } => "artifact",
+        Command::Attest { .. } => "attest",
+        Command::Release { .. } => "release",
+        Command::Init => "init",
+        Command::Check { .. } => "check",
+        Command::Show => "show",
+        Command::Refresh { .. } => "refresh",
+        Command::ListStale { .. } => "list-stale",
+        Command::Upgrade => "upgrade",
+        Command::SelfBuild { .. } => "self-build",
+        Command::RustCache { .. } => "rust-cache",
+        Command::RustPlan { .. } => "rust-plan",
+        Command::Shell { .. } => "shell",
+        Command::Develop { .. } => "develop",
+        Command::Run { .. } => "run",
+    }
 }
 
 fn apply_state_dir_override(args: &Args) {
@@ -4695,6 +4789,7 @@ fn run_local_file_build(
     import_entries: &[OsString],
     source_fetch_plan: Option<&source_bundle::SourceFetchOverridePlan>,
 ) -> Result<(), RunError> {
+    mark_test_local_route_entry()?;
     debug_assert!(prepared.max_jobs > 0);
     debug_assert!(prepared.ctx.store_prefix.starts_with('/'));
     debug_assert!(!path.as_os_str().is_empty());
@@ -5140,6 +5235,7 @@ fn run_remote_build_command(request: RemoteBuildCommandRequest<'_>) -> Result<()
         }
     };
     let inputs = evaluate_remote_client_derivation_inputs(file, request.import_entries, &request.ctx.store_prefix)?;
+    validate_portable_remote_inputs(request.selection, &inputs, &request.ctx.store_prefix)?;
     let build_outcome = run_remote_build_dispatches(
         request.selection,
         inputs,
@@ -5154,6 +5250,43 @@ fn run_remote_build_command(request: RemoteBuildCommandRequest<'_>) -> Result<()
         &request.ctx.resolved_state_dir,
         request.ctx.output_mode(),
     )
+}
+
+fn client_platform_label() -> &'static str {
+    if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        return "aarch64-darwin";
+    }
+    if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+        return "x86_64-darwin";
+    }
+    if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+        return "aarch64-linux";
+    }
+    if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        return "x86_64-linux";
+    }
+    "other"
+}
+
+fn validate_portable_remote_inputs(
+    selection: &RemoteBuildSelection,
+    inputs: &[remote_build::RemoteClientDerivationInput],
+    store_prefix: &str,
+) -> Result<(), RunError> {
+    let trusted_builder_key_count = u32::try_from(selection.options.trusted_output_keys.len())
+        .map_err(|_| RunError::Internal("trusted remote builder key count exceeds u32".to_string()))?;
+    for input in inputs {
+        mantle_portable_client_core::plan_portable_build(mantle_portable_client_core::PortableBuildFacts {
+            client_platform: client_platform_label(),
+            target_platform: &input.crunch_derivation.system,
+            store_prefix,
+            remote_capability_id: Some(&selection.options.builder.endpoint_id),
+            trusted_builder_key_count,
+            payload_kinds: &mantle_portable_client_core::FRONTEND_PAYLOAD_KINDS,
+        })
+        .map_err(|blocker| RunError::Internal(format!("{}: {}", blocker.code, blocker.detail)))?;
+    }
+    Ok(())
 }
 
 fn evaluate_remote_client_derivation_inputs(
@@ -8354,6 +8487,7 @@ struct InlineBuildRequest<'a> {
 
 /// Build from an inline Nickel expression string (for project selectors).
 fn build_from_expr(request: InlineBuildRequest<'_>) -> Result<(), RunError> {
+    mark_test_local_route_entry()?;
     debug_assert!(request.prepared.max_jobs > 0, "max_jobs must be positive");
     debug_assert!(request.prepared.ctx.store_prefix.starts_with('/'), "store prefix must be absolute");
     let tmp = tempfile::NamedTempFile::with_suffix(".ncl")

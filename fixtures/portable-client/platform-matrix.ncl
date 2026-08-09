@@ -1,0 +1,60 @@
+let Scenario = {
+  name | String,
+  client_platform | [| 'aarch64-darwin, 'x86_64-darwin, 'linux |],
+  target_platform | String,
+  command_root | String,
+  remote_route_selected | Bool,
+  expected | [| 'admitted, 'blocked |],
+  blocker | Dyn,
+} in
+{
+  positive = [
+    {
+      name = "darwin-remote-linux-build",
+      client_platform = 'aarch64-darwin,
+      target_platform = "x86_64-linux",
+      command_root = "build",
+      remote_route_selected = true,
+      expected = 'admitted,
+      blocker = null,
+    },
+    {
+      name = "darwin-plan-without-local-executor",
+      client_platform = 'x86_64-darwin,
+      target_platform = "aarch64-linux",
+      command_root = "build",
+      remote_route_selected = true,
+      expected = 'admitted,
+      blocker = null,
+    },
+  ] | Array Scenario,
+  negative = [
+    {
+      name = "darwin-local-build",
+      client_platform = 'aarch64-darwin,
+      target_platform = "x86_64-linux",
+      command_root = "build",
+      remote_route_selected = false,
+      expected = 'blocked,
+      blocker = "portable-remote-route-required",
+    },
+    {
+      name = "darwin-worker-server",
+      client_platform = 'x86_64-darwin,
+      target_platform = "x86_64-linux",
+      command_root = "remote",
+      remote_route_selected = false,
+      expected = 'blocked,
+      blocker = "portable-worker-server-unsupported",
+    },
+    {
+      name = "darwin-proof",
+      client_platform = 'aarch64-darwin,
+      target_platform = "aarch64-linux",
+      command_root = "self-build",
+      remote_route_selected = false,
+      expected = 'blocked,
+      blocker = "portable-proof-unsupported",
+    },
+  ] | Array Scenario,
+}

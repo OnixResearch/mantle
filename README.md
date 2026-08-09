@@ -517,6 +517,7 @@ Useful documentation:
 - [Machine artifact contracts](docs/machine-artifact-contracts.md)
 - [Build correctness primitives](docs/build-correctness-primitives.md)
 - [Remote credential operations](docs/remote-credentials.md)
+- [Portable remote client](docs/portable-remote-client.md)
 - [Mantle naming rules](docs/mantle-naming.md)
 - [Durable file publication adoption](docs/durable-file-publication-adoption.md)
 - [Immutable release objects and the current pointer](docs/immutable-release-current-pointer.md)

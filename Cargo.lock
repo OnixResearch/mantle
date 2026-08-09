@@ -4804,6 +4804,7 @@ dependencies = [
  "fs2",
  "futures",
  "libc",
+ "mantle-portable-client-core",
  "mantlepkgs-core",
  "nickel-export-core",
  "nix-compat",
@@ -4828,6 +4829,13 @@ dependencies = [
  "ureq",
  "url",
  "zeroize",
+]
+
+[[package]]
+name = "mantle-portable-client-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

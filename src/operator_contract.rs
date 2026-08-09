@@ -16,6 +16,7 @@ pub const REMEDIATION_PRECONDITION_COUNT_MAX: usize = 8;
 pub const EVIDENCE_REFERENCE_COUNT_MAX: usize = 16;
 pub const OPERATOR_TEXT_BYTES_MAX: usize = 1_024;
 pub const SAFE_SUBJECT_BYTES_MAX: usize = 128;
+pub const PLATFORM_PROFILE_COUNT_MAX: usize = 128;
 const ALLOWED_EXIT_CLASSES: &[&str] = &["policy-rejection", "success", "usage"];
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -86,10 +87,31 @@ pub struct OperatorSurface {
     pub removal_gate: Option<String>,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DarwinSupport {
+    Supported,
+    RemoteRequired,
+    Mixed,
+    Unsupported,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PlatformProfile {
+    pub command_root: String,
+    pub role: mantle_portable_client_core::CommandRole,
+    pub effects: mantle_portable_client_core::CommandEffects,
+    pub darwin_support: DarwinSupport,
+    pub blocker: Option<String>,
+    pub remote_capability_required: bool,
+    pub trusted_builder_key_required: bool,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OperatorInventory {
     pub schema: String,
     pub surfaces: Vec<OperatorSurface>,
+    pub platform_profiles: Vec<PlatformProfile>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -153,12 +175,51 @@ pub fn validate_inventory(inventory: &OperatorInventory) -> Result<(), ContractE
         ));
     }
 
+    validate_platform_profiles(&inventory.platform_profiles)?;
+
     let mut spellings = BTreeMap::<String, String>::new();
     for surface in &inventory.surfaces {
         validate_surface(surface)?;
         insert_spelling(&mut spellings, &surface.canonical, &surface.canonical)?;
         for spelling in &surface.compatibility_spellings {
             insert_spelling(&mut spellings, spelling, &surface.canonical)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_platform_profiles(profiles: &[PlatformProfile]) -> Result<(), ContractError> {
+    if profiles.len() != mantle_portable_client_core::ROOT_COMMAND_COUNT {
+        return Err(ContractError::new(
+            "platform-profile-count",
+            format!(
+                "{} profiles does not match {} reviewed roots",
+                profiles.len(),
+                mantle_portable_client_core::ROOT_COMMAND_COUNT
+            ),
+        ));
+    }
+    if profiles.len() > PLATFORM_PROFILE_COUNT_MAX {
+        return Err(ContractError::new("platform-profile-limit", profiles.len().to_string()));
+    }
+    let mut roots = BTreeMap::<String, ()>::new();
+    for profile in profiles {
+        validate_text("platform-command-root", &profile.command_root)?;
+        if roots.insert(profile.command_root.clone(), ()).is_some() {
+            return Err(ContractError::new("duplicate-platform-profile", profile.command_root.clone()));
+        }
+        let Some(core_profile) = mantle_portable_client_core::find_command_profile(&profile.command_root) else {
+            return Err(ContractError::new("unknown-platform-profile", profile.command_root.clone()));
+        };
+        if profile.role != core_profile.role || profile.effects != core_profile.effects {
+            return Err(ContractError::new("platform-profile-drift", profile.command_root.clone()));
+        }
+        let blocker_required = matches!(profile.darwin_support, DarwinSupport::Mixed | DarwinSupport::Unsupported);
+        if blocker_required != profile.blocker.as_deref().is_some_and(|value| !value.is_empty()) {
+            return Err(ContractError::new("platform-blocker-drift", profile.command_root.clone()));
+        }
+        if let Some(blocker) = &profile.blocker {
+            validate_text("platform-blocker", blocker)?;
         }
     }
     Ok(())
@@ -765,9 +826,35 @@ mod tests {
     }
 
     fn inventory(surfaces: Vec<OperatorSurface>) -> OperatorInventory {
+        let platform_profiles = mantle_portable_client_core::COMMAND_PROFILES
+            .iter()
+            .map(|profile| PlatformProfile {
+                command_root: profile.root.to_string(),
+                role: profile.role,
+                effects: profile.effects,
+                darwin_support: match profile.role {
+                    mantle_portable_client_core::CommandRole::PortableClient
+                    | mantle_portable_client_core::CommandRole::Internal => DarwinSupport::Supported,
+                    mantle_portable_client_core::CommandRole::PortableRemoteBuild => DarwinSupport::RemoteRequired,
+                    mantle_portable_client_core::CommandRole::RemoteMixed => DarwinSupport::Mixed,
+                    _ => DarwinSupport::Unsupported,
+                },
+                blocker: match profile.role {
+                    mantle_portable_client_core::CommandRole::PortableClient
+                    | mantle_portable_client_core::CommandRole::Internal
+                    | mantle_portable_client_core::CommandRole::PortableRemoteBuild => None,
+                    _ => Some("outside portable client boundary".to_string()),
+                },
+                remote_capability_required: profile.role
+                    == mantle_portable_client_core::CommandRole::PortableRemoteBuild,
+                trusted_builder_key_required: profile.role
+                    == mantle_portable_client_core::CommandRole::PortableRemoteBuild,
+            })
+            .collect();
         OperatorInventory {
             schema: OPERATOR_INVENTORY_SCHEMA.to_string(),
             surfaces,
+            platform_profiles,
         }
     }
 
