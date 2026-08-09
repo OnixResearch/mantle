@@ -47,6 +47,11 @@ const FAKE_PATH_DIR: &str = "fake-path";
 const ATERM_GRAPH_FILE: &str = "foreign-aterm.graph.json";
 const ATERM_INDEX_FILE: &str = "foreign-aterm.index.json";
 const NIX_SOURCE_PREFIX: &str = "/nix/store";
+const NIX_FIXTURE_SOURCE_PATH: &str = "/nix/store/00000000000000000000000000000000-hello-source";
+const NIX_FIXTURE_OUTPUT_PATH: &str = "/nix/store/11111111111111111111111111111111-hello";
+const NARIO_FIXTURE: &str = "fixtures/nario-v2/positive-single.nario";
+const NARIO_FORMAT_VERSION: u32 = 2;
+const NARIO_STORE_PATH: &str = "fixtures/nario-v2/store-path.txt";
 const GUIX_SOURCE_PREFIX: &str = "/gnu/store";
 const NIXPKGS_HELLO_DRV: &str = "/nix/store/22222222222222222222222222222222-hello.drv";
 const NIXPKGS_SOURCE_DRV: &str = "/nix/store/44444444444444444444444444444444-hello-source.drv";
@@ -1011,6 +1016,191 @@ fn foreign_import_cli_produce_aterm_matches_nix_and_emits_guix_directory_artifac
             node["original_derivation"].as_str().is_some_and(|path| path.starts_with(GUIX_SOURCE_PREFIX))
         })
     );
+}
+
+#[test]
+fn foreign_import_cli_prepares_exact_nario_source_and_rejects_unmatched_records() {
+    // r[verify foreign_derivation_import.nario_v2_source_preparation]
+    // r[verify foreign_derivation_import.nario_v2_non_claims]
+    let temp = TempDir::new().expect("tempdir should be created");
+    let graph_path = temp.path().join("nario.graph.json");
+    let plan_path = temp.path().join("nario.plan.json");
+    let receipt_path = temp.path().join("nario.receipt.json");
+    let bundle_path = temp.path().join("nario.bundle.json");
+    let evidence_path = temp.path().join("nario.evidence.json");
+    let actual_source = fs::read_to_string(NARIO_STORE_PATH).unwrap();
+    let actual_source = actual_source.trim();
+    let graph = fs::read_to_string(fixture_path(NIX_GRAPH)).unwrap().replace(NIX_FIXTURE_SOURCE_PATH, actual_source);
+    fs::write(&graph_path, graph).unwrap();
+    let profile = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(NIX_EXECUTION_PROFILE);
+
+    mantle_cmd()
+        .args([
+            "--json",
+            "foreign-import",
+            "plan",
+            "--graph",
+            path_str(&graph_path),
+            "--package-index",
+            path_str(&fixture_path(NIX_INDEX)),
+            "--policy",
+            path_str(&fixture_path(POLICY)),
+            "--package",
+            HELLO_PACKAGE,
+            "--system",
+            HELLO_SYSTEM,
+            "--execution-profile",
+            path_str(&profile),
+            "--plan-out",
+            path_str(&plan_path),
+            "--receipt-out",
+            path_str(&receipt_path),
+        ])
+        .assert()
+        .success();
+
+    mantle_cmd()
+        .args([
+            "--json",
+            "foreign-import",
+            "prepare-sources",
+            "--plan",
+            path_str(&plan_path),
+            "--nario-v2",
+            NARIO_FIXTURE,
+            "--nario-trust-unsigned",
+            "--nario-evidence-out",
+            path_str(&evidence_path),
+            "--out",
+            path_str(&bundle_path),
+        ])
+        .assert()
+        .success();
+    let bundle = json_file(&bundle_path);
+    let evidence = json_file(&evidence_path);
+    assert_eq!(bundle["records"].as_array().unwrap().len(), 1);
+    assert_eq!(evidence["schema"], "mantle-nario-v2-source-preparation-v1");
+    assert_eq!(evidence["producer_revision"], "9512828397f684d0f732ea76b7631f69a0db34f7");
+    assert_eq!(evidence["format_version"], NARIO_FORMAT_VERSION);
+    assert_eq!(evidence["supported_direction"], "list-and-import-only");
+    assert_eq!(evidence["projections"][0]["original_path"], actual_source);
+    assert_eq!(evidence["source_bundle_blake3"], bundle["manifest_blake3"]);
+    assert_eq!(evidence["translation_policy_blake3"].as_str().unwrap().len(), BLAKE3_HEX_CHARS);
+    assert_eq!(evidence["nario_trust_unsigned"], true);
+    assert_eq!(evidence["trusted_public_key_names"].as_array().unwrap().len(), 0);
+    assert!(evidence["non_claim"].as_str().unwrap().contains("store-data-only"));
+    assert!(evidence["non_claim"].as_str().unwrap().contains("Nix source translation"));
+
+    let unmatched_plan = temp.path().join("unmatched.plan.json");
+    mantle_cmd()
+        .args([
+            "--json",
+            "foreign-import",
+            "plan",
+            "--graph",
+            path_str(&fixture_path(NIX_GRAPH)),
+            "--package-index",
+            path_str(&fixture_path(NIX_INDEX)),
+            "--policy",
+            path_str(&fixture_path(POLICY)),
+            "--package",
+            HELLO_PACKAGE,
+            "--system",
+            HELLO_SYSTEM,
+            "--execution-profile",
+            path_str(&profile),
+            "--plan-out",
+            path_str(&unmatched_plan),
+        ])
+        .assert()
+        .success();
+    mantle_cmd()
+        .args([
+            "foreign-import",
+            "prepare-sources",
+            "--plan",
+            path_str(&unmatched_plan),
+            "--nario-v2",
+            NARIO_FIXTURE,
+            "--nario-trust-unsigned",
+            "--nario-evidence-out",
+            path_str(&temp.path().join("unmatched.evidence.json")),
+            "--out",
+            path_str(&temp.path().join("unmatched.bundle.json")),
+        ])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("not an exact non-derivation source requirement"));
+    assert!(!temp.path().join("unmatched.evidence.json").exists());
+    assert!(!temp.path().join("unmatched.bundle.json").exists());
+
+    let built_graph_path = temp.path().join("built-output.graph.json");
+    let built_plan_path = temp.path().join("built-output.plan.json");
+    let built_graph =
+        fs::read_to_string(fixture_path(NIX_GRAPH)).unwrap().replace(NIX_FIXTURE_OUTPUT_PATH, actual_source);
+    fs::write(&built_graph_path, built_graph).unwrap();
+    mantle_cmd()
+        .args([
+            "foreign-import",
+            "plan",
+            "--graph",
+            path_str(&built_graph_path),
+            "--package-index",
+            path_str(&fixture_path(NIX_INDEX)),
+            "--policy",
+            path_str(&fixture_path(POLICY)),
+            "--package",
+            HELLO_PACKAGE,
+            "--system",
+            HELLO_SYSTEM,
+            "--execution-profile",
+            path_str(&profile),
+            "--plan-out",
+            path_str(&built_plan_path),
+        ])
+        .assert()
+        .success();
+    mantle_cmd()
+        .args([
+            "foreign-import",
+            "prepare-sources",
+            "--plan",
+            path_str(&built_plan_path),
+            "--nario-v2",
+            NARIO_FIXTURE,
+            "--nario-trust-unsigned",
+            "--nario-evidence-out",
+            path_str(&temp.path().join("built-output.evidence.json")),
+            "--out",
+            path_str(&temp.path().join("built-output.bundle.json")),
+        ])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("not an exact non-derivation source requirement"));
+    assert!(!temp.path().join("built-output.evidence.json").exists());
+    assert!(!temp.path().join("built-output.bundle.json").exists());
+
+    mantle_cmd()
+        .args([
+            "foreign-import",
+            "prepare-sources",
+            "--plan",
+            path_str(&plan_path),
+            "--nario-v2",
+            NARIO_FIXTURE,
+            "--nario-v2",
+            NARIO_FIXTURE,
+            "--nario-trust-unsigned",
+            "--nario-evidence-out",
+            path_str(&temp.path().join("ambiguous.evidence.json")),
+            "--out",
+            path_str(&temp.path().join("ambiguous.bundle.json")),
+        ])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("ambiguous Nario records match source requirement"));
+    assert!(!temp.path().join("ambiguous.evidence.json").exists());
+    assert!(!temp.path().join("ambiguous.bundle.json").exists());
 }
 
 #[test]

@@ -1,5 +1,26 @@
 // Mantle Tracey coverage bridge.
 //
+// Nario v2 read-compatibility bridge.
+//
+// r[impl store_transports.nario_v2_read_compatibility]
+// r[impl store_transports.nario_v2_validation]
+// r[impl store_transports.nario_v2_bounded_admission]
+// r[impl foreign_derivation_import.nario_v2_source_preparation]
+// r[impl foreign_derivation_import.nario_v2_non_claims]
+// The bounded reader, validation core, staged castore ingest, and atomic
+// PathInfo publication live in `crates/crunch-store/src/nario.rs` and the
+// vendored PathInfo backends. Root-package list/import and source-projection
+// shells live in `src/{store_cmd,foreign_import_cmd}.rs`.
+//
+// r[verify store_transports.nario_v2_read_compatibility]
+// r[verify store_transports.nario_v2_validation]
+// r[verify store_transports.nario_v2_bounded_admission]
+// r[verify foreign_derivation_import.nario_v2_source_preparation]
+// r[verify foreign_derivation_import.nario_v2_non_claims]
+// Producer-derived positive and deterministic negative fixtures cover framing,
+// limits, trust, payload identity, atomic admission, source projection, and
+// rejected export. Evidence preserves the explicit non-claims.
+//
 // Hermetic Cairn release handoff bridge.
 //
 // r[impl mantle.release_provenance.cairn_evidence_handoff.measured_inputs]

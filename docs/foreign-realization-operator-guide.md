@@ -56,6 +56,22 @@ Copy the reported `manifest_blake3` value into the realization command.
 Mantle rejects missing records, changed content, incomplete trees, and wrong modes before source ingest.
 It does not read an ambient `/nix/store` or `/gnu/store` path to satisfy a requirement.
 
+A Nario v2 archive can supply an exact admitted Nix source requirement:
+
+```text
+mantle --json foreign-import prepare-sources \
+  --plan plan.json \
+  --nario-v2 sources.nario \
+  --nario-trusted-public-key NAME:BASE64 \
+  --nario-evidence-out nario-source-evidence.json \
+  --out source-bundle.json
+```
+
+Every Nario record must match one source requirement by its original path. Mantle rejects
+unmatched records and built outputs. Original Nix trust remains provenance for the original
+path. The target source identity is a separate Mantle content identity. See
+[`nario-v2-import.md`](nario-v2-import.md).
+
 ## Realize a preserved Nix cache path
 
 Use `preserve-cache-paths-v1` only with one unchanged `/nix/store` prefix.

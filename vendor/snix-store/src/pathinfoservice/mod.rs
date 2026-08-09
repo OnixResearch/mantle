@@ -81,6 +81,17 @@ pub trait PathInfoService: Send + Sync {
     /// Store a PathInfo.
     async fn put(&self, path_info: PathInfo) -> Result<PathInfo, Error>;
 
+    /// Store a bounded batch as one visible backend transaction.
+    ///
+    /// Backends that cannot provide atomic batch publication must reject the
+    /// operation. Callers must not approximate it with sequential `put` calls.
+    async fn put_batch_atomic(&self, path_infos: Vec<PathInfo>) -> Result<Vec<PathInfo>, Error> {
+        if path_infos.is_empty() {
+            return Ok(Vec::new());
+        }
+        Err("atomic PathInfo batch publication is unsupported by this backend".into())
+    }
+
     /// Iterate over all PathInfo objects in the store.
     /// Implementations can decide to disallow listing.
     ///

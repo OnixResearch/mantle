@@ -3063,10 +3063,21 @@ pub enum SourceBundleAction {
     },
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
+pub enum StoreArchiveFormat {
+    #[default]
+    MantleNative,
+    NarioV2,
+}
+
 #[derive(Subcommand, Debug, Clone)]
 pub enum StoreArchiveAction {
     /// Export selected store paths and recursive closure to an archive
     Export {
+        /// Archive format. Nario v2 export is unsupported.
+        #[arg(long, value_enum, default_value_t)]
+        format: StoreArchiveFormat,
+
         /// Archive output path, or '-' for stdout
         #[arg(long)]
         to: std::path::PathBuf,
@@ -3082,8 +3093,12 @@ pub enum StoreArchiveAction {
         /// Store path selectors to export (full or fragment)
         paths: Vec<String>,
     },
-    /// Import a Mantle-native store archive
+    /// Import a Mantle-native or supported compatibility archive
     Import {
+        /// Archive format to read
+        #[arg(long, value_enum, default_value_t)]
+        format: StoreArchiveFormat,
+
         /// Archive input path, or '-' for stdin
         #[arg(long)]
         from: std::path::PathBuf,
@@ -3102,6 +3117,10 @@ pub enum StoreArchiveAction {
     },
     /// List archive contents without importing
     List {
+        /// Archive format to read
+        #[arg(long, value_enum, default_value_t)]
+        format: StoreArchiveFormat,
+
         /// Archive input path, or '-' for stdin
         #[arg(long)]
         from: std::path::PathBuf,

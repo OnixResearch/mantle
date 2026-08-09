@@ -333,6 +333,8 @@ Mantle keeps build observations separate from stronger claims:
 - Foreign realization receipts bind observed execution and store facts.
   Cache-only plans can preserve exact Nix paths after trusted closure hydration.
   They do not prove local rebuild compatibility, package correctness, evaluator parity, or reproducibility.
+- [Nario v2 read compatibility](docs/nario-v2-import.md) lists and imports exact
+  Determinate Nix store records. It does not import recipes or Nix evaluation meaning.
 - Foreign provenance audits scan signed castore facts under explicit limits.
   The scanner handles bounded gzip and zstd streams and normalizes safe store
   suffixes. Unknown executable bytes still fail closed.
@@ -365,7 +367,8 @@ Foreign derivation admission is documented in
 [`docs/foreign-derivation-import-trust-model.md`](docs/foreign-derivation-import-trust-model.md).
 The [foreign realization operator guide](docs/foreign-realization-operator-guide.md)
 explains source preparation, local realization, provenance audits, receipts,
-and cache hydration.
+and cache hydration. The [Nario v2 guide](docs/nario-v2-import.md) defines the
+pinned read-compatibility and source-projection boundary.
 Run the positive and negative trust-model guards with:
 
 ```bash

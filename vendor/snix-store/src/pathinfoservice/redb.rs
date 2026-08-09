@@ -188,6 +188,27 @@ impl PathInfoService for RedbPathInfoService {
         Ok(path_info)
     }
 
+    async fn put_batch_atomic(&self, path_infos: Vec<PathInfo>) -> Result<Vec<PathInfo>, pathinfoservice::Error> {
+        let db = self.db.clone();
+        let committed = path_infos.clone();
+        tokio::task::spawn_blocking(move || -> Result<(), Error> {
+            let txn = db.begin_write()?;
+            {
+                let mut table = txn.open_table(PATHINFO_TABLE)?;
+                for path_info in path_infos {
+                    table.insert(
+                        *path_info.store_path.digest(),
+                        postcard::to_stdvec(&proto::PathInfo::from(path_info)).expect("serialize"),
+                    )?;
+                }
+            }
+            txn.commit()?;
+            Ok(())
+        })
+        .await??;
+        Ok(committed)
+    }
+
     fn list(&self) -> BoxStream<'static, Result<PathInfo, pathinfoservice::Error>> {
         let db = self.db.clone();
         let (tx, rx) = tokio::sync::mpsc::channel(64);

@@ -2355,6 +2355,10 @@
         "--help",
         "--json",
         "--log-level",
+        "--nario-evidence-out",
+        "--nario-trust-unsigned",
+        "--nario-trusted-public-key",
+        "--nario-v2",
         "--nix-compat",
         "--out",
         "--plan",
@@ -6566,6 +6570,7 @@
       "flags": [
         "--all",
         "--base-store",
+        "--format",
         "--help",
         "--json",
         "--log-level",
@@ -6604,6 +6609,7 @@
       ],
       "flags": [
         "--base-store",
+        "--format",
         "--from",
         "--help",
         "--json",
@@ -6644,6 +6650,7 @@
       ],
       "flags": [
         "--base-store",
+        "--format",
         "--from",
         "--help",
         "--json",

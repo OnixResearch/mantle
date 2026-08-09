@@ -23,6 +23,8 @@ const TEST_KEYPAIR: &str =
     "archive-cli-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
 const STORE_PATH_DIGEST_BYTES: usize = 20;
 const TEST_NAR_PIPE_BYTES: usize = 65_536;
+const NARIO_WIRE_WORD_BYTES: usize = 8;
+const NARIO_TRUNCATION_BYTES: usize = NARIO_WIRE_WORD_BYTES + 1;
 
 fn mantle_cmd() -> Command {
     Command::cargo_bin("mantle").expect("mantle binary should be built")
@@ -316,4 +318,172 @@ fn store_archive_cli_requires_unsigned_escape_hatch() {
         .assert()
         .success()
         .stdout(predicate::str::contains("ARCHIVE_EXPORT"));
+}
+
+#[test]
+fn nario_v2_cli_lists_imports_and_skips_pinned_producer_fixture() {
+    // r[verify store_transports.nario_v2_read_compatibility]
+    // r[verify store_transports.nario_v2_validation]
+    let fixture = Path::new("fixtures/nario-v2/positive-single.nario");
+    let expected_path = std::fs::read_to_string("fixtures/nario-v2/store-path.txt").unwrap();
+    let expected_path = expected_path.trim();
+    let temp = tempfile::tempdir().unwrap();
+    let output_dir = temp_path(&temp, "store");
+    let state_dir = temp_path(&temp, "state");
+
+    mantle_cmd()
+        .arg("--json")
+        .arg("store")
+        .arg("archive")
+        .arg("list")
+        .arg("--format")
+        .arg("nario-v2")
+        .arg("--from")
+        .arg(fixture)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"format\": \"nario-v2\""))
+        .stdout(predicate::str::contains("\"format_version\": 2"))
+        .stdout(predicate::str::contains("non-v16-worker-metadata"))
+        .stdout(predicate::str::contains("9512828397f684d0f732ea76b7631f69a0db34f7"))
+        .stdout(predicate::str::contains(expected_path));
+    mantle_cmd()
+        .arg("store")
+        .arg("archive")
+        .arg("list")
+        .arg("--format")
+        .arg("nario-v2")
+        .arg("--from")
+        .arg("-")
+        .write_stdin(std::fs::read(fixture).unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(expected_path));
+
+    let import = || {
+        let mut command = mantle_cmd();
+        command
+            .arg("--json")
+            .arg("--store")
+            .arg(&output_dir)
+            .arg("--state-dir")
+            .arg(&state_dir)
+            .arg("--store-prefix")
+            .arg("/nix/store")
+            .arg("store")
+            .arg("archive")
+            .arg("import")
+            .arg("--format")
+            .arg("nario-v2")
+            .arg("--from")
+            .arg(fixture)
+            .arg("--trust-unsigned");
+        command
+    };
+    import()
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"imported_count\": 1"))
+        .stdout(predicate::str::contains("non-v16-worker-metadata"));
+    import().assert().success().stdout(predicate::str::contains("\"skipped_already_present_count\": 1"));
+    let materialized = output_dir.join(expected_path.strip_prefix("/nix/store/").unwrap());
+    assert_eq!(std::fs::read_to_string(materialized).unwrap(), "Mantle pinned Nario v2 fixture\n");
+}
+
+#[test]
+fn nario_v2_cli_rejects_bad_input_wrong_prefix_untrusted_and_export() {
+    // r[verify store_transports.nario_v2_bounded_admission]
+    let fixture_bytes = include_bytes!("../fixtures/nario-v2/positive-single.nario");
+    let temp = tempfile::tempdir().unwrap();
+    let corrupt = temp_path(&temp, "corrupt.nario");
+    let truncated = temp_path(&temp, "truncated.nario");
+    std::fs::write(&corrupt, [0u8; NARIO_WIRE_WORD_BYTES]).unwrap();
+    std::fs::write(&truncated, &fixture_bytes[..fixture_bytes.len() - NARIO_TRUNCATION_BYTES]).unwrap();
+
+    for (path, diagnostic) in [(&corrupt, "wrong-magic"), (&truncated, "truncated-nar")] {
+        mantle_cmd()
+            .arg("store")
+            .arg("archive")
+            .arg("list")
+            .arg("--format")
+            .arg("nario-v2")
+            .arg("--from")
+            .arg(path)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(diagnostic));
+    }
+
+    mantle_cmd()
+        .arg("--state-dir")
+        .arg(temp_path(&temp, "untrusted-state"))
+        .arg("--store-prefix")
+        .arg("/nix/store")
+        .arg("store")
+        .arg("archive")
+        .arg("import")
+        .arg("--format")
+        .arg("nario-v2")
+        .arg("--from")
+        .arg("fixtures/nario-v2/positive-single.nario")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("untrusted-signature"));
+
+    mantle_cmd()
+        .arg("--state-dir")
+        .arg(temp_path(&temp, "wrong-prefix-state"))
+        .arg("store")
+        .arg("archive")
+        .arg("import")
+        .arg("--format")
+        .arg("nario-v2")
+        .arg("--from")
+        .arg("fixtures/nario-v2/positive-single.nario")
+        .arg("--trust-unsigned")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("store-prefix-mismatch"));
+
+    let output = temp_path(&temp, "unsupported.nario");
+    mantle_cmd()
+        .arg("store")
+        .arg("archive")
+        .arg("export")
+        .arg("--format")
+        .arg("nario-v2")
+        .arg("--to")
+        .arg(&output)
+        .arg("--all")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("export is unsupported"));
+    assert!(!output.exists());
+}
+
+#[test]
+fn nario_v2_cli_rejects_durable_negative_fixture_corpus() {
+    // r[verify store_transports.nario_v2_bounded_admission]
+    let cases = [
+        ("negative-wrong-magic.nario", "wrong-magic"),
+        ("negative-truncated.nario", "truncated-nar"),
+        ("negative-trailing-data.nario", "trailing-data"),
+        ("negative-duplicate-path.nario", "duplicate-path"),
+        ("negative-oversized-path.nario", "bytes length out of range"),
+        ("negative-unsupported-ca.nario", "unsupported-content-address"),
+        ("negative-hash-mismatch.nario", "nar-hash-mismatch"),
+    ];
+    for (fixture, diagnostic) in cases {
+        mantle_cmd()
+            .arg("store")
+            .arg("archive")
+            .arg("list")
+            .arg("--format")
+            .arg("nario-v2")
+            .arg("--from")
+            .arg(Path::new("fixtures/nario-v2").join(fixture))
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(diagnostic));
+    }
 }

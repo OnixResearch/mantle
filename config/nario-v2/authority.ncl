@@ -1,0 +1,42 @@
+let Authority = {
+  producer : String,
+  producer_version : String,
+  producer_revision : String,
+  source_url : String,
+  format_source : String,
+  protocol_version : Number,
+  direction : String,
+  logical_store_prefix : String,
+  positive_fixture : String,
+  positive_fixture_blake3_hex : String,
+  producer_command : String,
+  unsupported_metadata_classes : Array String,
+  non_claims : Array String,
+} in
+
+{
+  producer = "DeterminateSystems/nix-src",
+  producer_version = "Determinate Nix 3.12.0",
+  producer_revision = "9512828397f684d0f732ea76b7631f69a0db34f7",
+  source_url = "https://github.com/DeterminateSystems/nix-src/tree/9512828397f684d0f732ea76b7631f69a0db34f7",
+  format_source = "src/libstore/export-import.cc plus WorkerProto v16 short-store-path serialization",
+  protocol_version = 2,
+  direction = "list-and-import-only",
+  logical_store_prefix = "/nix/store",
+  positive_fixture = "fixtures/nario-v2/positive-single.nario",
+  positive_fixture_blake3_hex = "071a1e74ed7d09ad3cfa0e67c8ce5674173bff289106ac18e0c2faeb50655278",
+  producer_command = "nix nario export --format 2 STORE_PATH",
+  unsupported_metadata_classes = [
+    "non-v16-worker-metadata",
+    "non-sha256-nar-hash",
+    "unknown-content-address",
+  ],
+  non_claims = [
+    "package recipes",
+    "Nixpkgs selection meaning",
+    "Nix evaluator parity",
+    "package correctness",
+    "reproducibility",
+    "release eligibility",
+  ],
+} | Authority

@@ -1,6 +1,6 @@
 {
   "schema": "mantle-operator-command-catalog-v1",
-  "identity_blake3": "743dd080162620dc069e3d8756606359ae7c9835b739c106006469d6b10a68f6",
+  "identity_blake3": "595f254e7659b2d4dce4c02c1503a040a94d3b9a2a752b4a819c9ea1c33ea07a",
   "entries": [
     {
       "descriptor": {
@@ -2857,6 +2857,10 @@
           "--help",
           "--json",
           "--log-level",
+          "--nario-evidence-out",
+          "--nario-trust-unsigned",
+          "--nario-trusted-public-key",
+          "--nario-v2",
           "--nix-compat",
           "--out",
           "--plan",
@@ -2890,6 +2894,10 @@
           "--help",
           "--json",
           "--log-level",
+          "--nario-evidence-out",
+          "--nario-trust-unsigned",
+          "--nario-trusted-public-key",
+          "--nario-v2",
           "--nix-compat",
           "--out",
           "--plan",
@@ -9721,6 +9729,7 @@
         "flags": [
           "--all",
           "--base-store",
+          "--format",
           "--help",
           "--json",
           "--log-level",
@@ -9754,6 +9763,7 @@
         "flags": [
           "--all",
           "--base-store",
+          "--format",
           "--help",
           "--json",
           "--log-level",
@@ -9783,6 +9793,7 @@
         "aliases": [],
         "flags": [
           "--base-store",
+          "--format",
           "--from",
           "--help",
           "--json",
@@ -9798,7 +9809,7 @@
           "-h",
           "-v"
         ],
-        "help": "Import a Mantle-native store archive",
+        "help": "Import a Mantle-native or supported compatibility archive",
         "supports_json": true
       },
       "policy": {
@@ -9817,6 +9828,7 @@
         "compatibility_state": "canonical",
         "flags": [
           "--base-store",
+          "--format",
           "--from",
           "--help",
           "--json",
@@ -9848,6 +9860,7 @@
         "aliases": [],
         "flags": [
           "--base-store",
+          "--format",
           "--from",
           "--help",
           "--json",
@@ -9879,6 +9892,7 @@
         "compatibility_state": "canonical",
         "flags": [
           "--base-store",
+          "--format",
           "--from",
           "--help",
           "--json",

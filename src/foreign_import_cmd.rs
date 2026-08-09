@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::Read;
 use std::path::Path;
@@ -88,6 +89,8 @@ const SOURCE_BINDING_SEPARATOR: char = '=';
 const DRV_FILE_EXTENSION: &str = "drv";
 const NIX_LOGICAL_STORE_PREFIX: &str = "/nix/store";
 const NIX_LOGICAL_STORE_PREFIX_ROOT: &str = "/";
+const NARIO_SOURCE_ARCHIVE_COUNT_MAX: usize = 16;
+const NARIO_SOURCE_PREPARATION_SCHEMA: &str = "mantle-nario-v2-source-preparation-v1";
 pub(crate) const DEFAULT_FOREIGN_JSON_ARTIFACT_BYTES_MAX: u64 = 268_435_456;
 
 #[derive(Subcommand, Debug, Clone)]
@@ -156,6 +159,22 @@ pub(crate) enum ForeignImportAction {
         /// Source payload mapping: `payload-id=/path/to/payload`
         #[arg(long = "source")]
         sources: Vec<String>,
+
+        /// Pinned Determinate Nix Nario v2 archive supplying exact source requirements
+        #[arg(long = "nario-v2")]
+        nario_v2: Vec<PathBuf>,
+
+        /// Accept unsigned Nario records as original-path provenance
+        #[arg(long = "nario-trust-unsigned")]
+        nario_trust_unsigned: bool,
+
+        /// Trusted Nario PathInfo public keys (name:base64)
+        #[arg(long = "nario-trusted-public-key", value_delimiter = ',')]
+        nario_trusted_public_keys: Vec<String>,
+
+        /// Write Nario source-projection evidence to this path
+        #[arg(long = "nario-evidence-out")]
+        nario_evidence_out: Option<PathBuf>,
 
         /// Write the source-bundle manifest atomically to this path
         #[arg(long)]
@@ -577,7 +596,24 @@ pub(crate) fn cmd_foreign_import(
             receipt_out: receipt_out.as_deref(),
             json,
         }),
-        ForeignImportAction::PrepareSources { plan, sources, out } => run_prepare_sources(&plan, &sources, &out, json),
+        ForeignImportAction::PrepareSources {
+            plan,
+            sources,
+            nario_v2,
+            nario_trust_unsigned,
+            nario_trusted_public_keys,
+            nario_evidence_out,
+            out,
+        } => run_prepare_sources(
+            &plan,
+            &sources,
+            &nario_v2,
+            nario_trust_unsigned,
+            &nario_trusted_public_keys,
+            nario_evidence_out.as_deref(),
+            &out,
+            json,
+        ),
         ForeignImportAction::Realize {
             plan,
             import_receipt,
@@ -824,9 +860,46 @@ fn run_plan(request: ForeignPlanRequest<'_>) -> Result<(), RunError> {
     emit_report(outcome, request.json)
 }
 
+#[derive(Debug, Serialize)]
+struct NarioSourcePreparationEvidence {
+    schema: &'static str,
+    producer_revision: &'static str,
+    format_version: u32,
+    supported_direction: &'static str,
+    plan_identity_blake3: String,
+    translation_policy_blake3: String,
+    source_bundle_blake3: String,
+    nario_trust_unsigned: bool,
+    trusted_public_key_names: Vec<String>,
+    archives: Vec<NarioSourceArchiveEvidence>,
+    projections: Vec<NarioSourceProjectionEvidence>,
+    non_claim: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct NarioSourceArchiveEvidence {
+    archive_path: String,
+    archive_blake3: String,
+    original_paths: Vec<crunch_store::NarioV2ListedPath>,
+}
+
+#[derive(Debug, Serialize)]
+struct NarioSourceProjectionEvidence {
+    payload_id: String,
+    requirement_identity_blake3: String,
+    original_path: String,
+    target_path: String,
+    target_source_identity: String,
+    target_content_blake3: String,
+}
+
 fn run_prepare_sources(
     plan_path: &Path,
     source_specs: &[String],
+    nario_paths: &[PathBuf],
+    nario_trust_unsigned: bool,
+    nario_trusted_public_keys: &[String],
+    nario_evidence_out: Option<&Path>,
     output_path: &Path,
     json: bool,
 ) -> Result<(), RunError> {
@@ -840,21 +913,22 @@ fn run_prepare_sources(
     };
     crate::foreign_executable_plan::validate_foreign_executable_plan(&plan)
         .map_err(|diagnostic| RunError::Internal(format!("foreign source plan is invalid: {}", diagnostic.class)))?;
-    let mut bindings = Vec::with_capacity(source_specs.len());
-    for source_spec in source_specs {
-        let (payload_id, path) = source_spec.split_once(SOURCE_BINDING_SEPARATOR).ok_or_else(|| {
-            RunError::Internal(format!("foreign source binding must use payload-id=/path syntax: {source_spec}"))
-        })?;
-        if payload_id.is_empty() || path.is_empty() {
-            return Err(RunError::Internal(format!(
-                "foreign source binding has an empty payload ID or path: {source_spec}"
-            )));
+    let mut bindings = parse_source_bindings(source_specs)?;
+    let mut nario_evidence = None;
+    let _nario_staging = if nario_paths.is_empty() {
+        if nario_evidence_out.is_some() || nario_trust_unsigned || !nario_trusted_public_keys.is_empty() {
+            return Err(RunError::Internal("Nario trust or evidence options require --nario-v2".to_string()));
         }
-        bindings.push(ForeignSourcePathBinding {
-            payload_id: payload_id.to_string(),
-            path: PathBuf::from(path),
-        });
-    }
+        None
+    } else {
+        let evidence_path = nario_evidence_out
+            .ok_or_else(|| RunError::Internal("--nario-evidence-out is required with --nario-v2".to_string()))?;
+        let (staging, mut projected, evidence) =
+            prepare_nario_sources(&plan, nario_paths, nario_trust_unsigned, nario_trusted_public_keys)?;
+        bindings.append(&mut projected);
+        nario_evidence = Some((evidence_path.to_path_buf(), evidence));
+        Some(staging)
+    };
     let manifest = if is_cache_only_foreign_plan(&plan) {
         if !bindings.is_empty() {
             return Err(RunError::Internal(
@@ -865,6 +939,21 @@ fn run_prepare_sources(
     } else {
         plan_bound_foreign_source_bundle(&plan.source_requirements, &bindings, &plan.target_store_prefix)?
     };
+    if let Some((evidence_path, mut evidence)) = nario_evidence {
+        evidence.source_bundle_blake3 = manifest.manifest_blake3.clone();
+        for projection in &mut evidence.projections {
+            let record =
+                manifest.records.iter().find(|record| record.identity == projection.payload_id).ok_or_else(|| {
+                    RunError::Internal(format!(
+                        "Nario projection has no target source record for {}",
+                        projection.payload_id
+                    ))
+                })?;
+            projection.target_source_identity = record.identity.clone();
+            projection.target_content_blake3 = record.content_blake3.clone();
+        }
+        write_json_atomically(&evidence_path, &evidence, "Nario source preparation evidence")?;
+    }
     write_json_atomically(output_path, &manifest, "foreign source bundle")?;
     if json {
         println!(
@@ -881,6 +970,189 @@ fn run_prepare_sources(
         );
     }
     Ok(())
+}
+
+fn parse_source_bindings(source_specs: &[String]) -> Result<Vec<ForeignSourcePathBinding>, RunError> {
+    let mut bindings = Vec::with_capacity(source_specs.len());
+    for source_spec in source_specs {
+        let (payload_id, path) = source_spec.split_once(SOURCE_BINDING_SEPARATOR).ok_or_else(|| {
+            RunError::Internal(format!("foreign source binding must use payload-id=/path syntax: {source_spec}"))
+        })?;
+        if payload_id.is_empty() || path.is_empty() {
+            return Err(RunError::Internal(format!(
+                "foreign source binding has an empty payload ID or path: {source_spec}"
+            )));
+        }
+        bindings.push(ForeignSourcePathBinding {
+            payload_id: payload_id.to_string(),
+            path: PathBuf::from(path),
+        });
+    }
+    Ok(bindings)
+}
+
+struct NarioSourceStaging {
+    root: tempfile::TempDir,
+    output_dir: PathBuf,
+    runtime: tokio::runtime::Runtime,
+    store: crunch_store::StoreHandle,
+}
+
+fn prepare_nario_sources(
+    plan: &ForeignExecutablePlan,
+    nario_paths: &[PathBuf],
+    trust_unsigned: bool,
+    trusted_public_keys: &[String],
+) -> Result<(tempfile::TempDir, Vec<ForeignSourcePathBinding>, NarioSourcePreparationEvidence), RunError> {
+    validate_nario_source_request(plan, nario_paths, trusted_public_keys)?;
+    let keys = trusted_public_keys
+        .iter()
+        .map(|value| {
+            nix_compat::narinfo::VerifyingKey::parse(value)
+                .map_err(|error| RunError::Internal(format!("invalid Nario trusted public key: {error}")))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let staging = open_nario_source_staging()?;
+    let archives = import_nario_source_archives(&staging, nario_paths, trust_unsigned, &keys)?;
+    let (bindings, projections) = project_nario_source_records(plan, &staging.output_dir, &archives)?;
+    let trusted_public_key_names = keys.iter().map(|key| key.name().to_string()).collect();
+    let evidence = NarioSourcePreparationEvidence {
+        schema: NARIO_SOURCE_PREPARATION_SCHEMA,
+        producer_revision: crunch_store::NARIO_V2_PRODUCER_REVISION,
+        format_version: crunch_store::NARIO_V2_FORMAT_VERSION,
+        supported_direction: crunch_store::NARIO_V2_DIRECTION,
+        plan_identity_blake3: plan.plan_identity.value.clone(),
+        translation_policy_blake3: plan.accepted_import.translation_policy_digest_blake3.clone(),
+        source_bundle_blake3: String::new(),
+        nario_trust_unsigned: trust_unsigned,
+        trusted_public_key_names,
+        archives,
+        projections,
+        non_claim: crunch_store::NARIO_V2_NON_CLAIM,
+    };
+    Ok((staging.root, bindings, evidence))
+}
+
+fn validate_nario_source_request(
+    plan: &ForeignExecutablePlan,
+    nario_paths: &[PathBuf],
+    trusted_public_keys: &[String],
+) -> Result<(), RunError> {
+    if nario_paths.is_empty() || nario_paths.len() > NARIO_SOURCE_ARCHIVE_COUNT_MAX {
+        return Err(RunError::Internal(format!(
+            "Nario source archive count must be between 1 and {NARIO_SOURCE_ARCHIVE_COUNT_MAX}"
+        )));
+    }
+    if trusted_public_keys.len() > crunch_store::NARIO_V2_TRUSTED_KEYS_MAX {
+        return Err(RunError::Internal(format!(
+            "Nario trusted public key count exceeds {}",
+            crunch_store::NARIO_V2_TRUSTED_KEYS_MAX
+        )));
+    }
+    if is_cache_only_foreign_plan(plan) {
+        return Err(RunError::Internal("cache-only plans reject Nario source projection".to_string()));
+    }
+    Ok(())
+}
+
+fn open_nario_source_staging() -> Result<NarioSourceStaging, RunError> {
+    let root = tempfile::tempdir().map_err(|error| RunError::Internal(format!("creating Nario staging: {error}")))?;
+    let output_dir = root.path().join("store");
+    let state_dir = root.path().join("state");
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|error| RunError::Internal(format!("creating Nario source runtime: {error}")))?;
+    let store = runtime
+        .block_on(crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+            state_dir,
+            output_dir: output_dir.clone(),
+            remote_cache_urls: Vec::new(),
+            base_state_dirs: Vec::new(),
+            fallback_mode: crunch_store::StoreFallbackMode::Strict,
+            store_dir: crunch_store::NARIO_V2_STORE_PREFIX.to_string(),
+        }))
+        .map_err(|error| RunError::Internal(format!("opening Nario source staging store: {error}")))?;
+    Ok(NarioSourceStaging {
+        root,
+        output_dir,
+        runtime,
+        store,
+    })
+}
+
+fn import_nario_source_archives(
+    staging: &NarioSourceStaging,
+    nario_paths: &[PathBuf],
+    trust_unsigned: bool,
+    trusted_public_keys: &[nix_compat::narinfo::VerifyingKey],
+) -> Result<Vec<NarioSourceArchiveEvidence>, RunError> {
+    let options = crunch_store::NarioV2ImportOptions {
+        trust_unsigned,
+        trusted_public_keys: trusted_public_keys.to_vec(),
+        materialize: true,
+    };
+    let mut archives = Vec::with_capacity(nario_paths.len());
+    for archive_path in nario_paths {
+        let file = std::fs::File::open(archive_path)
+            .map_err(|error| RunError::Internal(format!("opening Nario source {}: {error}", archive_path.display())))?;
+        let mut reader = tokio::io::BufReader::new(tokio::fs::File::from_std(file));
+        let report = staging
+            .runtime
+            .block_on(crunch_store::import_nario_v2(&staging.store, &mut reader, &options))
+            .map_err(|error| {
+                RunError::Internal(format!("importing Nario source {}: {error}", archive_path.display()))
+            })?;
+        archives.push(NarioSourceArchiveEvidence {
+            archive_path: archive_path.display().to_string(),
+            archive_blake3: report.archive_blake3,
+            original_paths: report.paths,
+        });
+    }
+    Ok(archives)
+}
+
+fn project_nario_source_records(
+    plan: &ForeignExecutablePlan,
+    output_dir: &Path,
+    archives: &[NarioSourceArchiveEvidence],
+) -> Result<(Vec<ForeignSourcePathBinding>, Vec<NarioSourceProjectionEvidence>), RunError> {
+    let requirements = plan
+        .source_requirements
+        .iter()
+        .map(|requirement| (requirement.foreign_path.as_str(), requirement))
+        .collect::<BTreeMap<_, _>>();
+    let mut matched_payloads = BTreeSet::new();
+    let mut bindings = Vec::new();
+    let mut projections = Vec::new();
+    for original in archives.iter().flat_map(|archive| &archive.original_paths) {
+        let requirement = requirements.get(original.store_path.as_str()).ok_or_else(|| {
+            RunError::Internal(format!(
+                "Nario record {} is not an exact non-derivation source requirement",
+                original.store_path
+            ))
+        })?;
+        if !matched_payloads.insert(requirement.payload_id.clone()) {
+            return Err(RunError::Internal(format!(
+                "ambiguous Nario records match source requirement {}",
+                requirement.payload_id
+            )));
+        }
+        let short = original.store_path.strip_prefix("/nix/store/").ok_or_else(|| {
+            RunError::Internal(format!("Nario source path has the wrong prefix: {}", original.store_path))
+        })?;
+        bindings.push(ForeignSourcePathBinding {
+            payload_id: requirement.payload_id.clone(),
+            path: output_dir.join(short),
+        });
+        projections.push(NarioSourceProjectionEvidence {
+            payload_id: requirement.payload_id.clone(),
+            requirement_identity_blake3: requirement.descriptor_digest.clone(),
+            original_path: original.store_path.clone(),
+            target_path: requirement.target_path.clone(),
+            target_source_identity: String::new(),
+            target_content_blake3: String::new(),
+        });
+    }
+    Ok((bindings, projections))
 }
 
 fn run_audit(request: ForeignAuditCommandRequest<'_>, context: &ForeignImportContext<'_>) -> Result<(), RunError> {
@@ -2023,6 +2295,35 @@ mod tests {
             trusted_cache_scopes: std::collections::BTreeSet::new(),
             allowed_sandbox_capabilities: std::collections::BTreeSet::new(),
         }
+    }
+
+    #[test]
+    fn nario_source_request_core_rejects_archive_key_and_route_limits() {
+        let (graph, index) = crate::foreign_derivation_import::guix_like_hello_fixture();
+        let report = plan_inputs(graph, index, DEFAULT_PACKAGE_NAME, fixture_policy(), DEFAULT_SYSTEM);
+        let mut plan = report.plan.unwrap();
+        let too_many_archives = vec![PathBuf::from("fixture.nario"); NARIO_SOURCE_ARCHIVE_COUNT_MAX.saturating_add(1)];
+        let too_many_keys = vec!["key".to_string(); crunch_store::NARIO_V2_TRUSTED_KEYS_MAX.saturating_add(1)];
+
+        assert!(
+            validate_nario_source_request(&plan, &too_many_archives, &[])
+                .unwrap_err()
+                .to_string()
+                .contains("archive count")
+        );
+        assert!(
+            validate_nario_source_request(&plan, &[PathBuf::from("fixture.nario")], &too_many_keys)
+                .unwrap_err()
+                .to_string()
+                .contains("key count")
+        );
+        plan.realization_route = Some(crate::foreign_executable_plan::CACHE_ONLY_PRESERVE_ROUTE.to_string());
+        assert!(
+            validate_nario_source_request(&plan, &[PathBuf::from("fixture.nario")], &[])
+                .unwrap_err()
+                .to_string()
+                .contains("cache-only")
+        );
     }
 
     #[test]

@@ -43,6 +43,14 @@ impl PathInfoService for LruPathInfoService {
         Ok(path_info)
     }
 
+    async fn put_batch_atomic(&self, path_infos: Vec<PathInfo>) -> Result<Vec<PathInfo>, pathinfoservice::Error> {
+        let mut lru = self.lru.write().await;
+        for path_info in &path_infos {
+            lru.put(*path_info.store_path.digest(), path_info.clone());
+        }
+        Ok(path_infos)
+    }
+
     fn list(&self) -> BoxStream<'static, Result<PathInfo, pathinfoservice::Error>> {
         let lru = self.lru.clone();
         Box::pin(try_stream! {

@@ -23,4 +23,4 @@ Nario does not contain package recipes or Nixpkgs selection meaning. Mantle stil
 - **Planned files**: a pure Nario framing core, store archive adapters, foreign source preparation, CLI format selection, policy, fixtures, and operator documentation.
 - **Testing**: pinned compatibility fixtures, bounded streaming tests, signature and CA tests, source projection, malformed input, truncation, duplicate records, limits, and wrong-prefix failures.
 - **Compatibility**: supported direction is Nario v2 list and import only. Mantle-native archives remain the default format.
-- **Current effect**: lifecycle planning only. Mantle does not yet claim Nario compatibility.
+- **Current effect**: bounded read compatibility for the pinned Nario v2 producer revision. Mantle does not claim package recipes, evaluator parity, correctness, reproducibility, or release eligibility.

@@ -1,6 +1,6 @@
 # Mantle command reference
 
-Catalog BLAKE3: `743dd080162620dc069e3d8756606359ae7c9835b739c106006469d6b10a68f6`
+Catalog BLAKE3: `595f254e7659b2d4dce4c02c1503a040a94d3b9a2a752b4a819c9ea1c33ea07a`
 
 ## Daily commands
 
@@ -1340,7 +1340,7 @@ Export selected store paths and recursive closure to an archive
 
 ### `mantle store archive import`
 
-Import a Mantle-native store archive
+Import a Mantle-native or supported compatibility archive
 
 - Mutation: `store-state`
 - Network: `optional`

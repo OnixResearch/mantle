@@ -1313,11 +1313,18 @@ async fn cmd_store_archive(
 ) -> Result<(), RunError> {
     match action {
         crate::StoreArchiveAction::Export {
+            format,
             to,
             all,
             trust_unsigned,
             paths,
         } => {
+            if format == crate::StoreArchiveFormat::NarioV2 {
+                return Err(RunError::Internal(
+                    "nario-v2 export is unsupported; list and import are read-only compatibility operations"
+                        .to_string(),
+                ));
+            }
             let store = open_store(context).await?;
             cmd_store_archive_export(&store, StoreArchiveExportRequest {
                 destination: &to,
@@ -1329,6 +1336,7 @@ async fn cmd_store_archive(
             .await
         }
         crate::StoreArchiveAction::Import {
+            format,
             from,
             trust_unsigned,
             trusted_public_keys,
@@ -1337,6 +1345,7 @@ async fn cmd_store_archive(
             let _guard = store_mutation_guard(context.state_dir)?;
             let store = open_store(context).await?;
             cmd_store_archive_import(&store, StoreArchiveImportRequest {
+                format,
                 source: &from,
                 is_trust_unsigned: trust_unsigned,
                 explicit_trusted_public_keys: &trusted_public_keys,
@@ -1346,7 +1355,9 @@ async fn cmd_store_archive(
             })
             .await
         }
-        crate::StoreArchiveAction::List { from } => cmd_store_archive_list(&from, context.is_json_output).await,
+        crate::StoreArchiveAction::List { format, from } => {
+            cmd_store_archive_list(format, &from, context.is_json_output).await
+        }
     }
 }
 
@@ -1407,6 +1418,7 @@ async fn cmd_store_archive_export(
 }
 
 struct StoreArchiveImportRequest<'a> {
+    format: crate::StoreArchiveFormat,
     source: &'a Path,
     is_trust_unsigned: bool,
     explicit_trusted_public_keys: &'a [String],
@@ -1420,46 +1432,84 @@ async fn cmd_store_archive_import(
     request: StoreArchiveImportRequest<'_>,
 ) -> Result<(), RunError> {
     let trusted_public_keys = resolve_store_verify_keys(None, request.explicit_trusted_public_keys, request.state_dir)?;
+    debug_assert!(u32::try_from(trusted_public_keys.len()).is_ok());
+    if request.format == crate::StoreArchiveFormat::NarioV2
+        && trusted_public_keys.len() > crunch_store::NARIO_V2_TRUSTED_KEYS_MAX
+    {
+        return Err(RunError::Internal(format!(
+            "Nario trusted key count exceeds {}",
+            crunch_store::NARIO_V2_TRUSTED_KEYS_MAX
+        )));
+    }
+    if request.format == crate::StoreArchiveFormat::NarioV2 {
+        let options = crunch_store::NarioV2ImportOptions {
+            trust_unsigned: request.is_trust_unsigned,
+            trusted_public_keys,
+            materialize: request.is_materialize,
+        };
+        let report = if is_stdio_path(request.source) {
+            let mut stdin = tokio::io::stdin();
+            crunch_store::import_nario_v2(store, &mut stdin, &options).await
+        } else {
+            let file = tokio::fs::File::open(request.source)
+                .await
+                .map_err(|e| RunError::Internal(format!("opening archive {}: {e}", request.source.display())))?;
+            let mut reader = tokio::io::BufReader::new(file);
+            crunch_store::import_nario_v2(store, &mut reader, &options).await
+        }
+        .map_err(|e| RunError::Internal(format!("nario-v2 archive import: {e}")))?;
+        return print_nario_import_report(&report, request.is_json_output);
+    }
     let options = crunch_store::ArchiveImportOptions {
         trust_unsigned: request.is_trust_unsigned,
         trusted_public_keys,
         materialize: request.is_materialize,
     };
-    debug_assert_eq!(options.materialize, request.is_materialize);
-    debug_assert!(u32::try_from(options.trusted_public_keys.len()).is_ok());
-    let archive_read_summary = if is_stdio_path(request.source) {
+    let report = if is_stdio_path(request.source) {
         let mut stdin = tokio::io::stdin();
-        crunch_store::import_store_archive(store, &mut stdin, &options)
-            .await
-            .map_err(|e| RunError::Internal(format!("archive import: {e}")))?
+        crunch_store::import_store_archive(store, &mut stdin, &options).await
     } else {
         let file = tokio::fs::File::open(request.source)
             .await
             .map_err(|e| RunError::Internal(format!("opening archive {}: {e}", request.source.display())))?;
         let mut reader = tokio::io::BufReader::new(file);
-        crunch_store::import_store_archive(store, &mut reader, &options)
-            .await
-            .map_err(|e| RunError::Internal(format!("archive import: {e}")))?
-    };
-    print_archive_import_report(&archive_read_summary, request.is_json_output)
+        crunch_store::import_store_archive(store, &mut reader, &options).await
+    }
+    .map_err(|e| RunError::Internal(format!("archive import: {e}")))?;
+    print_archive_import_report(&report, request.is_json_output)
 }
 
-async fn cmd_store_archive_list(source: &Path, is_json_output: bool) -> Result<(), RunError> {
-    let archive_list_evidence = if is_stdio_path(source) {
+async fn cmd_store_archive_list(
+    format: crate::StoreArchiveFormat,
+    source: &Path,
+    is_json_output: bool,
+) -> Result<(), RunError> {
+    if format == crate::StoreArchiveFormat::NarioV2 {
+        let report = if is_stdio_path(source) {
+            let mut stdin = tokio::io::stdin();
+            crunch_store::list_nario_v2(&mut stdin).await
+        } else {
+            let file = tokio::fs::File::open(source)
+                .await
+                .map_err(|e| RunError::Internal(format!("opening archive {}: {e}", source.display())))?;
+            let mut reader = tokio::io::BufReader::new(file);
+            crunch_store::list_nario_v2(&mut reader).await
+        }
+        .map_err(|e| RunError::Internal(format!("nario-v2 archive list: {e}")))?;
+        return print_nario_list_report(&report, is_json_output);
+    }
+    let report = if is_stdio_path(source) {
         let mut stdin = tokio::io::stdin();
-        crunch_store::list_store_archive(&mut stdin)
-            .await
-            .map_err(|e| RunError::Internal(format!("archive list: {e}")))?
+        crunch_store::list_store_archive(&mut stdin).await
     } else {
         let file = tokio::fs::File::open(source)
             .await
             .map_err(|e| RunError::Internal(format!("opening archive {}: {e}", source.display())))?;
         let mut reader = tokio::io::BufReader::new(file);
-        crunch_store::list_store_archive(&mut reader)
-            .await
-            .map_err(|e| RunError::Internal(format!("archive list: {e}")))?
-    };
-    print_archive_list_report(&archive_list_evidence, is_json_output)
+        crunch_store::list_store_archive(&mut reader).await
+    }
+    .map_err(|e| RunError::Internal(format!("archive list: {e}")))?;
+    print_archive_list_report(&report, is_json_output)
 }
 
 fn print_archive_export_report(
@@ -1490,6 +1540,53 @@ fn print_archive_import_report(
         "imported={} skipped_present={} payload_bytes={}",
         report.imported_count, report.skipped_already_present_count, report.total_payload_bytes
     );
+    Ok(())
+}
+
+fn print_nario_import_report(report: &crunch_store::NarioV2ImportReport, is_json_output: bool) -> Result<(), RunError> {
+    if is_json_output {
+        return print_json_report(report, "serializing Nario v2 import report");
+    }
+    for path in &report.paths {
+        println!("NARIO_IMPORT {} nar_size={} nar_sha256={}", path.store_path, path.nar_size, path.nar_sha256_hex);
+    }
+    eprintln!(
+        "format={} producer_revision={} imported={} skipped_present={} nar_bytes={} archive_blake3={}",
+        report.format,
+        report.producer_revision,
+        report.imported_count,
+        report.skipped_already_present_count,
+        report.total_nar_bytes,
+        report.archive_blake3
+    );
+    Ok(())
+}
+
+fn print_nario_list_report(report: &crunch_store::NarioV2ListReport, is_json_output: bool) -> Result<(), RunError> {
+    if is_json_output {
+        return print_json_report(report, "serializing Nario v2 list report");
+    }
+    println!(
+        "format={} producer={} revision={} direction={} store_prefix={} records={} nar_bytes={} archive_blake3={}",
+        report.format,
+        report.producer_version,
+        report.producer_revision,
+        report.supported_direction,
+        report.store_prefix,
+        report.record_count,
+        report.total_nar_bytes,
+        report.archive_blake3
+    );
+    for path in &report.paths {
+        println!(
+            "NARIO_PATH {} nar_size={} refs={} signatures={} ca={}",
+            path.store_path,
+            path.nar_size,
+            path.references.len(),
+            path.signatures.len(),
+            path.ca.as_deref().unwrap_or("-")
+        );
+    }
     Ok(())
 }
 
