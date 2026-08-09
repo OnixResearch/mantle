@@ -80,3 +80,4 @@ compatibility surface, crate name, or historical decision.
 | [0071](0071-adopt-nix-archive-at-the-filesystem-nar-boundary.md) | Adopt nix-archive at the filesystem NAR boundary | Proposed |
 | [0072](0072-bind-immutable-release-objects-to-one-current-pointer.md) | Bind immutable release objects to one current pointer | Accepted |
 | [0073](0073-read-nario-v2-without-transferring-nix-authority.md) | Read Nario v2 without transferring Nix authority | Accepted |
+| [0074](0074-enforce-evaluation-budgets-with-an-owned-worker.md) | Enforce evaluation budgets with an owned worker | Accepted |

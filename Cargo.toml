@@ -10,6 +10,7 @@ members = [
   "crates/mantlepkgs-core",
   "crates/mantle-portable-client-core",
   "crates/crunch-eval",
+  "crates/crunch-eval-budget-core",
   "crates/crunch-glue",
   "crates/crunch-gc-core",
   "crates/crunch-overlay-core",
@@ -66,6 +67,7 @@ default_scope = [
   "-p", "crunch-delta",
   "-p", "crunch-delta-core",
   "-p", "crunch-eval",
+  "-p", "crunch-eval-budget-core",
   "-p", "crunch-glue",
   "-p", "crunch-gc-core",
   "-p", "crunch-overlay-core",
@@ -162,6 +164,7 @@ path = "examples/projects/shared-action-result-roundtrip/publish.rs"
 crunch-nar = { path = "crates/crunch-nar" }
 crunch-pipeline = { path = "crates/crunch-pipeline" }
 crunch-eval = { path = "crates/crunch-eval" }
+crunch-eval-budget-core = { path = "crates/crunch-eval-budget-core" }
 nickel-export-core = { git = "https://github.com/OnixResearch/nickel-export", rev = "257fafc1c746f1faf156207043a4c826bfb16d49" }
 crunch-glue = { path = "crates/crunch-glue" }
 crunch-action-result-core = { path = "crates/crunch-action-result-core" }

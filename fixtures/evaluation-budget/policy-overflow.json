@@ -1,0 +1,3 @@
+{
+  "schema":"mantle-evaluation-budget-policy-v1","policy_id":"negative-overflow","mode":"enforce","source_bytes_max":67108865,"import_roots_max":1,"imported_modules_max":1,"discovered_roots_max":1,"selected_roots_max":1,"diagnostics_max":1,"diagnostic_bytes_max":1,"request_bytes_max":1,"response_bytes_max":1,"wall_time_ms_max":1,"cpu_time_ms_max":1,"peak_rss_bytes_max":1,"workers_max":1,"shutdown_grace_ms":1,"stderr_bytes_max":1
+}

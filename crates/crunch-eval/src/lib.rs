@@ -26,6 +26,11 @@ pub(crate) mod cranelift_proto;
 pub mod session;
 pub mod stdlib;
 
+/// Stable identity for the linked evaluator family.
+pub const EVALUATOR_ID: &str = "nickel-lang";
+/// Cargo-selected Nickel evaluator version.
+pub const EVALUATOR_VERSION: &str = "2.0.0";
+
 /// Errors from crunch-eval.
 #[derive(Debug)]
 pub enum Error {
@@ -241,6 +246,20 @@ pub fn evaluate_str_and_deserialize<T: serde::de::DeserializeOwned>(
 /// Evaluate a Nickel source string and export to JSON.
 pub fn evaluate_str_to_json(source: &str, import_paths: &[OsString]) -> Result<String, Error> {
     let request = inline_eval_request(source, import_paths);
+    default_backend().eval_to_json(request)
+}
+
+/// Evaluate transferred source bytes with an explicit diagnostic source name.
+///
+/// The caller owns source and import admission. This function performs no I/O.
+pub fn evaluate_source_to_json(source: &str, import_paths: &[OsString], source_name: &str) -> Result<String, Error> {
+    assert!(!source.is_empty(), "evaluation source must not be empty");
+    assert!(!source_name.is_empty(), "evaluation source name must not be empty");
+    let request = EvalRequest {
+        source,
+        import_paths: import_paths.to_vec(),
+        source_name: source_name.to_string(),
+    };
     default_backend().eval_to_json(request)
 }
 

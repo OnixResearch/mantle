@@ -140,6 +140,8 @@ pub struct BenchmarkRequest {
 pub struct BenchmarkBundle {
     pub schema: String,
     pub generated_unix_s: u64,
+    #[serde(default)]
+    pub resource_cohort: EvaluationResourceCohort,
     pub repo_root: String,
     pub bundle_path: String,
     pub commit: String,
@@ -162,6 +164,67 @@ pub struct HostContext {
     pub hostname: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EvaluationResourceCohort {
+    pub host_class: String,
+    pub target: String,
+    pub evaluator_id: String,
+    pub evaluator_version: String,
+    pub toolchain_id: String,
+    pub policy_ref: String,
+    pub fixture_set_id: String,
+    pub repeat_count: u32,
+    pub warm_state: String,
+    pub cpu_time_support: MeasurementSupport,
+    pub peak_rss_support: MeasurementSupport,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MeasurementSupport {
+    pub status: String,
+    pub mechanism: String,
+    pub reason: Option<String>,
+}
+
+impl Default for MeasurementSupport {
+    fn default() -> Self {
+        Self {
+            status: "unavailable".to_string(),
+            mechanism: "legacy-bundle-no-mechanism".to_string(),
+            reason: Some("legacy-bundle-has-no-resource-support-facts".to_string()),
+        }
+    }
+}
+
+impl Default for EvaluationResourceCohort {
+    fn default() -> Self {
+        Self {
+            host_class: "legacy-unknown".to_string(),
+            target: "legacy-unknown".to_string(),
+            evaluator_id: "legacy-unknown".to_string(),
+            evaluator_version: "legacy-unknown".to_string(),
+            toolchain_id: "legacy-unknown".to_string(),
+            policy_ref: "legacy-unbound".to_string(),
+            fixture_set_id: "legacy-unbound".to_string(),
+            repeat_count: 0,
+            warm_state: "legacy-unknown".to_string(),
+            cpu_time_support: MeasurementSupport::default(),
+            peak_rss_support: MeasurementSupport::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BenchmarkResourceMetric {
+    pub name: String,
+    pub unit: String,
+    pub role: String,
+    pub status: String,
+    pub value: Option<u64>,
+    pub mechanism: String,
+    pub reason: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BenchmarkResult {
     pub workload_name: String,
@@ -180,6 +243,8 @@ pub struct BenchmarkResult {
     pub total_wall_ns: u64,
     pub sample_wall_ns: Vec<u64>,
     pub phase_metrics: Vec<BenchmarkMetric>,
+    #[serde(default)]
+    pub resource_metrics: Vec<BenchmarkResourceMetric>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -328,6 +393,8 @@ pub fn render_bundle_json(bundle: &BenchmarkBundle) -> Result<String, Error> {
 pub struct CompareThresholds {
     pub absolute_threshold_ns: u64,
     pub percent_threshold: f64,
+    pub named_absolute_thresholds: std::collections::BTreeMap<String, u64>,
+    pub named_percent_thresholds: std::collections::BTreeMap<String, f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -336,6 +403,8 @@ pub struct BenchmarkComparisonReport {
     pub baseline_path: String,
     pub fresh_path: String,
     pub thresholds: BenchmarkComparisonThresholds,
+    pub resource_cohort_compatible: bool,
+    pub resource_cohort_mismatches: Vec<String>,
     pub matched_workloads: Vec<WorkloadComparison>,
     pub missing_from_fresh: Vec<String>,
     pub missing_from_baseline: Vec<String>,
@@ -349,6 +418,8 @@ pub struct BenchmarkComparisonReport {
 pub struct BenchmarkComparisonThresholds {
     pub absolute_threshold_ns: u64,
     pub percent_threshold: f64,
+    pub named_absolute_thresholds: std::collections::BTreeMap<String, u64>,
+    pub named_percent_thresholds: std::collections::BTreeMap<String, f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -357,6 +428,7 @@ pub struct WorkloadComparison {
     pub matched_metrics: Vec<MetricComparison>,
     pub missing_from_fresh: Vec<String>,
     pub missing_from_baseline: Vec<String>,
+    pub unavailable_in_both: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -369,6 +441,9 @@ pub struct MetricComparison {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub delta_percent: Option<f64>,
     pub direction: String,
+    pub threshold_applied: bool,
+    pub absolute_threshold: u64,
+    pub percent_threshold: f64,
     pub exceeds_absolute_threshold: bool,
     pub exceeds_percent_threshold: bool,
 }
@@ -377,6 +452,8 @@ pub fn default_compare_thresholds() -> CompareThresholds {
     CompareThresholds {
         absolute_threshold_ns: 0,
         percent_threshold: 0.0,
+        named_absolute_thresholds: std::collections::BTreeMap::new(),
+        named_percent_thresholds: std::collections::BTreeMap::new(),
     }
 }
 
@@ -407,6 +484,8 @@ pub fn compare_bundles(
     validate_bundle_for_compare(baseline)?;
     validate_bundle_for_compare(fresh)?;
 
+    let resource_cohort_mismatches = resource_cohort_mismatches(&baseline.resource_cohort, &fresh.resource_cohort);
+    let resource_cohort_compatible = resource_cohort_mismatches.is_empty();
     let baseline_index = index_results_by_name(&baseline.results)?;
     let fresh_index = index_results_by_name(&fresh.results)?;
     let mut workload_names: Vec<String> = baseline_index.keys().chain(fresh_index.keys()).cloned().collect();
@@ -420,7 +499,12 @@ pub fn compare_bundles(
     for workload_name in workload_names {
         match (baseline_index.get(&workload_name), fresh_index.get(&workload_name)) {
             (Some(baseline_result), Some(fresh_result)) => {
-                matched_workloads.push(compare_workload(baseline_result, fresh_result, thresholds)?);
+                matched_workloads.push(compare_workload(
+                    baseline_result,
+                    fresh_result,
+                    thresholds,
+                    resource_cohort_compatible,
+                )?);
             }
             (Some(_), None) => missing_from_fresh.push(workload_name),
             (None, Some(_)) => missing_from_baseline.push(workload_name),
@@ -448,7 +532,11 @@ pub fn compare_bundles(
         thresholds: BenchmarkComparisonThresholds {
             absolute_threshold_ns: thresholds.absolute_threshold_ns,
             percent_threshold: thresholds.percent_threshold,
+            named_absolute_thresholds: thresholds.named_absolute_thresholds.clone(),
+            named_percent_thresholds: thresholds.named_percent_thresholds.clone(),
         },
+        resource_cohort_compatible,
+        resource_cohort_mismatches,
         matched_workloads,
         missing_from_fresh,
         missing_from_baseline,
@@ -468,6 +556,10 @@ pub fn render_comparison_human(report: &BenchmarkComparisonReport) -> String {
     out.push_str(&format!(
         "thresholds: absolute_ns={} percent={}\n",
         report.thresholds.absolute_threshold_ns, report.thresholds.percent_threshold
+    ));
+    out.push_str(&format!(
+        "resource_cohort_compatible={} mismatches={:?}\n",
+        report.resource_cohort_compatible, report.resource_cohort_mismatches
     ));
 
     if let Some(metric) = &report.largest_regression {
@@ -509,6 +601,9 @@ pub fn render_comparison_human(report: &BenchmarkComparisonReport) -> String {
         if !workload.missing_from_baseline.is_empty() {
             out.push_str(&format!("  missing_from_baseline={:?}\n", workload.missing_from_baseline));
         }
+        if !workload.unavailable_in_both.is_empty() {
+            out.push_str(&format!("  unavailable_in_both={:?}\n", workload.unavailable_in_both));
+        }
     }
 
     if !report.missing_from_fresh.is_empty() {
@@ -519,6 +614,23 @@ pub fn render_comparison_human(report: &BenchmarkComparisonReport) -> String {
     }
 
     out
+}
+
+fn resource_cohort_mismatches(baseline: &EvaluationResourceCohort, fresh: &EvaluationResourceCohort) -> Vec<String> {
+    let fields = [
+        (baseline.host_class == fresh.host_class, "host-class"),
+        (baseline.target == fresh.target, "target"),
+        (baseline.evaluator_id == fresh.evaluator_id, "evaluator-id"),
+        (baseline.evaluator_version == fresh.evaluator_version, "evaluator-version"),
+        (baseline.toolchain_id == fresh.toolchain_id, "toolchain-id"),
+        (baseline.policy_ref == fresh.policy_ref, "policy-ref"),
+        (baseline.fixture_set_id == fresh.fixture_set_id, "fixture-set-id"),
+        (baseline.repeat_count == fresh.repeat_count, "repeat-count"),
+        (baseline.warm_state == fresh.warm_state, "warm-state"),
+        (baseline.cpu_time_support == fresh.cpu_time_support, "cpu-time-support"),
+        (baseline.peak_rss_support == fresh.peak_rss_support, "peak-rss-support"),
+    ];
+    fields.into_iter().filter(|(matches, _)| !matches).map(|(_, name)| name.to_string()).collect()
 }
 
 fn render_optional_percent(percent: Option<f64>) -> String {
@@ -534,6 +646,11 @@ fn validate_compare_thresholds(thresholds: &CompareThresholds) -> Result<(), Err
     }
     if thresholds.percent_threshold < 0.0 {
         return Err(Error::InvalidArgument("percent threshold must be >= 0".to_string()));
+    }
+    for (name, value) in &thresholds.named_percent_thresholds {
+        if !value.is_finite() || *value < 0.0 {
+            return Err(Error::InvalidArgument(format!("named percent threshold must be finite and >= 0: {name}")));
+        }
     }
     Ok(())
 }
@@ -571,6 +688,7 @@ fn compare_workload(
     baseline: &BenchmarkResult,
     fresh: &BenchmarkResult,
     thresholds: &CompareThresholds,
+    resource_cohort_compatible: bool,
 ) -> Result<WorkloadComparison, Error> {
     let baseline_metrics = index_metrics(baseline)?;
     let fresh_metrics = index_metrics(fresh)?;
@@ -581,20 +699,25 @@ fn compare_workload(
     let mut matched_metrics = Vec::new();
     let mut missing_from_fresh = Vec::new();
     let mut missing_from_baseline = Vec::new();
+    let mut unavailable_in_both = Vec::new();
 
     for metric_name in metric_names {
         match (baseline_metrics.get(&metric_name), fresh_metrics.get(&metric_name)) {
-            (Some(&baseline_value), Some(&fresh_value)) => {
+            (Some(Some(baseline_value)), Some(Some(fresh_value))) => {
                 matched_metrics.push(compare_metric(
                     &baseline.workload_name,
                     &metric_name,
-                    baseline_value,
-                    fresh_value,
+                    *baseline_value,
+                    *fresh_value,
                     thresholds,
+                    resource_cohort_compatible,
                 )?);
             }
-            (Some(_), None) => missing_from_fresh.push(metric_name),
-            (None, Some(_)) => missing_from_baseline.push(metric_name),
+            (Some(None), Some(None)) => unavailable_in_both.push(metric_name),
+            (Some(Some(_)), Some(None) | None) => missing_from_fresh.push(metric_name),
+            (Some(None) | None, Some(Some(_))) => missing_from_baseline.push(metric_name),
+            (Some(None), None) => missing_from_fresh.push(metric_name),
+            (None, Some(None)) => missing_from_baseline.push(metric_name),
             (None, None) => {}
         }
     }
@@ -604,16 +727,25 @@ fn compare_workload(
         matched_metrics,
         missing_from_fresh,
         missing_from_baseline,
+        unavailable_in_both,
     })
 }
 
-fn index_metrics(result: &BenchmarkResult) -> Result<std::collections::BTreeMap<String, u64>, Error> {
+fn index_metrics(result: &BenchmarkResult) -> Result<std::collections::BTreeMap<String, Option<u64>>, Error> {
     let mut metrics = std::collections::BTreeMap::new();
-    metrics.insert(TOTAL_PHASE_METRIC_NAME.to_string(), result.total_wall_ns);
+    metrics.insert(TOTAL_PHASE_METRIC_NAME.to_string(), Some(result.total_wall_ns));
     for metric in &result.phase_metrics {
-        if metrics.insert(metric.name.clone(), metric.value).is_some() {
+        if metrics.insert(metric.name.clone(), Some(metric.value)).is_some() {
             return Err(Error::InvalidArgument(format!(
                 "duplicate metric in workload {}: {}",
+                result.workload_name, metric.name
+            )));
+        }
+    }
+    for metric in &result.resource_metrics {
+        if metrics.insert(metric.name.clone(), metric.value).is_some() {
+            return Err(Error::InvalidArgument(format!(
+                "duplicate resource metric in workload {}: {}",
                 result.workload_name, metric.name
             )));
         }
@@ -627,6 +759,7 @@ fn compare_metric(
     baseline_value: u64,
     fresh_value: u64,
     thresholds: &CompareThresholds,
+    resource_cohort_compatible: bool,
 ) -> Result<MetricComparison, Error> {
     let delta_ns = i128::from(fresh_value) - i128::from(baseline_value);
     let delta_percent = if baseline_value == 0 {
@@ -634,8 +767,20 @@ fn compare_metric(
     } else {
         Some(((fresh_value as f64 - baseline_value as f64) / baseline_value as f64) * 100.0)
     };
-    let exceeds_absolute_threshold = delta_ns.unsigned_abs() >= u128::from(thresholds.absolute_threshold_ns);
-    let exceeds_percent_threshold = delta_percent.is_some_and(|percent| percent.abs() >= thresholds.percent_threshold);
+    let absolute_threshold = thresholds
+        .named_absolute_thresholds
+        .get(metric_name)
+        .copied()
+        .unwrap_or(thresholds.absolute_threshold_ns);
+    let percent_threshold = thresholds
+        .named_percent_thresholds
+        .get(metric_name)
+        .copied()
+        .unwrap_or(thresholds.percent_threshold);
+    let threshold_applied = resource_cohort_compatible;
+    let exceeds_absolute_threshold = threshold_applied && delta_ns.unsigned_abs() >= u128::from(absolute_threshold);
+    let exceeds_percent_threshold =
+        threshold_applied && delta_percent.is_some_and(|percent| percent.abs() >= percent_threshold);
     let direction = if delta_ns > 0 {
         "regression"
     } else if delta_ns < 0 {
@@ -652,6 +797,9 @@ fn compare_metric(
         delta_ns,
         delta_percent,
         direction: direction.to_string(),
+        threshold_applied,
+        absolute_threshold,
+        percent_threshold,
         exceeds_absolute_threshold,
         exceeds_percent_threshold,
     })
@@ -723,9 +871,11 @@ fn build_bundle(
     if results.is_empty() {
         return Err(Error::InvalidArgument("benchmark bundle must contain at least one result".to_string()));
     }
+    let resource_cohort = build_resource_cohort(context, &results)?;
     Ok(BenchmarkBundle {
         schema: BENCHMARK_BUNDLE_SCHEMA_V1.to_string(),
         generated_unix_s: unix_timestamp_now()?,
+        resource_cohort,
         repo_root: context.repo_root.display().to_string(),
         bundle_path: bundle_out_path.display().to_string(),
         commit: context.commit.clone(),
@@ -734,6 +884,61 @@ fn build_bundle(
         host: context.host.clone(),
         results,
     })
+}
+
+fn build_resource_cohort(
+    context: &BenchmarkContext,
+    results: &[BenchmarkResult],
+) -> Result<EvaluationResourceCohort, Error> {
+    let repeat_count = results
+        .first()
+        .map(|result| result.repeat_count)
+        .ok_or_else(|| Error::InvalidArgument("resource cohort requires results".to_string()))?;
+    if results.iter().any(|result| result.repeat_count != repeat_count) {
+        return Err(Error::InvalidArgument("resource cohort requires one repeat policy".to_string()));
+    }
+    let host_class = format!("{}-{}", context.host.os, context.host.arch);
+    let toolchain_id = digest_fields(&[
+        context.toolchain.rustc_version.as_str(),
+        context.toolchain.cargo_version.as_str(),
+    ])?;
+    let mut fixture_fields: Vec<&str> = results
+        .iter()
+        .flat_map(|result| [result.workload_name.as_str(), result.workload_path.as_str()])
+        .collect();
+    fixture_fields.sort_unstable();
+    let fixture_set_id = digest_fields(&fixture_fields)?;
+    let unavailable = MeasurementSupport {
+        status: "unavailable".to_string(),
+        mechanism: "unavailable".to_string(),
+        reason: Some("in-process-benchmark-has-no-operation-scoped-resource-observation".to_string()),
+    };
+    Ok(EvaluationResourceCohort {
+        host_class: host_class.clone(),
+        target: host_class,
+        evaluator_id: crunch_eval::EVALUATOR_ID.to_string(),
+        evaluator_version: crunch_eval::EVALUATOR_VERSION.to_string(),
+        toolchain_id,
+        policy_ref: "evaluation-policy:in-process-observe-only-v1".to_string(),
+        fixture_set_id,
+        repeat_count,
+        warm_state: "declared-per-workload".to_string(),
+        cpu_time_support: unavailable.clone(),
+        peak_rss_support: unavailable,
+    })
+}
+
+fn digest_fields(fields: &[&str]) -> Result<String, Error> {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"mantle:benchmark-resource-cohort:v1\0");
+    for field in fields {
+        let bytes = field.as_bytes();
+        let byte_count = u64::try_from(bytes.len())
+            .map_err(|_| Error::InvalidArgument("resource cohort field is too large".to_string()))?;
+        hasher.update(&byte_count.to_le_bytes());
+        hasher.update(bytes);
+    }
+    Ok(format!("blake3:{}", hasher.finalize().to_hex()))
 }
 
 fn write_bundle(bundle: BenchmarkBundle) -> Result<BenchmarkBundle, Error> {
@@ -1384,7 +1589,31 @@ fn build_result(
         total_wall_ns,
         sample_wall_ns,
         phase_metrics,
+        resource_metrics: unavailable_in_process_resource_metrics(),
     })
+}
+
+pub fn unavailable_in_process_resource_metrics() -> Vec<BenchmarkResourceMetric> {
+    vec![
+        BenchmarkResourceMetric {
+            name: "cpu_time_ms".to_string(),
+            unit: "milliseconds".to_string(),
+            role: "observation".to_string(),
+            status: "unavailable".to_string(),
+            value: None,
+            mechanism: "unavailable".to_string(),
+            reason: Some("in-process-benchmark-has-no-operation-scoped-cpu-observation".to_string()),
+        },
+        BenchmarkResourceMetric {
+            name: "peak_rss_bytes".to_string(),
+            unit: "bytes".to_string(),
+            role: "observation".to_string(),
+            status: "unavailable".to_string(),
+            value: None,
+            mechanism: "unavailable".to_string(),
+            reason: Some("in-process-benchmark-has-no-operation-scoped-peak-rss".to_string()),
+        },
+    ]
 }
 
 fn named_metric(name: &str, value: u64) -> BenchmarkMetric {
@@ -1820,6 +2049,8 @@ mod tests {
         let thresholds = CompareThresholds {
             absolute_threshold_ns: 10,
             percent_threshold: 20.0,
+            named_absolute_thresholds: std::collections::BTreeMap::new(),
+            named_percent_thresholds: std::collections::BTreeMap::new(),
         };
 
         let report = compare_bundles(&baseline, &fresh, "baseline.json", "fresh.json", &thresholds).unwrap();
@@ -1918,10 +2149,75 @@ mod tests {
         assert!(workload.missing_from_fresh.is_empty());
     }
 
+    #[test]
+    fn compare_rejects_threshold_application_across_mismatched_resource_cohorts() {
+        let baseline = fixture_bundle("baseline", vec![fixture_result(
+            EVAL_SMOKE_WORKLOAD_NAME,
+            EVAL_PHASE_METRIC_NAME,
+            100,
+            90,
+        )]);
+        let mut fresh = fixture_bundle("fresh", vec![fixture_result(
+            EVAL_SMOKE_WORKLOAD_NAME,
+            EVAL_PHASE_METRIC_NAME,
+            200,
+            180,
+        )]);
+        fresh.resource_cohort.host_class = "different-host".to_string();
+        let report =
+            compare_bundles(&baseline, &fresh, "baseline.json", "fresh.json", &default_compare_thresholds()).unwrap();
+        assert!(!report.resource_cohort_compatible);
+        assert_eq!(report.resource_cohort_mismatches, vec!["host-class".to_string()]);
+        assert!(report.matched_workloads[0].matched_metrics.iter().all(|metric| !metric.threshold_applied));
+        assert!(report.matched_workloads[0].matched_metrics.iter().all(|metric| !metric.exceeds_absolute_threshold));
+    }
+
+    #[test]
+    fn compatible_cohorts_apply_named_memory_thresholds_and_report_missing_values() {
+        let mut baseline_result = fixture_result(EVAL_SMOKE_WORKLOAD_NAME, EVAL_PHASE_METRIC_NAME, 100, 90);
+        baseline_result.resource_metrics = vec![fixture_peak_rss_metric(Some(100))];
+        let mut fresh_result = fixture_result(EVAL_SMOKE_WORKLOAD_NAME, EVAL_PHASE_METRIC_NAME, 110, 95);
+        fresh_result.resource_metrics = vec![fixture_peak_rss_metric(Some(150))];
+        let baseline = fixture_bundle("baseline", vec![baseline_result]);
+        let fresh = fixture_bundle("fresh", vec![fresh_result]);
+        let mut thresholds = default_compare_thresholds();
+        thresholds.named_absolute_thresholds.insert("peak_rss_bytes".to_string(), 40);
+        thresholds.named_percent_thresholds.insert("peak_rss_bytes".to_string(), 20.0);
+        let report = compare_bundles(&baseline, &fresh, "baseline.json", "fresh.json", &thresholds).unwrap();
+        assert!(report.resource_cohort_compatible);
+        let memory = report.matched_workloads[0]
+            .matched_metrics
+            .iter()
+            .find(|metric| metric.metric_name == "peak_rss_bytes")
+            .unwrap();
+        assert!(memory.threshold_applied);
+        assert_eq!(memory.absolute_threshold, 40);
+        assert!(memory.exceeds_absolute_threshold);
+        assert!(memory.exceeds_percent_threshold);
+
+        let mut missing_fresh = fresh.clone();
+        missing_fresh.results[0].resource_metrics = vec![fixture_peak_rss_metric(None)];
+        let missing = compare_bundles(&baseline, &missing_fresh, "baseline.json", "fresh.json", &thresholds).unwrap();
+        assert_eq!(missing.matched_workloads[0].missing_from_fresh, vec!["peak_rss_bytes".to_string()]);
+    }
+
+    fn fixture_peak_rss_metric(value: Option<u64>) -> BenchmarkResourceMetric {
+        BenchmarkResourceMetric {
+            name: "peak_rss_bytes".to_string(),
+            unit: "bytes".to_string(),
+            role: "observation".to_string(),
+            status: if value.is_some() { "observed" } else { "unavailable" }.to_string(),
+            value,
+            mechanism: "fixture-rusage".to_string(),
+            reason: value.is_none().then(|| "fixture-missing".to_string()),
+        }
+    }
+
     fn fixture_bundle(commit: &str, results: Vec<BenchmarkResult>) -> BenchmarkBundle {
         BenchmarkBundle {
             schema: BENCHMARK_BUNDLE_SCHEMA_V1.to_string(),
             generated_unix_s: 1,
+            resource_cohort: fixture_resource_cohort(),
             repo_root: "/tmp/repo".to_string(),
             bundle_path: "/tmp/repo/target/benchmarks/suite.json".to_string(),
             commit: commit.to_string(),
@@ -1961,6 +2257,7 @@ mod tests {
             total_wall_ns,
             sample_wall_ns: vec![phase_wall_ns],
             phase_metrics: vec![named_metric(phase_metric_name, phase_wall_ns)],
+            resource_metrics: unavailable_in_process_resource_metrics(),
         }
     }
 
@@ -1981,6 +2278,7 @@ mod tests {
             total_wall_ns,
             sample_wall_ns: vec![total_wall_ns],
             phase_metrics: Vec::new(),
+            resource_metrics: unavailable_in_process_resource_metrics(),
         }
     }
 
@@ -2005,6 +2303,28 @@ mod tests {
             total_wall_ns,
             sample_wall_ns: vec![total_wall_ns],
             phase_metrics: phase_metrics.into_iter().map(|(name, value)| named_metric(name, value)).collect(),
+            resource_metrics: unavailable_in_process_resource_metrics(),
+        }
+    }
+
+    fn fixture_resource_cohort() -> EvaluationResourceCohort {
+        let unavailable = MeasurementSupport {
+            status: "unavailable".to_string(),
+            mechanism: "unavailable".to_string(),
+            reason: Some("fixture-unavailable".to_string()),
+        };
+        EvaluationResourceCohort {
+            host_class: "linux-x86_64".to_string(),
+            target: "linux-x86_64".to_string(),
+            evaluator_id: "nickel-lang".to_string(),
+            evaluator_version: "2.0.0".to_string(),
+            toolchain_id: "fixture-toolchain".to_string(),
+            policy_ref: "fixture-policy".to_string(),
+            fixture_set_id: "fixture-set".to_string(),
+            repeat_count: 1,
+            warm_state: "fixture".to_string(),
+            cpu_time_support: unavailable.clone(),
+            peak_rss_support: unavailable,
         }
     }
 

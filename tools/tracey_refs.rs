@@ -1,5 +1,31 @@
 // Mantle Tracey coverage bridge.
 //
+// Evaluator resource-budget bridge.
+//
+// r[impl evaluation_performance.budget_policy]
+// r[impl evaluation_performance.worker_protocol]
+// r[impl evaluation_performance.resource_observations]
+// r[impl evaluation_performance.metric_role_separation]
+// r[impl evaluation_performance.enforced_teardown]
+// r[impl evaluation_performance.benchmark_gates]
+// r[impl evaluation_performance.rollout]
+// r[impl evaluation_performance.validation]
+// The no-std core owns policy, identity, framing, truncation, classification,
+// and report construction. The root shell owns files, clocks, workers, limits,
+// capture, cancellation, teardown, and CLI report publication.
+//
+// r[verify evaluation_performance.budget_policy]
+// r[verify evaluation_performance.worker_protocol]
+// r[verify evaluation_performance.resource_observations]
+// r[verify evaluation_performance.metric_role_separation]
+// r[verify evaluation_performance.enforced_teardown]
+// r[verify evaluation_performance.benchmark_gates]
+// r[verify evaluation_performance.rollout]
+// r[verify evaluation_performance.validation]
+// Positive and negative core, worker, CLI, benchmark, and fixture tests cover
+// strict and observe-only modes, framing, limits, metrics, terminal precedence,
+// process failures, cohort compatibility, named thresholds, and missing facts.
+//
 // Frontend-neutral composition-root bridge.
 //
 // r[impl composition_roots.frontend_neutral_plan]

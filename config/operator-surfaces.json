@@ -2036,12 +2036,16 @@
         "usage"
       ],
       "flags": [
+        "--all-roots",
         "--base-store",
+        "--budget-policy",
+        "--budget-report",
         "--help",
         "--import-path",
         "--json",
         "--log-level",
         "--nix-compat",
+        "--root",
         "--state-dir",
         "--store",
         "--store-prefix",

@@ -94,6 +94,10 @@ fn eval_smoke_benchmark_writes_machine_readable_bundle() {
     assert!(!bundle.commit.is_empty(), "bundle must record commit id");
     assert!(!bundle.toolchain.rustc_version.is_empty(), "bundle must record rustc version");
     assert!(!bundle.toolchain.cargo_version.is_empty(), "bundle must record cargo version");
+    assert_eq!(bundle.resource_cohort.evaluator_id, crunch_eval::EVALUATOR_ID);
+    assert_eq!(bundle.resource_cohort.repeat_count, 2);
+    assert_eq!(bundle.resource_cohort.peak_rss_support.status, "unavailable");
+    assert!(!bundle.resource_cohort.fixture_set_id.is_empty());
 
     let result = &bundle.results[0];
     assert_eq!(result.workload_name, EVAL_SMOKE_WORKLOAD_NAME);
@@ -104,6 +108,11 @@ fn eval_smoke_benchmark_writes_machine_readable_bundle() {
     assert_eq!(result.root_count, 1);
     assert_eq!(result.phase_metrics.len(), 1);
     assert_eq!(result.phase_metrics[0].name, EVAL_PHASE_METRIC_NAME);
+    assert!(
+        result.resource_metrics.iter().any(|metric| {
+            metric.name == "peak_rss_bytes" && metric.status == "unavailable" && metric.value.is_none()
+        })
+    );
     assert_eq!(result.sample_wall_ns.len(), 2);
     assert!(result.total_wall_ns > 0, "total wall metric must be positive");
     assert!(result.phase_metrics[0].value > 0, "eval phase metric must be positive");

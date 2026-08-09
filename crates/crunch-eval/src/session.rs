@@ -163,6 +163,11 @@ impl EvaluationSession {
         Self::open_source(source.to_string(), import_paths, "<input>")
     }
 
+    /// Open a session from transferred source with an explicit diagnostic name.
+    pub fn open_named_str(source: &str, import_paths: &[OsString], source_name: &str) -> Result<Self, Error> {
+        Self::open_source(source.to_string(), import_paths, source_name)
+    }
+
     fn open_source(source: String, import_paths: &[OsString], source_name: &str) -> Result<Self, Error> {
         assert!(!source_name.is_empty(), "source name must not be empty");
 

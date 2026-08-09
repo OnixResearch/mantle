@@ -14,6 +14,7 @@ use std::time::Instant;
 use benchmark_support::BenchmarkMetric;
 use benchmark_support::BenchmarkResult;
 use benchmark_support::Error;
+use benchmark_support::unavailable_in_process_resource_metrics;
 use crunch_eval::session::EvaluationSession;
 use crunch_glue::CrunchDerivation;
 
@@ -145,6 +146,7 @@ fn run_lazy_benchmarks(repeat_count: u32) -> Result<Vec<BenchmarkResult>, Error>
                 unit: "ns".to_string(),
                 value: med,
             }],
+            resource_metrics: unavailable_in_process_resource_metrics(),
         });
     }
 
@@ -205,6 +207,7 @@ fn run_lazy_benchmarks(repeat_count: u32) -> Result<Vec<BenchmarkResult>, Error>
                     value: lm.explicit_nonselected_root_force_count as u64,
                 },
             ],
+            resource_metrics: unavailable_in_process_resource_metrics(),
         });
     }
 
@@ -238,6 +241,7 @@ fn run_lazy_benchmarks(repeat_count: u32) -> Result<Vec<BenchmarkResult>, Error>
                 unit: "ns".to_string(),
                 value: med,
             }],
+            resource_metrics: unavailable_in_process_resource_metrics(),
         });
     }
 
@@ -281,6 +285,7 @@ fn run_lazy_benchmarks(repeat_count: u32) -> Result<Vec<BenchmarkResult>, Error>
                     value: DEFAULT_PARALLEL_ALL_ROOTS_CONCURRENCY as u64,
                 },
             ],
+            resource_metrics: unavailable_in_process_resource_metrics(),
         });
     }
 

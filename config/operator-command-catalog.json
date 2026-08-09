@@ -1,6 +1,6 @@
 {
   "schema": "mantle-operator-command-catalog-v1",
-  "identity_blake3": "9fc4cc6767d912ca399916c84694cd2b37bcad65ce9996b3f7f3020dfd1f0a65",
+  "identity_blake3": "72acdf422788614d163966a8e464623276ee49535fb936c629e45f5554ec1277",
   "entries": [
     {
       "descriptor": {
@@ -2343,12 +2343,16 @@
         "path": "eval",
         "aliases": [],
         "flags": [
+          "--all-roots",
           "--base-store",
+          "--budget-policy",
+          "--budget-report",
           "--help",
           "--import-path",
           "--json",
           "--log-level",
           "--nix-compat",
+          "--root",
           "--state-dir",
           "--store",
           "--store-prefix",
@@ -2375,12 +2379,16 @@
         "network": "none",
         "compatibility_state": "canonical",
         "flags": [
+          "--all-roots",
           "--base-store",
+          "--budget-policy",
+          "--budget-report",
           "--help",
           "--import-path",
           "--json",
           "--log-level",
           "--nix-compat",
+          "--root",
           "--state-dir",
           "--store",
           "--store-prefix",

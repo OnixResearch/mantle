@@ -33,6 +33,7 @@ mod early_native_row_receipt_shell;
 mod elf_local_symbol_core;
 mod elf_local_symbol_shell;
 mod errors;
+mod evaluator_budget;
 #[allow(dead_code)]
 mod external_batch_dispatch;
 mod filegen_cmd;
@@ -621,7 +622,31 @@ enum Command {
         /// Additional import paths for Nickel
         #[arg(long = "import-path", short = 'I')]
         import_paths: Vec<PathBuf>,
+
+        /// Checked evaluation budget policy JSON
+        #[arg(long, requires = "budget_report")]
+        budget_policy: Option<PathBuf>,
+
+        /// Write the bounded evaluation budget report to this path
+        #[arg(long, requires = "budget_policy")]
+        budget_report: Option<PathBuf>,
+
+        /// Force one selected top-level root; repeat for multiple roots
+        #[arg(long = "root", requires = "budget_policy", conflicts_with = "all_roots")]
+        roots: Vec<String>,
+
+        /// Discover and force all top-level roots through the bounded worker
+        #[arg(long, requires = "budget_policy")]
+        all_roots: bool,
     },
+
+    /// Internal owned evaluator worker
+    #[command(hide = true)]
+    EvaluatorWorker,
+
+    /// Internal evaluator-worker process fixture
+    #[command(hide = true)]
+    EvaluatorWorkerFixture { behavior: String },
 
     /// Export declared Nickel data to a deterministic external JSON payload and receipt
     Export {
@@ -3218,6 +3243,13 @@ fn run(args: Args) -> Result<(), RunError> {
 }
 
 fn run_for_platform(args: Args, platform: mantle_portable_client_core::PlatformFamily) -> Result<(), RunError> {
+    match &args.command {
+        Command::EvaluatorWorker => return evaluator_budget::worker_main(),
+        Command::EvaluatorWorkerFixture { behavior } => {
+            return evaluator_budget::worker_fixture_main(behavior);
+        }
+        _ => {}
+    }
     enforce_portable_command_admission(platform, &args.command)?;
     if let Command::RemoteSecretWorker {
         manifest,
@@ -3296,6 +3328,8 @@ fn command_root(command: &Command) -> &'static str {
         Command::ForeignImport { .. } => "foreign-import",
         Command::Mantlepkgs { .. } => "mantlepkgs",
         Command::Eval { .. } => "eval",
+        Command::EvaluatorWorker => "__evaluator-worker",
+        Command::EvaluatorWorkerFixture { .. } => "__evaluator-worker-fixture",
         Command::Export { .. } => "export",
         Command::Bootstrap { .. } => "bootstrap",
         Command::Log { .. } => "log",
@@ -3388,6 +3422,8 @@ fn command_label(command: &Command) -> &'static str {
         Command::ForeignImport { .. } => "foreign-import",
         Command::Mantlepkgs { .. } => "mantlepkgs",
         Command::Eval { .. } => "eval",
+        Command::EvaluatorWorker => "evaluator-worker",
+        Command::EvaluatorWorkerFixture { .. } => "evaluator-worker-fixture",
         Command::Export { .. } => "export",
         Command::Bootstrap { action, .. } => bootstrap_command_label(action.as_ref()),
         Command::Log { .. } => "log",
@@ -3940,7 +3976,16 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
                 json: ctx.json,
             })
         }
-        Command::Eval { file, import_paths } => run_eval(file, import_paths),
+        Command::Eval {
+            file,
+            import_paths,
+            budget_policy,
+            budget_report,
+            roots,
+            all_roots,
+        } => run_eval(file, import_paths, budget_policy.as_deref(), budget_report.as_deref(), roots, *all_roots),
+        Command::EvaluatorWorker => evaluator_budget::worker_main(),
+        Command::EvaluatorWorkerFixture { behavior } => evaluator_budget::worker_fixture_main(behavior),
         Command::Export { .. } => run_nickel_export_from_command(ctx, &args.command),
         Command::Build { .. } => run_build_from_command(ctx, &args.command),
         Command::WasmComponent { action } => run_wasm_component_command(ctx, action),
@@ -4536,11 +4581,42 @@ fn run_stage0_inventory_command(ctx: &RunContext, output: &Path) -> Result<(), R
     Ok(())
 }
 
-fn run_eval(file: &Path, import_paths: &[PathBuf]) -> Result<(), RunError> {
-    let nickel_search_dirs = build_import_paths(import_paths)?;
-    let json = crunch_eval::evaluate_to_json(file, &nickel_search_dirs).map_err(|e| RunError::Eval(format!("{e}")))?;
-    println!("{json}");
-    Ok(())
+fn run_eval(
+    file: &Path,
+    import_paths: &[PathBuf],
+    budget_policy: Option<&Path>,
+    budget_report: Option<&Path>,
+    roots: &[String],
+    all_roots: bool,
+) -> Result<(), RunError> {
+    match (budget_policy, budget_report) {
+        (Some(policy), Some(report)) => {
+            let selection = if all_roots {
+                evaluator_budget::EvaluationSelection::AllRoots
+            } else if roots.is_empty() {
+                evaluator_budget::EvaluationSelection::WholeValue
+            } else {
+                evaluator_budget::EvaluationSelection::SelectedRoots(roots.to_vec())
+            };
+            let result = evaluator_budget::run_budgeted_file(file, import_paths, policy, report, selection)?;
+            if let Some(error) = evaluator_budget::terminal_failure(&result) {
+                return Err(error);
+            }
+            let json = result
+                .output_json
+                .ok_or_else(|| RunError::Internal("evaluation worker succeeded without output".to_string()))?;
+            println!("{json}");
+            Ok(())
+        }
+        (None, None) => {
+            let nickel_search_dirs = build_import_paths(import_paths)?;
+            let json = crunch_eval::evaluate_to_json(file, &nickel_search_dirs)
+                .map_err(|error| RunError::Eval(error.to_string()))?;
+            println!("{json}");
+            Ok(())
+        }
+        _ => Err(RunError::Eval("evaluation budget policy and report path must be provided together".to_string())),
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -1492,6 +1492,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-eval-budget-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "serde",
+]
+
+[[package]]
 name = "crunch-gc-core"
 version = "0.1.0"
 dependencies = [
@@ -4791,6 +4799,7 @@ dependencies = [
  "crunch-composition-core",
  "crunch-delta",
  "crunch-eval",
+ "crunch-eval-budget-core",
  "crunch-glue",
  "crunch-hardware-simulation",
  "crunch-hardware-simulation-core",

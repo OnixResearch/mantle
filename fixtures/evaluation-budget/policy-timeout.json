@@ -1,0 +1,20 @@
+{
+  "cpu_time_ms_max": 30000,
+  "diagnostic_bytes_max": 262144,
+  "diagnostics_max": 64,
+  "discovered_roots_max": 4096,
+  "import_roots_max": 64,
+  "imported_modules_max": 4096,
+  "mode": "enforce",
+  "peak_rss_bytes_max": 8589934592,
+  "policy_id": "mantle-evaluation-timeout-fixture-v1",
+  "request_bytes_max": 33554432,
+  "response_bytes_max": 67108864,
+  "schema": "mantle-evaluation-budget-policy-v1",
+  "selected_roots_max": 1024,
+  "shutdown_grace_ms": 10,
+  "source_bytes_max": 16777216,
+  "stderr_bytes_max": 262144,
+  "wall_time_ms_max": 1,
+  "workers_max": 1
+}

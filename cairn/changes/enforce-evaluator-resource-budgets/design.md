@@ -20,7 +20,7 @@ Runtime Rust consumes checked-in generated policy data. Policy has observe-only 
 
 **Choice:** Strict evaluation runs in a child process through a versioned length-bounded protocol. The parent sends source identity, source bytes or confined source descriptor, import descriptors, selected roots, evaluator descriptor, and policy identity.
 
-The worker returns one terminal response with status, output or error summary, bounded diagnostics, evaluator observations, and worker-side identity. Protocol input does not grant arbitrary filesystem paths or process execution.
+The worker returns one terminal response with status, output or error summary, bounded diagnostics, evaluator observations, and worker-side identity. On Linux, Landlock confines evaluator reads to the admitted import roots. Parent and worker walks bind a bounded import-entry upper limit. Protocol input does not grant arbitrary filesystem paths or process execution.
 
 **Rationale:** A process boundary lets the parent enforce deadlines, terminate hangs, reap crashes, and recover allocations.
 
@@ -34,7 +34,7 @@ Every non-trivial shell step consumes or returns typed state. No renderer can co
 
 ### Decision: Enforce only mechanisms the host can prove
 
-**Choice:** The worker shell probes supported deadline, CPU, and memory mechanisms. Strict wall-time policy requires owned timeout and teardown. Strict memory policy requires a supported enforceable address-space, cgroup, job-object, or equivalent limit plus peak observation when the platform provides it.
+**Choice:** The worker shell probes supported deadline, CPU, memory, and import-confinement mechanisms. Strict wall-time policy requires owned timeout and teardown. Strict memory policy requires a supported enforceable address-space, cgroup, job-object, or equivalent limit plus peak observation when the platform provides it.
 
 When strict policy requests an unavailable mechanism, evaluation fails before worker launch with `evaluation-budget-unsupported`. Observe-only mode can record unavailable metrics as absent with a reason.
 

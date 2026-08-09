@@ -8,7 +8,8 @@ under `examples/`:
 - Compare baseline vs fresh: `cargo run --example benchmark_compare -- --baseline target/benchmarks/baseline.json --fresh target/benchmarks/suite.json --absolute-threshold-ns 1000 --percent-threshold 5`
 
 The smoke and full-suite commands write a machine-readable JSON bundle with
-schema `crunch-benchmark-bundle-v1`.
+schema `crunch-benchmark-bundle-v1`. Each new bundle includes a resource cohort
+and per-workload resource observation facts.
 
 ## Initial workload matrix
 
@@ -36,8 +37,12 @@ schema `crunch-benchmark-bundle-v1`.
 - The four `lazy-eval` workloads share a single wide package-set fixture (`tests/fixtures/wide_package_set.ncl`). They emit `root_discovery_wall_ns`, `selected_root_total_wall_ns`, `selected_root_force_wall_ns`, `explicit_top_level_root_force_count`, `explicit_nonselected_root_force_count`, `all_roots_total_wall_ns`, `parallel_all_roots_total_wall_ns`, and `parallel_root_eval_concurrency`. The standalone lazy benchmark can also be run via `cargo run --example benchmark_lazy_eval -- --repeat-count 10`.
 - If a workload can only report honest total wall time, the bundle keeps `total_wall_ns` and leaves `phase_metrics` empty rather than inventing a fake phase metric.
 - The comparison entry point matches workloads by stable `workload_name`, compares only the shared metric names in each workload, reports per-workload missing metrics explicitly, and reports the largest regression and largest win across the matched metrics.
+- A resource cohort binds the host class, target, evaluator, toolchain, policy, fixture set, repeat count, warm state, CPU support, and peak-RSS support.
+- Comparison applies thresholds only when both resource cohorts match. It reports each cohort mismatch by field.
+- The current in-process suite marks operation-scoped CPU time and peak RSS unavailable. It does not report zero or an estimate.
 - `benchmark_compare` also accepts `--json` when you want machine-readable comparison output.
 - `--absolute-threshold-ns` highlights changes at or above a fixed nanosecond delta. `--percent-threshold` highlights changes at or above a percentage delta.
+- Use repeatable `--metric-absolute-threshold NAME=VALUE` and `--metric-percent-threshold NAME=VALUE` options for named resource limits, such as `peak_rss_bytes=1048576`.
 - All three entry points support `-h` / `--help` for their exact flag list.
 - Evaluation and substitution workloads record the default logical store prefix `/mantle/store`.
 - Conversion and build-graph workloads record `/nix/store` because their checked-in seed inputs are absolute `/nix/store/...` paths; using `/mantle/store` there would make `crunch_glue::convert()` reject those seed inputs as invalid store paths.
@@ -62,7 +67,8 @@ schema `crunch-benchmark-bundle-v1`.
 3. Compare the fresh bundle against the saved baseline:
    - `cargo run --example benchmark_compare -- --baseline target/benchmarks/baseline.json --fresh target/benchmarks/candidate.json --absolute-threshold-ns 1000 --percent-threshold 5`
    - add `--json` when another tool should consume the comparison result
-4. Read `missing_from_fresh` and `missing_from_baseline` as honest omission, not zero. Sparse metrics stay sparse on purpose.
-5. When a change is likely store-related, inspect `store-persist-lookup-blob` first. That is the only checked-in workload that should carry `store_persistence_wall_ns` or `store_lookup_wall_ns`.
-6. Treat small deltas as noise until the same workload and metric move in the same direction across repeated runs on the same host.
-7. For `parallel-all-roots-wide-package-set`, keep the run isolated: no concurrent Cargo build or test should share the same target directory during the measurement window.
+4. Read `missing_from_fresh`, `missing_from_baseline`, and `unavailable_in_both` as honest missing observations, not zero.
+5. Check `resource_cohort_compatible` before you use a threshold result. A mismatch disables threshold application.
+6. When a change is likely store-related, inspect `store-persist-lookup-blob` first. That is the only checked-in workload that should carry `store_persistence_wall_ns` or `store_lookup_wall_ns`.
+7. Treat small deltas as noise until the same workload and metric move in the same direction across repeated runs on the same host.
+8. For `parallel-all-roots-wide-package-set`, keep the run isolated: no concurrent Cargo build or test should share the same target directory during the measurement window.

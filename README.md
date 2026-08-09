@@ -73,6 +73,15 @@ Evaluate it without building:
 mantle eval examples/hello.ncl
 ```
 
+For strict time, CPU, address-space, protocol, and teardown bounds, use an
+[owned evaluation worker](docs/evaluation-resource-budgets.md):
+
+```bash
+mantle eval examples/hello.ncl \
+  --budget-policy config/evaluation/default-policy.json \
+  --budget-report target/evaluation-report.json
+```
+
 Preview and realize it:
 
 ```bash
@@ -338,6 +347,9 @@ Mantle keeps build observations separate from stronger claims:
 - [Experimental composition roots](docs/composition-roots.md) merge exact castore
   directory roots with canonical BLAKE3 plan identity and explicit conflict decisions.
   They do not select packages, execute, activate, deploy, or prove release eligibility.
+- [Evaluation resource budgets](docs/evaluation-resource-budgets.md) run strict Nickel
+  evaluation in an owned worker with bounded protocol and teardown facts. Budget
+  compliance does not prove evaluator correctness, reproducibility, or release eligibility.
 - Foreign provenance audits scan signed castore facts under explicit limits.
   The scanner handles bounded gzip and zstd streams and normalizes safe store
   suffixes. Unknown executable bytes still fail closed.
