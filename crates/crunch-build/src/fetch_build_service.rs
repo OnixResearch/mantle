@@ -859,6 +859,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn ordered_foreign_candidates_report_exhaustion_before_network() {
+        let primary = "https://primary.example.invalid/source.txt";
+        let mirror = "https://mirror.example.invalid/source.txt";
+        let candidates = serde_json::to_string(&vec![primary.to_string(), mirror.to_string()]).unwrap();
+        let service = test_fetch_service(MemoryBlobService::default(), tmp_ds())
+            .with_source_policy(FetchSourcePolicy::RequireOverride);
+        let request = fetch_request(vec![env("url", primary), env(FOREIGN_FETCH_CANDIDATES_ENV, &candidates)]);
+
+        let error = service.do_build(request).await.unwrap_err();
+        let message = error.to_string();
+
+        assert!(message.contains("rejected all ordered builtin fetch candidates"));
+        assert!(message.contains("primary.example.invalid/source.txt"));
+        assert!(!message.contains("mirror payload"));
+    }
+
+    #[tokio::test]
     async fn required_source_override_rejects_unmatched_fetch_before_network() {
         let bs = MemoryBlobService::default();
         let ds = tmp_ds();

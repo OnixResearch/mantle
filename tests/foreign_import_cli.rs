@@ -53,6 +53,8 @@ const NIXPKGS_SOURCE_DRV: &str = "/nix/store/44444444444444444444444444444444-he
 const GUIXPKGS_HELLO_DRV: &str = "/gnu/store/22222222222222222222222222222222-hello.drv";
 const GUIXPKGS_SOURCE_DRV: &str = "/gnu/store/44444444444444444444444444444444-hello-source.drv";
 const NIXPKGS_UNRELATED_DRV: &str = "/nix/store/66666666666666666666666666666666-unrelated.drv";
+const NIX_FETCH_PRIMARY: &str = "https://source.example.invalid/hello.txt";
+const NIX_FETCH_MIRROR: &str = "https://mirror.example.invalid/hello.txt";
 const NIXPKGS_REACHABLE_DRV_COUNT: usize = 2;
 const CACHE_NIXOS_ORG: &str = "https://cache.nixos.org";
 const TRUSTED_CACHE_SCOPE: &str = "trusted-binary-cache";
@@ -708,12 +710,17 @@ fn foreign_import_cli_reports_fixed_output_mismatch_from_admitted_source_state()
     let receipt = json_file(&realization_receipt_path);
     eprintln!("fixed-output-mismatch build_report_blake3={}", receipt["build_report_blake3"]);
     assert_eq!(receipt["strongest_state"], "partial-realization");
+    let attempts = receipt["units"][0]["fetch_attempts"].as_array().expect("fetch attempts");
+    assert_eq!(attempts.len(), 1, "fixed-output mismatch must stop candidate fallback");
     assert_eq!(
-        receipt["units"][0]["fetch_attempts"][0]["classification"], "selected-source-state",
+        attempts[0]["classification"], "selected-source-state",
         "failure: {} unit: {}",
         receipt["failure"], receipt["units"][0]
     );
+    assert_eq!(attempts[0]["candidate"], "https://source.example.invalid/hello.tar.gz");
+    assert!(!attempts.iter().any(|attempt| attempt["candidate"] == "https://cache.example.invalid/hello.tar.gz"));
     assert_ne!(receipt["units"][0]["failure"], Value::Null);
+    assert!(fs::read_dir(&output_dir).expect("output directory").next().is_none());
 }
 
 #[test]
@@ -798,6 +805,7 @@ fn foreign_import_cli_produces_nixpkgs_artifacts_then_validates_and_plans_withou
     assert!(graph.exists());
     assert!(index.exists());
     assert!(produce.stderr.is_empty());
+    assert_nix_fetch_candidate_order(&json_file(&graph));
 
     let validate = run_validate_json(graph.clone(), index.clone(), fixture_path(NIXPKGS_POLICY));
     let plan = run_plan_json(graph, index, fixture_path(NIXPKGS_POLICY));
@@ -807,6 +815,7 @@ fn foreign_import_cli_produces_nixpkgs_artifacts_then_validates_and_plans_withou
     assert_eq!(plan["accepted"], true);
     assert_eq!(plan["plan"]["substitution_audit"][0]["cache_url"], CACHE_NIXOS_ORG);
     assert_eq!(plan["plan"]["substitution_audit"][0]["store_admission_required"], true);
+    assert_nix_plan_candidate_order(&plan);
     assert!(plan["plan"]["forbidden_process_invocations"].as_array().unwrap().is_empty());
 }
 
@@ -826,6 +835,7 @@ fn foreign_import_cli_produces_nixpkgs_artifacts_from_drv_files_without_nix() {
     assert!(graph.exists());
     assert!(index.exists());
     assert!(produce.stderr.is_empty());
+    assert_nix_fetch_candidate_order(&json_file(&graph));
 
     let validate = run_validate_json(graph.clone(), index.clone(), fixture_path(NIXPKGS_POLICY));
     let plan = run_plan_json(graph, index, fixture_path(NIXPKGS_POLICY));
@@ -1124,6 +1134,30 @@ fn foreign_import_cli_produce_aterm_rejects_input_mode_conflicts_without_artifac
     assert!(output.stderr.is_empty());
     assert!(!out_dir.join(ATERM_GRAPH_FILE).exists());
     assert!(!out_dir.join(ATERM_INDEX_FILE).exists());
+}
+
+fn assert_nix_plan_candidate_order(report: &Value) {
+    let unit = report["plan"]["native_units"]
+        .as_array()
+        .expect("native units")
+        .iter()
+        .find(|unit| unit["environment"]["url"] == NIX_FETCH_PRIMARY)
+        .expect("Nix fetch unit");
+    let expected = serde_json::to_string(&vec![NIX_FETCH_PRIMARY, NIX_FETCH_MIRROR]).unwrap();
+    assert_eq!(unit["environment"]["__mantle_foreign_candidates"], expected);
+    assert!(unit["derivation_aterm"].as_str().expect("ATerm").contains("__mantle_foreign_candidates"));
+}
+
+fn assert_nix_fetch_candidate_order(graph: &Value) {
+    let source = graph["nodes"]
+        .as_array()
+        .expect("graph nodes")
+        .iter()
+        .find(|node| node["original_derivation"] == NIXPKGS_SOURCE_DRV)
+        .expect("Nix source node");
+    assert_eq!(source["fetch_candidates"], serde_json::json!([NIX_FETCH_PRIMARY, NIX_FETCH_MIRROR]));
+    assert_eq!(source["env"]["url"], NIX_FETCH_PRIMARY);
+    assert!(source["env"].get("urls").is_none());
 }
 
 fn produce_nixpkgs_json_artifacts(fake_path: &Path, out_dir: &Path) -> std::process::Output {

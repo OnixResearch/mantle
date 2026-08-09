@@ -23,6 +23,20 @@ mantle --json foreign-import plan \
 The execution profile is part of each derivation identity.
 A profile change therefore changes target derivation paths.
 
+## Review Nix fetch candidates
+
+For supported concrete Nix fetches, inspect each graph node's
+`fetch_candidates` field. The first address is primary. Later addresses are
+fallbacks. Order changes derivation and executable-plan identity.
+
+Mantle tries these addresses in order. Transport, Git, and I/O failures can
+select the next address. A fixed-output mismatch is terminal. Mantle does not
+consult `NIX_MIRRORS_*`, Nixpkgs mirror tables, or unresolved `mirror://`
+aliases during realization.
+
+Reject a graph that contains `__mantle_foreign_candidates` in its foreign
+environment. Mantle creates this private binding only after graph validation.
+
 ## Prepare source records
 
 Bind every non-derivation source requirement to an explicit local path:

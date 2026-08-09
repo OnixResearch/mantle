@@ -698,13 +698,7 @@ fn lower_foreign_builtin(
 ) -> Result<BuiltinLowering, ImportDiagnostic> {
     match node.builtin.as_str() {
         NIX_DERIVATION_BUILTIN => Ok(native_builtin_lowering(node, CompiledForeignBuiltin::NativeDerivation)),
-        FIXED_OUTPUT_FETCH_BUILTIN => Ok(BuiltinLowering {
-            builder: FETCH_BUILDER.to_string(),
-            system: MANTLE_BUILTIN_SYSTEM.to_string(),
-            arguments: Vec::new(),
-            environment: BTreeMap::new(),
-            fact: CompiledForeignBuiltin::FixedOutput,
-        }),
+        FIXED_OUTPUT_FETCH_BUILTIN => lower_fixed_output_fetch_builtin(node, payloads),
         FOREIGN_DOWNLOAD_BUILTIN => lower_download_builtin(node, payloads),
         FOREIGN_GIT_DOWNLOAD_BUILTIN => lower_git_download_builtin(node, payloads),
         _ => Err(compiler_diagnostic(
@@ -725,6 +719,30 @@ fn native_builtin_lowering(node: &ForeignDerivationNode, fact: CompiledForeignBu
     }
 }
 
+fn lower_fixed_output_fetch_builtin(
+    node: &ForeignDerivationNode,
+    payloads: &BTreeMap<&str, &SourcePayload>,
+) -> Result<BuiltinLowering, ImportDiagnostic> {
+    let has_fetch_address =
+        !node.fetch_candidates.is_empty() || node.env.get("url").is_some_and(|value| !value.trim().is_empty());
+    if !has_fetch_address {
+        return Ok(BuiltinLowering {
+            builder: FETCH_BUILDER.to_string(),
+            system: MANTLE_BUILTIN_SYSTEM.to_string(),
+            arguments: Vec::new(),
+            environment: BTreeMap::new(),
+            fact: CompiledForeignBuiltin::FixedOutput,
+        });
+    }
+    let fixed_output = required_sha256_fixed_output(node)?;
+    let mode = if fixed_output.recursive {
+        FETCH_MODE_RECURSIVE.to_string()
+    } else {
+        FETCH_MODE_FLAT.to_string()
+    };
+    lower_download_facts(node, payloads, fixed_output, mode, false)
+}
+
 fn lower_download_builtin(
     node: &ForeignDerivationNode,
     payloads: &BTreeMap<&str, &SourcePayload>,
@@ -732,6 +750,16 @@ fn lower_download_builtin(
     let fixed_output = required_sha256_fixed_output(node)?;
     let mode = required_fetch_mode(node, fixed_output)?;
     let executable = required_boolean_environment(node, "executable")?;
+    lower_download_facts(node, payloads, fixed_output, mode, executable)
+}
+
+fn lower_download_facts(
+    node: &ForeignDerivationNode,
+    payloads: &BTreeMap<&str, &SourcePayload>,
+    fixed_output: &FixedOutputMetadata,
+    mode: String,
+    executable: bool,
+) -> Result<BuiltinLowering, ImportDiagnostic> {
     if executable && fixed_output.recursive {
         return Err(compiler_diagnostic(
             "foreign-compiler-executable-mode-mismatch",
@@ -875,19 +903,21 @@ fn ordered_fetch_candidates(
     node: &ForeignDerivationNode,
     payloads: &BTreeMap<&str, &SourcePayload>,
 ) -> Result<Vec<String>, ImportDiagnostic> {
-    let mut candidates = Vec::new();
-    if let Some(primary) = node.env.get("url").filter(|value| !value.trim().is_empty()) {
-        candidates.push(primary.clone());
-    }
-    for source_ref in &node.source_refs {
-        let payload = payloads.get(source_ref.payload_id.as_str()).copied().ok_or_else(|| {
-            compiler_diagnostic(
-                "foreign-compiler-missing-source",
-                Some(&node.node_id),
-                "fetch candidate source payload is absent",
-            )
-        })?;
-        candidates.extend(payload.mirrors.iter().cloned());
+    let mut candidates = node.fetch_candidates.clone();
+    if candidates.is_empty() {
+        if let Some(primary) = node.env.get("url").filter(|value| !value.trim().is_empty()) {
+            candidates.push(primary.clone());
+        }
+        for source_ref in &node.source_refs {
+            let payload = payloads.get(source_ref.payload_id.as_str()).copied().ok_or_else(|| {
+                compiler_diagnostic(
+                    "foreign-compiler-missing-source",
+                    Some(&node.node_id),
+                    "fetch candidate source payload is absent",
+                )
+            })?;
+            candidates.extend(payload.mirrors.iter().cloned());
+        }
     }
     if candidates.is_empty() || candidates.len() > MAX_FOREIGN_FETCH_CANDIDATES {
         return Err(compiler_diagnostic(
@@ -1932,6 +1962,60 @@ mod tests {
     }
 
     #[test]
+    fn compiler_binds_canonical_nix_candidates_and_order_into_recipe_identity() {
+        let primary = "https://primary.example/source.tar".to_string();
+        let mirror = "https://mirror.example/source.tar".to_string();
+        let mut first_graph = diamond_graph();
+        let first_leaf = first_graph.nodes.iter_mut().find(|node| node.node_id == "leaf").expect("leaf");
+        first_leaf.env.insert("url".to_string(), primary.clone());
+        first_leaf.fetch_candidates = vec![primary.clone(), mirror.clone()];
+
+        let first = compile_foreign_graph(&first_graph, TARGET_PREFIX).expect("canonical Nix fetch graph");
+        let first_unit = first.units.iter().find(|unit| unit.node_id == "leaf").expect("leaf unit");
+        match &first_unit.builtin {
+            CompiledForeignBuiltin::Download {
+                candidates,
+                mode,
+                executable,
+                content_digest,
+            } => {
+                assert_eq!(candidates, &[primary.clone(), mirror.clone()]);
+                assert_eq!(mode, FETCH_MODE_RECURSIVE);
+                assert!(!executable);
+                assert_eq!(content_digest.value, EMPTY_HASH);
+            }
+            other => panic!("unexpected lowered builtin: {other:?}"),
+        }
+        let encoded = first_unit
+            .derivation
+            .environment
+            .get(FOREIGN_FETCH_CANDIDATES_ENV)
+            .expect("private candidate binding");
+        assert_eq!(encoded, &serde_json::to_string(&vec![primary.clone(), mirror.clone()]).unwrap());
+
+        let mut second_graph = first_graph.clone();
+        let second_leaf = second_graph.nodes.iter_mut().find(|node| node.node_id == "leaf").expect("leaf");
+        second_leaf.env.insert("url".to_string(), mirror.clone());
+        second_leaf.fetch_candidates = vec![mirror, primary];
+        let second = compile_foreign_graph(&second_graph, TARGET_PREFIX).expect("reordered Nix fetch graph");
+        let second_unit = second.units.iter().find(|unit| unit.node_id == "leaf").expect("leaf unit");
+
+        assert_ne!(first_unit.target_derivation, second_unit.target_derivation);
+        assert_ne!(first_unit.aterm_digest, second_unit.aterm_digest);
+        let first_content = first_unit
+            .digest_facts
+            .iter()
+            .find(|fact| fact.role == FIXED_OUTPUT_CONTENT_ROLE)
+            .expect("first content fact");
+        let second_content = second_unit
+            .digest_facts
+            .iter()
+            .find(|fact| fact.role == FIXED_OUTPUT_CONTENT_ROLE)
+            .expect("second content fact");
+        assert_eq!(first_content, second_content);
+    }
+
+    #[test]
     fn compiler_lowers_git_revision_and_export_policy_to_mantle_fetch_facts() {
         let mut graph = diamond_graph();
         let primary = "https://git.example/project.git";
@@ -2250,6 +2334,7 @@ mod tests {
             })]),
             input_derivations,
             source_refs: Vec::new(),
+            fetch_candidates: Vec::new(),
             fixed_output: None,
             builtin: "nix.derivation".to_string(),
             declared_references: Vec::new(),

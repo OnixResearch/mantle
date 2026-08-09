@@ -168,6 +168,19 @@ Mantle verifies fixed-output downloads before store admission. Ordered candidate
 retain plan order, and failed candidates appear in the realization receipt.
 Trusted source-output claims still require the recorded store or attestation evidence.
 
+For supported Nix fixed-output fetches, the producer normalizes `url`,
+whitespace-separated `urls`, or structured `__json.urls` into one ordered graph
+field. The compiler binds that field into derivation and plan identity. It then
+emits the private runtime candidate binding. The fetch service does not parse
+Nix fields or ambient mirror settings.
+
+The producer rejects duplicate addresses, unsupported schemes, URL userinfo,
+unresolved `mirror://` aliases, conflicting primary addresses, and more than 16 candidates.
+A foreign graph cannot set `__mantle_foreign_candidates`. Candidate failure can
+advance in order. A fixed-output mismatch stops the attempt before PathInfo
+admission. This behavior does not prove mirror trust or arbitrary Nix fetcher
+compatibility.
+
 ### Cache and substitution trust
 
 Cache hints remain subject to store/substitution trust policy. A cache hint in a

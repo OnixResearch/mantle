@@ -30,7 +30,8 @@
     "builder": "/nix/store/55555555555555555555555555555555-builtin-fetchurl",
     "args": [],
     "env": {
-      "url": "https://source.example.invalid/hello.txt"
+      "url": "https://source.example.invalid/hello.txt",
+      "urls": "https://source.example.invalid/hello.txt https://mirror.example.invalid/hello.txt"
     },
     "outputs": {
       "out": {

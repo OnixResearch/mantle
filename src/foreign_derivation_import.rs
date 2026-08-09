@@ -6,6 +6,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use crunch_build::fetch_build_service::FOREIGN_FETCH_CANDIDATES_ENV as MANTLE_FOREIGN_CANDIDATES_ENV;
 use data_encoding::HEXLOWER;
 use serde::Deserialize;
 use serde::Serialize;
@@ -41,6 +42,8 @@ const MAX_ATERM_STORE_REFERENCES_PER_FIELD: usize = 256;
 const MAX_STRUCTURED_ATTRS_MEBIBYTES: usize = 1;
 const MAX_STRUCTURED_ATTRS_BYTES: usize = MAX_STRUCTURED_ATTRS_MEBIBYTES * MEBIBYTE_BYTES;
 const NIX_STRUCTURED_ATTRS_ENV: &str = "__json";
+const NIX_URL_ENV: &str = "url";
+const NIX_URLS_ENV: &str = "urls";
 const UNKNOWN_FOREIGN_PREFIX: &str = "/foreign/store";
 const GUIX_HELLO_NODE_ID: &str = "guix:hello";
 const NIX_HELLO_NODE_ID: &str = "nix:hello";
@@ -145,6 +148,8 @@ pub(crate) struct ForeignDerivationNode {
     pub(crate) outputs: BTreeMap<String, OutputDeclaration>,
     pub(crate) input_derivations: Vec<InputDerivationEdge>,
     pub(crate) source_refs: Vec<SourceRef>,
+    #[serde(default = "empty_strings", skip_serializing_if = "Vec::is_empty")]
+    pub(crate) fetch_candidates: Vec<String>,
     pub(crate) fixed_output: Option<FixedOutputMetadata>,
     pub(crate) builtin: String,
     pub(crate) declared_references: Vec<String>,
@@ -1200,6 +1205,7 @@ fn hello_fixture_graph(spec: &HelloFixtureSpec<'_>) -> ForeignDerivationGraph {
                 payload_id: payload_id.clone(),
                 field: SOURCE_REF_FIELD.to_string(),
             }],
+            fetch_candidates: Vec::new(),
             fixed_output: Some(FixedOutputMetadata {
                 algorithm: SHA256_ALGORITHM.to_string(),
                 digest: fixed_output_digest,
@@ -1679,6 +1685,18 @@ fn lower_aterm_derivation_node(
     let fixed_output = nix_fixed_output_metadata(&derivation.outputs, &derivation.env)?;
     let input_derivations = lower_nix_input_derivations(&derivation.input_drvs, context.path_to_node_id)?;
     let source_refs = lower_aterm_source_refs(&derivation.input_srcs, source_payloads, context.config)?;
+    let builtin = foreign_aterm_builtin(&context.config.source_prefix, fixed_output.is_some(), &derivation.builder);
+    let fetch_candidates = if builtin == FIXED_OUTPUT_FETCH_BUILTIN {
+        normalize_nix_fetch_candidates(&derivation.env)?
+    } else {
+        Vec::new()
+    };
+    let mut canonical_env = derivation.env.clone();
+    if let Some(primary) = fetch_candidates.first() {
+        canonical_env.remove(NIX_URLS_ENV);
+        canonical_env.remove(NIX_STRUCTURED_ATTRS_ENV);
+        canonical_env.insert(NIX_URL_ENV.to_string(), primary.clone());
+    }
     let declared_references = nix_declared_references(&derivation.input_drvs, &derivation.input_srcs, context.closure)?;
     let cache_hints = if request.is_root {
         context.config.cache_hints.to_vec()
@@ -1692,12 +1710,13 @@ fn lower_aterm_derivation_node(
         system: derivation.system.clone(),
         builder: derivation.builder.clone(),
         args: derivation.args.clone(),
-        env: derivation.env.clone(),
+        env: canonical_env,
         outputs,
         input_derivations,
         source_refs,
+        fetch_candidates,
         fixed_output: fixed_output.clone(),
-        builtin: foreign_aterm_builtin(&context.config.source_prefix, fixed_output.is_some()),
+        builtin,
         declared_references,
         sandbox_capabilities: Vec::new(),
         unsupported_features: Vec::new(),
@@ -1905,8 +1924,131 @@ fn foreign_source_payload_id(input_src: &str, source_prefix: &str) -> String {
     format!("{}-source:{short_digest}", foreign_store_namespace(source_prefix))
 }
 
-fn foreign_aterm_builtin(source_prefix: &str, fixed_output: bool) -> String {
-    if fixed_output {
+fn normalize_nix_fetch_candidates(env: &BTreeMap<String, String>) -> Result<Vec<String>, ImportDiagnostic> {
+    if env.contains_key(MANTLE_FOREIGN_CANDIDATES_ENV) {
+        return Err(diagnostic(
+            "reserved-fetch-candidate-field",
+            None,
+            "foreign input cannot set Mantle's private fetch candidate field",
+        ));
+    }
+    let direct_url = env.get(NIX_URL_ENV);
+    let direct_urls = env.get(NIX_URLS_ENV);
+    if direct_url.is_some_and(|value| value.trim().is_empty())
+        || direct_urls.is_some_and(|value| value.trim().is_empty())
+    {
+        return Err(diagnostic(
+            "empty-nix-fetch-candidate-field",
+            None,
+            "Nix fetch candidate fields must not be empty or whitespace-only",
+        ));
+    }
+    let candidates = if let Some(structured) = env.get(NIX_STRUCTURED_ATTRS_ENV) {
+        if direct_url.is_some() || direct_urls.is_some() {
+            return Err(diagnostic(
+                "conflicting-nix-fetch-candidate-surfaces",
+                None,
+                "structured Nix candidate data conflicts with top-level candidate fields",
+            ));
+        }
+        normalize_structured_nix_fetch_candidates(structured)?
+    } else if let Some(urls) = direct_urls {
+        let candidates = urls.split_whitespace().map(str::to_string).collect::<Vec<_>>();
+        if direct_url.is_some_and(|url| candidates.first() != Some(url)) {
+            return Err(diagnostic(
+                "conflicting-nix-fetch-primary",
+                None,
+                "Nix url must match the first unstructured urls candidate",
+            ));
+        }
+        candidates
+    } else {
+        direct_url.cloned().into_iter().collect()
+    };
+    validate_nix_fetch_candidates(candidates)
+}
+
+fn normalize_structured_nix_fetch_candidates(encoded: &str) -> Result<Vec<String>, ImportDiagnostic> {
+    require_byte_limit(encoded, MAX_STRUCTURED_ATTRS_BYTES, None, "structured_attrs")?;
+    let value = serde_json::from_str::<serde_json::Value>(encoded).map_err(|_| {
+        diagnostic("malformed-nix-fetch-candidates", None, "Nix structured attributes are not valid JSON")
+    })?;
+    let object = value.as_object().ok_or_else(|| {
+        diagnostic("malformed-nix-fetch-candidates", None, "Nix structured attributes must be an object")
+    })?;
+    let structured_url = object.get(NIX_URL_ENV).map(structured_candidate_string).transpose()?;
+    let structured_urls = object.get(NIX_URLS_ENV).map(structured_candidate_array).transpose()?;
+    let candidates = structured_urls.unwrap_or_else(|| structured_url.clone().into_iter().collect());
+    if structured_url.is_some_and(|url| candidates.first() != Some(&url)) {
+        return Err(diagnostic(
+            "conflicting-nix-fetch-primary",
+            None,
+            "structured Nix url must match the first urls candidate",
+        ));
+    }
+    Ok(candidates)
+}
+
+fn structured_candidate_string(value: &serde_json::Value) -> Result<String, ImportDiagnostic> {
+    value
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| diagnostic("non-string-nix-fetch-candidate", None, "structured Nix url must be a string"))
+}
+
+fn structured_candidate_array(value: &serde_json::Value) -> Result<Vec<String>, ImportDiagnostic> {
+    let values = value
+        .as_array()
+        .ok_or_else(|| diagnostic("malformed-nix-fetch-candidates", None, "structured Nix urls must be an array"))?;
+    values.iter().map(structured_candidate_string).collect()
+}
+
+fn validate_nix_fetch_candidates(candidates: Vec<String>) -> Result<Vec<String>, ImportDiagnostic> {
+    if candidates.is_empty() || candidates.len() > MAX_MIRROR_CANDIDATES {
+        return Err(diagnostic(
+            "nix-fetch-candidate-count-invalid",
+            None,
+            "Nix fetch candidate count is outside supported limits",
+        ));
+    }
+    let mut seen = BTreeSet::new();
+    for candidate in &candidates {
+        require_field_limit(candidate, None, "nix_fetch_candidate")?;
+        let parsed = url::Url::parse(candidate)
+            .map_err(|_| diagnostic("invalid-nix-fetch-candidate", None, "Nix fetch candidate is not a valid URL"))?;
+        if !matches!(parsed.scheme(), "http" | "https" | "file") {
+            return Err(diagnostic(
+                "unsupported-nix-fetch-candidate-scheme",
+                None,
+                "Nix fetch candidate scheme is unsupported or requires producer expansion",
+            ));
+        }
+        if !parsed.username().is_empty() || parsed.password().is_some() {
+            return Err(diagnostic(
+                "credential-bearing-nix-fetch-candidate",
+                None,
+                "Nix fetch candidates must not contain URL userinfo",
+            ));
+        }
+        if matches!(parsed.scheme(), "http" | "https") && parsed.host_str().is_none() {
+            return Err(diagnostic(
+                "invalid-nix-fetch-candidate",
+                None,
+                "HTTP Nix fetch candidates must name an authority",
+            ));
+        }
+        if !seen.insert(candidate) {
+            return Err(diagnostic("duplicate-nix-fetch-candidate", None, "Nix fetch candidates contain a duplicate"));
+        }
+    }
+    debug_assert!(!candidates.is_empty());
+    debug_assert!(candidates.len() <= MAX_MIRROR_CANDIDATES);
+    Ok(candidates)
+}
+
+fn foreign_aterm_builtin(source_prefix: &str, fixed_output: bool, builder: &str) -> String {
+    let builtin_fetchurl = builder == "builtin:fetchurl" || builder.ends_with("-builtin-fetchurl");
+    if fixed_output && builtin_fetchurl {
         return FIXED_OUTPUT_FETCH_BUILTIN.to_string();
     }
     format!("{}.derivation", foreign_store_namespace(source_prefix))
@@ -2162,6 +2304,7 @@ pub(crate) fn validate_graph(graph: &ForeignDerivationGraph) -> Result<(), Impor
     validate_unique_ids(graph)?;
     validate_roots(graph)?;
     validate_source_refs(graph)?;
+    validate_fetch_candidate_model(graph)?;
     validate_field_limits(graph)?;
     debug_assert!(!graph.nodes.is_empty());
     debug_assert!(graph.nodes.len() <= MAX_GRAPH_NODES);
@@ -2290,6 +2433,70 @@ fn validate_source_refs(graph: &ForeignDerivationGraph) -> Result<(), ImportDiag
                 ));
             }
         }
+    }
+    Ok(())
+}
+
+fn validate_fetch_candidate_model(graph: &ForeignDerivationGraph) -> Result<(), ImportDiagnostic> {
+    let payloads = graph
+        .source_payloads
+        .iter()
+        .map(|payload| (payload.payload_id.as_str(), payload))
+        .collect::<BTreeMap<_, _>>();
+    for node in &graph.nodes {
+        if node.env.contains_key(MANTLE_FOREIGN_CANDIDATES_ENV) {
+            return Err(diagnostic(
+                "reserved-fetch-candidate-field",
+                Some(&node.node_id),
+                "foreign graph cannot set Mantle's private fetch candidate field",
+            ));
+        }
+        if node.fetch_candidates.is_empty() {
+            continue;
+        }
+        if node.builtin != FIXED_OUTPUT_FETCH_BUILTIN {
+            return Err(diagnostic(
+                "fetch-candidates-on-unsupported-node",
+                Some(&node.node_id),
+                "canonical fetch candidates require a supported fixed-output fetch node",
+            ));
+        }
+        validate_nix_fetch_candidates(node.fetch_candidates.clone())?;
+        validate_legacy_candidate_agreement(node, &payloads)?;
+    }
+    Ok(())
+}
+
+fn validate_legacy_candidate_agreement(
+    node: &ForeignDerivationNode,
+    payloads: &BTreeMap<&str, &SourcePayload>,
+) -> Result<(), ImportDiagnostic> {
+    let primary = node.env.get(NIX_URL_ENV).filter(|value| !value.trim().is_empty());
+    if primary.is_some_and(|value| node.fetch_candidates.first() != Some(value)) {
+        return Err(diagnostic(
+            "canonical-fetch-primary-conflict",
+            Some(&node.node_id),
+            "canonical fetch candidates conflict with the legacy primary URL",
+        ));
+    }
+    let mut mirrors = Vec::new();
+    for source_ref in &node.source_refs {
+        let payload = payloads.get(source_ref.payload_id.as_str()).ok_or_else(|| {
+            diagnostic("missing-source-payload-ref", Some(&node.node_id), "node references missing source payload")
+        })?;
+        mirrors.extend(payload.mirrors.iter().cloned());
+    }
+    let legacy_mirrors = if primary.is_some() {
+        node.fetch_candidates.get(1..)
+    } else {
+        Some(node.fetch_candidates.as_slice())
+    };
+    if !mirrors.is_empty() && legacy_mirrors != Some(mirrors.as_slice()) {
+        return Err(diagnostic(
+            "canonical-fetch-candidates-conflict",
+            Some(&node.node_id),
+            "canonical fetch candidates conflict with legacy source mirrors",
+        ));
     }
     Ok(())
 }
@@ -2664,6 +2871,256 @@ mod tests {
         assert_eq!(modern, (SHA256_ALGORITHM.to_string(), true));
         assert_eq!(legacy, modern);
         assert_eq!(flat, (SHA256_ALGORITHM.to_string(), false));
+    }
+
+    #[test]
+    fn nix_fetch_candidates_normalize_direct_unstructured_and_structured_forms() {
+        let direct = BTreeMap::from([(NIX_URL_ENV.to_string(), "https://primary.example/source".to_string())]);
+        let unstructured = BTreeMap::from([
+            (NIX_URL_ENV.to_string(), "https://primary.example/source".to_string()),
+            (NIX_URLS_ENV.to_string(), "https://primary.example/source https://mirror.example/source".to_string()),
+        ]);
+        let structured = BTreeMap::from([(
+            NIX_STRUCTURED_ATTRS_ENV.to_string(),
+            serde_json::json!({
+                "url": "https://primary.example/source",
+                "urls": ["https://primary.example/source", "https://mirror.example/source"]
+            })
+            .to_string(),
+        )]);
+
+        assert_eq!(normalize_nix_fetch_candidates(&direct).unwrap(), vec![
+            "https://primary.example/source".to_string()
+        ]);
+        let expected = vec![
+            "https://primary.example/source".to_string(),
+            "https://mirror.example/source".to_string(),
+        ];
+        assert_eq!(normalize_nix_fetch_candidates(&unstructured).unwrap(), expected);
+        assert_eq!(normalize_nix_fetch_candidates(&structured).unwrap(), expected);
+    }
+
+    #[test]
+    fn nix_fetch_candidates_reject_invalid_ambiguous_and_private_forms() {
+        let cases = [
+            (BTreeMap::new(), "nix-fetch-candidate-count-invalid"),
+            (BTreeMap::from([(NIX_URLS_ENV.to_string(), "   ".to_string())]), "empty-nix-fetch-candidate-field"),
+            (
+                BTreeMap::from([(NIX_STRUCTURED_ATTRS_ENV.to_string(), "not-json".to_string())]),
+                "malformed-nix-fetch-candidates",
+            ),
+            (
+                BTreeMap::from([(
+                    NIX_STRUCTURED_ATTRS_ENV.to_string(),
+                    serde_json::json!({"urls": ["https://example/source", 1]}).to_string(),
+                )]),
+                "non-string-nix-fetch-candidate",
+            ),
+            (
+                BTreeMap::from([
+                    (NIX_URL_ENV.to_string(), "https://example/source".to_string()),
+                    (
+                        NIX_STRUCTURED_ATTRS_ENV.to_string(),
+                        serde_json::json!({"urls": ["https://example/source"]}).to_string(),
+                    ),
+                ]),
+                "conflicting-nix-fetch-candidate-surfaces",
+            ),
+            (
+                BTreeMap::from([
+                    (NIX_URL_ENV.to_string(), "https://other/source".to_string()),
+                    (NIX_URLS_ENV.to_string(), "https://example/source".to_string()),
+                ]),
+                "conflicting-nix-fetch-primary",
+            ),
+            (
+                BTreeMap::from([(
+                    NIX_URLS_ENV.to_string(),
+                    "https://example/source https://example/source".to_string(),
+                )]),
+                "duplicate-nix-fetch-candidate",
+            ),
+            (
+                BTreeMap::from([(NIX_URL_ENV.to_string(), "mirror://gnu/source".to_string())]),
+                "unsupported-nix-fetch-candidate-scheme",
+            ),
+            (
+                BTreeMap::from([(NIX_URL_ENV.to_string(), "https://user:secret@example.test/source".to_string())]),
+                "credential-bearing-nix-fetch-candidate",
+            ),
+            (
+                BTreeMap::from([(MANTLE_FOREIGN_CANDIDATES_ENV.to_string(), "[]".to_string())]),
+                "reserved-fetch-candidate-field",
+            ),
+        ];
+
+        for (env, expected) in cases {
+            assert_error_class(normalize_nix_fetch_candidates(&env), expected);
+        }
+        let too_many = (0..=MAX_MIRROR_CANDIDATES)
+            .map(|index| format!("https://mirror{index}.example/source"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert_error_class(
+            normalize_nix_fetch_candidates(&BTreeMap::from([(NIX_URLS_ENV.to_string(), too_many)])),
+            "nix-fetch-candidate-count-invalid",
+        );
+    }
+
+    #[test]
+    fn structured_and_unstructured_nix_candidates_lower_to_equal_node_facts() {
+        let candidates = vec![
+            "https://source.example.invalid/hello.txt".to_string(),
+            "https://mirror.example.invalid/hello.txt".to_string(),
+        ];
+        let mut unstructured = nixpkgs_hello_closure();
+        unstructured
+            .get_mut(NIXPKGS_SOURCE_DRV)
+            .expect("source fixture")
+            .env
+            .insert(NIX_URLS_ENV.to_string(), candidates.join(" "));
+        let mut structured = nixpkgs_hello_closure();
+        let structured_source = structured.get_mut(NIXPKGS_SOURCE_DRV).expect("source fixture");
+        structured_source.env.remove(NIX_URL_ENV);
+        structured_source.env.insert(
+            NIX_STRUCTURED_ATTRS_ENV.to_string(),
+            serde_json::json!({"url": candidates[0], "urls": candidates}).to_string(),
+        );
+
+        let unstructured = lower_nix_derivation_json_closure(&unstructured, &nixpkgs_producer_config()).unwrap();
+        let structured = lower_nix_derivation_json_closure(&structured, &nixpkgs_producer_config()).unwrap();
+        let unstructured_source = unstructured
+            .graph
+            .nodes
+            .iter()
+            .find(|node| node.original_derivation == NIXPKGS_SOURCE_DRV)
+            .expect("unstructured source node");
+        let structured_source = structured
+            .graph
+            .nodes
+            .iter()
+            .find(|node| node.original_derivation == NIXPKGS_SOURCE_DRV)
+            .expect("structured source node");
+
+        assert_eq!(unstructured_source.fetch_candidates, structured_source.fetch_candidates);
+        assert_eq!(unstructured_source.env, structured_source.env);
+        assert_eq!(unstructured_source.fixed_output, structured_source.fixed_output);
+    }
+
+    #[test]
+    fn nix_lowering_emits_canonical_candidates_and_keeps_arbitrary_fixed_outputs_non_downloads() {
+        let mut closure = nixpkgs_hello_closure();
+        let source = closure.get_mut(NIXPKGS_SOURCE_DRV).expect("source fixture");
+        source.env.insert(
+            NIX_URLS_ENV.to_string(),
+            "https://source.example.invalid/hello.txt https://mirror.example.invalid/hello.txt".to_string(),
+        );
+        let artifacts = lower_nix_derivation_json_closure(&closure, &nixpkgs_producer_config()).unwrap();
+        let node = artifacts
+            .graph
+            .nodes
+            .iter()
+            .find(|node| node.original_derivation == NIXPKGS_SOURCE_DRV)
+            .expect("source node");
+        assert_eq!(node.fetch_candidates, vec![
+            "https://source.example.invalid/hello.txt".to_string(),
+            "https://mirror.example.invalid/hello.txt".to_string(),
+        ]);
+        assert!(!node.env.contains_key(NIX_URLS_ENV));
+        assert_eq!(node.env[NIX_URL_ENV], node.fetch_candidates[0]);
+
+        let mut unsupported = nixpkgs_hello_closure();
+        unsupported.get_mut(NIXPKGS_SOURCE_DRV).expect("source fixture").builder = "/bin/custom-transform".to_string();
+        let artifacts = lower_nix_derivation_json_closure(&unsupported, &nixpkgs_producer_config()).unwrap();
+        let node = artifacts
+            .graph
+            .nodes
+            .iter()
+            .find(|node| node.original_derivation == NIXPKGS_SOURCE_DRV)
+            .expect("source node");
+        assert_eq!(node.builtin, NIX_DERIVATION_BUILTIN);
+        assert!(node.fetch_candidates.is_empty());
+    }
+
+    #[test]
+    fn canonical_fetch_candidate_validation_rejects_conflicts_and_private_injection() {
+        let mut artifacts = lower_nix_derivation_json_closure(&nixpkgs_hello_closure(), &nixpkgs_producer_config())
+            .expect("fixture graph");
+        let source = artifacts
+            .graph
+            .nodes
+            .iter_mut()
+            .find(|node| node.original_derivation == NIXPKGS_SOURCE_DRV)
+            .expect("source node");
+        source.fetch_candidates[0] = "https://different.example/source".to_string();
+        assert_error_class(validate_graph(&artifacts.graph), "canonical-fetch-primary-conflict");
+
+        let mut reserved = lower_nix_derivation_json_closure(&nixpkgs_hello_closure(), &nixpkgs_producer_config())
+            .expect("fixture graph");
+        reserved.graph.nodes[0].env.insert(MANTLE_FOREIGN_CANDIDATES_ENV.to_string(), "[]".to_string());
+        assert_error_class(validate_graph(&reserved.graph), "reserved-fetch-candidate-field");
+    }
+
+    #[test]
+    fn canonical_fetch_graph_model_preserves_legacy_decode_and_rejects_invalid_lists() {
+        let artifacts = lower_nix_derivation_json_closure(&nixpkgs_hello_closure(), &nixpkgs_producer_config())
+            .expect("fixture graph");
+        let mut legacy_value = serde_json::to_value(&artifacts.graph).expect("graph JSON");
+        let legacy_source = legacy_value["nodes"]
+            .as_array_mut()
+            .expect("graph nodes")
+            .iter_mut()
+            .find(|node| node["original_derivation"] == NIXPKGS_SOURCE_DRV)
+            .expect("source node");
+        legacy_source.as_object_mut().expect("source object").remove("fetch_candidates");
+        let legacy = serde_json::from_value::<ForeignDerivationGraph>(legacy_value).expect("legacy graph decode");
+        validate_graph(&legacy).expect("legacy graph validation");
+        assert!(
+            legacy
+                .nodes
+                .iter()
+                .find(|node| node.original_derivation == NIXPKGS_SOURCE_DRV)
+                .expect("legacy source")
+                .fetch_candidates
+                .is_empty()
+        );
+
+        let mut duplicate = artifacts.graph.clone();
+        let duplicate_source = duplicate
+            .nodes
+            .iter_mut()
+            .find(|node| node.original_derivation == NIXPKGS_SOURCE_DRV)
+            .expect("source node");
+        duplicate_source.fetch_candidates.push(duplicate_source.fetch_candidates[0].clone());
+        assert_error_class(validate_graph(&duplicate), "duplicate-nix-fetch-candidate");
+
+        let mut oversized = artifacts.graph.clone();
+        oversized
+            .nodes
+            .iter_mut()
+            .find(|node| node.original_derivation == NIXPKGS_SOURCE_DRV)
+            .expect("source node")
+            .fetch_candidates =
+            (0..=MAX_MIRROR_CANDIDATES).map(|index| format!("https://mirror{index}.example/source")).collect();
+        assert_error_class(validate_graph(&oversized), "nix-fetch-candidate-count-invalid");
+
+        let mut wrong_kind = artifacts.graph;
+        wrong_kind
+            .nodes
+            .iter_mut()
+            .find(|node| node.original_derivation == NIXPKGS_SOURCE_DRV)
+            .expect("source node")
+            .builtin = NIX_DERIVATION_BUILTIN.to_string();
+        assert_error_class(validate_graph(&wrong_kind), "fetch-candidates-on-unsupported-node");
+    }
+
+    #[test]
+    fn canonical_fetch_graph_model_rejects_stale_legacy_mirrors() {
+        let (mut graph, _) = guix_like_hello_fixture();
+        graph.nodes[0].fetch_candidates = vec!["https://different.example/hello.tar.gz".to_string()];
+
+        assert_error_class(validate_graph(&graph), "canonical-fetch-candidates-conflict");
+        assert_eq!(graph.source_payloads[0].mirrors.len(), 1);
     }
 
     #[test]
@@ -3074,6 +3531,7 @@ mod tests {
             ("builder".to_string(), "builtin:fetchurl".to_string()),
             ("name".to_string(), "hello-source".to_string()),
             ("system".to_string(), "builtin".to_string()),
+            (NIX_URL_ENV.to_string(), "https://source.example.invalid/hello.txt".to_string()),
         ]);
         if include_env_out {
             env.insert(OUT_OUTPUT_NAME.to_string(), NIXPKGS_SOURCE_OUT.to_string());
@@ -3115,7 +3573,7 @@ mod tests {
             system: HELLO_SYSTEM.to_string(),
             builder: "/nix/store/55555555555555555555555555555555-builtin-fetchurl".to_string(),
             args: Vec::new(),
-            env: BTreeMap::new(),
+            env: BTreeMap::from([(NIX_URL_ENV.to_string(), "https://source.example.invalid/hello.txt".to_string())]),
             outputs,
             input_drvs: BTreeMap::new(),
             input_srcs: Vec::new(),
