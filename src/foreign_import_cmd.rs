@@ -28,7 +28,6 @@ use crate::foreign_derivation_import::admit_translated_graph;
 use crate::foreign_derivation_import::foreign_import_non_claims;
 use crate::foreign_derivation_import::lower_nix_derivation_json_closure;
 use crate::foreign_derivation_import::lower_prefix_aware_aterm_closure;
-use crate::foreign_derivation_import::normalize_nix_aterm_derivation_closure;
 use crate::foreign_derivation_import::normalize_nix_derivation_json_export;
 use crate::foreign_derivation_import::parse_prefix_aware_aterm_bundle;
 use crate::foreign_derivation_import::select_nix_derivation_json_closure;
@@ -1895,36 +1894,39 @@ fn read_nix_aterm_drv_closure(
     drv_file_specs: &[String],
 ) -> Result<Result<crate::foreign_derivation_import::NixDerivationJsonClosure, ForeignImportCliReport>, RunError> {
     assert!(!drv_file_specs.is_empty(), "explicit ATerm closure requires at least one drv file");
-    assert!(!NIX_LOGICAL_STORE_PREFIX.is_empty(), "Nix logical store prefix must not be empty");
-    let mut derivations = BTreeMap::new();
+    if drv_file_specs.len() > MAX_ATERM_BUNDLE_DERIVATIONS {
+        return Ok(Err(nix_input_rejection(
+            "nix-derivation-count-out-of-range",
+            "explicit Nix derivation closure exceeds the file-count limit",
+        )));
+    }
+    let mut inputs = Vec::with_capacity(drv_file_specs.len());
+    let mut total_bytes = 0usize;
     for spec in drv_file_specs {
         let (logical_path, file_path) = match parse_drv_file_spec(spec) {
             Ok(pair) => pair,
             Err(diagnostic) => return Ok(Err(rejected_report(PRODUCE_NIX_COMMAND, diagnostic))),
         };
-        let derivation = match parse_nix_aterm_drv_file(&logical_path, &file_path) {
-            Ok(derivation) => derivation,
+        let input = match read_nix_aterm_input(&logical_path, &file_path) {
+            Ok(input) => input,
             Err(report) => return Ok(Err(report)),
         };
-        if derivations.insert(logical_path, derivation).is_some() {
-            return Ok(Err(rejected_report(
-                PRODUCE_NIX_COMMAND,
-                diagnostic("duplicate-nix-derivation-path", None, "duplicate --drv logical derivation path"),
-            )));
+        if let Err(report) = push_bounded_nix_input(&mut inputs, &mut total_bytes, input) {
+            return Ok(Err(report));
         }
     }
-    normalize_nix_aterm_drv_map(derivations)
+    parse_reviewed_nix_inputs(&inputs)
 }
 
 fn read_nix_aterm_drv_dir_closure(
     drv_dir: &Path,
     root_derivation: &str,
 ) -> Result<Result<crate::foreign_derivation_import::NixDerivationJsonClosure, ForeignImportCliReport>, RunError> {
-    let derivations = match read_nix_aterm_drv_dir(drv_dir)? {
-        Ok(derivations) => derivations,
+    let inputs = match read_nix_aterm_drv_dir(drv_dir)? {
+        Ok(inputs) => inputs,
         Err(report) => return Ok(Err(report)),
     };
-    let closure = match normalize_nix_aterm_drv_map(derivations)? {
+    let closure = match parse_reviewed_nix_inputs(&inputs)? {
         Ok(closure) => closure,
         Err(report) => return Ok(Err(report)),
     };
@@ -1936,67 +1938,109 @@ fn read_nix_aterm_drv_dir_closure(
 
 fn read_nix_aterm_drv_dir(
     drv_dir: &Path,
-) -> Result<Result<BTreeMap<String, nix_compat::derivation::Derivation>, ForeignImportCliReport>, RunError> {
+) -> Result<Result<Vec<AtermDerivationInput>, ForeignImportCliReport>, RunError> {
     assert!(!NIX_LOGICAL_STORE_PREFIX.is_empty(), "Nix logical store prefix must not be empty");
     assert!(!DRV_FILE_EXTENSION.is_empty(), "ATerm drv extension must not be empty");
-    let mut entries = fs::read_dir(drv_dir)
-        .map_err(|error| RunError::Internal(format!("reading foreign import drv dir {}: {error}", drv_dir.display())))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| {
+    let entries = fs::read_dir(drv_dir).map_err(|error| {
+        RunError::Internal(format!("reading foreign import drv dir {}: {error}", drv_dir.display()))
+    })?;
+    let mut file_paths = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|error| {
             RunError::Internal(format!("reading foreign import drv dir {}: {error}", drv_dir.display()))
         })?;
-    entries.sort_by_key(|entry| entry.path());
-    let derivation_count_max = entries.len();
-    let mut derivations = BTreeMap::new();
-    for entry in entries {
         let file_path = entry.path();
         if file_path.extension().and_then(|extension| extension.to_str()) != Some(DRV_FILE_EXTENSION) {
             continue;
         }
+        if file_paths.len() >= MAX_ATERM_BUNDLE_DERIVATIONS {
+            return Ok(Err(nix_input_rejection(
+                "nix-derivation-count-out-of-range",
+                "Nix derivation directory exceeds the file-count limit",
+            )));
+        }
+        file_paths.push(file_path);
+    }
+    file_paths.sort();
+    read_nix_aterm_paths(&file_paths)
+}
+
+fn read_nix_aterm_paths(
+    file_paths: &[PathBuf],
+) -> Result<Result<Vec<AtermDerivationInput>, ForeignImportCliReport>, RunError> {
+    let mut inputs = Vec::with_capacity(file_paths.len());
+    let mut total_bytes = 0usize;
+    for file_path in file_paths {
         let Some(file_name) = file_path.file_name().and_then(|name| name.to_str()) else {
-            return Ok(Err(rejected_report(
-                PRODUCE_NIX_COMMAND,
-                diagnostic("non-utf8-nix-derivation-filename", None, "drv directory contains non-UTF-8 filename"),
+            return Ok(Err(nix_input_rejection(
+                "non-utf8-nix-derivation-filename",
+                "Nix derivation directory contains a non-UTF-8 filename",
             )));
         };
         let logical_path = format!("{NIX_LOGICAL_STORE_PREFIX}/{file_name}");
-        let derivation = match parse_nix_aterm_drv_file(&logical_path, &file_path) {
-            Ok(derivation) => derivation,
+        let input = match read_nix_aterm_input(&logical_path, file_path) {
+            Ok(input) => input,
             Err(report) => return Ok(Err(report)),
         };
-        if derivations.len() >= derivation_count_max {
-            return Err(RunError::Internal("ATerm derivation count exceeded directory entries".to_string()));
+        if let Err(report) = push_bounded_nix_input(&mut inputs, &mut total_bytes, input) {
+            return Ok(Err(report));
         }
-        derivations.insert(logical_path, derivation);
     }
-    Ok(Ok(derivations))
+    Ok(Ok(inputs))
 }
 
-fn normalize_nix_aterm_drv_map(
-    derivations: BTreeMap<String, nix_compat::derivation::Derivation>,
+fn read_nix_aterm_input(logical_path: &str, file_path: &Path) -> Result<AtermDerivationInput, ForeignImportCliReport> {
+    let read_limit = MAX_ATERM_DERIVATION_BYTES.checked_add(1).expect("Nix derivation read limit must fit usize");
+    let read_limit_u64 = u64::try_from(read_limit).expect("Nix derivation read limit must fit u64");
+    let file = fs::File::open(file_path).map_err(|error| {
+        nix_input_rejection(
+            "unreadable-nix-derivation-file",
+            &format!("reading {logical_path} from {}: {error}", file_path.display()),
+        )
+    })?;
+    let mut bytes = Vec::new();
+    file.take(read_limit_u64).read_to_end(&mut bytes).map_err(|error| {
+        nix_input_rejection(
+            "unreadable-nix-derivation-file",
+            &format!("reading {logical_path} from {}: {error}", file_path.display()),
+        )
+    })?;
+    Ok(AtermDerivationInput {
+        logical_path: logical_path.to_string(),
+        bytes,
+    })
+}
+
+fn push_bounded_nix_input(
+    inputs: &mut Vec<AtermDerivationInput>,
+    total_bytes: &mut usize,
+    input: AtermDerivationInput,
+) -> Result<(), ForeignImportCliReport> {
+    let next_total = total_bytes.checked_add(input.bytes.len()).ok_or_else(|| {
+        nix_input_rejection("nix-derivation-bundle-bytes-out-of-range", "Nix derivation bundle byte count overflowed")
+    })?;
+    if next_total > MAX_ATERM_BUNDLE_BYTES {
+        return Err(nix_input_rejection(
+            "nix-derivation-bundle-bytes-out-of-range",
+            "Nix derivation bundle exceeds the total byte limit",
+        ));
+    }
+    *total_bytes = next_total;
+    inputs.push(input);
+    Ok(())
+}
+
+fn parse_reviewed_nix_inputs(
+    inputs: &[AtermDerivationInput],
 ) -> Result<Result<crate::foreign_derivation_import::NixDerivationJsonClosure, ForeignImportCliReport>, RunError> {
-    Ok(match normalize_nix_aterm_derivation_closure(derivations) {
+    Ok(match parse_prefix_aware_aterm_bundle(NIX_LOGICAL_STORE_PREFIX, inputs) {
         Ok(closure) => Ok(closure),
         Err(diagnostic) => Err(rejected_report(PRODUCE_NIX_COMMAND, diagnostic)),
     })
 }
 
-fn parse_nix_aterm_drv_file(
-    logical_path: &str,
-    file_path: &Path,
-) -> Result<nix_compat::derivation::Derivation, ForeignImportCliReport> {
-    let bytes = fs::read(file_path).map_err(|error| {
-        rejected_report(
-            PRODUCE_NIX_COMMAND,
-            diagnostic("unreadable-nix-derivation-file", None, &format!("reading {}: {error}", file_path.display())),
-        )
-    })?;
-    nix_compat::derivation::Derivation::from_aterm_bytes(&bytes).map_err(|error| {
-        rejected_report(
-            PRODUCE_NIX_COMMAND,
-            diagnostic("malformed-nix-derivation", None, &format!("{logical_path}: {error:?}")),
-        )
-    })
+fn nix_input_rejection(class: &str, message: &str) -> ForeignImportCliReport {
+    rejected_report(PRODUCE_NIX_COMMAND, diagnostic(class, None, message))
 }
 
 fn parse_drv_file_spec(spec: &str) -> Result<(String, PathBuf), ImportDiagnostic> {

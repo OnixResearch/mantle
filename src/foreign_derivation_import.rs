@@ -11,6 +11,16 @@ use data_encoding::HEXLOWER;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::nix_derivation_adapter::AdapterDerivation;
+use crate::nix_derivation_adapter::AdapterError;
+use crate::nix_derivation_adapter::AdapterFixedOutput;
+use crate::nix_derivation_adapter::AdapterLimits;
+use crate::nix_derivation_adapter::AdapterOutput;
+use crate::nix_derivation_adapter::AdapterOutputKind;
+use crate::nix_derivation_adapter::AdapterSyntax;
+use crate::nix_derivation_adapter::AdapterValidation;
+use crate::nix_derivation_adapter::parse_derivation as parse_reviewed_nix_derivation;
+
 const GRAPH_SCHEMA: &str = "foreign-derivation-graph-v1";
 const PACKAGE_INDEX_SCHEMA: &str = "foreign-package-index-v1";
 const IMPORT_RECEIPT_SCHEMA: &str = "foreign-derivation-import-receipt-v1";
@@ -38,6 +48,7 @@ pub(crate) const MAX_ATERM_DERIVATION_BYTES: usize = MAX_ATERM_DERIVATION_MEBIBY
 pub(crate) const MAX_ATERM_BUNDLE_BYTES: usize = MAX_ATERM_BUNDLE_MEBIBYTES * MEBIBYTE_BYTES;
 pub(crate) const MAX_ATERM_BUNDLE_DERIVATIONS: usize = MAX_GRAPH_NODES;
 const MAX_ATERM_COLLECTION_ITEMS: usize = 256;
+const MAX_ATERM_DYNAMIC_DEPTH: usize = 256;
 const MAX_ATERM_STORE_REFERENCES_PER_FIELD: usize = 256;
 const MAX_STRUCTURED_ATTRS_MEBIBYTES: usize = 1;
 const MAX_STRUCTURED_ATTRS_BYTES: usize = MAX_STRUCTURED_ATTRS_MEBIBYTES * MEBIBYTE_BYTES;
@@ -637,6 +648,20 @@ fn parse_prefix_aware_aterm_derivation(
     input: &AtermDerivationInput,
     source_prefix: &str,
 ) -> Result<NixDerivationJsonNode, ImportDiagnostic> {
+    if source_prefix == NIX_SOURCE_PREFIX {
+        reject_mixed_nix_store_prefix(&input.bytes, &input.logical_path)?;
+        let derivation =
+            parse_reviewed_nix_derivation(&input.logical_path, &input.bytes, reviewed_nix_adapter_limits())
+                .map_err(nix_adapter_diagnostic)?;
+        return normalize_reviewed_nix_derivation(derivation);
+    }
+    parse_prefix_rewritten_aterm_derivation(input, source_prefix)
+}
+
+fn parse_prefix_rewritten_aterm_derivation(
+    input: &AtermDerivationInput,
+    source_prefix: &str,
+) -> Result<NixDerivationJsonNode, ImportDiagnostic> {
     if input.bytes.is_empty() || input.bytes.len() > MAX_ATERM_DERIVATION_BYTES {
         return Err(diagnostic(
             "foreign-aterm-bytes-out-of-range",
@@ -661,6 +686,203 @@ fn parse_prefix_aware_aterm_derivation(
     debug_assert!(input.logical_path.starts_with(source_prefix));
     debug_assert!(node.input_drvs.len() <= MAX_ATERM_COLLECTION_ITEMS);
     Ok(node)
+}
+
+fn reviewed_nix_adapter_limits() -> AdapterLimits {
+    AdapterLimits {
+        derivation_bytes_max: MAX_ATERM_DERIVATION_BYTES,
+        collection_items_max: MAX_ATERM_COLLECTION_ITEMS,
+        input_edges_max: MAX_GRAPH_EDGES,
+        field_bytes_max: MAX_FIELD_BYTES,
+        structured_attrs_bytes_max: MAX_STRUCTURED_ATTRS_BYTES,
+        dynamic_depth_max: MAX_ATERM_DYNAMIC_DEPTH,
+    }
+}
+
+fn reject_mixed_nix_store_prefix(bytes: &[u8], logical_path: &str) -> Result<(), ImportDiagnostic> {
+    const GUIX_PREFIX: &[u8] = b"/gnu/store/";
+    if bytes.windows(GUIX_PREFIX.len()).any(|window| window == GUIX_PREFIX) {
+        return Err(diagnostic(
+            "mixed-foreign-store-prefix",
+            None,
+            &format!("Nix derivation contains /gnu/store outside declared /nix/store: {logical_path}"),
+        ));
+    }
+    Ok(())
+}
+
+fn nix_adapter_diagnostic(error: AdapterError) -> ImportDiagnostic {
+    diagnostic(error.class, None, &error.message)
+}
+
+fn normalize_reviewed_nix_derivation(derivation: AdapterDerivation) -> Result<NixDerivationJsonNode, ImportDiagnostic> {
+    if derivation.syntax == AdapterSyntax::Versioned {
+        return Err(diagnostic(
+            "unsupported-nix-versioned-derivation",
+            None,
+            "versioned Nix derivations require a separate graph-shape cutover",
+        ));
+    }
+    if let AdapterValidation::Rejected(message) = &derivation.validation {
+        return Err(diagnostic("invalid-nix-derivation-semantics", None, message));
+    }
+    let env = normalize_reviewed_nix_environment(&derivation)?;
+    validate_reviewed_nix_name(&derivation, &env)?;
+    let outputs = normalize_reviewed_nix_outputs(&derivation.outputs)?;
+    let input_drvs = normalize_reviewed_nix_inputs(&derivation)?;
+    let node = NixDerivationJsonNode {
+        name: derivation.name.clone(),
+        system: derivation.system,
+        builder: derivation.builder,
+        args: derivation.arguments,
+        env,
+        outputs,
+        input_drvs,
+        input_srcs: derivation.input_sources,
+    };
+    debug_assert!(derivation.logical_path.starts_with(NIX_STORE_PREFIX_WITH_SLASH));
+    debug_assert!(!derivation.canonical_aterm.is_empty());
+    debug_assert!(derivation.computed_drv_path.starts_with(NIX_STORE_PREFIX_WITH_SLASH));
+    debug_assert!(derivation.modulo_hash_without_inputs.is_none() || node.input_drvs.is_empty());
+    Ok(node)
+}
+
+fn normalize_reviewed_nix_environment(
+    derivation: &AdapterDerivation,
+) -> Result<BTreeMap<String, String>, ImportDiagnostic> {
+    let mut env = BTreeMap::new();
+    for (key, bytes) in &derivation.environment {
+        let value = std::str::from_utf8(bytes).map_err(|_| {
+            diagnostic(
+                "non-utf8-nix-derivation-projection",
+                None,
+                &format!("Nix derivation environment value is not UTF-8: {key}"),
+            )
+        })?;
+        validate_embedded_foreign_store_paths(value, NIX_SOURCE_PREFIX, "environment")?;
+        env.insert(key.clone(), value.to_string());
+    }
+    if let Some(json) = derivation.structured_attrs_json.as_ref() {
+        let json = std::str::from_utf8(json).map_err(|_| {
+            diagnostic("non-utf8-nix-derivation-projection", None, "Nix structured attributes are not UTF-8")
+        })?;
+        env.insert(NIX_STRUCTURED_ATTRS_ENV.to_string(), json.to_string());
+    }
+    Ok(env)
+}
+
+fn validate_reviewed_nix_name(
+    derivation: &AdapterDerivation,
+    env: &BTreeMap<String, String>,
+) -> Result<(), ImportDiagnostic> {
+    if let Some(environment_name) = env.get("name")
+        && environment_name != &derivation.name
+    {
+        return Err(diagnostic(
+            "nix-derivation-name-mismatch",
+            None,
+            "Nix derivation environment name differs from its logical .drv identity",
+        ));
+    }
+    Ok(())
+}
+
+fn normalize_reviewed_nix_outputs(
+    outputs: &BTreeMap<String, AdapterOutput>,
+) -> Result<BTreeMap<String, NixDerivationJsonOutput>, ImportDiagnostic> {
+    if outputs.is_empty() {
+        return Err(diagnostic("missing-output-declaration", None, "Nix derivation has no outputs"));
+    }
+    outputs.iter().map(|(name, output)| normalize_reviewed_nix_output(name, output)).collect()
+}
+
+fn normalize_reviewed_nix_output(
+    name: &str,
+    output: &AdapterOutput,
+) -> Result<(String, NixDerivationJsonOutput), ImportDiagnostic> {
+    let path = output.path.clone().ok_or_else(|| {
+        diagnostic(
+            "unsupported-nix-derivation-output",
+            None,
+            &format!("Nix output {name} has no concrete pre-build path"),
+        )
+    })?;
+    let (hash, hash_algo) = match &output.kind {
+        AdapterOutputKind::InputAddressed => (None, None),
+        AdapterOutputKind::Fixed(fixed) => reviewed_fixed_output_fields(fixed)?,
+        AdapterOutputKind::Floating { method, algorithm } => {
+            return Err(unsupported_output_variant(name, "floating", method, algorithm));
+        }
+        AdapterOutputKind::Deferred => {
+            return Err(unsupported_output_variant(name, "deferred", "none", "none"));
+        }
+        AdapterOutputKind::Impure { method, algorithm } => {
+            return Err(unsupported_output_variant(name, "impure", method, algorithm));
+        }
+    };
+    Ok((name.to_string(), NixDerivationJsonOutput {
+        path: Some(path),
+        hash,
+        hash_algo,
+    }))
+}
+
+fn reviewed_fixed_output_fields(
+    fixed: &AdapterFixedOutput,
+) -> Result<(Option<String>, Option<String>), ImportDiagnostic> {
+    let hash_algo = match fixed.method {
+        "flat" => fixed.algorithm.to_string(),
+        "nar" => format!("r:{}", fixed.algorithm),
+        "text" | "git" => {
+            return Err(diagnostic(
+                "unsupported-nix-derivation-output",
+                None,
+                &format!("Nix fixed output method is not admitted: {}", fixed.method),
+            ));
+        }
+        other => {
+            return Err(diagnostic(
+                "unsupported-nix-derivation-output",
+                None,
+                &format!("Nix fixed output method is unknown: {other}"),
+            ));
+        }
+    };
+    Ok((Some(fixed.digest_hex.clone()), Some(hash_algo)))
+}
+
+fn unsupported_output_variant(name: &str, variant: &str, method: &str, algorithm: &str) -> ImportDiagnostic {
+    diagnostic(
+        "unsupported-nix-derivation-output",
+        None,
+        &format!("Nix output {name} uses unsupported {variant} form {method}:{algorithm}"),
+    )
+}
+
+fn normalize_reviewed_nix_inputs(
+    derivation: &AdapterDerivation,
+) -> Result<BTreeMap<String, NixDerivationJsonInput>, ImportDiagnostic> {
+    derivation
+        .input_derivations
+        .iter()
+        .map(|(path, input)| {
+            if let Some(request) = input.dynamic_requests.first() {
+                return Err(diagnostic(
+                    "unsupported-nix-dynamic-input",
+                    None,
+                    &format!(
+                        "Nix dynamic input requires a separate graph-shape cutover: {path}; depth={}; output={}; requests={}",
+                        request.depth,
+                        request.output,
+                        request.requested_outputs.len(),
+                    ),
+                ));
+            }
+            Ok((path.clone(), NixDerivationJsonInput {
+                outputs: input.outputs.clone(),
+            }))
+        })
+        .collect()
 }
 
 fn validate_foreign_aterm_limits(
@@ -974,6 +1196,7 @@ fn restore_store_prefix(value: &str, from_prefix: &str, to_prefix: &str) -> Stri
     value.replace(&from_prefix_with_slash, &to_prefix_with_slash)
 }
 
+#[cfg(test)]
 pub(crate) fn normalize_nix_aterm_derivation_closure(
     derivations: BTreeMap<String, nix_compat::derivation::Derivation>,
 ) -> Result<NixDerivationJsonClosure, ImportDiagnostic> {
@@ -1432,6 +1655,7 @@ fn select_reachable_nix_derivations(
     Ok(selected)
 }
 
+#[cfg(test)]
 fn normalize_nix_aterm_derivation_node(
     drv_path: &str,
     derivation: nix_compat::derivation::Derivation,
@@ -1452,6 +1676,7 @@ fn normalize_nix_aterm_derivation_node(
     })
 }
 
+#[cfg(test)]
 fn nix_aterm_environment_to_strings(
     derivation: &nix_compat::derivation::Derivation,
 ) -> Result<BTreeMap<String, String>, ImportDiagnostic> {
@@ -1473,6 +1698,7 @@ fn nix_aterm_environment_to_strings(
     Ok(env)
 }
 
+#[cfg(test)]
 fn nix_aterm_outputs_to_json(
     outputs: BTreeMap<String, nix_compat::derivation::Output>,
 ) -> BTreeMap<String, NixDerivationJsonOutput> {
@@ -1501,6 +1727,7 @@ fn nix_aterm_output_hash_fields(hash: Option<&nix_compat::nixhash::CAHash>) -> (
     }
 }
 
+#[cfg(test)]
 fn nix_aterm_input_derivations_to_json(
     input_drvs: BTreeMap<nix_compat::store_path::StorePath<String>, BTreeSet<String>>,
 ) -> BTreeMap<String, NixDerivationJsonInput> {
@@ -1514,6 +1741,7 @@ fn nix_aterm_input_derivations_to_json(
         .collect()
 }
 
+#[cfg(test)]
 fn nix_aterm_input_sources_to_json(input_srcs: BTreeSet<nix_compat::store_path::StorePath<String>>) -> Vec<String> {
     input_srcs.into_iter().map(|source| source.to_absolute_path()).collect()
 }
@@ -2771,7 +2999,7 @@ mod tests {
     const NIXPKGS_SOURCE_DRV: &str = "/nix/store/44444444444444444444444444444444-hello-source.drv";
     const NIXPKGS_DERIVATION_COUNT: usize = 2;
     const NIXPKGS_HELLO_OUT: &str = "/nix/store/11111111111111111111111111111111-hello";
-    const NIXPKGS_SOURCE_OUT: &str = "/nix/store/00000000000000000000000000000000-hello-source";
+    const NIXPKGS_SOURCE_OUT: &str = "/nix/store/n3i8ai7ldvbjgjdhdd0rl4sqcs14iqyx-hello-source";
 
     #[test]
     fn translates_guix_and_nix_hello_fixtures_deterministically() {
@@ -3156,6 +3384,24 @@ mod tests {
     }
 
     #[test]
+    fn reviewed_nix_adapter_matches_legacy_projection_for_accepted_fixture() {
+        let inputs = nixpkgs_hello_aterm_inputs(NIX_SOURCE_PREFIX);
+        let reviewed = parse_prefix_aware_aterm_bundle(NIX_SOURCE_PREFIX, &inputs).unwrap();
+        let legacy = normalize_nix_aterm_derivation_closure(nixpkgs_hello_aterm_closure()).unwrap();
+
+        assert_eq!(reviewed, legacy);
+        assert_eq!(reviewed.len(), NIXPKGS_DERIVATION_COUNT);
+        for input in inputs {
+            let adapter =
+                parse_reviewed_nix_derivation(&input.logical_path, &input.bytes, reviewed_nix_adapter_limits())
+                    .unwrap();
+            let legacy = nix_compat::derivation::Derivation::from_aterm_bytes(&input.bytes).unwrap();
+            assert_eq!(adapter.canonical_aterm, legacy.to_aterm_bytes());
+            assert!(adapter.computed_drv_path.starts_with(NIX_STORE_PREFIX_WITH_SLASH));
+        }
+    }
+
+    #[test]
     fn prefix_aware_aterm_lowering_emits_guix_graph_facts() {
         let inputs = nixpkgs_hello_aterm_inputs(GUIX_SOURCE_PREFIX);
         let closure = parse_prefix_aware_aterm_bundle(GUIX_SOURCE_PREFIX, &inputs).unwrap();
@@ -3254,6 +3500,52 @@ mod tests {
         assert_error_class(
             parse_prefix_aware_aterm_bundle(NIX_SOURCE_PREFIX, &oversized),
             "foreign-aterm-bytes-out-of-range",
+        );
+    }
+
+    #[test]
+    fn reviewed_nix_adapter_rejects_unrepresentable_forms_before_graph_publication() {
+        let floating = vec![AtermDerivationInput {
+            logical_path: NIXPKGS_SOURCE_DRV.to_string(),
+            bytes: b"Derive([(\"out\",\"\",\"r:sha256\",\"\")],[],[],\"x86_64-linux\",\"/bin/sh\",[],[(\"name\",\"hello-source\")])"
+                .to_vec(),
+        }];
+        assert_error_class(
+            parse_prefix_aware_aterm_bundle(NIX_SOURCE_PREFIX, &floating),
+            "unsupported-nix-derivation-output",
+        );
+
+        let mismatched_name = vec![AtermDerivationInput {
+            logical_path: NIXPKGS_SOURCE_DRV.to_string(),
+            bytes: b"Derive([(\"out\",\"\",\"r:sha256\",\"\")],[],[],\"x86_64-linux\",\"/bin/sh\",[],[(\"name\",\"wrong-name\")])"
+                .to_vec(),
+        }];
+        assert_error_class(
+            parse_prefix_aware_aterm_bundle(NIX_SOURCE_PREFIX, &mismatched_name),
+            "nix-derivation-name-mismatch",
+        );
+
+        let mut non_utf8 = b"Derive([(\"out\",\"\",\"r:sha256\",\"\")],[],[],\"x86_64-linux\",\"/bin/sh\",[],[(\"name\",\"hello-source\"),(\"raw\",\""
+            .to_vec();
+        non_utf8.push(u8::MAX);
+        non_utf8.extend_from_slice(b"\")])");
+        assert_error_class(
+            parse_prefix_aware_aterm_bundle(NIX_SOURCE_PREFIX, &[AtermDerivationInput {
+                logical_path: NIXPKGS_SOURCE_DRV.to_string(),
+                bytes: non_utf8,
+            }]),
+            "non-utf8-nix-derivation-projection",
+        );
+
+        let versioned = format!(
+            "DrvWithVersion(\"xp-dyn-drv\",[],[(\"{NIXPKGS_SOURCE_DRV}\",([\"out\"],[(\"generated\",[\"out\"])]))],[],\"x86_64-linux\",\"/bin/sh\",[],[])"
+        );
+        assert_error_class(
+            parse_prefix_aware_aterm_bundle(NIX_SOURCE_PREFIX, &[AtermDerivationInput {
+                logical_path: NIXPKGS_SOURCE_DRV.to_string(),
+                bytes: versioned.into_bytes(),
+            }]),
+            "unsupported-nix-versioned-derivation",
         );
     }
 

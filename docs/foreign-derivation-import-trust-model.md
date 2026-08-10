@@ -10,6 +10,11 @@ Use this guide when reviewing `foreign-derivation-graph-v1`,
 receipt binds, which trust decisions remain separate, and which extra evidence is
 needed before reporting trusted build outputs.
 
+Concrete `/nix/store/*.drv` inputs use the reviewed boundary in
+[`nix-derivation-compatibility-boundary.md`](nix-derivation-compatibility-boundary.md).
+That boundary preserves Nix SHA-256 identity rules and Mantle-owned limits.
+It does not change the foreign graph or receipt schemas.
+
 ## CLI usage
 
 Validate lowered artifacts without invoking a foreign frontend:

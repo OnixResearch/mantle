@@ -382,6 +382,8 @@ checks. See [`docs/native-rust-plan-validation.md`](docs/native-rust-plan-valida
 
 Foreign derivation admission is documented in
 [`docs/foreign-derivation-import-trust-model.md`](docs/foreign-derivation-import-trust-model.md).
+The [Nix derivation compatibility guide](docs/nix-derivation-compatibility-boundary.md)
+defines the reviewed parser, package identity, limits, hash domains, and rollback.
 The [foreign realization operator guide](docs/foreign-realization-operator-guide.md)
 explains source preparation, local realization, provenance audits, receipts,
 and cache hydration. The [Nario v2 guide](docs/nario-v2-import.md) defines the
