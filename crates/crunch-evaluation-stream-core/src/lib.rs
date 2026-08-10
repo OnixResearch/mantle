@@ -27,6 +27,7 @@ pub use types::RunDisposition;
 pub use types::RunSummary;
 pub use types::SelectedRoot;
 pub use types::SourceSequence;
+pub use types::TerminalPhase;
 pub use types::TerminalState;
 pub use types::TransitionResult;
 

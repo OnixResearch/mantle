@@ -33,6 +33,7 @@ mod early_native_row_receipt_shell;
 mod elf_local_symbol_core;
 mod elf_local_symbol_shell;
 mod errors;
+mod evaluation_stream_output;
 mod evaluator_budget;
 #[allow(dead_code)]
 mod external_batch_dispatch;
@@ -424,6 +425,10 @@ enum Command {
         /// Require imported source state for selected roots before planning or building
         #[arg(long)]
         offline_source_preflight: bool,
+
+        /// Emit the bounded mantle-evaluation-stream-v1 NDJSON contract on stdout
+        #[arg(long, conflicts_with_all = ["fix", "plan", "builder"])]
+        evaluation_stream: bool,
 
         /// Maximum number of concurrent builds (default: CPU count, max 16)
         #[arg(short, long)]
@@ -3178,6 +3183,10 @@ pub enum StoreArchiveAction {
 
 fn main() -> ExitCode {
     let args = Args::parse();
+    if has_conflicting_machine_output_modes(&args) {
+        eprintln!("error: '--evaluation-stream' cannot be used with '--json'");
+        return ExitCode::from(2);
+    }
     init_tracing(&args);
 
     let is_json_error_output = args.json;
@@ -3196,6 +3205,14 @@ fn main() -> ExitCode {
             error.exit_code()
         }
     }
+}
+
+fn has_conflicting_machine_output_modes(args: &Args) -> bool {
+    args.json
+        && matches!(args.command, Command::Build {
+            evaluation_stream: true,
+            ..
+        })
 }
 
 fn init_tracing(args: &Args) {
@@ -4678,6 +4695,7 @@ struct BuildCommandInput<'a> {
     fix: bool,
     plan: bool,
     offline_source_preflight: bool,
+    output_mode: BuildOutputMode,
     jobs: Option<u32>,
     substituters: &'a str,
     no_substitute: bool,
@@ -4705,6 +4723,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
         fix,
         plan,
         offline_source_preflight,
+        evaluation_stream,
         jobs,
         substituters,
         no_substitute,
@@ -4734,6 +4753,11 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
         fix: *fix,
         plan: *plan,
         offline_source_preflight: *offline_source_preflight,
+        output_mode: if *evaluation_stream {
+            BuildOutputMode::EvaluationStream
+        } else {
+            ctx.output_mode()
+        },
         jobs: *jobs,
         substituters,
         no_substitute: *no_substitute,
@@ -4776,6 +4800,7 @@ struct PreparedBuildCommand<'a> {
     fix: bool,
     plan: bool,
     offline_source_preflight: bool,
+    output_mode: BuildOutputMode,
     max_jobs: u32,
     substituter_urls: Vec<String>,
     signing_key: Option<&'a Path>,
@@ -4839,6 +4864,7 @@ fn prepare_build_command<'a>(
         fix: input.fix,
         plan: input.plan,
         offline_source_preflight: input.offline_source_preflight,
+        output_mode: input.output_mode,
         max_jobs: crunch_pipeline::resolve_max_jobs(input.jobs),
         substituter_urls,
         signing_key: input.signing_key,
@@ -4860,7 +4886,7 @@ fn run_file_build_target(prepared: &PreparedBuildCommand<'_>, path: &Path) -> Re
         import_entries: &nickel_search_dirs,
         state_dir: &prepared.ctx.resolved_state_dir,
         store_prefix: &prepared.ctx.store_prefix,
-        output_mode: prepared.ctx.output_mode(),
+        output_mode: prepared.output_mode,
     })?;
     let source_fetch_plan =
         if prepared.offline_source_preflight && !prepared.plan && prepared.remote_selection.is_none() {
@@ -4906,7 +4932,7 @@ fn run_file_build_plan(
         trust_unsigned: prepared.trust_unsigned,
         remote_builder: prepared.remote_plan_facts.as_ref(),
         source_preflight,
-        output_mode: prepared.ctx.output_mode(),
+        output_mode: prepared.output_mode,
     })
 }
 
@@ -4935,7 +4961,7 @@ fn run_local_file_build(
             prepared.parsed_trusted.as_deref(),
             prepared.trust_unsigned,
             prepared.hermeticity_mode,
-            prepared.ctx.output_mode(),
+            prepared.output_mode,
             source_fetch_plan.overrides.clone(),
             prepared.ctx.base_state_dirs.clone(),
             None,
@@ -4955,7 +4981,7 @@ fn run_local_file_build(
         prepared.parsed_trusted.as_deref(),
         prepared.trust_unsigned,
         prepared.hermeticity_mode,
-        prepared.ctx.output_mode(),
+        prepared.output_mode,
     )
 }
 
@@ -4974,7 +5000,7 @@ fn run_project_build_target(prepared: &PreparedBuildCommand<'_>) -> Result<(), R
         import_entries: &nickel_search_dirs,
         state_dir: &prepared.ctx.resolved_state_dir,
         store_prefix: &prepared.ctx.store_prefix,
-        output_mode: prepared.ctx.output_mode(),
+        output_mode: prepared.output_mode,
     })?;
     let source_fetch_plan = source_fetch_override_plan_for_expr_if_requested(
         prepared.offline_source_preflight && !prepared.plan && prepared.remote_selection.is_none(),
@@ -6624,6 +6650,11 @@ fn print_remote_client_build_report(
                 }
             }
         }
+        BuildOutputMode::EvaluationStream => {
+            return Err(RunError::Internal(
+                "--evaluation-stream cannot be used with remote build dispatch".to_string(),
+            ));
+        }
     }
     Ok(())
 }
@@ -6789,7 +6820,14 @@ fn run_offline_source_preflight_if_requested(
     if source_bundle::source_offline_preflight_is_ready(&preflight) {
         return Ok(Some(preflight));
     }
-    source_bundle::print_offline_preflight_report(&preflight, request.output_mode == BuildOutputMode::Json)?;
+    if request.output_mode == BuildOutputMode::EvaluationStream {
+        eprintln!(
+            "error: offline source preflight failed before evaluation stream admission: readiness={:?}",
+            preflight.ready_class
+        );
+    } else {
+        source_bundle::print_offline_preflight_report(&preflight, request.output_mode == BuildOutputMode::Json)?;
+    }
     Err(RunError::Reported(1))
 }
 
@@ -8634,7 +8672,7 @@ fn build_from_expr(request: InlineBuildRequest<'_>) -> Result<(), RunError> {
         request.prepared.parsed_trusted.as_deref(),
         request.prepared.trust_unsigned,
         request.prepared.hermeticity_mode,
-        request.prepared.ctx.output_mode(),
+        request.prepared.output_mode,
         request.source_fetch_overrides,
         Vec::new(),
         Some(request.root_registration),
@@ -8665,7 +8703,7 @@ fn build_plan_from_expr(request: InlineBuildPlanRequest<'_>) -> Result<(), RunEr
         trust_unsigned: request.prepared.trust_unsigned,
         remote_builder: request.prepared.remote_plan_facts.as_ref(),
         source_preflight: request.source_preflight,
-        output_mode: request.prepared.ctx.output_mode(),
+        output_mode: request.prepared.output_mode,
     })
 }
 

@@ -1,3 +1,7 @@
+// r[impl evaluation_streaming.versioned_event_stream]
+// r[impl evaluation_streaming.deterministic_identity_and_order]
+// r[impl evaluation_streaming.cancellation_and_output]
+use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
@@ -12,11 +16,14 @@ use crunch_evaluation_stream_core::FailureFact;
 use crunch_evaluation_stream_core::FailureScope;
 use crunch_evaluation_stream_core::IdentityContext;
 use crunch_evaluation_stream_core::OutcomeLedger;
+use crunch_evaluation_stream_core::ROOTS_MAX;
 use crunch_evaluation_stream_core::RootReferences;
 use crunch_evaluation_stream_core::RootSet;
 use crunch_evaluation_stream_core::RunSummary;
 use crunch_evaluation_stream_core::SelectedRoot;
 use crunch_evaluation_stream_core::SourceSequence;
+use crunch_evaluation_stream_core::StreamRecordValue;
+use crunch_evaluation_stream_core::TerminalPhase;
 use crunch_evaluation_stream_core::TransitionResult;
 use crunch_glue::ConversionCache;
 use crunch_glue::CrunchDerivation;
@@ -146,6 +153,7 @@ pub(crate) struct EvalStreamRequest<'a> {
     pub(crate) session: &'a crunch_eval::session::EvaluationSession,
     pub(crate) tx: mpsc::Sender<EvalMessage>,
     pub(crate) cancellation: EvaluationCancellation,
+    pub(crate) stream_tx: Option<mpsc::Sender<StreamRecordValue>>,
     pub(crate) worker_control: EvalWorkerControl,
 }
 
@@ -253,9 +261,25 @@ impl<'a> EvalStreamState<'a> {
         Ok(())
     }
 
+    async fn emit_initial_records(&self) -> Result<(), Error> {
+        let root_set = self.ledger.root_set();
+        self.emit_record(StreamRecordValue::run_start(&root_set).map_err(outcome_error)?).await?;
+        let roots = root_set.roots();
+        debug_assert_eq!(roots.len(), self.selected_roots.len());
+        for root in roots {
+            self.emit_record(StreamRecordValue::root_discovered(root)).await?;
+        }
+        Ok(())
+    }
+
+    async fn emit_record(&self, record: StreamRecordValue) -> Result<(), Error> {
+        send_stream_record(self.request.stream_tx.as_ref(), &self.request.cancellation, record).await
+    }
+
     async fn run(mut self) -> Result<EvalStreamResult, Error> {
+        self.emit_initial_records().await?;
         if self.request.cancellation.is_requested() {
-            self.apply_stop(FailureScope::Cancellation, OPERATOR_CANCELLATION_DIAGNOSTIC)?;
+            self.apply_stop(FailureScope::Cancellation, OPERATOR_CANCELLATION_DIAGNOSTIC).await?;
         } else {
             self.spawn_available()?;
         }
@@ -267,7 +291,7 @@ impl<'a> EvalStreamState<'a> {
             let cancellation = self.request.cancellation.clone();
             tokio::select! {
                 _ = cancellation.cancelled() => {
-                    self.apply_stop(FailureScope::Cancellation, OPERATOR_CANCELLATION_DIAGNOSTIC)?;
+                    self.apply_stop(FailureScope::Cancellation, OPERATOR_CANCELLATION_DIAGNOSTIC).await?;
                 }
                 join_result = self.join_set.join_next() => {
                     self.handle_join_result(join_result).await?;
@@ -275,8 +299,9 @@ impl<'a> EvalStreamState<'a> {
             }
             self.spawn_available()?;
         }
-        drop(self.request.tx);
         let summary = self.ledger.finish().map_err(outcome_error)?;
+        self.emit_record(StreamRecordValue::run_summary(summary.clone())).await?;
+        drop(self.request.tx);
         Ok(EvalStreamResult {
             root_drv_paths: self.root_drv_paths,
             summary,
@@ -293,7 +318,7 @@ impl<'a> EvalStreamState<'a> {
         let completion = match join_result {
             Ok(completion) => completion,
             Err(_) => {
-                self.apply_stop(FailureScope::CoordinatorFailure, WORKER_JOIN_DIAGNOSTIC)?;
+                self.apply_stop(FailureScope::CoordinatorFailure, WORKER_JOIN_DIAGNOSTIC).await?;
                 return Ok(());
             }
         };
@@ -305,44 +330,55 @@ impl<'a> EvalStreamState<'a> {
 
     async fn handle_completion(&mut self, completion: EvalWorkerCompletion) -> Result<(), Error> {
         if self.request.cancellation.is_requested() {
-            return self.apply_failure(
-                completion.sequence(),
-                FailureFact::OperatorCancellation,
-                OPERATOR_CANCELLATION_DIAGNOSTIC.to_string(),
-            );
+            return self
+                .apply_failure(
+                    completion.sequence(),
+                    FailureFact::OperatorCancellation,
+                    OPERATOR_CANCELLATION_DIAGNOSTIC.to_string(),
+                )
+                .await;
         }
         match completion {
             EvalWorkerCompletion::Succeeded { root, derivation } => self.handle_success(root, *derivation).await,
-            EvalWorkerCompletion::Failed { root, fact, error } => self.apply_failure(root.sequence(), fact, error),
-            EvalWorkerCompletion::Cancelled { root } => self.apply_failure(
-                root.sequence(),
-                FailureFact::OperatorCancellation,
-                OPERATOR_CANCELLATION_DIAGNOSTIC.to_string(),
-            ),
+            EvalWorkerCompletion::Failed { root, fact, error } => {
+                self.apply_failure(root.sequence(), fact, error).await
+            }
+            EvalWorkerCompletion::Cancelled { root } => {
+                self.apply_failure(
+                    root.sequence(),
+                    FailureFact::OperatorCancellation,
+                    OPERATOR_CANCELLATION_DIAGNOSTIC.to_string(),
+                )
+                .await
+            }
             EvalWorkerCompletion::WorkerLost { root, error } => {
-                self.apply_failure(root.sequence(), FailureFact::Coordinator, error)
+                self.apply_failure(root.sequence(), FailureFact::Coordinator, error).await
             }
         }
     }
 
     async fn handle_success(&mut self, root: SelectedRoot, mut derivation: CrunchDerivation) -> Result<(), Error> {
         if self.request.cancellation.is_requested() {
-            return self.apply_failure(
-                root.sequence(),
-                FailureFact::OperatorCancellation,
-                OPERATOR_CANCELLATION_DIAGNOSTIC.to_string(),
-            );
+            return self
+                .apply_failure(
+                    root.sequence(),
+                    FailureFact::OperatorCancellation,
+                    OPERATOR_CANCELLATION_DIAGNOSTIC.to_string(),
+                )
+                .await;
         }
         if let Err(error) =
             self.file_resolver.resolve_root_inputs(self.request.root_file, &mut derivation, &mut self.cache)
         {
-            return self.apply_failure(root.sequence(), FailureFact::RootConversion, error.to_string());
+            return self.apply_failure(root.sequence(), FailureFact::RootConversion, error.to_string()).await;
         }
         let label = root.label();
         let (drv_path, _nix_drv) = match crunch_glue::convert(&derivation, &mut self.cache) {
             Ok(converted) => converted,
             Err(error) => {
-                return self.apply_failure(root.sequence(), FailureFact::RootConversion, format!("{label}: {error}"));
+                return self
+                    .apply_failure(root.sequence(), FailureFact::RootConversion, format!("{label}: {error}"))
+                    .await;
             }
         };
         self.send_converted_root(root, drv_path).await
@@ -362,39 +398,54 @@ impl<'a> EvalStreamState<'a> {
             })
             .await
         {
-            return self.apply_failure(root.sequence(), FailureFact::Coordinator, format!("channel send: {error}"));
+            return self
+                .apply_failure(root.sequence(), FailureFact::Coordinator, format!("channel send: {error}"))
+                .await;
         }
         let logical_path = drv_path.to_absolute_path_with_prefix(self.request.store_dir);
         let references = RootReferences::new(Some(logical_path), None, None).map_err(outcome_error)?;
-        let transition = self.ledger.record_success(root.sequence(), references).map_err(outcome_error)?;
-        self.apply_transition(transition);
+        let transition = self
+            .ledger
+            .record_success_at_phase(root.sequence(), TerminalPhase::Conversion, references)
+            .map_err(outcome_error)?;
+        self.apply_transition(transition).await?;
         self.root_drv_paths.push((label, drv_path));
         Ok(())
     }
 
-    fn apply_failure(&mut self, sequence: SourceSequence, fact: FailureFact, error: String) -> Result<(), Error> {
+    async fn apply_failure(&mut self, sequence: SourceSequence, fact: FailureFact, error: String) -> Result<(), Error> {
         let transition =
             self.ledger.record_failure(sequence, fact, BoundedDiagnostic::new(error)).map_err(outcome_error)?;
-        self.apply_transition(transition);
-        Ok(())
+        self.apply_transition(transition).await
     }
 
-    fn apply_stop(&mut self, scope: FailureScope, diagnostic: &str) -> Result<(), Error> {
+    async fn apply_stop(&mut self, scope: FailureScope, diagnostic: &str) -> Result<(), Error> {
         let transition = self
             .ledger
             .stop_remaining(scope, BoundedDiagnostic::new(diagnostic.to_string()))
             .map_err(outcome_error)?;
-        self.apply_transition(transition);
-        Ok(())
+        self.apply_transition(transition).await
     }
 
-    fn apply_transition(&mut self, transition: TransitionResult) {
+    async fn apply_transition(&mut self, transition: TransitionResult) -> Result<(), Error> {
+        let previous_sequences =
+            self.ledger.outcomes().into_iter().map(|outcome| outcome.root().sequence()).collect::<BTreeSet<_>>();
         if transition.decision() == DispatchDecision::Stop {
             self.dispatch_stopped = true;
         }
         self.ledger = transition.into_ledger();
+        let new_outcomes = self
+            .ledger
+            .outcomes()
+            .into_iter()
+            .filter(|outcome| !previous_sequences.contains(&outcome.root().sequence()))
+            .collect::<Vec<_>>();
+        for outcome in new_outcomes {
+            self.emit_record(StreamRecordValue::root_terminal(outcome)).await?;
+        }
         debug_assert!(!self.dispatch_stopped || self.ledger.finish().is_ok());
         debug_assert!(self.root_drv_paths.len() <= self.selected_roots.len());
+        Ok(())
     }
 }
 
@@ -402,7 +453,16 @@ pub(crate) async fn stream_roots_into_worker(request: EvalStreamRequest<'_>) -> 
     let root_set = admit_root_set(request.session)?;
     let file_resolver = match derivation_file::DerivationFileResolver::new(request.root_file, request.import_paths) {
         Ok(resolver) => resolver,
-        Err(error) => return shared_initialization_failure(request.tx, root_set, error.to_string()),
+        Err(error) => {
+            return shared_initialization_failure(
+                request.tx,
+                request.stream_tx,
+                request.cancellation,
+                root_set,
+                error.to_string(),
+            )
+            .await;
+        }
     };
     EvalStreamState::new(request, root_set, file_resolver)?.run().await
 }
@@ -415,17 +475,34 @@ fn admit_root_set(session: &crunch_eval::session::EvaluationSession) -> Result<R
     RootSet::admit(context, labels).map_err(outcome_error)
 }
 
-fn shared_initialization_failure(
+async fn shared_initialization_failure(
     tx: mpsc::Sender<EvalMessage>,
+    stream_tx: Option<mpsc::Sender<StreamRecordValue>>,
+    cancellation: EvaluationCancellation,
     root_set: RootSet,
     error: String,
 ) -> Result<EvalStreamResult, Error> {
+    debug_assert!(root_set.root_count() >= 1);
+    debug_assert!(root_set.root_count() <= ROOTS_MAX);
+    send_stream_record(
+        stream_tx.as_ref(),
+        &cancellation,
+        StreamRecordValue::run_start(&root_set).map_err(outcome_error)?,
+    )
+    .await?;
+    for root in root_set.roots() {
+        send_stream_record(stream_tx.as_ref(), &cancellation, StreamRecordValue::root_discovered(root)).await?;
+    }
     let ledger = OutcomeLedger::new(root_set);
     let transition = ledger
-        .stop_remaining(FailureScope::SharedFatal, BoundedDiagnostic::new(error))
+        .stop_remaining_at_phase(FailureScope::SharedFatal, TerminalPhase::Conversion, BoundedDiagnostic::new(error))
         .map_err(outcome_error)?;
     drop(tx);
     let summary = transition.into_ledger().finish().map_err(outcome_error)?;
+    for outcome in summary.roots() {
+        send_stream_record(stream_tx.as_ref(), &cancellation, StreamRecordValue::root_terminal(outcome)).await?;
+    }
+    send_stream_record(stream_tx.as_ref(), &cancellation, StreamRecordValue::run_summary(summary.clone())).await?;
     Ok(EvalStreamResult {
         root_drv_paths: Vec::new(),
         summary,
@@ -502,6 +579,21 @@ fn failure_fact(scope: crunch_eval::FailureScopeHint) -> FailureFact {
         crunch_eval::FailureScopeHint::SharedFatal => FailureFact::SharedSource,
         crunch_eval::FailureScopeHint::CoordinatorFailure => FailureFact::Coordinator,
     }
+}
+
+async fn send_stream_record(
+    stream_tx: Option<&mpsc::Sender<StreamRecordValue>>,
+    cancellation: &EvaluationCancellation,
+    record: StreamRecordValue,
+) -> Result<(), Error> {
+    let Some(stream_tx) = stream_tx else {
+        return Ok(());
+    };
+    if stream_tx.send(record).await.is_err() {
+        cancellation.request();
+        return Err(Error::Internal("evaluation stream consumer closed before run-summary".to_string()));
+    }
+    Ok(())
 }
 
 fn outcome_error(error: crunch_evaluation_stream_core::OutcomeError) -> Error {

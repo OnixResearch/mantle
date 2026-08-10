@@ -460,6 +460,17 @@ let seed = import "seed.ncl" in
         .stdout(predicate::str::contains("seed-test"));
 }
 
+#[test]
+fn evaluation_stream_requires_explicit_non_json_build_mode() {
+    crunch_cmd()
+        .arg("--json")
+        .arg("build")
+        .arg("--evaluation-stream")
+        .assert()
+        .code(CLAP_USAGE_ERROR_CODE)
+        .stderr(predicate::str::contains("cannot be used with '--json'"));
+}
+
 // ── Phase 4: Build tests (Linux-only) ──────────────────────────
 
 /// Check if we can actually build (need bwrap + sandbox shell + nix store).
@@ -714,6 +725,134 @@ mod build_tests {
 
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(stderr.trim().is_empty(), "reported JSON build failures must not emit a second error: {stderr}");
+    }
+
+    fn parse_evaluation_stream(stdout: &[u8]) -> Vec<serde_json::Value> {
+        let text = std::str::from_utf8(stdout).expect("stream stdout must be UTF-8");
+        let records = text
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("each stream line must be JSON"))
+            .collect::<Vec<_>>();
+        assert!(!records.is_empty(), "stream must contain records");
+        assert_eq!(records[0]["kind"], "run-start");
+        assert_eq!(records.last().expect("last record")["kind"], "run-summary");
+        records
+    }
+
+    #[test]
+    fn build_evaluation_stream_emits_complete_success_contract() {
+        if !can_build() {
+            eprintln!("skipping build test: bwrap or /nix/store not available");
+            return;
+        }
+
+        let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+        let output = crunch_cmd()
+            .arg("--store")
+            .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
+            .arg("build")
+            .arg("--no-substitute")
+            .arg("--evaluation-stream")
+            .arg(fixture("simple.ncl"))
+            .output()
+            .unwrap();
+
+        assert!(output.status.success(), "stream build should pass: {}", String::from_utf8_lossy(&output.stderr));
+        let records = parse_evaluation_stream(&output.stdout);
+        assert_eq!(records.len(), 4);
+        assert_eq!(records[1]["kind"], "root-discovered");
+        assert_eq!(records[2]["kind"], "root-terminal");
+        assert_eq!(records[2]["terminal_state"], "succeeded");
+        assert_eq!(records[2]["terminal_phase"], "conversion");
+        assert_eq!(records[3]["disposition"], "success");
+        assert_eq!(records[3]["selected_root_count"], 1);
+        assert_eq!(records[3]["terminal_root_count"], 1);
+    }
+
+    #[test]
+    fn build_evaluation_stream_preserves_partial_results_and_exit_status() {
+        if !can_build() {
+            eprintln!("skipping build test: bwrap or /nix/store not available");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("mixed.ncl"),
+            r#"{
+  bad = { builder = "/bin/sh", args = ["-c", "exit 9"] },
+  good = { name = "stream-good", builder = "/bin/sh", args = ["-c", "echo ok > $out"] },
+}"#,
+        )
+        .unwrap();
+
+        let output = crunch_cmd()
+            .arg("--store")
+            .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
+            .arg("build")
+            .arg("--no-substitute")
+            .arg("--evaluation-stream")
+            .arg("--jobs")
+            .arg("1")
+            .arg(dir.path().join("mixed.ncl"))
+            .output()
+            .unwrap();
+
+        assert_eq!(output.status.code(), Some(1));
+        let records = parse_evaluation_stream(&output.stdout);
+        let summary = records.last().unwrap();
+        assert_eq!(summary["disposition"], "partial");
+        assert_eq!(summary["counts"]["succeeded"], 1);
+        assert_eq!(summary["counts"]["failed"], 1);
+        assert_eq!(summary["roots"][0]["root_label"], "bad");
+        assert_eq!(summary["roots"][1]["root_label"], "good");
+        assert!(summary["roots"][1]["result_ref"].as_str().unwrap().contains("stream-good.drv"));
+    }
+
+    #[test]
+    fn build_evaluation_stream_rejects_broken_stdout() {
+        const BROKEN_PIPE_ROOT_COUNT: u32 = 512;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let state = tempfile::tempdir().unwrap();
+        let mut source = String::from("{");
+        for index in 0..BROKEN_PIPE_ROOT_COUNT {
+            source.push_str(&format!("root_{index} = {{ builder = \"/bin/sh\" }},"));
+        }
+        source.push('}');
+        let source_path = dir.path().join("many-roots.ncl");
+        std::fs::write(&source_path, source).unwrap();
+
+        let mut child = std::process::Command::new(assert_cmd::cargo::cargo_bin!("crunch"))
+            .arg("--store")
+            .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
+            .arg("build")
+            .arg("--no-substitute")
+            .arg("--evaluation-stream")
+            .arg(&source_path)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut stdout = std::io::BufReader::new(child.stdout.take().unwrap());
+        let mut first_record = String::new();
+        std::io::BufRead::read_line(&mut stdout, &mut first_record).unwrap();
+        assert!(first_record.contains("\"kind\":\"run-start\""));
+        drop(stdout);
+        let output = child.wait_with_output().unwrap();
+
+        assert_eq!(output.status.code(), Some(3));
+        assert!(String::from_utf8_lossy(&output.stderr).contains("evaluation stream output failed"));
     }
 
     #[test]

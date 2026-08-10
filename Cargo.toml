@@ -167,6 +167,7 @@ crunch-nar = { path = "crates/crunch-nar" }
 crunch-pipeline = { path = "crates/crunch-pipeline" }
 crunch-eval = { path = "crates/crunch-eval" }
 crunch-eval-budget-core = { path = "crates/crunch-eval-budget-core" }
+crunch-evaluation-stream-core = { path = "crates/crunch-evaluation-stream-core" }
 nickel-export-core = { git = "https://github.com/OnixResearch/nickel-export", rev = "257fafc1c746f1faf156207043a4c826bfb16d49" }
 crunch-glue = { path = "crates/crunch-glue" }
 crunch-action-result-core = { path = "crates/crunch-action-result-core" }

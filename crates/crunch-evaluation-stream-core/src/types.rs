@@ -14,6 +14,9 @@ use crate::identity::root_identity;
 use crate::identity::run_identity;
 
 const BLAKE3_HEX_BYTES: usize = 64;
+const REDACTED_DIAGNOSTIC_TOKEN: &str = "<redacted>";
+const REDACTED_DIAGNOSTIC_PATH: &str = "<redacted-path>";
+const REDACTED_DIAGNOSTIC_DIGEST: &str = "<redacted-digest>";
 
 #[derive(Debug, Clone, Copy)]
 struct TextBound {
@@ -224,6 +227,24 @@ impl FailureFact {
             Self::OperatorCancellation => FailureScope::Cancellation,
         }
     }
+
+    pub fn phase(self) -> TerminalPhase {
+        match self {
+            Self::RootEvaluation | Self::SharedSource | Self::SharedImport | Self::SharedEvaluatorCohort => {
+                TerminalPhase::Evaluation
+            }
+            Self::RootConversion => TerminalPhase::Conversion,
+            Self::SharedProtocol | Self::Coordinator | Self::OperatorCancellation => TerminalPhase::Coordination,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalPhase {
+    Evaluation,
+    Conversion,
+    Build,
+    Coordination,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -243,9 +264,13 @@ pub struct BoundedDiagnostic {
 
 impl BoundedDiagnostic {
     pub fn new(text: String) -> Self {
+        let (text, input_truncated) = redact_diagnostic(&text);
         let bytes_max = DIAGNOSTIC_BYTES_MAX_USIZE;
         if text.len() <= bytes_max {
-            return Self { text, truncated: false };
+            return Self {
+                text,
+                truncated: input_truncated,
+            };
         }
         let boundary = utf8_boundary(&text, bytes_max);
         Self {
@@ -306,6 +331,7 @@ impl RootReferences {
 pub struct RootOutcome {
     pub(crate) root: SelectedRoot,
     pub(crate) terminal_state: TerminalState,
+    pub(crate) terminal_phase: TerminalPhase,
     pub(crate) failure_scope: Option<FailureScope>,
     pub(crate) diagnostic: Option<BoundedDiagnostic>,
     pub(crate) references: Option<RootReferences>,
@@ -318,6 +344,10 @@ impl RootOutcome {
 
     pub fn terminal_state(&self) -> TerminalState {
         self.terminal_state
+    }
+
+    pub fn terminal_phase(&self) -> TerminalPhase {
+        self.terminal_phase
     }
 
     pub fn failure_scope(&self) -> Option<FailureScope> {
@@ -497,6 +527,38 @@ fn validate_reference(reference: &Option<String>) -> Result<(), OutcomeError> {
     Ok(())
 }
 
+fn redact_diagnostic(text: &str) -> (String, bool) {
+    let scan_bytes_max = DIAGNOSTIC_BYTES_MAX_USIZE.saturating_mul(2);
+    let scan_boundary = utf8_boundary(text, scan_bytes_max);
+    let is_input_truncated = scan_boundary < text.len();
+    let mut redacted = String::with_capacity(scan_boundary.min(DIAGNOSTIC_BYTES_MAX_USIZE));
+    for token in text[..scan_boundary].split_whitespace() {
+        if !redacted.is_empty() {
+            redacted.push(' ');
+        }
+        redacted.push_str(redacted_token(token));
+    }
+    (redacted, is_input_truncated)
+}
+
+fn redacted_token(token: &str) -> &str {
+    let unquoted = token.trim_start_matches(['\'', '"', '(', '[', '{']);
+    let lowercase = token.to_ascii_lowercase();
+    let has_sensitive_name = ["secret", "token", "password", "credential", "authorization"]
+        .iter()
+        .any(|name| lowercase.contains(name));
+    if has_sensitive_name {
+        return REDACTED_DIAGNOSTIC_TOKEN;
+    }
+    if unquoted.starts_with('/') || unquoted.starts_with("file://") {
+        return REDACTED_DIAGNOSTIC_PATH;
+    }
+    if token.len() == BLAKE3_HEX_BYTES && token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return REDACTED_DIAGNOSTIC_DIGEST;
+    }
+    token
+}
+
 fn utf8_boundary(text: &str, bytes_max: usize) -> usize {
     let mut boundary = bytes_max.min(text.len());
     while !text.is_char_boundary(boundary) {
@@ -505,10 +567,15 @@ fn utf8_boundary(text: &str, bytes_max: usize) -> usize {
     boundary
 }
 
-pub(crate) fn success_outcome(root: SelectedRoot, references: RootReferences) -> RootOutcome {
+pub(crate) fn success_outcome(
+    root: SelectedRoot,
+    terminal_phase: TerminalPhase,
+    references: RootReferences,
+) -> RootOutcome {
     RootOutcome {
         root,
         terminal_state: TerminalState::Succeeded,
+        terminal_phase,
         failure_scope: None,
         diagnostic: None,
         references: Some(references),
@@ -518,6 +585,7 @@ pub(crate) fn success_outcome(root: SelectedRoot, references: RootReferences) ->
 pub(crate) fn stopped_outcome(
     root: SelectedRoot,
     terminal_state: TerminalState,
+    terminal_phase: TerminalPhase,
     scope: FailureScope,
     diagnostic: BoundedDiagnostic,
 ) -> RootOutcome {
@@ -526,6 +594,7 @@ pub(crate) fn stopped_outcome(
     RootOutcome {
         root,
         terminal_state,
+        terminal_phase,
         failure_scope: Some(scope),
         diagnostic: Some(diagnostic),
         references: None,

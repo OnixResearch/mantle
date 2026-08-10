@@ -209,12 +209,28 @@ fn map_eval_error(err: crunch_eval::Error) -> Error {
 }
 
 pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
-    build_with_evaluation_cancellation(config, EvaluationCancellation::new()).await
+    build_with_stream_sender(config, EvaluationCancellation::new(), None).await
 }
 
 pub async fn build_with_evaluation_cancellation(
     config: &BuildConfig,
     cancellation: EvaluationCancellation,
+) -> Result<PipelineResult, Error> {
+    build_with_stream_sender(config, cancellation, None).await
+}
+
+pub async fn build_with_evaluation_stream(
+    config: &BuildConfig,
+    cancellation: EvaluationCancellation,
+    stream_tx: mpsc::Sender<crunch_evaluation_stream_core::StreamRecordValue>,
+) -> Result<PipelineResult, Error> {
+    build_with_stream_sender(config, cancellation, Some(stream_tx)).await
+}
+
+async fn build_with_stream_sender(
+    config: &BuildConfig,
+    cancellation: EvaluationCancellation,
+    stream_tx: Option<mpsc::Sender<crunch_evaluation_stream_core::StreamRecordValue>>,
 ) -> Result<PipelineResult, Error> {
     validate_build_config(config)?;
     let _mutation_guard = StoreMutationGuard::acquire_wait(&config.state_dir)
@@ -267,12 +283,20 @@ pub async fn build_with_evaluation_cancellation(
 
     #[cfg(target_os = "linux")]
     {
-        return build_linux(config, store, session, hermeticity_audit_events, cancellation).await;
+        return build_linux(LinuxBuildRequest {
+            config,
+            store,
+            session,
+            hermeticity_audit_events,
+            cancellation,
+            stream_tx,
+        })
+        .await;
     }
 
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = (store, cancellation);
+        let _ = (store, cancellation, stream_tx);
         Err(Error::Build("building is only supported on Linux (requires bwrap)".to_string()))
     }
 }
@@ -286,17 +310,22 @@ struct PipelineBuilderBundle<S> {
 }
 
 #[cfg(target_os = "linux")]
-async fn build_linux(
-    config: &BuildConfig,
+struct LinuxBuildRequest<'a> {
+    config: &'a BuildConfig,
     store: crunch_store::StoreHandle,
     session: crunch_eval::session::EvaluationSession,
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
     cancellation: EvaluationCancellation,
-) -> Result<PipelineResult, Error> {
+    stream_tx: Option<mpsc::Sender<crunch_evaluation_stream_core::StreamRecordValue>>,
+}
+
+#[cfg(target_os = "linux")]
+async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, Error> {
+    let config = request.config;
     debug_assert!(!config.store_dir.is_empty());
     debug_assert!(config.max_jobs >= 1);
 
-    let bundle = create_pipeline_builder(config, store)?;
+    let bundle = create_pipeline_builder(config, request.store)?;
     let mut builder = bundle.builder;
     let workspace_evidence_sink = bundle.workspace_evidence_sink;
     let _output_lookup = bundle.output_lookup;
@@ -313,9 +342,10 @@ async fn build_linux(
         root_force_policy: RootForceExecutionPolicy::PreferThreaded,
         root_file: &config.file,
         import_paths: &config.import_paths,
-        session: &session,
+        session: &request.session,
         tx,
-        cancellation,
+        cancellation: request.cancellation,
+        stream_tx: request.stream_tx,
         worker_control: EvalWorkerControl::default(),
     });
     let (worker_run, eval_stream) = tokio::join!(worker_run, eval_stream);
@@ -329,7 +359,7 @@ async fn build_linux(
         .overlay_report()
         .map_err(|error| Error::Build(format!("collecting overlay build evidence: {error}")))?;
     let store_layer_selections = builder.take_store_layer_selections();
-    let mut hermeticity_audit_events = hermeticity_audit_events;
+    let mut hermeticity_audit_events = request.hermeticity_audit_events;
     hermeticity_audit_events.extend(builder.take_hermeticity_audit_events());
     let pipeline_evidence = PipelineRunEvidence {
         hermeticity_audit_events,
@@ -934,6 +964,7 @@ mod tests {
             session,
             tx,
             cancellation: EvaluationCancellation::new(),
+            stream_tx: None,
             worker_control: EvalWorkerControl::default(),
         }
     }
@@ -1247,6 +1278,74 @@ mod tests {
         assert_eq!(inline_drv_sorted, preferred_drv_sorted);
         assert_eq!(inline_result.summary, preferred_result.summary);
         assert_eq!(inline_result.summary.disposition(), crunch_evaluation_stream_core::RunDisposition::Success);
+    }
+
+    #[tokio::test]
+    async fn evaluation_stream_emits_start_discovery_terminals_and_final_summary() {
+        const STREAM_TEST_CHANNEL_CAPACITY: usize = 16;
+
+        let (_directory, root_file) = resolver_fixture_file();
+        let session = crunch_eval::session::EvaluationSession::open_str(
+            r#"{
+  alpha = { name = "alpha", builder = "/bin/sh" },
+  beta = { name = "beta", builder = "/bin/sh" },
+}"#,
+            &[],
+        )
+        .unwrap();
+        let (build_tx, build_rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
+        let (stream_tx, mut stream_rx) =
+            mpsc::channel::<crunch_evaluation_stream_core::StreamRecordValue>(STREAM_TEST_CHANNEL_CAPACITY);
+        let mut request = eval_stream_request(&session, &root_file, RootForceExecutionPolicy::Inline, build_tx);
+        request.stream_tx = Some(stream_tx);
+        let result = stream_roots_into_worker(request).await.unwrap();
+        let labels = collect_eval_message_labels(build_rx).await;
+        let mut records = Vec::new();
+        while let Some(record) = stream_rx.recv().await {
+            records.push(record);
+        }
+
+        assert_eq!(labels.len(), TWO_ROOT_COUNT as usize);
+        assert_eq!(records.len(), 6);
+        assert!(matches!(records.first(), Some(crunch_evaluation_stream_core::StreamRecordValue::RunStart(_))));
+        assert!(matches!(records[1], crunch_evaluation_stream_core::StreamRecordValue::RootDiscovered(_)));
+        assert!(matches!(records[2], crunch_evaluation_stream_core::StreamRecordValue::RootDiscovered(_)));
+        assert!(matches!(records[3], crunch_evaluation_stream_core::StreamRecordValue::RootTerminal(_)));
+        assert!(matches!(records[4], crunch_evaluation_stream_core::StreamRecordValue::RootTerminal(_)));
+        let crunch_evaluation_stream_core::StreamRecordValue::RunSummary(summary) = &records[5] else {
+            panic!("last stream record must be run-summary");
+        };
+        assert_eq!(summary, &result.summary);
+        assert_eq!(summary.roots()[ROOT_ALPHA_INDEX].root().label(), "alpha");
+        assert_eq!(summary.roots()[ROOT_BETA_INDEX].root().label(), "beta");
+    }
+
+    #[tokio::test]
+    async fn closed_stream_consumer_requests_cancellation_before_dispatch() {
+        const CLOSED_STREAM_CHANNEL_CAPACITY: usize = 1;
+
+        let (_directory, root_file) = resolver_fixture_file();
+        let session = crunch_eval::session::EvaluationSession::open_str(
+            r#"{ alpha = { name = "alpha", builder = "/bin/sh" } }"#,
+            &[],
+        )
+        .unwrap();
+        let (build_tx, mut build_rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
+        let (stream_tx, stream_rx) =
+            mpsc::channel::<crunch_evaluation_stream_core::StreamRecordValue>(CLOSED_STREAM_CHANNEL_CAPACITY);
+        drop(stream_rx);
+        let cancellation = EvaluationCancellation::new();
+        let mut request = eval_stream_request(&session, &root_file, RootForceExecutionPolicy::Inline, build_tx);
+        request.cancellation = cancellation.clone();
+        request.stream_tx = Some(stream_tx);
+        let error = match stream_roots_into_worker(request).await {
+            Ok(_) => panic!("closed stream consumer must fail"),
+            Err(error) => error,
+        };
+
+        assert!(cancellation.is_requested());
+        assert!(error.to_string().contains("consumer closed before run-summary"));
+        assert!(build_rx.recv().await.is_none());
     }
 
     #[tokio::test]

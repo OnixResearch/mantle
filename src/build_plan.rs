@@ -177,12 +177,18 @@ pub fn cmd_build_plan(config: BuildPlanConfig<'_>) -> Result<(), RunError> {
     let rendered = match config.output_mode {
         BuildOutputMode::Human => plan_document.render_human(),
         BuildOutputMode::Json => plan_document.render_json()?,
+        BuildOutputMode::EvaluationStream => {
+            return Err(RunError::Internal("--evaluation-stream cannot be used with --plan".to_string()));
+        }
     };
 
     if plan_document.has_preflight_errors() {
         match config.output_mode {
             BuildOutputMode::Human => eprintln!("{rendered}"),
             BuildOutputMode::Json => println!("{rendered}"),
+            BuildOutputMode::EvaluationStream => {
+                return Err(RunError::Internal("stream mode reached build-plan rendering".to_string()));
+            }
         }
         return Err(RunError::Reported(1));
     }

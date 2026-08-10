@@ -3,6 +3,10 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use crunch_build::signing;
+use crunch_evaluation_stream_core::ProcessMode;
+use crunch_evaluation_stream_core::ProcessOutcome;
+use crunch_evaluation_stream_core::RunDisposition;
+use crunch_evaluation_stream_core::process_status;
 use crunch_pipeline::BuildConfig;
 use crunch_pipeline::HermeticityAuditEvent;
 use crunch_pipeline::HermeticityMode;
@@ -21,6 +25,9 @@ use crate::build_log::log_file_path;
 use crate::build_log::write_log_file;
 use crate::build_report::render_build_json_report;
 use crate::errors::RunError;
+use crate::evaluation_stream_output::EvaluationStreamOutputError;
+use crate::evaluation_stream_output::EvaluationStreamWriter;
+use crate::evaluation_stream_output::STREAM_EVENT_CHANNEL_CAPACITY;
 
 const MAX_HUMAN_PRIORITY_ROWS: usize = 64;
 const PRIORITY_DIGEST_PREFIX_BYTES: usize = 12;
@@ -30,6 +37,7 @@ const PRIORITY_SUMMARY_EXTRA_LINES: usize = 2;
 pub enum BuildOutputMode {
     Human,
     Json,
+    EvaluationStream,
 }
 
 impl BuildOutputMode {
@@ -39,6 +47,10 @@ impl BuildOutputMode {
 
     fn is_json(self) -> bool {
         matches!(self, Self::Json)
+    }
+
+    fn is_evaluation_stream(self) -> bool {
+        matches!(self, Self::EvaluationStream)
     }
 }
 
@@ -149,6 +161,11 @@ pub fn cmd_build_with_source_fetch_overrides(
 
     debug_assert_eq!(config.file.as_path(), file);
     debug_assert_eq!(config.hermeticity_mode, hermeticity_mode);
+    if output_mode.is_evaluation_stream() {
+        let completion = run_build_with_evaluation_stream(&config)?;
+        report_build_result(&config, &completion.result, fix, output_mode)?;
+        return evaluation_stream_process_result(&completion);
+    }
     let result = run_build(&config)?;
     report_build_result(&config, &result, fix, output_mode)
 }
@@ -158,6 +175,92 @@ pub fn run_build(config: &BuildConfig) -> Result<PipelineResult, RunError> {
     rt.block_on(crunch_pipeline::build(config)).map_err(Into::into)
 }
 
+struct EvaluationStreamBuildCompletion {
+    result: PipelineResult,
+    disposition: RunDisposition,
+}
+
+fn run_build_with_evaluation_stream(config: &BuildConfig) -> Result<EvaluationStreamBuildCompletion, RunError> {
+    let runtime =
+        tokio::runtime::Runtime::new().map_err(|error| RunError::Internal(format!("tokio runtime: {error}")))?;
+    let stdout = std::io::stdout();
+    let locked = stdout.lock();
+    runtime.block_on(run_build_with_stream_output(config, locked))
+}
+
+async fn run_build_with_stream_output<W: std::io::Write>(
+    config: &BuildConfig,
+    output: W,
+) -> Result<EvaluationStreamBuildCompletion, RunError> {
+    let (stream_tx, mut stream_rx) = tokio::sync::mpsc::channel(STREAM_EVENT_CHANNEL_CAPACITY);
+    let cancellation = crunch_pipeline::EvaluationCancellation::new();
+    let mut build_future =
+        Box::pin(crunch_pipeline::build_with_evaluation_stream(config, cancellation.clone(), stream_tx));
+    let mut writer = EvaluationStreamWriter::new(output);
+    let mut build_result = None;
+
+    loop {
+        if build_result.is_some() {
+            match stream_rx.recv().await {
+                Some(record) => write_stream_record(&mut writer, &record, &cancellation)?,
+                None => break,
+            }
+            continue;
+        }
+        tokio::select! {
+            record = stream_rx.recv() => {
+                match record {
+                    Some(record) => write_stream_record(&mut writer, &record, &cancellation)?,
+                    None => {
+                        build_result = Some(build_future.await);
+                        break;
+                    }
+                }
+            }
+            result = &mut build_future => {
+                build_result = Some(result);
+            }
+        }
+    }
+
+    let disposition = writer.finish().map_err(stream_output_failure)?;
+    let result = build_result
+        .ok_or_else(|| stream_output_failure(EvaluationStreamOutputError::MissingSummary))?
+        .map_err(RunError::from)?;
+    Ok(EvaluationStreamBuildCompletion { result, disposition })
+}
+
+fn write_stream_record<W: std::io::Write>(
+    writer: &mut EvaluationStreamWriter<W>,
+    record: &crunch_evaluation_stream_core::StreamRecordValue,
+    cancellation: &crunch_pipeline::EvaluationCancellation,
+) -> Result<(), RunError> {
+    if let Err(error) = writer.write_record(record) {
+        cancellation.request();
+        return Err(stream_output_failure(error));
+    }
+    Ok(())
+}
+
+fn stream_output_failure(error: EvaluationStreamOutputError) -> RunError {
+    eprintln!("error: evaluation stream output failed: {error}");
+    RunError::Reported(crunch_evaluation_stream_core::INTERNAL_EXIT_CODE)
+}
+
+fn evaluation_stream_process_result(completion: &EvaluationStreamBuildCompletion) -> Result<(), RunError> {
+    let stream_status = process_status(ProcessOutcome::Completed(completion.disposition), ProcessMode::Pipeline);
+    let status =
+        if stream_status == crunch_evaluation_stream_core::SUCCESS_EXIT_CODE && !completion.result.failed.is_empty() {
+            crunch_evaluation_stream_core::PIPELINE_NON_SUCCESS_EXIT_CODE
+        } else {
+            stream_status
+        };
+    if status == crunch_evaluation_stream_core::SUCCESS_EXIT_CODE {
+        return Ok(());
+    }
+    Err(RunError::Reported(status))
+}
+
 pub fn report_build_result(
     config: &BuildConfig,
     result: &PipelineResult,
@@ -165,7 +268,8 @@ pub fn report_build_result(
     output_mode: BuildOutputMode,
 ) -> Result<(), RunError> {
     let logs_dir = log_dir();
-    debug_assert_eq!(output_mode.is_json(), !output_mode.is_human());
+    debug_assert!(!(output_mode.is_json() && output_mode.is_human()));
+    debug_assert!(output_mode.is_human() || output_mode.is_json() || output_mode.is_evaluation_stream());
     debug_assert!(!config.store_dir.is_empty());
     let mut diagnostic_persistence_failures = Vec::new();
     let is_log_dir_ready = match prepare_logs_dir(&logs_dir) {
@@ -189,7 +293,7 @@ pub fn report_build_result(
     }
 
     if result.failed.is_empty() {
-        if output_mode.is_human() {
+        if output_mode.is_human() || output_mode.is_evaluation_stream() {
             print_diagnostic_persistence_failures(&diagnostic_persistence_failures);
         }
         if output_mode.is_json() {
@@ -203,6 +307,10 @@ pub fn report_build_result(
     }
     if output_mode.is_json() {
         print_json_report(config, result, &logs_dir, &diagnostic_persistence_failures)?;
+    }
+    if output_mode.is_evaluation_stream() {
+        print_diagnostic_persistence_failures(&diagnostic_persistence_failures);
+        return Ok(());
     }
 
     if let Some(single_mismatch) = maybe_single_fod_mismatch(config, result, fix, output_mode) {
@@ -274,7 +382,7 @@ fn write_success_logs(
         }
     }
     debug_assert!(failures.len() <= result.outcomes.len());
-    debug_assert_eq!(output_mode.is_json(), !output_mode.is_human());
+    debug_assert!(!(output_mode.is_json() && output_mode.is_human()));
     failures
 }
 

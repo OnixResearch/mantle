@@ -2897,6 +2897,61 @@ let Registry = {
         "bundle syntax does not prove evidence truth"
       ],
       "rationale"= "The report projections are contracted now; the full portable bundle remains compatibility-owned."
+    },
+    {
+      "id"= "build.evaluation-stream",
+      "class"= "compatibility",
+      "rust_owner"= "src/evaluation_stream_output.rs::EvaluationStreamWriter",
+      "producer"= {
+        "command_or_api"= "mantle build --evaluation-stream",
+        "marker"= "build.evaluation-stream",
+        "source_paths"= [
+          "src/evaluation_stream_output.rs",
+          "src/build_cmd.rs"
+        ]
+      },
+      "consumers"= [
+        "build automation",
+        "selected-root monitors"
+      ],
+      "artifacts"= {
+        "schema"= "",
+        "generated_contract"= "",
+        "positive_fixtures"= [],
+        "negative_fixture_set"= ""
+      },
+      "version_policy"= {
+        "current"= "mantle-evaluation-stream-v1",
+        "supported"= [
+          "mantle-evaluation-stream-v1"
+        ],
+        "unknown_version_behavior"= "reject before accepting the record",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-evaluation-stream-contract.rs",
+        "cargo test -p mantle --test integration evaluation_stream"
+      ],
+      "fixture_coverage"= [
+        "all record kinds",
+        "partial outcomes",
+        "unknown versions",
+        "malformed and oversized records"
+      ],
+      "freshness_strategy"= "A dedicated bounded NDJSON checker owns record framing and schema validation",
+      "freshness"= {
+        "schema_blake3"= "",
+        "contract_blake3"= "",
+        "prelude_blake3"= "",
+        "fixture_set_blake3"= "",
+        "producer_identity_blake3"= "",
+        "consumer_policy_blake3"= ""
+      },
+      "non_claims"= [
+        "stream shape does not prove evaluation or build correctness"
+      ],
+      "rationale"= "The public stream is versioned and checked by the NDJSON-specific contract rail; the document-JSON registry cannot render multi-record framing."
     }
   ]
 }

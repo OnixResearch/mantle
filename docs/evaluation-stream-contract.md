@@ -2,7 +2,9 @@
 
 Mantle will expose the `mantle-evaluation-stream-v1` NDJSON contract through an explicit stream option.
 
-This document defines the contract before pipeline dispatch changes.
+Use `mantle build --evaluation-stream <source.ncl>` to select the stream explicitly.
+
+`--evaluation-stream` cannot be combined with `--json`, `--fix`, `--plan`, or remote build dispatch. Existing `--json build` output remains available during the compatibility period.
 
 ## Record framing
 
@@ -30,6 +32,8 @@ The supported record kinds are:
 | `MAX_SAFE_REFERENCE_BYTES` | 4,096 | Reject the record value. |
 
 All byte limits use UTF-8 bytes. Sequence values start at zero and remain less than `MAX_SELECTED_ROOTS`.
+
+Diagnostic admission redacts absolute paths, credential-shaped tokens, and standalone hexadecimal digests before truncation. It normalizes diagnostic whitespace.
 
 ## Root identity and order
 
@@ -71,6 +75,8 @@ Failure scopes are:
 
 A successful root has no failure scope or diagnostic. A cancelled root uses `cancellation`.
 
+Terminal phases are `evaluation`, `conversion`, `build`, and `coordination`. The pipeline currently reports successful derivation conversion with `terminal_phase = "conversion"`.
+
 A `worker-lost` root uses `coordinator-failure`. A `not-started` root uses the scope that stopped dispatch.
 
 Each root can have one `root-terminal` record. A repeated terminal record is a contract error.
@@ -94,6 +100,16 @@ The selected-root count and terminal-root count must match. A missing outcome pr
 | Pipeline stream | 0 | 1 | 1 | 130 |
 
 A broken stream, rejected summary, or internal coordinator error returns status 3. These errors do not produce a successful completion claim.
+
+A build can fail after its selected roots convert successfully. In that case, the evaluation summary can report `success`, but the pipeline process returns status 1. The stream does not claim build correctness.
+
+## Output failure policy
+
+The stream shell serializes and checks each record before writing it. It flushes after each complete NDJSON line.
+
+If a write or flush fails, the shell requests evaluation cancellation and returns status 3. It does not drain unbounded work or emit a replacement summary.
+
+If the pipeline does not supply an admitted `run-summary`, the shell returns status 3. Earlier records do not establish successful completion.
 
 ## Compatibility period
 

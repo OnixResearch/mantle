@@ -11,6 +11,7 @@ use crate::types::RootSet;
 use crate::types::RunSummary;
 use crate::types::SelectedRoot;
 use crate::types::SourceSequence;
+use crate::types::TerminalPhase;
 use crate::types::TerminalState;
 use crate::types::TransitionResult;
 use crate::types::stopped_outcome;
@@ -76,8 +77,17 @@ impl OutcomeLedger {
         sequence: SourceSequence,
         references: RootReferences,
     ) -> Result<TransitionResult, OutcomeError> {
+        self.record_success_at_phase(sequence, TerminalPhase::Evaluation, references)
+    }
+
+    pub fn record_success_at_phase(
+        &self,
+        sequence: SourceSequence,
+        terminal_phase: TerminalPhase,
+        references: RootReferences,
+    ) -> Result<TransitionResult, OutcomeError> {
         let root = self.root(sequence)?;
-        let outcome = success_outcome(root, references);
+        let outcome = success_outcome(root, terminal_phase, references);
         let ledger = self.record_terminal(sequence, outcome)?;
         Ok(TransitionResult {
             ledger,
@@ -92,9 +102,10 @@ impl OutcomeLedger {
         diagnostic: BoundedDiagnostic,
     ) -> Result<TransitionResult, OutcomeError> {
         let scope = fact.scope();
+        let terminal_phase = fact.phase();
         let terminal_state = state_for_observed_failure(scope);
         let root = self.root(sequence)?;
-        let outcome = stopped_outcome(root, terminal_state, scope, diagnostic.clone());
+        let outcome = stopped_outcome(root, terminal_state, terminal_phase, scope, diagnostic.clone());
         let ledger = self.record_terminal(sequence, outcome)?;
         if scope == FailureScope::RootScoped {
             return Ok(TransitionResult {
@@ -102,7 +113,7 @@ impl OutcomeLedger {
                 decision: DispatchDecision::Continue,
             });
         }
-        let stopped = ledger.classify_remaining(scope, diagnostic)?;
+        let stopped = ledger.classify_remaining(scope, terminal_phase, diagnostic)?;
         Ok(TransitionResult {
             ledger: stopped,
             decision: DispatchDecision::Stop,
@@ -114,10 +125,19 @@ impl OutcomeLedger {
         scope: FailureScope,
         diagnostic: BoundedDiagnostic,
     ) -> Result<TransitionResult, OutcomeError> {
+        self.stop_remaining_at_phase(scope, default_stop_phase(scope), diagnostic)
+    }
+
+    pub fn stop_remaining_at_phase(
+        &self,
+        scope: FailureScope,
+        terminal_phase: TerminalPhase,
+        diagnostic: BoundedDiagnostic,
+    ) -> Result<TransitionResult, OutcomeError> {
         if scope == FailureScope::RootScoped {
             return Err(OutcomeError::StopScopeRequired);
         }
-        let ledger = self.classify_remaining(scope, diagnostic)?;
+        let ledger = self.classify_remaining(scope, terminal_phase, diagnostic)?;
         Ok(TransitionResult {
             ledger,
             decision: DispatchDecision::Stop,
@@ -144,7 +164,12 @@ impl OutcomeLedger {
         summary(&self.root_set, outcomes)
     }
 
-    fn classify_remaining(&self, scope: FailureScope, diagnostic: BoundedDiagnostic) -> Result<Self, OutcomeError> {
+    fn classify_remaining(
+        &self,
+        scope: FailureScope,
+        terminal_phase: TerminalPhase,
+        diagnostic: BoundedDiagnostic,
+    ) -> Result<Self, OutcomeError> {
         let mut next = self.clone();
         for slot in &mut next.slots {
             let terminal_state = match slot.progress {
@@ -152,8 +177,13 @@ impl OutcomeLedger {
                 RootProgress::Started => state_for_started_stop(scope)?,
                 RootProgress::Terminal(_) => continue,
             };
-            slot.progress =
-                RootProgress::Terminal(stopped_outcome(slot.root.clone(), terminal_state, scope, diagnostic.clone()));
+            slot.progress = RootProgress::Terminal(stopped_outcome(
+                slot.root.clone(),
+                terminal_state,
+                terminal_phase,
+                scope,
+                diagnostic.clone(),
+            ));
         }
         debug_assert_eq!(next.slots.len(), self.slots.len());
         debug_assert!(next.slots.iter().all(slot_is_terminal));
@@ -184,6 +214,15 @@ impl OutcomeLedger {
             return Err(OutcomeError::SequenceOutOfRange(sequence.value()));
         }
         Ok(index)
+    }
+}
+
+fn default_stop_phase(scope: FailureScope) -> TerminalPhase {
+    match scope {
+        FailureScope::SharedFatal => TerminalPhase::Evaluation,
+        FailureScope::Cancellation | FailureScope::CoordinatorFailure | FailureScope::RootScoped => {
+            TerminalPhase::Coordination
+        }
     }
 }
 

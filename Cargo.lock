@@ -4810,6 +4810,7 @@ dependencies = [
  "crunch-delta",
  "crunch-eval",
  "crunch-eval-budget-core",
+ "crunch-evaluation-stream-core",
  "crunch-glue",
  "crunch-hardware-simulation",
  "crunch-hardware-simulation-core",

@@ -30,6 +30,7 @@ use crate::RunDisposition;
 use crate::SUCCESS_EXIT_CODE;
 use crate::SourceSequence;
 use crate::StreamRecordValue;
+use crate::TerminalPhase;
 use crate::TerminalState;
 use crate::process_status;
 
@@ -136,6 +137,7 @@ fn root_scoped_failure_keeps_dispatch_open_and_preserves_success() {
     assert_eq!(summary.disposition(), RunDisposition::Partial);
     assert_eq!(summary.counts().succeeded, TWO_ROOT_COUNT);
     assert_eq!(summary.counts().failed, 1);
+    assert!(summary.roots().iter().all(|root| root.terminal_phase() == TerminalPhase::Evaluation));
     assert_eq!(summary.counts().total().expect("bounded total"), THREE_ROOT_COUNT);
 }
 
@@ -159,6 +161,7 @@ fn shared_fatal_classifies_started_and_pending_roots() {
     assert_eq!(roots[ROOT_B_SEQUENCE as usize].terminal_state(), TerminalState::Failed);
     assert_eq!(roots[ROOT_C_SEQUENCE as usize].terminal_state(), TerminalState::NotStarted);
     assert!(roots.iter().all(|root| root.failure_scope() == Some(FailureScope::SharedFatal)));
+    assert!(roots.iter().all(|root| root.terminal_phase() == TerminalPhase::Evaluation));
 }
 
 #[test]
@@ -176,6 +179,7 @@ fn cancellation_is_terminal_and_rejects_late_success() {
     assert_eq!(roots[ROOT_A_SEQUENCE as usize].terminal_state(), TerminalState::Cancelled);
     assert_eq!(roots[ROOT_B_SEQUENCE as usize].terminal_state(), TerminalState::NotStarted);
     assert_eq!(roots[ROOT_C_SEQUENCE as usize].terminal_state(), TerminalState::NotStarted);
+    assert!(roots.iter().all(|root| root.terminal_phase() == TerminalPhase::Coordination));
     assert_eq!(summary.counts().total().expect("bounded total"), THREE_ROOT_COUNT);
 
     let error = ledger
@@ -197,6 +201,7 @@ fn coordinator_failure_marks_started_work_as_lost() {
     assert_eq!(roots[ROOT_A_SEQUENCE as usize].terminal_state(), TerminalState::WorkerLost);
     assert_eq!(roots[ROOT_B_SEQUENCE as usize].terminal_state(), TerminalState::NotStarted);
     assert_eq!(roots[ROOT_C_SEQUENCE as usize].terminal_state(), TerminalState::NotStarted);
+    assert!(roots.iter().all(|root| root.terminal_phase() == TerminalPhase::Coordination));
     assert_eq!(summary.counts().worker_lost, 1);
     assert_eq!(summary.counts().not_started, TWO_ROOT_COUNT);
 }
@@ -253,6 +258,23 @@ fn bounded_values_reject_or_truncate_at_utf8_boundaries() {
     assert!(diagnostic.truncated());
     assert!(diagnostic.text().len() <= DIAGNOSTIC_BYTES_MAX as usize);
     assert!(diagnostic.text().is_char_boundary(diagnostic.text().len()));
+}
+
+#[test]
+fn bounded_diagnostic_redacts_sensitive_tokens_paths_and_digests() {
+    let digest = "a".repeat(SOURCE_BLAKE3.len());
+    let diagnostic = BoundedDiagnostic::new(format!(
+        "failed at /home/operator/private token=secret-value digest {digest} ordinary-detail"
+    ));
+    let text = diagnostic.text();
+
+    assert!(text.contains("<redacted-path>"));
+    assert!(text.contains("<redacted>"));
+    assert!(text.contains("<redacted-digest>"));
+    assert!(text.contains("ordinary-detail"));
+    assert!(!text.contains("/home/operator/private"));
+    assert!(!text.contains("secret-value"));
+    assert!(!text.contains(&digest));
 }
 
 #[test]

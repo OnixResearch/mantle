@@ -43,6 +43,10 @@ const FAILED_PIPELINE_EXIT_CODE: u8 = 1;
 const CANCELLED_EXIT_CODE: u8 = 130;
 const INTERNAL_EXIT_CODE: u8 = 3;
 const COMPATIBILITY_MODE: &str = "stream-v1-introduction-plus-one-subsequent-minor-release";
+const PRODUCT_SOURCE_FILES_MAX: u32 = 20_000;
+const PRODUCT_SOURCE_FILE_BYTES_MAX: u64 = 16_777_216;
+const PRODUCT_SOURCE_ROOTS: &[&str] = &["src", "crates"];
+const FORBIDDEN_IMPORT_TOKENS: &[&str] = &["nix-eval-jobs", "nix_eval_jobs"];
 const POSITIVE_FIXTURES: &[&str] = &["all-success.ndjson", "partial.ndjson"];
 const NEGATIVE_FIXTURES: &[(&str, &str)] = &[
     ("unknown-version.ndjson", "unsupported-schema-version"),
@@ -167,6 +171,7 @@ fn run(arguments: Vec<String>) -> Result<String, String> {
 fn run_repository_check() -> Result<String, String> {
     let root = env::current_dir().map_err(|error| format!("current-directory:{error}"))?;
     validate_schema_file(&root.join(SCHEMA_PATH))?;
+    validate_reference_boundary(&root)?;
     for fixture in POSITIVE_FIXTURES {
         let bytes = read_fixture(&root, fixture)?;
         validate_stream(&bytes).map_err(|error| format!("positive-fixture:{fixture}:{error}"))?;
@@ -208,6 +213,14 @@ fn run_self_test() -> Result<String, String> {
         return Err(format!("self-test-summary:{incomplete_error}"));
     }
     validate_process_status_contract()?;
+    let forbidden_error = validate_product_source_text(
+        Path::new("Cargo.toml"),
+        "[dependencies]\nnix-eval-jobs = \"0.1\"",
+    )
+    .expect_err("forbidden dependency must fail");
+    if !forbidden_error.contains("forbidden-reference-import:nix-eval-jobs") {
+        return Err(format!("self-test-reference-boundary:{forbidden_error}"));
+    }
     Ok("evaluation stream contract self-test: PASS".to_string())
 }
 
@@ -228,6 +241,75 @@ fn validate_schema_file(path: &Path) -> Result<(), String> {
         return Err(format!("schema-record-kind-count:{}", variants.len()));
     }
     Ok(())
+}
+
+fn validate_reference_boundary(root: &Path) -> Result<(), String> {
+    let mut file_count: u32 = 0;
+    for relative_root in PRODUCT_SOURCE_ROOTS {
+        validate_product_source_directory(&root.join(relative_root), &mut file_count)?;
+    }
+    validate_product_source_file(&root.join("Cargo.toml"), &mut file_count)?;
+    if file_count == 0 {
+        return Err("reference-boundary:no-product-source-files".to_string());
+    }
+    if file_count > PRODUCT_SOURCE_FILES_MAX {
+        return Err(format!("reference-boundary:file-count:{file_count}"));
+    }
+    Ok(())
+}
+
+fn validate_product_source_directory(directory: &Path, file_count: &mut u32) -> Result<(), String> {
+    let mut entries = fs::read_dir(directory)
+        .map_err(|error| format!("reference-boundary-read-dir:{}:{error}", directory.display()))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("reference-boundary-read-entry:{}:{error}", directory.display()))?;
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        let file_type = entry
+            .file_type()
+            .map_err(|error| format!("reference-boundary-file-type:{}:{error}", entry.path().display()))?;
+        if file_type.is_symlink() {
+            continue;
+        }
+        if file_type.is_dir() {
+            validate_product_source_directory(&entry.path(), file_count)?;
+            continue;
+        }
+        if file_type.is_file() && is_product_source_file(&entry.path()) {
+            validate_product_source_file(&entry.path(), file_count)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_product_source_file(path: &Path, file_count: &mut u32) -> Result<(), String> {
+    *file_count = file_count
+        .checked_add(1)
+        .ok_or_else(|| "reference-boundary:file-count-overflow".to_string())?;
+    if *file_count > PRODUCT_SOURCE_FILES_MAX {
+        return Err(format!("reference-boundary:file-count:{}", *file_count));
+    }
+    let metadata = fs::metadata(path)
+        .map_err(|error| format!("reference-boundary-metadata:{}:{error}", path.display()))?;
+    if metadata.len() > PRODUCT_SOURCE_FILE_BYTES_MAX {
+        return Err(format!("reference-boundary-file-too-large:{}", path.display()));
+    }
+    let text = fs::read_to_string(path)
+        .map_err(|error| format!("reference-boundary-read-file:{}:{error}", path.display()))?;
+    validate_product_source_text(path, &text)
+}
+
+fn validate_product_source_text(path: &Path, text: &str) -> Result<(), String> {
+    for token in FORBIDDEN_IMPORT_TOKENS {
+        if text.contains(token) {
+            return Err(format!("forbidden-reference-import:{token}:{}", path.display()));
+        }
+    }
+    Ok(())
+}
+
+fn is_product_source_file(path: &Path) -> bool {
+    matches!(path.extension().and_then(|extension| extension.to_str()), Some("rs" | "toml" | "ncl"))
 }
 
 fn validate_stream(bytes: &[u8]) -> Result<String, String> {

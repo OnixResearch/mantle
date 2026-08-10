@@ -89,9 +89,9 @@ mantle build --plan examples/hello.ncl
 mantle build examples/hello.ncl --no-substitute
 ```
 
-Use `mantle --json build ...` for the stable, machine-readable build report.
-The current compatibility identifier for that report is
-`crunch-build-report-v1`.
+Use `mantle --json build ...` for the stable aggregate build report. Its compatibility identifier is `crunch-build-report-v1`.
+
+Use `mantle build --evaluation-stream ...` for bounded NDJSON selected-root events. Stdout contains only `mantle-evaluation-stream-v1` records. See [the evaluation stream contract](docs/evaluation-stream-contract.md) for ordering, status, cancellation, and compatibility rules.
 
 ## Core workflows
 

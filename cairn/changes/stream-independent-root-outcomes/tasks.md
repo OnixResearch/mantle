@@ -39,16 +39,16 @@
 
 ## Phase 4: Machine stream and compatibility shell
 
-- [ ] [serial] I15 Add an explicit CLI stream mode that emits bounded NDJSON on stdout and keeps human diagnostics on stderr. r[evaluation_streaming.versioned_event_stream]
-- [ ] [serial] I16 Emit live records in observed completion order and one canonical final summary in source-order sequence. r[evaluation_streaming.deterministic_identity_and_order]
-- [ ] [serial] I17 Preserve successful root references in partial runs while returning the admitted non-success process disposition. r[evaluation_streaming.partial_run_disposition]
-- [ ] [serial] I18 Add broken-pipe, flush-failure, output-cancellation, and missing-summary handling without false success. r[evaluation_streaming.cancellation_and_output]
-- [ ] [serial] I19 Keep aggregate output available for the declared migration period and add dependency gates for forbidden upstream code and semantics. r[evaluation_streaming.reference_boundary]
-- [ ] [parallel] I20 Add CLI golden fixtures for all record kinds, mixed outcomes, order variation, redaction, bounds, process status, and aggregate compatibility. r[evaluation_streaming.validation]
+- [x] [serial] I15 Add an explicit CLI stream mode that emits bounded NDJSON on stdout and keeps human diagnostics on stderr. r[evaluation_streaming.versioned_event_stream]
+- [x] [serial] I16 Emit live records in observed completion order and one canonical final summary in source-order sequence. r[evaluation_streaming.deterministic_identity_and_order]
+- [x] [serial] I17 Preserve successful root references in partial runs while returning the admitted non-success process disposition. r[evaluation_streaming.partial_run_disposition]
+- [x] [serial] I18 Add broken-pipe, flush-failure, output-cancellation, and missing-summary handling without false success. r[evaluation_streaming.cancellation_and_output]
+- [x] [serial] I19 Keep aggregate output available for the declared migration period and add dependency gates for forbidden upstream code and semantics. r[evaluation_streaming.reference_boundary]
+- [x] [parallel] I20 Add CLI golden fixtures for all record kinds, mixed outcomes, order variation, redaction, bounds, process status, and aggregate compatibility. r[evaluation_streaming.validation]
 
 ## Phase 5: Documentation and completion evidence
 
-- [ ] [serial] I21 Document stream records, identity inputs, ordering, failure scope, cancellation, partial-result handling, compatibility, and non-claims. r[evaluation_streaming.versioned_event_stream] r[evaluation_streaming.reference_boundary]
+- [x] [serial] I21 Document stream records, identity inputs, ordering, failure scope, cancellation, partial-result handling, compatibility, and non-claims. r[evaluation_streaming.versioned_event_stream] r[evaluation_streaming.reference_boundary]
 - [ ] [serial] V1 Rerun every Phase 1 baseline command and all focused positive and negative tests. r[evaluation_streaming.validation]
 - [ ] [serial] V2 Run formatting, focused Clippy with warnings denied, machine-contract checks, architecture checks, and `git diff --check`. r[evaluation_streaming.core_shell_boundary]
 - [ ] [serial] V3 Run Cairn validation, proposal, design, and tasks gates plus Tracey coverage. Record exact output before sync and archive. r[evaluation_streaming.validation]

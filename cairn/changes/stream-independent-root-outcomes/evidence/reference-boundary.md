@@ -40,6 +40,13 @@ Non-claims:
 - This review does not authorize copied GPL source.
 - Similar record streaming does not prove implementation independence by itself.
 
+Implementation guard:
+
+- `scripts/check-evaluation-stream-contract.rs` scans bounded first-party Rust and Cargo manifest inputs.
+- The guard permits the external project name only in comments and the approved `docs/`, `adr/`, and `cairn/` review boundary.
+- Its negative self-test proves that a product-source import is rejected.
+- Pueue task `16923` passed the self-test and the repository check.
+
 Decision: Adapt independent error reporting and NDJSON framing under Mantle-owned types, identity, bounds, tests, and claims.
 
 Owner: `stream-independent-root-outcomes`.
