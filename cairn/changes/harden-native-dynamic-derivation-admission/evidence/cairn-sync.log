@@ -1,0 +1,49 @@
+$ cairn sync harden-native-dynamic-derivation-admission --root . --execute
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./cairn/changes/harden-native-dynamic-derivation-admission/specs/dynamic-derivation-admission/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./cairn/changes/harden-native-dynamic-derivation-admission/specs/dynamic-derivation-admission/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "harden-native-dynamic-derivation-admission",
+  "delta_specs": [
+    "./cairn/changes/harden-native-dynamic-derivation-admission/specs/dynamic-derivation-admission/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "8b23052233f82b95c8a8b104789e124a0de76d034f631b3a370fd02ee5d2089e",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "4e5d5072d825e7d57a9e742ffe645ceba9b9f466917279e5ce9c6df571cd25c8",
+          "exists": true,
+          "path": "./cairn/specs/dynamic-derivation-admission/spec.md"
+        }
+      ],
+      "manifest_hash": "681837150e191aa1202687cd0c9c08aed2f332f4db5f9a7068332c93995eecea"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./cairn/specs/dynamic-derivation-admission/spec.md"
+        }
+      ],
+      "manifest_hash": "d84d7ede51c7f011931f771c2d6b95281b135724d4a3c75b24389463cfd60035"
+    },
+    "kind": "sync",
+    "manifest_hash": "461415f3576c6efaefcb737320069ed1f40a2c950b4ba7199032ee1c55a34d7d"
+  },
+  "plan_hash": "3d16cb8c38dd27e751bd1407726d899db02b92c4d9b88bfb8c32e3cb880a42f4",
+  "policy": "mantle-default",
+  "policy_hash": "810cfa56991a9d1f10038ca79bf9a7a0996a2ee756c4e62324f1cd3f8628c848",
+  "reasons": [],
+  "receipt_hash": "6cfe221a53daebf31bf3bd9192f375b887f887a50bea611d53397ef7d30365e2"
+}
+command_exit=0
