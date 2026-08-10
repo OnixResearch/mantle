@@ -1478,6 +1478,7 @@ dependencies = [
 name = "crunch-eval"
 version = "0.1.0"
 dependencies = [
+ "blake3",
  "cranelift",
  "cranelift-jit",
  "cranelift-module",
@@ -1605,6 +1606,7 @@ version = "0.1.0"
 dependencies = [
  "crunch-build",
  "crunch-eval",
+ "crunch-evaluation-stream-core",
  "crunch-glue",
  "crunch-store",
  "data-encoding",

@@ -87,7 +87,7 @@ impl IsolatedWorkerInput {
             self.shape.clone(),
             self.labels.to_vec(),
         )?;
-        let value = session.force_root(label)?;
+        let value = session.force_root(label).map_err(|error| label_error(label, error))?;
         Ok(value)
     }
 
@@ -254,6 +254,11 @@ impl EvaluationSession {
     /// The discovered root labels, in order.
     pub fn root_labels(&self) -> &[RootLabel] {
         &self.labels
+    }
+
+    /// BLAKE3 identity of the exact source text used by this session.
+    pub fn source_blake3(&self) -> String {
+        blake3::hash(self.source.as_bytes()).to_hex().to_string()
     }
 
     /// How many top-level roots have been explicitly forced through this session.
@@ -1077,6 +1082,8 @@ mod tests {
 
     use super::*;
 
+    const BLAKE3_HEX_LENGTH: usize = 64;
+
     fn eval_deep_expr(source: &str) -> Expr {
         let mut ctx = Context::new().with_source_name("<test>".to_string());
         ctx.eval_deep_for_export(source).unwrap()
@@ -1424,6 +1431,17 @@ let second = first + 1 in {
         let observed = merged.into_iter().map(|(label, _)| label).collect::<Vec<_>>();
 
         assert_eq!(observed, labels);
+    }
+
+    #[test]
+    fn source_identity_is_stable_and_content_sensitive() {
+        let first = EvaluationSession::open_str("{ alpha = 1 }", &[]).unwrap();
+        let replay = EvaluationSession::open_str("{ alpha = 1 }", &[]).unwrap();
+        let changed = EvaluationSession::open_str("{ alpha = 2 }", &[]).unwrap();
+
+        assert_eq!(first.source_blake3(), replay.source_blake3());
+        assert_ne!(first.source_blake3(), changed.source_blake3());
+        assert_eq!(first.source_blake3().len(), BLAKE3_HEX_LENGTH);
     }
 
     #[test]

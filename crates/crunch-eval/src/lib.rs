@@ -31,6 +31,17 @@ pub const EVALUATOR_ID: &str = "nickel-lang";
 /// Cargo-selected Nickel evaluator version.
 pub const EVALUATOR_VERSION: &str = "2.0.0";
 
+/// Conservative failure scope visible at the evaluator adapter boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailureScopeHint {
+    /// The adapter identified a root-local failure.
+    RootScoped,
+    /// The failure can affect more than one selected root.
+    SharedFatal,
+    /// The adapter protocol or coordinator failed.
+    CoordinatorFailure,
+}
+
 /// Errors from crunch-eval.
 #[derive(Debug)]
 pub enum Error {
@@ -48,6 +59,22 @@ pub enum Error {
         label: String,
         source: Box<Error>,
     },
+}
+
+impl Error {
+    /// Classify only errors whose scope is visible at this adapter boundary.
+    ///
+    /// The Nickel facade keeps evaluator error variants opaque. Therefore, an
+    /// unclassified Nickel error is shared-fatal instead of root-scoped.
+    pub fn failure_scope_hint(&self) -> FailureScopeHint {
+        match self {
+            Error::Eval(_) => FailureScopeHint::SharedFatal,
+            Error::Io(_) => FailureScopeHint::SharedFatal,
+            Error::Boundary(_) => FailureScopeHint::CoordinatorFailure,
+            Error::Serde(_) => FailureScopeHint::RootScoped,
+            Error::Labeled { source, .. } => source.failure_scope_hint(),
+        }
+    }
 }
 
 impl std::fmt::Display for Error {
@@ -313,6 +340,27 @@ mod tests {
     use session::RootShape;
 
     use super::*;
+
+    #[test]
+    fn failure_scope_hint_preserves_root_shared_and_coordinator_boundaries() {
+        let root = Error::Serde("bad root".to_string());
+        let shared = Error::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "missing import"));
+        let coordinator = Error::Boundary("worker protocol".to_string());
+        let opaque_evaluator = match evaluate_str("{", &[]) {
+            Ok(_) => panic!("invalid Nickel must fail"),
+            Err(error) => error,
+        };
+        let labeled_shared = Error::Labeled {
+            label: "alpha".to_string(),
+            source: Box::new(Error::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "missing import"))),
+        };
+
+        assert_eq!(root.failure_scope_hint(), FailureScopeHint::RootScoped);
+        assert_eq!(shared.failure_scope_hint(), FailureScopeHint::SharedFatal);
+        assert_eq!(coordinator.failure_scope_hint(), FailureScopeHint::CoordinatorFailure);
+        assert_eq!(opaque_evaluator.failure_scope_hint(), FailureScopeHint::SharedFatal);
+        assert_eq!(labeled_shared.failure_scope_hint(), FailureScopeHint::SharedFatal);
+    }
 
     // ── Phase 1: File-based evaluation ──────────────────────────
 

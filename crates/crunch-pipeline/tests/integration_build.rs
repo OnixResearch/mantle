@@ -648,7 +648,7 @@ async fn pipeline_preserves_label_to_output_association_under_parallel_root_stre
 }
 
 #[tokio::test]
-async fn pipeline_reports_labeled_eval_failure_after_prior_root_dispatch() {
+async fn pipeline_preserves_successful_sibling_after_labeled_eval_failure() {
     if !can_build() {
         eprintln!("skipping: bwrap or /nix/store not available");
         return;

@@ -28,10 +28,14 @@
 
 ## Phase 3: Pipeline and worker integration
 
-- [ ] [serial] I11 Replace `first_failure` dispatch control with typed root and shared outcomes while preserving bounded worker concurrency. r[evaluation_streaming.complete_root_outcomes] r[evaluation_streaming.failure_scope]
-- [ ] [serial] I12 Continue independent evaluation and build conversion after root-scoped errors. Stop safely after shared fatal errors. r[evaluation_streaming.complete_root_outcomes]
-- [ ] [serial] I13 Integrate cancellation so new dispatch stops, owned work receives cancellation, late success cannot replace cancellation, and every root becomes terminal. r[evaluation_streaming.cancellation_and_output]
-- [ ] [parallel] I14 Add pipeline fixtures for one malformed sibling, recursive evaluation, worker loss, shared initialization failure, cancellation races, and late results. r[evaluation_streaming.validation]
+- [x] [serial] I11 Replace `first_failure` dispatch control with typed root and shared outcomes while preserving bounded worker concurrency. r[evaluation_streaming.complete_root_outcomes] r[evaluation_streaming.failure_scope]
+  Evidence: `evidence/pipeline-worker-integration.md` records the ledger coordinator, unchanged concurrency bound, and complete root accounting.
+- [x] [serial] I12 Continue independent evaluation and build conversion after root-scoped errors. Stop safely after shared fatal errors. r[evaluation_streaming.complete_root_outcomes]
+  Evidence: single-worker tests prove a later sibling succeeds after evaluation/deserialization and conversion failures; opaque evaluator and shared initialization failures stop dispatch.
+- [x] [serial] I13 Integrate cancellation so new dispatch stops, owned work receives cancellation, late success cannot replace cancellation, and every root becomes terminal. r[evaluation_streaming.cancellation_and_output]
+  Evidence: `EvaluationCancellation` and the cancellation race test prove stop, wake, terminalization, and late-success rejection.
+- [x] [parallel] I14 Add pipeline fixtures for one malformed sibling, recursive evaluation, worker loss, shared initialization failure, cancellation races, and late results. r[evaluation_streaming.validation]
+  Evidence: all required fixture classes pass in `crunch-pipeline`; see `evidence/pipeline-worker-integration.md`.
 
 ## Phase 4: Machine stream and compatibility shell
 

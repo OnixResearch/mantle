@@ -6,6 +6,7 @@
 // r[impl foreign_derivation_import.live_nixpkgs_realization_proof]
 
 mod derivation_file;
+mod evaluation_stream;
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -52,11 +53,14 @@ use crunch_glue::ConversionCache;
 use crunch_glue::CrunchDerivation;
 use crunch_store::GcRootSource;
 use crunch_store::StoreMutationGuard;
+use evaluation_stream::EvalStreamRequest;
+use evaluation_stream::EvalStreamResult;
+use evaluation_stream::EvalWorkerControl;
+pub use evaluation_stream::EvaluationCancellation;
+use evaluation_stream::stream_roots_into_worker;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
 use tokio::sync::mpsc;
-use tokio::task::JoinSet;
-use tracing::info;
 
 const EVAL_MESSAGE_CHANNEL_CAPACITY: usize = 16;
 #[cfg(test)]
@@ -205,6 +209,13 @@ fn map_eval_error(err: crunch_eval::Error) -> Error {
 }
 
 pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
+    build_with_evaluation_cancellation(config, EvaluationCancellation::new()).await
+}
+
+pub async fn build_with_evaluation_cancellation(
+    config: &BuildConfig,
+    cancellation: EvaluationCancellation,
+) -> Result<PipelineResult, Error> {
     validate_build_config(config)?;
     let _mutation_guard = StoreMutationGuard::acquire_wait(&config.state_dir)
         .map_err(|err| Error::Internal(format!("acquiring store mutation lock: {err}")))?;
@@ -256,12 +267,12 @@ pub async fn build(config: &BuildConfig) -> Result<PipelineResult, Error> {
 
     #[cfg(target_os = "linux")]
     {
-        return build_linux(config, store, session, hermeticity_audit_events).await;
+        return build_linux(config, store, session, hermeticity_audit_events, cancellation).await;
     }
 
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = store;
+        let _ = (store, cancellation);
         Err(Error::Build("building is only supported on Linux (requires bwrap)".to_string()))
     }
 }
@@ -280,6 +291,7 @@ async fn build_linux(
     store: crunch_store::StoreHandle,
     session: crunch_eval::session::EvaluationSession,
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
+    cancellation: EvaluationCancellation,
 ) -> Result<PipelineResult, Error> {
     debug_assert!(!config.store_dir.is_empty());
     debug_assert!(config.max_jobs >= 1);
@@ -303,6 +315,8 @@ async fn build_linux(
         import_paths: &config.import_paths,
         session: &session,
         tx,
+        cancellation,
+        worker_control: EvalWorkerControl::default(),
     });
     let (worker_run, eval_stream) = tokio::join!(worker_run, eval_stream);
     let worker_result = match worker_run {
@@ -311,7 +325,7 @@ async fn build_linux(
     };
     let eval_stream = eval_stream?;
     let source_generation_paths = builder.source_generation_paths();
-    let overlay_report = builder
+    let overlay_evidence = builder
         .overlay_report()
         .map_err(|error| Error::Build(format!("collecting overlay build evidence: {error}")))?;
     let store_layer_selections = builder.take_store_layer_selections();
@@ -323,7 +337,7 @@ async fn build_linux(
         network_policy_rows: builder.take_network_policy_reports(),
         workspace_rows: workspace_evidence_sink.take(),
         action_result_rows: builder.take_action_result_reports(),
-        overlay_report,
+        overlay_report: overlay_evidence,
         store_layer_selections,
     };
     let result = finish_pipeline_result(
@@ -638,6 +652,11 @@ fn empty_workspace_report_collector() -> crunch_build::WorkspaceReportCollector 
     collector
 }
 
+struct EvalFailure {
+    label: String,
+    error: String,
+}
+
 fn finish_pipeline_result(
     store_dir: &str,
     hermeticity_mode: HermeticityMode,
@@ -646,12 +665,14 @@ fn finish_pipeline_result(
     evidence: PipelineRunEvidence,
 ) -> PipelineResult {
     debug_assert!(!store_dir.is_empty(), "store prefix must not be empty");
-    debug_assert!(
-        eval_stream.eval_failure.is_some() || !eval_stream.root_drv_paths.is_empty(),
-        "pipeline must finish with a converted root or labeled evaluation failure"
+    let eval_failures = evaluation_failures(&eval_stream.summary);
+    let accounted_root_count = eval_stream.summary.counts().total().ok().and_then(|count| usize::try_from(count).ok());
+    debug_assert_eq!(
+        accounted_root_count,
+        Some(eval_stream.summary.roots().len()),
+        "evaluation summary must account for every selected root"
     );
-
-    if let Some(eval_failure) = &eval_stream.eval_failure {
+    for eval_failure in &eval_failures {
         worker_result.failed.push(FailedGoal {
             drv_key: eval_failure_key(&eval_failure.label),
             origin_drv_key: eval_failure_key(&eval_failure.label),
@@ -662,7 +683,7 @@ fn finish_pipeline_result(
     }
     normalize_failed_goal_keys(&mut worker_result.failed, store_dir);
     let mut root_labels = build_root_labels(&eval_stream.root_drv_paths, store_dir);
-    if let Some(eval_failure) = &eval_stream.eval_failure {
+    for eval_failure in &eval_failures {
         root_labels.insert(eval_failure_key(&eval_failure.label), eval_failure.label.clone());
     }
 
@@ -681,6 +702,34 @@ fn finish_pipeline_result(
         priority_decisions: worker_result.priority_decisions,
         overlay_report: evidence.overlay_report,
         store_layer_selections: evidence.store_layer_selections,
+    }
+}
+
+fn evaluation_failures(summary: &crunch_evaluation_stream_core::RunSummary) -> Vec<EvalFailure> {
+    summary
+        .roots()
+        .into_iter()
+        .filter_map(|outcome| {
+            if outcome.terminal_state() == crunch_evaluation_stream_core::TerminalState::Succeeded {
+                return None;
+            }
+            let label = outcome.root().label();
+            let error = outcome
+                .diagnostic()
+                .map(|diagnostic| diagnostic.text())
+                .unwrap_or_else(|| terminal_state_diagnostic(outcome.terminal_state()).to_string());
+            Some(EvalFailure { label, error })
+        })
+        .collect()
+}
+
+fn terminal_state_diagnostic(state: crunch_evaluation_stream_core::TerminalState) -> &'static str {
+    match state {
+        crunch_evaluation_stream_core::TerminalState::Succeeded => "evaluation succeeded",
+        crunch_evaluation_stream_core::TerminalState::Failed => "evaluation failed",
+        crunch_evaluation_stream_core::TerminalState::WorkerLost => "evaluation worker lost",
+        crunch_evaluation_stream_core::TerminalState::Cancelled => "evaluation cancelled",
+        crunch_evaluation_stream_core::TerminalState::NotStarted => "evaluation not started",
     }
 }
 
@@ -722,133 +771,6 @@ fn validate_build_config(config: &BuildConfig) -> Result<(), Error> {
         return Err(Error::Internal(format!("store_dir must be an absolute path: {}", config.store_dir,)));
     }
     Ok(())
-}
-
-struct EvalStreamResult {
-    root_drv_paths: Vec<(String, StorePath<String>)>,
-    eval_failure: Option<EvalFailure>,
-}
-
-struct EvalFailure {
-    label: String,
-    error: String,
-}
-
-struct EvalStreamRequest<'a> {
-    max_jobs: u32,
-    store_dir: &'a str,
-    root_force_policy: RootForceExecutionPolicy,
-    root_file: &'a std::path::Path,
-    import_paths: &'a [OsString],
-    session: &'a crunch_eval::session::EvaluationSession,
-    tx: mpsc::Sender<EvalMessage>,
-}
-
-async fn stream_roots_into_worker(request: EvalStreamRequest<'_>) -> Result<EvalStreamResult, Error> {
-    let requested_labels =
-        request.session.root_labels().iter().map(|root_label| root_label.label.clone()).collect::<Vec<_>>();
-    debug_assert!(!requested_labels.is_empty(), "must have at least one root label");
-
-    let eval_parallelism = resolve_eval_parallelism(request.max_jobs, requested_labels.len() as u32);
-    let worker_input = request.session.isolated_worker_input();
-    let mut join_set = JoinSet::new();
-    let mut next_label_index: usize = 0;
-    let mut cache = ConversionCache::new(request.store_dir);
-    let mut file_resolver = derivation_file::DerivationFileResolver::new(request.root_file, request.import_paths)?;
-    let mut root_drv_paths = Vec::with_capacity(requested_labels.len());
-    let mut first_failure: Option<EvalFailure> = None;
-
-    spawn_eval_workers(
-        &mut join_set,
-        &worker_input,
-        &requested_labels,
-        &mut next_label_index,
-        eval_parallelism,
-        request.root_force_policy,
-    );
-    while let Some(join_result) = join_set.join_next().await {
-        let worker_result = join_result.map_err(|e| Error::Internal(format!("eval worker panicked: {e}")))?;
-
-        match worker_result {
-            Ok((label, mut drv)) => {
-                if first_failure.is_some() {
-                    continue;
-                }
-                file_resolver.resolve_root_inputs(request.root_file, &mut drv, &mut cache)?;
-                let (drv_path, _nix_drv) =
-                    crunch_glue::convert(&drv, &mut cache).map_err(|e| Error::Convert(format!("{label}: {e}")))?;
-                let new_entries = cache.drain_pending();
-                info!(drv = %drv_path, label = %label, entries = new_entries.len(), "converted, sending to worker");
-                request
-                    .tx
-                    .send(EvalMessage {
-                        label: label.clone(),
-                        drv_path: drv_path.clone(),
-                        new_entries,
-                    })
-                    .await
-                    .map_err(|e| Error::Internal(format!("channel send: {e}")))?;
-                root_drv_paths.push((label, drv_path));
-            }
-            Err((label, error)) => {
-                if first_failure.is_none() {
-                    first_failure = Some(EvalFailure { label, error });
-                }
-            }
-        }
-
-        if first_failure.is_none() {
-            spawn_eval_workers(
-                &mut join_set,
-                &worker_input,
-                &requested_labels,
-                &mut next_label_index,
-                eval_parallelism,
-                request.root_force_policy,
-            );
-        }
-    }
-
-    drop(request.tx);
-    Ok(EvalStreamResult {
-        root_drv_paths,
-        eval_failure: first_failure,
-    })
-}
-
-type EvalWorkerResult = Result<(String, CrunchDerivation), (String, String)>;
-
-#[allow(tigerstyle::too_many_parameters)]
-fn spawn_eval_workers(
-    join_set: &mut JoinSet<EvalWorkerResult>,
-    worker_input: &crunch_eval::session::IsolatedWorkerInput,
-    labels: &[String],
-    next_label_index: &mut usize,
-    eval_parallelism: u32,
-    root_force_policy: RootForceExecutionPolicy,
-) {
-    let max_inflight: usize = match usize::try_from(eval_parallelism) {
-        Ok(n) => n,
-        Err(_) => return, // u32 > usize only on 16-bit targets; nothing to spawn
-    };
-    while *next_label_index < labels.len() && join_set.len() < max_inflight {
-        let worker_input = worker_input.clone();
-        let label = labels[*next_label_index].clone();
-        *next_label_index = next_label_index.saturating_add(1);
-        join_set.spawn_blocking(move || {
-            let labels = vec![label.clone()];
-            match worker_input.force_selected_roots_with_policy::<CrunchDerivation>(&labels, 1, root_force_policy) {
-                Ok(mut roots) => {
-                    debug_assert_eq!(roots.len(), 1, "single-label request must return one root");
-                    let (_returned_label, drv) = roots
-                        .pop()
-                        .ok_or_else(|| (label.clone(), "single-label request returned zero roots".to_string()))?;
-                    Ok((label, drv))
-                }
-                Err(err) => Err((label.clone(), format!("root '{label}': {err}"))),
-            }
-        });
-    }
 }
 
 #[allow(tigerstyle::ambiguous_params)]
@@ -959,6 +881,10 @@ pub fn label_for_key<'a>(result: &'a PipelineResult, drv_key: &str) -> Option<&'
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
 
     use snix_castore::Node;
     use snix_castore::SymlinkTarget;
@@ -975,6 +901,15 @@ mod tests {
     const MANAGED_TEST_SOURCE_DIGEST_BYTE: u8 = 32;
     const MANAGED_TEST_DRV_DIGEST_BYTE: u8 = 33;
     const MANAGED_TEST_GENERATION: u64 = 1;
+    const CANCELLATION_WAIT_TIMEOUT_MS: u64 = 30_000;
+    const CANCELLATION_POLL_INTERVAL_MS: u64 = 1;
+    const SINGLE_EVAL_JOB: u32 = 1;
+    const SINGLE_ROOT_COUNT: u32 = 1;
+    const TWO_ROOT_COUNT: u32 = 2;
+    const THREE_ROOT_COUNT: u32 = 3;
+    const ROOT_ALPHA_INDEX: usize = 0;
+    const ROOT_BETA_INDEX: usize = 1;
+    const ROOT_GAMMA_INDEX: usize = 2;
 
     async fn collect_eval_message_labels(mut rx: mpsc::Receiver<EvalMessage>) -> Vec<String> {
         let mut labels = Vec::new();
@@ -982,6 +917,25 @@ mod tests {
             labels.push(message.label);
         }
         labels
+    }
+
+    fn eval_stream_request<'a>(
+        session: &'a crunch_eval::session::EvaluationSession,
+        root_file: &'a std::path::Path,
+        root_force_policy: RootForceExecutionPolicy,
+        tx: mpsc::Sender<EvalMessage>,
+    ) -> EvalStreamRequest<'a> {
+        EvalStreamRequest {
+            max_jobs: EVAL_POLICY_TEST_MAX_JOBS,
+            store_dir: "/crunch/store",
+            root_force_policy,
+            root_file,
+            import_paths: &[],
+            session,
+            tx,
+            cancellation: EvaluationCancellation::new(),
+            worker_control: EvalWorkerControl::default(),
+        }
     }
 
     fn managed_test_path(name: &str, digest_byte: u8) -> StorePath<String> {
@@ -1259,29 +1213,23 @@ mod tests {
         )
         .unwrap();
         let (inline_tx, inline_rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
-        let inline_result = stream_roots_into_worker(EvalStreamRequest {
-            max_jobs: EVAL_POLICY_TEST_MAX_JOBS,
-            store_dir: "/crunch/store",
-            root_force_policy: RootForceExecutionPolicy::Inline,
-            root_file: &root_file,
-            import_paths: &[],
-            session: &session,
-            tx: inline_tx,
-        })
+        let inline_result = stream_roots_into_worker(eval_stream_request(
+            &session,
+            &root_file,
+            RootForceExecutionPolicy::Inline,
+            inline_tx,
+        ))
         .await
         .unwrap();
         let inline_labels = collect_eval_message_labels(inline_rx).await;
 
         let (preferred_tx, preferred_rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
-        let preferred_result = stream_roots_into_worker(EvalStreamRequest {
-            max_jobs: EVAL_POLICY_TEST_MAX_JOBS,
-            store_dir: "/crunch/store",
-            root_force_policy: RootForceExecutionPolicy::PreferThreaded,
-            root_file: &root_file,
-            import_paths: &[],
-            session: &session,
-            tx: preferred_tx,
-        })
+        let preferred_result = stream_roots_into_worker(eval_stream_request(
+            &session,
+            &root_file,
+            RootForceExecutionPolicy::PreferThreaded,
+            preferred_tx,
+        ))
         .await
         .unwrap();
         let preferred_labels = collect_eval_message_labels(preferred_rx).await;
@@ -1297,56 +1245,253 @@ mod tests {
         let mut preferred_drv_sorted = preferred_result.root_drv_paths.clone();
         preferred_drv_sorted.sort();
         assert_eq!(inline_drv_sorted, preferred_drv_sorted);
-
-        assert!(inline_result.eval_failure.is_none());
-        assert!(preferred_result.eval_failure.is_none());
+        assert_eq!(inline_result.summary, preferred_result.summary);
+        assert_eq!(inline_result.summary.disposition(), crunch_evaluation_stream_core::RunDisposition::Success);
     }
 
     #[tokio::test]
-    async fn stream_roots_into_worker_reports_same_labeled_failure_across_policies() {
+    async fn malformed_sibling_does_not_suppress_independent_success() {
         let (_directory, root_file) = resolver_fixture_file();
         let session = crunch_eval::session::EvaluationSession::open_str(
             r#"{
-  good = { name = "good", builder = "/bin/sh" },
   bad = { builder = "/bin/sh" },
+  good = { name = "good", builder = "/bin/sh" },
 }"#,
             &[],
         )
         .unwrap();
         let (inline_tx, inline_rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
-        let inline_result = stream_roots_into_worker(EvalStreamRequest {
-            max_jobs: EVAL_POLICY_TEST_MAX_JOBS,
-            store_dir: "/crunch/store",
-            root_force_policy: RootForceExecutionPolicy::Inline,
-            root_file: &root_file,
-            import_paths: &[],
-            session: &session,
-            tx: inline_tx,
-        })
-        .await
-        .unwrap();
+        let mut inline_request = eval_stream_request(&session, &root_file, RootForceExecutionPolicy::Inline, inline_tx);
+        inline_request.max_jobs = SINGLE_EVAL_JOB;
+        let inline_result = stream_roots_into_worker(inline_request).await.unwrap();
         let inline_labels = collect_eval_message_labels(inline_rx).await;
 
         let (preferred_tx, preferred_rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
-        let preferred_result = stream_roots_into_worker(EvalStreamRequest {
-            max_jobs: EVAL_POLICY_TEST_MAX_JOBS,
-            store_dir: "/crunch/store",
-            root_force_policy: RootForceExecutionPolicy::PreferThreaded,
-            root_file: &root_file,
-            import_paths: &[],
-            session: &session,
-            tx: preferred_tx,
-        })
-        .await
-        .unwrap();
+        let mut preferred_request =
+            eval_stream_request(&session, &root_file, RootForceExecutionPolicy::PreferThreaded, preferred_tx);
+        preferred_request.max_jobs = SINGLE_EVAL_JOB;
+        let preferred_result = stream_roots_into_worker(preferred_request).await.unwrap();
         let preferred_labels = collect_eval_message_labels(preferred_rx).await;
 
-        assert!(inline_labels.len() <= 1, "inline should dispatch at most one root before failure");
-        assert!(preferred_labels.len() <= 1, "preferred should dispatch at most one root before failure");
-        let inline_failure = inline_result.eval_failure.expect("inline policy must report failure");
-        let preferred_failure = preferred_result.eval_failure.expect("preferred policy must report failure");
-        assert_eq!(inline_failure.label, preferred_failure.label);
-        assert_eq!(inline_failure.label, "bad");
-        assert_eq!(inline_failure.error, preferred_failure.error);
+        assert_eq!(inline_labels, vec!["good".to_string()]);
+        assert_eq!(preferred_labels, vec!["good".to_string()]);
+        assert_eq!(inline_result.summary, preferred_result.summary);
+        assert_eq!(inline_result.summary.disposition(), crunch_evaluation_stream_core::RunDisposition::Partial);
+        assert_eq!(inline_result.summary.counts().succeeded, SINGLE_ROOT_COUNT);
+        assert_eq!(inline_result.summary.counts().failed, SINGLE_ROOT_COUNT);
+        let bad = inline_result
+            .summary
+            .roots()
+            .into_iter()
+            .find(|outcome| outcome.root().label() == "bad")
+            .expect("bad root outcome");
+        assert_eq!(bad.terminal_state(), crunch_evaluation_stream_core::TerminalState::Failed);
+        assert_eq!(bad.failure_scope(), Some(crunch_evaluation_stream_core::FailureScope::RootScoped));
+    }
+
+    #[tokio::test]
+    async fn conversion_failure_does_not_suppress_later_root() {
+        let (_directory, root_file) = resolver_fixture_file();
+        let session = crunch_eval::session::EvaluationSession::open_str(
+            r#"{
+  a_bad = { name = "a-bad", builder = "/bin/sh", addressing_mode = "bogus" },
+  z_good = { name = "z-good", builder = "/bin/sh" },
+}"#,
+            &[],
+        )
+        .unwrap();
+        let (tx, rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
+        let mut request = eval_stream_request(&session, &root_file, RootForceExecutionPolicy::Inline, tx);
+        request.max_jobs = SINGLE_EVAL_JOB;
+        let result = stream_roots_into_worker(request).await.unwrap();
+        let labels = collect_eval_message_labels(rx).await;
+        let roots = result.summary.roots();
+
+        assert_eq!(labels, vec!["z_good".to_string()]);
+        assert_eq!(result.summary.disposition(), crunch_evaluation_stream_core::RunDisposition::Partial);
+        assert_eq!(roots[ROOT_ALPHA_INDEX].root().label(), "a_bad");
+        assert_eq!(roots[ROOT_ALPHA_INDEX].terminal_state(), crunch_evaluation_stream_core::TerminalState::Failed);
+        assert_eq!(
+            roots[ROOT_ALPHA_INDEX].failure_scope(),
+            Some(crunch_evaluation_stream_core::FailureScope::RootScoped)
+        );
+        assert_eq!(roots[ROOT_BETA_INDEX].terminal_state(), crunch_evaluation_stream_core::TerminalState::Succeeded);
+    }
+
+    #[tokio::test]
+    async fn recursive_record_root_evaluates_without_suppressing_its_sibling() {
+        let (_directory, root_file) = resolver_fixture_file();
+        let session = crunch_eval::session::EvaluationSession::open_str(
+            r#"{
+  base = { name = "base", builder = "/bin/sh" },
+  derived = { name = base.name ++ "-derived", builder = base.builder },
+}"#,
+            &[],
+        )
+        .unwrap();
+        let (tx, rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
+        let result = stream_roots_into_worker(eval_stream_request(
+            &session,
+            &root_file,
+            RootForceExecutionPolicy::PreferThreaded,
+            tx,
+        ))
+        .await
+        .unwrap();
+        let mut labels = collect_eval_message_labels(rx).await;
+        labels.sort();
+
+        assert_eq!(labels, vec!["base".to_string(), "derived".to_string()]);
+        assert_eq!(result.summary.disposition(), crunch_evaluation_stream_core::RunDisposition::Success);
+        assert_eq!(result.summary.counts().succeeded, TWO_ROOT_COUNT);
+        assert_eq!(result.summary.counts().total().unwrap(), TWO_ROOT_COUNT);
+    }
+
+    #[tokio::test]
+    async fn worker_loss_stops_dispatch_and_accounts_for_every_root() {
+        let (_directory, root_file) = resolver_fixture_file();
+        let session = crunch_eval::session::EvaluationSession::open_str(
+            r#"{
+  alpha = { name = "alpha", builder = "/bin/sh" },
+  beta = { name = "beta", builder = "/bin/sh" },
+  gamma = { name = "gamma", builder = "/bin/sh" },
+}"#,
+            &[],
+        )
+        .unwrap();
+        let (tx, rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
+        let mut request = eval_stream_request(&session, &root_file, RootForceExecutionPolicy::Inline, tx);
+        request.max_jobs = SINGLE_EVAL_JOB;
+        request.worker_control = EvalWorkerControl::panic_on("alpha".to_string());
+        let result = stream_roots_into_worker(request).await.unwrap();
+        let labels = collect_eval_message_labels(rx).await;
+        let roots = result.summary.roots();
+
+        assert!(labels.is_empty());
+        assert_eq!(result.summary.disposition(), crunch_evaluation_stream_core::RunDisposition::Failed);
+        assert_eq!(roots[ROOT_ALPHA_INDEX].terminal_state(), crunch_evaluation_stream_core::TerminalState::WorkerLost);
+        assert_eq!(roots[ROOT_BETA_INDEX].terminal_state(), crunch_evaluation_stream_core::TerminalState::NotStarted);
+        assert_eq!(roots[ROOT_GAMMA_INDEX].terminal_state(), crunch_evaluation_stream_core::TerminalState::NotStarted);
+        assert_eq!(result.summary.counts().total().unwrap(), THREE_ROOT_COUNT);
+    }
+
+    #[tokio::test]
+    async fn shared_initialization_failure_prevents_dispatch_and_accounts_for_roots() {
+        let directory = tempfile::tempdir().unwrap();
+        let missing_root_file = directory.path().join("missing").join("root.ncl");
+        let session = crunch_eval::session::EvaluationSession::open_str(
+            r#"{
+  alpha = { name = "alpha", builder = "/bin/sh" },
+  beta = { name = "beta", builder = "/bin/sh" },
+}"#,
+            &[],
+        )
+        .unwrap();
+        let (tx, rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
+        let result = stream_roots_into_worker(eval_stream_request(
+            &session,
+            &missing_root_file,
+            RootForceExecutionPolicy::Inline,
+            tx,
+        ))
+        .await
+        .unwrap();
+        let labels = collect_eval_message_labels(rx).await;
+        let roots = result.summary.roots();
+
+        assert!(labels.is_empty());
+        assert_eq!(result.summary.disposition(), crunch_evaluation_stream_core::RunDisposition::Failed);
+        assert!(roots.iter().all(|outcome| {
+            outcome.terminal_state() == crunch_evaluation_stream_core::TerminalState::NotStarted
+                && outcome.failure_scope() == Some(crunch_evaluation_stream_core::FailureScope::SharedFatal)
+        }));
+        assert_eq!(result.summary.counts().not_started, TWO_ROOT_COUNT);
+        assert_eq!(result.summary.counts().total().unwrap(), TWO_ROOT_COUNT);
+    }
+
+    #[tokio::test]
+    async fn opaque_evaluator_failure_stops_dispatch_as_shared_fatal() {
+        let (_directory, root_file) = resolver_fixture_file();
+        let session = crunch_eval::session::EvaluationSession::open_str(
+            r#"{
+  a_bad = { name | Number = "not-a-number", builder = "/bin/sh" },
+  z_good = { name = "z-good", builder = "/bin/sh" },
+}"#,
+            &[],
+        )
+        .unwrap();
+        let (tx, rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
+        let mut request = eval_stream_request(&session, &root_file, RootForceExecutionPolicy::Inline, tx);
+        request.max_jobs = SINGLE_EVAL_JOB;
+        let result = stream_roots_into_worker(request).await.unwrap();
+        let labels = collect_eval_message_labels(rx).await;
+        let roots = result.summary.roots();
+
+        assert!(labels.is_empty());
+        assert_eq!(result.summary.disposition(), crunch_evaluation_stream_core::RunDisposition::Failed);
+        assert_eq!(roots[ROOT_ALPHA_INDEX].terminal_state(), crunch_evaluation_stream_core::TerminalState::Failed);
+        assert_eq!(
+            roots[ROOT_ALPHA_INDEX].failure_scope(),
+            Some(crunch_evaluation_stream_core::FailureScope::SharedFatal)
+        );
+        assert_eq!(roots[ROOT_BETA_INDEX].terminal_state(), crunch_evaluation_stream_core::TerminalState::NotStarted);
+        assert_eq!(
+            roots[ROOT_BETA_INDEX].failure_scope(),
+            Some(crunch_evaluation_stream_core::FailureScope::SharedFatal)
+        );
+    }
+
+    #[tokio::test]
+    async fn cancellation_rejects_late_success_and_stops_new_dispatch() {
+        let (_directory, root_file) = resolver_fixture_file();
+        let session = crunch_eval::session::EvaluationSession::open_str(
+            r#"{
+  alpha = { name = "alpha", builder = "/bin/sh" },
+  beta = { name = "beta", builder = "/bin/sh" },
+  gamma = { name = "gamma", builder = "/bin/sh" },
+}"#,
+            &[],
+        )
+        .unwrap();
+        let cancellation = EvaluationCancellation::new();
+        let evaluation_completed = Arc::new(AtomicBool::new(false));
+        let release_evaluation = Arc::new(AtomicBool::new(false));
+        let control = EvalWorkerControl::pause_after_evaluation(
+            "beta".to_string(),
+            evaluation_completed.clone(),
+            release_evaluation.clone(),
+        );
+        let (tx, rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
+        let mut request = eval_stream_request(&session, &root_file, RootForceExecutionPolicy::Inline, tx);
+        request.max_jobs = SINGLE_EVAL_JOB;
+        request.cancellation = cancellation.clone();
+        request.worker_control = control;
+
+        let controller = async {
+            let reached_boundary = tokio::time::timeout(Duration::from_millis(CANCELLATION_WAIT_TIMEOUT_MS), async {
+                while !evaluation_completed.load(Ordering::Acquire) {
+                    tokio::time::sleep(Duration::from_millis(CANCELLATION_POLL_INTERVAL_MS)).await;
+                }
+            })
+            .await
+            .is_ok();
+            if !reached_boundary {
+                release_evaluation.store(true, Ordering::Release);
+                panic!("evaluation did not reach the cancellation race boundary");
+            }
+            cancellation.request();
+            release_evaluation.store(true, Ordering::Release);
+        };
+        let (result, ()) = tokio::join!(stream_roots_into_worker(request), controller);
+        let result = result.unwrap();
+        let labels = collect_eval_message_labels(rx).await;
+        let roots = result.summary.roots();
+
+        assert_eq!(labels, vec!["alpha".to_string()]);
+        assert_eq!(result.summary.disposition(), crunch_evaluation_stream_core::RunDisposition::Cancelled);
+        assert_eq!(roots[ROOT_ALPHA_INDEX].terminal_state(), crunch_evaluation_stream_core::TerminalState::Succeeded);
+        assert_eq!(roots[ROOT_BETA_INDEX].terminal_state(), crunch_evaluation_stream_core::TerminalState::Cancelled);
+        assert_eq!(roots[ROOT_GAMMA_INDEX].terminal_state(), crunch_evaluation_stream_core::TerminalState::NotStarted);
+        assert_eq!(result.summary.counts().total().unwrap(), THREE_ROOT_COUNT);
     }
 }

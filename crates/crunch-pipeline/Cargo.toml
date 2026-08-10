@@ -7,6 +7,7 @@ license.workspace = true
 [dependencies]
 crunch-build = { path = "../crunch-build" }
 crunch-eval = { path = "../crunch-eval" }
+crunch-evaluation-stream-core = { path = "../crunch-evaluation-stream-core" }
 crunch-glue = { path = "../crunch-glue" }
 crunch-store = { path = "../crunch-store" }
 nix-compat = { path = "../../vendor/nix-compat" }

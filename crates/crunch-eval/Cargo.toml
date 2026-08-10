@@ -13,6 +13,7 @@ cranelift-proto = [
 ]
 
 [dependencies]
+blake3 = { version = "=1.8.2", default-features = false, features = ["pure"] }
 nickel-lang = "2.0.0"
 nickel-lang-core = { version = "0.16.1", default-features = false }
 thiserror = "2.0"
