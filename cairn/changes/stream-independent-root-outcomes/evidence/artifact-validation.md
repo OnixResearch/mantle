@@ -18,8 +18,14 @@ Results:
 - The delta contains nine requirements and 18 scenarios.
 - The task file contains 25 incomplete tasks at change start.
 
-Decision: The artifacts are valid for implementation.
+Completion rerun:
+
+- Pueue task `17055`: pinned Cairn validation reported `valid: true`, with 23 of 25 tasks complete before V3 and V4.
+- Pueue task `17059`: the pinned proposal, design, and tasks gates each reported `PASS`.
+- Pueue task `17059`: Tracey reported `155/155 referenced` for the `mantle-default` profile.
+
+Decision: The implementation and completion artifacts are valid for sync and archive.
 
 Owner: `stream-independent-root-outcomes`.
 
-Next action: Run task I1 before core or pipeline changes.
+Next action: Sync the accepted specification, archive the change, and record post-archive validation.

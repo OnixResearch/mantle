@@ -49,7 +49,7 @@
 ## Phase 5: Documentation and completion evidence
 
 - [x] [serial] I21 Document stream records, identity inputs, ordering, failure scope, cancellation, partial-result handling, compatibility, and non-claims. r[evaluation_streaming.versioned_event_stream] r[evaluation_streaming.reference_boundary]
-- [ ] [serial] V1 Rerun every Phase 1 baseline command and all focused positive and negative tests. r[evaluation_streaming.validation]
-- [ ] [serial] V2 Run formatting, focused Clippy with warnings denied, machine-contract checks, architecture checks, and `git diff --check`. r[evaluation_streaming.core_shell_boundary]
-- [ ] [serial] V3 Run Cairn validation, proposal, design, and tasks gates plus Tracey coverage. Record exact output before sync and archive. r[evaluation_streaming.validation]
+- [x] [serial] V1 Rerun every Phase 1 baseline command and all focused positive and negative tests. r[evaluation_streaming.validation]
+- [x] [serial] V2 Run formatting, focused Clippy with warnings denied, machine-contract checks, architecture checks, and `git diff --check`. r[evaluation_streaming.core_shell_boundary]
+- [x] [serial] V3 Run Cairn validation, proposal, design, and tasks gates plus Tracey coverage. Record exact output before sync and archive. r[evaluation_streaming.validation]
 - [ ] [serial] V4 Sync the accepted specification, archive the completed change with evidence, and rerun post-archive validation. r[evaluation_streaming.complete_root_outcomes] r[evaluation_streaming.validation]
