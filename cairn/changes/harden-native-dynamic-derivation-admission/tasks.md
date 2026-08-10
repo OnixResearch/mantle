@@ -1,46 +1,46 @@
-# Tasks
+## Implementation
 
-## 1. Freeze current behavior
+- [x] [serial] **I1** r[dynamic_derivation_admission.staged_core] [covers=dynamic_derivation_admission.staged_core] Replace direct parse-and-register flow with private parsed, validated, identity-resolved, and registry-ready states.
+  Evidence: `dynamic.rs` exposes only staged constructors to the Worker, and the registry accepts only the final private state.
+- [x] [serial] **I2** r[dynamic_derivation_admission.complete_parent_identity] [covers=dynamic_derivation_admission.complete_parent_identity] Require explicit Mantle BLAKE3 facts for every direct parent and remove all-zero fallback identity.
+  Evidence: missing, duplicate, conflicting, unexpected, wrong-prefix, and wrong-domain facts return stable errors before identity resolution.
+- [x] [serial] **I3** r[dynamic_derivation_admission.versioned_forms] [covers=dynamic_derivation_admission.versioned_forms] Add bounded iterative support for traditional `Derive` and versioned `DrvWithVersion("xp-dyn-drv",...)` forms.
+  Evidence: named limits cover bytes, fields, collections, parents, nodes, depth, and parser collections without recursive traversal.
+- [x] [serial] **I4** r[dynamic_derivation_admission.registry_boundary] [covers=dynamic_derivation_admission.registry_boundary] Split Worker observations and effects from pure admission decisions.
+  Evidence: castore reads and registry observations precede batch preflight; registry, goal, waiter, queue, and report effects follow it.
+- [x] [serial] **I5** r[dynamic_derivation_admission.registry_boundary] [covers=dynamic_derivation_admission.registry_boundary] Make exact duplicates idempotent and reject path collisions before batch mutation.
+  Evidence: batch selection keeps one exact representative and rejects different full identities for one path.
+- [x] [serial] **I6** r[dynamic_derivation_admission.compatibility] [covers=dynamic_derivation_admission.compatibility] Preserve covered traditional HDM and configured-prefix path behavior.
+  Evidence: compatibility tests compare the new traditional result with the prior native algorithm and cover a custom logical prefix.
+- [x] [serial] **I7** r[dynamic_derivation_admission.staged_core] [covers=dynamic_derivation_admission.staged_core] Add `scripts/check-dynamic-admission-boundary.rs` with positive and negative self-tests.
+  Evidence: the guard rejects effects, registry types, `nix-derivation`, panic helpers, sentinel digests, and sentinel integer fallbacks in the core.
+- [x] [serial] **I8** r[dynamic_derivation_admission.claim_boundary] [covers=dynamic_derivation_admission.claim_boundary] Update ADR 0002, README guidance, operator diagnostics, rollback facts, and Tracey references.
+  Evidence: `docs/dynamic-derivation-admission.md` lists forms, limits, blockers, hash domains, rollback, validation, and non-claims.
 
-- [ ] [serial] 1.1 Run existing `crunch-build` dynamic derivation and Worker tests before core changes. r[dynamic_derivation_admission.compatibility]
-- [ ] [serial] 1.2 Record traditional-form identities, configured-prefix paths, parent lookup behavior, registry mutations, and scheduler outcomes. r[dynamic_derivation_admission.compatibility]
-- [ ] [serial] 1.3 Add an active negative fixture that demonstrates the current unknown-parent zero-hash fallback. r[dynamic_derivation_admission.complete_parent_identity]
+## Validation
 
-## 2. Build the staged pure core
+- [x] [serial] **V1** r[dynamic_derivation_admission.staged_core] [covers=dynamic_derivation_admission.staged_core] [evidence=evidence/implementation-validation.md] Run `nix develop -c env CARGO_TARGET_DIR=/tmp/mantle-dynamic-admission-target cargo test -p crunch-build --lib --tests`.
+  Evidence summary: 674 unit tests and one API integration test passed.
+- [x] [serial] **V2** r[dynamic_derivation_admission.complete_parent_identity] [covers=dynamic_derivation_admission.complete_parent_identity] [evidence=evidence/implementation-validation.md] Run focused missing, duplicate, conflict, wrong-prefix, wrong-domain, and unexpected-parent tests.
+  Evidence summary: every incomplete or invalid parent-fact class failed before registry-ready state.
+- [x] [serial] **V3** r[dynamic_derivation_admission.versioned_forms] [covers=dynamic_derivation_admission.versioned_forms] [evidence=evidence/implementation-validation.md] Run positive and negative versioned parser tests.
+  Evidence summary: supported nested and custom-prefix forms passed; unknown, malformed, empty, unsupported-output, over-size, and over-depth forms failed.
+- [x] [serial] **V4** r[dynamic_derivation_admission.compatibility] [covers=dynamic_derivation_admission.compatibility] [evidence=evidence/implementation-validation.md] Run traditional identity and configurable-prefix compatibility tests.
+  Evidence summary: covered HDM and path results match the prior algorithm without mixed-prefix acceptance.
+- [x] [serial] **V5** r[dynamic_derivation_admission.registry_boundary] [covers=dynamic_derivation_admission.registry_boundary] [evidence=evidence/implementation-validation.md] Run Worker duplicate, collision, missing-parent, streaming, and build tests.
+  Evidence summary: exact duplicates insert once; rejected missing-parent and collision paths leave Worker and registry state unchanged.
+- [x] [serial] **V6** r[dynamic_derivation_admission.staged_core] [covers=dynamic_derivation_admission.staged_core,dynamic_derivation_admission.registry_boundary] [evidence=evidence/implementation-validation.md] Run `cargo -Zscript scripts/check-dynamic-admission-boundary.rs --self-test`, the source guard, and `scripts/check-nix-derivation-boundary.rs`.
+  Evidence summary: positive and negative guard fixtures passed, and no compatibility dependency leaked into native identity code.
+- [x] [serial] **V7** r[dynamic_derivation_admission.staged_core] [covers=dynamic_derivation_admission.staged_core] [evidence=evidence/implementation-validation.md] Run focused strict Clippy, the first-party Clippy gate, focused Tiger Style, and workspace tests.
+  Evidence summary: changed-package Clippy passed; changed dynamic source has no Tiger finding; broad unrelated findings are recorded exactly.
+- [x] [serial] **V8** r[dynamic_derivation_admission.claim_boundary] [covers=dynamic_derivation_admission.claim_boundary] [evidence=evidence/implementation-validation.md] Run targeted rustfmt, `cargo fmt --all -- --check`, and `git diff --check`.
+  Evidence summary: changed Rust files and diff checks passed; only the known unrelated fixed-point shell drift remains repo-wide.
+- [x] [serial] **V9** r[dynamic_derivation_admission.staged_core] [covers=dynamic_derivation_admission.staged_core,dynamic_derivation_admission.complete_parent_identity,dynamic_derivation_admission.versioned_forms,dynamic_derivation_admission.registry_boundary,dynamic_derivation_admission.compatibility,dynamic_derivation_admission.claim_boundary] [evidence=evidence/cairn-validation.log] Run strict Cairn validation and proposal, design, and tasks gates.
+  Evidence summary: strict validation, proposal gate, design gate, tasks gate, and completeness review passed without findings.
+- [x] [serial] **V10** r[dynamic_derivation_admission.claim_boundary] [covers=dynamic_derivation_admission.claim_boundary] [evidence=evidence/implementation-validation.md] Run `nix build .#crunch -L` and validate the typed Nickel receipt.
+  Evidence summary: release compilation completed; the known seccomp listener test blocked Nix completion after 173 passes; Nickel receipt export passed.
 
-- [ ] [serial] 2.1 Add private parsed, validated, identity-resolved, and registry-ready dynamic derivation types. r[dynamic_derivation_admission.staged_core]
-- [ ] [serial] 2.2 Move candidate, syntax, semantic, output-form, depth, parent, identity, and registration-plan decisions into pure functions. r[dynamic_derivation_admission.staged_core]
-- [ ] [serial] 2.3 Keep castore reads, registry observations, tracing, mutation, goal creation, and dispatch in the Worker shell. r[dynamic_derivation_admission.staged_core]
-- [ ] [serial] 2.4 Add stable typed blockers for every rejected transition. r[dynamic_derivation_admission.staged_core]
+## Hardening and review
 
-## 3. Require complete identity facts
-
-- [ ] [serial] 3.1 Replace callback-based unknown-parent fallback with an explicit bounded parent-hash fact map. r[dynamic_derivation_admission.complete_parent_identity]
-- [ ] [serial] 3.2 Reject missing, duplicate, conflicting, and wrong-prefix parent facts before identity calculation. r[dynamic_derivation_admission.complete_parent_identity]
-- [ ] [serial] 3.3 Prove that every failed parent-resolution case leaves registry and scheduler state unchanged. r[dynamic_derivation_admission.registry_boundary]
-- [ ] [serial] 3.4 Preserve Mantle-native BLAKE3 and configured-prefix identity for complete accepted graphs. r[dynamic_derivation_admission.compatibility]
-
-## 4. Add bounded versioned forms
-
-- [ ] [serial] 4.1 Detect traditional and declared versioned ATerm prefixes under one named byte bound. r[dynamic_derivation_admission.versioned_forms]
-- [ ] [serial] 4.2 Model bounded recursive dynamic-input trees under one named depth policy. r[dynamic_derivation_admission.versioned_forms]
-- [ ] [serial] 4.3 Reject unknown versions, excessive depth, empty requests, and unsupported output semantics before identity resolution. r[dynamic_derivation_admission.versioned_forms]
-- [ ] [serial] 4.4 Add positive traversal tests and negative boundary tests without recursive stack dependence. r[dynamic_derivation_admission.versioned_forms]
-
-## 5. Integrate registry and scheduler admission
-
-- [ ] [serial] 5.1 Change registry insertion to accept only registry-ready dynamic derivations. r[dynamic_derivation_admission.registry_boundary]
-- [ ] [serial] 5.2 Make duplicate discovery idempotent only for equal full admitted identity. r[dynamic_derivation_admission.registry_boundary]
-- [ ] [serial] 5.3 Reject path collisions with different admitted identities before waiter or goal mutation. r[dynamic_derivation_admission.registry_boundary]
-- [ ] [serial] 5.4 Update ADR 0002 and operator diagnostics with new blockers and non-claims. r[dynamic_derivation_admission.claim_boundary]
-
-## 6. Validate positive and negative behavior
-
-- [ ] [parallel] 6.1 Test valid traditional, versioned, known-parent, duplicate, and custom-prefix cases. r[dynamic_derivation_admission.compatibility]
-- [ ] [parallel] 6.2 Test malformed, truncated, oversized, over-depth, unknown-version, unsupported-output, mixed-prefix, missing-parent, conflicting-parent, and collision cases. r[dynamic_derivation_admission.complete_parent_identity]
-- [ ] [serial] 6.3 Prove through state snapshots that every negative case leaves registry, waiter, goal, and success-report state unchanged. r[dynamic_derivation_admission.registry_boundary]
-- [ ] [serial] 6.4 Run `cargo fmt --all -- --check`. r[dynamic_derivation_admission.staged_core]
-- [ ] [serial] 6.5 Run focused `crunch-build` dynamic and Worker tests. r[dynamic_derivation_admission.compatibility]
-- [ ] [serial] 6.6 Run `cargo test --workspace`. r[dynamic_derivation_admission.registry_boundary]
-- [ ] [serial] 6.7 Run `cargo clippy --workspace --all-targets -- -D warnings`. r[dynamic_derivation_admission.staged_core]
-- [ ] [serial] 6.8 Run Cairn validation, requirement coverage, proposal gate, design gate, and tasks gate. r[dynamic_derivation_admission.claim_boundary]
+- [x] [serial] **H1** r[dynamic_derivation_admission.staged_core] [covers=dynamic_derivation_admission.staged_core,dynamic_derivation_admission.complete_parent_identity,dynamic_derivation_admission.versioned_forms,dynamic_derivation_admission.registry_boundary,dynamic_derivation_admission.compatibility,dynamic_derivation_admission.claim_boundary] [evidence=evidence/implementation-validation.md] Review incomplete facts, deep trees, malformed versions, unsupported outputs, mixed prefixes, hash-domain crossings, duplicates, collisions, and rollback.
+  Evidence summary: the portfolio review found and fixed a custom-prefix projection defect, a duplicate-batch partial-mutation defect, and a weak output fixture.

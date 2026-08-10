@@ -15,10 +15,10 @@ use snix_castore::Node;
 
 use crate::Error;
 
-// r[impl dynamic_derivations.staged_core]
-// r[impl dynamic_derivations.versioned_forms]
-// r[impl dynamic_derivations.complete_parent_identity]
-// r[impl dynamic_derivations.compatibility]
+// r[impl dynamic_derivation_admission.staged_core]
+// r[impl dynamic_derivation_admission.versioned_forms]
+// r[impl dynamic_derivation_admission.complete_parent_identity]
+// r[impl dynamic_derivation_admission.compatibility]
 
 const DEFAULT_STORE_PREFIX: &str = "/nix/store";
 const TRADITIONAL_PREFIX: &[u8] = b"Derive(";
@@ -1299,10 +1299,10 @@ impl<'a> Cursor<'a> {
 }
 
 #[cfg(test)]
-// r[verify dynamic_derivations.staged_core]
-// r[verify dynamic_derivations.versioned_forms]
-// r[verify dynamic_derivations.complete_parent_identity]
-// r[verify dynamic_derivations.compatibility]
+// r[verify dynamic_derivation_admission.staged_core]
+// r[verify dynamic_derivation_admission.versioned_forms]
+// r[verify dynamic_derivation_admission.complete_parent_identity]
+// r[verify dynamic_derivation_admission.compatibility]
 mod tests {
     use std::collections::BTreeMap;
     use std::collections::BTreeSet;

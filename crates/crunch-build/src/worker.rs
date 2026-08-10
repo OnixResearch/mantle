@@ -1670,7 +1670,7 @@ impl Worker {
         Ok(())
     }
 
-    // r[impl dynamic_derivations.registry_boundary]
+    // r[impl dynamic_derivation_admission.registry_boundary]
     async fn scan_dynamic_derivations<BServ>(
         &self,
         outcome: &BuildOutcome,
@@ -3885,7 +3885,7 @@ mod tests {
     use crate::test_support::DrvProducingMockBuildService;
 
     #[tokio::test]
-    // r[verify dynamic_derivations.registry_boundary]
+    // r[verify dynamic_derivation_admission.registry_boundary]
     async fn dynamic_missing_parent_leaves_registry_scheduler_and_reports_unchanged() {
         let bs = MemoryBlobService::default();
         let builder = make_test_builder(bs.clone());
