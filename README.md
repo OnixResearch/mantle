@@ -579,3 +579,4 @@ notices.
 - [cachix/nix-archive](https://github.com/cachix/nix-archive) provides reviewed byte-safe NAR encoding, hashing, decoding, and restoration APIs. Mantle retains castore, PathInfo, trust, transport, publication, and release authority.
 - Celld provides the reviewed immutable-release and atomic-current-pointer layout reference. Mantle does not claim installer parity or implementation equivalence.
 - [fzakaria/nixpkgs-multiverse](https://github.com/fzakaria/nixpkgs-multiverse) provides the compact historical Nixpkgs revision-index reference. Mantle retains producer, source-admission, package-identity, and evidence authority.
+- [cachix/nix-derivation](https://github.com/cachix/nix-derivation) provides the reviewed Nix 2.34 derivation parsing, validation, serialization, and store-path compatibility candidate. Mantle retains native BLAKE3, configurable-prefix, build, store, evidence, and release authority.
