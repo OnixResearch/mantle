@@ -156,6 +156,8 @@ use crate::mantlepkgs_adapter::MergedForeignArtifacts;
 use crate::mantlepkgs_adapter::ProducedPackageFacts;
 use crate::mantlepkgs_adapter::merge_buildable_packages;
 use crate::mantlepkgs_adapter::observe_package;
+use crate::mantlepkgs_version_cmd::MantlepkgsVersionAction;
+use crate::mantlepkgs_version_cmd::cmd_mantlepkgs_version;
 use crate::source_bundle::ForeignSourcePathBinding;
 use crate::source_bundle::digest_bound_foreign_source_path;
 use crate::source_bundle::plan_bound_foreign_source_bundle;
@@ -420,6 +422,12 @@ pub(crate) enum MantlepkgsAction {
 
         #[arg(long)]
         out: PathBuf,
+    },
+
+    /// Resolve historical package versions before ordinary Mantlepkgs production
+    Version {
+        #[command(subcommand)]
+        action: MantlepkgsVersionAction,
     },
 
     /// Seal one typed update policy with its canonical BLAKE3 identity
@@ -692,6 +700,7 @@ pub(crate) fn cmd_mantlepkgs(action: MantlepkgsAction, context: MantlepkgsContex
             output: &out,
             is_json: context.json,
         }),
+        MantlepkgsAction::Version { action } => cmd_mantlepkgs_version(action, context.json),
         MantlepkgsAction::UpdatePolicySeal { policy, out } => run_update_policy_seal(&policy, &out, context.json),
         MantlepkgsAction::UpdateSourceObserve {
             policy,
@@ -3028,7 +3037,7 @@ fn sync_directory(path: &Path) -> Result<(), RunError> {
         .map_err(|error| RunError::Internal(format!("syncing Mantlepkgs directory {}: {error}", path.display())))
 }
 
-fn run_nix(program: &Path, arguments: &[&str], max_stdout_bytes: usize) -> Result<Output, RunError> {
+pub(crate) fn run_nix(program: &Path, arguments: &[&str], max_stdout_bytes: usize) -> Result<Output, RunError> {
     let mut stdout = tempfile::tempfile()
         .map_err(|error| RunError::Internal(format!("creating Nix producer stdout capture: {error}")))?;
     let mut stderr = tempfile::tempfile()
@@ -3067,7 +3076,7 @@ fn run_nix(program: &Path, arguments: &[&str], max_stdout_bytes: usize) -> Resul
     Ok(Output { status, stdout, stderr })
 }
 
-fn read_capture(file: &mut fs::File, maximum: usize, label: &str) -> Result<Vec<u8>, RunError> {
+pub(crate) fn read_capture(file: &mut fs::File, maximum: usize, label: &str) -> Result<Vec<u8>, RunError> {
     file.seek(SeekFrom::Start(0))
         .map_err(|error| RunError::Internal(format!("seeking Nix producer {label}: {error}")))?;
     let byte_limit = u64::try_from(maximum)
@@ -3138,7 +3147,7 @@ fn emit_publication(catalog: &MantlepkgsCatalog, path: &Path, json: bool) -> Res
     Ok(())
 }
 
-fn core_eval_error(failure: CoreFailure) -> RunError {
+pub(crate) fn core_eval_error(failure: CoreFailure) -> RunError {
     RunError::Eval(format_core_failure(&failure))
 }
 

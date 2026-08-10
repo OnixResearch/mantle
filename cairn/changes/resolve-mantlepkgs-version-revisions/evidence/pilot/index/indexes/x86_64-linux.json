@@ -1,0 +1,34 @@
+{
+  "schema": "mantlepkgs-version-index-v1",
+  "index_identity_blake3": "3956447f10a1373f80ca2d58fa664db045ea308b3a15fe5cfe7c8a9ddfbac3e2",
+  "cohort_identity_blake3": "efa3591a4b81ceace11c103af83c7e9c53cfaf80ea7364bfe43b0eba525d21ee",
+  "observation_set_identity_blake3": "6faa060b78d74ee042920d6a5e6622720dc4df70814729f3d7199c704e556850",
+  "generator_identity": "mantle-version-index-producer-v1",
+  "system": "x86_64-linux",
+  "method": "package-version-attribute",
+  "entries": [
+    {
+      "system": "x86_64-linux",
+      "attribute": "hello",
+      "reported_version": "2.12.2",
+      "source_reference": "github:NixOS/nixpkgs/b40629efe5d6ec48dd1efba650c797ddbd39ace0",
+      "revision": "b40629efe5d6ec48dd1efba650c797ddbd39ace0",
+      "published_order": 1,
+      "nar_hash": "sha256-TJ3lSQtW0E2JrznGVm8hOQGVpXjJyXY2guAxku2O9A4=",
+      "observation_identity_blake3": "73028be647ab6b0c6770421be7e5aed4d4c4f5399424ce02e36ca3acd340287f"
+    },
+    {
+      "system": "x86_64-linux",
+      "attribute": "hello",
+      "reported_version": "2.12.3",
+      "source_reference": "github:NixOS/nixpkgs/241313f4e8e508cb9b13278c2b0fa25b9ca27163",
+      "revision": "241313f4e8e508cb9b13278c2b0fa25b9ca27163",
+      "published_order": 2,
+      "nar_hash": "sha256-vlHUuqAcbcH2RKmHbPiuQzbv1pnzzavXnI62RD0bqCU=",
+      "observation_identity_blake3": "188c93559d70c1fb20a5d3f79af26b559915b4a477f2a9a51fcc557657937ee7"
+    }
+  ],
+  "successful_observations": 2,
+  "unavailable_observations": 0,
+  "failed_observations": 0
+}

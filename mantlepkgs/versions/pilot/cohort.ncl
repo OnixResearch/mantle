@@ -1,0 +1,34 @@
+let Contracts = import "../contracts.ncl" in
+{
+  schema = "mantlepkgs-version-cohort-v1",
+  cohort_identity_blake3 = "",
+  system = "x86_64-linux",
+  generator_identity = "mantle-version-index-producer-v1",
+  index_relative_path = "indexes/x86_64-linux.json",
+  observation_method = "package-version-attribute",
+  revisions = [
+    {
+      published_order = 1,
+      reference = "github:NixOS/nixpkgs/b40629efe5d6ec48dd1efba650c797ddbd39ace0",
+      revision = "b40629efe5d6ec48dd1efba650c797ddbd39ace0",
+      nar_hash = "sha256-TJ3lSQtW0E2JrznGVm8hOQGVpXjJyXY2guAxku2O9A4=",
+    },
+    {
+      published_order = 2,
+      reference = "github:NixOS/nixpkgs/241313f4e8e508cb9b13278c2b0fa25b9ca27163",
+      revision = "241313f4e8e508cb9b13278c2b0fa25b9ca27163",
+      nar_hash = "sha256-vlHUuqAcbcH2RKmHbPiuQzbv1pnzzavXnI62RD0bqCU=",
+    },
+  ],
+  attributes = ["hello"],
+  limits = {
+    max_revisions = 2,
+    max_attributes = 1,
+    max_observations = 2,
+    max_requests = 2,
+    max_groups = 2,
+    max_diagnostics = 16,
+    max_aliases_per_request = 2,
+    max_text_bytes = 256,
+  },
+} | Contracts.Cohort

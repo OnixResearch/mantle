@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -36,6 +36,8 @@ A pure core will validate observations and resolve the newest sampled published 
 Each result will use a separate versioned resolution receipt. It will bind the exact revision, Nix SHA-256 `narHash`, index BLAKE3, observation-set BLAKE3, and reported version.
 
 The producer will recheck the exact selected revision before generation. It will compute the source-tree BLAKE3 used by the existing Mantlepkgs source lock.
+
+The source identity binds relative paths, file bytes, executable bits, directories, and symlink text. It does not follow symlinks and rejects special files.
 
 Requests will be grouped by exact revision. Each group will use one existing Mantlepkgs generation, and domain composition will combine the resulting shards.
 

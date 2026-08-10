@@ -669,21 +669,17 @@ fn validate_node_compile_surface(node: &ForeignDerivationNode) -> Result<(), Imp
         ));
     }
     match (node.builtin.as_str(), node.fixed_output.is_some()) {
-        (NIX_DERIVATION_BUILTIN, false)
+        (NIX_DERIVATION_BUILTIN, _)
         | (FIXED_OUTPUT_FETCH_BUILTIN, true)
         | (FOREIGN_DOWNLOAD_BUILTIN, true)
         | (FOREIGN_GIT_DOWNLOAD_BUILTIN, true) => Ok(()),
-        (
-            NIX_DERIVATION_BUILTIN
-            | FIXED_OUTPUT_FETCH_BUILTIN
-            | FOREIGN_DOWNLOAD_BUILTIN
-            | FOREIGN_GIT_DOWNLOAD_BUILTIN,
-            _,
-        ) => Err(compiler_diagnostic(
-            "foreign-compiler-builtin-shape-mismatch",
-            Some(&node.node_id),
-            "foreign builtin does not match fixed-output metadata",
-        )),
+        (FIXED_OUTPUT_FETCH_BUILTIN | FOREIGN_DOWNLOAD_BUILTIN | FOREIGN_GIT_DOWNLOAD_BUILTIN, _) => {
+            Err(compiler_diagnostic(
+                "foreign-compiler-builtin-shape-mismatch",
+                Some(&node.node_id),
+                "foreign builtin does not match fixed-output metadata",
+            ))
+        }
         _ => Err(compiler_diagnostic(
             "foreign-compiler-unsupported-builtin",
             Some(&node.node_id),
@@ -1488,15 +1484,17 @@ fn rewrite_store_objects(
             cursor = object_end;
             continue;
         }
-        let target_path = exact_map.get(foreign_path).ok_or_else(|| {
-            compiler_diagnostic(
-                "foreign-compiler-unknown-reference",
-                node_id,
-                &format!("foreign store object has no exact mapping: {foreign_path}"),
-            )
-        })?;
+        let (matched_foreign_path, target_path, matched_end) =
+            exact_store_object_match(value, start, object_end, exact_map).ok_or_else(|| {
+                compiler_diagnostic(
+                    "foreign-compiler-unknown-reference",
+                    node_id,
+                    &format!("foreign store object has no exact mapping: {foreign_path}"),
+                )
+            })?;
+        debug_assert_eq!(&value[start..matched_end], matched_foreign_path);
         rewritten.push_str(target_path);
-        cursor = object_end;
+        cursor = matched_end;
     }
     rewritten.push_str(&value[cursor..]);
     if contains_unmapped_source_store_object(&rewritten, source_prefixes, exact_map) {
@@ -1507,6 +1505,32 @@ fn rewrite_store_objects(
         ));
     }
     Ok(rewritten)
+}
+
+fn exact_store_object_match<'a>(
+    value: &str,
+    start: usize,
+    parsed_end: usize,
+    exact_map: &'a BTreeMap<String, String>,
+) -> Option<(&'a str, &'a str, usize)> {
+    let suffix = value.get(start..)?;
+    let direct = value.get(start..parsed_end)?;
+    if let Some((foreign_path, target_path)) = exact_map.get_key_value(direct) {
+        return Some((foreign_path.as_str(), target_path.as_str(), parsed_end));
+    }
+    exact_map
+        .iter()
+        .filter_map(|(foreign_path, target_path)| {
+            if !suffix.starts_with(foreign_path) {
+                return None;
+            }
+            let matched_end = start.checked_add(foreign_path.len())?;
+            if value.as_bytes().get(matched_end).copied() != Some(b'=') {
+                return None;
+            }
+            Some((foreign_path.as_str(), target_path.as_str(), matched_end))
+        })
+        .max_by_key(|(foreign_path, _, _)| foreign_path.len())
 }
 
 fn next_store_object<'a>(value: &str, cursor: usize, source_prefixes: &'a [String]) -> Option<(usize, &'a str)> {
@@ -1666,6 +1690,21 @@ mod tests {
     const TARGET_PREFIX: &str = "/mantle/store";
     const OTHER_TARGET_PREFIX: &str = "/alt/store";
     const EMPTY_HASH: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+    #[test]
+    fn exact_store_mapping_accepts_prefix_map_boundary_but_rejects_name_extension() {
+        let foreign = foreign_output("leaf", "out");
+        let target = "/mantle/store/mapped-leaf".to_string();
+        let exact_map = BTreeMap::from([(foreign.clone(), target.clone())]);
+        let source_prefixes = vec![SOURCE_PREFIX.to_string()];
+        let prefix_map = format!("-ffile-prefix-map={foreign}=.");
+        let rewritten = rewrite_store_objects(&prefix_map, &exact_map, &source_prefixes, Some("leaf")).unwrap();
+        assert_eq!(rewritten, format!("-ffile-prefix-map={target}=."));
+        assert_class(
+            rewrite_store_objects(&format!("{foreign}-unmapped"), &exact_map, &source_prefixes, Some("leaf")),
+            "foreign-compiler-unknown-reference",
+        );
+    }
 
     #[test]
     fn known_store_dir_placeholders_use_the_active_store_prefix() {
@@ -2057,6 +2096,39 @@ mod tests {
             }
             other => panic!("unexpected native fetch: {other:?}"),
         }
+    }
+
+    #[test]
+    fn native_fixed_output_derivation_keeps_builder_and_content_identity() {
+        let mut graph = diamond_graph();
+        let leaf = graph.nodes.iter_mut().find(|node| node.node_id == "leaf").expect("leaf");
+        leaf.fixed_output = Some(FixedOutputMetadata {
+            algorithm: SHA256_ALGORITHM.to_string(),
+            digest: EMPTY_HASH.to_string(),
+            recursive: true,
+        });
+        leaf.outputs.get_mut("out").expect("out output").hash = Some(EMPTY_HASH.to_string());
+        leaf.builtin = NIX_DERIVATION_BUILTIN.to_string();
+        let compiled = compile_foreign_graph(&graph, TARGET_PREFIX).expect("ordinary Nix fixed output must compile");
+        let unit = compiled.units.iter().find(|unit| unit.node_id == "leaf").expect("compiled leaf");
+        assert!(matches!(unit.builtin, CompiledForeignBuiltin::NativeDerivation));
+        assert_eq!(unit.derivation.builder, "/bin/sh");
+        assert!(unit.derivation.outputs["out"].ca_hash.is_some());
+        assert!(unit.digest_facts.iter().any(|fact| {
+            fact.role == FIXED_OUTPUT_CONTENT_ROLE
+                && fact.domain == FOREIGN_DIGEST_DOMAIN
+                && fact.algorithm == SHA256_ALGORITHM
+                && fact.value == EMPTY_HASH
+        }));
+    }
+
+    #[test]
+    fn foreign_fetch_builtin_without_fixed_output_still_fails_shape_validation() {
+        let mut node = plain_node("fetch", Vec::new());
+        node.builtin = FOREIGN_DOWNLOAD_BUILTIN.to_string();
+        let error = validate_node_compile_surface(&node).unwrap_err();
+        assert_eq!(error.class, "foreign-compiler-builtin-shape-mismatch");
+        assert_eq!(error.node_id.as_deref(), Some("fetch"));
     }
 
     #[test]

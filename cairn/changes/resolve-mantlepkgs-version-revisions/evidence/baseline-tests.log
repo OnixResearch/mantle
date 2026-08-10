@@ -1,0 +1,756 @@
+COMMAND: nix develop -c cargo test -p mantlepkgs-core
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling serde_core v1.0.228
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v1.3.0
+   Compiling zmij v1.0.21
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.149
+   Compiling arrayvec v0.7.6
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.0
+   Compiling cfg-if v1.0.4
+   Compiling arrayref v0.3.9
+   Compiling constant_time_eq v0.3.1
+   Compiling diff v0.1.13
+   Compiling yansi v1.0.1
+   Compiling cc v1.2.59
+   Compiling pretty_assertions v1.4.1
+   Compiling blake3 v1.8.2
+   Compiling syn v2.0.117
+   Compiling serde_derive v1.0.228
+   Compiling mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantlepkgs-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.72s
+     Running unittests src/lib.rs (/tmp/mantlepkgs-version-baseline-target/debug/deps/mantlepkgs_core-bce808baf85c9306)
+
+running 73 tests
+test domains::tests::corpus_revision_license_and_source_identity_fail_closed ... ok
+test domains::tests::incomplete_corpus_evidence_is_rejected ... ok
+test catalog::tests::stale_producer_lock_blocks_the_complete_selection ... ok
+test catalog::tests::incomplete_plan_cannot_emit_receipt_or_catalog ... ok
+test domains::tests::missing_corpus_source_artifact_is_rejected ... ok
+test catalog::tests::catalog_plan_blocks_conflicts_stale_digests_and_missing_roots ... ok
+test domains::tests::non_placeholder_identity_mismatch_is_rejected ... ok
+test domains::tests::blocked_package_cannot_back_validation_success ... ok
+test domains::tests::named_domain_limits_fail_closed ... ok
+test domains::tests::missing_validation_package_is_rejected ... ok
+test catalog::tests::catalog_plan_deduplicates_shared_nodes_and_is_order_independent ... ok
+test domains::tests::unsupported_corpus_package_is_rejected ... ok
+test domains::tests::missing_variant_base_is_rejected ... ok
+test catalog::tests::complete_plan_finalizes_and_artifact_tampering_fails ... ok
+test domains::tests::unknown_class_and_missing_owner_are_rejected ... ok
+test domains::tests::public_selector_conflicts_never_choose_a_winner ... ok
+test domains::tests::stale_variant_base_is_rejected ... ok
+test impact::tests::exceeded_package_limit_fails_before_comparison ... ok
+test domains::tests::variant_cycles_are_reported ... ok
+test impact::tests::conflicting_package_keys_are_rejected ... ok
+test impact::tests::explicit_status_cannot_invent_success ... ok
+test domains::tests::malformed_validation_outcome_is_rejected ... ok
+test domains::tests::equivalent_domain_inputs_compose_to_one_identity ... ok
+test domains::tests::failed_validation_keeps_package_identity ... ok
+test impact::tests::dependency_edge_limit_fails_before_closure_work ... ok
+test impact::tests::admitted_action_result_requires_all_current_authority_bindings ... ok
+test domains::tests::elapsed_validation_cannot_hide_timeout ... ok
+test manifest::tests::invalid_manifest_rejects_floating_source_alias_conflict_and_path_escape ... ok
+test domains::tests::malformed_validation_evidence_retains_package_identity ... ok
+test render::tests::render_depth_overflow_is_an_error ... ok
+test impact::tests::closure_byte_overflow_prevents_numeric_claims ... ok
+test render::tests::unsupported_catalog_schema_does_not_render ... ok
+test render::tests::catalog_renders_as_typed_deterministic_nickel ... ok
+test impact::tests::closure_semantic_mismatch_emits_no_numeric_delta ... ok
+test impact::tests::admitted_success_to_failed_receipt_is_newly_failed ... ok
+test impact::tests::complete_report_is_not_truncated_to_fit_byte_limit ... ok
+test impact::tests::combined_recipe_and_policy_change_preserves_both_dimensions ... ok
+test manifest::tests::valid_manifest_normalizes_and_hashes_deterministically ... ok
+test impact::tests::stale_observation_binding_is_rejected ... ok
+test domains::tests::zero_identity_placeholders_seal_before_composition ... ok
+test impact::tests::complete_closure_reports_members_bytes_and_retained_dependencies ... ok
+test domains::tests::validation_output_limit_is_enforced ... ok
+test domains::tests::validation_plan_binds_separate_inputs_and_policy ... ok
+test impact::tests::global_incompatibilities_are_ordered_failures_without_report ... ok
+test domains::tests::test_only_change_preserves_package_identity ... ok
+test updates::tests::policy_rejects_cross_origin_and_insecure_queries ... ok
+test impact::tests::incomplete_closure_has_reasons_and_no_numeric_claims ... ok
+test impact::tests::missing_logical_size_and_duplicate_member_prevent_numeric_deltas ... ok
+test impact::tests::missing_head_observation_is_not_a_failure ... ok
+test impact::tests::unresolved_reference_prevents_numeric_closure_claims ... ok
+test updates::tests::candidate_and_artifact_limits_fail_before_selection ... ok
+test updates::tests::conflicting_duplicate_version_is_ambiguous ... ok
+test updates::tests::unsafe_path_duplicate_pointer_and_ambient_authority_fail ... ok
+test impact::tests::report_identity_changes_after_semantic_mutation ... ok
+test updates::tests::malformed_ignored_prerelease_and_development_versions_are_rejected ... ok
+test updates::tests::unavailable_source_is_not_an_empty_success ... ok
+test updates::tests::duplicate_advisory_findings_and_observations_are_rejected ... ok
+test domains::tests::stale_validation_policy_observation_is_rejected ... ok
+test updates::tests::complete_evidence_selects_highest_candidate_and_plans_exact_effect ... ok
+test impact::tests::explicit_non_build_states_remain_distinct ... ok
+test updates::tests::multiple_mutation_documents_fail_closed ... ok
+test updates::tests::mutation_old_value_and_output_limits_fail_closed ... ok
+test updates::tests::missing_validation_never_becomes_success ... ok
+test updates::tests::execution_receipts_bind_exact_outputs_and_denials ... ok
+test updates::tests::advisory_findings_require_review ... ok
+test updates::tests::exact_duplicate_source_candidates_produce_no_candidate ... ok
+test updates::tests::semantic_mutation_changes_plan_identity ... ok
+test updates::tests::stale_policy_and_observation_identities_fail ... ok
+test impact::tests::compatible_order_independent_snapshots_have_one_identity ... ok
+test updates::tests::execution_rejects_partial_or_wrong_output_claims ... ok
+test impact::tests::catalog_dispositions_cover_added_removed_recipe_blocker_and_variant_changes ... ok
+test updates::tests::candidate_order_does_not_change_plan_identity ... ok
+test updates::tests::unavailable_advisory_blocks_ready_status ... ok
+
+test result: ok. 73 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mantlepkgs_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+COMMAND: nix develop -c cargo test -p mantle --bin mantle mantlepkgs_cmd::tests
+warning: /home/brittonr/git/OnixResearch/mantle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling serde_core v1.0.228
+   Compiling libc v0.2.186
+   Compiling serde v1.0.228
+   Compiling memchr v2.8.0
+   Compiling version_check v0.9.5
+   Compiling smallvec v1.15.1
+   Compiling typenum v1.20.1
+   Compiling parking_lot_core v0.9.12
+   Compiling regex-syntax v0.8.10
+   Compiling subtle v2.6.1
+   Compiling scopeguard v1.2.0
+   Compiling const-oid v0.9.6
+   Compiling equivalent v1.0.2
+   Compiling crossbeam-utils v0.8.21
+   Compiling once_cell v1.21.4
+   Compiling bitflags v2.11.0
+   Compiling allocator-api2 v0.2.21
+   Compiling thiserror v2.0.18
+   Compiling generic-array v0.14.7
+   Compiling lock_api v0.4.14
+   Compiling stable_deref_trait v1.2.1
+   Compiling foldhash v0.2.0
+   Compiling fastrand v2.4.1
+   Compiling same-file v1.0.6
+   Compiling crc32fast v1.5.0
+   Compiling aho-corasick v1.1.4
+   Compiling cpufeatures v0.2.17
+   Compiling hashbrown v0.16.1
+   Compiling walkdir v2.5.0
+   Compiling rustix v1.1.4
+   Compiling log v0.4.29
+   Compiling linux-raw-sys v0.12.1
+   Compiling tinyvec_macros v0.1.1
+   Compiling gix-trace v0.1.18
+   Compiling pin-project-lite v0.2.17
+   Compiling tinyvec v1.11.0
+   Compiling serde_json v1.0.149
+   Compiling zeroize v1.8.2
+   Compiling futures-core v0.3.32
+   Compiling fnv v1.0.7
+   Compiling crossbeam-epoch v0.9.20
+   Compiling rayon-core v1.13.0
+   Compiling human_format v1.2.1
+   Compiling unicode-normalization v0.1.25
+   Compiling bytesize v2.3.1
+   Compiling zlib-rs v0.6.3
+   Compiling winnow v0.7.15
+   Compiling byteorder v1.5.0
+   Compiling getrandom v0.4.2
+   Compiling heapless v0.8.0
+   Compiling rand_core v0.10.0
+   Compiling hash32 v0.3.1
+   Compiling futures-io v0.3.32
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling futures-sink v0.3.32
+   Compiling futures-task v0.3.32
+   Compiling rustversion v1.0.22
+   Compiling regex-automata v0.4.14
+   Compiling slab v0.4.12
+   Compiling strsim v0.11.1
+   Compiling crossbeam-channel v0.5.15
+   Compiling jiff v0.2.23
+   Compiling digest v0.10.7
+   Compiling libm v0.2.16
+   Compiling syn v2.0.117
+   Compiling futures-channel v0.3.32
+   Compiling foldhash v0.1.5
+   Compiling tracing-core v0.1.36
+   Compiling fs_extra v1.3.0
+   Compiling dunce v1.0.5
+   Compiling sha1 v0.10.6
+   Compiling percent-encoding v2.3.2
+   Compiling jobserver v0.1.34
+   Compiling hashbrown v0.15.5
+   Compiling either v1.15.0
+   Compiling autocfg v1.5.0
+   Compiling semver v1.0.28
+   Compiling aws-lc-rs v1.16.2
+   Compiling crossbeam-deque v0.8.6
+   Compiling rustls-pki-types v1.14.0
+   Compiling sha1-checked v0.10.0
+   Compiling cc v1.2.59
+   Compiling unicode-width v0.2.2
+   Compiling litemap v0.8.2
+   Compiling unicode-xid v0.2.6
+   Compiling errno v0.3.14
+   Compiling mio v1.2.0
+   Compiling getrandom v0.2.17
+   Compiling socket2 v0.6.3
+   Compiling rustc_version v0.4.1
+   Compiling memmap2 v0.9.10
+   Compiling blake3 v1.8.2
+   Compiling parking_lot v0.12.5
+   Compiling signal-hook-registry v1.4.8
+   Compiling cmake v0.1.58
+   Compiling ring v0.17.14
+   Compiling writeable v0.6.3
+   Compiling encoding_rs v0.8.35
+   Compiling icu_normalizer_data v2.2.0
+   Compiling pkg-config v0.3.32
+   Compiling base64 v0.22.1
+   Compiling aws-lc-sys v0.39.1
+   Compiling utf8_iter v1.0.4
+   Compiling untrusted v0.9.0
+   Compiling prodash v31.0.0
+   Compiling ident_case v1.0.1
+   Compiling httparse v1.10.1
+   Compiling faster-hex v0.10.0
+   Compiling icu_properties_data v2.2.0
+   Compiling rustls v0.23.37
+   Compiling ipnet v2.12.0
+   Compiling signal-hook v0.4.4
+   Compiling num-traits v0.2.19
+   Compiling ryu v1.0.23
+   Compiling static_assertions v1.1.0
+   Compiling atomic-waker v1.1.2
+   Compiling indexmap v2.13.1
+   Compiling try-lock v0.2.5
+   Compiling tower-service v0.3.3
+   Compiling nonempty v0.12.0
+   Compiling hashbrown v0.14.5
+   Compiling rand_core v0.6.4
+   Compiling want v0.3.1
+   Compiling form_urlencoded v1.2.2
+   Compiling unicode-segmentation v1.13.2
+   Compiling cfg_aliases v0.2.1
+   Compiling sync_wrapper v1.0.2
+   Compiling tower-layer v0.3.3
+   Compiling openssl-probe v0.2.1
+   Compiling sha2 v0.10.9
+   Compiling spin v0.9.9
+   Compiling iri-string v0.7.12
+   Compiling colorchoice v1.0.5
+   Compiling synstructure v0.13.2
+   Compiling rustls-native-certs v0.8.3
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling tokio-macros v2.7.0
+   Compiling futures-macro v0.3.32
+   Compiling zerovec-derive v0.11.3
+   Compiling displaydoc v0.2.5
+   Compiling tracing-attributes v0.1.31
+   Compiling dashmap v6.1.0
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling tempfile v3.27.0
+   Compiling data-encoding v2.10.0
+   Compiling lazy_static v1.5.0
+   Compiling unicode-bom v2.0.3
+   Compiling futures-util v0.3.32
+   Compiling simd-adler32 v0.3.9
+   Compiling mime v0.3.17
+   Compiling adler2 v2.0.1
+   Compiling zerofrom v0.1.7
+   Compiling anstyle v1.0.14
+   Compiling convert_case v0.10.0
+   Compiling darling_core v0.23.0
+   Compiling signature v2.2.0
+   Compiling tracing v0.1.44
+   Compiling filetime v0.2.27
+   Compiling heck v0.5.0
+   Compiling utf8parse v0.2.2
+   Compiling miniz_oxide v0.8.9
+   Compiling kstring v2.0.2
+   Compiling regex v1.12.3
+   Compiling derive_more-impl v2.1.1
+   Compiling anstyle-parse v1.0.0
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling curve25519-dalek v4.1.3
+   Compiling thread_local v1.1.9
+   Compiling shell-words v1.1.1
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling yoke v0.8.2
+   Compiling portable-atomic v1.13.1
+   Compiling winnow v1.0.1
+   Compiling anstyle-query v1.1.5
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling libmimalloc-sys v0.1.44
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling clap_lex v1.1.0
+   Compiling anstream v1.0.0
+   Compiling anyhow v1.0.102
+   Compiling zerovec v0.11.6
+   Compiling zerotrie v0.2.4
+   Compiling clap_derive v4.6.0
+   Compiling derive_more v2.1.1
+   Compiling darling_macro v0.23.0
+   Compiling clap_builder v4.6.0
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling ed25519 v2.2.3
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling async-trait v0.1.89
+   Compiling darling_core v0.20.11
+   Compiling darling v0.23.0
+   Compiling icu_collections v2.2.0
+   Compiling icu_locale_core v2.2.0
+   Compiling toml_edit v0.25.10+spec-1.1.0
+   Compiling lzma-sys v0.1.20
+   Compiling futures-executor v0.3.32
+   Compiling serde_with_macros v3.18.0
+   Compiling bzip2-sys v0.1.13+1.0.8
+   Compiling memoffset v0.6.5
+   Compiling vte v0.15.0
+   Compiling rustix v0.38.44
+   Compiling icu_provider v2.2.0
+   Compiling typeid v1.0.3
+   Compiling zstd-safe v7.2.4
+   Compiling darling_macro v0.20.11
+   Compiling vt100 v0.16.2
+   Compiling clap v4.6.0
+   Compiling icu_properties v2.2.0
+   Compiling icu_normalizer v2.2.0
+   Compiling futures v0.3.32
+   Compiling proc-macro-crate v3.5.0
+   Compiling ed25519-dalek v2.2.0
+   Compiling arc-swap v1.9.1
+   Compiling sharded-slab v0.1.7
+   Compiling xattr v1.6.1
+   Compiling pin-project-internal v1.1.11
+   Compiling nix v0.31.3
+   Compiling n0-future v0.3.2
+   Compiling matchers v0.2.0
+   Compiling console v0.16.3
+   Compiling tracing-log v0.2.0
+   Compiling nu-ansi-term v0.50.3
+   Compiling linux-raw-sys v0.4.15
+   Compiling unit-prefix v0.5.2
+   Compiling cordyceps v0.3.4
+   Compiling spin v0.10.0
+   Compiling idna_adapter v1.2.1
+   Compiling cpufeatures v0.3.0
+   Compiling bitflags v1.3.2
+   Compiling zerocopy v0.8.48
+   Compiling parking v2.2.1
+   Compiling siphasher v1.0.2
+   Compiling thiserror v1.0.69
+   Compiling erased-serde v0.4.10
+   Compiling diatomic-waker v0.2.3
+   Compiling chacha20 v0.10.0
+   Compiling idna v1.1.0
+   Compiling futures-lite v2.6.1
+   Compiling phf_shared v0.11.3
+   Compiling futures-buffered v0.2.13
+   Compiling indicatif v0.18.4
+   Compiling tracing-subscriber v0.3.23
+   Compiling pin-project v1.1.11
+   Compiling num_enum_derive v0.7.6
+   Compiling darling v0.20.11
+   Compiling flate2 v1.1.9
+   Compiling async-stream-impl v0.3.6
+   Compiling thiserror-impl v1.0.69
+   Compiling n0-error-macros v0.1.3
+   Compiling spez v0.1.2
+   Compiling gix-sec v0.13.2
+   Compiling md-5 v0.10.6
+   Compiling nibble_vec v0.1.0
+   Compiling keccak v0.1.6
+   Compiling redb v3.1.3
+   Compiling term v1.2.1
+   Compiling bytemuck v1.25.0
+   Compiling endian-type v0.1.2
+   Compiling precomputed-hash v0.1.1
+   Compiling bit-vec v0.8.0
+   Compiling iana-time-zone v0.1.65
+   Compiling new_debug_unreachable v1.0.6
+   Compiling fixedbitset v0.5.7
+   Compiling nix-compat v0.1.0 (/home/brittonr/git/OnixResearch/mantle/vendor/nix-compat)
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/git/OnixResearch/mantle/vendor/fuse-backend-rs)
+   Compiling matchit v0.8.4
+   Compiling radix_trie v0.2.1
+   Compiling n0-error v0.1.3
+   Compiling string_cache v0.8.9
+   Compiling safe_arch v0.7.4
+   Compiling bit-set v0.8.0
+   Compiling petgraph v0.7.1
+   Compiling ena v0.14.4
+   Compiling mimalloc v0.1.48
+   Compiling ascii-canvas v4.0.0
+   Compiling sha3 v0.10.8
+   Compiling async-stream v0.3.6
+   Compiling num_enum v0.7.6
+   Compiling tracing-indicatif v0.3.14
+   Compiling derive_builder_core v0.20.2
+   Compiling nix v0.24.3
+   Compiling rand v0.10.1
+   Compiling lalrpop-util v0.22.2
+   Compiling vmm-sys-util v0.11.2
+   Compiling clap-verbosity-flag v3.0.4
+   Compiling cobs v0.3.0
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/git/OnixResearch/mantle/vendor/nix-compat-derive)
+   Compiling irpc-derive v0.10.0
+   Compiling vm-memory v0.10.0
+   Compiling num_cpus v1.17.0
+   Compiling mio v0.8.11
+   Compiling caps v0.5.6
+   Compiling itertools v0.14.0
+   Compiling itertools v0.15.0
+   Compiling proc-macro-error-attr2 v2.0.0
+   Compiling nom v8.0.0
+   Compiling pico-args v0.5.0
+   Compiling humantime v2.3.0
+   Compiling snix-castore v0.1.0 (/home/brittonr/git/OnixResearch/mantle/vendor/snix-castore)
+   Compiling malachite-nz v0.6.1
+   Compiling fixedbitset v0.4.2
+   Compiling rustc-hash v2.1.2
+   Compiling proc-macro-error2 v2.0.1
+   Compiling malachite-base v0.6.1
+   Compiling lalrpop v0.22.2
+   Compiling threadpool v1.8.1
+   Compiling derive_builder_macro v0.20.2
+   Compiling wide v0.7.33
+   Compiling auto_impl v1.3.0
+   Compiling nix v0.29.0
+   Compiling logos-codegen v0.15.1
+   Compiling proc-macro2-diagnostics v0.10.1
+   Compiling wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+   Compiling derive_builder v0.20.2
+   Compiling getset v0.1.6
+   Compiling strum_macros v0.26.4
+   Compiling bzip2 v0.5.2
+   Compiling typed-builder-macro v0.22.0
+   Compiling strum v0.26.3
+   Compiling beef v0.5.2
+   Compiling toml_writer v1.1.1+spec-1.1.0
+   Compiling ppv-lite86 v0.2.21
+   Compiling snix-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/vendor/snix-build)
+   Compiling snix-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/vendor/snix-store)
+   Compiling typed-builder v0.22.0
+   Compiling tar v0.4.45
+   Compiling nix-archive v0.1.0
+   Compiling itertools v0.12.1
+   Compiling lru v0.16.4
+   Compiling heck v0.4.1
+   Compiling count-write v0.1.0
+   Compiling base64ct v1.8.3
+   Compiling bitmaps v3.2.1
+   Compiling termcolor v1.4.1
+   Compiling ouroboros_macro v0.18.5
+   Compiling nickel-lang-parser v0.1.1
+   Compiling pem-rfc7468 v0.7.0
+   Compiling logos-derive v0.15.1
+   Compiling rand_chacha v0.3.1
+   Compiling crunch-repair-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-repair-core)
+   Compiling crunch-gc-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-gc-core)
+   Compiling crunch-overlay-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-overlay-core)
+   Compiling imara-diff v0.1.8
+   Compiling hashlink v0.10.0
+   Compiling imara-diff v0.2.0
+   Compiling imbl-sized-chunks v0.1.3
+   Compiling fs2 v0.4.3
+   Compiling paste v1.0.15
+   Compiling aliasable v0.1.3
+   Compiling arraydeque v0.5.1
+   Compiling typed-arena v2.0.2
+   Compiling getrandom v0.3.4
+   Compiling serde_with v3.18.0
+   Compiling serde_bytes v0.11.19
+   Compiling toml_datetime v0.7.5+spec-1.1.0
+   Compiling uuid v1.23.0
+   Compiling serde_spanned v1.1.1
+   Compiling io-lifetimes v3.0.1
+   Compiling signal-hook v0.3.18
+   Compiling object v0.37.3
+   Compiling io-lifetimes v2.0.4
+   Compiling arrayvec v0.5.2
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling pretty v0.12.5
+   Compiling bytes v1.11.1
+   Compiling bstr v1.12.1
+   Compiling url v2.5.8
+   Compiling quick-xml v0.40.1
+   Compiling serde_urlencoded v0.7.1
+   Compiling chrono v0.4.44
+   Compiling petgraph v0.6.5
+   Compiling postcard v1.1.3
+   Compiling serde_tagged v0.3.0
+   Compiling serde_qs v0.12.0
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling crunch-composition-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-composition-core)
+   Compiling codespan-reporting v0.13.1
+   Compiling gix-validate v0.11.0
+   Compiling gix-utils v0.3.1
+   Compiling gix-error v0.2.1
+   Compiling tokio v1.51.0
+   Compiling http v1.4.0
+   Compiling gix-packetline v0.21.2
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-attestation-core)
+   Compiling gix-path v0.11.2
+   Compiling oci-spec v0.7.1
+   Compiling gix-date v0.15.1
+   Compiling gix-chunk v0.7.0
+   Compiling gix-quote v0.7.0
+   Compiling gix-bitmap v0.3.0
+   Compiling gix-features v0.46.2
+   Compiling gix-command v0.8.0
+   Compiling gix-config-value v0.17.1
+   Compiling gix-url v0.35.2
+   Compiling crunch-action-result-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-action-result-core)
+   Compiling codespan v0.13.1
+   Compiling toml_edit v0.23.10+spec-1.0.0
+   Compiling nickel-lang-vector v0.1.0
+   Compiling gix-actor v0.40.0
+   Compiling http-body v1.0.1
+   Compiling saphyr-parser v0.0.6
+   Compiling ouroboros v0.18.5
+   Compiling http-body-util v0.1.3
+   Compiling gix-hash v0.23.0
+   Compiling gix-fs v0.19.2
+   Compiling gix-glob v0.24.0
+   Compiling gix-prompt v0.14.1
+   Compiling rand v0.8.6
+   Compiling logos v0.15.1
+   Compiling der v0.7.10
+   Compiling nickel-lang-core v0.16.1
+   Compiling clru v0.6.3
+   Compiling uluru v3.1.0
+   Compiling vte v0.14.1
+   Compiling gimli v0.32.3
+   Compiling gix-credentials v0.37.1
+   Compiling io-extras v0.19.0
+   Compiling bumpalo v3.20.2
+   Compiling gix-hashtable v0.13.0
+   Compiling gix-tempfile v21.0.2
+   Compiling gix-commitgraph v0.35.0
+   Compiling gix-attributes v0.31.0
+   Compiling gix-ignore v0.19.1
+   Compiling simple-counter v0.1.0
+   Compiling gix-object v0.58.0
+   Compiling unsafe-libyaml v0.2.11
+   Compiling addr2line v0.25.1
+   Compiling strip-ansi-escapes v0.2.1
+   Compiling spki v0.7.3
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-attestation)
+   Compiling gix-lock v21.0.2
+   Compiling num-integer v0.1.46
+   Compiling maybe-async v0.2.10
+   Compiling io-close v0.3.7
+   Compiling sha-1 v0.10.1
+   Compiling json_scanner v0.1.0
+   Compiling rustc-demangle v0.1.28
+   Compiling num-bigint-dig v0.8.6
+   Compiling indoc v2.0.7
+   Compiling linkme-impl v0.3.37
+   Compiling owo-colors v4.3.0
+   Compiling cap-primitives v4.0.2
+   Compiling crc-catalog v2.4.0
+   Compiling litrs v1.0.0
+   Compiling gix-shallow v0.10.0
+   Compiling crc v3.4.0
+   Compiling document-features v0.2.12
+   Compiling backtrace v0.3.76
+   Compiling num-iter v0.1.46
+   Compiling signal-hook-mio v0.2.5
+   Compiling rand_core v0.9.5
+   Compiling fs-set-times v0.20.3
+   Compiling pkcs8 v0.10.2
+   Compiling gix-mailmap v0.32.0
+   Compiling ureq-proto v0.6.0
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling rustix-linux-procfs v0.1.1
+   Compiling webpki-roots v1.0.6
+   Compiling syn v3.0.3
+   Compiling twox-hash v2.1.2
+   Compiling unicode-linebreak v0.1.5
+   Compiling maybe-owned v0.3.4
+   Compiling linkme v0.3.37
+   Compiling utf8-zero v0.8.1
+   Compiling ambient-authority v0.0.2
+   Compiling gix-pathspec v0.16.1
+   Compiling toml_write v0.1.2
+   Compiling cap-std v4.0.2
+   Compiling is_ci v1.2.0
+   Compiling toml_edit v0.22.27
+   Compiling supports-color v3.0.2
+   Compiling textwrap v0.16.2
+   Compiling ruzstd v0.8.2
+   Compiling pkcs1 v0.7.5
+   Compiling rand_chacha v0.9.0
+   Compiling crossterm v0.29.0
+   Compiling backtrace-ext v0.2.1
+   Compiling lzma-rs v0.3.0
+   Compiling artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling crunch-rust-cache-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache-core)
+   Compiling gethostname v0.5.0
+   Compiling fuzzy-matcher v0.3.7
+   Compiling terminal_size v0.4.4
+   Compiling miette-derive v7.6.0
+   Compiling bzip2-rs v0.1.2
+   Compiling unicode-width v0.1.14
+   Compiling dyn-clone v1.0.20
+   Compiling predicates-core v1.0.10
+   Compiling supports-hyperlinks v3.2.0
+   Compiling cap-fs-ext v4.0.2
+   Compiling supports-unicode v3.0.0
+   Compiling inquire v0.9.4
+   Compiling rsa v0.9.10
+   Compiling rand v0.9.3
+   Compiling miette v7.6.0
+   Compiling crunch-project-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-project-core)
+   Compiling crunch-shell-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-shell-core)
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-wasm-component-core)
+   Compiling secrecy v0.10.3
+   Compiling float-cmp v0.10.0
+   Compiling crunch-evaluation-stream-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-evaluation-stream-core)
+   Compiling etcetera v0.11.0
+   Compiling detect-coding-agent v0.1.0
+   Compiling assert_cmd v2.2.0
+   Compiling normalize-line-endings v0.3.0
+   Compiling difflib v0.4.0
+   Compiling crunch-delta-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-delta-core)
+   Compiling colored v3.1.1
+   Compiling termtree v0.5.1
+   Compiling dotenvy v0.15.7
+   Compiling predicates v3.1.4
+   Compiling predicates-tree v1.0.13
+   Compiling crunch-bootstrap-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-bootstrap-core)
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-release-core)
+   Compiling crunch-hardware-simulation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-hardware-simulation-core)
+   Compiling nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+   Compiling gix-revwalk v0.29.0
+   Compiling gix-ref v0.61.0
+   Compiling gix-traverse v0.55.0
+   Compiling gix-filter v0.28.0
+   Compiling gix-revision v0.43.0
+   Compiling gix-negotiate v0.29.0
+   Compiling gix-pack v0.68.0
+   Compiling gix-index v0.49.0
+   Compiling crunch-shell v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-shell)
+   Compiling xz2 v0.1.7
+   Compiling mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantlepkgs-core)
+   Compiling gix-refspec v0.39.0
+   Compiling crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-eval-budget-core)
+   Compiling gix-worktree-stream v0.30.0
+   Compiling mantle-portable-client-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/mantle-portable-client-core)
+   Compiling chapter-tgz v0.1.0
+   Compiling durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+   Compiling wait-timeout v0.2.1
+   Compiling gix-archive v0.30.0
+   Compiling gix-discover v0.49.0
+   Compiling gix-config v0.54.0
+   Compiling crunch-kernelscript-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-kernelscript-core)
+   Compiling toml v0.8.23
+   Compiling gix-worktree v0.50.0
+   Compiling crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-hardware-simulation)
+   Compiling tokio-util v0.7.18
+   Compiling tower v0.5.3
+   Compiling tokio-stream v0.1.18
+   Compiling malachite-q v0.6.1
+   Compiling gix-diff v0.61.0
+   Compiling gix-dir v0.23.0
+   Compiling gix-odb v0.78.0
+   Compiling gix-worktree-state v0.28.0
+   Compiling secretspec v0.17.0
+   Compiling tower-http v0.6.8
+   Compiling astral-tokio-tar v0.6.3
+   Compiling fastcdc v3.2.1
+   Compiling crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-wasm-component)
+   Compiling h2 v0.4.13
+   Compiling gix-submodule v0.28.0
+   Compiling gix-status v0.28.0
+   Compiling gix-blame v0.11.0
+   Compiling malachite-float v0.6.1
+   Compiling zstd v0.13.3
+   Compiling irpc v0.13.0
+   Compiling async-compression v0.4.19
+   Compiling crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-project)
+   Compiling malachite v0.6.1
+   Compiling crunch-nar v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-nar)
+   Compiling crunch-glue v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-glue)
+   Compiling hyper v1.9.0
+   Compiling hyper-util v0.1.20
+   Compiling rustls-webpki v0.103.13
+   Compiling tokio-rustls v0.26.4
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling ureq v3.3.0
+   Compiling hyper-rustls v0.27.7
+   Compiling reqwest v0.13.2
+   Compiling reqwest-middleware v0.5.1
+   Compiling object_store v0.14.0
+   Compiling gix-transport v0.55.1
+   Compiling reqwest-tracing v0.6.0
+   Compiling gix-protocol v0.59.0
+   Compiling snix-tracing v0.1.0 (/home/brittonr/git/OnixResearch/mantle/vendor/snix-tracing)
+   Compiling gix v0.81.0
+   Compiling crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-store)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-rust-cache)
+   Compiling crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-build)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-rustc-wrapper)
+   Compiling nickel-lang v2.0.0
+   Compiling crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-eval)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 53s
+     Running unittests src/main.rs (/tmp/mantlepkgs-version-baseline-target/debug/deps/mantle-11d69a8a0db42f62)
+
+running 33 tests
+test mantlepkgs_cmd::tests::execution_outputs_and_denials_cannot_overlap_the_source_tree ... ok
+test mantlepkgs_cmd::tests::http_response_classification_preserves_failure_status ... ok
+test mantlepkgs_cmd::tests::impact_action_result_adapter_accepts_only_current_admission ... ok
+test mantlepkgs_cmd::tests::fixed_output_seed_realization_rejects_non_utf8_out_link ... ok
+test mantlepkgs_cmd::tests::fixed_output_without_url_becomes_a_bound_seed_candidate ... ok
+test mantlepkgs_cmd::tests::fixed_output_with_a_url_becomes_a_bound_seed_candidate ... ok
+test mantlepkgs_cmd::tests::fixed_output_seed_realization_creates_a_durable_out_link ... ok
+test mantlepkgs_cmd::tests::malformed_fixed_output_seed_candidate_is_rejected ... ok
+test mantlepkgs_cmd::tests::no_nix_child_verifies_and_plans_catalog ... ok
+test mantlepkgs_cmd::tests::producer_capture_child ... ok
+test mantlepkgs_cmd::tests::validation_output_paths_must_be_distinct ... ok
+test mantlepkgs_cmd::tests::impact_command_rejects_a_stale_snapshot_before_publication ... ok
+test mantlepkgs_cmd::tests::explicit_unavailable_source_observation_stays_unavailable ... ok
+test mantlepkgs_cmd::tests::update_policy_seal_writes_one_canonical_policy ... ok
+test mantlepkgs_cmd::tests::oversized_saved_source_response_becomes_explicit_failed_evidence ... ok
+test mantlepkgs_cmd::tests::malformed_saved_source_response_becomes_explicit_failed_evidence ... ok
+test mantlepkgs_cmd::tests::advisory_coordinate_mismatch_becomes_explicit_failed_evidence ... ok
+test mantlepkgs_cmd::tests::duplicate_advisory_findings_become_explicit_failed_evidence ... ok
+test mantlepkgs_cmd::tests::release_index_saved_response_replays_without_network ... ok
+test mantlepkgs_cmd::tests::partial_batch_writes_failure_report_and_no_success_generation ... ok
+test mantlepkgs_cmd::tests::impact_command_writes_a_local_atomic_report ... ok
+test mantlepkgs_cmd::tests::stale_update_preimage_leaves_source_unchanged_and_writes_denial ... ok
+test mantlepkgs_cmd::tests::symlinked_update_source_is_denied_without_publication ... ok
+test mantlepkgs_cmd::tests::update_commands_replay_saved_evidence_and_publish_one_immutable_tree ... ok
+test mantlepkgs_cmd::tests::publication_conflict_preserves_existing_output_and_records_denial ... ok
+test mantlepkgs_cmd::tests::output_digest_tamper_is_denied_before_publication ... ok
+test mantlepkgs_cmd::tests::domain_contract_rejects_unknown_class ... ok
+test mantlepkgs_cmd::tests::domain_composition_rejects_duplicate_shard_identity ... ok
+test mantlepkgs_cmd::tests::domain_manifest_composes_without_nix ... ok
+test mantlepkgs_cmd::tests::corpus_verification_rejects_artifact_tampering ... ok
+test mantlepkgs_cmd::tests::domain_contract_rejects_missing_fields_and_nonpositive_limits ... ok
+test mantlepkgs_cmd::tests::producer_capture_rejects_output_above_the_limit ... ok
+test mantlepkgs_cmd::tests::fixture_batch_publishes_and_verifies_without_nix_in_path ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 2305 filtered out; finished in 0.19s

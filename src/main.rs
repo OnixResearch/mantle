@@ -70,6 +70,7 @@ mod machine_contract_producer_tests;
 mod mantlepkgs_adapter;
 #[allow(clippy::large_enum_variant, clippy::too_many_arguments)]
 mod mantlepkgs_cmd;
+mod mantlepkgs_version_cmd;
 mod native_toolchain_closure;
 mod nickel_export;
 mod nickel_export_core_adapter;

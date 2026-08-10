@@ -236,6 +236,16 @@ Execution publishes a new immutable output directory. It does not edit the sourc
 
 See [`updates/README.md`](updates/README.md) for commands, fixtures, failure behavior, and claim boundaries.
 
+## Resolve historical package versions
+
+The version-resolution producer maps reported package versions to exact Nixpkgs revisions before catalog generation.
+
+It records unavailable and failed observations. It also groups successful requests by exact revision.
+
+The producer rechecks each selected source and version before it emits existing Mantlepkgs manifests.
+
+See [`versions/README.md`](versions/README.md) for the commands, pilot, receipts, failure behavior, and claim boundary.
+
 ## Package dispositions
 
 Each selected package has one disposition:

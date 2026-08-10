@@ -214,6 +214,7 @@
             || pkgs.lib.hasPrefix "${toString ./lib}/" pathString
             || pkgs.lib.hasPrefix "${toString ./bootstrap}/" pathString
             || pkgs.lib.hasPrefix "${toString ./builders}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./mantlepkgs}/" pathString
             || pkgs.lib.hasPrefix "${toString ./cairn-policy/evidence}/" pathString
             || pkgs.lib.hasPrefix "${toString ./cairn/archive}/" pathString
             || pathString == toString ./config
@@ -226,6 +227,7 @@
             || pkgs.lib.hasPrefix "${toString ./examples/transcripts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./schemas/machine-contracts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./tests/fixtures}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./fixtures/nario-v2}/" pathString
             || isContentBoundRequirementFixture pathString
             || pkgs.lib.hasPrefix "${toString ./packages/kernelscript-experiment}/" pathString
             || pathString == toString ./nix/kernelscript-experiment.nix

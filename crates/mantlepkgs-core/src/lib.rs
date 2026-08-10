@@ -17,6 +17,7 @@ mod impact;
 mod manifest;
 mod render;
 mod updates;
+mod versions;
 
 pub use catalog::*;
 pub use domains::*;
@@ -25,3 +26,4 @@ pub use impact::*;
 pub use manifest::*;
 pub use render::*;
 pub use updates::*;
+pub use versions::*;

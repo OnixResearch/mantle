@@ -1,0 +1,36 @@
+{
+  "schema": "mantlepkgs-version-resolution-v1",
+  "receipt_identity_blake3": "2bd8dd45902883f4f5456919cf9b9c3e513058a718f292699485839760798b81",
+  "request_identity_blake3": "6ea0b14bc26f350166853c584f3cf3aaaf9b80469d866e412ad0cdc229e5af00",
+  "policy_identity_blake3": "2279d3d0a3b86c0c6715fe4143100c36dac144f85bbfecb403823188b1773292",
+  "index_identity_blake3": "3956447f10a1373f80ca2d58fa664db045ea308b3a15fe5cfe7c8a9ddfbac3e2",
+  "observation_set_identity_blake3": "6faa060b78d74ee042920d6a5e6622720dc4df70814729f3d7199c704e556850",
+  "cohort_identity_blake3": "efa3591a4b81ceace11c103af83c7e9c53cfaf80ea7364bfe43b0eba525d21ee",
+  "system": "x86_64-linux",
+  "attribute": "hello",
+  "reported_version": "2.12.3",
+  "public_selector": "hello@2.12.3",
+  "aliases": [
+    "hello",
+    "hello-2.12.3"
+  ],
+  "unversioned_default": true,
+  "method": "newest-published-revision-for-reported-version",
+  "status": "resolved",
+  "selected": {
+    "source_reference": "github:NixOS/nixpkgs/241313f4e8e508cb9b13278c2b0fa25b9ca27163",
+    "revision": "241313f4e8e508cb9b13278c2b0fa25b9ca27163",
+    "published_order": 2,
+    "nar_hash": "sha256-vlHUuqAcbcH2RKmHbPiuQzbv1pnzzavXnI62RD0bqCU=",
+    "observation_identity_blake3": "188c93559d70c1fb20a5d3f79af26b559915b4a477f2a9a51fcc557657937ee7"
+  },
+  "blocker_codes": [],
+  "non_claims": [
+    "reported versions do not prove package identity",
+    "resolution does not prove package correctness",
+    "resolution does not prove package compatibility",
+    "channel publication does not prove binary-cache retention",
+    "Nix evaluation does not prove evaluator parity",
+    "version-resolution evidence does not prove release eligibility"
+  ]
+}

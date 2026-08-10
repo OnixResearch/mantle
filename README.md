@@ -256,6 +256,8 @@ derivation graphs. Nix runs only during explicit catalog production. Later
 verification, selection, planning, and building use published artifacts without
 Nix.
 
+The producer can resolve reported package versions to exact historical revisions before catalog generation. See the [version-resolution guide](mantlepkgs/versions/README.md).
+
 ```bash
 mantle mantlepkgs validate --manifest mantlepkgs/live-cohort/manifest.ncl
 mantle mantlepkgs verify --generation <generation-directory>
