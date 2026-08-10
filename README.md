@@ -576,3 +576,4 @@ notices.
 - [fzakaria/stage0-bazel](https://github.com/fzakaria/stage0-bazel) provides an MIT-licensed root action-audit and trust-report design reference. Mantle retains BLAKE3 identity, producer-linked authority, seccomp enforcement, and evidence authority.
 - [cachix/nix-archive](https://github.com/cachix/nix-archive) provides reviewed byte-safe NAR encoding, hashing, decoding, and restoration APIs. Mantle retains castore, PathInfo, trust, transport, publication, and release authority.
 - Celld provides the reviewed immutable-release and atomic-current-pointer layout reference. Mantle does not claim installer parity or implementation equivalence.
+- [fzakaria/nixpkgs-multiverse](https://github.com/fzakaria/nixpkgs-multiverse) provides the compact historical Nixpkgs revision-index reference. Mantle retains producer, source-admission, package-identity, and evidence authority.
