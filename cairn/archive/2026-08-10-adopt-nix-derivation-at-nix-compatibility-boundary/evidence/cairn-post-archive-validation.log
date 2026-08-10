@@ -1,0 +1,12 @@
+$ cairn validate --root /home/brittonr/git/OnixResearch/.worktrees/mantle-adopt-nix-derivation-at-nix-compatibility-boundary --strict
+{
+  "change_issues": [],
+  "changes": 10,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 61,
+  "valid": true
+}
+command_exit=0

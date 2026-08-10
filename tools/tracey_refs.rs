@@ -183,6 +183,25 @@
 // `examples/picolibc_compare.rs`. The diagnostic derivations live under
 // `bootstrap/picolibc-1.8.12-*.ncl`.
 
+// Reviewed Nix derivation compatibility boundary.
+//
+// r[impl foreign_derivation_import.reviewed_nix_derivation_dependency]
+// r[impl foreign_derivation_import.reviewed_nix_derivation_adapter]
+// r[impl foreign_derivation_import.nix_derivation_projection_boundary]
+// r[impl foreign_derivation_import.nix_derivation_adapter_parity]
+// r[impl foreign_derivation_import.nix_derivation_adapter_rollback]
+// r[impl nix_producer_adapter.reviewed_derivation_admission]
+// r[impl nix_producer_adapter.nix_derivation_evidence_boundary]
+// r[verify foreign_derivation_import.reviewed_nix_derivation_dependency]
+// r[verify foreign_derivation_import.reviewed_nix_derivation_adapter]
+// r[verify foreign_derivation_import.nix_derivation_projection_boundary]
+// r[verify foreign_derivation_import.nix_derivation_adapter_parity]
+// r[verify foreign_derivation_import.nix_derivation_adapter_rollback]
+// r[verify nix_producer_adapter.reviewed_derivation_admission]
+// r[verify nix_producer_adapter.nix_derivation_evidence_boundary]
+// The root adapter, producer shell, boundary guard, pinned package audit, and
+// positive and negative parity fixtures own the implementation evidence.
+//
 // Nix producer adapter contract bridge.
 //
 // r[impl nix_producer_adapter.backend_contract]

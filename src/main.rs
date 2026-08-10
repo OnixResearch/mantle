@@ -83,6 +83,7 @@ mod nix_free_demo_bundle;
 // Demo command variants retain complete validation inputs so clap and JSON compatibility stay
 // stable.
 #[allow(clippy::large_enum_variant)]
+mod nix_derivation_adapter;
 mod nix_free_demo_cmd;
 mod nix_producer;
 mod nix_producer_shell;

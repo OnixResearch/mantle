@@ -188,6 +188,7 @@ crunch-release-core = { path = "crates/crunch-release-core" }
 durable-file-publication = { git = "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git", rev = "951c27f59003cea9bfdb40ed4d89653d50fada1f" }
 crunch-delta = { path = "crates/crunch-delta" }
 nix-compat = { path = "vendor/nix-compat" }
+nix-derivation = "=0.1.0"
 snix-build = { path = "vendor/snix-build" }
 snix-castore = { path = "vendor/snix-castore" }
 snix-store = { path = "vendor/snix-store" }

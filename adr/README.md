@@ -82,4 +82,5 @@ compatibility surface, crate name, or historical decision.
 | [0073](0073-read-nario-v2-without-transferring-nix-authority.md) | Read Nario v2 without transferring Nix authority | Accepted |
 | [0074](0074-enforce-evaluation-budgets-with-an-owned-worker.md) | Enforce evaluation budgets with an owned worker | Accepted |
 | [0075](0075-stream-complete-root-outcomes-with-canonical-summaries.md) | Stream complete root outcomes with canonical summaries | Accepted |
-| [0076](0076-resolve-historical-nixpkgs-versions-before-mantlepkgs-production.md) | Resolve historical Nixpkgs versions before Mantlepkgs production | Proposed |
+| [0076](0076-resolve-historical-nixpkgs-versions-before-mantlepkgs-production.md) | Resolve historical Nixpkgs versions before Mantlepkgs production | Accepted |
+| [0077](0077-adopt-nix-derivation-at-the-nix-compatibility-boundary.md) | Adopt `nix-derivation` at the Nix compatibility boundary | Accepted |
