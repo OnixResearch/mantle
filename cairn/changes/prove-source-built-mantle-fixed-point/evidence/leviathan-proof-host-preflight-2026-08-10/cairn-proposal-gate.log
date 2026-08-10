@@ -1,0 +1,23 @@
+$ nix run github:onixresearch/cairn/fb1a7403a7897f7fa161e0b3c5d86b4cf19e52f8 -- gate proposal prove-source-built-mantle-fixed-point --root .
+{
+  "change": "prove-source-built-mantle-fixed-point",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "65bbff40df9c0fe04f29387dbbb1e72215caf66cd97a0a1807edd18443c1ac70",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "810cfa56991a9d1f10038ca79bf9a7a0996a2ee756c4e62324f1cd3f8628c848",
+  "receipt_hash": "7bb437f5f26a0b094862fdc35a68d14a68b7167c3fad07530f93fe3766cd8a83",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+command_exit=0

@@ -1,0 +1,12 @@
+$ nix run github:onixresearch/cairn/fb1a7403a7897f7fa161e0b3c5d86b4cf19e52f8 -- validate --root . --strict
+{
+  "change_issues": [],
+  "changes": 10,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 62,
+  "valid": true
+}
+command_exit=0

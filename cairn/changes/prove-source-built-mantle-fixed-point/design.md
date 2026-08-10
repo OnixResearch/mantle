@@ -16,6 +16,14 @@ The hydrated full-source-provider proof reaches matching Mantle binaries but ins
 
 **Rationale:** Extending the v1 result could let existing provider-path inputs satisfy a source-construction claim. An external driver cannot own one typed authority plan or durable fail-closed evidence. ADR 0050 records this boundary.
 
+### Decision: run the first promoted proof on Leviathan
+
+**Choice:** The first promoted V2 evidence run executes the complete six-stage proof on Leviathan (`leviathan.cymric-daggertooth.ts.net`). Host Mantle orchestration, StageX transition and publication, native and Rust provider construction, stage1, and stage2 all execute on that host. The operator transfers the exact source tree and authenticated profile before the attempt. Leviathan's pueue daemon launches and retains the run. Mantle `--builder`, Nix remote-action dispatch, and split-host stage execution are forbidden for this run.
+
+The Tailscale DNS name is an operator routing label, not execution authority. Proof authority continues to come from authenticated source and policy identities, explicit executable paths, bounded host observations, the action trust plan, and planned-versus-observed reconciliation. SSH, rsync, and pueue remain outside the proof action graph as pre-launch transfer and control mechanisms.
+
+**Rationale:** Leviathan provides substantially more CPU, memory, and disk than the operator workstation. Running the complete process there uses those resources while preserving the proof's local-only execution rule.
+
 ### Decision: use one immutable closure policy for both Mantle stages
 
 **Choice:** Stage1 and stage2 must use the same full-source-bound native/Rust closure policy digest, Cargo-free planner contract, source-state identity, and hermeticity policy. Stage1 Mantle is the stage2 planner/orchestrator; the host Mantle binary cannot plan stage2.
@@ -61,6 +69,8 @@ The hydrated full-source-provider proof reaches matching Mantle binaries but ins
 ## Risks / Trade-offs
 
 - A clean proof can run for many hours and require substantial disk; preflight must bound both before construction.
+- Leviathan cannot currently authenticate to GitHub, so the operator must transfer a fresh source tree and retain exact post-transfer parity evidence.
+- The Leviathan route name cannot grant proof authority. Host preflight must record the observed system, architecture, kernel, resource bounds, and explicit sandbox tools.
 - Native-provider and Rust-unit adapters can expose incomplete action descriptions. The proof must stop instead of emitting a partial report.
 - Generated build scripts require producer-linked authority and a digest observation before execution.
 - The complete action list and observations can be large, so schemas and event counts need explicit limits.

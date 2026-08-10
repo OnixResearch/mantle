@@ -1,0 +1,23 @@
+$ ssh -o BatchMode=yes leviathan.cymric-daggertooth.ts.net <proof-host-preflight>
+endpoint=leviathan.cymric-daggertooth.ts.net
+hostname=leviathan
+kernel=Linux 6.18.38 x86_64 GNU/Linux
+cpus=256
+memory_kib=263485988
+root_disk=/dev/nvme0n1p1  3844549616 1854153532 1795028868      51% /
+open_files_soft=1024
+open_files_hard=524288
+nix=nix (Nix) 2.34.8
+pueue=pueue 4.0.4
+bubblewrap=bubblewrap 0.11.2
+bubblewrap_probe=ok
+static_busybox_probe=ok
+kernel_config=/proc/config.gz
+CONFIG_USER_NS=y
+CONFIG_SECCOMP=y
+CONFIG_SECCOMP_FILTER=y
+
+$ ssh -T -o BatchMode=yes git@github.com  # expected transfer-route probe
+no such identity: /home/brittonr/.ssh/framework: No such file or directory
+git@github.com: Permission denied (publickey).
+github_ssh_exit=255

@@ -10,6 +10,7 @@ The current six-stage plan names broad proof stages but does not provide one pre
 
 - Add a full-bootstrap proof mode that consumes authenticated source bundles and constructs the StageX native provider plus full-source-bound Rust provider before Mantle compilation.
 - Execute both Mantle stages through the receipt-bound Cargo-free topology and strict hermeticity policy.
+- Run the first promoted V2 evidence build on Leviathan (`leviathan.cymric-daggertooth.ts.net`) as the sole execution host. Transfer the exact source tree and authenticated profile before launch. Use SSH, rsync, and pueue only for operator control, not proof-action dispatch.
 - Emit a deterministic root-scoped action trust plan before construction. It lists every reachable action, fixed or producer-linked executable authority, input authority, output, execution locality, event bound, and resource limit.
 - Reconcile the planned action list with protected-exec and build execution records. Reject unknown, missing, digest-mismatched, producerless, remote, cache-only, or over-limit execution.
 - Emit current `mantle-deterministic-proof-receipt-v2` evidence linking source, lineage, toolchain closure, stage authority, action trust, outputs, protected execution, and non-claims.
@@ -23,4 +24,4 @@ The current six-stage plan names broad proof stages but does not provide one pre
 ## Impact
 
 - **Files**: bootstrap functional core, self-build/Cargo-free orchestration, source-bundle profiles, deterministic proof/release evidence, parity inputs, proof scripts/tests, documentation, and lifecycle evidence.
-- **Testing**: pure proof-plan and action-trust tests; negative authority, execution, fallback, and tamper cases; real multi-stage proof; v2 receipt verification; release evidence verification; Cairn gates.
+- **Testing**: Add pure proof-plan and action-trust tests. Add negative authority, execution, fallback, and tamper cases. Record Leviathan preflight and source-transfer parity. Run the real proof, v2 receipt verification, release verification, and Cairn gates.
