@@ -1,0 +1,619 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: resolve-mantlepkgs-version-revisions",
+      "kind": "archive_change",
+      "path": "/home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions"
+    }
+  ],
+  "blocked": false,
+  "change": "resolve-mantlepkgs-version-revisions",
+  "dry_run": false,
+  "input_hash": "44cf250fbb5da8c25b86d05749db4835c71bcda9627af913bd26a72cc6702919",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "b83947b6ea0b4f5e3f892aba47c94a8f6493bc117a15232abf00075205ff3364",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/design.md"
+        },
+        {
+          "content_hash": "7e2d038ebf665fb6d958b441aec3bd5c258ce3061819c84420c0986179ff3362",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/baseline-tests.log"
+        },
+        {
+          "content_hash": "2155050d842197470703f573077d40bfa27df9a9f77eaf74a08c7c0129867b18",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/cairn-archive-dry-run.log"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/cairn-archive-execute.log"
+        },
+        {
+          "content_hash": "dd3ae8fd1a018a1659688be56b51aae3e9a87e5646449948af74228b9c121c0a",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/cairn-final-active-validation.log"
+        },
+        {
+          "content_hash": "6f7ff7a363312db7ec7bd5ea4413b03e6427a3421f1c39c94081c7841d4d14cf",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/cairn-post-sync-validation.log"
+        },
+        {
+          "content_hash": "9519d94263fc377eaff680d4c3bdd0214381393ef630d59a39b8fd65e12d77b4",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/cairn-prearchive-validation.log"
+        },
+        {
+          "content_hash": "eda23904d4652016a2aef58582bfda94b2e803f734bd73808b1a91c6ec1729a7",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/cairn-sync-dry-run.log"
+        },
+        {
+          "content_hash": "5ed9b702af1684b9658d9fedad59dc081e9d73985174aff62d996541d115e638",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/cairn-sync-execute.log"
+        },
+        {
+          "content_hash": "e01f8d8dee0f1b67265c332e3f87655871a83ad106088ab7933937763b7db090",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/implementation-validation.md"
+        },
+        {
+          "content_hash": "9af29c40bdbb82cc4b6840bf83431431e14c639bafffeb2c4e421b844a23fbcb",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/nix-package-check.log"
+        },
+        {
+          "content_hash": "90cfa4c3f92884084b9a1079d7705293e90bd3d9b94578fd9488675a02cfc066",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/nixpkgs-multiverse-reference-audit.md"
+        },
+        {
+          "content_hash": "c44bc478b5c7a3527abdfbfce01abe729fee9c8d1b679c31a29d2632016c2b49",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/README.md"
+        },
+        {
+          "content_hash": "9363c29e3f7d09bc22a1ee4a7397e44438e3ebebd43ce4d5cd3675447fc01f2f",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.2/artifacts/packages.index.json"
+        },
+        {
+          "content_hash": "93d99febc8d530dc052a630dc4fbe09a413c469bdec51b45a4ddd9741f7ea4f3",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.2/artifacts/source-requirements.json"
+        },
+        {
+          "content_hash": "2f4ae0f9025b3a0300ab676efa18031715ffc048ecfc7fd25a9b8f22331cbcb9",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.2/catalog.json"
+        },
+        {
+          "content_hash": "fdb4f8b0dc5c281c94d56f7b8416a44f4775aac680d308852543f7e7ac2622d1",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.2/producer-receipt.json"
+        },
+        {
+          "content_hash": "d4b8e9e8728ad588b3b04487198e352d7e184dbf783e227f06ec9da8a380c12a",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.3/artifacts/packages.index.json"
+        },
+        {
+          "content_hash": "e63547a4332ef55ac4a4dbb993507328702f3ad8893e8c8278059530b0982f20",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.3/artifacts/source-requirements.json"
+        },
+        {
+          "content_hash": "c60272493158a4ad85eb7fceb3b45c66600ac070dc9f78ead0ff2184c56886a6",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.3/catalog.json"
+        },
+        {
+          "content_hash": "e847f660b4d3be087fac425d49394fc7200075b991a97cceb440670d6c01a68d",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.3/producer-receipt.json"
+        },
+        {
+          "content_hash": "811669f93c5469b499c131652b79fc5dc081efb7ed3569a72f26036719f62ac2",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/domain/catalog.json"
+        },
+        {
+          "content_hash": "7eefe42299f1d19dad295c5ffd2610d5bfd4cdf992fce8450749cf789949db8d",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/domain/manifest.ncl"
+        },
+        {
+          "content_hash": "b0dbfc31213e618384bb026252de14b63e42870fe387e43605fd9b126acc0147",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/domain/sealed-manifest.json"
+        },
+        {
+          "content_hash": "1d5bb8908875924db07a6c95027bc3683b375d02831f189cf6178d31ceef8b88",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/domain/shard-hello-2.12.2.json"
+        },
+        {
+          "content_hash": "2e2f6be1e62aeee81dadb914e57d3acb86507587efadc10d9ec0c1c0208a907d",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/domain/shard-hello-2.12.3.json"
+        },
+        {
+          "content_hash": "904e6bf09120bf7230d01372f758b5b39c6a538af158bc0a47694a0900ed2310",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/domain-composition.log"
+        },
+        {
+          "content_hash": "525b601fd3fc10de6ad880727fb1cc7c9533af60f721ef039820c6c61d354b45",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/focused-validation.log"
+        },
+        {
+          "content_hash": "953f7841f748e02901ba865ab7ae1462989902b03722c9fb7263e49485fac795",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/generated-catalog-newer.log"
+        },
+        {
+          "content_hash": "c1c3b2ae0815d97c619d0ac4395baa0c28a744cf542aaf6ef4c5249315086c5c",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/generated-catalog-older.log"
+        },
+        {
+          "content_hash": "f64b9d62ad525c8a23e2073b5346d6fce8c2ec1a824425588ceb5e09a428ce40",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/index/cohort.json"
+        },
+        {
+          "content_hash": "122dce41a80e495a4bd9a11488869f173d1fcb07b8cf7438188f1df02ffd012f",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/index/indexes/x86_64-linux.json"
+        },
+        {
+          "content_hash": "d36a7fd129c4bc5b6cdc8090efae2e96a8153a2791510ebffdc1c0618c2a8640",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/index/observations.json"
+        },
+        {
+          "content_hash": "b23f38e3d7e086aaabd0ac1d23ddb3b57853758b2462f9ab63d2dae80747de04",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/index.log"
+        },
+        {
+          "content_hash": "e5fb4247737ce8b42385dcd9496d7cf25790939b6a727d8336c5e877815af299",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/manifest-validation.log"
+        },
+        {
+          "content_hash": "152a8ceac23bcdfe15e343c8d2280db69ae83416d06f58244d9810a9cf6fc0ff",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/producer-facts.txt"
+        },
+        {
+          "content_hash": "4473f7f6dba87bb4046f34c0978ec643886271b256161dbf82c6c338ac03ba3c",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/2b99abd6c8185f8908f6937d81cd72df65882239763a7f86138db4db5d726ed4/contracts.ncl"
+        },
+        {
+          "content_hash": "8eba8a402b5876a970570ad6964e8a0fcc083ed3bae4d4ee0b026c64042ee88d",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/2b99abd6c8185f8908f6937d81cd72df65882239763a7f86138db4db5d726ed4/manifest.json"
+        },
+        {
+          "content_hash": "4591ed6c8b3dd1ec96db2639f7ce43c4c0c26faab21404f216f8b0d34d36e421",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/2b99abd6c8185f8908f6937d81cd72df65882239763a7f86138db4db5d726ed4/manifest.ncl"
+        },
+        {
+          "content_hash": "054ec6754f08d60088cf3388f43295ad37621e5115e979f702a2a5c5d0eefcb8",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/2b99abd6c8185f8908f6937d81cd72df65882239763a7f86138db4db5d726ed4/policy/execution-profile.json"
+        },
+        {
+          "content_hash": "18eaa36031cfa19529089febc9439dc4c540f27f279be21b5d8f10fef618e415",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/2b99abd6c8185f8908f6937d81cd72df65882239763a7f86138db4db5d726ed4/policy/translation.json"
+        },
+        {
+          "content_hash": "4473f7f6dba87bb4046f34c0978ec643886271b256161dbf82c6c338ac03ba3c",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/53aad3b17f18087111c34c973dd4668415d8567fef1f4df0baabbfac5d038fd6/contracts.ncl"
+        },
+        {
+          "content_hash": "5a3e1cd080225f69799d6d732976b17e4aae969e95c96a4999c73a050ffd4afc",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/53aad3b17f18087111c34c973dd4668415d8567fef1f4df0baabbfac5d038fd6/manifest.json"
+        },
+        {
+          "content_hash": "eb27afec28a460ba40f26cd091e5b6350b1667e650e983e57c2a40ad596fd58d",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/53aad3b17f18087111c34c973dd4668415d8567fef1f4df0baabbfac5d038fd6/manifest.ncl"
+        },
+        {
+          "content_hash": "054ec6754f08d60088cf3388f43295ad37621e5115e979f702a2a5c5d0eefcb8",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/53aad3b17f18087111c34c973dd4668415d8567fef1f4df0baabbfac5d038fd6/policy/execution-profile.json"
+        },
+        {
+          "content_hash": "18eaa36031cfa19529089febc9439dc4c540f27f279be21b5d8f10fef618e415",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/53aad3b17f18087111c34c973dd4668415d8567fef1f4df0baabbfac5d038fd6/policy/translation.json"
+        },
+        {
+          "content_hash": "2cfe5d3b9dff54ce3dce16c9ca28ab29aaaf43879c2a69dfc73804c8ba95a109",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/rechecks.json"
+        },
+        {
+          "content_hash": "b00936777deadfea4926bf8d58bf3123388f815d089a126140be708a4201ef96",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/recheck.log"
+        },
+        {
+          "content_hash": "60aa6dab9595fcf48351bee12472babf0e95d714f152a2a5b1d753dfbd3534ac",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/resolve/policy.json"
+        },
+        {
+          "content_hash": "3efbd9af730cc40c9a4a7b8be67eddd3f2be898bbc7bf67fdccbf5a19e47f528",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/resolve/production-plan.json"
+        },
+        {
+          "content_hash": "8e97bc134e0b43447b5012766025665824956a1a486f58a3abec6b775ef0af58",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/resolve/receipts/2bd8dd45902883f4f5456919cf9b9c3e513058a718f292699485839760798b81.json"
+        },
+        {
+          "content_hash": "1c0e1f08ae245473f77efbfc46351f5f8aef945a61a7992a1cabe50d3a359797",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/resolve/receipts/be80a6f55d19699375896b20652cc87941a9f5cc2dfbef7401195f00924d8dc5.json"
+        },
+        {
+          "content_hash": "cd1445298dc9a55b7741e652b3c82052f1d8fe9735011eaaacae241154153123",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/resolve/requests.json"
+        },
+        {
+          "content_hash": "235726647e030887b59d4a35e79215964daceabd1cfc20cd1771220bfff916e3",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/resolve/resolutions.json"
+        },
+        {
+          "content_hash": "ae57420406679453e0d5ecbf835bbe0064e71d02c78b77a9aba09b9ca1138912",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/evidence/pilot/resolve.log"
+        },
+        {
+          "content_hash": "993fee76737fe9f9b0a7bd7cbfd4055afe71b19538223d5d4a8bc91ed00e0241",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/proposal.md"
+        },
+        {
+          "content_hash": "6750e181c5935170f6af1fdc163c2b75c4763dc325a81e9d4bd21fb75b8a6b30",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/specs/mantlepkgs-version-resolution/spec.md"
+        },
+        {
+          "content_hash": "1db14c9b3402454cc291160377a6b60827ed98f92a1ea11e9b5350de6fbae4ef",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-10-resolve-mantlepkgs-version-revisions/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions"
+        }
+      ],
+      "manifest_hash": "7b1f62b5849ecfce49556a2e5e17658329b93403ab6392e7cdf9308fb4ed55d3"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "b83947b6ea0b4f5e3f892aba47c94a8f6493bc117a15232abf00075205ff3364",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/design.md"
+        },
+        {
+          "content_hash": "7e2d038ebf665fb6d958b441aec3bd5c258ce3061819c84420c0986179ff3362",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/baseline-tests.log"
+        },
+        {
+          "content_hash": "2155050d842197470703f573077d40bfa27df9a9f77eaf74a08c7c0129867b18",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/cairn-archive-dry-run.log"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/cairn-archive-execute.log"
+        },
+        {
+          "content_hash": "dd3ae8fd1a018a1659688be56b51aae3e9a87e5646449948af74228b9c121c0a",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/cairn-final-active-validation.log"
+        },
+        {
+          "content_hash": "6f7ff7a363312db7ec7bd5ea4413b03e6427a3421f1c39c94081c7841d4d14cf",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/cairn-post-sync-validation.log"
+        },
+        {
+          "content_hash": "9519d94263fc377eaff680d4c3bdd0214381393ef630d59a39b8fd65e12d77b4",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/cairn-prearchive-validation.log"
+        },
+        {
+          "content_hash": "eda23904d4652016a2aef58582bfda94b2e803f734bd73808b1a91c6ec1729a7",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/cairn-sync-dry-run.log"
+        },
+        {
+          "content_hash": "5ed9b702af1684b9658d9fedad59dc081e9d73985174aff62d996541d115e638",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/cairn-sync-execute.log"
+        },
+        {
+          "content_hash": "e01f8d8dee0f1b67265c332e3f87655871a83ad106088ab7933937763b7db090",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/implementation-validation.md"
+        },
+        {
+          "content_hash": "9af29c40bdbb82cc4b6840bf83431431e14c639bafffeb2c4e421b844a23fbcb",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/nix-package-check.log"
+        },
+        {
+          "content_hash": "90cfa4c3f92884084b9a1079d7705293e90bd3d9b94578fd9488675a02cfc066",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/nixpkgs-multiverse-reference-audit.md"
+        },
+        {
+          "content_hash": "c44bc478b5c7a3527abdfbfce01abe729fee9c8d1b679c31a29d2632016c2b49",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/README.md"
+        },
+        {
+          "content_hash": "9363c29e3f7d09bc22a1ee4a7397e44438e3ebebd43ce4d5cd3675447fc01f2f",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.2/artifacts/packages.index.json"
+        },
+        {
+          "content_hash": "93d99febc8d530dc052a630dc4fbe09a413c469bdec51b45a4ddd9741f7ea4f3",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.2/artifacts/source-requirements.json"
+        },
+        {
+          "content_hash": "2f4ae0f9025b3a0300ab676efa18031715ffc048ecfc7fd25a9b8f22331cbcb9",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.2/catalog.json"
+        },
+        {
+          "content_hash": "fdb4f8b0dc5c281c94d56f7b8416a44f4775aac680d308852543f7e7ac2622d1",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.2/producer-receipt.json"
+        },
+        {
+          "content_hash": "d4b8e9e8728ad588b3b04487198e352d7e184dbf783e227f06ec9da8a380c12a",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.3/artifacts/packages.index.json"
+        },
+        {
+          "content_hash": "e63547a4332ef55ac4a4dbb993507328702f3ad8893e8c8278059530b0982f20",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.3/artifacts/source-requirements.json"
+        },
+        {
+          "content_hash": "c60272493158a4ad85eb7fceb3b45c66600ac070dc9f78ead0ff2184c56886a6",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.3/catalog.json"
+        },
+        {
+          "content_hash": "e847f660b4d3be087fac425d49394fc7200075b991a97cceb440670d6c01a68d",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/catalogs/hello-2.12.3/producer-receipt.json"
+        },
+        {
+          "content_hash": "811669f93c5469b499c131652b79fc5dc081efb7ed3569a72f26036719f62ac2",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/domain/catalog.json"
+        },
+        {
+          "content_hash": "7eefe42299f1d19dad295c5ffd2610d5bfd4cdf992fce8450749cf789949db8d",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/domain/manifest.ncl"
+        },
+        {
+          "content_hash": "b0dbfc31213e618384bb026252de14b63e42870fe387e43605fd9b126acc0147",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/domain/sealed-manifest.json"
+        },
+        {
+          "content_hash": "1d5bb8908875924db07a6c95027bc3683b375d02831f189cf6178d31ceef8b88",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/domain/shard-hello-2.12.2.json"
+        },
+        {
+          "content_hash": "2e2f6be1e62aeee81dadb914e57d3acb86507587efadc10d9ec0c1c0208a907d",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/domain/shard-hello-2.12.3.json"
+        },
+        {
+          "content_hash": "904e6bf09120bf7230d01372f758b5b39c6a538af158bc0a47694a0900ed2310",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/domain-composition.log"
+        },
+        {
+          "content_hash": "525b601fd3fc10de6ad880727fb1cc7c9533af60f721ef039820c6c61d354b45",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/focused-validation.log"
+        },
+        {
+          "content_hash": "953f7841f748e02901ba865ab7ae1462989902b03722c9fb7263e49485fac795",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/generated-catalog-newer.log"
+        },
+        {
+          "content_hash": "c1c3b2ae0815d97c619d0ac4395baa0c28a744cf542aaf6ef4c5249315086c5c",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/generated-catalog-older.log"
+        },
+        {
+          "content_hash": "f64b9d62ad525c8a23e2073b5346d6fce8c2ec1a824425588ceb5e09a428ce40",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/index/cohort.json"
+        },
+        {
+          "content_hash": "122dce41a80e495a4bd9a11488869f173d1fcb07b8cf7438188f1df02ffd012f",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/index/indexes/x86_64-linux.json"
+        },
+        {
+          "content_hash": "d36a7fd129c4bc5b6cdc8090efae2e96a8153a2791510ebffdc1c0618c2a8640",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/index/observations.json"
+        },
+        {
+          "content_hash": "b23f38e3d7e086aaabd0ac1d23ddb3b57853758b2462f9ab63d2dae80747de04",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/index.log"
+        },
+        {
+          "content_hash": "e5fb4247737ce8b42385dcd9496d7cf25790939b6a727d8336c5e877815af299",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/manifest-validation.log"
+        },
+        {
+          "content_hash": "152a8ceac23bcdfe15e343c8d2280db69ae83416d06f58244d9810a9cf6fc0ff",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/producer-facts.txt"
+        },
+        {
+          "content_hash": "4473f7f6dba87bb4046f34c0978ec643886271b256161dbf82c6c338ac03ba3c",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/2b99abd6c8185f8908f6937d81cd72df65882239763a7f86138db4db5d726ed4/contracts.ncl"
+        },
+        {
+          "content_hash": "8eba8a402b5876a970570ad6964e8a0fcc083ed3bae4d4ee0b026c64042ee88d",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/2b99abd6c8185f8908f6937d81cd72df65882239763a7f86138db4db5d726ed4/manifest.json"
+        },
+        {
+          "content_hash": "4591ed6c8b3dd1ec96db2639f7ce43c4c0c26faab21404f216f8b0d34d36e421",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/2b99abd6c8185f8908f6937d81cd72df65882239763a7f86138db4db5d726ed4/manifest.ncl"
+        },
+        {
+          "content_hash": "054ec6754f08d60088cf3388f43295ad37621e5115e979f702a2a5c5d0eefcb8",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/2b99abd6c8185f8908f6937d81cd72df65882239763a7f86138db4db5d726ed4/policy/execution-profile.json"
+        },
+        {
+          "content_hash": "18eaa36031cfa19529089febc9439dc4c540f27f279be21b5d8f10fef618e415",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/2b99abd6c8185f8908f6937d81cd72df65882239763a7f86138db4db5d726ed4/policy/translation.json"
+        },
+        {
+          "content_hash": "4473f7f6dba87bb4046f34c0978ec643886271b256161dbf82c6c338ac03ba3c",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/53aad3b17f18087111c34c973dd4668415d8567fef1f4df0baabbfac5d038fd6/contracts.ncl"
+        },
+        {
+          "content_hash": "5a3e1cd080225f69799d6d732976b17e4aae969e95c96a4999c73a050ffd4afc",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/53aad3b17f18087111c34c973dd4668415d8567fef1f4df0baabbfac5d038fd6/manifest.json"
+        },
+        {
+          "content_hash": "eb27afec28a460ba40f26cd091e5b6350b1667e650e983e57c2a40ad596fd58d",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/53aad3b17f18087111c34c973dd4668415d8567fef1f4df0baabbfac5d038fd6/manifest.ncl"
+        },
+        {
+          "content_hash": "054ec6754f08d60088cf3388f43295ad37621e5115e979f702a2a5c5d0eefcb8",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/53aad3b17f18087111c34c973dd4668415d8567fef1f4df0baabbfac5d038fd6/policy/execution-profile.json"
+        },
+        {
+          "content_hash": "18eaa36031cfa19529089febc9439dc4c540f27f279be21b5d8f10fef618e415",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/manifests/53aad3b17f18087111c34c973dd4668415d8567fef1f4df0baabbfac5d038fd6/policy/translation.json"
+        },
+        {
+          "content_hash": "2cfe5d3b9dff54ce3dce16c9ca28ab29aaaf43879c2a69dfc73804c8ba95a109",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/recheck/rechecks.json"
+        },
+        {
+          "content_hash": "b00936777deadfea4926bf8d58bf3123388f815d089a126140be708a4201ef96",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/recheck.log"
+        },
+        {
+          "content_hash": "60aa6dab9595fcf48351bee12472babf0e95d714f152a2a5b1d753dfbd3534ac",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/resolve/policy.json"
+        },
+        {
+          "content_hash": "3efbd9af730cc40c9a4a7b8be67eddd3f2be898bbc7bf67fdccbf5a19e47f528",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/resolve/production-plan.json"
+        },
+        {
+          "content_hash": "8e97bc134e0b43447b5012766025665824956a1a486f58a3abec6b775ef0af58",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/resolve/receipts/2bd8dd45902883f4f5456919cf9b9c3e513058a718f292699485839760798b81.json"
+        },
+        {
+          "content_hash": "1c0e1f08ae245473f77efbfc46351f5f8aef945a61a7992a1cabe50d3a359797",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/resolve/receipts/be80a6f55d19699375896b20652cc87941a9f5cc2dfbef7401195f00924d8dc5.json"
+        },
+        {
+          "content_hash": "cd1445298dc9a55b7741e652b3c82052f1d8fe9735011eaaacae241154153123",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/resolve/requests.json"
+        },
+        {
+          "content_hash": "235726647e030887b59d4a35e79215964daceabd1cfc20cd1771220bfff916e3",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/resolve/resolutions.json"
+        },
+        {
+          "content_hash": "ae57420406679453e0d5ecbf835bbe0064e71d02c78b77a9aba09b9ca1138912",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/resolve.log"
+        },
+        {
+          "content_hash": "993fee76737fe9f9b0a7bd7cbfd4055afe71b19538223d5d4a8bc91ed00e0241",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/proposal.md"
+        },
+        {
+          "content_hash": "6750e181c5935170f6af1fdc163c2b75c4763dc325a81e9d4bd21fb75b8a6b30",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/specs/mantlepkgs-version-resolution/spec.md"
+        },
+        {
+          "content_hash": "1db14c9b3402454cc291160377a6b60827ed98f92a1ea11e9b5350de6fbae4ef",
+          "exists": true,
+          "path": "./cairn/changes/resolve-mantlepkgs-version-revisions/tasks.md"
+        }
+      ],
+      "manifest_hash": "41b3745314d81c5c81a437f4f197ebaf727763b2944bde0e415adfd4a65e2fa5"
+    },
+    "kind": "archive",
+    "manifest_hash": "639f804f35ccaaae39efbafc191f58944fd743c2b7c7ef5fad5abd3bcd8f635e"
+  },
+  "plan_hash": "54a01ae95348e08f77bd1650415d967e493d910f2a8d1cfcae9778a2b84dd7f8",
+  "policy": "mantle-default",
+  "policy_hash": "810cfa56991a9d1f10038ca79bf9a7a0996a2ee756c4e62324f1cd3f8628c848",
+  "reasons": [],
+  "receipt_hash": "49d4255442f9d2131b1548a55d9829d1a253d8d7831b42a181572d2ce512d519"
+}
