@@ -1,0 +1,12 @@
+$ cairn validate --root . --strict
+{
+  "change_issues": [],
+  "changes": 10,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 62,
+  "valid": true
+}
+command_exit=0
