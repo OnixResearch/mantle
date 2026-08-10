@@ -116,6 +116,14 @@
 // synced requirements implemented there need a small bridge until the coverage
 // rail scans the package root directly.
 
+// Evaluation-stream signal cancellation bridge.
+//
+// r[impl evaluation_streaming.signal_cancellation]
+// r[verify evaluation_streaming.signal_cancellation]
+// The pure first-versus-repeated observation policy lives in
+// `crates/crunch-evaluation-stream-core`. Signal registration, cancellation,
+// bounded output draining, and subprocess tests stay in the root package.
+
 // Cargo profile codegen bridge.
 //
 // r[impl rust_package_planning.profile_defaults_table]

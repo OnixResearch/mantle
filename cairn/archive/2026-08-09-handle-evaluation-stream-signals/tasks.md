@@ -14,4 +14,4 @@
 - [x] [serial] I6 Add bounded subprocess tests for `SIGINT`, `SIGTERM`, repeated interruption, and the final cancelled summary. r[evaluation_streaming.signal_cancellation]
 - [x] [serial] I7 Document signal, summary, process-status, and non-claim behavior. r[evaluation_streaming.signal_cancellation]
 - [x] [serial] V1 Run focused tests, formatting, Clippy, stream-contract checks, Cairn validation and gates, and Tracey coverage. r[evaluation_streaming.signal_cancellation]
-- [ ] [serial] V2 Sync the accepted requirement, archive the completed change with evidence, and rerun post-archive validation. r[evaluation_streaming.signal_cancellation]
+- [x] [serial] V2 Sync the accepted requirement, archive the completed change with evidence, and rerun post-archive validation. r[evaluation_streaming.signal_cancellation]

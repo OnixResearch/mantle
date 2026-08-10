@@ -25,4 +25,11 @@ Decision: V1 is complete. The change is ready to sync and archive.
 
 Owner: `handle-evaluation-stream-signals`.
 
-Next action: Sync the accepted requirement, archive the change, and append exact post-archive validation output.
+Archive completion:
+
+- Pueue task `17264` synced `evaluation_streaming.signal_cancellation` into the accepted specification.
+- Pueue task `17267` archived the completed package at `cairn/archive/2026-08-09-handle-evaluation-stream-signals/`.
+- Pueue task `17269` passed pinned post-archive validation and Tracey coverage.
+- `evidence/cairn-prearchive-transcript.txt` contains exact pre-archive and post-archive command output.
+
+Next action: Commit and integrate the archived lifecycle state.
