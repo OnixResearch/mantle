@@ -323,6 +323,10 @@ dispatches eligible work under explicit concurrency and policy bounds. A build
 report describes what was observed. It does not turn scheduling, sandbox, or
 cache evidence into a whole-system correctness proof.
 
+[Native dynamic derivation admission](docs/dynamic-derivation-admission.md) requires
+complete parent BLAKE3 facts before registry or scheduler mutation. It rejects
+missing parents instead of using the former all-zero fallback.
+
 ## Evidence and trust boundaries
 
 Mantle keeps build observations separate from stronger claims:

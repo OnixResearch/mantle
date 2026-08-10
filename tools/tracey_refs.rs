@@ -1,5 +1,24 @@
 // Mantle Tracey coverage bridge.
 //
+// Native dynamic derivation admission bridge.
+//
+// r[impl dynamic_derivations.staged_core]
+// r[impl dynamic_derivations.complete_parent_identity]
+// r[impl dynamic_derivations.versioned_forms]
+// r[impl dynamic_derivations.registry_boundary]
+// r[impl dynamic_derivations.compatibility]
+// r[impl dynamic_derivations.claim_boundary]
+// r[verify dynamic_derivations.staged_core]
+// r[verify dynamic_derivations.complete_parent_identity]
+// r[verify dynamic_derivations.versioned_forms]
+// r[verify dynamic_derivations.registry_boundary]
+// r[verify dynamic_derivations.compatibility]
+// r[verify dynamic_derivations.claim_boundary]
+// The pure core owns bounded parsing, validation, identity, and insertion plans.
+// Worker and registry adapters own observations, mutation, scheduling, and logs.
+// Tests cover positive, negative, compatibility, collision, and no-effect paths.
+// Operator documentation records the bounded claims and rollback limitations.
+//
 // Evaluator resource-budget bridge.
 //
 // r[impl evaluation_performance.budget_policy]

@@ -16,6 +16,8 @@ use nix_compat::derivation::Derivation;
 use nix_compat::store_path::StorePath;
 
 use crate::ExecutionProfile;
+use crate::dynamic::DynamicRegistrationDecision;
+use crate::dynamic::RegistryReadyDynamicDerivation;
 use crate::validate_execution_profile;
 use crate::verify_execution_profile_binding;
 
@@ -34,6 +36,8 @@ pub struct RegistryEntry {
     pub provenance_claims: Option<Claims>,
     /// Explicit execution policy used when the worker creates a build request.
     pub execution_profile: ExecutionProfile,
+    /// Full staged identity for dynamically admitted registry entries.
+    pub dynamic_admission_identity: Option<[u8; 32]>,
     /// Resolved output paths for CA derivations. Populated by
     /// `resolve_output()` after the build completes.
     /// Key: output name, Value: final store path.
@@ -48,6 +52,7 @@ struct RegistryInsert {
     dynamic_plan_outputs: Vec<String>,
     provenance_claims: Option<Claims>,
     execution_profile: ExecutionProfile,
+    dynamic_admission_identity: Option<[u8; 32]>,
 }
 
 /// Build-time derivation lookup for the Worker and Builder.
@@ -111,7 +116,41 @@ impl DerivationRegistry {
             dynamic_plan_outputs: Vec::new(),
             provenance_claims,
             execution_profile: ExecutionProfile::native_compatibility(),
+            dynamic_admission_identity: None,
         });
+    }
+
+    /// Apply one fully admitted dynamic registration plan.
+    pub(crate) fn insert_registry_ready_dynamic(
+        &mut self,
+        ready: &RegistryReadyDynamicDerivation,
+    ) -> Result<(), crate::Error> {
+        let absolute = ready.drv_path().to_absolute_path_with_prefix(&self.store_dir);
+        if ready.decision() == DynamicRegistrationDecision::AlreadyPresent {
+            let existing = self.entries.get(&absolute).ok_or_else(|| {
+                crate::Error::Store(format!("dynamic duplicate `{absolute}` is absent from the registry"))
+            })?;
+            if existing.dynamic_admission_identity != Some(ready.full_identity()) {
+                return Err(crate::Error::Store(format!("dynamic duplicate `{absolute}` changed admitted identity")));
+            }
+            return Ok(());
+        }
+        if self.entries.contains_key(&absolute) {
+            return Err(crate::Error::Store(format!(
+                "dynamic insertion `{absolute}` collides with an existing registry entry"
+            )));
+        }
+        self.insert_registration(RegistryInsert {
+            drv_path: ready.drv_path().clone(),
+            hash_derivation_modulo: ready.hash_derivation_modulo(),
+            derivation: Arc::new(ready.derivation().clone()),
+            content_addressed: ready.content_addressed(),
+            dynamic_plan_outputs: Vec::new(),
+            provenance_claims: None,
+            execution_profile: ExecutionProfile::native_compatibility(),
+            dynamic_admission_identity: Some(ready.full_identity()),
+        });
+        Ok(())
     }
 
     /// Register a derivation with native dynamic-plan output metadata.
@@ -136,6 +175,7 @@ impl DerivationRegistry {
             dynamic_plan_outputs,
             provenance_claims,
             execution_profile: ExecutionProfile::native_compatibility(),
+            dynamic_admission_identity: None,
         });
     }
 
@@ -162,6 +202,7 @@ impl DerivationRegistry {
             dynamic_plan_outputs: Vec::new(),
             provenance_claims,
             execution_profile,
+            dynamic_admission_identity: None,
         });
         Ok(())
     }
@@ -175,6 +216,7 @@ impl DerivationRegistry {
             dynamic_plan_outputs,
             provenance_claims,
             execution_profile,
+            dynamic_admission_identity,
         } = registration;
         debug_assert!(!derivation.outputs.is_empty(), "derivation must have at least one output");
         debug_assert!(
@@ -196,6 +238,7 @@ impl DerivationRegistry {
             dynamic_plan_outputs,
             provenance_claims,
             execution_profile,
+            dynamic_admission_identity,
             resolved_outputs: HashMap::new(),
         });
     }
@@ -277,6 +320,7 @@ where I: IntoIterator<Item = (StorePath<String>, [u8; 32], Derivation, bool, Vec
             dynamic_plan_outputs,
             provenance_claims,
             execution_profile: ExecutionProfile::native_compatibility(),
+            dynamic_admission_identity: None,
         });
     }
 }

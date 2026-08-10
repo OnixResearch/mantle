@@ -6,117 +6,143 @@ Accepted
 
 ## Context
 
-crunch's spec requires support for dynamic derivations: builds that
-produce `.drv` files as outputs, which are then built in turn. ADR 0001
-chose the lazy goal scheduler explicitly to enable this — `want()` is
-callable mid-run, KnownPaths grows during builds, and the goal registry
-accepts new entries after dispatch starts.
+Mantle inspects completed build outputs for `.drv` files.
+It can register these files as new goals during the same Worker run.
 
-The question: how to wire up the detection, parsing, and scheduling of
-dynamically-discovered derivations without changing the fundamental
-Worker/Goal architecture.
+The earlier path parsed and registered one mutable derivation value.
+It used an all-zero parent hash when the registry lacked a referenced parent.
+That fallback produced a deterministic but unsupported identity.
+It could schedule work under a path that did not match the declared graph.
+
+Native Mantle derivations use BLAKE3 and one explicit logical store prefix.
+The Nix compatibility adapter uses Nix-required identity rules.
+These identity domains must remain separate.
 
 ## Decision
 
-Implement dynamic derivations via **post-build output inspection** in
-the Worker, with no changes to the Nickel schema or convert pipeline.
+Use a staged pure admission core before any registry or scheduler mutation.
 
-### Detection
+The state sequence is:
 
-After every build completion, `detect_dynamic_derivations()` scans the
-build's output PathInfos. An output is a candidate if:
-
-1. The store path name ends with `.drv`
-2. The output node is a regular file (not dir/symlink)
-3. The file is under 4 MiB
-
-### Parsing
-
-Candidate outputs are read from the castore blob service via
-`Builder::read_blob()`. Content is checked for the ATerm prefix
-(`Derive(`) and parsed with `Derivation::from_aterm_bytes()`.
-
-### Registration
-
-Parsed derivations are registered in KnownPaths via
-`register_dynamic_drv()`, which computes the ATerm hash, HDM, and
-derivation path. If a parent derivation referenced by the dynamic drv
-isn't in KnownPaths, its HDM falls back to zeros with a warning — the
-build still works, the output path just won't match what Nix computes.
-
-### Scheduling
-
-Two paths depending on whether a goal was pre-created:
-
-1. **AwaitingDerivation goals**: If a goal exists in the
-   `AwaitingDerivation` state with a matching `producer_key`, the
-   parsed derivation is injected via `set_derivation()`, transitioning
-   to `Pending`. The goal is then inspected and wired normally.
-
-2. **Auto-discovered goals**: If no awaiting goal exists, a new root
-   goal is created via `want()`. The Worker's dispatch loop picks it
-   up on the next iteration.
-
-### Goal State Machine Extension
-
-One new state: `AwaitingDerivation`. A goal in this state has no
-`Derivation` yet — it's waiting for a producer build to complete.
-
-```
-AwaitingDerivation → Pending  (set_derivation called)
-AwaitingDerivation → Failed   (producer failed)
+```text
+candidate bytes
+  -> parsed dynamic derivation
+  -> validated dynamic derivation
+  -> identity-resolved dynamic derivation
+  -> registry-ready dynamic derivation
+  -> Worker-owned mutation
 ```
 
-The `Goal::new_awaiting(drv_path, producer_key)` constructor creates
-goals in this state. The `producer_key` field links the goal to its
-producer for lookup after build completion.
+Each state has a private Rust type.
+Only constructors in the pure core can create the next state.
 
-### Module Structure
+### Detection and bounds
 
-New `dynamic.rs` in crunch-build: pure detection and parsing logic.
-No async, no I/O — the Worker handles blob reads and goal mutations.
-FCIS boundary maintained.
+The Worker inspects bounded regular files whose store-path names end in `.drv`.
+The core accepts the traditional `Derive(` prefix.
+It also accepts `DrvWithVersion("xp-dyn-drv",` under the declared policy.
 
-## Alternatives Considered
+Named limits cover bytes, fields, collections, parent edges, dynamic nodes, parser collections, and depth.
+Unknown versions, malformed input, excess depth, and excess size fail before identity work.
 
-### Nickel schema changes
+### Versioned input model
 
-Add `Input::Dynamic(Box<CrunchDerivation>)` to the Nickel type system,
-letting users explicitly declare producers at eval time.
+Versioned recursive requests use a flattened preorder model.
+Each dynamic node records its parent index, output name, and requested outputs.
+Parsing and traversal use explicit stacks instead of recursive calls.
 
-Pro: Type-safe, eval-time visibility.
-Con: Premature — we don't yet know the right Nickel API for this. The
-post-build approach works today without forcing a schema commitment.
-Can be added later as sugar on top.
+The execution projection keeps direct outputs and top-level dynamic output names as parent dependencies.
+The full native identity also binds the original versioned bytes.
+Nested requests therefore cannot disappear from identity.
 
-### Full IFD (Import From Derivation)
+Versioned execution currently accepts only input-addressed outputs.
+Other versioned output semantics fail with a stable unsupported-output blocker.
 
-Pause Nickel evaluation, build a derivation, import its output into
-the evaluator, and continue.
+### Complete parent identity
 
-Pro: Most powerful — matches Nix's `import (derivation { ... })`.
-Con: Requires deep Nickel runtime integration (eval suspension/
-resumption). Much larger scope. The post-build approach handles the
-common case (build → discover → build) without eval changes.
+The Worker observes one immutable hash fact for each direct parent.
+Each fact binds the logical parent path, BLAKE3 digest, and native digest role.
 
-### Content-based detection only
+Missing, duplicate, conflicting, unexpected, wrong-prefix, and wrong-domain facts fail closed.
+The core never substitutes zero bytes or another sentinel.
 
-Check output bytes for ATerm prefix without requiring `.drv` name.
+Traditional covered derivations keep their prior BLAKE3 identity when all parent facts are complete.
+Custom logical prefixes flow through parsing, hashing, path calculation, registry keys, and diagnostics.
+Mixed-prefix candidates fail before registration.
 
-Pro: Works regardless of naming.
-Con: False positives on files that happen to start with `Derive(`.
-Name-based check is cheap and matches Nix convention.
+### Registry and scheduler boundary
+
+The pure core creates an insertion or exact-duplicate plan.
+An exact duplicate must match the full admitted identity.
+A path collision with another identity fails closed.
+
+The Worker prepares every candidate before it applies any registry mutation.
+Batch collisions fail before the first insertion.
+Only `RegistryReadyDynamicDerivation` can enter the dynamic registry insertion method.
+
+Goal creation, waiter changes, ready queues, scheduling evidence, and success reports remain after registry admission.
+Any earlier failure leaves those states unchanged.
+
+### Functional core and imperative shell
+
+The pure core owns these decisions:
+
+- candidate classification;
+- syntax parsing;
+- semantic and output validation;
+- recursive request flattening;
+- limit enforcement;
+- parent-fact completeness;
+- native BLAKE3 identity;
+- configured-prefix path calculation;
+- duplicate and collision planning.
+
+The Worker shell owns these effects:
+
+- castore discovery and bounded blob reads;
+- registry observations;
+- diagnostics and tracing;
+- registry mutation;
+- goal and waiter mutation;
+- scheduler dispatch.
+
+`scripts/check-dynamic-admission-boundary.rs` enforces this source boundary.
+
+## Rejected alternatives
+
+### Keep the zero-hash fallback
+
+This choice makes unknown parents appear complete.
+It was rejected because the calculated identity does not bind the declared parent graph.
+
+### Use `nix-derivation` in the native core
+
+This choice would mix Nix compatibility identity with Mantle-native identity.
+It was rejected by ADR 0077 and the dependency source guard.
+
+### Add evaluator suspension
+
+Full import-from-derivation needs evaluator suspension and resumption.
+That work is outside this bounded post-build admission change.
+
+## Compatibility and rollback
+
+Covered traditional fixtures retain their BLAKE3 identity and configured-prefix path.
+The recorded baseline includes the former zero-fallback identity and path.
+
+Rollback must restore the old core and Worker adapter together.
+Rollback evidence must state that missing parents again receive an unsupported zero-hash fallback.
 
 ## Consequences
 
-- 201 tests total in crunch-build (was 198). 14 tests cover dynamic
-  derivation detection, parsing, registration, goal lifecycle, and
-  Worker integration.
-- The Worker loop is slightly longer per build completion (output
-  scan). The scan is O(outputs) per build — negligible.
-- KnownPaths grows during builds. Already supported by the lazy goal
-  architecture (ADR 0001).
-- No Nickel schema changes needed. Users produce `.drv` files as
-  build outputs; crunch detects and builds them automatically.
-- The `AwaitingDerivation` state is available for future use when
-  explicit pre-declaration of dynamic deps is wanted.
+- Missing parent facts now block admission.
+- Supported versioned requests have bounded iterative traversal.
+- Registry insertion is atomic for each discovered output batch.
+- Exact duplicates remain idempotent.
+- Colliding identities fail before scheduler mutation.
+- The Worker shell remains responsible for all effects.
+
+## Claim boundary
+
+Admission proves only the recorded parsing, validation, identity, path, and registry-plan facts.
+It does not prove builder safety, sandbox enforcement, source trust, output correctness, scheduling quality, or release eligibility.

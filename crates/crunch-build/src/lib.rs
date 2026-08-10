@@ -52,8 +52,6 @@ pub use distributed::RemoteBuildServiceAdapter;
 pub use distributed::RemoteFirstBuildService;
 pub use dynamic::DynamicDrv;
 pub use dynamic::is_drv_output;
-pub use dynamic::parse_drv_bytes;
-pub use dynamic::register_dynamic_drv;
 pub use environment_policy::BUILD_ENVIRONMENT_DIGEST_ALGORITHM;
 pub use environment_policy::BuildDeterminismControl;
 pub use environment_policy::BuildDeterminismNormalizationReport;

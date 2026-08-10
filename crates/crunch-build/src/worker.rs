@@ -32,6 +32,18 @@ use tracing::debug;
 use tracing::info;
 
 use crate::Error;
+use crate::dynamic::DynamicAdmissionLimits;
+use crate::dynamic::DynamicParentHashFact;
+use crate::dynamic::ExistingDynamicRegistration;
+use crate::dynamic::IdentityResolvedDynamicDerivation;
+use crate::dynamic::RegistryReadyDynamicDerivation;
+use crate::dynamic::ValidatedDynamicDerivation;
+use crate::dynamic::parse_dynamic_candidate;
+use crate::dynamic::plan_dynamic_registration;
+use crate::dynamic::required_parent_paths;
+use crate::dynamic::resolve_dynamic_identity;
+use crate::dynamic::validate_dynamic_candidate;
+use crate::dynamic::validate_registry_ready_batch;
 use crate::dynamic_plan::AddressingMode;
 use crate::dynamic_plan::CanonicalDynamicPlanV1;
 use crate::dynamic_plan::DeclaredSourceInput;
@@ -84,6 +96,31 @@ type PendingRegistryEntry = (
     Option<crunch_attestation::Claims>,
 );
 type CreatedGoal = (String, Vec<StorePath<String>>);
+
+fn observe_dynamic_parent_facts(
+    validated: &ValidatedDynamicDerivation,
+    known_paths: &DerivationRegistry,
+) -> Vec<DynamicParentHashFact> {
+    required_parent_paths(validated)
+        .into_iter()
+        .filter_map(|logical_path| {
+            known_paths
+                .get_hdm_by_drv_path(&logical_path)
+                .map(|digest| DynamicParentHashFact::native(logical_path, digest))
+        })
+        .collect()
+}
+
+fn observe_existing_dynamic_registration(
+    resolved: &IdentityResolvedDynamicDerivation,
+    known_paths: &DerivationRegistry,
+) -> Option<ExistingDynamicRegistration> {
+    let logical_path = resolved.drv_path().to_absolute_path_with_prefix(resolved.logical_store_prefix());
+    known_paths.get_by_drv_path(&logical_path).map(|entry| ExistingDynamicRegistration {
+        logical_drv_path: logical_path,
+        full_identity: entry.dynamic_admission_identity,
+    })
+}
 
 struct DynamicPlaceholderBindings {
     sources: BTreeMap<SourceId, StorePathString>,
@@ -1633,6 +1670,7 @@ impl Worker {
         Ok(())
     }
 
+    // r[impl dynamic_derivations.registry_boundary]
     async fn scan_dynamic_derivations<BServ>(
         &self,
         outcome: &BuildOutcome,
@@ -1643,30 +1681,61 @@ impl Worker {
     where
         BServ: BuildService + 'static,
     {
-        let mut discovered: Vec<crate::dynamic::DynamicDrv> = Vec::with_capacity(outcome.outputs.len());
+        let admission_policy = DynamicAdmissionLimits::default();
+        let store_prefix = known_paths.store_dir().to_string();
+        let mut output_names = Vec::with_capacity(outcome.outputs.len());
+        let mut ready = Vec::with_capacity(outcome.outputs.len());
         for (output_name, path_info) in &outcome.outputs {
-            if native_dynamic_outputs.contains(output_name) {
-                continue;
-            }
-            if !crate::dynamic::is_drv_output(&path_info.store_path, &path_info.node) {
+            if native_dynamic_outputs.contains(output_name)
+                || !crate::dynamic::is_drv_output(&path_info.store_path, &path_info.node)
+            {
                 continue;
             }
             let content = builder.read_blob(&path_info.node).await?;
-            if let Some(drv) = crate::dynamic::parse_drv_bytes(&content)? {
-                let sd = known_paths.store_dir().to_string();
-                let drv_path = crate::dynamic::register_dynamic_drv(&drv, known_paths, &sd)?;
-                info!(
-                    producer = %outcome.drv_path.name(),
-                    dynamic_drv = %drv_path.name(),
-                    output = %output_name,
-                    "detected dynamic derivation in build output"
-                );
-                discovered.push(crate::dynamic::DynamicDrv {
-                    output_name: output_name.clone(),
-                    drv_store_path: drv_path,
-                    derivation: drv,
-                });
+            let Some(parsed) =
+                parse_dynamic_candidate(&content, &path_info.store_path, &store_prefix, admission_policy)?
+            else {
+                continue;
+            };
+            let validated = validate_dynamic_candidate(parsed, &store_prefix, admission_policy)?;
+            let parent_facts = observe_dynamic_parent_facts(&validated, known_paths);
+            let resolved = resolve_dynamic_identity(validated, &parent_facts)?;
+            let existing = observe_existing_dynamic_registration(&resolved, known_paths);
+            output_names.push(output_name.clone());
+            ready.push(plan_dynamic_registration(resolved, existing.as_ref())?);
+        }
+        let selected = validate_registry_ready_batch(&ready)?;
+        let mut selected_output_names = Vec::with_capacity(selected.len());
+        let mut selected_ready = Vec::with_capacity(selected.len());
+        for (index, (output_name, item)) in output_names.into_iter().zip(ready).enumerate() {
+            let index = u32::try_from(index)
+                .map_err(|_| Error::Store("dynamic admission batch index exceeds u32".to_string()))?;
+            if selected.contains(&index) {
+                selected_output_names.push(output_name);
+                selected_ready.push(item);
             }
+        }
+        debug_assert_eq!(selected_ready.len(), selected.len(), "selected batch must be complete");
+        self.apply_dynamic_registration_batch(outcome, known_paths, selected_output_names, selected_ready)
+    }
+
+    fn apply_dynamic_registration_batch(
+        &self,
+        outcome: &BuildOutcome,
+        known_paths: &mut DerivationRegistry,
+        output_names: Vec<String>,
+        ready: Vec<RegistryReadyDynamicDerivation>,
+    ) -> Result<Vec<crate::dynamic::DynamicDrv>, Error> {
+        let mut discovered = Vec::with_capacity(ready.len());
+        for (output_name, item) in output_names.into_iter().zip(ready) {
+            known_paths.insert_registry_ready_dynamic(&item)?;
+            info!(
+                producer = %outcome.drv_path.name(),
+                dynamic_drv = %item.drv_path().name(),
+                output = %output_name,
+                "admitted dynamic derivation in build output"
+            );
+            discovered.push(item.into_dynamic_drv(output_name));
         }
         Ok(discovered)
     }
@@ -3814,6 +3883,149 @@ mod tests {
     use std::collections::HashMap as StdHashMap;
 
     use crate::test_support::DrvProducingMockBuildService;
+
+    #[tokio::test]
+    // r[verify dynamic_derivations.registry_boundary]
+    async fn dynamic_missing_parent_leaves_registry_scheduler_and_reports_unchanged() {
+        let bs = MemoryBlobService::default();
+        let builder = make_test_builder(bs.clone());
+        let mut scratch = DerivationRegistry::default();
+        let (parent_path, _) = build_and_register("missing-parent", &[], &mut scratch);
+        let (_, child) = build_and_register("dynamic-child", &[(parent_path, "out")], &mut scratch);
+        let node = put_test_blob(&bs, &child.to_aterm_bytes()).await;
+
+        let mut known_paths = DerivationRegistry::default();
+        let (producer_path, _) = build_and_register("dynamic-producer", &[], &mut known_paths);
+        let mut outputs = BTreeMap::new();
+        outputs.insert("drv".to_string(), test_path_info("dynamic-child.drv", node));
+        let outcome = BuildOutcome {
+            drv_path: producer_path.clone(),
+            outputs,
+            substitutions: BTreeMap::new(),
+            cached: false,
+            log: None,
+        };
+        let mut worker = Worker::new(1);
+        let before = (
+            known_paths.len(),
+            worker.registry.len(),
+            worker.ready_goals.len(),
+            worker.pressure_dirty_goals.len(),
+            worker.priority_decisions.len(),
+            worker.scheduling_epoch,
+        );
+
+        let error = worker
+            .detect_dynamic_derivations(
+                &producer_path.to_absolute_path(),
+                &outcome,
+                &builder,
+                &mut known_paths,
+                &BTreeSet::new(),
+            )
+            .await
+            .unwrap_err();
+        let after = (
+            known_paths.len(),
+            worker.registry.len(),
+            worker.ready_goals.len(),
+            worker.pressure_dirty_goals.len(),
+            worker.priority_decisions.len(),
+            worker.scheduling_epoch,
+        );
+
+        assert!(error.to_string().contains("dynamic-admission-missing-parent"));
+        assert_eq!(after, before);
+        assert_eq!(known_paths.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn dynamic_exact_duplicate_batch_inserts_one_registry_entry() {
+        let bs = MemoryBlobService::default();
+        let builder = make_test_builder(bs.clone());
+        let mut scratch = DerivationRegistry::default();
+        let (_, dynamic) = build_and_register("duplicate-dynamic", &[], &mut scratch);
+        let node = put_test_blob(&bs, &dynamic.to_aterm_bytes()).await;
+
+        let mut known_paths = DerivationRegistry::default();
+        let (producer_path, _) = build_and_register("duplicate-producer", &[], &mut known_paths);
+        let path_info = test_path_info("duplicate-dynamic.drv", node);
+        let mut outputs = BTreeMap::new();
+        outputs.insert("first".to_string(), path_info.clone());
+        outputs.insert("second".to_string(), path_info);
+        let outcome = BuildOutcome {
+            drv_path: producer_path,
+            outputs,
+            substitutions: BTreeMap::new(),
+            cached: false,
+            log: None,
+        };
+        let worker = Worker::new(1);
+        let before_entries = known_paths.len();
+        let discovered = worker
+            .scan_dynamic_derivations(&outcome, &builder, &mut known_paths, &BTreeSet::new())
+            .await
+            .unwrap();
+
+        assert_eq!(discovered.len(), 1);
+        assert_eq!(known_paths.len(), before_entries + 1);
+        assert_eq!(discovered[0].output_name, "first");
+    }
+
+    #[tokio::test]
+    async fn dynamic_registry_collision_changes_no_worker_or_registry_state() {
+        let bs = MemoryBlobService::default();
+        let builder = make_test_builder(bs.clone());
+        let mut scratch = DerivationRegistry::default();
+        let (_, dynamic) = build_and_register("colliding-dynamic", &[], &mut scratch);
+        let bytes = dynamic.to_aterm_bytes();
+        let node = put_test_blob(&bs, &bytes).await;
+        let candidate = test_path_info("colliding-dynamic.drv", node);
+
+        let parsed = parse_dynamic_candidate(
+            &bytes,
+            &candidate.store_path,
+            nix_compat::store_path::STORE_DIR,
+            DynamicAdmissionLimits::default(),
+        )
+        .unwrap()
+        .unwrap();
+        let validated =
+            validate_dynamic_candidate(parsed, nix_compat::store_path::STORE_DIR, DynamicAdmissionLimits::default())
+                .unwrap();
+        let resolved = resolve_dynamic_identity(validated, &[]).unwrap();
+        let ready = plan_dynamic_registration(resolved, None).unwrap();
+
+        let mut known_paths = DerivationRegistry::default();
+        known_paths.insert(
+            ready.drv_path().clone(),
+            ready.hash_derivation_modulo(),
+            ready.derivation().clone(),
+            ready.content_addressed(),
+            None,
+        );
+        let (producer_path, _) = build_and_register("collision-producer", &[], &mut known_paths);
+        let mut outputs = BTreeMap::new();
+        outputs.insert("drv".to_string(), candidate);
+        let outcome = BuildOutcome {
+            drv_path: producer_path,
+            outputs,
+            substitutions: BTreeMap::new(),
+            cached: false,
+            log: None,
+        };
+        let worker = Worker::new(1);
+        let before = (known_paths.len(), worker.registry.len(), worker.ready_goals.len());
+        let error = worker
+            .scan_dynamic_derivations(&outcome, &builder, &mut known_paths, &BTreeSet::new())
+            .await
+            .unwrap_err();
+        let after = (known_paths.len(), worker.registry.len(), worker.ready_goals.len());
+
+        assert!(error.to_string().contains("dynamic-admission-path-collision"));
+        assert_eq!(after, before);
+        assert_eq!(known_paths.len(), 2);
+    }
 
     /// Build a derivation that produces `.drv` ATerm output.
     /// The Worker should detect it, parse the inner .drv, register
