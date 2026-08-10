@@ -52,4 +52,4 @@
 - [x] [serial] V1 Rerun every Phase 1 baseline command and all focused positive and negative tests. r[evaluation_streaming.validation]
 - [x] [serial] V2 Run formatting, focused Clippy with warnings denied, machine-contract checks, architecture checks, and `git diff --check`. r[evaluation_streaming.core_shell_boundary]
 - [x] [serial] V3 Run Cairn validation, proposal, design, and tasks gates plus Tracey coverage. Record exact output before sync and archive. r[evaluation_streaming.validation]
-- [ ] [serial] V4 Sync the accepted specification, archive the completed change with evidence, and rerun post-archive validation. r[evaluation_streaming.complete_root_outcomes] r[evaluation_streaming.validation]
+- [x] [serial] V4 Sync the accepted specification, archive the completed change with evidence, and rerun post-archive validation. r[evaluation_streaming.complete_root_outcomes] r[evaluation_streaming.validation]

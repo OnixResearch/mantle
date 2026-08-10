@@ -28,4 +28,12 @@ Decision: The implementation and completion artifacts are valid for sync and arc
 
 Owner: `stream-independent-root-outcomes`.
 
-Next action: Sync the accepted specification, archive the change, and record post-archive validation.
+Archive completion:
+
+- Pueue task `17069`: sync created `cairn/specs/evaluation-streaming/spec.md` with all nine accepted requirements.
+- Pueue task `17072`: archive moved the completed package to `cairn/archive/2026-08-09-stream-independent-root-outcomes/`.
+- Pueue task `17074`: pinned post-archive validation reported `valid: true` with no issues.
+- Pueue task `17077`: post-archive Tracey coverage reported `155/155 referenced`.
+- The exact pre-archive and post-archive command output is in `evidence/cairn-prearchive-transcript.txt`.
+
+Next action: Commit and integrate the archived lifecycle state.
