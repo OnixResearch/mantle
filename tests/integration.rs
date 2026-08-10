@@ -522,6 +522,10 @@ fn can_build() -> bool {
 mod build_tests {
     use super::*;
 
+    const SIGNAL_TEST_ROOT_COUNT: u32 = 512;
+    const CHILD_WAIT_POLL_COUNT_MAX: u32 = 400;
+    const CHILD_WAIT_POLL_INTERVAL_MS: u64 = 10;
+
     #[test]
     fn build_trivial_derivation() {
         if !can_build() {
@@ -728,6 +732,12 @@ mod build_tests {
     }
 
     fn parse_evaluation_stream(stdout: &[u8]) -> Vec<serde_json::Value> {
+        let records = parse_evaluation_stream_lines(stdout);
+        assert_eq!(records.last().expect("last record")["kind"], "run-summary");
+        records
+    }
+
+    fn parse_evaluation_stream_lines(stdout: &[u8]) -> Vec<serde_json::Value> {
         let text = std::str::from_utf8(stdout).expect("stream stdout must be UTF-8");
         let records = text
             .lines()
@@ -735,8 +745,85 @@ mod build_tests {
             .collect::<Vec<_>>();
         assert!(!records.is_empty(), "stream must contain records");
         assert_eq!(records[0]["kind"], "run-start");
-        assert_eq!(records.last().expect("last record")["kind"], "run-summary");
         records
+    }
+
+    #[cfg(unix)]
+    fn signal_test_source() -> String {
+        let mut source = String::from("{");
+        for index in 0..SIGNAL_TEST_ROOT_COUNT {
+            source.push_str(&format!("root_{index} = {{ builder = \"/bin/sh\" }},"));
+        }
+        source.push('}');
+        source
+    }
+
+    #[cfg(unix)]
+    fn send_child_signal(child: &std::process::Child, signal: libc::c_int) {
+        let process_id = libc::pid_t::try_from(child.id()).expect("child pid must fit pid_t");
+        let result = unsafe { libc::kill(process_id, signal) };
+        assert_eq!(result, 0, "sending signal {signal} to child failed");
+    }
+
+    #[cfg(unix)]
+    fn wait_with_output_bounded(mut child: std::process::Child) -> std::process::Output {
+        for _ in 0..CHILD_WAIT_POLL_COUNT_MAX {
+            if child.try_wait().expect("poll child status").is_some() {
+                return child.wait_with_output().expect("collect completed child output");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(CHILD_WAIT_POLL_INTERVAL_MS));
+        }
+        match child.kill() {
+            Ok(()) => {}
+            Err(error) => panic!("signal test timed out and child kill failed: {error}"),
+        }
+        let output = child.wait_with_output().expect("collect killed child output");
+        panic!("signal test child exceeded bounded wait: status={:?}", output.status);
+    }
+
+    #[cfg(unix)]
+    fn run_evaluation_stream_signal_test(
+        first_signal: libc::c_int,
+        second_signal: Option<libc::c_int>,
+    ) -> std::process::Output {
+        let dir = tempfile::tempdir().expect("create source directory");
+        let store = tempfile::tempdir().expect("create store directory");
+        let state = tempfile::tempdir().expect("create state directory");
+        let source_path = dir.path().join("signal-roots.ncl");
+        std::fs::write(&source_path, signal_test_source()).expect("write signal fixture");
+
+        let mut child = std::process::Command::new(assert_cmd::cargo::cargo_bin!("crunch"))
+            .arg("--store")
+            .arg(store.path())
+            .arg("--state-dir")
+            .arg(state.path())
+            .arg("build")
+            .arg("--no-substitute")
+            .arg("--evaluation-stream")
+            .arg(&source_path)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn signal fixture");
+        let stdout = child.stdout.take().expect("capture child stdout");
+        let mut reader = std::io::BufReader::new(stdout);
+        let mut first_record = String::new();
+        std::io::BufRead::read_line(&mut reader, &mut first_record).expect("read run-start");
+        assert!(first_record.contains("\"kind\":\"run-start\""));
+        send_child_signal(&child, first_signal);
+        if let Some(signal) = second_signal {
+            send_child_signal(&child, signal);
+        }
+        let reader_thread = std::thread::spawn(move || {
+            let mut remainder = Vec::new();
+            std::io::Read::read_to_end(&mut reader, &mut remainder).expect("read remaining stream");
+            remainder
+        });
+        let mut output = wait_with_output_bounded(child);
+        let mut stdout = first_record.into_bytes();
+        stdout.extend(reader_thread.join().expect("join stream reader"));
+        output.stdout = stdout;
+        output
     }
 
     #[test]
@@ -814,6 +901,46 @@ mod build_tests {
         assert_eq!(summary["roots"][0]["root_label"], "bad");
         assert_eq!(summary["roots"][1]["root_label"], "good");
         assert!(summary["roots"][1]["result_ref"].as_str().unwrap().contains("stream-good.drv"));
+    }
+
+    #[cfg(unix)]
+    fn assert_completed_signal_cancellation(output: std::process::Output, signal_name: &str) {
+        assert_eq!(output.status.code(), Some(i32::from(crunch_evaluation_stream_core::CANCELLED_EXIT_CODE)));
+        let records = parse_evaluation_stream(&output.stdout);
+        let summary = records.last().expect("cancelled summary");
+        assert_eq!(summary["disposition"], "cancelled");
+        assert_eq!(summary["selected_root_count"], SIGNAL_TEST_ROOT_COUNT);
+        assert_eq!(summary["terminal_root_count"], SIGNAL_TEST_ROOT_COUNT);
+        let expected_root_count = usize::try_from(SIGNAL_TEST_ROOT_COUNT).expect("root count must fit usize");
+        assert_eq!(summary["roots"].as_array().expect("summary roots").len(), expected_root_count);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains(signal_name), "missing signal diagnostic: {stderr}");
+        assert!(stderr.contains("requesting evaluation stream cancellation"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn build_evaluation_stream_sigint_emits_cancelled_summary() {
+        assert_completed_signal_cancellation(run_evaluation_stream_signal_test(libc::SIGINT, None), "SIGINT");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn build_evaluation_stream_sigterm_emits_cancelled_summary() {
+        assert_completed_signal_cancellation(run_evaluation_stream_signal_test(libc::SIGTERM, None), "SIGTERM");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn build_evaluation_stream_repeated_signal_forces_non_success() {
+        let output = run_evaluation_stream_signal_test(libc::SIGINT, Some(libc::SIGTERM));
+
+        assert_eq!(output.status.code(), Some(i32::from(crunch_evaluation_stream_core::CANCELLED_EXIT_CODE)));
+        let records = parse_evaluation_stream_lines(&output.stdout);
+        assert!(!records.iter().any(|record| record["disposition"] == "success"));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("forcing evaluation stream interruption"));
+        assert!(!stderr.contains("evaluation stream output failed"));
     }
 
     #[test]

@@ -1,4 +1,6 @@
+// r[impl evaluation_streaming.signal_cancellation]
 use std::ffi::OsString;
+use std::future::Future;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -6,7 +8,9 @@ use crunch_build::signing;
 use crunch_evaluation_stream_core::ProcessMode;
 use crunch_evaluation_stream_core::ProcessOutcome;
 use crunch_evaluation_stream_core::RunDisposition;
+use crunch_evaluation_stream_core::SignalCancellationAction;
 use crunch_evaluation_stream_core::process_status;
+use crunch_evaluation_stream_core::signal_cancellation_action;
 use crunch_pipeline::BuildConfig;
 use crunch_pipeline::HermeticityAuditEvent;
 use crunch_pipeline::HermeticityMode;
@@ -32,6 +36,66 @@ use crate::evaluation_stream_output::STREAM_EVENT_CHANNEL_CAPACITY;
 const MAX_HUMAN_PRIORITY_ROWS: usize = 64;
 const PRIORITY_DIGEST_PREFIX_BYTES: usize = 12;
 const PRIORITY_SUMMARY_EXTRA_LINES: usize = 2;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OperatorSignal {
+    Interrupt,
+    Terminate,
+}
+
+impl OperatorSignal {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Interrupt => "SIGINT",
+            Self::Terminate => "SIGTERM",
+        }
+    }
+}
+
+#[cfg(unix)]
+struct OperatorSignalMonitor {
+    interrupt: tokio::signal::unix::Signal,
+    terminate: tokio::signal::unix::Signal,
+}
+
+#[cfg(unix)]
+impl OperatorSignalMonitor {
+    fn new() -> Result<Self, RunError> {
+        let interrupt = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+            .map_err(|error| RunError::Internal(format!("registering SIGINT listener: {error}")))?;
+        let terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .map_err(|error| RunError::Internal(format!("registering SIGTERM listener: {error}")))?;
+        Ok(Self { interrupt, terminate })
+    }
+
+    async fn receive(&mut self) -> Result<OperatorSignal, RunError> {
+        tokio::select! {
+            received = self.interrupt.recv() => received
+                .map(|()| OperatorSignal::Interrupt)
+                .ok_or_else(|| RunError::Internal("SIGINT listener closed".to_string())),
+            received = self.terminate.recv() => received
+                .map(|()| OperatorSignal::Terminate)
+                .ok_or_else(|| RunError::Internal("SIGTERM listener closed".to_string())),
+        }
+    }
+}
+
+#[cfg(not(unix))]
+struct OperatorSignalMonitor;
+
+#[cfg(not(unix))]
+impl OperatorSignalMonitor {
+    fn new() -> Result<Self, RunError> {
+        Ok(Self)
+    }
+
+    async fn receive(&mut self) -> Result<OperatorSignal, RunError> {
+        tokio::signal::ctrl_c()
+            .await
+            .map_err(|error| RunError::Internal(format!("waiting for Ctrl-C: {error}")))?;
+        Ok(OperatorSignal::Interrupt)
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BuildOutputMode {
@@ -192,42 +256,81 @@ async fn run_build_with_stream_output<W: std::io::Write>(
     config: &BuildConfig,
     output: W,
 ) -> Result<EvaluationStreamBuildCompletion, RunError> {
+    let mut signal_monitor = OperatorSignalMonitor::new()?;
     let (stream_tx, mut stream_rx) = tokio::sync::mpsc::channel(STREAM_EVENT_CHANNEL_CAPACITY);
     let cancellation = crunch_pipeline::EvaluationCancellation::new();
-    let mut build_future =
-        Box::pin(crunch_pipeline::build_with_evaluation_stream(config, cancellation.clone(), stream_tx));
+    let build_future = crunch_pipeline::build_with_evaluation_stream(config, cancellation.clone(), stream_tx);
     let mut writer = EvaluationStreamWriter::new(output);
-    let mut build_result = None;
+    let build_result =
+        drive_stream_with_signals(&mut writer, &mut stream_rx, &cancellation, &mut signal_monitor, build_future)
+            .await?;
+    let disposition = writer.finish().map_err(stream_output_failure)?;
+    let result = build_result.map_err(RunError::from)?;
+    Ok(EvaluationStreamBuildCompletion { result, disposition })
+}
 
-    loop {
-        if build_result.is_some() {
-            match stream_rx.recv().await {
-                Some(record) => write_stream_record(&mut writer, &record, &cancellation)?,
-                None => break,
-            }
-            continue;
-        }
+async fn drive_stream_with_signals<W, F>(
+    writer: &mut EvaluationStreamWriter<W>,
+    stream_rx: &mut tokio::sync::mpsc::Receiver<crunch_evaluation_stream_core::StreamRecordValue>,
+    cancellation: &crunch_pipeline::EvaluationCancellation,
+    signal_monitor: &mut OperatorSignalMonitor,
+    build_future: F,
+) -> Result<Result<PipelineResult, crunch_pipeline::Error>, RunError>
+where
+    W: std::io::Write,
+    F: Future<Output = Result<PipelineResult, crunch_pipeline::Error>>,
+{
+    let mut build_future = Box::pin(build_future);
+    let mut build_result = None;
+    let mut is_stream_open = true;
+    let mut observed_signal_count = 0_u32;
+    while is_stream_open || build_result.is_none() {
         tokio::select! {
-            record = stream_rx.recv() => {
-                match record {
-                    Some(record) => write_stream_record(&mut writer, &record, &cancellation)?,
-                    None => {
-                        build_result = Some(build_future.await);
-                        break;
+            biased;
+            signal = signal_monitor.receive() => {
+                match signal {
+                    Ok(signal) => handle_operator_signal(signal, &mut observed_signal_count, cancellation)?,
+                    Err(error) => {
+                        cancellation.request();
+                        return Err(error);
                     }
                 }
             }
-            result = &mut build_future => {
+            record = stream_rx.recv(), if is_stream_open => {
+                match record {
+                    Some(record) => write_stream_record(writer, &record, cancellation)?,
+                    None => is_stream_open = false,
+                }
+            }
+            result = &mut build_future, if build_result.is_none() => {
                 build_result = Some(result);
             }
         }
     }
+    build_result.ok_or_else(|| stream_output_failure(EvaluationStreamOutputError::MissingSummary))
+}
 
-    let disposition = writer.finish().map_err(stream_output_failure)?;
-    let result = build_result
-        .ok_or_else(|| stream_output_failure(EvaluationStreamOutputError::MissingSummary))?
-        .map_err(RunError::from)?;
-    Ok(EvaluationStreamBuildCompletion { result, disposition })
+fn handle_operator_signal(
+    signal: OperatorSignal,
+    observed_signal_count: &mut u32,
+    cancellation: &crunch_pipeline::EvaluationCancellation,
+) -> Result<(), RunError> {
+    *observed_signal_count = observed_signal_count.saturating_add(1);
+    let action = signal_cancellation_action(*observed_signal_count)
+        .ok_or_else(|| RunError::Internal("signal policy rejected an observed signal".to_string()))?;
+    match action {
+        SignalCancellationAction::RequestCancellation => {
+            eprintln!("received {}; requesting evaluation stream cancellation", signal.name());
+            cancellation.request();
+            debug_assert!(cancellation.is_requested());
+            Ok(())
+        }
+        SignalCancellationAction::ForceInterruption => {
+            eprintln!("received repeated {}; forcing evaluation stream interruption", signal.name());
+            cancellation.request();
+            Err(RunError::Reported(crunch_evaluation_stream_core::CANCELLED_EXIT_CODE))
+        }
+    }
 }
 
 fn write_stream_record<W: std::io::Write>(
@@ -813,6 +916,26 @@ mod tests {
     const TEST_PRIORITY_EPOCH: u32 = 1;
     const TEST_PRIORITY_PATH_NODES: u32 = 2;
     const TEST_PRIORITY_SUMMARY_LINE_COUNT: usize = 2;
+    const FIRST_OBSERVED_SIGNAL_COUNT: u32 = 1;
+    const REPEATED_OBSERVED_SIGNAL_COUNT: u32 = 2;
+
+    #[test]
+    fn operator_signal_handler_requests_then_forces_cancellation() {
+        let cancellation = crunch_pipeline::EvaluationCancellation::new();
+        let mut observed_signal_count = 0_u32;
+
+        handle_operator_signal(OperatorSignal::Interrupt, &mut observed_signal_count, &cancellation)
+            .expect("first signal requests cancellation");
+        assert_eq!(observed_signal_count, FIRST_OBSERVED_SIGNAL_COUNT);
+        assert!(cancellation.is_requested());
+
+        let repeated = handle_operator_signal(OperatorSignal::Terminate, &mut observed_signal_count, &cancellation)
+            .expect_err("repeated signal forces interruption");
+        assert!(
+            matches!(repeated, RunError::Reported(status) if status == crunch_evaluation_stream_core::CANCELLED_EXIT_CODE)
+        );
+        assert_eq!(observed_signal_count, REPEATED_OBSERVED_SIGNAL_COUNT);
+    }
 
     fn sample_action_result_report(disposition: &str) -> crunch_build::ActionResultRuntimeReport {
         crunch_build::ActionResultRuntimeReport {

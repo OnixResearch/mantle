@@ -111,6 +111,14 @@ If a write or flush fails, the shell requests evaluation cancellation and return
 
 If the pipeline does not supply an admitted `run-summary`, the shell returns status 3. Earlier records do not establish successful completion.
 
+## Operator interruption
+
+Signal listeners are active only during explicit evaluation-stream mode. On Unix, the first `SIGINT` or `SIGTERM` requests cooperative cancellation. Other targets use the portable Ctrl-C listener.
+
+After the first signal, the shell continues bounded record draining. A writable stream ends with a cancelled `run-summary` and process status 130.
+
+A repeated interruption forces process status 130 without claiming a complete summary. This path lets an operator stop a blocked graceful shutdown.
+
 ## Compatibility period
 
 Existing aggregate output remains supported in the stream introduction release and one subsequent minor release.
