@@ -1366,7 +1366,7 @@ mod linux {
             })
             .join()
             .unwrap();
-            let status = Command::new("/usr/bin/env").env_clear().status().unwrap();
+            let status = Command::new(&current_exe).arg("--help").status().unwrap();
 
             assert!(status.success());
         }
