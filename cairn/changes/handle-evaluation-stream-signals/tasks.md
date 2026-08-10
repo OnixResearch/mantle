@@ -1,7 +1,7 @@
 ## Phase 1: Baseline and policy
 
 - [x] [serial] I1 Record the current default-signal behavior and rerun the focused stream CLI baseline. r[evaluation_streaming.signal_cancellation]
-- [ ] [serial] I2 Add positive and negative pure tests for first and repeated signal observations. r[evaluation_streaming.signal_cancellation]
+- [x] [serial] I2 Add positive and negative pure tests for first and repeated signal observations. r[evaluation_streaming.signal_cancellation]
 
 ## Phase 2: Stream shell
 

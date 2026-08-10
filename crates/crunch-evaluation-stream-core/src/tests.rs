@@ -28,11 +28,13 @@ use crate::RootReferences;
 use crate::RootSet;
 use crate::RunDisposition;
 use crate::SUCCESS_EXIT_CODE;
+use crate::SignalCancellationAction;
 use crate::SourceSequence;
 use crate::StreamRecordValue;
 use crate::TerminalPhase;
 use crate::TerminalState;
 use crate::process_status;
+use crate::signal_cancellation_action;
 
 const SOURCE_BLAKE3: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const ROOT_A_ID: &str = "db4c0be35af35d0f235bf3c6160783fa17ae089620fbc4f6a9cf93caf29b28de";
@@ -43,6 +45,8 @@ const ROOT_C_SEQUENCE: u32 = 2;
 const THREE_ROOT_COUNT: u32 = 3;
 const TWO_ROOT_COUNT: u32 = 2;
 const PROPERTY_ROOT_COUNT_MAX: u32 = 32;
+const FIRST_SIGNAL_COUNT: u32 = 1;
+const REPEATED_SIGNAL_COUNT: u32 = 2;
 const FAILURE_INTERVAL: u32 = 2;
 const ASCII_CHAR_BYTES: u32 = 1;
 const BOUND_GENERATOR_END_PADDING: usize = 2;
@@ -330,6 +334,14 @@ fn pure_stream_projection_keeps_json_and_io_outside_core() {
     assert!(matches!(discovered, StreamRecordValue::RootDiscovered(_)));
     assert!(matches!(terminal, StreamRecordValue::RootTerminal(_)));
     assert!(matches!(finished, StreamRecordValue::RunSummary(_)));
+}
+
+#[test]
+fn signal_observation_policy_requests_once_then_forces_interruption() {
+    assert_eq!(signal_cancellation_action(0), None);
+    assert_eq!(signal_cancellation_action(FIRST_SIGNAL_COUNT), Some(SignalCancellationAction::RequestCancellation));
+    assert_eq!(signal_cancellation_action(REPEATED_SIGNAL_COUNT), Some(SignalCancellationAction::ForceInterruption));
+    assert_eq!(signal_cancellation_action(u32::MAX), Some(SignalCancellationAction::ForceInterruption));
 }
 
 #[test]

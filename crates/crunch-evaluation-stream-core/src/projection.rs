@@ -87,6 +87,24 @@ impl StreamRecordValue {
     }
 }
 
+const FIRST_SIGNAL_OBSERVATION_COUNT: u32 = 1;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignalCancellationAction {
+    RequestCancellation,
+    ForceInterruption,
+}
+
+pub fn signal_cancellation_action(observed_count: u32) -> Option<SignalCancellationAction> {
+    if observed_count == 0 {
+        return None;
+    }
+    if observed_count == FIRST_SIGNAL_OBSERVATION_COUNT {
+        return Some(SignalCancellationAction::RequestCancellation);
+    }
+    Some(SignalCancellationAction::ForceInterruption)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessMode {
     Evaluation,
