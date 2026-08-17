@@ -1,6 +1,7 @@
 use alloc::collections::BTreeMap;
 use alloc::collections::BTreeSet;
 use alloc::string::String;
+use alloc::string::ToString;
 use alloc::vec::Vec;
 
 use serde::Deserialize;
@@ -32,21 +33,31 @@ impl core::fmt::Display for SeedClass {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
 pub struct Blake3Hex(String);
 
 impl Blake3Hex {
-    pub fn new(hex: String) -> Self {
-        Self(hex)
+    pub fn new(hex: impl Into<String>) -> Result<Self, crate::LineageError> {
+        let hex = hex.into();
+        let valid = hex.len() == crate::BLAKE3_HEX_LENGTH
+            && hex.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
+        if !valid {
+            return Err(crate::LineageError::MalformedBlake3Hex(hex));
+        }
+        Ok(Self(hex))
     }
 
     pub fn as_str(&self) -> &str {
         &self.0
     }
+}
 
-    pub fn is_valid_format(&self) -> bool {
-        self.0.len() == crate::BLAKE3_HEX_LENGTH
-            && self.0.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+impl<'de> Deserialize<'de> for Blake3Hex {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        let hex = String::deserialize(deserializer)?;
+        Self::new(hex).map_err(serde::de::Error::custom)
     }
 }
 
@@ -114,7 +125,11 @@ impl Default for AuditedSeed {
             audit_note: String::new(),
             audit_seed_max_bytes: DEFAULT_AUDIT_SEED_MAX_BYTES,
             seed_bytes_len: 0,
-            seed_digest: DigestEntry::blake3(Blake3Hex::new(String::new())),
+            seed_digest: DigestEntry {
+                algorithm: String::from("blake3"),
+                hex_value: String::new(),
+                interoperability_reason: None,
+            },
         }
     }
 }
@@ -237,6 +252,225 @@ pub struct LineageManifest {
     pub stage_graph: Vec<StageTransition>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ResolvedLineageNodeId {
+    Seed,
+    Source(crate::LineageSourceArtifactId),
+    Generated(crate::LineageGeneratedArtifactId),
+    Tool(crate::LineageTransitionToolId),
+    Patch(crate::LineagePatchId),
+}
+
+impl ResolvedLineageNodeId {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Seed => "seed",
+            Self::Source(value) => value.as_str(),
+            Self::Generated(value) => value.as_str(),
+            Self::Tool(value) => value.as_str(),
+            Self::Patch(value) => value.as_str(),
+        }
+    }
+
+    pub fn role_name(&self) -> &'static str {
+        match self {
+            Self::Seed => "seed",
+            Self::Source(_) => "source_artifact",
+            Self::Generated(_) => "generated_artifact",
+            Self::Tool(_) => "transition_tool",
+            Self::Patch(_) => "patch",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdmittedLineageTransition {
+    pub from: ResolvedLineageNodeId,
+    pub to: ResolvedLineageNodeId,
+    pub tool: Option<crate::LineageTransitionToolId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdmittedGeneratedArtifactBinding {
+    pub artifact: crate::LineageGeneratedArtifactId,
+    pub producing_tool: crate::LineageTransitionToolId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdmittedTransitionToolBinding {
+    pub tool: crate::LineageTransitionToolId,
+    pub sources: Vec<crate::LineageSourceArtifactId>,
+    pub inputs: Vec<ResolvedLineageNodeId>,
+    pub outputs: Vec<crate::LineageGeneratedArtifactId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdmittedLineageManifest {
+    pub source_artifact_ids: Vec<crate::LineageSourceArtifactId>,
+    pub generated_artifacts: Vec<AdmittedGeneratedArtifactBinding>,
+    pub transition_tools: Vec<AdmittedTransitionToolBinding>,
+    pub patch_ids: Vec<crate::LineagePatchId>,
+    pub environment_assumption_ids: Vec<crate::LineageEnvironmentAssumptionId>,
+    pub stage_graph: Vec<AdmittedLineageTransition>,
+}
+
+pub fn admit_lineage_manifest(manifest: &LineageManifest) -> Result<AdmittedLineageManifest, crate::LineageError> {
+    let nodes = admitted_lineage_nodes(manifest)?;
+    let source_artifact_ids = manifest
+        .source_artifacts
+        .iter()
+        .map(|artifact| nominal_value("source_artifacts[].id", crate::LineageSourceArtifactId::new(&artifact.id)))
+        .collect::<Result<Vec<_>, _>>()?;
+    let generated_artifacts = manifest
+        .generated_artifacts
+        .iter()
+        .map(|artifact| {
+            Ok(AdmittedGeneratedArtifactBinding {
+                artifact: nominal_value(
+                    "generated_artifacts[].id",
+                    crate::LineageGeneratedArtifactId::new(&artifact.id),
+                )?,
+                producing_tool: require_tool_node(&artifact.producing_tool_id, &nodes)?,
+            })
+        })
+        .collect::<Result<Vec<_>, crate::LineageError>>()?;
+    let transition_tools = manifest
+        .transition_tools
+        .iter()
+        .map(|tool| admit_transition_tool(tool, &nodes))
+        .collect::<Result<Vec<_>, _>>()?;
+    let patch_ids = manifest
+        .patches
+        .iter()
+        .map(|patch| nominal_value("patches[].id", crate::LineagePatchId::new(&patch.id)))
+        .collect::<Result<Vec<_>, _>>()?;
+    let environment_assumption_ids = manifest
+        .environment_assumptions
+        .iter()
+        .map(|assumption| {
+            nominal_value("environment_assumptions[].id", crate::LineageEnvironmentAssumptionId::new(&assumption.id))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let stage_graph = manifest
+        .stage_graph
+        .iter()
+        .map(|transition| {
+            Ok(AdmittedLineageTransition {
+                from: require_node(&transition.from_node_id, &nodes)?,
+                to: require_node(&transition.to_node_id, &nodes)?,
+                tool: transition.tool_id.as_deref().map(|id| require_tool_node(id, &nodes)).transpose()?,
+            })
+        })
+        .collect::<Result<Vec<_>, crate::LineageError>>()?;
+
+    let validation = crate::validate_lineage(manifest);
+    if !validation.errors.is_empty() {
+        return Err(crate::LineageError::MultipleErrors(validation.errors));
+    }
+
+    Ok(AdmittedLineageManifest {
+        source_artifact_ids,
+        generated_artifacts,
+        transition_tools,
+        patch_ids,
+        environment_assumption_ids,
+        stage_graph,
+    })
+}
+
+fn admitted_lineage_nodes(
+    manifest: &LineageManifest,
+) -> Result<BTreeMap<String, ResolvedLineageNodeId>, crate::LineageError> {
+    let mut nodes = BTreeMap::new();
+    nodes.insert("seed".to_string(), ResolvedLineageNodeId::Seed);
+    for artifact in &manifest.source_artifacts {
+        let id = nominal_value("source_artifacts[].id", crate::LineageSourceArtifactId::new(&artifact.id))?;
+        nodes.insert(artifact.id.clone(), ResolvedLineageNodeId::Source(id));
+    }
+    for artifact in &manifest.generated_artifacts {
+        let id = nominal_value("generated_artifacts[].id", crate::LineageGeneratedArtifactId::new(&artifact.id))?;
+        nodes.insert(artifact.id.clone(), ResolvedLineageNodeId::Generated(id));
+    }
+    for tool in &manifest.transition_tools {
+        let id = nominal_value("transition_tools[].id", crate::LineageTransitionToolId::new(&tool.id))?;
+        nodes.insert(tool.id.clone(), ResolvedLineageNodeId::Tool(id));
+    }
+    for patch in &manifest.patches {
+        let id = nominal_value("patches[].id", crate::LineagePatchId::new(&patch.id))?;
+        nodes.insert(patch.id.clone(), ResolvedLineageNodeId::Patch(id));
+    }
+    Ok(nodes)
+}
+
+fn admit_transition_tool(
+    tool: &TransitionTool,
+    nodes: &BTreeMap<String, ResolvedLineageNodeId>,
+) -> Result<AdmittedTransitionToolBinding, crate::LineageError> {
+    let tool_id = nominal_value("transition_tools[].id", crate::LineageTransitionToolId::new(&tool.id))?;
+    let sources = tool
+        .source_artifact_ids
+        .iter()
+        .map(|id| nominal_value("transition_tools[].source_artifact_ids", crate::LineageSourceArtifactId::new(id)))
+        .collect::<Result<Vec<_>, _>>()?;
+    let inputs = tool.input_artifact_ids.iter().map(|id| require_node(id, nodes)).collect::<Result<Vec<_>, _>>()?;
+    let outputs = tool
+        .output_artifact_ids
+        .iter()
+        .map(|id| require_generated_node(id, nodes))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(AdmittedTransitionToolBinding {
+        tool: tool_id,
+        sources,
+        inputs,
+        outputs,
+    })
+}
+
+fn require_node(
+    reference: &str,
+    nodes: &BTreeMap<String, ResolvedLineageNodeId>,
+) -> Result<ResolvedLineageNodeId, crate::LineageError> {
+    nodes
+        .get(reference)
+        .cloned()
+        .ok_or_else(|| crate::LineageError::MissingLineageNode(reference.to_string()))
+}
+
+fn require_generated_node(
+    reference: &str,
+    nodes: &BTreeMap<String, ResolvedLineageNodeId>,
+) -> Result<crate::LineageGeneratedArtifactId, crate::LineageError> {
+    match require_node(reference, nodes)? {
+        ResolvedLineageNodeId::Generated(id) => Ok(id),
+        actual => Err(wrong_node_role(reference, "generated_artifact", actual.role_name())),
+    }
+}
+
+fn require_tool_node(
+    reference: &str,
+    nodes: &BTreeMap<String, ResolvedLineageNodeId>,
+) -> Result<crate::LineageTransitionToolId, crate::LineageError> {
+    match require_node(reference, nodes)? {
+        ResolvedLineageNodeId::Tool(id) => Ok(id),
+        actual => Err(wrong_node_role(reference, "transition_tool", actual.role_name())),
+    }
+}
+
+fn wrong_node_role(reference: &str, expected: &str, actual: &str) -> crate::LineageError {
+    crate::LineageError::WrongLineageNodeRole {
+        reference: reference.to_string(),
+        expected: expected.to_string(),
+        actual: actual.to_string(),
+    }
+}
+
+fn nominal_value<T>(field: &str, value: Result<T, crate::NominalValueError>) -> Result<T, crate::LineageError> {
+    value.map_err(|error| crate::LineageError::InvalidNominal {
+        field: field.to_string(),
+        reason: error.to_string(),
+    })
+}
+
 impl LineageManifest {
     pub fn all_node_ids(&self) -> BTreeSet<String> {
         let mut ids = BTreeSet::new();
@@ -334,7 +568,7 @@ mod tests {
     use super::*;
 
     fn valid_blake3() -> Blake3Hex {
-        Blake3Hex::new("a".repeat(64))
+        Blake3Hex::new("a".repeat(crate::BLAKE3_HEX_LENGTH)).unwrap()
     }
 
     fn valid_digest() -> DigestEntry {
@@ -406,18 +640,18 @@ mod tests {
     }
 
     #[test]
-    fn blake3_hex_valid_format() {
-        let valid = Blake3Hex::new("a".repeat(64));
-        assert!(valid.is_valid_format());
+    fn blake3_hex_constructor_and_deserializer_enforce_format() {
+        let valid_text = "a".repeat(crate::BLAKE3_HEX_LENGTH);
+        let valid = Blake3Hex::new(valid_text.clone()).unwrap();
+        let serialized = serde_json::to_string(&valid).unwrap();
+        let deserialized: Blake3Hex = serde_json::from_str(&serialized).unwrap();
 
-        let too_short = Blake3Hex::new("abcd".to_string());
-        assert!(!too_short.is_valid_format());
-
-        let uppercase = Blake3Hex::new("A".repeat(64));
-        assert!(!uppercase.is_valid_format());
-
-        let non_hex = Blake3Hex::new("g".repeat(64));
-        assert!(!non_hex.is_valid_format());
+        assert_eq!(valid.as_str(), valid_text);
+        assert_eq!(deserialized, valid);
+        assert!(Blake3Hex::new("abcd").is_err());
+        assert!(Blake3Hex::new("A".repeat(crate::BLAKE3_HEX_LENGTH)).is_err());
+        assert!(Blake3Hex::new("g".repeat(crate::BLAKE3_HEX_LENGTH)).is_err());
+        assert!(serde_json::from_str::<Blake3Hex>("\"abcd\"").is_err());
     }
 
     #[test]
@@ -473,5 +707,42 @@ mod tests {
         let json = serde_json::to_string(&manifest).unwrap();
         let parsed: LineageManifest = serde_json::from_str(&json).unwrap();
         assert_eq!(manifest, parsed);
+    }
+
+    #[test]
+    fn valid_lineage_admission_resolves_node_roles_without_wire_drift() {
+        let manifest = minimal_manifest();
+        let wire_before = serde_json::to_vec(&manifest).unwrap();
+        let admitted = admit_lineage_manifest(&manifest).unwrap();
+
+        assert_eq!(admitted.source_artifact_ids[0].as_str(), "hex0-src");
+        assert_eq!(admitted.generated_artifacts[0].artifact.as_str(), "hex0-bin");
+        assert_eq!(admitted.generated_artifacts[0].producing_tool.as_str(), "hex0-assembler");
+        assert!(matches!(admitted.stage_graph[0].from, ResolvedLineageNodeId::Seed));
+        assert!(matches!(admitted.stage_graph[0].to, ResolvedLineageNodeId::Source(_)));
+        assert_eq!(serde_json::to_vec(&manifest).unwrap(), wire_before);
+    }
+
+    #[test]
+    fn missing_and_wrong_role_lineage_references_fail_closed() {
+        let mut missing = minimal_manifest();
+        missing.stage_graph[0].to_node_id = "missing-node".to_string();
+
+        let mut wrong_role = minimal_manifest();
+        wrong_role.generated_artifacts[0].producing_tool_id = "hex0-src".to_string();
+
+        assert!(matches!(admit_lineage_manifest(&missing), Err(crate::LineageError::MissingLineageNode(_))));
+        assert!(matches!(admit_lineage_manifest(&wrong_role), Err(crate::LineageError::WrongLineageNodeRole { .. })));
+    }
+
+    #[test]
+    fn control_bearing_lineage_identifier_fails_nominal_admission() {
+        let mut manifest = minimal_manifest();
+        let control_id = "hex0\nsource".to_string();
+        manifest.source_artifacts[0].id = control_id.clone();
+        manifest.transition_tools[0].source_artifact_ids[0] = control_id.clone();
+        manifest.stage_graph[0].to_node_id = control_id;
+
+        assert!(matches!(admit_lineage_manifest(&manifest), Err(crate::LineageError::InvalidNominal { .. })));
     }
 }

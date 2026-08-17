@@ -113,7 +113,7 @@ mod tests {
     use crate::lineage::*;
 
     fn valid_blake3() -> Blake3Hex {
-        Blake3Hex::new("a".repeat(64))
+        Blake3Hex::new("a".repeat(crate::BLAKE3_HEX_LENGTH)).unwrap()
     }
 
     fn valid_digest() -> DigestEntry {

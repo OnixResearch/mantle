@@ -6,7 +6,10 @@ use core::fmt;
 pub enum LineageError {
     MissingSeedField(String),
     UnsupportedSeedClass(String),
-    OversizedSeed { actual_bytes: u32, budget_bytes: u32 },
+    OversizedSeed {
+        actual_bytes: u32,
+        budget_bytes: u32,
+    },
     MissingDigest(String),
     MalformedBlake3Hex(String),
     NonBlake3WithoutReason(String),
@@ -15,6 +18,16 @@ pub enum LineageError {
     UnreachableProviderOutput(String),
     EmptyField(String),
     DuplicateNodeId(String),
+    InvalidNominal {
+        field: String,
+        reason: String,
+    },
+    MissingLineageNode(String),
+    WrongLineageNodeRole {
+        reference: String,
+        expected: String,
+        actual: String,
+    },
     MultipleErrors(Vec<LineageError>),
 }
 
@@ -48,6 +61,13 @@ impl fmt::Display for LineageError {
             }
             Self::EmptyField(field) => write!(f, "required field is empty: {field}"),
             Self::DuplicateNodeId(id) => write!(f, "duplicate lineage node id: {id}"),
+            Self::InvalidNominal { field, reason } => write!(f, "invalid nominal lineage value for {field}: {reason}"),
+            Self::MissingLineageNode(reference) => write!(f, "lineage reference names no declared node: {reference}"),
+            Self::WrongLineageNodeRole {
+                reference,
+                expected,
+                actual,
+            } => write!(f, "lineage reference {reference} has role {actual}; expected {expected}"),
             Self::MultipleErrors(errors) => {
                 write!(f, "{} lineage validation errors:", errors.len())?;
                 for e in errors {

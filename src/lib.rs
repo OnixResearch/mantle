@@ -14,3 +14,4 @@ pub mod protected_exec;
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub mod protected_exec_seccomp;
 pub mod remote_credentials;
+pub mod remote_nominal;

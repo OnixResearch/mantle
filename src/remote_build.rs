@@ -1269,9 +1269,8 @@ pub struct RemoteSshStdioPlanRequest {
 }
 
 pub fn plan_ssh_stdio_builder_command(request: RemoteSshStdioPlanRequest) -> Result<RemoteStdioBuilderCommand, String> {
-    if request.endpoint_id.is_empty() {
-        return Err("ssh-stdio-endpoint-empty".to_string());
-    }
+    let endpoint_id = crate::remote_nominal::RemoteEndpointId::new(&request.endpoint_id)
+        .map_err(|error| format!("ssh-stdio-endpoint-{}", error.as_str()))?;
     if request.ssh_program.as_os_str().is_empty() {
         return Err("ssh-stdio-program-empty".to_string());
     }
@@ -1289,7 +1288,7 @@ pub fn plan_ssh_stdio_builder_command(request: RemoteSshStdioPlanRequest) -> Res
     args.push(request.remote_program);
     args.extend(request.remote_args);
     let command = RemoteStdioBuilderCommand {
-        endpoint_id: request.endpoint_id,
+        endpoint_id: endpoint_id.as_str().to_string(),
         program: request.ssh_program,
         args,
     };
@@ -1966,13 +1965,21 @@ pub fn validate_hello(
     expected_endpoint_id: &str,
     supported_capabilities: &[String],
 ) -> ProtocolDecision {
+    let actual_endpoint = match crate::remote_nominal::RemoteEndpointId::new(&hello.endpoint_id) {
+        Ok(value) => value,
+        Err(error) => return ProtocolDecision::Reject(format!("endpoint identity invalid: {}", error.as_str())),
+    };
+    let expected_endpoint = match crate::remote_nominal::RemoteEndpointId::new(expected_endpoint_id) {
+        Ok(value) => value,
+        Err(error) => return ProtocolDecision::Reject(format!("expected endpoint invalid: {}", error.as_str())),
+    };
     if hello.alpn != REMOTE_PROTOCOL_ALPN {
         return ProtocolDecision::Reject(format!("unsupported ALPN {}", hello.alpn));
     }
     if hello.version != REMOTE_PROTOCOL_VERSION {
         return ProtocolDecision::Reject(format!("unsupported protocol version {}", hello.version));
     }
-    if hello.endpoint_id != expected_endpoint_id {
+    if actual_endpoint != expected_endpoint {
         return ProtocolDecision::Reject("endpoint identity mismatch".to_string());
     }
     if hello.capabilities.len() > MAX_REMOTE_CAPABILITIES {
@@ -2020,6 +2027,8 @@ pub fn authorize_ticket(
 }
 
 pub fn validate_concrete_request(request: &ConcreteBuildRequest, ticket: &RemoteTicket) -> Result<(), String> {
+    let _request_id = crate::remote_nominal::RemoteRequestId::new(&request.request_id)
+        .map_err(|error| format!("remote-request-id-{}", error.as_str()))?;
     let admitted_ticket = crate::remote_credentials::admit_ticket_policy(ticket)?;
     plan_remote_executable_request(request)?;
     // Reject raw frontend eval requests — CI systems must submit
@@ -2076,6 +2085,8 @@ fn validate_source_input_refs(request: &ConcreteBuildRequest) -> Result<(), Stri
 }
 
 pub fn plan_remote_executable_request(request: &ConcreteBuildRequest) -> Result<RemoteExecutablePlan, String> {
+    let _request_id = crate::remote_nominal::RemoteRequestId::new(&request.request_id)
+        .map_err(|error| format!("remote-request-id-{}", error.as_str()))?;
     if request.contains_raw_frontend_eval {
         return Err("raw-frontend-evaluation-rejected".to_string());
     }
@@ -2172,10 +2183,9 @@ fn validate_expected_outputs(outputs: &[RemoteExpectedOutput], store_prefix: &st
     }
     let mut names = BTreeSet::new();
     for output in outputs {
-        if output.name.is_empty() {
-            return Err("remote-expected-output-name-empty".to_string());
-        }
-        if !names.insert(output.name.as_str()) {
+        let output_id = crate::remote_nominal::RemoteOutputId::new(&output.name)
+            .map_err(|error| format!("remote-expected-output-name-{}", error.as_str()))?;
+        if !names.insert(output_id.as_str().to_string()) {
             return Err("remote-expected-output-name-duplicate".to_string());
         }
         if let Some(logical_path) = &output.logical_path
@@ -2215,10 +2225,9 @@ fn validate_action_outputs(outputs: &[String], expected_outputs: &[RemoteExpecte
     }
     let mut action_names = BTreeSet::new();
     for output in outputs {
-        if output.is_empty() {
-            return Err("remote-action-output-name-empty".to_string());
-        }
-        if !action_names.insert(output.clone()) {
+        let output_id = crate::remote_nominal::RemoteOutputId::new(output)
+            .map_err(|error| format!("remote-action-output-name-{}", error.as_str()))?;
+        if !action_names.insert(output_id.as_str().to_string()) {
             return Err("remote-action-output-name-duplicate".to_string());
         }
     }
@@ -4733,9 +4742,8 @@ fn parse_output_key_ref(value: &str) -> OutputKeyRef {
 }
 
 pub fn validate_worker_registration(registration: &RemoteWorkerRegistration) -> Result<(), String> {
-    if registration.endpoint_id.is_empty() {
-        return Err("remote-worker-endpoint-empty".to_string());
-    }
+    let _endpoint_id = crate::remote_nominal::RemoteEndpointId::new(&registration.endpoint_id)
+        .map_err(|error| format!("remote-worker-endpoint-{}", error.as_str()))?;
     if registration.protocol_version != REMOTE_PROTOCOL_VERSION {
         return Err("remote-worker-protocol-version-mismatch".to_string());
     }
@@ -11250,9 +11258,10 @@ fn validate_loopback_participants(
     builder: &RemoteLoopbackBuilder,
     client: &RemoteLoopbackClient,
 ) -> Result<(), String> {
-    if builder.endpoint_id.is_empty() || client.session_id.is_empty() {
-        return Err("remote-loopback-identity-empty".to_string());
-    }
+    let _endpoint_id = crate::remote_nominal::RemoteEndpointId::new(&builder.endpoint_id)
+        .map_err(|error| format!("remote-loopback-endpoint-{}", error.as_str()))?;
+    let _session_id = crate::remote_nominal::RemoteProtocolSessionId::new(&client.session_id)
+        .map_err(|error| format!("remote-loopback-session-{}", error.as_str()))?;
     if builder.store_prefix != client.request.store_prefix {
         return Err("remote-loopback-store-prefix-mismatch".to_string());
     }
@@ -14005,6 +14014,30 @@ mod tests {
         };
         let decision = validate_hello(&hello, "builder-1", &["delta".to_string()]);
         assert!(matches!(decision, ProtocolDecision::Proceed(_)));
+    }
+
+    #[test]
+    fn endpoint_nominal_admission_rejects_malformed_and_mismatched_roles() {
+        let mut malformed = fixture_hello();
+        malformed.endpoint_id = "builder\ncontrol".to_string();
+        let malformed_decision = validate_hello(&malformed, "builder-1", &[]);
+
+        let mismatch_decision = validate_hello(&fixture_hello(), "builder-2", &[]);
+
+        assert!(matches!(malformed_decision, ProtocolDecision::Reject(reason) if reason.contains("control-character")));
+        assert!(
+            matches!(mismatch_decision, ProtocolDecision::Reject(reason) if reason == "endpoint identity mismatch")
+        );
+    }
+
+    #[test]
+    fn request_nominal_admission_rejects_control_bearing_wire_value() {
+        let mut request = fixture_request();
+        request.request_id = "request\ncontrol".to_string();
+
+        let error = validate_concrete_request(&request, &fixture_ticket()).unwrap_err();
+
+        assert_eq!(error, "remote-request-id-control-character");
     }
 
     #[test]

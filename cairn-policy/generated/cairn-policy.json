@@ -2423,6 +2423,64 @@
         {
           "compatibility_required": true,
           "compatibility_scopes": [
+            "crates/crunch-build/src/ca_plan.rs",
+            "crates/crunch-pipeline/src/lib.rs"
+          ],
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "crates/crunch-build/src/trust_boundary_nominal.rs"
+          ],
+          "domain_id": "mantle-ca-plan-id",
+          "raw_representation": "string",
+          "symbols": [
+            "DerivationName",
+            "OutputName",
+            "LogicalStorePrefix",
+            "ProvisionalStorePath",
+            "FinalStorePath",
+            "DerivationKey"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "compatibility_required": true,
+          "compatibility_scopes": [
+            "crates/crunch-release-core/src/content_bound_requirements.rs"
+          ],
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "crates/crunch-release-core/src/content_bound_nominal.rs"
+          ],
+          "domain_id": "mantle-content-bound-digest",
+          "raw_representation": "string",
+          "symbols": [
+            "CheckedBlake3Hex",
+            "CheckedRequirementDigest",
+            "CheckedContentBoundDigest"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "compatibility_required": true,
+          "compatibility_scopes": [
+            "crates/crunch-release-core/src/content_bound_requirements.rs"
+          ],
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "crates/crunch-release-core/src/content_bound_nominal.rs"
+          ],
+          "domain_id": "mantle-content-bound-id",
+          "raw_representation": "string",
+          "symbols": [
+            "ContentBoundRepositoryId",
+            "ContentBoundRequirementId",
+            "ContentBoundReleaseId"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "compatibility_required": true,
+          "compatibility_scopes": [
             "crates/cairn-core/src/verified"
           ],
           "constructor_policy": "marker-only",
@@ -2435,6 +2493,137 @@
             "MantleDigest"
           ],
           "wrapper_kind": "marker-generic"
+        },
+        {
+          "compatibility_required": true,
+          "compatibility_scopes": [
+            "crates/crunch-build/src/fetcher.rs"
+          ],
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "crates/crunch-build/src/trust_boundary_nominal.rs"
+          ],
+          "domain_id": "mantle-fetch-id",
+          "raw_representation": "string",
+          "symbols": [
+            "FetchUrl",
+            "GitRevision",
+            "ArchiveInputPath",
+            "FetchOutputDirectory"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "compatibility_required": true,
+          "compatibility_scopes": [
+            "src/frontend_artifact_spec.rs"
+          ],
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "src/frontend_artifact_spec.rs"
+          ],
+          "domain_id": "mantle-frontend-id",
+          "raw_representation": "string",
+          "symbols": [
+            "FrontendSpecId",
+            "FrontendValidatorKind",
+            "FrontendArtifactKind",
+            "FrontendArtifactRef",
+            "FrontendBuildRoot"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "compatibility_required": true,
+          "compatibility_scopes": [
+            "src/frontend_artifact_spec.rs"
+          ],
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "src/frontend_artifact_spec.rs"
+          ],
+          "domain_id": "mantle-frontend-spec-hash",
+          "raw_representation": "string",
+          "symbols": [
+            "FrontendSpecHash"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "compatibility_required": true,
+          "compatibility_scopes": [
+            "crates/crunch-bootstrap-core/src/lineage.rs"
+          ],
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "crates/crunch-bootstrap-core/src"
+          ],
+          "domain_id": "mantle-lineage-id",
+          "raw_representation": "string",
+          "symbols": [
+            "LineageSourceArtifactId",
+            "LineageGeneratedArtifactId",
+            "LineageTransitionToolId",
+            "LineagePatchId",
+            "LineageEnvironmentAssumptionId"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "compatibility_required": true,
+          "compatibility_scopes": [
+            "src/remote_build.rs"
+          ],
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "src/remote_nominal.rs"
+          ],
+          "domain_id": "mantle-remote-id",
+          "raw_representation": "string",
+          "symbols": [
+            "RemoteRequestId",
+            "RemoteProtocolSessionId",
+            "RemoteEndpointId",
+            "RemoteOutputId"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "compatibility_required": true,
+          "compatibility_scopes": [
+            "crates/crunch-bootstrap-core/src/stagex.rs"
+          ],
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "crates/crunch-bootstrap-core/src"
+          ],
+          "domain_id": "mantle-stagex-digest",
+          "raw_representation": "string",
+          "symbols": [
+            "StagexLineageManifestDigest",
+            "StagexSourceStateDigest",
+            "StagexExecutableDigest"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "compatibility_required": true,
+          "compatibility_scopes": [
+            "crates/crunch-bootstrap-core/src/stagex.rs"
+          ],
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "crates/crunch-bootstrap-core/src"
+          ],
+          "domain_id": "mantle-stagex-id",
+          "raw_representation": "string",
+          "symbols": [
+            "StagexStageId",
+            "StagexArtifactId",
+            "StagexExecutableAuthorizationId",
+            "StagexEnvironmentAssumptionId"
+          ],
+          "wrapper_kind": "refined-newtype"
         },
         {
           "compatibility_required": true,
@@ -2908,6 +3097,73 @@
           "wrapper_kind": "marker-generic"
         },
         {
+          "algorithm": "none",
+          "category": "domain-id",
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "crates/crunch-build/src/trust_boundary_nominal.rs"
+          ],
+          "domain_id": "mantle-ca-plan-id",
+          "max_bytes": 4096,
+          "raw_representation": "string",
+          "required_prefix": "",
+          "rust_symbols": [
+            "DerivationName",
+            "OutputName",
+            "LogicalStorePrefix",
+            "ProvisionalStorePath",
+            "FinalStorePath",
+            "DerivationKey"
+          ],
+          "wire_compatibility_scopes": [
+            "crates/crunch-build/src/ca_plan.rs",
+            "crates/crunch-pipeline/src/lib.rs"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "algorithm": "BLAKE3",
+          "category": "blake3-digest",
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "crates/crunch-release-core/src/content_bound_nominal.rs"
+          ],
+          "domain_id": "mantle-content-bound-digest",
+          "max_bytes": 64,
+          "raw_representation": "string",
+          "required_prefix": "",
+          "rust_symbols": [
+            "CheckedBlake3Hex",
+            "CheckedRequirementDigest",
+            "CheckedContentBoundDigest"
+          ],
+          "wire_compatibility_scopes": [
+            "crates/crunch-release-core/src/content_bound_requirements.rs"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "algorithm": "none",
+          "category": "domain-id",
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "crates/crunch-release-core/src/content_bound_nominal.rs"
+          ],
+          "domain_id": "mantle-content-bound-id",
+          "max_bytes": 4096,
+          "raw_representation": "string",
+          "required_prefix": "",
+          "rust_symbols": [
+            "ContentBoundRepositoryId",
+            "ContentBoundRequirementId",
+            "ContentBoundReleaseId"
+          ],
+          "wire_compatibility_scopes": [
+            "crates/crunch-release-core/src/content_bound_requirements.rs"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
           "algorithm": "BLAKE3",
           "category": "blake3-digest",
           "constructor_policy": "marker-only",
@@ -2925,6 +3181,158 @@
             "crates/cairn-core/src/verified"
           ],
           "wrapper_kind": "marker-generic"
+        },
+        {
+          "algorithm": "none",
+          "category": "domain-ref",
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "crates/crunch-build/src/trust_boundary_nominal.rs"
+          ],
+          "domain_id": "mantle-fetch-id",
+          "max_bytes": 4096,
+          "raw_representation": "string",
+          "required_prefix": "",
+          "rust_symbols": [
+            "FetchUrl",
+            "GitRevision",
+            "ArchiveInputPath",
+            "FetchOutputDirectory"
+          ],
+          "wire_compatibility_scopes": [
+            "crates/crunch-build/src/fetcher.rs"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "algorithm": "none",
+          "category": "domain-id",
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "src/frontend_artifact_spec.rs"
+          ],
+          "domain_id": "mantle-frontend-id",
+          "max_bytes": 4096,
+          "raw_representation": "string",
+          "required_prefix": "",
+          "rust_symbols": [
+            "FrontendSpecId",
+            "FrontendValidatorKind",
+            "FrontendArtifactKind",
+            "FrontendArtifactRef",
+            "FrontendBuildRoot"
+          ],
+          "wire_compatibility_scopes": [
+            "src/frontend_artifact_spec.rs"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "algorithm": "BLAKE3",
+          "category": "blake3-digest",
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "src/frontend_artifact_spec.rs"
+          ],
+          "domain_id": "mantle-frontend-spec-hash",
+          "max_bytes": 64,
+          "raw_representation": "string",
+          "required_prefix": "",
+          "rust_symbols": [
+            "FrontendSpecHash"
+          ],
+          "wire_compatibility_scopes": [
+            "src/frontend_artifact_spec.rs"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "algorithm": "none",
+          "category": "domain-id",
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "crates/crunch-bootstrap-core/src"
+          ],
+          "domain_id": "mantle-lineage-id",
+          "max_bytes": 4096,
+          "raw_representation": "string",
+          "required_prefix": "",
+          "rust_symbols": [
+            "LineageSourceArtifactId",
+            "LineageGeneratedArtifactId",
+            "LineageTransitionToolId",
+            "LineagePatchId",
+            "LineageEnvironmentAssumptionId"
+          ],
+          "wire_compatibility_scopes": [
+            "crates/crunch-bootstrap-core/src/lineage.rs"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "algorithm": "none",
+          "category": "domain-id",
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "src/remote_nominal.rs"
+          ],
+          "domain_id": "mantle-remote-id",
+          "max_bytes": 256,
+          "raw_representation": "string",
+          "required_prefix": "",
+          "rust_symbols": [
+            "RemoteRequestId",
+            "RemoteProtocolSessionId",
+            "RemoteEndpointId",
+            "RemoteOutputId"
+          ],
+          "wire_compatibility_scopes": [
+            "src/remote_build.rs"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "algorithm": "BLAKE3",
+          "category": "blake3-digest",
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "crates/crunch-bootstrap-core/src"
+          ],
+          "domain_id": "mantle-stagex-digest",
+          "max_bytes": 64,
+          "raw_representation": "string",
+          "required_prefix": "",
+          "rust_symbols": [
+            "StagexLineageManifestDigest",
+            "StagexSourceStateDigest",
+            "StagexExecutableDigest"
+          ],
+          "wire_compatibility_scopes": [
+            "crates/crunch-bootstrap-core/src/stagex.rs"
+          ],
+          "wrapper_kind": "refined-newtype"
+        },
+        {
+          "algorithm": "none",
+          "category": "domain-id",
+          "constructor_policy": "private-fallible",
+          "core_scopes": [
+            "crates/crunch-bootstrap-core/src"
+          ],
+          "domain_id": "mantle-stagex-id",
+          "max_bytes": 4096,
+          "raw_representation": "string",
+          "required_prefix": "",
+          "rust_symbols": [
+            "StagexStageId",
+            "StagexArtifactId",
+            "StagexExecutableAuthorizationId",
+            "StagexEnvironmentAssumptionId"
+          ],
+          "wire_compatibility_scopes": [
+            "crates/crunch-bootstrap-core/src/stagex.rs"
+          ],
+          "wrapper_kind": "refined-newtype"
         },
         {
           "algorithm": "none",

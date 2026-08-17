@@ -55,6 +55,91 @@ pub struct StagexExecutableAuthorization {
     pub digest_blake3: String,
 }
 
+/// StageX digest roles cannot cross without an explicit checked conversion.
+///
+/// ```compile_fail
+/// use crunch_bootstrap_core::{StagexLineageManifestDigest, StagexSourceStateDigest};
+/// fn requires_source_state(_: StagexSourceStateDigest) {}
+/// let lineage = StagexLineageManifestDigest::new("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
+/// requires_source_state(lineage);
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StagexLineageManifestDigest(crate::Blake3Hex);
+
+impl StagexLineageManifestDigest {
+    pub fn new(value: impl Into<String>) -> Result<Self, crate::LineageError> {
+        crate::Blake3Hex::new(value).map(Self)
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StagexSourceStateDigest(crate::Blake3Hex);
+
+impl StagexSourceStateDigest {
+    pub fn new(value: impl Into<String>) -> Result<Self, crate::LineageError> {
+        crate::Blake3Hex::new(value).map(Self)
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StagexExecutableDigest(crate::Blake3Hex);
+
+impl StagexExecutableDigest {
+    pub fn new(value: impl Into<String>) -> Result<Self, crate::LineageError> {
+        crate::Blake3Hex::new(value).map(Self)
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StagexExecutableSource {
+    Seed,
+    Stage(crate::StagexStageId),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdmittedStagexMaterializationPlan {
+    pub lineage_manifest_digest: StagexLineageManifestDigest,
+    pub source_state_digest: StagexSourceStateDigest,
+    pub protected_transition_stage_id: crate::StagexStageId,
+    pub environment_assumption_ids: Vec<crate::StagexEnvironmentAssumptionId>,
+    pub stage_count_max: crate::StagexStageCountLimit,
+    pub stages: Vec<AdmittedStagexStagePlan>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdmittedStagexStagePlan {
+    pub id: crate::StagexStageId,
+    pub immediate_predecessor_stage_ids: Vec<crate::StagexStageId>,
+    pub source_artifact_ids: Vec<crate::StagexArtifactId>,
+    pub input_artifact_ids: Vec<crate::StagexArtifactId>,
+    pub output_artifact_ids: Vec<crate::StagexArtifactId>,
+    pub executable_authorizations: Vec<AdmittedStagexExecutableAuthorization>,
+    pub timeout_ms_max: crate::StagexTimeoutMillis,
+    pub output_bytes_max: crate::StagexOutputByteLimit,
+    pub parallel_job_count_max: crate::StagexParallelJobLimit,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdmittedStagexExecutableAuthorization {
+    pub id: crate::StagexExecutableAuthorizationId,
+    pub absolute_path: crate::StagexAbsoluteExecutablePath,
+    pub role: crate::StagexExecutableRole,
+    pub source: StagexExecutableSource,
+    pub digest: StagexExecutableDigest,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StagexLineageReceipt {
     pub schema_version: String,
@@ -121,6 +206,10 @@ pub enum StagexValidationError {
         limit: u32,
     },
     InvalidLimit(String),
+    InvalidNominal {
+        field: String,
+        reason: String,
+    },
     DuplicateId {
         field: String,
         id: String,
@@ -166,6 +255,7 @@ impl core::fmt::Display for StagexValidationError {
                 write!(f, "StageX collection {field} has {actual} entries; limit is {limit}")
             }
             Self::InvalidLimit(field) => write!(f, "StageX limit is zero or exceeds the hard bound: {field}"),
+            Self::InvalidNominal { field, reason } => write!(f, "invalid StageX nominal value for {field}: {reason}"),
             Self::DuplicateId { field, id } => write!(f, "duplicate StageX {field} id: {id}"),
             Self::MissingStage(stage_id) => write!(f, "missing StageX stage: {stage_id}"),
             Self::MissingPredecessor {
@@ -232,10 +322,120 @@ pub fn stagex_stage_report_digest_blake3(report: &StagexStageReport) -> Result<S
     Ok(blake3::hash(&bytes).to_hex().to_string())
 }
 
+pub fn admit_stagex_plan(
+    plan: &StagexMaterializationPlan,
+) -> Result<AdmittedStagexMaterializationPlan, StagexValidationError> {
+    let validation = validate_stagex_plan(plan);
+    if let Some(error) = validation.errors.first() {
+        return Err(error.clone());
+    }
+    admit_valid_stagex_plan(plan)
+}
+
+fn admit_valid_stagex_plan(
+    plan: &StagexMaterializationPlan,
+) -> Result<AdmittedStagexMaterializationPlan, StagexValidationError> {
+    let mut stages = Vec::with_capacity(plan.stages.len());
+    for stage in &plan.stages {
+        stages.push(admit_valid_stagex_stage(stage)?);
+    }
+    Ok(AdmittedStagexMaterializationPlan {
+        lineage_manifest_digest: StagexLineageManifestDigest::new(&plan.lineage_manifest_digest_blake3)
+            .map_err(|error| nominal_error("lineage_manifest_digest_blake3", error))?,
+        source_state_digest: StagexSourceStateDigest::new(&plan.source_state_digest_blake3)
+            .map_err(|error| nominal_error("source_state_digest_blake3", error))?,
+        protected_transition_stage_id: crate::StagexStageId::new(&plan.protected_transition_stage_id)
+            .map_err(|error| nominal_error("protected_transition_stage_id", error))?,
+        environment_assumption_ids: plan
+            .environment_assumption_ids
+            .iter()
+            .map(|value| {
+                crate::StagexEnvironmentAssumptionId::new(value)
+                    .map_err(|error| nominal_error("environment_assumption_ids", error))
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        stage_count_max: crate::StagexStageCountLimit::new(plan.stage_count_max)
+            .map_err(|error| nominal_error("stage_count_max", error))?,
+        stages,
+    })
+}
+
+fn admit_valid_stagex_stage(stage: &StagexStagePlan) -> Result<AdmittedStagexStagePlan, StagexValidationError> {
+    Ok(AdmittedStagexStagePlan {
+        id: crate::StagexStageId::new(&stage.id).map_err(|error| nominal_error("stages[].id", error))?,
+        immediate_predecessor_stage_ids: stage
+            .immediate_predecessor_stage_ids
+            .iter()
+            .map(|value| {
+                crate::StagexStageId::new(value)
+                    .map_err(|error| nominal_error("stages[].immediate_predecessor_stage_ids", error))
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        source_artifact_ids: admit_stagex_artifact_ids("stages[].source_artifact_ids", &stage.source_artifact_ids)?,
+        input_artifact_ids: admit_stagex_artifact_ids("stages[].input_artifact_ids", &stage.input_artifact_ids)?,
+        output_artifact_ids: admit_stagex_artifact_ids("stages[].output_artifact_ids", &stage.output_artifact_ids)?,
+        executable_authorizations: stage
+            .executable_authorizations
+            .iter()
+            .map(admit_valid_stagex_authorization)
+            .collect::<Result<Vec<_>, _>>()?,
+        timeout_ms_max: crate::StagexTimeoutMillis::new(stage.timeout_ms_max)
+            .map_err(|error| nominal_error("stages[].timeout_ms_max", error))?,
+        output_bytes_max: crate::StagexOutputByteLimit::new(stage.output_bytes_max)
+            .map_err(|error| nominal_error("stages[].output_bytes_max", error))?,
+        parallel_job_count_max: crate::StagexParallelJobLimit::new(stage.parallel_job_count_max)
+            .map_err(|error| nominal_error("stages[].parallel_job_count_max", error))?,
+    })
+}
+
+fn admit_stagex_artifact_ids(
+    field: &str,
+    values: &[String],
+) -> Result<Vec<crate::StagexArtifactId>, StagexValidationError> {
+    values
+        .iter()
+        .map(|value| crate::StagexArtifactId::new(value).map_err(|error| nominal_error(field, error)))
+        .collect()
+}
+
+fn admit_valid_stagex_authorization(
+    authorization: &StagexExecutableAuthorization,
+) -> Result<AdmittedStagexExecutableAuthorization, StagexValidationError> {
+    let source = if authorization.source_stage_id == STAGEX_SEED_SOURCE_STAGE_ID {
+        StagexExecutableSource::Seed
+    } else {
+        StagexExecutableSource::Stage(
+            crate::StagexStageId::new(&authorization.source_stage_id)
+                .map_err(|error| nominal_error("executable_authorizations[].source_stage_id", error))?,
+        )
+    };
+    Ok(AdmittedStagexExecutableAuthorization {
+        id: crate::StagexExecutableAuthorizationId::new(&authorization.id)
+            .map_err(|error| nominal_error("executable_authorizations[].id", error))?,
+        absolute_path: crate::StagexAbsoluteExecutablePath::new(&authorization.absolute_path)
+            .map_err(|error| nominal_error("executable_authorizations[].absolute_path", error))?,
+        role: crate::StagexExecutableRole::new(&authorization.role)
+            .map_err(|error| nominal_error("executable_authorizations[].role", error))?,
+        source,
+        digest: StagexExecutableDigest::new(&authorization.digest_blake3)
+            .map_err(|error| nominal_error("executable_authorizations[].digest_blake3", error))?,
+    })
+}
+
+fn nominal_error(field: &str, error: impl core::fmt::Display) -> StagexValidationError {
+    StagexValidationError::InvalidNominal {
+        field: field.to_string(),
+        reason: error.to_string(),
+    }
+}
+
 pub fn validate_stagex_plan(plan: &StagexMaterializationPlan) -> StagexValidationResult {
     let mut errors = Vec::new();
     validate_plan_header(plan, &mut errors);
     validate_plan_stage_limits(plan, &mut errors);
+    if let Err(error) = admit_valid_stagex_plan(plan) {
+        errors.push(error);
+    }
     let stage_ids = validate_stage_ids(plan, &mut errors);
     let output_producers = validate_stage_artifacts(plan, &mut errors);
     validate_stage_predecessors(plan, &stage_ids, &mut errors);
@@ -708,8 +908,7 @@ fn validate_schema(actual: &str, expected: &str, errors: &mut Vec<StagexValidati
 }
 
 fn validate_blake3(field: &str, value: &str, errors: &mut Vec<StagexValidationError>) {
-    let digest = Blake3Hex::new(value.to_string());
-    if !digest.is_valid_format() {
+    if Blake3Hex::new(value).is_err() {
         errors.push(StagexValidationError::InvalidBlake3 {
             field: field.to_string(),
             value: value.to_string(),
@@ -765,6 +964,7 @@ mod tests {
     const STAGE_TIMEOUT_MS_MAX: u64 = 30_000;
     const STAGE_OUTPUT_BYTES_MAX: u64 = 1_048_576;
     const STAGE_PARALLEL_JOB_COUNT_MAX: u32 = 1;
+    const OVERSIZED_NOMINAL_ID_BYTES: usize = 4_097;
 
     fn authorization(id: &str, path: &str, source_stage_id: &str, digest: &str) -> StagexExecutableAuthorization {
         StagexExecutableAuthorization {
@@ -872,6 +1072,54 @@ mod tests {
         let receipt = valid_receipt(&plan);
         assert!(validate_stagex_plan(&plan).is_valid());
         assert!(validate_stagex_receipt(&plan, &receipt).is_valid());
+    }
+
+    #[test]
+    fn valid_plan_admits_role_specific_scalars_without_wire_changes() {
+        let plan = valid_plan();
+        let wire_bytes = serde_json::to_vec(&plan).unwrap();
+        let admitted = admit_stagex_plan(&plan).unwrap();
+
+        assert_eq!(admitted.lineage_manifest_digest.as_str(), plan.lineage_manifest_digest_blake3);
+        assert_eq!(admitted.source_state_digest.as_str(), plan.source_state_digest_blake3);
+        assert_eq!(admitted.protected_transition_stage_id.as_str(), plan.protected_transition_stage_id);
+        assert_eq!(admitted.stages.len(), plan.stages.len());
+        assert_eq!(serde_json::to_vec(&plan).unwrap(), wire_bytes);
+        assert!(matches!(admitted.stages[0].executable_authorizations[0].source, StagexExecutableSource::Seed));
+    }
+
+    #[test]
+    fn nominal_admission_rejects_control_oversized_and_over_limit_values() {
+        let mut control = valid_plan();
+        control.stages[0].id = "stage\ncontrol".to_string();
+        let control_result = validate_stagex_plan(&control);
+
+        let mut oversized = valid_plan();
+        oversized.stages[0].id = "a".repeat(OVERSIZED_NOMINAL_ID_BYTES);
+        let oversized_result = validate_stagex_plan(&oversized);
+
+        let mut over_limit = valid_plan();
+        over_limit.stages[0].output_bytes_max = u64::MAX;
+        let over_limit_result = validate_stagex_plan(&over_limit);
+
+        assert!(
+            control_result
+                .errors
+                .iter()
+                .any(|error| matches!(error, StagexValidationError::InvalidNominal { .. }))
+        );
+        assert!(
+            oversized_result
+                .errors
+                .iter()
+                .any(|error| matches!(error, StagexValidationError::InvalidNominal { .. }))
+        );
+        assert!(
+            over_limit_result
+                .errors
+                .iter()
+                .any(|error| matches!(error, StagexValidationError::InvalidNominal { .. }))
+        );
     }
 
     #[test]

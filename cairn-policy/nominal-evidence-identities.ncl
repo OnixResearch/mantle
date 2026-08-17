@@ -11,6 +11,17 @@ let GitOidSha1HexBytes = 40 in
 let Sha256HexBytes = 64 in
 let CoreScope = "crates/cairn-core/src/verified" in
 let WireScope = "crates/cairn-core/src/verified" in
+let MantleIdentifierMaxBytes = 4096 in
+let MantleRemoteIdentifierMaxBytes = 256 in
+let BootstrapCoreScope = "crates/crunch-bootstrap-core/src" in
+let BootstrapWireScope = "crates/crunch-bootstrap-core/src/stagex.rs" in
+let RemoteCoreScope = "src/remote_nominal.rs" in
+let RemoteWireScope = "src/remote_build.rs" in
+let ReleaseCoreScope = "crates/crunch-release-core/src/content_bound_nominal.rs" in
+let ReleaseWireScope = "crates/crunch-release-core/src/content_bound_requirements.rs" in
+let FrontendCoreScope = "src/frontend_artifact_spec.rs" in
+let BuildCoreScope = "crates/crunch-build/src/trust_boundary_nominal.rs" in
+let BuildWireScope = "crates/crunch-build/src/fetcher.rs" in
 let NonClaim = "nominal identities prove configured local syntax and role separation only; they do not prove evidence truth, authority, policy correctness, verifier soundness, mutation safety outside checked plans, or release eligibility" in
 let domain = fun id kind hash_algorithm prefix byte_limit symbols => {
   domain_id = id,
@@ -24,6 +35,19 @@ let domain = fun id kind hash_algorithm prefix byte_limit symbols => {
   raw_representation = "string",
   wrapper_kind = "marker-generic",
   constructor_policy = "marker-only",
+} in
+let refined_domain = fun id kind hash_algorithm byte_limit symbols checked_scopes compatible_scopes => {
+  domain_id = id,
+  category = kind,
+  algorithm = hash_algorithm,
+  required_prefix = "",
+  max_bytes = byte_limit,
+  rust_symbols = symbols,
+  core_scopes = checked_scopes,
+  wire_compatibility_scopes = compatible_scopes,
+  raw_representation = "string",
+  wrapper_kind = "refined-newtype",
+  constructor_policy = "private-fallible",
 } in
 let RuntimeDomains = [
   domain "actor-id" "domain-ref" "none" "actor:" ActorIdMaxBytes ["ActorId"],
@@ -39,7 +63,17 @@ let RuntimeDomains = [
   domain "graph-digest" "blake3-digest" "BLAKE3" "" Blake3DisplayMaxBytes ["GraphDigest"],
   domain "input-digest" "blake3-digest" "BLAKE3" "" Blake3DisplayMaxBytes ["InputDigest"],
   domain "ledger-digest" "blake3-digest" "BLAKE3" "" Blake3DisplayMaxBytes ["LedgerDigest"],
+  refined_domain "mantle-ca-plan-id" "domain-id" "none" MantleIdentifierMaxBytes ["DerivationName", "OutputName", "LogicalStorePrefix", "ProvisionalStorePath", "FinalStorePath", "DerivationKey"] [BuildCoreScope] ["crates/crunch-build/src/ca_plan.rs", "crates/crunch-pipeline/src/lib.rs"],
+  refined_domain "mantle-content-bound-digest" "blake3-digest" "BLAKE3" Blake3RawHexBytes ["CheckedBlake3Hex", "CheckedRequirementDigest", "CheckedContentBoundDigest"] [ReleaseCoreScope] [ReleaseWireScope],
+  refined_domain "mantle-content-bound-id" "domain-id" "none" MantleIdentifierMaxBytes ["ContentBoundRepositoryId", "ContentBoundRequirementId", "ContentBoundReleaseId"] [ReleaseCoreScope] [ReleaseWireScope],
   domain "mantle-digest" "blake3-digest" "BLAKE3" "" Blake3DisplayMaxBytes ["MantleDigest"],
+  refined_domain "mantle-fetch-id" "domain-ref" "none" MantleIdentifierMaxBytes ["FetchUrl", "GitRevision", "ArchiveInputPath", "FetchOutputDirectory"] [BuildCoreScope] [BuildWireScope],
+  refined_domain "mantle-frontend-id" "domain-id" "none" MantleIdentifierMaxBytes ["FrontendSpecId", "FrontendValidatorKind", "FrontendArtifactKind", "FrontendArtifactRef", "FrontendBuildRoot"] [FrontendCoreScope] [FrontendCoreScope],
+  refined_domain "mantle-frontend-spec-hash" "blake3-digest" "BLAKE3" Blake3RawHexBytes ["FrontendSpecHash"] [FrontendCoreScope] [FrontendCoreScope],
+  refined_domain "mantle-lineage-id" "domain-id" "none" MantleIdentifierMaxBytes ["LineageSourceArtifactId", "LineageGeneratedArtifactId", "LineageTransitionToolId", "LineagePatchId", "LineageEnvironmentAssumptionId"] [BootstrapCoreScope] ["crates/crunch-bootstrap-core/src/lineage.rs"],
+  refined_domain "mantle-remote-id" "domain-id" "none" MantleRemoteIdentifierMaxBytes ["RemoteRequestId", "RemoteProtocolSessionId", "RemoteEndpointId", "RemoteOutputId"] [RemoteCoreScope] [RemoteWireScope],
+  refined_domain "mantle-stagex-digest" "blake3-digest" "BLAKE3" Blake3RawHexBytes ["StagexLineageManifestDigest", "StagexSourceStateDigest", "StagexExecutableDigest"] [BootstrapCoreScope] [BootstrapWireScope],
+  refined_domain "mantle-stagex-id" "domain-id" "none" MantleIdentifierMaxBytes ["StagexStageId", "StagexArtifactId", "StagexExecutableAuthorizationId", "StagexEnvironmentAssumptionId"] [BootstrapCoreScope] [BootstrapWireScope],
   domain "operation-id" "domain-id" "none" "operation:" DomainIdMaxBytes ["OperationId"],
   domain "pack-digest" "blake3-digest" "BLAKE3" "" Blake3DisplayMaxBytes ["PackDigest"],
   domain "plan-digest" "blake3-digest" "BLAKE3" "" Blake3DisplayMaxBytes ["PlanDigest"],

@@ -74,6 +74,9 @@ pub enum FetchError {
     #[error("invalid ordered foreign fetch candidates: {0}")]
     InvalidCandidateList(String),
 
+    #[error("invalid fetch trust-boundary value: {0}")]
+    InvalidBoundary(String),
+
     #[error("fetcher derivation has no fixed-output hash")]
     NotFixedOutput,
 
@@ -360,11 +363,21 @@ fn fetch_agent() -> ureq::Agent {
 
 /// Download a URL and write the raw content to a file.
 /// Tiger Style: bounded read — stops at MAX_DOWNLOAD_BYTES.
-#[allow(tigerstyle::ambiguous_params)] // url vs filesystem output path: distinct domains
+#[allow(
+    tigerstyle::ambiguous_params,
+    reason = "stable compatibility wrapper admits URL and output path into distinct nominal roles"
+)]
 pub(crate) fn fetch_flat(url: &str, out: &str) -> Result<(), FetchError> {
+    let url = crate::FetchUrl::new(url).map_err(|error| FetchError::InvalidBoundary(error.as_str().to_string()))?;
+    let output = crate::FetchOutputDirectory::new(out)
+        .map_err(|error| FetchError::InvalidBoundary(error.as_str().to_string()))?;
+    let out = output
+        .as_path()
+        .to_str()
+        .ok_or_else(|| FetchError::InvalidBoundary("output-path-not-utf8".to_string()))?;
     fetch_with_retry(
         || {
-            let result = fetch_flat_once(FetchOnceRequest { url, out });
+            let result = fetch_flat_once(FetchOnceRequest { url: url.as_str(), out });
             if result.is_err() {
                 cleanup_fetch_output(out);
             }
@@ -380,7 +393,10 @@ struct FetchOnceRequest<'a> {
 }
 
 /// Download acquisition bytes without interpreting their archive format.
-#[allow(tigerstyle::ambiguous_params)] // url vs filesystem output path: distinct domains
+#[allow(
+    tigerstyle::ambiguous_params,
+    reason = "stable compatibility wrapper delegates to typed fetch boundary admission"
+)]
 pub fn fetch_raw_to_file(url: &str, out: &str) -> Result<(), FetchError> {
     fetch_flat(url, out)
 }
@@ -395,11 +411,21 @@ fn fetch_flat_once(request: FetchOnceRequest<'_>) -> Result<(), FetchError> {
 }
 
 /// Download a tarball, decompress, and extract to a directory.
-#[allow(tigerstyle::ambiguous_params)] // url vs filesystem output path: distinct domains
+#[allow(
+    tigerstyle::ambiguous_params,
+    reason = "stable compatibility wrapper admits URL and output path into distinct nominal roles"
+)]
 pub fn fetch_and_unpack(url: &str, out: &str) -> Result<(), FetchError> {
+    let url = crate::FetchUrl::new(url).map_err(|error| FetchError::InvalidBoundary(error.as_str().to_string()))?;
+    let output = crate::FetchOutputDirectory::new(out)
+        .map_err(|error| FetchError::InvalidBoundary(error.as_str().to_string()))?;
+    let out = output
+        .as_path()
+        .to_str()
+        .ok_or_else(|| FetchError::InvalidBoundary("output-path-not-utf8".to_string()))?;
     fetch_with_retry(
         || {
-            let result = fetch_and_unpack_once(FetchOnceRequest { url, out });
+            let result = fetch_and_unpack_once(FetchOnceRequest { url: url.as_str(), out });
             if result.is_err() {
                 cleanup_fetch_output(out);
             }
@@ -417,13 +443,23 @@ fn fetch_and_unpack_once(request: FetchOnceRequest<'_>) -> Result<(), FetchError
 }
 
 /// Unpack already-acquired archive bytes using the same bounded extractor as a live fetch.
-#[allow(tigerstyle::ambiguous_params)] // url identity, archive input, and output path are distinct domains
+#[allow(
+    tigerstyle::ambiguous_params,
+    reason = "stable compatibility wrapper admits URL, archive input, and output into distinct nominal roles"
+)]
 pub fn unpack_archive_file(url: &str, archive_path: &Path, out: &str) -> Result<(), FetchError> {
-    assert!(!url.is_empty(), "archive URL identity must not be empty");
-    assert!(!archive_path.as_os_str().is_empty(), "archive path must not be empty");
-    let reader = std::fs::File::open(archive_path)?;
-    let decompressed = decompress_reader(url, reader)?;
-    extract_tar(decompressed, out)
+    let url = crate::FetchUrl::new(url).map_err(|error| FetchError::InvalidBoundary(error.as_str().to_string()))?;
+    let archive = crate::ArchiveInputPath::new(archive_path)
+        .map_err(|error| FetchError::InvalidBoundary(error.as_str().to_string()))?;
+    let output = crate::FetchOutputDirectory::new(out)
+        .map_err(|error| FetchError::InvalidBoundary(error.as_str().to_string()))?;
+    let output = output
+        .as_path()
+        .to_str()
+        .ok_or_else(|| FetchError::InvalidBoundary("output-path-not-utf8".to_string()))?;
+    let reader = std::fs::File::open(archive.as_path())?;
+    let decompressed = decompress_reader(url.as_str(), reader)?;
+    extract_tar(decompressed, output)
 }
 
 fn fetch_with_retry<F, S>(mut operation: F, mut sleep_ms: S) -> Result<(), FetchError>
@@ -1202,12 +1238,17 @@ const MAX_GIT_PATH_COMPONENTS: u32 = 1024;
 
 /// Clone a git repository and materialize a specific revision without using
 /// any host `git` binary.
-#[allow(tigerstyle::ambiguous_params)] // url, rev, out: three distinct domains (origin, commit, filesystem)
+#[allow(
+    tigerstyle::ambiguous_params,
+    reason = "stable compatibility wrapper admits URL, revision, and output into a typed Git fetch request"
+)]
 pub(crate) fn fetch_git(url: &str, rev: &str, out: &str) -> Result<(), FetchError> {
-    let out_path = Path::new(out);
-    assert!(!url.is_empty(), "git url must not be empty");
-    assert!(!out_path.as_os_str().is_empty(), "output path must not be empty");
-    assert!(!rev.is_empty(), "git revision must not be empty");
+    let request = crate::GitFetchRequest::new(url, rev, out)
+        .map_err(|error| FetchError::InvalidBoundary(error.as_str().to_string()))?;
+    let url = request.url.as_str();
+    let rev = request.revision.as_str();
+    let out_path = request.output.as_path();
+    let out = out_path.to_str().ok_or_else(|| FetchError::InvalidBoundary("output-path-not-utf8".to_string()))?;
 
     if out_path.exists() {
         info!(out = out, "using cached git fetch");
@@ -2084,6 +2125,21 @@ mod tests {
             )
         );
         assert!(!message.contains("fatal:"), "error should not depend on host git stderr: {message}");
+    }
+
+    #[test]
+    fn fetch_boundaries_reject_empty_and_control_bearing_roles_before_io() {
+        let temp = tempfile::tempdir().unwrap();
+        let output = temp.path().join("output");
+        let output = output.to_str().unwrap();
+
+        assert!(matches!(fetch_git("", "revision", output), Err(FetchError::InvalidBoundary(_))));
+        assert!(matches!(
+            fetch_git("file:///tmp/repo", "bad\nrevision", output),
+            Err(FetchError::InvalidBoundary(_))
+        ));
+        assert!(matches!(fetch_raw_to_file("", output), Err(FetchError::InvalidBoundary(_))));
+        assert!(!temp.path().join("output").exists());
     }
 
     #[test]

@@ -316,7 +316,8 @@ in thin Rust adapters.
 
 The `mantle-plan-v1` boundary decodes structural wire records before it admits
 checked IDs, output names, logical store paths, and role-specific BLAKE3 values.
-See [Nominal dynamic-plan types](docs/nominal-dynamic-plan-types.md).
+See [Nominal dynamic-plan types](docs/nominal-dynamic-plan-types.md) and
+[Nominal trust boundaries](docs/nominal-trust-boundaries.md).
 
 The scheduler creates goals lazily, deduplicates them by store identity, and
 dispatches eligible work under explicit concurrency and policy bounds. A build

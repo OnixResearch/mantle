@@ -2189,14 +2189,9 @@ fn read_stagex_lineage_profile_metadata(
 ) -> Result<BootstrapProviderProfileMetadata, RunError> {
     let lineage = serde_json::from_slice::<crunch_bootstrap_core::LineageManifest>(bytes)
         .map_err(|err| RunError::Internal(format!("parsing StageX lineage manifest {}: {err}", path.display())))?;
-    let validation = crunch_bootstrap_core::validate_lineage(&lineage);
-    if !validation.is_valid() {
-        return Err(RunError::Internal(format!(
-            "StageX lineage manifest {} is invalid: {:?}",
-            path.display(),
-            validation.errors
-        )));
-    }
+    crunch_bootstrap_core::admit_lineage_manifest(&lineage).map_err(|error| {
+        RunError::Internal(format!("StageX lineage manifest {} is invalid: {error}", path.display()))
+    })?;
     let metadata = BootstrapProviderProfileMetadata {
         provider_kind: BOOTSTRAP_PROVIDER_KIND_STAGEX_LINEAGE.to_string(),
         schema_version: "1".to_string(),
