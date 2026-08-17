@@ -1,0 +1,5 @@
+CLOSURE plan_blake3=d88b153f61dc4b7fcdba29378edc93d275333afd719c90c01900dd32f9617570 members=4 reused=0 root=23afiym7dlgh1lxk1lyx6xrzplwnwhsk-hello-2.12.2 admitted=true
+PULL 6f1n9cmgsbm5s1nhjgsw8xghphrkh9vc-glibc-2.41
+PULL nqlk596879spw2h2rlapajbs4b12da5v-gcc-14.3.0-lib
+PULL y7d6l50mnhy92w81k48k7was6kzaip1p-bash-static-5.2.37
+PULL 23afiym7dlgh1lxk1lyx6xrzplwnwhsk-hello-2.12.2

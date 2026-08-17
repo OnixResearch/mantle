@@ -1,0 +1,59 @@
+{
+  "format": "mantle-stagex-tcc-musl-v2-inventory-v1",
+  "configured_source_digest_blake3": "b68ec9f7c46ca1cbec5508a98476f771e4bcc4d90b4e088a237065aac1c6061b",
+  "build_command_count": 4,
+  "smoke_command_count": 5,
+  "outputs": [
+    {
+      "artifact_id": "tcc-musl-v2",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v51-tcc-musl-v2-20260728/tcc-musl-v2-stage/runtime/output/bin/tcc-0.9.27-musl-v2",
+      "bytes_len": 375728,
+      "digest_blake3": "e7c34884d2dd51b38db8a19034ce36cc79a66af9222e30fed1f37d7516351765"
+    },
+    {
+      "artifact_id": "tcc-musl-v2-alias",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v51-tcc-musl-v2-20260728/tcc-musl-v2-stage/runtime/output/bin/tcc",
+      "bytes_len": 375728,
+      "digest_blake3": "e7c34884d2dd51b38db8a19034ce36cc79a66af9222e30fed1f37d7516351765"
+    },
+    {
+      "artifact_id": "tcc-musl-v2-libtcc1",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v51-tcc-musl-v2-20260728/tcc-musl-v2-stage/runtime/output/lib/tcc/libtcc1.a",
+      "bytes_len": 1760,
+      "digest_blake3": "c201ffd35a5466b4171345fc924b64a75c650fabbe7d0c20d365cfe08faf0860"
+    },
+    {
+      "artifact_id": "tcc-musl-v2-source-tree",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v51-tcc-musl-v2-20260728/tcc-musl-v2-stage/runtime/output/share/tcc-source",
+      "bytes_len": 1374839,
+      "digest_blake3": "f6d2aec4068377861ab1548e672389dd79aaa31412057e5b4d3187e59ec11e26"
+    },
+    {
+      "artifact_id": "tcc-musl-v2-header-tree",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v51-tcc-musl-v2-20260728/tcc-musl-v2-stage/runtime/output/lib/tcc/include",
+      "bytes_len": 5801,
+      "digest_blake3": "2fa068749df350a62721e60696d625b6d5b0e3061019929a4c67970155833424"
+    },
+    {
+      "artifact_id": "tcc-musl-v2-positive-object",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v51-tcc-musl-v2-20260728/tcc-musl-v2-stage/runtime/smoke/variadic-positive.o",
+      "bytes_len": 1288,
+      "digest_blake3": "a507376f7e9af418c78cc9f9121e7b182c8b1ef3b741de98741d6320f6f301b2"
+    },
+    {
+      "artifact_id": "tcc-musl-v2-positive-binary",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v51-tcc-musl-v2-20260728/tcc-musl-v2-stage/runtime/smoke/variadic-positive",
+      "bytes_len": 1876,
+      "digest_blake3": "2a6733b887417ec6f848ece381d125e10d5d5544f0839dcfa896eacc88529fa6"
+    },
+    {
+      "artifact_id": "tcc-musl-v2-positive-execution",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v51-tcc-musl-v2-20260728/tcc-musl-v2-stage/runtime/smoke/positive-execution.stdout.txt",
+      "bytes_len": 0,
+      "digest_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    }
+  ],
+  "protected_exec_enforced": true,
+  "fallback_events": [],
+  "non_claim": "this inventory binds TinyCC 0.9.27 rebuilt by the protected TinyCC 0.9.26 host, its extended variadic runtime, and bounded compile/link/execute observations only; it does not prove the later self-host, native runtime, or provider admission"
+}

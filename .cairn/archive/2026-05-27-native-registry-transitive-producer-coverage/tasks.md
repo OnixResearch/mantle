@@ -1,0 +1,7 @@
+# Tasks
+
+- [x] [serial] Record pushed-head self-probe evidence for the `itertools@0.10.5` missing producer blocker. Evidence: `evidence/current-blocker.md`. r[rust_package_planning.native_registry_transitive_producer_coverage]
+- [x] [serial] Add focused positive coverage where a transitive vendored-registry dependency with ready package/source facts gets an executable producer `lib` unit. Evidence: `evidence/verification.md` pueue task `25`. r[rust_package_planning.native_registry_transitive_producer_coverage]
+- [x] [serial] Add negative coverage where a consumer dependency artifact lacks native package/source/lib producer facts and graph readiness fails before topology execution. Evidence: `evidence/verification.md` pueue task `25`. r[rust_package_planning.native_registry_transitive_producer_coverage]
+- [x] [serial] Implement native unit/derivation graph producer closure so supported transitive registry dependency artifacts have producer units before consumers execute. Evidence: `evidence/verification.md` pueue tasks `20` and `25`. r[rust_package_planning.native_registry_transitive_producer_coverage]
+- [x] [serial] Verify focused Rust plan tests, Mantle self probe blocker movement, Cairn validation, Cairn gates, sync, archive, and commit. Evidence: `evidence/verification.md` pueue tasks `20` and `25`, plus the archived evidence oracle checkpoint. r[rust_package_planning.native_registry_transitive_producer_coverage]

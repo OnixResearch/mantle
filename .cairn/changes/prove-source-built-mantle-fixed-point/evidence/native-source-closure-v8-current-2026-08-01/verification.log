@@ -1,0 +1,2 @@
+manifest_blake3=0d5e81a6741391c9e3acb4329b3290e777eac2a3fcf9014c357771e3dded05d2 readiness=Ready missing=0 stale=0 unsupported=0 untrusted=0
+non_claim=source bundle evidence proves declared source/input availability and identity only

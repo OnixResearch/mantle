@@ -1,0 +1,6 @@
+cf3339247c0150fa151000ac63a5b3531167da8bcff06f49327c7f6fb7a06c16  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v22-tinycc27-2026-07-28/malformed.stderr.txt
+6eae6ae59d278dec6de54f3a328616904df6b2592f3f0d5d7ee6a57a0b8d9b15  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v22-tinycc27-2026-07-28/protected-exec-audit.json
+08282f1db334dc8d7ecf2f23d7b75ae8edb5f753b1ef5204dc963b32d825f92f  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v22-tinycc27-2026-07-28/tinycc27-inventory.json
+244d334444201ca9d218ac0c99e86510d55d78b454b9834f80349401427d403e  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v22-tinycc27-2026-07-28/tinycc27-source-materialization.json
+fae73cb2ec5d9ae2420921b254c4e02ff9be6f86dace8f575a55a65858886c1b  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v22-tinycc27-2026-07-28/transition-plan.json
+78eaa62042e23d1c0fd93003d3f24dcef74a192d9d361b09b365dc6464243f09  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v22-tinycc27-2026-07-28/transition-report.json

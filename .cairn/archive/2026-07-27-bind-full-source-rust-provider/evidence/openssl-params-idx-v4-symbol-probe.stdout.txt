@@ -1,0 +1,8 @@
+libcrypto archive member:
+libcrypto-lib-params_idx.o
+
+symbols from libcrypto-lib-params_idx.o:
+(none)
+
+unresolved archive reference:
+libcrypto.a:libcommon-lib-ciphercommon_gcm.o: U ossl_param_find_pidx

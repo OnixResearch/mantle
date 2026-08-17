@@ -1,0 +1,15 @@
++ ret=0
++ test 0 -eq 0
+++ printf '%s\n' y.tab.c
+++ sed 's|y\.tab\.c|arparse.c|g;s|y\.tab\.h|arparse.h|g;s|y\.output|arparse.output|g;'
++ to=arparse.c
++ test -f y.tab.c
++ target=../arparse.c
++ test y.tab.c '!=' y.tab.c
++ sed -e '/^#/!b' -e 's|/home/brittonr/\.cargo-target/stagex-binutils-generated-source-probe1-20260730/source/binutils/||' -e 's|y\.tab\.c|arparse.c|g;s|y\.tab\.h|arparse.h|g;s|y\.output|arparse.output|g;' -e 's|Y_TAB_C|ARPARSE_C|g;s|Y_TAB_H|ARPARSE_H|g;s|Y_OUTPUT|ARPARSE_OUTPUT|g;' y.tab.c
+Terminated
+++ ret=143
+++ cd /home/brittonr/.cargo-target/stagex-binutils-generated-source-probe1-20260730/source/binutils
+++ rm -rf ylwrap435221
+++ exit 143
+++ exit 143

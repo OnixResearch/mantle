@@ -1,0 +1,35 @@
+{
+  "schema": "mantle-full-source-rust-host-tool-construction-v1",
+  "receipt_id": "full-source-rust-host-python-construction",
+  "role": "python",
+  "source_policy": "authenticated-offline-only",
+  "source_id": "cpython-3.13.5",
+  "source_url": "https://www.python.org/ftp/python/3.13.5/Python-3.13.5.tar.xz",
+  "source_sha256_hex": "93e583f243454e6e9e4588ca2c2662206ad961659863277afcdb96801647d640",
+  "native_provider_output_digest_blake3": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f",
+  "executable_path": "/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/8b995r4qgngkvai2l6hkwvpa4zb32gqh-python-3.13.5-full-source-gcc10-v1/bin/python3.13",
+  "executable_digest_blake3": "7a5f2d268fec22e59bf3bfa3875682c724d18884f4d6e7b34830e7d18e5fe4ce",
+  "artifact_attestation_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-host-tool-attestations-v2-2026-07-26/python-attestation.json",
+  "artifact_attestation_digest_blake3": "27afc9f4dbb2dea65a5c7ea9f90000885259cdb827e190f92b34a4dc44b39973",
+  "artifact_attestation_file_digest_blake3": "27afc9f4dbb2dea65a5c7ea9f90000885259cdb827e190f92b34a4dc44b39973",
+  "positive_checks": [
+    "version",
+    "rust-bootstrap-stdlib-imports",
+    "copied-tree-execution"
+  ],
+  "rejection_checks": [
+    "malformed-python-rejected"
+  ],
+  "dependency_digests_blake3": {
+    "busybox": "da5b5b1ca280f8a545eb750c27894766311c1b10b326da5ce10e6e1ee8c7f4c8",
+    "linux-headers": "0fdac41832c7b489a3896fb70d7395110c7542a18bbf511432c78fe3757e3778",
+    "linux-headers-attestation": "ee761748d6d860cad63a2d4582e7992cc077f818d53172ede6477160e9760f35",
+    "make": "11e99bd96b27689e78797520566b915d3b519f4550197ebb6678a67bed215866",
+    "native-provider": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f"
+  },
+  "ambient_tool_discovery": false,
+  "fallback_events": [],
+  "environmental_assumptions": [
+    "sandbox-orchestration:declared-bwrap-and-builder-shell-outside-installed-host-tool-claim"
+  ]
+}

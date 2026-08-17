@@ -1,0 +1,225 @@
++ nix develop -c rustfmt --edition 2024 --check crates/mantlepkgs-core/src/versions.rs src/mantlepkgs_version_cmd.rs src/foreign_graph_compiler.rs src/mantlepkgs_cmd.rs
++ nix develop -c env CARGO_TARGET_DIR=/tmp/mantlepkgs-version-baseline-target cargo test -p mantlepkgs-core
+warning: /home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/Cargo.toml: file `/home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src/lib.rs (/tmp/mantlepkgs-version-baseline-target/debug/deps/mantlepkgs_core-bce808baf85c9306)
+
+running 86 tests
+test catalog::tests::stale_producer_lock_blocks_the_complete_selection ... ok
+test domains::tests::corpus_revision_license_and_source_identity_fail_closed ... ok
+test catalog::tests::catalog_plan_blocks_conflicts_stale_digests_and_missing_roots ... ok
+test catalog::tests::incomplete_plan_cannot_emit_receipt_or_catalog ... ok
+test domains::tests::missing_corpus_source_artifact_is_rejected ... ok
+test domains::tests::incomplete_corpus_evidence_is_rejected ... ok
+test catalog::tests::catalog_plan_deduplicates_shared_nodes_and_is_order_independent ... ok
+test domains::tests::missing_variant_base_is_rejected ... ok
+test domains::tests::named_domain_limits_fail_closed ... ok
+test domains::tests::non_placeholder_identity_mismatch_is_rejected ... ok
+test domains::tests::unsupported_corpus_package_is_rejected ... ok
+test domains::tests::missing_validation_package_is_rejected ... ok
+test domains::tests::unknown_class_and_missing_owner_are_rejected ... ok
+test domains::tests::malformed_validation_outcome_is_rejected ... ok
+test domains::tests::blocked_package_cannot_back_validation_success ... ok
+test domains::tests::failed_validation_keeps_package_identity ... ok
+test impact::tests::admitted_action_result_requires_all_current_authority_bindings ... ok
+test impact::tests::conflicting_package_keys_are_rejected ... ok
+test domains::tests::variant_cycles_are_reported ... ok
+test impact::tests::explicit_status_cannot_invent_success ... ok
+test impact::tests::admitted_success_to_failed_receipt_is_newly_failed ... ok
+test domains::tests::stale_variant_base_is_rejected ... ok
+test impact::tests::exceeded_package_limit_fails_before_comparison ... ok
+test catalog::tests::complete_plan_finalizes_and_artifact_tampering_fails ... ok
+test domains::tests::validation_output_limit_is_enforced ... ok
+test impact::tests::dependency_edge_limit_fails_before_closure_work ... ok
+test manifest::tests::invalid_manifest_rejects_floating_source_alias_conflict_and_path_escape ... ok
+test domains::tests::validation_plan_binds_separate_inputs_and_policy ... ok
+test render::tests::render_depth_overflow_is_an_error ... ok
+test impact::tests::stale_observation_binding_is_rejected ... ok
+test render::tests::unsupported_catalog_schema_does_not_render ... ok
+test impact::tests::complete_report_is_not_truncated_to_fit_byte_limit ... ok
+test domains::tests::public_selector_conflicts_never_choose_a_winner ... ok
+test domains::tests::test_only_change_preserves_package_identity ... ok
+test impact::tests::global_incompatibilities_are_ordered_failures_without_report ... ok
+test render::tests::catalog_renders_as_typed_deterministic_nickel ... ok
+test impact::tests::incomplete_closure_has_reasons_and_no_numeric_claims ... ok
+test impact::tests::missing_logical_size_and_duplicate_member_prevent_numeric_deltas ... ok
+test impact::tests::missing_head_observation_is_not_a_failure ... ok
+test manifest::tests::valid_manifest_normalizes_and_hashes_deterministically ... ok
+test impact::tests::unresolved_reference_prevents_numeric_closure_claims ... ok
+test domains::tests::elapsed_validation_cannot_hide_timeout ... ok
+test updates::tests::conflicting_duplicate_version_is_ambiguous ... ok
+test domains::tests::malformed_validation_evidence_retains_package_identity ... ok
+test domains::tests::equivalent_domain_inputs_compose_to_one_identity ... ok
+test impact::tests::closure_semantic_mismatch_emits_no_numeric_delta ... ok
+test impact::tests::closure_byte_overflow_prevents_numeric_claims ... ok
+test impact::tests::report_identity_changes_after_semantic_mutation ... ok
+test impact::tests::complete_closure_reports_members_bytes_and_retained_dependencies ... ok
+test domains::tests::zero_identity_placeholders_seal_before_composition ... ok
+test updates::tests::candidate_and_artifact_limits_fail_before_selection ... ok
+test updates::tests::malformed_ignored_prerelease_and_development_versions_are_rejected ... ok
+test domains::tests::stale_validation_policy_observation_is_rejected ... ok
+test updates::tests::policy_rejects_cross_origin_and_insecure_queries ... ok
+test versions::tests::invalid_cohort_rejects_floating_wrong_system_duplicates_and_limits ... ok
+test impact::tests::explicit_non_build_states_remain_distinct ... ok
+test versions::tests::malformed_success_and_wrong_nar_hash_fail_closed ... ok
+test updates::tests::unavailable_source_is_not_an_empty_success ... ok
+test updates::tests::unsafe_path_duplicate_pointer_and_ambient_authority_fail ... ok
+test updates::tests::complete_evidence_selects_highest_candidate_and_plans_exact_effect ... ok
+test updates::tests::exact_duplicate_source_candidates_produce_no_candidate ... ok
+test updates::tests::execution_rejects_partial_or_wrong_output_claims ... ok
+test updates::tests::duplicate_advisory_findings_and_observations_are_rejected ... ok
+test versions::tests::request_names_reject_selector_alias_collisions ... ok
+test versions::tests::unavailable_observation_stays_explicit_and_never_parses_a_name ... ok
+test updates::tests::execution_receipts_bind_exact_outputs_and_denials ... ok
+test versions::tests::unknown_version_is_blocked_without_nearby_selection ... ok
+test updates::tests::advisory_findings_require_review ... ok
+test versions::tests::stale_resolution_set_and_production_plan_fail_closed ... ok
+test impact::tests::compatible_order_independent_snapshots_have_one_identity ... ok
+test updates::tests::multiple_mutation_documents_fail_closed ... ok
+test versions::tests::duplicate_recheck_receipt_cannot_hide_an_unchecked_selector ... ok
+test versions::tests::newest_observation_wins_and_input_order_does_not_change_identity ... ok
+test updates::tests::mutation_old_value_and_output_limits_fail_closed ... ok
+test updates::tests::unavailable_advisory_blocks_ready_status ... ok
+test updates::tests::candidate_order_does_not_change_plan_identity ... ok
+test updates::tests::missing_validation_never_becomes_success ... ok
+test impact::tests::catalog_dispositions_cover_added_removed_recipe_blocker_and_variant_changes ... ok
+test versions::tests::resolution_receipt_binds_newest_exact_source_and_replays ... ok
+test impact::tests::combined_recipe_and_policy_change_preserves_both_dimensions ... ok
+test versions::tests::stale_index_and_mutated_receipt_fail_replay ... ok
+test updates::tests::stale_policy_and_observation_identities_fail ... ok
+test updates::tests::semantic_mutation_changes_plan_identity ... ok
+test versions::tests::two_versions_group_by_exact_revision_and_keep_selectors_distinct ... ok
+test versions::tests::successful_rechecks_emit_existing_manifests ... ok
+test versions::tests::failed_recheck_never_emits_a_partial_manifest ... ok
+
+test result: ok. 86 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mantlepkgs_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
++ nix develop -c env CARGO_TARGET_DIR=/tmp/mantlepkgs-version-baseline-target cargo check -p mantlepkgs-core --target wasm32-unknown-unknown
+warning: /home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/Cargo.toml: file `/home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
++ nix develop -c env CARGO_TARGET_DIR=/tmp/mantlepkgs-version-baseline-target cargo test -p mantle --bin mantle mantlepkgs_version_cmd::tests
+warning: /home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/Cargo.toml: file `/home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+     Running unittests src/main.rs (/tmp/mantlepkgs-version-baseline-target/debug/deps/mantle-11d69a8a0db42f62)
+
+running 15 tests
+test mantlepkgs_version_cmd::tests::expression_uses_only_exact_reference_system_and_attribute_segments ... ok
+test mantlepkgs_version_cmd::tests::metadata_parser_accepts_exact_github_source ... ok
+test mantlepkgs_version_cmd::tests::metadata_parser_rejects_relative_source_path ... ok
+test mantlepkgs_version_cmd::tests::version_output_preserves_success_unavailable_and_malformed_states ... ok
+test mantlepkgs_version_cmd::tests::atomic_stage_rejects_existing_output ... ok
+test mantlepkgs_version_cmd::tests::version_output_rejects_unknown_and_incomplete_success ... ok
+test mantlepkgs_version_cmd::tests::source_tree_identity_rejects_special_files ... ok
+test mantlepkgs_version_cmd::tests::source_tree_identity_hashes_symlink_text_without_following_it ... ok
+test mantlepkgs_version_cmd::tests::oversized_producer_capture_fails_closed ... ok
+test mantlepkgs_version_cmd::tests::invalid_artifacts_fail_before_nix_execution ... ok
+test mantlepkgs_version_cmd::tests::typed_duplicate_fixture_reaches_core_and_fails_closed ... ok
+test mantlepkgs_version_cmd::tests::positive_contract_fixtures_evaluate ... ok
+test mantlepkgs_version_cmd::tests::negative_contract_fixtures_fail_closed ... ok
+test mantlepkgs_version_cmd::tests::metadata_hash_mismatch_records_failures_without_success_entries ... ok
+test mantlepkgs_version_cmd::tests::fake_nix_runs_index_resolution_recheck_and_manifest_emission ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 2341 filtered out; finished in 1.13s
+
++ nix develop -c env CARGO_TARGET_DIR=/tmp/mantlepkgs-version-baseline-target cargo test -p mantle --bin mantle mantlepkgs_cmd::tests
+warning: /home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/Cargo.toml: file `/home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running unittests src/main.rs (/tmp/mantlepkgs-version-baseline-target/debug/deps/mantle-11d69a8a0db42f62)
+
+running 33 tests
+test mantlepkgs_cmd::tests::execution_outputs_and_denials_cannot_overlap_the_source_tree ... ok
+test mantlepkgs_cmd::tests::http_response_classification_preserves_failure_status ... ok
+test mantlepkgs_cmd::tests::impact_action_result_adapter_accepts_only_current_admission ... ok
+test mantlepkgs_cmd::tests::fixed_output_seed_realization_creates_a_durable_out_link ... ok
+test mantlepkgs_cmd::tests::fixed_output_without_url_becomes_a_bound_seed_candidate ... ok
+test mantlepkgs_cmd::tests::fixed_output_seed_realization_rejects_non_utf8_out_link ... ok
+test mantlepkgs_cmd::tests::fixed_output_with_a_url_becomes_a_bound_seed_candidate ... ok
+test mantlepkgs_cmd::tests::malformed_fixed_output_seed_candidate_is_rejected ... ok
+test mantlepkgs_cmd::tests::no_nix_child_verifies_and_plans_catalog ... ok
+test mantlepkgs_cmd::tests::producer_capture_child ... ok
+test mantlepkgs_cmd::tests::validation_output_paths_must_be_distinct ... ok
+test mantlepkgs_cmd::tests::impact_command_rejects_a_stale_snapshot_before_publication ... ok
+test mantlepkgs_cmd::tests::explicit_unavailable_source_observation_stays_unavailable ... ok
+test mantlepkgs_cmd::tests::impact_command_writes_a_local_atomic_report ... ok
+test mantlepkgs_cmd::tests::duplicate_advisory_findings_become_explicit_failed_evidence ... ok
+test mantlepkgs_cmd::tests::advisory_coordinate_mismatch_becomes_explicit_failed_evidence ... ok
+test mantlepkgs_cmd::tests::malformed_saved_source_response_becomes_explicit_failed_evidence ... ok
+test mantlepkgs_cmd::tests::oversized_saved_source_response_becomes_explicit_failed_evidence ... ok
+test mantlepkgs_cmd::tests::release_index_saved_response_replays_without_network ... ok
+test mantlepkgs_cmd::tests::update_policy_seal_writes_one_canonical_policy ... ok
+test mantlepkgs_cmd::tests::partial_batch_writes_failure_report_and_no_success_generation ... ok
+test mantlepkgs_cmd::tests::stale_update_preimage_leaves_source_unchanged_and_writes_denial ... ok
+test mantlepkgs_cmd::tests::symlinked_update_source_is_denied_without_publication ... ok
+test mantlepkgs_cmd::tests::publication_conflict_preserves_existing_output_and_records_denial ... ok
+test mantlepkgs_cmd::tests::output_digest_tamper_is_denied_before_publication ... ok
+test mantlepkgs_cmd::tests::update_commands_replay_saved_evidence_and_publish_one_immutable_tree ... ok
+test mantlepkgs_cmd::tests::domain_contract_rejects_unknown_class ... ok
+test mantlepkgs_cmd::tests::domain_composition_rejects_duplicate_shard_identity ... ok
+test mantlepkgs_cmd::tests::domain_manifest_composes_without_nix ... ok
+test mantlepkgs_cmd::tests::corpus_verification_rejects_artifact_tampering ... ok
+test mantlepkgs_cmd::tests::domain_contract_rejects_missing_fields_and_nonpositive_limits ... ok
+test mantlepkgs_cmd::tests::producer_capture_rejects_output_above_the_limit ... ok
+test mantlepkgs_cmd::tests::fixture_batch_publishes_and_verifies_without_nix_in_path ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 2323 filtered out; finished in 0.16s
+
++ nix develop -c env CARGO_TARGET_DIR=/tmp/mantlepkgs-version-baseline-target cargo test -p mantle --bin mantle foreign_graph_compiler::tests
+warning: /home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/Cargo.toml: file `/home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running unittests src/main.rs (/tmp/mantlepkgs-version-baseline-target/debug/deps/mantle-11d69a8a0db42f62)
+
+running 22 tests
+test foreign_graph_compiler::tests::conflicting_cross_class_path_mapping_is_rejected ... ok
+test foreign_graph_compiler::tests::exact_path_map_reuses_identical_entries_and_rejects_conflicts ... ok
+test foreign_graph_compiler::tests::exact_store_mapping_accepts_prefix_map_boundary_but_rejects_name_extension ... ok
+test foreign_graph_compiler::tests::foreign_fetch_builtin_without_fixed_output_still_fails_shape_validation ... ok
+test foreign_graph_compiler::tests::unrelated_or_non_token_store_text_is_not_rewritten ... ok
+test foreign_graph_compiler::tests::known_store_dir_placeholders_use_the_active_store_prefix ... ok
+test foreign_graph_compiler::tests::dependency_order_rejects_cycles_duplicate_edges_unknown_outputs_and_partial_coverage ... ok
+test foreign_graph_compiler::tests::foreign_builtin_lowering_rejects_malformed_hash_empty_candidates_and_digest_domain_substitution ... ok
+test foreign_graph_compiler::tests::fixed_output_seed_outside_the_selected_root_is_not_required ... ok
+test foreign_graph_compiler::tests::fixed_output_seed_without_a_producer_binding_is_rejected ... ok
+test foreign_graph_compiler::tests::native_fixed_output_derivation_keeps_builder_and_content_identity ... ok
+test foreign_graph_compiler::tests::fixed_output_seed_admits_the_recomputed_output_path ... ok
+test foreign_graph_compiler::tests::compiler_maps_source_descriptors_and_rewrites_suffixes ... ok
+test foreign_graph_compiler::tests::compiler_rewrites_store_paths_inside_structured_attribute_json ... ok
+test foreign_graph_compiler::tests::cache_only_compiler_preserves_exact_paths_and_rejects_prefix_drift ... ok
+test foreign_graph_compiler::tests::compiler_lowers_ordered_executable_download_to_mantle_fetch_facts ... ok
+test foreign_graph_compiler::tests::compiler_lowers_git_revision_and_export_policy_to_mantle_fetch_facts ... ok
+test foreign_graph_compiler::tests::compiler_preserves_non_path_store_placeholders_but_rejects_valid_unknown_paths ... ok
+test foreign_graph_compiler::tests::compiler_binds_canonical_nix_candidates_and_order_into_recipe_identity ... ok
+test foreign_graph_compiler::tests::compiler_rejects_duplicate_maps_output_drift_and_unknown_embedded_paths ... ok
+test foreign_graph_compiler::tests::execution_profile_changes_target_identity_and_reserved_collision_fails ... ok
+test foreign_graph_compiler::tests::dependency_compiler_is_exact_deterministic_and_prefix_sensitive ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 2334 filtered out; finished in 0.01s
+
++ nix develop -c env CARGO_TARGET_DIR=/tmp/mantlepkgs-version-baseline-target cargo clippy -p mantlepkgs-core -p mantle --bin mantle --no-deps -- -D warnings
+warning: /home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/Cargo.toml: file `/home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 39.79s
++ rm -f /tmp/mantlepkgs-version-evidence-sealed.json /tmp/mantlepkgs-version-evidence-catalog.json
++ PATH=/nonexistent
++ /tmp/mantlepkgs-version-baseline-target/debug/mantle mantlepkgs domain-compose --manifest cairn/changes/resolve-mantlepkgs-version-revisions/evidence/pilot/domain/manifest.ncl --sealed-manifest-out /tmp/mantlepkgs-version-evidence-sealed.json --out /tmp/mantlepkgs-version-evidence-catalog.json
+mantlepkgs domain catalog composed: identity=bc0a75f644b06fbdeb832c160d655863c8f3c3a91abe488752a4462b1c964f80 packages=5 variants=0 validations=0 path=/tmp/mantlepkgs-version-evidence-catalog.json
++ git diff --check
++ printf 'focused_validation=passed\n'
+focused_validation=passed

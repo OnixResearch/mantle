@@ -1,0 +1,38 @@
+{
+  "change": "materialize-stagex-lineage-provider",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "890bdfd0ff6f478def4d0ce9680385b3d08b89a2e8dc15c70e59b581e43ff3ec",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "31311ed59859b17aa3da30518cfd4053edafa0443ca657459c44956a08495ac4",
+  "probe_evidence": null,
+  "receipt_hash": "eab28671b3e59d0f0ad6c167e064fca0237806d540a6a647f0b27d4af8e5b30f",
+  "stage": "proposal",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./cairn/changes/materialize-stagex-lineage-provider/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 13,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    }
+  ],
+  "valid": true,
+  "verdict": "PASS"
+}

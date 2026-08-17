@@ -1,0 +1,311 @@
+{
+  "schema": "mantle-hardware-build-evidence-v1",
+  "evidence_ref": "mantle-hardware-evidence://blake3/9c581d319c676243a347de04a9da02d3b4f09540fadfa74f0cd4304268adba94",
+  "fresh": {
+    "run_class": "fresh",
+    "environment_class": "x86_64-linux-local-native-sandbox",
+    "profile_ref": "mantle-hardware-profile://blake3/29ae88cd1abea071db01d724167876f4caef643344cce36e1d0b6e634ffb5c0f",
+    "cohort_ref": "mantle-hardware-cohort://blake3/672eb14a9e5494aba76794c35013b656b9d8525d15107ed8ac5f63b0ac78609c",
+    "source_refs": [
+      "mantle-object://blake3/6860eda5dd590eef7c8cec838d78438a5cdd8f13494730ba9b533299fa5515ba",
+      "mantle-object://blake3/cd82577a3366fcca505d116e5b5e139ad60aebc032242ef5dfdae8ed2f1d69c4"
+    ],
+    "action_refs": [
+      "mantle-action://blake3/a9aa9a57206facd31dbb82fb196f08092f8da5933ddd4b118e8436d591898633",
+      "mantle-action://blake3/5f8ce7fdd01608c670ba411dd4760d387e7d009285615d9dfa7a2cedef1d27db",
+      "mantle-action://blake3/96cc46e1a8f46614c19df4dec9a65dd667a733c134886f1c515490a147169e98",
+      "mantle-action://blake3/f2435d046415cf79740d358ee2d873efdfcbb0f51650f0b41fe97472b13aaf87",
+      "mantle-action://blake3/054a8361480572f9848306c39b4d92494e601a33b7008a5fbd7ae270f952984f",
+      "mantle-action://blake3/d11cd3d47cf16e5f1a62c6f342147fe898e302c7745a5d1232488570727144f0",
+      "mantle-action://blake3/c0301e51fb63f865f4d27d034fcae805afc6307b69945c8ba887633262062602",
+      "mantle-action://blake3/d9d35a42c47e9ffdf0eb07caa86d50d8357825aa8fbf2401c593ee6282b6dd7f",
+      "mantle-action://blake3/eb2d5b03941c2d7c4ab31de00ebaf6107723b7839261ae68ff18316e0a3ab1fd",
+      "mantle-action://blake3/42e4be48cb3913295b79b608e6e141c5fbdb977f69a532efc0cba563b3ca4e85",
+      "mantle-action://blake3/a6838ef31687ba7ac8982884a42b2c6a491eaa4d4b20d6d4971e5b73a21443c1",
+      "mantle-action://blake3/ff381abff3b7ec2c8da08ed463f59e96046428a4a0f2c3b6ed976398420b935c",
+      "mantle-action://blake3/bd23284de9d3fc526d97e810229d0956ca45b5ec01226952cae9cf78d8ab3d9a"
+    ],
+    "counts": {
+      "generation": {
+        "requested": 1,
+        "executed": 1,
+        "reused": 0,
+        "invalidated": 1
+      },
+      "compile": {
+        "requested": 9,
+        "executed": 9,
+        "reused": 0,
+        "invalidated": 9
+      },
+      "link": {
+        "requested": 1,
+        "executed": 1,
+        "reused": 0,
+        "invalidated": 1
+      },
+      "smoke": {
+        "requested": 2,
+        "executed": 2,
+        "reused": 0,
+        "invalidated": 2
+      }
+    },
+    "transferred_bytes": 0,
+    "reused_bytes": 0,
+    "invalidated_action_refs": [
+      "mantle-action://blake3/a9aa9a57206facd31dbb82fb196f08092f8da5933ddd4b118e8436d591898633",
+      "mantle-action://blake3/5f8ce7fdd01608c670ba411dd4760d387e7d009285615d9dfa7a2cedef1d27db",
+      "mantle-action://blake3/96cc46e1a8f46614c19df4dec9a65dd667a733c134886f1c515490a147169e98",
+      "mantle-action://blake3/f2435d046415cf79740d358ee2d873efdfcbb0f51650f0b41fe97472b13aaf87",
+      "mantle-action://blake3/054a8361480572f9848306c39b4d92494e601a33b7008a5fbd7ae270f952984f",
+      "mantle-action://blake3/d11cd3d47cf16e5f1a62c6f342147fe898e302c7745a5d1232488570727144f0",
+      "mantle-action://blake3/c0301e51fb63f865f4d27d034fcae805afc6307b69945c8ba887633262062602",
+      "mantle-action://blake3/d9d35a42c47e9ffdf0eb07caa86d50d8357825aa8fbf2401c593ee6282b6dd7f",
+      "mantle-action://blake3/eb2d5b03941c2d7c4ab31de00ebaf6107723b7839261ae68ff18316e0a3ab1fd",
+      "mantle-action://blake3/42e4be48cb3913295b79b608e6e141c5fbdb977f69a532efc0cba563b3ca4e85",
+      "mantle-action://blake3/a6838ef31687ba7ac8982884a42b2c6a491eaa4d4b20d6d4971e5b73a21443c1",
+      "mantle-action://blake3/ff381abff3b7ec2c8da08ed463f59e96046428a4a0f2c3b6ed976398420b935c",
+      "mantle-action://blake3/bd23284de9d3fc526d97e810229d0956ca45b5ec01226952cae9cf78d8ab3d9a"
+    ],
+    "elapsed_diagnostic_ns": null,
+    "elapsed_is_gating": false,
+    "non_claims": [
+      "elapsed-diagnostics-are-not-correctness-thresholds",
+      "no-commercial-simulator-or-license-server-support",
+      "no-dvcon-speedup-reproduction-claim",
+      "no-fpga-or-asic-correctness-proof",
+      "no-physical-design-or-timing-closure-claim",
+      "no-production-capacity-claim",
+      "no-production-remote-farm-throughput-claim",
+      "no-simulator-license-saving-claim",
+      "no-specific-speedup-promise"
+    ]
+  },
+  "selected_source_change": {
+    "run_class": "selected-source-change",
+    "environment_class": "x86_64-linux-local-native-sandbox",
+    "profile_ref": "mantle-hardware-profile://blake3/f4382d6761f63b25ff72f420fedca27655521d5294f432a777cb49fa4c5cc7b5",
+    "cohort_ref": "mantle-hardware-cohort://blake3/672eb14a9e5494aba76794c35013b656b9d8525d15107ed8ac5f63b0ac78609c",
+    "source_refs": [
+      "mantle-object://blake3/6860eda5dd590eef7c8cec838d78438a5cdd8f13494730ba9b533299fa5515ba",
+      "mantle-object://blake3/6e118d493647fd9df22209d4ade2ac64875d7de67f3adc3f3158bf6f19fc6a48"
+    ],
+    "action_refs": [
+      "mantle-action://blake3/268079315f8d519efa00122018bd8b99f0ff6b011b35875024ed9ba2d776610e",
+      "mantle-action://blake3/0150959f1de98c65f804513b225f4a09165c8d91541145b7d7999fb7258d4a0c",
+      "mantle-action://blake3/1a7a6f84f0c35eee2225567b3927026337aad81e43127bc54b3cc00ab47038ff",
+      "mantle-action://blake3/aa600b601705ab9f85afb60c789a0b9e73ccf1934329f82907bc8ab9d5e815d4",
+      "mantle-action://blake3/02a85691206818644708c5609ba4dded12bbeef49afa3746f1149616d6d5e841",
+      "mantle-action://blake3/24323a96ddb2c97570bc6b6667711d191e72c651bd42ebe41a4ca65750027b52",
+      "mantle-action://blake3/fd36b741c718ff56a1c426fd4c1ba70b6e3df2202f16b5ff2550c83fa1c981f6",
+      "mantle-action://blake3/94f06b0f5ff0da321e280f024113ca06521e9d7e7eca787dbeee5c689cc0edfd",
+      "mantle-action://blake3/89d246c79feee9fdf568f0ec682b818a2c3bf40b55c004546b06d468d72011a9",
+      "mantle-action://blake3/723cb3b92ebaf2b2f54e173f1c47b13f39515aba583c9d11b7827e4b6503bff5",
+      "mantle-action://blake3/8e6de07fad6c639963b7618d96acd9694157a82f6ab1d9c7e6d53e9507cafc6e",
+      "mantle-action://blake3/2d16816321850f909c0cc6bb674be3192193bf9ebfb73b65ebcfbc418dbecdd2",
+      "mantle-action://blake3/311740572e24388a8bfb79391aeda0aea4e25425a82fdc30c9c32ddca510b099"
+    ],
+    "counts": {
+      "generation": {
+        "requested": 1,
+        "executed": 1,
+        "reused": 0,
+        "invalidated": 1
+      },
+      "compile": {
+        "requested": 9,
+        "executed": 9,
+        "reused": 0,
+        "invalidated": 9
+      },
+      "link": {
+        "requested": 1,
+        "executed": 1,
+        "reused": 0,
+        "invalidated": 1
+      },
+      "smoke": {
+        "requested": 2,
+        "executed": 2,
+        "reused": 0,
+        "invalidated": 2
+      }
+    },
+    "transferred_bytes": 0,
+    "reused_bytes": 0,
+    "invalidated_action_refs": [
+      "mantle-action://blake3/054a8361480572f9848306c39b4d92494e601a33b7008a5fbd7ae270f952984f",
+      "mantle-action://blake3/42e4be48cb3913295b79b608e6e141c5fbdb977f69a532efc0cba563b3ca4e85",
+      "mantle-action://blake3/5f8ce7fdd01608c670ba411dd4760d387e7d009285615d9dfa7a2cedef1d27db",
+      "mantle-action://blake3/96cc46e1a8f46614c19df4dec9a65dd667a733c134886f1c515490a147169e98",
+      "mantle-action://blake3/a6838ef31687ba7ac8982884a42b2c6a491eaa4d4b20d6d4971e5b73a21443c1",
+      "mantle-action://blake3/a9aa9a57206facd31dbb82fb196f08092f8da5933ddd4b118e8436d591898633",
+      "mantle-action://blake3/bd23284de9d3fc526d97e810229d0956ca45b5ec01226952cae9cf78d8ab3d9a",
+      "mantle-action://blake3/c0301e51fb63f865f4d27d034fcae805afc6307b69945c8ba887633262062602",
+      "mantle-action://blake3/d11cd3d47cf16e5f1a62c6f342147fe898e302c7745a5d1232488570727144f0",
+      "mantle-action://blake3/d9d35a42c47e9ffdf0eb07caa86d50d8357825aa8fbf2401c593ee6282b6dd7f",
+      "mantle-action://blake3/eb2d5b03941c2d7c4ab31de00ebaf6107723b7839261ae68ff18316e0a3ab1fd",
+      "mantle-action://blake3/f2435d046415cf79740d358ee2d873efdfcbb0f51650f0b41fe97472b13aaf87",
+      "mantle-action://blake3/ff381abff3b7ec2c8da08ed463f59e96046428a4a0f2c3b6ed976398420b935c"
+    ],
+    "elapsed_diagnostic_ns": null,
+    "elapsed_is_gating": false,
+    "non_claims": [
+      "elapsed-diagnostics-are-not-correctness-thresholds",
+      "no-commercial-simulator-or-license-server-support",
+      "no-dvcon-speedup-reproduction-claim",
+      "no-fpga-or-asic-correctness-proof",
+      "no-physical-design-or-timing-closure-claim",
+      "no-production-capacity-claim",
+      "no-production-remote-farm-throughput-claim",
+      "no-simulator-license-saving-claim",
+      "no-specific-speedup-promise"
+    ]
+  },
+  "unrelated_source_change": {
+    "run_class": "unrelated-source-change",
+    "environment_class": "x86_64-linux-local-native-sandbox",
+    "profile_ref": "mantle-hardware-profile://blake3/29ae88cd1abea071db01d724167876f4caef643344cce36e1d0b6e634ffb5c0f",
+    "cohort_ref": "mantle-hardware-cohort://blake3/672eb14a9e5494aba76794c35013b656b9d8525d15107ed8ac5f63b0ac78609c",
+    "source_refs": [
+      "mantle-object://blake3/6860eda5dd590eef7c8cec838d78438a5cdd8f13494730ba9b533299fa5515ba",
+      "mantle-object://blake3/cd82577a3366fcca505d116e5b5e139ad60aebc032242ef5dfdae8ed2f1d69c4"
+    ],
+    "action_refs": [
+      "mantle-action://blake3/a9aa9a57206facd31dbb82fb196f08092f8da5933ddd4b118e8436d591898633",
+      "mantle-action://blake3/5f8ce7fdd01608c670ba411dd4760d387e7d009285615d9dfa7a2cedef1d27db",
+      "mantle-action://blake3/96cc46e1a8f46614c19df4dec9a65dd667a733c134886f1c515490a147169e98",
+      "mantle-action://blake3/f2435d046415cf79740d358ee2d873efdfcbb0f51650f0b41fe97472b13aaf87",
+      "mantle-action://blake3/054a8361480572f9848306c39b4d92494e601a33b7008a5fbd7ae270f952984f",
+      "mantle-action://blake3/d11cd3d47cf16e5f1a62c6f342147fe898e302c7745a5d1232488570727144f0",
+      "mantle-action://blake3/c0301e51fb63f865f4d27d034fcae805afc6307b69945c8ba887633262062602",
+      "mantle-action://blake3/d9d35a42c47e9ffdf0eb07caa86d50d8357825aa8fbf2401c593ee6282b6dd7f",
+      "mantle-action://blake3/eb2d5b03941c2d7c4ab31de00ebaf6107723b7839261ae68ff18316e0a3ab1fd",
+      "mantle-action://blake3/42e4be48cb3913295b79b608e6e141c5fbdb977f69a532efc0cba563b3ca4e85",
+      "mantle-action://blake3/a6838ef31687ba7ac8982884a42b2c6a491eaa4d4b20d6d4971e5b73a21443c1",
+      "mantle-action://blake3/ff381abff3b7ec2c8da08ed463f59e96046428a4a0f2c3b6ed976398420b935c",
+      "mantle-action://blake3/bd23284de9d3fc526d97e810229d0956ca45b5ec01226952cae9cf78d8ab3d9a"
+    ],
+    "counts": {
+      "generation": {
+        "requested": 1,
+        "executed": 0,
+        "reused": 1,
+        "invalidated": 0
+      },
+      "compile": {
+        "requested": 9,
+        "executed": 0,
+        "reused": 9,
+        "invalidated": 0
+      },
+      "link": {
+        "requested": 1,
+        "executed": 0,
+        "reused": 1,
+        "invalidated": 0
+      },
+      "smoke": {
+        "requested": 2,
+        "executed": 0,
+        "reused": 2,
+        "invalidated": 0
+      }
+    },
+    "transferred_bytes": 0,
+    "reused_bytes": 791928,
+    "invalidated_action_refs": [],
+    "elapsed_diagnostic_ns": null,
+    "elapsed_is_gating": false,
+    "non_claims": [
+      "elapsed-diagnostics-are-not-correctness-thresholds",
+      "no-commercial-simulator-or-license-server-support",
+      "no-dvcon-speedup-reproduction-claim",
+      "no-fpga-or-asic-correctness-proof",
+      "no-physical-design-or-timing-closure-claim",
+      "no-production-capacity-claim",
+      "no-production-remote-farm-throughput-claim",
+      "no-simulator-license-saving-claim",
+      "no-specific-speedup-promise"
+    ]
+  },
+  "full_shared_hit": {
+    "run_class": "full-shared-hit",
+    "environment_class": "x86_64-linux-http-clean-client-native-sandbox",
+    "profile_ref": "mantle-hardware-profile://blake3/29ae88cd1abea071db01d724167876f4caef643344cce36e1d0b6e634ffb5c0f",
+    "cohort_ref": "mantle-hardware-cohort://blake3/672eb14a9e5494aba76794c35013b656b9d8525d15107ed8ac5f63b0ac78609c",
+    "source_refs": [
+      "mantle-object://blake3/6860eda5dd590eef7c8cec838d78438a5cdd8f13494730ba9b533299fa5515ba",
+      "mantle-object://blake3/cd82577a3366fcca505d116e5b5e139ad60aebc032242ef5dfdae8ed2f1d69c4"
+    ],
+    "action_refs": [
+      "mantle-action://blake3/a9aa9a57206facd31dbb82fb196f08092f8da5933ddd4b118e8436d591898633",
+      "mantle-action://blake3/5f8ce7fdd01608c670ba411dd4760d387e7d009285615d9dfa7a2cedef1d27db",
+      "mantle-action://blake3/96cc46e1a8f46614c19df4dec9a65dd667a733c134886f1c515490a147169e98",
+      "mantle-action://blake3/f2435d046415cf79740d358ee2d873efdfcbb0f51650f0b41fe97472b13aaf87",
+      "mantle-action://blake3/054a8361480572f9848306c39b4d92494e601a33b7008a5fbd7ae270f952984f",
+      "mantle-action://blake3/d11cd3d47cf16e5f1a62c6f342147fe898e302c7745a5d1232488570727144f0",
+      "mantle-action://blake3/c0301e51fb63f865f4d27d034fcae805afc6307b69945c8ba887633262062602",
+      "mantle-action://blake3/d9d35a42c47e9ffdf0eb07caa86d50d8357825aa8fbf2401c593ee6282b6dd7f",
+      "mantle-action://blake3/eb2d5b03941c2d7c4ab31de00ebaf6107723b7839261ae68ff18316e0a3ab1fd",
+      "mantle-action://blake3/42e4be48cb3913295b79b608e6e141c5fbdb977f69a532efc0cba563b3ca4e85",
+      "mantle-action://blake3/a6838ef31687ba7ac8982884a42b2c6a491eaa4d4b20d6d4971e5b73a21443c1",
+      "mantle-action://blake3/ff381abff3b7ec2c8da08ed463f59e96046428a4a0f2c3b6ed976398420b935c",
+      "mantle-action://blake3/bd23284de9d3fc526d97e810229d0956ca45b5ec01226952cae9cf78d8ab3d9a"
+    ],
+    "counts": {
+      "generation": {
+        "requested": 1,
+        "executed": 0,
+        "reused": 1,
+        "invalidated": 0
+      },
+      "compile": {
+        "requested": 9,
+        "executed": 0,
+        "reused": 9,
+        "invalidated": 0
+      },
+      "link": {
+        "requested": 1,
+        "executed": 0,
+        "reused": 1,
+        "invalidated": 0
+      },
+      "smoke": {
+        "requested": 2,
+        "executed": 0,
+        "reused": 2,
+        "invalidated": 0
+      }
+    },
+    "transferred_bytes": 791928,
+    "reused_bytes": 791928,
+    "invalidated_action_refs": [],
+    "elapsed_diagnostic_ns": null,
+    "elapsed_is_gating": false,
+    "non_claims": [
+      "elapsed-diagnostics-are-not-correctness-thresholds",
+      "no-commercial-simulator-or-license-server-support",
+      "no-dvcon-speedup-reproduction-claim",
+      "no-fpga-or-asic-correctness-proof",
+      "no-physical-design-or-timing-closure-claim",
+      "no-production-capacity-claim",
+      "no-production-remote-farm-throughput-claim",
+      "no-simulator-license-saving-claim",
+      "no-specific-speedup-promise"
+    ]
+  },
+  "non_claims": [
+    "elapsed-diagnostics-are-not-correctness-thresholds",
+    "no-commercial-simulator-or-license-server-support",
+    "no-dvcon-speedup-reproduction-claim",
+    "no-fpga-or-asic-correctness-proof",
+    "no-physical-design-or-timing-closure-claim",
+    "no-production-capacity-claim",
+    "no-production-remote-farm-throughput-claim",
+    "no-simulator-license-saving-claim",
+    "no-specific-speedup-promise"
+  ]
+}

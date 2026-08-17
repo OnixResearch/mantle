@@ -1,0 +1,14 @@
+## Implementation
+
+- [x] [serial] I1 Audit the existing trust-policy surface in `crates/crunch-project/src/refresh_adapter.rs`, `crates/crunch-project/src/lib.rs`, `src/project_resolve.rs`, and `src/pin_import.rs` against every scenario clause of the accepted requirement; record which verifier kinds, key-set checks, quorum decisions, and byte/digest bindings are already covered, and which are gaps. [depends:project_workflows.input_trust_policy] [evidence=evidence/audit.md]
+- [x] [serial] I2 Provide a bounded local offline proof rail (`tests/trust_policy_offline_rail.rs`) that exercises input trust policy verification during refresh using a bounded offline verifier fixture (fixed test key pair, no network or ambient keyring), accepting a refresh only when fetched bytes match the content hash and present valid trust evidence from the configured signer set. r[project_workflows.input_trust_policy_proof_rail]
+- [x] [serial] I3 Emit a versioned (`mantle-trust-policy-rail-evidence-v1`), redacted, non-overclaiming evidence record that identifies the verified trust policy (verifier kind and trusted key identity or fingerprint, not secret material), asserts the signature binding to fetched bytes or digest, and states that a hash-only input is content integrity, not signer trust or upstream authenticity. r[project_workflows.input_trust_policy_proof_rail]
+- [x] [serial] I4 Add negative cases: `trust_policy_offline_rail_missing_signature_blocks` (missing signature), `trust_policy_offline_rail_untrusted_key_blocks` (different key), and `trust_policy_offline_rail_hash_only_is_content_integrity` (hash-only non-claim). r[project_workflows.input_trust_policy_proof_rail]
+
+## Verification
+
+- [x] [serial] V1 Positive: `trust_policy_offline_rail_trusted_refresh_accepted` asserts trusted refresh, lock entry written, evidence carries schema version and non-claims. Pre-existing binary build errors block runtime execution; test code compiled. r[project_workflows.input_trust_policy_proof_rail]
+- [x] [serial] V2 Negative: missing signature and untrusted key cases reject before writing new lock entries. Pre-existing binary build errors block runtime execution of all negative fixtures; test code compiled. r[project_workflows.input_trust_policy_proof_rail]
+- [x] [serial] V3 Hash-only non-claim: evidence record asserts hash-only non-claim and no trust claim for content-hash-only inputs. r[project_workflows.input_trust_policy_proof_rail]
+- [x] [serial] V4 Redaction: `trust_policy_offline_rail_evidence_redaction` asserts evidence omits private key material. r[project_workflows.input_trust_policy_proof_rail]
+- [x] [serial] V5 Cairn validation passed (22 specs valid). Proposal, design, and tasks gates all PASS for this change. Pre-existing binary build errors block runtime test execution. r[project_workflows.input_trust_policy_proof_rail]

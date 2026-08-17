@@ -1,0 +1,141 @@
+{
+  "build": {
+    "log_path": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/mrustc-first-stage-build.log",
+    "minicargo_digest_blake3": "af49a81946ca860c7364eeda82539a80340716ce6cd0be95659d27f71cd427e2",
+    "minicargo_path": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/sources/mrustc-0.12.0/bin/minicargo",
+    "mrustc_digest_blake3": "5ac771b2b4a86341bf0756f3ddff5e39acf180d7b131e297ca227cf5ed4cdc81",
+    "mrustc_path": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/sources/mrustc-0.12.0/bin/mrustc",
+    "parallel_job_count": 4,
+    "plan_digest_blake3": "417a886acf1ec23d2d09269594b88c477e6413eccd7a9cf5410a44dd39f4125c",
+    "prefix_digest_blake3": "d28dce81cc01de1b401e88811363fe680e90168d35827241953aeb7574be0d48",
+    "prefix_path": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/sources/mrustc-0.12.0/run_rustc/output/prefix",
+    "prefix_rustlib_digest_blake3": "197ba422a299be2e112eb447c7356f9f4ff5732af173166204e79161e3ea357d",
+    "prefix_rustlib_path": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/sources/mrustc-0.12.0/run_rustc/output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib",
+    "script_digest_blake3": "6ead0c26cb44850553131e60298531614e83e7cea02b8d710de0458a47bc4f8c",
+    "script_path": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/run-mrustc-first-stage.sh",
+    "stage_id": "mrustc-to-rust-1.90.0",
+    "target_prefix_rustlib_digest_blake3": "197ba422a299be2e112eb447c7356f9f4ff5732af173166204e79161e3ea357d",
+    "target_prefix_rustlib_path": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/sources/mrustc-0.12.0/run_rustc/output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib",
+    "translated_cargo_digest_blake3": "912a62f138df9b241276119730e1fc811d5f6b2369318b3c08ce42c6315f2d1b",
+    "translated_cargo_path": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/sources/mrustc-0.12.0/output/cargo",
+    "translated_rustc_digest_blake3": "c9ad4de4578ea6cc914a7f3457b302e169e6a36fb24e6a86814e0a32b7196d42",
+    "translated_rustc_path": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v13-20260726/sources/mrustc-0.12.0/output/rustc"
+  },
+  "next_blocked_reason": "source-built Rust provider completion remains pending until every planned stage passes and the validated final provider is published",
+  "patch_plan": {
+    "input": {
+      "capabilities": {
+        "dynamic_tool_runtime": true,
+        "proc_macro_runtime": true,
+        "provider_contract_version": "mantle-rust-source-provider-v1",
+        "rustdoc_tool": false,
+        "source_built_provider": true,
+        "static_executable_linking": true
+      },
+      "host_triple": "x86_64-unknown-linux-musl",
+      "mrustc_version": "0.12.0",
+      "route_id": "rust-source-musl-host-plan",
+      "route_plan_digest_blake3": "58c6ea33a72121463d8e1e71310f60562f63528385b6cd2b86d98e8d37b2281c",
+      "route_policy_digest_blake3": "66a76c43410fabbbd3747a64f3715506acfe7034220e81e3b564dd5fd97e935a",
+      "rust_version": "1.90.0",
+      "source_identities": [
+        {
+          "digest": "c1ba35f5fc5c4ca2952d9f5526e900dcb6632ea7fd4d71fa58029b3bb563ae56",
+          "digest_kind": "sha256",
+          "id": "mrustc-0.12.0",
+          "name": "mrustc-source"
+        },
+        {
+          "digest": "799a9f9cba4ed5351e071048bcf6b5560755d9009648def33a407dd4961f9b7e",
+          "digest_kind": "sha256",
+          "id": "rust-1.90.0",
+          "name": "rust-compiler-source"
+        }
+      ],
+      "stage": "first-stage",
+      "stage_id": "mrustc-to-rust-1.90.0",
+      "target_triple": "x86_64-unknown-linux-musl"
+    },
+    "input_digest_blake3": "a7dc673650091a0c8f8b4b4c767c736da21941407ba19956b0f5feddb2345fa5",
+    "operation_count": 9,
+    "operations": [
+      {
+        "expected_anchor": "tools/minicargo/build.cpp OUT_DIR assignment",
+        "id": "first-stage-minicargo-out-dir",
+        "kind": "minicargo-build-out-dir",
+        "phase": "before-first-stage-main-make",
+        "source_id": "mrustc-0.12.0",
+        "summary": "share generated build-script outputs with target crate compiles"
+      },
+      {
+        "expected_anchor": "tools/minicargo/build.cpp rustc argument construction",
+        "id": "first-stage-minicargo-rustc-threads",
+        "kind": "minicargo-rustc-threads",
+        "phase": "before-first-stage-main-make",
+        "source_id": "mrustc-0.12.0",
+        "summary": "limit temporary static compiler worker threads"
+      },
+      {
+        "expected_anchor": "minicargo.mk LLVM CMake configuration",
+        "id": "first-stage-llvm-static-archives",
+        "kind": "minicargo-llvm-static-archive-targets",
+        "phase": "before-first-stage-main-make",
+        "source_id": "mrustc-0.12.0",
+        "summary": "disable LLVM shared probes and request generated headers plus static archives"
+      },
+      {
+        "expected_anchor": "source-root musl target toolchain",
+        "id": "first-stage-source-root-musl-runtime",
+        "kind": "source-root-musl-llvm-runtime",
+        "phase": "after-first-stage-minicargo",
+        "source_id": "mrustc-0.12.0",
+        "summary": "prepare source-root musl compiler runtime for LLVM and helper links"
+      },
+      {
+        "expected_anchor": "compiler/rustc_session/src/config.rs Sysroot::new",
+        "id": "first-stage-rust-explicit-sysroot",
+        "kind": "rust-explicit-sysroot",
+        "phase": "after-first-stage-rust-source-extract",
+        "source_id": "rust-1.90.0",
+        "summary": "keep explicit sysroot from probing dynamic compiler location"
+      },
+      {
+        "expected_anchor": "compiler/rustc_driver/Cargo.toml crate-type",
+        "id": "first-stage-rustc-driver-rlib",
+        "kind": "rustc-driver-rlib",
+        "phase": "after-first-stage-translated-cargo",
+        "source_id": "rust-1.90.0",
+        "summary": "build rustc_driver as rlib for temporary static compiler linking"
+      },
+      {
+        "expected_anchor": "run_rustc/Makefile host compiler rules",
+        "id": "first-stage-run-rustc-host-runtime",
+        "kind": "run-rustc-host-runtime",
+        "phase": "first-stage-run-rustc-host",
+        "source_id": "mrustc-0.12.0",
+        "summary": "build host compiler prefix with route runtime policy"
+      },
+      {
+        "expected_anchor": "run_rustc target rustlib rule",
+        "id": "first-stage-run-rustc-target",
+        "kind": "run-rustc-target-rustlib",
+        "phase": "first-stage-run-rustc-target",
+        "source_id": "mrustc-0.12.0",
+        "summary": "build provider target rustlib after host compiler prefix"
+      },
+      {
+        "expected_anchor": "provider metadata contract",
+        "id": "provider-contract-assertion",
+        "kind": "provider-contract-assertion",
+        "phase": "provider-evidence",
+        "summary": "assert provider contract mantle-rust-source-provider-v1 from explicit route facts"
+      }
+    ],
+    "output_digest_blake3": "82554907a23ae9214e1396dc421289ba2eb3905109c7a6e37c0551ba9a05cb8e",
+    "schema": "mantle-rust-bootstrap-patch-plan-v1"
+  },
+  "route_plan_digest_blake3": "58c6ea33a72121463d8e1e71310f60562f63528385b6cd2b86d98e8d37b2281c",
+  "route_policy_digest_blake3": "66a76c43410fabbbd3747a64f3715506acfe7034220e81e3b564dd5fd97e935a",
+  "schema": "mantle-rust-source-provider-first-stage-build-v1",
+  "stage_id": "mrustc-to-rust-1.90.0"
+}

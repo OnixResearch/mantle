@@ -1,0 +1,527 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: export-live-guixpkgs-foreign-realization",
+      "kind": "archive_change",
+      "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization"
+    }
+  ],
+  "blocked": false,
+  "change": "export-live-guixpkgs-foreign-realization",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "c5a478cbfc662fd997e7ad050cd19487200302796427e697e2d50faf43095c13",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "860fcf019180b030d855e90c3475a102dc6cdeb4aeb5214badeb84e0dd95145f",
+    "receipt_hash": "b06b13b9f7df737bb10a7204ea1b0f2bd67b15db56686a8e08767561662ed3de",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "2531bc6ce06f98fe33da054fdfedcbb008df3d30cfc1f38b88c198d2d0464745",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "6155fd3ecf692622c55fadbdc6d6da07a173d92eeff1d9a40d516403307532bc",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/design.md"
+        },
+        {
+          "content_hash": "97f91f616a30ecbc07b42253df252d0ef12c61c8a850770585f1035a9bfab670",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/baseline.md"
+        },
+        {
+          "content_hash": "bd80847e9c551c3b90dd77587e4be8d1d00598b7627518349cf680b75deb5c21",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/implementation.md"
+        },
+        {
+          "content_hash": "cba31ab16463450ec2da7d809071787dbad4435935abf9f683ce114e60aa730c",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/artifacts/nixpkgs.graph.json"
+        },
+        {
+          "content_hash": "3ce608f9c12211f73c2d4ef9b4928333d700f9f88eac079fed56f5da398d1a7e",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/artifacts/nixpkgs.index.json"
+        },
+        {
+          "content_hash": "fca7ac8bc66d148ff44fd0dec14f1b36e22b265257bf2e3675ea6222f84e38f3",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/cache-dry-run.stderr"
+        },
+        {
+          "content_hash": "2e58a1b244e76c93570dee3ed817e6ae91fa4aaaa0fd2ea5a0f59aa37cbc07cc",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/cache-policy-one-member.json"
+        },
+        {
+          "content_hash": "76214a5d04ef1bd85b3d64030ee483f838499fc48008c879e695665823012a98",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/derivation-json.json"
+        },
+        {
+          "content_hash": "cb6bb5f174bb6eaa9be56457ee57aba12a0ec02771683a5a03457592bc043eaf",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/export-cache-metadata/23afiym7dlgh1lxk1lyx6xrzplwnwhsk.narinfo"
+        },
+        {
+          "content_hash": "6d53768dd313fb3c8a791b70f5b24f218c6264cbf4c1fc37d0a77c054d451dca",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/export-cache-metadata/6f1n9cmgsbm5s1nhjgsw8xghphrkh9vc.narinfo"
+        },
+        {
+          "content_hash": "e99d9961547cce32fa9b9386425e2695da50ce3ff1667b264155f8bdf9b321e4",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/export-cache-metadata/nix-cache-info"
+        },
+        {
+          "content_hash": "48572c24f93e80e5dfb858786f64de7215510f85446b42b669d0854857bbdbbe",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/export-cache-metadata/nqlk596879spw2h2rlapajbs4b12da5v.narinfo"
+        },
+        {
+          "content_hash": "c81cc468703a5f819575c56138ef22b7f33d658ad0d364dfbe424a75bf57a37a",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/export-cache-metadata/y7d6l50mnhy92w81k48k7was6kzaip1p.narinfo"
+        },
+        {
+          "content_hash": "46f9ceeed871c8a5d3da5cf45b98907070c8400c7bba1caf8472364a36dfd121",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/export-cache-public-key"
+        },
+        {
+          "content_hash": "a59f353d3ac76bfa4eea4c540fb01d83510d3278e419fbe7446e3f400047a40b",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/guix-metadata.json"
+        },
+        {
+          "content_hash": "c9607a8dcb674daa3cf37b41ecdc4472218f9d122ad7b4b175de6e2e69a1832c",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/guixpkgs-flake-metadata.json"
+        },
+        {
+          "content_hash": "94f1675bac4f8bc3c593c63dbf5fe78a0bfda01082af85d5b41a65096db56bff",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/hello-output.txt"
+        },
+        {
+          "content_hash": "e459203c15e21c6973e2b620b1ee863ebad5de2cf994e9893d92f1e5f37c870e",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/hello-unwrapped-drv.txt"
+        },
+        {
+          "content_hash": "335f15b74dd540c98423448b1d5a47ab4c37b92f364caed562d731c167e4c4a6",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/hello-unwrapped-output.txt"
+        },
+        {
+          "content_hash": "0ac66c8eb3dc6d645971d4033d937fcb1415604331c07d6446f88fb2b4bf2f74",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/import-receipt.json"
+        },
+        {
+          "content_hash": "62f8fc5c68a9e43cfb9dbdfd89e99ddc7344deeee442d2fcdb4549d4e39fa5ca",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/limit-stderr.txt"
+        },
+        {
+          "content_hash": "127999cba8744394f6eb8832d601fcbfe462675b1a1da424c7f0f0fdff790520",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/missing-stderr.txt"
+        },
+        {
+          "content_hash": "eeaf494008a6141502ed5033f66e844ce87e93a0331bf74291225b086f4bb704",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/nix-version.txt"
+        },
+        {
+          "content_hash": "ed56378109f789b32ace6a3427c5cf44f2d99794dc8ee7f246b9ad67aaec5f32",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/produce-report.json"
+        },
+        {
+          "content_hash": "d856ffda55fbdf2c235028681256580b7c7a9f2f322df32e30a2cdee54a15e85",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/producer-build-output.txt"
+        },
+        {
+          "content_hash": "a20a31bc36a22b9d8b685c183fb34282917dcd80b0a296b9addd30c1caaac147",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/producer-build-stderr.txt"
+        },
+        {
+          "content_hash": "b4509de17863ddb54fed312d608d5e346cac64442c3f017730bb72046a0839ed",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/producer-metadata.json"
+        },
+        {
+          "content_hash": "07346d96c7b1821b0b6b55240cdd68f0a4ea1438c3ab7bb268427d36675f337c",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/provenance-audit.json"
+        },
+        {
+          "content_hash": "4d0a75411c18f0c34981cde5bf6711ffdc0a51e253276dbf302fce77acb87c5a",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/pull-report.txt"
+        },
+        {
+          "content_hash": "7fc356cc48814f80dfb5ed14df6763bf3053718065a8016e1f9fda35fc116bfe",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/realization-receipt-reuse.json"
+        },
+        {
+          "content_hash": "a4af257f022df5f8fc57c819ee40b49c997db7a73ea3eb3e82d9448a659f78cc",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/realization-receipt.json"
+        },
+        {
+          "content_hash": "fd05a588ba677de5e57014480695410f9a3338b0bddeb6d3dddc4f6d58c42aa8",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/runtime-closure.txt"
+        },
+        {
+          "content_hash": "b8abb366a886bb79314411a3d479a97fe8481173334c238333b9118fe7ab8030",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/source-bundle.json"
+        },
+        {
+          "content_hash": "e743ff60c0f2a7fb075979775634b9601b62db5aa6f34046d37468efeb2654e8",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/summary.md"
+        },
+        {
+          "content_hash": "c90416912e58067327faeb94bcacbebc11831c3ace9da8cca09392ab8e2ba1dc",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/tamper-stderr.txt"
+        },
+        {
+          "content_hash": "42f521346c95b3868d3c470b1920588cb4bb1cd7bbf7a5d0810ce0551167502d",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/transcript.md"
+        },
+        {
+          "content_hash": "e2bf1dae8d00519387644062ccc48768e79f018c56b1bd2340bb4dc3336f83c0",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/wrong-key-stderr.txt"
+        },
+        {
+          "content_hash": "af11c10e649394dd5cbc2de5307722d42c0dffd2a6a23a1c4fc252f2d9204a18",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/machine-schema.log"
+        },
+        {
+          "content_hash": "e671d3c3f44ac454e266f628408465427196886b07924b0067af128ac420a476",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/portfolio-search.md"
+        },
+        {
+          "content_hash": "a647e2f4ce3adbdee8d1bb96594ff787f4358a405737b26a23f71a7c82e5e9cc",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "9aa85de8428c75240afcf1e526c94aab3d6d87f4055be931dada79f8b2cc0fbf",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/sync-plan.json"
+        },
+        {
+          "content_hash": "cc7e8bcef2cfc92151e8a37c237160731a2f905ae66244fd1f87792b40f55cad",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/tracey-postsync.json"
+        },
+        {
+          "content_hash": "dac51c222d6d7a7744ad5f12be188f414e918dafff623855ccec4c1433381872",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/tracey-presync.json"
+        },
+        {
+          "content_hash": "4d6b6135c442d7e9ac0799881dd2eb65c083a790d9fadb8a80e8bbecffb37f55",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/evidence/verification.md"
+        },
+        {
+          "content_hash": "29193ae97e4eb9bb78177b3f715d413c542665776cfd6b1bb1b31d1d863710c8",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/proposal.md"
+        },
+        {
+          "content_hash": "24a5fef52ce34aa447b8e4f2c41eb74e1919afa7b4b6d5ddbd4deecc2cf8b8c8",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/specs/foreign-derivation-import/spec.md"
+        },
+        {
+          "content_hash": "f96a7e1eb14596977027514d95011a3132f70fed7d2b8ad35c3ad77e23614da4",
+          "exists": true,
+          "path": "./cairn/archive/2026-08-02-export-live-guixpkgs-foreign-realization/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization"
+        }
+      ],
+      "manifest_hash": "e29b2cf2bde69482757c9ea20da49c130fda237c70abd12a3e69c547cfe93e9f"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "6155fd3ecf692622c55fadbdc6d6da07a173d92eeff1d9a40d516403307532bc",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/design.md"
+        },
+        {
+          "content_hash": "97f91f616a30ecbc07b42253df252d0ef12c61c8a850770585f1035a9bfab670",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/baseline.md"
+        },
+        {
+          "content_hash": "bd80847e9c551c3b90dd77587e4be8d1d00598b7627518349cf680b75deb5c21",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/implementation.md"
+        },
+        {
+          "content_hash": "cba31ab16463450ec2da7d809071787dbad4435935abf9f683ce114e60aa730c",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/artifacts/nixpkgs.graph.json"
+        },
+        {
+          "content_hash": "3ce608f9c12211f73c2d4ef9b4928333d700f9f88eac079fed56f5da398d1a7e",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/artifacts/nixpkgs.index.json"
+        },
+        {
+          "content_hash": "fca7ac8bc66d148ff44fd0dec14f1b36e22b265257bf2e3675ea6222f84e38f3",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/cache-dry-run.stderr"
+        },
+        {
+          "content_hash": "2e58a1b244e76c93570dee3ed817e6ae91fa4aaaa0fd2ea5a0f59aa37cbc07cc",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/cache-policy-one-member.json"
+        },
+        {
+          "content_hash": "76214a5d04ef1bd85b3d64030ee483f838499fc48008c879e695665823012a98",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/derivation-json.json"
+        },
+        {
+          "content_hash": "cb6bb5f174bb6eaa9be56457ee57aba12a0ec02771683a5a03457592bc043eaf",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/export-cache-metadata/23afiym7dlgh1lxk1lyx6xrzplwnwhsk.narinfo"
+        },
+        {
+          "content_hash": "6d53768dd313fb3c8a791b70f5b24f218c6264cbf4c1fc37d0a77c054d451dca",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/export-cache-metadata/6f1n9cmgsbm5s1nhjgsw8xghphrkh9vc.narinfo"
+        },
+        {
+          "content_hash": "e99d9961547cce32fa9b9386425e2695da50ce3ff1667b264155f8bdf9b321e4",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/export-cache-metadata/nix-cache-info"
+        },
+        {
+          "content_hash": "48572c24f93e80e5dfb858786f64de7215510f85446b42b669d0854857bbdbbe",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/export-cache-metadata/nqlk596879spw2h2rlapajbs4b12da5v.narinfo"
+        },
+        {
+          "content_hash": "c81cc468703a5f819575c56138ef22b7f33d658ad0d364dfbe424a75bf57a37a",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/export-cache-metadata/y7d6l50mnhy92w81k48k7was6kzaip1p.narinfo"
+        },
+        {
+          "content_hash": "46f9ceeed871c8a5d3da5cf45b98907070c8400c7bba1caf8472364a36dfd121",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/export-cache-public-key"
+        },
+        {
+          "content_hash": "a59f353d3ac76bfa4eea4c540fb01d83510d3278e419fbe7446e3f400047a40b",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/guix-metadata.json"
+        },
+        {
+          "content_hash": "c9607a8dcb674daa3cf37b41ecdc4472218f9d122ad7b4b175de6e2e69a1832c",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/guixpkgs-flake-metadata.json"
+        },
+        {
+          "content_hash": "94f1675bac4f8bc3c593c63dbf5fe78a0bfda01082af85d5b41a65096db56bff",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/hello-output.txt"
+        },
+        {
+          "content_hash": "e459203c15e21c6973e2b620b1ee863ebad5de2cf994e9893d92f1e5f37c870e",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/hello-unwrapped-drv.txt"
+        },
+        {
+          "content_hash": "335f15b74dd540c98423448b1d5a47ab4c37b92f364caed562d731c167e4c4a6",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/hello-unwrapped-output.txt"
+        },
+        {
+          "content_hash": "0ac66c8eb3dc6d645971d4033d937fcb1415604331c07d6446f88fb2b4bf2f74",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/import-receipt.json"
+        },
+        {
+          "content_hash": "62f8fc5c68a9e43cfb9dbdfd89e99ddc7344deeee442d2fcdb4549d4e39fa5ca",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/limit-stderr.txt"
+        },
+        {
+          "content_hash": "127999cba8744394f6eb8832d601fcbfe462675b1a1da424c7f0f0fdff790520",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/missing-stderr.txt"
+        },
+        {
+          "content_hash": "eeaf494008a6141502ed5033f66e844ce87e93a0331bf74291225b086f4bb704",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/nix-version.txt"
+        },
+        {
+          "content_hash": "ed56378109f789b32ace6a3427c5cf44f2d99794dc8ee7f246b9ad67aaec5f32",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/produce-report.json"
+        },
+        {
+          "content_hash": "d856ffda55fbdf2c235028681256580b7c7a9f2f322df32e30a2cdee54a15e85",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/producer-build-output.txt"
+        },
+        {
+          "content_hash": "a20a31bc36a22b9d8b685c183fb34282917dcd80b0a296b9addd30c1caaac147",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/producer-build-stderr.txt"
+        },
+        {
+          "content_hash": "b4509de17863ddb54fed312d608d5e346cac64442c3f017730bb72046a0839ed",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/producer-metadata.json"
+        },
+        {
+          "content_hash": "07346d96c7b1821b0b6b55240cdd68f0a4ea1438c3ab7bb268427d36675f337c",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/provenance-audit.json"
+        },
+        {
+          "content_hash": "4d0a75411c18f0c34981cde5bf6711ffdc0a51e253276dbf302fce77acb87c5a",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/pull-report.txt"
+        },
+        {
+          "content_hash": "7fc356cc48814f80dfb5ed14df6763bf3053718065a8016e1f9fda35fc116bfe",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/realization-receipt-reuse.json"
+        },
+        {
+          "content_hash": "a4af257f022df5f8fc57c819ee40b49c997db7a73ea3eb3e82d9448a659f78cc",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/realization-receipt.json"
+        },
+        {
+          "content_hash": "fd05a588ba677de5e57014480695410f9a3338b0bddeb6d3dddc4f6d58c42aa8",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/runtime-closure.txt"
+        },
+        {
+          "content_hash": "b8abb366a886bb79314411a3d479a97fe8481173334c238333b9118fe7ab8030",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/source-bundle.json"
+        },
+        {
+          "content_hash": "e743ff60c0f2a7fb075979775634b9601b62db5aa6f34046d37468efeb2654e8",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/summary.md"
+        },
+        {
+          "content_hash": "c90416912e58067327faeb94bcacbebc11831c3ace9da8cca09392ab8e2ba1dc",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/tamper-stderr.txt"
+        },
+        {
+          "content_hash": "42f521346c95b3868d3c470b1920588cb4bb1cd7bbf7a5d0810ce0551167502d",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/transcript.md"
+        },
+        {
+          "content_hash": "e2bf1dae8d00519387644062ccc48768e79f018c56b1bd2340bb4dc3336f83c0",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/live-guixpkgs-hello/wrong-key-stderr.txt"
+        },
+        {
+          "content_hash": "af11c10e649394dd5cbc2de5307722d42c0dffd2a6a23a1c4fc252f2d9204a18",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/machine-schema.log"
+        },
+        {
+          "content_hash": "e671d3c3f44ac454e266f628408465427196886b07924b0067af128ac420a476",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/portfolio-search.md"
+        },
+        {
+          "content_hash": "a647e2f4ce3adbdee8d1bb96594ff787f4358a405737b26a23f71a7c82e5e9cc",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "9aa85de8428c75240afcf1e526c94aab3d6d87f4055be931dada79f8b2cc0fbf",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/sync-plan.json"
+        },
+        {
+          "content_hash": "cc7e8bcef2cfc92151e8a37c237160731a2f905ae66244fd1f87792b40f55cad",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/tracey-postsync.json"
+        },
+        {
+          "content_hash": "dac51c222d6d7a7744ad5f12be188f414e918dafff623855ccec4c1433381872",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/tracey-presync.json"
+        },
+        {
+          "content_hash": "4d6b6135c442d7e9ac0799881dd2eb65c083a790d9fadb8a80e8bbecffb37f55",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/evidence/verification.md"
+        },
+        {
+          "content_hash": "29193ae97e4eb9bb78177b3f715d413c542665776cfd6b1bb1b31d1d863710c8",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/proposal.md"
+        },
+        {
+          "content_hash": "24a5fef52ce34aa447b8e4f2c41eb74e1919afa7b4b6d5ddbd4deecc2cf8b8c8",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/specs/foreign-derivation-import/spec.md"
+        },
+        {
+          "content_hash": "f96a7e1eb14596977027514d95011a3132f70fed7d2b8ad35c3ad77e23614da4",
+          "exists": true,
+          "path": "./cairn/changes/export-live-guixpkgs-foreign-realization/tasks.md"
+        }
+      ],
+      "manifest_hash": "32560f5018badf7578cb3a32b32aed4c33b739c9a6078128099340dc81ee9d50"
+    },
+    "kind": "archive",
+    "manifest_hash": "d3f6fae3f3ac15d27619f740d7992e538f40cec9c7f17215b0d6476e11dd608c"
+  },
+  "plan_hash": "b6e225e479a8592e97b7d01f67a6a8ce4e5fd64130758b407124cbe8afde7d4b",
+  "policy": "cairn-default",
+  "policy_hash": "860fcf019180b030d855e90c3475a102dc6cdeb4aeb5214badeb84e0dd95145f",
+  "reasons": [],
+  "receipt_hash": "6154d69342383401e38dd4aaee07612e5ee31644c3c8118d59c795456bab0bf5"
+}

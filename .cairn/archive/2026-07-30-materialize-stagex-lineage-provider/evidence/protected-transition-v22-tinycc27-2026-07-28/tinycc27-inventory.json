@@ -1,0 +1,53 @@
+{
+  "format": "mantle-stagex-tinycc27-inventory-v1",
+  "source_patch_digest_blake3": "684632508d70bc1cfd9941cb8f3ceea609507347f677eb29f148d86000d29711",
+  "patched_files": [
+    "libtcc.c",
+    "tcc.c",
+    "tcc.h",
+    "tccelf.c",
+    "tccgen.c",
+    "tccpp.c",
+    "tcctools.c",
+    "x86_64-gen.c"
+  ],
+  "unified_libc_source_count": 261,
+  "runtime_command_count": 3,
+  "build_command_count": 1,
+  "smoke_command_count": 3,
+  "outputs": [
+    {
+      "artifact_id": "tinycc-0.9.27",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v22-tinycc27-20260728/tinycc27-stage/runtime/output/bin/tcc-0.9.27",
+      "bytes_len": 379552,
+      "digest_blake3": "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39"
+    },
+    {
+      "artifact_id": "tinycc27-va-list",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v22-tinycc27-20260728/tinycc27-stage/runtime/output/lib/mes/va_list.o",
+      "bytes_len": 1472,
+      "digest_blake3": "0374e6d6c06eb731b2189d02283736cb93a0caa66ef4022737f2617ae037c7e8"
+    },
+    {
+      "artifact_id": "tinycc27-libc",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v22-tinycc27-20260728/tinycc27-stage/runtime/output/lib/mes/libc.a",
+      "bytes_len": 93630,
+      "digest_blake3": "bd46a4a350e17ec4a7870be6c6dea82f7327c513ee4e2720bebb7b6e26f20d85"
+    },
+    {
+      "artifact_id": "tinycc27-positive-object",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v22-tinycc27-20260728/tinycc27-stage/runtime/smoke/positive.o",
+      "bytes_len": 692,
+      "digest_blake3": "19efdabfedafc9bf94f3ddc49967773a2a5e5b5f28128c6f95ac4f36184fdb92"
+    },
+    {
+      "artifact_id": "tinycc27-alias",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v22-tinycc27-20260728/tinycc27-stage/runtime/output/bin/tcc",
+      "bytes_len": 379552,
+      "digest_blake3": "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39"
+    }
+  ],
+  "protected_exec_enforced": true,
+  "fallback_events": [],
+  "non_claim": "this inventory binds the TinyCC 0.9.27 source patch, Mes runtime ABI refresh, compiler, and bounded smoke observations only; it does not prove later toolchain stages or provider admission"
+}

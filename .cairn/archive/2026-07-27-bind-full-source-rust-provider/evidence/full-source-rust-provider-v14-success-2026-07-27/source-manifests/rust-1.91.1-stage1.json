@@ -1,0 +1,27 @@
+{
+  "bootstrap_provider_candidate": {
+    "metadata_digest_blake3": "350e8284d82e7ccebcc1d2638848528b5df7c8ded5b3090b29290df1153c4c2c",
+    "path": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v14-20260726/mrustc-first-stage-provider-candidate",
+    "policy_digest_blake3": "fc17c6eeb1284a5c3d8e9b5ffc17920b5cfc3b948a05be5c1f8e459ee23d9ff3"
+  },
+  "bootstrap_stage_id": "mrustc-to-rust-1.90.0",
+  "next_blocked_reason": "source-built Rust provider completion remains pending until every planned stage passes and the validated final provider is published",
+  "route_plan_digest_blake3": "58c6ea33a72121463d8e1e71310f60562f63528385b6cd2b86d98e8d37b2281c",
+  "route_policy_digest_blake3": "66a76c43410fabbbd3747a64f3715506acfe7034220e81e3b564dd5fd97e935a",
+  "schema": "mantle-rust-source-provider-rustc-stage1-sources-v1",
+  "source_count": 1,
+  "sources": [
+    {
+      "archive_entry_count": 290629,
+      "archive_path": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v14-20260726/rustc-stage1-archives/rust-1.91.1.tar.gz",
+      "archive_sha256_hex": "38dce205d39f61571261f0444237a1ce9efecb970e760d8ec4d957af5b445723",
+      "extracted_digest_blake3": "72aec21fa22a2956a7b69a20842681a183480479f0a59017fc233583ec4c6a9c",
+      "extracted_path": "/home/brittonr/.cargo-target/mantle-full-source-rust-scratch-detached-v14-20260726/rustc-stage1-sources/rust-1.91.1",
+      "id": "rust-1.91.1",
+      "source_input_path": "/home/brittonr/.cache/mantle-full-source-20260718/rust-source-archives-20260726/rust-1.91.1.tar.gz",
+      "source_policy": "authenticated-offline-only",
+      "url": "https://static.rust-lang.org/dist/rustc-1.91.1-src.tar.gz"
+    }
+  ],
+  "stage_id": "rust-1.91.1-stage1"
+}

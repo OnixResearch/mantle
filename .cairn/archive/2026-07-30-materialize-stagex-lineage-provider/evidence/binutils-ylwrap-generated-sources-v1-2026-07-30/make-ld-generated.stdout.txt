@@ -1,0 +1,7 @@
+make: Entering directory `/home/brittonr/.cargo-target/stagex-binutils-generated-source-probe5-20260730/source/ld'
+/home/brittonr/.cargo-target/stagex-protected-transition-v77-bash-full-final-20260729/bash-full-stage/runtime/output/bin/bash-full ./../ylwrap deffilep.y y.tab.c deffilep.c y.tab.h deffilep.h y.output deffilep.output -- `if [ -f ../bison/bison ]; then echo ../bison/bison -y -L./../bison/; else echo bison -y; fi`  -d
+updating deffilep.h
+/home/brittonr/.cargo-target/stagex-protected-transition-v77-bash-full-final-20260729/bash-full-stage/runtime/output/bin/bash-full ./../ylwrap ldgram.y y.tab.c ldgram.c y.tab.h ldgram.h y.output ldgram.output -- `if [ -f ../bison/bison ]; then echo ../bison/bison -y -L./../bison/; else echo bison -y; fi`  -d
+updating ldgram.h
+/home/brittonr/.cargo-target/stagex-protected-transition-v77-bash-full-final-20260729/bash-full-stage/runtime/output/bin/bash-full ./../ylwrap ldlex.l lex.yy.c ldlex.c -- `if [ -f ../flex/flex ]; then echo ../flex/flex; else echo flex; fi`  
+make: Leaving directory `/home/brittonr/.cargo-target/stagex-binutils-generated-source-probe5-20260730/source/ld'

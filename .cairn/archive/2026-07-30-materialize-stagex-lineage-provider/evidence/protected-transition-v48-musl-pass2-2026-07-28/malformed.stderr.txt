@@ -1,0 +1,2 @@
+malformed.c:1: error: identifier expected
+malformed.c:1: error: identifier expected

@@ -1,0 +1,15 @@
+    |     ^^^^^^^^^^^^^
+    |
+    = note: `Error` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `snix-castore` (lib) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-9acdbd2e5de447e1)
+
+running 1 test
+test stagex_binutils::tests::generates_initial_sources_and_runs_second_bfd_configure has been running for over 60 seconds
+test stagex_binutils::tests::generates_initial_sources_and_runs_second_bfd_configure ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1880 filtered out; finished in 140.16s
+

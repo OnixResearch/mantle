@@ -1,0 +1,20 @@
+make: Entering directory `/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/source/opcodes'
+Making install in .
+make: Entering an unknown directory
+make: Entering an unknown directory
+make[2]: Nothing to be done for `install-exec-am'.
+ /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/tools/mkdir -p '/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/include'
+ /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/tools/install -c -m 644 ./../include/dis-asm.h '/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/include'
+ /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/tools/mkdir -p '/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/lib'
+ /home/brittonr/.cargo-target/stagex-protected-transition-v77-bash-full-final-20260729/bash-full-stage/runtime/output/bin/bash-full ./libtool   --mode=install /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/tools/install -c   libopcodes.la '/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/lib'
+libtool: install: /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/tools/install -c .libs/libopcodes.lai /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/lib/libopcodes.la
+libtool: install: /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/tools/install -c .libs/libopcodes.a /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/lib/libopcodes.a
+libtool: install: chmod 644 /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/lib/libopcodes.a
+libtool: install: true /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/lib/libopcodes.a
+make[2]: Leaving directory `/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/source/opcodes'
+make[1]: Leaving directory `/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/source/opcodes'
+Making install in po
+make: Entering an unknown directory
+make[1]: Nothing to be done for `install'.
+make[1]: Leaving directory `/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/source/opcodes/po'
+make: Leaving directory `/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/source/opcodes'

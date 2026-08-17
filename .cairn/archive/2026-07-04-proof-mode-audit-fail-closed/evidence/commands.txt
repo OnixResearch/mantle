@@ -1,0 +1,5 @@
+# Focused proof-mode audit gate validation
+nix develop -c cargo test -p crunch-release-core
+nix develop -c cargo test -p mantle --bin mantle provider_fixed_point_verifier -- --test-threads=1
+nix develop -c cargo test -p mantle --bin mantle cargo_free_self_build:: -- --test-threads=1
+nix develop -c cargo -Zscript scripts/check-operator-proof-guide.rs

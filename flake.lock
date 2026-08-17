@@ -17,6 +17,23 @@
         "url": "ssh://git@github.com/OnixResearch/onix-artifact.git"
       }
     },
+    "boundedTreeSource": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1785813402,
+        "narHash": "sha256-NQZJIfiq8dLW0rHrxZWrs5z6yTsSjMHiapNv7tTT1LY=",
+        "ref": "refs/heads/main",
+        "rev": "b0fd0103bc9eed2c1b6d852045959462d105d8f1",
+        "revCount": 4,
+        "type": "git",
+        "url": "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git"
+      },
+      "original": {
+        "rev": "b0fd0103bc9eed2c1b6d852045959462d105d8f1",
+        "type": "git",
+        "url": "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git"
+      }
+    },
     "cairn": {
       "inputs": {
         "nixpkgs": [
@@ -423,6 +440,7 @@
     "root": {
       "inputs": {
         "artifactAuthSource": "artifactAuthSource",
+        "boundedTreeSource": "boundedTreeSource",
         "crane": "crane",
         "durablePublicationSource": "durablePublicationSource",
         "flake-utils": "flake-utils",

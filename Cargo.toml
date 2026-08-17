@@ -185,6 +185,8 @@ crunch-attestation = { path = "crates/crunch-attestation" }
 crunch-shell = { path = "crates/crunch-shell" }
 crunch-bootstrap-core = { path = "crates/crunch-bootstrap-core" }
 crunch-release-core = { path = "crates/crunch-release-core" }
+bounded-tree-core = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "b0fd0103bc9eed2c1b6d852045959462d105d8f1" }
+bounded-tree-cap = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "b0fd0103bc9eed2c1b6d852045959462d105d8f1" }
 durable-file-publication = { git = "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git", rev = "951c27f59003cea9bfdb40ed4d89653d50fada1f" }
 crunch-delta = { path = "crates/crunch-delta" }
 nix-compat = { path = "vendor/nix-compat" }

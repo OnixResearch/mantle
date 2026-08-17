@@ -1,0 +1,17 @@
+## Implementation
+
+- [x] [serial] I1 Add the nixpkgs producer-adapter requirements and hash-domain requirements to the foreign derivation import spec delta. r[foreign_derivation_import.nixpkgs_producer_adapter] r[foreign_derivation_import.nix_hash_domain_boundary]
+- [x] [serial] I2 Implement a thin Nix producer shell that lowers a selected nixpkgs package from concrete `.drv` or derivation-JSON closure facts into `foreign-derivation-graph-v1` plus `foreign-package-index-v1`, with Nix evaluation/flake/overlay work allowed only before artifact emission. r[foreign_derivation_import.nixpkgs_producer_adapter] r[foreign_derivation_import.nixpkgs_eval_boundary]
+- [x] [serial] I3 Add a pure adapter core for canonicalizing parsed Nix derivation facts into the foreign import IR, with no filesystem, process, network, environment, clock, or store access. r[foreign_derivation_import.nixpkgs_producer_adapter] r[foreign_derivation_import.nixpkgs_eval_boundary]
+- [x] [serial] I4 Audit `nix-compat` use for Nix-compatible SHA-256 `.drv` identity versus Mantle BLAKE3 receipt identity, and add an explicit hash-domain mode or adapter-local upstream-compatible path before using it for Nix cache identity. r[foreign_derivation_import.nix_hash_domain_boundary]
+- [x] [serial] I5 Thread `cache.nixos.org` and other binary-cache hints as trust-scoped policy data for substitution-first plans without bypassing Mantle PathInfo, NAR hash, signature, or attestation admission. r[foreign_derivation_import.nixpkgs_substitution_first]
+- [x] [serial] I6 Update operator docs and CLI help so nixpkgs support is described as admitted/planned/substituted/rebuilt levels, not as direct nixpkgs evaluation in Mantle. r[foreign_derivation_import.nixpkgs_receipt_non_claims]
+
+## Verification
+
+- [x] [serial] V1 Positive: import a small nixpkgs `hello` fixture lowered from concrete `.drv` or derivation-JSON facts, validate the graph, emit a package index entry, and plan the root without invoking `nix`, `nix-store`, flake evaluation, Nix expression evaluation, or overlay application during consumption. r[foreign_derivation_import.nixpkgs_producer_adapter] r[foreign_derivation_import.nixpkgs_eval_boundary]
+- [x] [serial] V2 Positive: prove substitution-first planning preserves cache hints as policy data and accepts an output only through Mantle's normal PathInfo/NAR/signature admission path. r[foreign_derivation_import.nixpkgs_substitution_first]
+- [x] [serial] V3 Positive: prove Nix-compatible derivation identity and Mantle BLAKE3 receipt identity are both present, deterministic, and not silently substituted for each other. r[foreign_derivation_import.nix_hash_domain_boundary]
+- [x] [serial] V4 Negative: reject or mark unsupported a fixture that contains flake output metadata, overlay-order dependence, or package-set replacement semantics that were not lowered into explicit graph/package-index facts. r[foreign_derivation_import.nixpkgs_eval_boundary]
+- [x] [serial] V5 Negative: fail closed on a hash-domain mismatch where a Mantle BLAKE3 derivation digest is presented as a Nix-compatible `.drv`/cache identity, and on cache hints lacking matching trust policy. r[foreign_derivation_import.nix_hash_domain_boundary] r[foreign_derivation_import.nixpkgs_substitution_first]
+- [x] [serial] V6 Run focused import adapter tests, trust-model doc guard, `cargo fmt -p mantle --check`, `git diff --check`, Cairn validation, and Cairn proposal/design/tasks gates. r[foreign_derivation_import.nixpkgs_receipt_non_claims]

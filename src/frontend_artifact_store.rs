@@ -1,7 +1,12 @@
-use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
+use bounded_tree_core::EntryKind as SharedEntryKind;
+use bounded_tree_core::LimitValues;
+use bounded_tree_core::SymlinkPolicy;
+use bounded_tree_core::TreeLimits;
+use cap_std::ambient_authority;
+use cap_std::fs::Dir;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -28,13 +33,21 @@ const HEX_CHARS_PER_BYTE: usize = 2;
 const BLAKE3_HEX_LENGTH: usize = blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE);
 const FILE_READ_BUFFER_BYTES: usize = 65_536;
 const MAX_TREE_ENTRIES: usize = 1_000_000;
-const INITIAL_WORKLIST_CAPACITY: usize = 64;
+const MAX_TREE_MEMBER_ENTRIES: usize = MAX_TREE_ENTRIES - 1;
+const MAX_TREE_DEPTH: u64 = u64::MAX;
+const MAX_TREE_PATH_BYTES: u64 = u64::MAX;
+const MAX_TREE_FILE_BYTES: u64 = u64::MAX;
+const MAX_TREE_TOTAL_BYTES: u64 = u64::MAX;
+const MAX_SYMLINK_TARGET_BYTES: u64 = u64::MAX;
 const EXECUTABLE_PERMISSION_MASK: u32 = 0o111;
 
 const _: () = {
     assert!(BLAKE3_HEX_LENGTH == blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE));
-    assert!(INITIAL_WORKLIST_CAPACITY > 0);
-    assert!(MAX_TREE_ENTRIES >= INITIAL_WORKLIST_CAPACITY);
+    assert!(MAX_TREE_DEPTH > 0);
+    assert!(MAX_TREE_PATH_BYTES > 0);
+    assert!(MAX_TREE_FILE_BYTES > 0);
+    assert!(MAX_TREE_TOTAL_BYTES > 0);
+    assert!(MAX_SYMLINK_TARGET_BYTES > 0);
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,6 +82,11 @@ struct ArtifactTreeEntry {
     executable: bool,
 }
 
+struct CollectedArtifactTree {
+    entries: Vec<ArtifactTreeEntry>,
+    prepared_directory: Option<bounded_tree_cap::PreparedTree>,
+}
+
 /// Recompute a frontend artifact identity without mutating the content store.
 ///
 /// OCI export uses this after materialization so projection admission binds the
@@ -76,18 +94,18 @@ struct ArtifactTreeEntry {
 pub fn frontend_artifact_identity(source: &Path) -> Result<String, String> {
     std::fs::symlink_metadata(source)
         .map_err(|err| format!("reading frontend artifact metadata for {}: {err}", source.display()))?;
-    let entries = collect_artifact_tree_entries(source)?;
-    root_content_kind(&entries)?;
-    Ok(artifact_ref_from_digest_hex(&hash_artifact_tree_entries(&entries)))
+    let collected = collect_artifact_tree_entries(source)?;
+    root_content_kind(&collected.entries)?;
+    Ok(artifact_ref_from_digest_hex(&hash_artifact_tree_entries(&collected.entries)))
 }
 
 pub fn import_frontend_artifact(source: &Path, state_dir: &Path) -> Result<FrontendArtifactStoreImportReport, String> {
     if !source.exists() {
         return Err(format!("frontend artifact source does not exist: {}", source.display()));
     }
-    let entries = collect_artifact_tree_entries(source)?;
-    let content_kind = root_content_kind(&entries)?;
-    let digest_hex = hash_artifact_tree_entries(&entries);
+    let collected = collect_artifact_tree_entries(source)?;
+    let content_kind = root_content_kind(&collected.entries)?;
+    let digest_hex = hash_artifact_tree_entries(&collected.entries);
     let artifact_ref = artifact_ref_from_digest_hex(&digest_hex);
     let artifact_digest = artifact_digest_from_digest_hex(&digest_hex);
     let content_path = stored_content_path(state_dir, &digest_hex);
@@ -96,7 +114,7 @@ pub fn import_frontend_artifact(source: &Path, state_dir: &Path) -> Result<Front
     if !content_path.exists() {
         let partial_path = partial_content_path(state_dir, &digest_hex);
         remove_existing_path(&partial_path)?;
-        copy_path_to_destination(source, &partial_path)?;
+        copy_collected_artifact(source, &partial_path, &collected)?;
         std::fs::rename(&partial_path, &content_path)
             .map_err(|err| format!("renaming {} -> {}: {err}", partial_path.display(), content_path.display()))?;
     }
@@ -211,44 +229,130 @@ fn is_lowercase_blake3_hex(value: &str) -> bool {
     value.len() == BLAKE3_HEX_LENGTH && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn collect_artifact_tree_entries(root: &Path) -> Result<Vec<ArtifactTreeEntry>, String> {
-    let mut entries = Vec::with_capacity(INITIAL_WORKLIST_CAPACITY);
-    let mut worklist = Vec::with_capacity(INITIAL_WORKLIST_CAPACITY);
-    worklist.push(root.to_path_buf());
-    while let Some(path) = worklist.pop() {
-        if entries.len() >= MAX_TREE_ENTRIES {
-            return Err(format!("frontend artifact tree exceeds {MAX_TREE_ENTRIES} entries"));
-        }
-        let metadata = std::fs::symlink_metadata(&path)
-            .map_err(|err| format!("reading metadata for {}: {err}", path.display()))?;
-        let relative_path = relative_path_string(root, &path)?;
-        if metadata.file_type().is_symlink() {
-            entries.push(symlink_entry(&path, relative_path)?);
-            continue;
-        }
-        if metadata.is_file() {
-            entries.push(file_entry(&path, relative_path)?);
-            continue;
-        }
-        if metadata.is_dir() {
-            entries.push(ArtifactTreeEntry {
-                relative_path,
-                kind: ENTRY_KIND_DIRECTORY.to_string(),
-                digest_or_target: String::new(),
-                executable: false,
-            });
-            let children = read_dir_sorted(&path)?;
-            for child in children.into_iter().rev() {
-                worklist.push(child);
-            }
-            continue;
-        }
-        return Err(format!("unsupported frontend artifact file type: {}", path.display()));
+fn collect_artifact_tree_entries(root: &Path) -> Result<CollectedArtifactTree, String> {
+    let metadata =
+        std::fs::symlink_metadata(root).map_err(|err| format!("reading metadata for {}: {err}", root.display()))?;
+    if metadata.file_type().is_symlink() {
+        return Ok(CollectedArtifactTree {
+            entries: vec![symlink_entry(root, ROOT_RELATIVE_PATH.to_string())?],
+            prepared_directory: None,
+        });
+    }
+    if metadata.is_file() {
+        return Ok(CollectedArtifactTree {
+            entries: vec![file_entry(root, ROOT_RELATIVE_PATH.to_string())?],
+            prepared_directory: None,
+        });
+    }
+    if !metadata.is_dir() {
+        return Err(format!("unsupported frontend artifact file type: {}", root.display()));
+    }
+
+    let prepared = prepare_frontend_tree(root)?;
+    let mut entries = Vec::with_capacity(prepared.plan().member_facts().len().saturating_add(1));
+    entries.push(ArtifactTreeEntry {
+        relative_path: ROOT_RELATIVE_PATH.to_string(),
+        kind: ENTRY_KIND_DIRECTORY.to_string(),
+        digest_or_target: String::new(),
+        executable: false,
+    });
+    for fact in prepared.plan().member_facts() {
+        entries.push(frontend_entry_from_shared(fact)?);
     }
     entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path).then(left.kind.cmp(&right.kind)));
     debug_assert!(entries.len() <= MAX_TREE_ENTRIES);
     debug_assert!(entries.iter().any(|entry| entry.relative_path == ROOT_RELATIVE_PATH));
-    Ok(entries)
+    Ok(CollectedArtifactTree {
+        entries,
+        prepared_directory: Some(prepared),
+    })
+}
+
+fn frontend_tree_limits() -> Result<TreeLimits, String> {
+    let entries = u64::try_from(MAX_TREE_MEMBER_ENTRIES)
+        .map_err(|_| "frontend artifact member limit does not fit u64".to_string())?;
+    TreeLimits::new(LimitValues {
+        entries,
+        depth: MAX_TREE_DEPTH,
+        path_bytes: MAX_TREE_PATH_BYTES,
+        file_bytes: MAX_TREE_FILE_BYTES,
+        total_bytes: MAX_TREE_TOTAL_BYTES,
+        symlink_target_bytes: MAX_SYMLINK_TARGET_BYTES,
+    })
+    .map_err(|error| format!("invalid frontend bounded-tree limit: {:?}", error.kind()))
+}
+
+fn prepare_frontend_tree(root: &Path) -> Result<bounded_tree_cap::PreparedTree, String> {
+    let source = Dir::open_ambient_dir(root, ambient_authority())
+        .map_err(|error| format!("opening frontend artifact capability root: {error}"))?;
+    bounded_tree_cap::prepare(&source, frontend_tree_limits()?, SymlinkPolicy::PreserveInternal)
+        .map_err(|error| frontend_tree_error("observing frontend artifact", &error))
+}
+
+fn frontend_entry_from_shared(fact: &bounded_tree_core::MemberFact) -> Result<ArtifactTreeEntry, String> {
+    let relative_path = shared_relative_path(fact.path().components())?;
+    match fact.kind() {
+        SharedEntryKind::Directory => Ok(ArtifactTreeEntry {
+            relative_path,
+            kind: ENTRY_KIND_DIRECTORY.to_string(),
+            digest_or_target: String::new(),
+            executable: false,
+        }),
+        SharedEntryKind::File => {
+            let digest = fact
+                .file_content()
+                .ok_or_else(|| format!("bounded-tree file fact omitted content identity: {relative_path}"))?;
+            Ok(ArtifactTreeEntry {
+                relative_path,
+                kind: ENTRY_KIND_FILE.to_string(),
+                digest_or_target: blake3_hex(digest.as_bytes()),
+                executable: fact.mode().bits() & EXECUTABLE_PERMISSION_MASK != 0,
+            })
+        }
+        SharedEntryKind::Symlink => {
+            let target = fact
+                .symlink_target()
+                .ok_or_else(|| format!("bounded-tree symlink fact omitted target: {relative_path}"))?;
+            let target = String::from_utf8(target.to_vec())
+                .map_err(|_| format!("bounded-tree symlink target is not UTF-8: {relative_path}"))?;
+            Ok(ArtifactTreeEntry {
+                relative_path,
+                kind: ENTRY_KIND_SYMLINK.to_string(),
+                digest_or_target: target,
+                executable: false,
+            })
+        }
+        SharedEntryKind::Unsupported => Err(format!("bounded-tree admitted unsupported entry: {relative_path}")),
+    }
+}
+
+fn shared_relative_path(components: &[Vec<u8>]) -> Result<String, String> {
+    let mut parts = Vec::with_capacity(components.len());
+    for component in components {
+        parts.push(
+            String::from_utf8(component.clone()).map_err(|_| "bounded-tree path component is not UTF-8".to_string())?,
+        );
+    }
+    Ok(parts.join("/"))
+}
+
+fn blake3_hex(bytes: &[u8; blake3::OUT_LEN]) -> String {
+    let mut hex = String::with_capacity(BLAKE3_HEX_LENGTH);
+    for byte in bytes {
+        use std::fmt::Write as _;
+        write!(&mut hex, "{byte:02x}").expect("writing to String cannot fail");
+    }
+    hex
+}
+
+fn frontend_tree_error(action: &str, error: &bounded_tree_cap::ShellError) -> String {
+    let path = error
+        .path_components()
+        .iter()
+        .map(|component| String::from_utf8_lossy(component))
+        .collect::<Vec<_>>()
+        .join("/");
+    format!("bounded-tree {action} failed with {:?} at {path}", error.kind())
 }
 
 fn root_content_kind(entries: &[ArtifactTreeEntry]) -> Result<String, String> {
@@ -329,41 +433,11 @@ fn append_tree_field(preimage: &mut String, name: impl AsRef<str>, value: &str) 
     preimage.push_str(TREE_RECORD_SEPARATOR);
 }
 
-fn relative_path_string(root: &Path, path: &Path) -> Result<String, String> {
-    let relative = path
-        .strip_prefix(root)
-        .map_err(|err| format!("computing relative path for {}: {err}", path.display()))?;
-    if relative.as_os_str().is_empty() {
-        return Ok(ROOT_RELATIVE_PATH.to_string());
+fn copy_collected_artifact(source: &Path, destination: &Path, collected: &CollectedArtifactTree) -> Result<(), String> {
+    if let Some(prepared) = collected.prepared_directory.as_ref() {
+        return copy_prepared_directory(prepared, destination);
     }
-    let component_count = relative.components().count();
-    let mut parts = Vec::with_capacity(component_count);
-    for component in relative.components() {
-        match component {
-            Component::Normal(part) => parts.push(
-                part.to_str()
-                    .ok_or_else(|| format!("artifact path component in {} is not UTF-8", path.display()))?
-                    .to_string(),
-            ),
-            other => return Err(format!("unsupported artifact path component {other:?} in {}", path.display())),
-        }
-    }
-    debug_assert!(parts.len() <= component_count);
-    debug_assert!(!parts.is_empty());
-    Ok(parts.join("/"))
-}
-
-fn read_dir_sorted(path: &Path) -> Result<Vec<PathBuf>, String> {
-    let read_dir = std::fs::read_dir(path).map_err(|err| format!("reading dir {}: {err}", path.display()))?;
-    let mut entries = read_dir
-        .map(|entry| {
-            entry
-                .map(|value| value.path())
-                .map_err(|err| format!("reading dir entry in {}: {err}", path.display()))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    entries.sort_by(|left, right| left.file_name().cmp(&right.file_name()));
-    Ok(entries)
+    copy_path_to_destination(source, destination)
 }
 
 fn copy_path_to_destination(source: &Path, destination: &Path) -> Result<(), String> {
@@ -394,39 +468,19 @@ fn copy_file(source: &Path, destination: &Path) -> Result<(), String> {
 }
 
 fn copy_directory(source: &Path, destination: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(destination).map_err(|err| format!("creating {}: {err}", destination.display()))?;
-    let mut copied_entries = 0_usize;
-    let mut worklist = Vec::with_capacity(INITIAL_WORKLIST_CAPACITY);
-    worklist.push((source.to_path_buf(), destination.to_path_buf()));
-    while let Some((src_dir, dst_dir)) = worklist.pop() {
-        if copied_entries >= MAX_TREE_ENTRIES {
-            return Err(format!("frontend artifact copy exceeds {MAX_TREE_ENTRIES} entries"));
-        }
-        copied_entries = copied_entries.saturating_add(1);
-        let children = read_dir_sorted(&src_dir)?;
-        for child in children {
-            let child_name = child.file_name().ok_or_else(|| format!("missing filename for {}", child.display()))?;
-            let child_destination = dst_dir.join(child_name);
-            let metadata = std::fs::symlink_metadata(&child)
-                .map_err(|err| format!("reading metadata for {}: {err}", child.display()))?;
-            if metadata.file_type().is_symlink() {
-                copy_symlink(&child, &child_destination)?;
-                continue;
-            }
-            if metadata.is_file() {
-                copy_file(&child, &child_destination)?;
-                continue;
-            }
-            if metadata.is_dir() {
-                std::fs::create_dir_all(&child_destination)
-                    .map_err(|err| format!("creating {}: {err}", child_destination.display()))?;
-                worklist.push((child, child_destination));
-                continue;
-            }
-            return Err(format!("unsupported frontend artifact file type: {}", child.display()));
-        }
+    let prepared = prepare_frontend_tree(source)?;
+    copy_prepared_directory(&prepared, destination)
+}
+
+fn copy_prepared_directory(prepared: &bounded_tree_cap::PreparedTree, destination: &Path) -> Result<(), String> {
+    if let Some(parent) = destination.parent() {
+        std::fs::create_dir_all(parent).map_err(|err| format!("creating {}: {err}", parent.display()))?;
     }
-    debug_assert!(copied_entries <= MAX_TREE_ENTRIES);
+    std::fs::create_dir(destination).map_err(|err| format!("creating {}: {err}", destination.display()))?;
+    let destination_root = Dir::open_ambient_dir(destination, ambient_authority())
+        .map_err(|error| format!("opening frontend artifact destination capability: {error}"))?;
+    bounded_tree_cap::execute(prepared, &destination_root)
+        .map_err(|error| frontend_tree_error("copying frontend artifact", &error))?;
     debug_assert!(destination.is_dir());
     Ok(())
 }
@@ -548,5 +602,120 @@ mod tests {
         let err = materialize_frontend_artifact(temp.path(), "/nix/store/not-an-artifact", &temp.path().join("out"))
             .expect_err("unsupported ref rejected");
         assert!(err.contains(FRONTEND_ARTIFACT_REF_PREFIX_BLAKE3));
+    }
+
+    // r[verify mantle.bounded_tree_adoption.parity]
+    #[test]
+    #[cfg(unix)]
+    fn shared_member_facts_preserve_frontend_tree_identity() {
+        use std::os::unix::fs::PermissionsExt as _;
+        use std::os::unix::fs::symlink;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let source = temp.path().join("source-dir");
+        let nested = source.join("nested");
+        std::fs::create_dir_all(&nested).expect("create nested source");
+        std::fs::write(source.join("root.txt"), FILE_CONTENT).expect("write root file");
+        let executable = nested.join("tool");
+        std::fs::write(&executable, SECOND_FILE_CONTENT).expect("write executable");
+        let mut permissions = std::fs::metadata(&executable).expect("metadata").permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&executable, permissions).expect("set executable mode");
+        symlink("nested/tool", source.join("latest")).expect("create internal symlink");
+
+        let shared = frontend_artifact_identity(&source).expect("shared identity");
+        let legacy = legacy_artifact_tree_entries(&source).expect("legacy entries");
+        let expected = artifact_ref_from_digest_hex(&hash_artifact_tree_entries(&legacy));
+
+        assert_eq!(shared, expected);
+    }
+
+    // r[verify mantle.bounded_tree_adoption.parity]
+    #[test]
+    #[cfg(unix)]
+    fn external_symlink_is_rejected_before_import() {
+        use std::os::unix::fs::symlink;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let source = temp.path().join("source-dir");
+        let external = temp.path().join("external-secret");
+        std::fs::create_dir(&source).expect("create source");
+        std::fs::write(&external, b"secret-marker").expect("write external");
+        symlink(&external, source.join("escape")).expect("create external symlink");
+
+        let error = frontend_artifact_identity(&source).expect_err("external symlink must fail");
+
+        assert!(error.contains("PlanRejected"));
+        assert!(!error.contains("secret-marker"));
+    }
+
+    // r[verify mantle.bounded_tree_adoption.parity]
+    #[test]
+    fn source_change_after_identity_fails_before_frontend_publication() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let source = temp.path().join("source-dir");
+        let destination = temp.path().join("stored");
+        std::fs::create_dir(&source).expect("create source");
+        let member = source.join("member");
+        std::fs::write(&member, FILE_CONTENT).expect("write member");
+        let collected = collect_artifact_tree_entries(&source).expect("collect identity facts");
+        std::fs::write(&member, SECOND_FILE_CONTENT).expect("change member");
+
+        let error = copy_collected_artifact(&source, &destination, &collected).expect_err("source change must fail");
+
+        assert!(error.contains("SourceChanged"));
+        assert!(!destination.join("member").exists());
+    }
+
+    fn legacy_artifact_tree_entries(root: &Path) -> Result<Vec<ArtifactTreeEntry>, String> {
+        let mut entries = Vec::new();
+        let mut worklist = vec![root.to_path_buf()];
+        while let Some(path) = worklist.pop() {
+            if entries.len() >= MAX_TREE_ENTRIES {
+                return Err(format!("legacy fixture exceeds {MAX_TREE_ENTRIES} entries"));
+            }
+            let metadata =
+                std::fs::symlink_metadata(&path).map_err(|error| format!("legacy fixture metadata: {error}"))?;
+            let relative_path = legacy_relative_path(root, &path)?;
+            if metadata.file_type().is_symlink() {
+                entries.push(symlink_entry(&path, relative_path)?);
+            } else if metadata.is_file() {
+                entries.push(file_entry(&path, relative_path)?);
+            } else if metadata.is_dir() {
+                entries.push(ArtifactTreeEntry {
+                    relative_path,
+                    kind: ENTRY_KIND_DIRECTORY.to_string(),
+                    digest_or_target: String::new(),
+                    executable: false,
+                });
+                let mut children = std::fs::read_dir(&path)
+                    .map_err(|error| format!("legacy fixture directory: {error}"))?
+                    .map(|entry| entry.map(|value| value.path()).map_err(|error| error.to_string()))
+                    .collect::<Result<Vec<_>, _>>()?;
+                children.sort_by(|left, right| left.file_name().cmp(&right.file_name()));
+                for child in children.into_iter().rev() {
+                    worklist.push(child);
+                }
+            } else {
+                return Err("legacy fixture contains unsupported entry".to_string());
+            }
+        }
+        entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path).then(left.kind.cmp(&right.kind)));
+        Ok(entries)
+    }
+
+    fn legacy_relative_path(root: &Path, path: &Path) -> Result<String, String> {
+        let relative = path.strip_prefix(root).map_err(|error| error.to_string())?;
+        if relative.as_os_str().is_empty() {
+            return Ok(ROOT_RELATIVE_PATH.to_string());
+        }
+        let mut parts = Vec::new();
+        for component in relative.components() {
+            let std::path::Component::Normal(part) = component else {
+                return Err("legacy fixture path is not normal".to_string());
+            };
+            parts.push(part.to_str().ok_or_else(|| "legacy fixture path is not UTF-8".to_string())?);
+        }
+        Ok(parts.join("/"))
     }
 }

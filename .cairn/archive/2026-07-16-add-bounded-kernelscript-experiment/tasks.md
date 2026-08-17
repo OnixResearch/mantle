@@ -1,0 +1,34 @@
+## Phase 1: Profile and compiler materialization
+
+- [x] [serial] Define the typed beta experiment profile, source/compiler/toolchain/kernel refs, selected output classes, expected generated files, named bounds, and non-claims. r[kernelscript_experiment.profile]
+- [x] [serial] Add pinned fixed-output KernelScript source and locked OCaml/dune/opam compiler derivations with offline build/codegen behavior and BLAKE3 identities. r[kernelscript_experiment.compiler]
+  - Evidence: the official `v0.1.2` archive is fixed by upstream SHA-256 and measured BLAKE3; the compiler and codegen run offline from the locked nixpkgs OCaml/dune/menhir/library closure with no ambient opam or upstream binary. The production adapter remeasures the archive SHA-256 plus compiler/closure BLAKE3 identities and admits the exact compiler observation through the core. See `evidence/probe-production-evidence.md`.
+- [x] [parallel] Add compiler/source drift, missing dependency closure, network attempt, unsupported target, and bound-exceeded negative fixtures. r[kernelscript_experiment.compiler] r[kernelscript_experiment.verification]
+
+## Phase 2: Code generation and explicit build planning
+
+- [x] [serial] Implement the separate codegen derivation and pure generated-project manifest parser/classifier with exact expected-file checks. r[kernelscript_experiment.codegen]
+  - Evidence: the pinned Nix route executes compiler codegen for both reviewed fixtures, then its thin `crunch-kernelscript-adapter` shell reads bounded no-follow bytes and invokes the pure core classifier, planner, and receipt constructor. The structural check proves exact probe/kfunc member parity and rejects the old shell-owned `find`/`diff` classifier. See `evidence/probe-production-evidence.md`.
+- [x] [serial] Implement a Mantle-owned pure compilation planner for allowlisted userspace, eBPF, optional module, and test steps; retain but never execute generated Makefiles. r[kernelscript_experiment.artifacts]
+- [x] [serial] Implement target kernel-build/BTF/header/config/architecture admission and fail closed on absent, ambient-only, or mismatched inputs. r[kernelscript_experiment.kernel_inputs]
+- [x] [serial] Build and statically inspect each selected output class independently with exact member and receipt identities. r[kernelscript_experiment.artifacts]
+  - Evidence: the pinned Nix route invokes the core adapter for generated manifests, compilation plans, and receipts, then builds and statically inspects the probe eBPF object, probe loader, private-kfunc eBPF object, generated skeleton, userspace loader, and private-kfunc kernel module. The module artifact carries `.BTF`/`.BTF.base` and the `process_value` `DECL_TAG 'bpf_kfunc'` evidence. Core receipts remain blocked on external target authority rather than shape/materialization absence. See `evidence/probe-production-evidence.md` and `evidence/downstream-authority-attempt-2026-07-15.md`.
+
+## Phase 3: Candidate handoff and evidence
+
+- [x] [depends:mantle.add-onix-kernel-bundle-oci-projections] Emit frontend-neutral experimental ModulePack/BPF Pack candidate projections with target bindings and no deployability claim. r[kernelscript_experiment.handoff]
+- [x] [serial] Add codegen/build receipts binding source, compiler closure, target inputs, plans, generated manifest, outputs, inspections, blockers, and non-claims with BLAKE3. r[kernelscript_experiment.evidence]
+- [x] [parallel] Add positive fixtures for a small userspace+probe program and one separately gated kfunc/module case under an exact kernel cohort. r[kernelscript_experiment.verification]
+  - Evidence: reviewed `.ks` fixtures now generate under the locked Linux `6.18.20` cohort. The probe object/loader pass structural plus exact-kernel verifier/load/attach/detach VM gates. The private-kfunc route builds the module, BPF object, skeleton, and userspace loader; the runtime VM gate loads the module, verifies/loads the XDP object with `bpftool`, runs the loader, observes attach/detach success, and cleans up. This remains Mantle/NixOS VM behavior evidence, not ChaosControl authority. See `evidence/probe-production-evidence.md` and `evidence/downstream-authority-attempt-2026-07-15.md`.
+- [x] [parallel] Add negative fixtures for generated-file drift/extra files, forbidden Makefile execution, unknown command/path, missing BTF/headers, kernel mismatch, BPF/module compile failure, malformed ELF/BTF metadata, stale output, receipt leak, and production overclaim. r[kernelscript_experiment.verification]
+
+## Phase 4: Validation and closeout
+
+- [x] [parallel] Document the pinned cohort, beta status, reproducible command path, generated-source review, pack handoff, ChaosControl dependency, upgrade procedure, and non-claims. r[kernelscript_experiment.profile] r[kernelscript_experiment.evidence]
+- [x] [serial] Run focused profile, compiler, codegen, planner, build, static-inspection, schema/receipt, formatting, clippy, and dependency-audit checks. r[kernelscript_experiment.verification]
+  - Evidence: pure-core, adapter, and integration positive/negative suites pass; the core compiles for `wasm32-unknown-unknown`; focused core/adapter and integration Clippy pass with `-D warnings`; package/leaf formatting passes; both KernelScript package-root cargo-deny graphs pass advisories, bans, licenses, and sources; and the production structural plus exact-kernel runtime rails pass. The attempted whole-workspace dependency audit still reports unrelated workspace debt and is not claimed as passing. See `evidence/final-validation-2026-07-16.md`.
+- [x] [serial] Run Cairn validation and proposal/design/tasks gates; sync and archive only with positive/negative evidence and without promoting experimental artifacts. r[kernelscript_experiment.verification]
+  - Historical audits and attempts are retained in `evidence/downstream-authority-audit-2026-07-15.md`, `evidence/downstream-authority-attempt-2026-07-15.md`, and `evidence/downstream-admission-progress-2026-07-15.md` rather than rewritten as success.
+  - Exact downstream closeout `evidence/downstream-target-authority-2026-07-16.md` records the archived ChaosControl exact KVM receipt and OnixOS target-provisioned activation, denied-UCAN, replacement, rollback, reconciliation, drift-refusal, recovery, and cleanup receipts for the same Mantle bytes. Credentials remain target-local, lifecycle `CAP_SYS_ADMIN` remains absent, and the exact driver passed three consecutive runs.
+  - OnixOS commit `fc6eb30` has passing proposal/design/tasks gates with 23 done and zero todo. Its sync/archive is blocked only by unrelated legacy accepted-spec validation debt; Mantle does not claim that downstream archive occurred.
+  - Mantle's final implementation/quality evidence is complete. Canonical validation plus proposal/design/tasks gates pass; this completion is finalized by the immediately following reviewed Cairn sync/archive execution, without promoting the experiment.

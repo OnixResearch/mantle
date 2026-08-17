@@ -1,0 +1,30 @@
+{
+  "schema": "mantlepkgs-version-request-set-v1",
+  "request_set_identity_blake3": "89e9e458a34707d1335a2ece5cb3509902d00bea9e139a4cdf35f93d9ed2a97a",
+  "policy_identity_blake3": "2279d3d0a3b86c0c6715fe4143100c36dac144f85bbfecb403823188b1773292",
+  "requests": [
+    {
+      "request_identity_blake3": "25a4b7110b573444df1601a10e609532ce54e018db8b4e53c7c997bf41e67513",
+      "system": "x86_64-linux",
+      "attribute": "hello",
+      "reported_version": "2.12.2",
+      "public_selector": "hello@2.12.2",
+      "aliases": [
+        "hello-2.12.2"
+      ],
+      "unversioned_default": false
+    },
+    {
+      "request_identity_blake3": "6ea0b14bc26f350166853c584f3cf3aaaf9b80469d866e412ad0cdc229e5af00",
+      "system": "x86_64-linux",
+      "attribute": "hello",
+      "reported_version": "2.12.3",
+      "public_selector": "hello@2.12.3",
+      "aliases": [
+        "hello",
+        "hello-2.12.3"
+      ],
+      "unversioned_default": true
+    }
+  ]
+}

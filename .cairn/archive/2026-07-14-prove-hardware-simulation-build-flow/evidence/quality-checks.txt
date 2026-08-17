@@ -1,0 +1,10 @@
+command: nix --option secret-key-files '' develop -c cargo check -p mantle --example hardware_simulation_plan
+result: exit 0
+command: nix --option secret-key-files '' develop -c cargo fmt --check -p crunch-hardware-simulation-core -p crunch-hardware-simulation -p crunch-action-result-core -p crunch-build -p crunch-store -p mantle
+result: exit 0
+command: nix --option secret-key-files '' develop -c cargo clippy -p crunch-hardware-simulation-core -p crunch-hardware-simulation --all-targets --no-deps -- -D warnings
+result: exit 0
+command: nix --option secret-key-files '' develop -c cargo clippy -p crunch-action-result-core -p crunch-build -p crunch-store --lib --no-deps -- -D warnings
+result: exit 0
+command: nix --option secret-key-files '' develop -c cargo clippy -p mantle --bin mantle --example hardware_simulation_plan --no-deps -- -D warnings
+result: exit 0

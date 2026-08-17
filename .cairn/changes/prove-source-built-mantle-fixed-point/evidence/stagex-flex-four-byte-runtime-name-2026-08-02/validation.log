@@ -1,0 +1,17 @@
+Baseline focused tests (pueue task 7130)
+test result: ok. 9 passed; 0 failed; 2 ignored; 0 measured; 1996 filtered out; finished in 0.00s
+
+Post-change focused tests (pueue task 7136)
+test result: ok. 12 passed; 0 failed; 2 ignored; 0 measured; 1996 filtered out; finished in 0.00s
+
+Fresh four-byte retained-artifact convergence (pueue task 7136)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2009 filtered out; finished in 0.00s
+
+Focused first-party Clippy (pueue task 7136)
+cargo clippy -p mantle --bin mantle --no-deps -- -D warnings
+status=0
+
+Formatting and diff checks (pueue task 7136)
+rustfmt --edition 2024 src/stagex_flex.rs
+git diff --check
+status=0

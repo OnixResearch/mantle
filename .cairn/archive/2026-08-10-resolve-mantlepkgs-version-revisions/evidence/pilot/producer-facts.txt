@@ -1,0 +1,3 @@
+canonical_path=/nix/store/lhgrxz1snbqxgvgzf6z2s4dg77fqjnya-nix-2.35.0/bin/nix
+version=nix (Nix) 2.35.0
+executable_blake3=f9fda9d013aa084c19357712a964095a95b7a735a08643c1db39e34620189478

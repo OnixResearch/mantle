@@ -1,0 +1,7 @@
+# Focused cap-std release boundary validation
+nix develop -c rustfmt --check --config skip_children=true src/main.rs src/release_capability.rs
+nix develop -c cargo test -p mantle --bin mantle release_capability
+nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- validate --root .
+nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- gate proposal adopt-cap-std-release-boundaries --root .
+nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- gate design adopt-cap-std-release-boundaries --root .
+nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- gate tasks adopt-cap-std-release-boundaries --root .

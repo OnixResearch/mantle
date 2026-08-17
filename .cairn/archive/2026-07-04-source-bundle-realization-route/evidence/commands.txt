@@ -1,0 +1,272 @@
+# source-bundle-realization-route validation evidence
+Captured: 2026-07-04T21:35:38-04:00
+
+## Focused Rust checks
+$ cargo fmt -p mantle -p crunch-build -p crunch-pipeline -- --check
+
+$ cargo test -p crunch-build fetch_build_service:: --lib
+warning: /home/brittonr/git/mantle/Cargo.toml: file `/home/brittonr/git/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/debug/deps/crunch_build-dfda1e5ff0594692)
+
+running 19 tests
+test fetch_build_service::tests::is_fetch_request_false_for_sandbox ... ok
+test fetch_build_service::tests::is_fetch_request_false_for_empty_args ... ok
+test fetch_build_service::tests::is_fetch_request_true_for_builtin ... ok
+test fetch_build_service::tests::parse_git_fetch ... ok
+test fetch_build_service::tests::parse_git_missing_rev ... ok
+test fetch_build_service::tests::parse_file_fetch ... ok
+test fetch_build_service::tests::parse_executable_fetch ... ok
+test fetch_build_service::tests::parse_invalid_url ... ok
+test fetch_build_service::tests::parse_rejects_non_fetcher ... ok
+test fetch_build_service::tests::parse_missing_url ... ok
+test fetch_build_service::tests::parse_tarball_fetch ... ok
+test fetch_build_service::tests::parse_unpack_takes_priority_over_executable ... ok
+test fetch_build_service::tests::source_override_requires_matching_git_revision ... ok
+test fetch_build_service::tests::do_build_rejects_missing_url ... ok
+test fetch_build_service::tests::do_build_rejects_non_fetch ... ok
+test fetch_build_service::tests::do_build_executable_sets_mode ... ok
+test fetch_build_service::tests::do_build_fetches_local_file ... ok
+test fetch_build_service::tests::do_build_uses_matching_source_override_without_network ... ok
+test fetch_build_service::tests::do_build_fetches_tarball ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 453 filtered out; finished in 0.02s
+
+
+$ cargo test -p mantle --bin crunch source_bundle::
+warning: /home/brittonr/git/mantle/Cargo.toml: file `/home/brittonr/git/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.34s
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/crunch-f5359da809e7cefb)
+
+running 34 tests
+test source_bundle::tests::source_bundle_export_rejects_remote_fetcher_without_local_payload ... ok
+test source_bundle::tests::source_bundle_rejects_unfixed_builtin_fetcher_in_build_root ... ok
+test source_bundle::tests::source_bundle_rejects_unsafe_identity ... ok
+test source_bundle::tests::source_bundle_rejects_file_below_symlink_record ... ok
+test source_bundle::tests::source_bundle_preserves_fetch_policy_metadata_from_fetch_derivation ... ok
+test source_bundle::tests::source_bundle_derives_vcs_snapshot_from_git_fetcher ... ok
+test source_bundle::tests::source_bundle_derives_fetcher_and_store_path_inputs_from_build_root ... ok
+test source_bundle::tests::source_bundle_rejects_vcs_snapshot_without_revision_identity ... ok
+test source_bundle::tests::source_bundle_accepts_single_file_payload_root ... ok
+test source_bundle::tests::source_bundle_export_materializes_local_file_fetcher_payload ... ok
+test source_bundle::tests::source_bundle_rejects_unsafe_symlink ... ok
+test source_bundle::tests::source_bundle_verify_reports_missing_state ... ok
+test source_bundle::tests::source_offline_preflight_allows_roots_without_source_requirements ... ok
+test source_bundle::tests::source_bundle_import_and_verify_are_idempotent ... ok
+test source_bundle::tests::source_bundle_export_rejects_imported_remote_payload_with_wrong_metadata ... ok
+test source_bundle::tests::source_offline_preflight_reports_missing_local_source_state ... ok
+test source_bundle::tests::source_offline_preflight_reports_remote_network_requirement ... ok
+test source_bundle::tests::source_bundle_export_uses_imported_state_for_remote_fetcher_payload ... ok
+test source_bundle::tests::source_fetch_override_plan_rejects_unpinned_imported_fetcher_payload ... ok
+test source_bundle::tests::source_offline_preflight_reports_unsupported_adapter ... ok
+test source_bundle::tests::source_bundle_accepts_language_neutral_package_adapters ... ok
+test source_bundle::tests::source_bundle_rejects_malformed_roots_and_record_order ... ok
+test source_bundle::tests::source_bundle_rejects_tampered_file_payload_and_store_prefix ... ok
+test source_bundle::tests::source_offline_preflight_rejects_unpinned_imported_source ... ok
+test source_bundle::tests::source_bundle_rejects_incomplete_adapter_metadata ... ok
+test source_bundle::tests::source_bundle_export_rejects_local_vcs_revision_mismatch ... ok
+test source_bundle::tests::source_bundle_covers_bootstrap_provider_toolchain_and_proof_records ... ok
+test source_bundle::tests::source_bundle_export_materializes_local_vcs_snapshot_without_dot_git ... ok
+test source_bundle::tests::source_bundle_canonicalizes_equivalent_traversal ... ok
+test source_bundle::tests::source_fetch_override_plan_materializes_pinned_file_fetcher_payload ... ok
+test source_bundle::tests::source_fetch_override_plan_rejects_wrong_vcs_revision_metadata ... ok
+test source_bundle::tests::source_offline_preflight_accepts_pinned_imported_file_payload ... ok
+test source_bundle::tests::source_offline_preflight_reports_untrusted_adapter ... ok
+test source_bundle::tests::source_fetch_override_plan_materializes_tarball_and_vcs_payloads ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 1167 filtered out; finished in 0.00s
+
+
+$ cargo test -p mantle --bin crunch realization_routing::
+warning: /home/brittonr/git/mantle/Cargo.toml: file `/home/brittonr/git/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.32s
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/crunch-f5359da809e7cefb)
+
+running 21 tests
+test realization_routing::tests::cli_remote_builder_plan_rejects_missing_output_trust_before_local_build ... ok
+test realization_routing::tests::candidate_order_does_not_change_tie_breaker_result ... ok
+test realization_routing::tests::existing_action_adapter_records_selected_and_rejected_routes ... ok
+test realization_routing::tests::offline_incomplete_source_bundle_facts_reject_network_and_local_fetch_routes ... ok
+test realization_routing::tests::negative_route_facts_keep_specific_blocker_codes ... ok
+test realization_routing::tests::remote_builder_ticket_without_output_trust_is_rejected ... ok
+test realization_routing::tests::remote_builder_plan_facts_reject_missing_input_capability_and_source_readiness ... ok
+test realization_routing::tests::offline_policy_rejects_network_routes_before_local_build ... ok
+test realization_routing::tests::cli_remote_builder_plan_facts_select_remote_route_without_secrets ... ok
+test realization_routing::tests::reports_preflight_when_no_realization_route_is_eligible ... ok
+test realization_routing::tests::offline_ready_source_bundle_facts_select_input_realization_route ... ok
+test realization_routing::tests::selects_archive_import_when_archive_candidate_is_eligible ... ok
+test realization_routing::tests::selects_cached_local_before_remote_candidates ... ok
+test realization_routing::tests::selects_remote_builder_with_privacy_safe_upload_summary ... ok
+test realization_routing::tests::selects_source_bundle_route_when_source_material_is_required ... ok
+test realization_routing::tests::route_reports_do_not_include_raw_secret_values ... ok
+test realization_routing::tests::selects_trusted_substitute_when_local_cache_misses ... ok
+test realization_routing::tests::strong_claim_compatible_route_can_be_selected ... ok
+test realization_routing::tests::strong_claim_policy_rejects_practical_only_remote_build ... ok
+test realization_routing::tests::upload_summary_rejects_overflow_without_panicking ... ok
+test realization_routing::tests::upload_policy_rejects_forbidden_secret_descriptors ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 1180 filtered out; finished in 0.00s
+
+
+$ cargo test -p crunch-pipeline --lib --tests
+warning: /home/brittonr/git/mantle/Cargo.toml: file `/home/brittonr/git/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.38s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/debug/deps/crunch_pipeline-5494d72544c79731)
+
+running 18 tests
+test tests::hermeticity_audit_event_preserves_kind_and_detail ... ok
+test tests::map_store_audit_events_preserves_closure_degraded_kind ... ok
+test tests::hermeticity_mode_display_uses_stable_strings ... ok
+test tests::map_store_audit_events_preserves_pathinfo_fallback ... ok
+test tests::map_eval_error_keeps_labeled_deserialize_failures_in_deserialize_class ... ok
+test tests::parse_fod_mismatch_edge_case_preserves_trailing_context ... ok
+test tests::eval_failure_key_uses_stable_prefix ... ok
+test tests::parse_drv_key_round_trip ... ok
+test tests::normalize_failed_goal_keys_rewrites_nix_store_keys ... ok
+test tests::parse_fod_mismatch_invalid ... ok
+test tests::parse_fod_mismatch_valid ... ok
+test tests::resolve_eval_parallelism_stays_within_requested_roots ... ok
+test tests::parse_fod_mismatch_strips_drv_suffix ... ok
+test tests::resolve_max_jobs_clamps_user_value ... ok
+test tests::store_fallback_mode_matches_hermeticity_mode ... ok
+test tests::resolve_max_jobs_default_in_range ... ok
+test tests::stream_roots_into_worker_reports_same_labeled_failure_across_policies ... ok
+test tests::stream_roots_into_worker_matches_across_root_force_policies ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/integration_build.rs (/home/brittonr/.cargo-target/debug/deps/integration_build-ecb5ec1ed4f1cd8f)
+
+running 23 tests
+test pipeline_determinism_probe_fetcher_root ... ignored
+test pipeline_determinism_probe_normal_derivation ... ignored
+test pipeline_determinism_probe_self_build_friendly_path ... ignored
+test pipeline_determinism_probe_strict_environment_override_blocker ... ignored
+test pipeline_determinism_normal_derivation_stable_across_ambient_state ... ok
+test pipeline_determinism_fetcher_root_stable_across_ambient_state ... ok
+test pipeline_determinism_strict_blocker_stable_across_ambient_state ... ok
+test pipeline_host_ambient_state_does_not_leak_into_strict_build ... ok
+test pipeline_determinism_self_build_friendly_path_stable_across_ambient_state ... ok
+test pipeline_normalizes_runtime_environment_and_umask ... ok
+test pipeline_builds_trivial_derivation_end_to_end ... ok
+test pipeline_practical_mode_audits_environment_override ... ok
+test pipeline_practical_mode_reports_pathinfo_startup_fallback ... ok
+test pipeline_reports_fod_mismatch_without_aborting_other_roots ... ok
+test pipeline_practical_mode_reports_degraded_closure_resolution ... ok
+test pipeline_strict_mode_rejects_environment_override ... ok
+test pipeline_strict_mode_rejects_pathinfo_startup_fallback ... ok
+test pipeline_uses_source_fetch_override_for_remote_fixed_output_fetcher ... ok
+test pipeline_strict_mode_rejects_missing_closure_facts ... ok
+test pipeline_preserves_label_to_output_association_under_parallel_root_streaming ... ok
+test pipeline_reports_labeled_eval_failure_after_prior_root_dispatch ... ok
+test pipeline_rejects_denied_strict_environment_before_dispatch ... ok
+test pipeline_blocks_declared_build_time_network_capability_before_dispatch ... ok
+
+test result: ok. 19 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+
+## Cairn validation and gates
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root /home/brittonr/git/mantle
+{
+  "change_issues": [],
+  "changes": 4,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 21,
+  "valid": true
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal source-bundle-realization-route --root /home/brittonr/git/mantle
+{
+  "change": "source-bundle-realization-route",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "b5496d48328ed980e111f5703ba5621ad8e91d6274747f391dcffbb35562dc7c",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "cce88946a548efe69b8d62f2215578500242a90b3a32a07f91aa21fee1ca117d",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design source-bundle-realization-route --root /home/brittonr/git/mantle
+{
+  "change": "source-bundle-realization-route",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "c6bf1ac81adb822f3be93046f46524465fea50689fe178962d28bf45d0378959",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "7133c803aed56b074d6032fd06654119199a79c133918e1811671e95b258abac",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks source-bundle-realization-route --root /home/brittonr/git/mantle
+{
+  "change": "source-bundle-realization-route",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "75d8e2ca6fad8e5f6208bce63d954f0ee9e0c6b5e0f34973b644101a4e953858",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "f01bdfb01e64de9a30c0e2b7049af4c7ff9331cbfafc23abf8d58f7942df3e31",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+## Archive execution and post-archive validation
+Archive execution: CAIRN_ARCHIVE_DATE=2026-07-04 nix run path:/home/brittonr/git/cairn#cairn -- archive source-bundle-realization-route --root /home/brittonr/git/mantle --execute
+Archive execution evidence: pueue task 785 completed, then validate reported changes=3 and valid=true.
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root /home/brittonr/git/mantle
+{
+  "change_issues": [],
+  "changes": 3,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 19,
+  "valid": true
+}

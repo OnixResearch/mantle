@@ -1,0 +1,47 @@
+{
+  "schema": "mantle-full-source-rust-host-tools-v1",
+  "source_policy": "authenticated-offline-only",
+  "ambient_tool_discovery": false,
+  "tools": [
+    {
+      "role": "make",
+      "path": "/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/zgmmrsrq5kmcvmg70rjixz0g3lns6hig-make-4.4.1-full-source-gcc10-v1/bin/make",
+      "content_digest_blake3": "11e99bd96b27689e78797520566b915d3b519f4550197ebb6678a67bed215866",
+      "source_id": "gnu-make-4.4.1",
+      "construction_receipt_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-host-tools-2026-07-26/make-construction.json",
+      "construction_receipt_digest_blake3": "b485ebdfc05f6083c54d661e57e74135a777d382b9ceef263b0a7464fdf44ec6"
+    },
+    {
+      "role": "cmake",
+      "path": "/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/rndqm2bqm2707xapjk0agq1l6rpjzv6d-cmake-3.31.8-full-source-gcc10-v1/bin/cmake",
+      "content_digest_blake3": "fdebf50f037de72ef22726f84359c8791a6abfbc5a28b888f50b71c23674657b",
+      "source_id": "cmake-3.31.8",
+      "construction_receipt_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-host-tools-2026-07-26/cmake-construction.json",
+      "construction_receipt_digest_blake3": "3a47ab4b9edd00825e88d80887dfa475eb6d769375b8b10a2e3efe103bbf2d2b"
+    },
+    {
+      "role": "python",
+      "path": "/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/8b995r4qgngkvai2l6hkwvpa4zb32gqh-python-3.13.5-full-source-gcc10-v1/bin/python3.13",
+      "content_digest_blake3": "7a5f2d268fec22e59bf3bfa3875682c724d18884f4d6e7b34830e7d18e5fe4ce",
+      "source_id": "cpython-3.13.5",
+      "construction_receipt_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-host-tools-2026-07-26/python-construction.json",
+      "construction_receipt_digest_blake3": "86abaf1b4fc6ef3b07f1119de34ee038b6968b8fa0c31cfd54daec191919df57"
+    },
+    {
+      "role": "perl",
+      "path": "/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/93cbd63ilmcxzvfmqa9jfl7fjvwjy33f-perl-5.10.1-full-source-gcc10-v2/bin/perl",
+      "content_digest_blake3": "2ac480cb0e8de0a78c3ca26fa0f81245458f72b2554b67f02037a3e3299f83f9",
+      "source_id": "perl-5.10.1",
+      "construction_receipt_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-host-tools-2026-07-26/perl-construction.json",
+      "construction_receipt_digest_blake3": "c5b673f4e778099290cb7946ec08b7be64d1e201f72f30335a336accd8fecb80"
+    },
+    {
+      "role": "busybox",
+      "path": "/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/md1lri56iljbbdiyk45njakzdbj7n4c3-busybox-1.37.0-full-source-gcc10-v1/bin/busybox",
+      "content_digest_blake3": "da5b5b1ca280f8a545eb750c27894766311c1b10b326da5ce10e6e1ee8c7f4c8",
+      "source_id": "busybox-1.37.0",
+      "construction_receipt_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-host-tools-2026-07-26/busybox-construction.json",
+      "construction_receipt_digest_blake3": "4fa20697ce280bec37631508f90732919a6adebc833d52bc2318c807beaf3d0f"
+    }
+  ]
+}

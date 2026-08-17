@@ -1,0 +1,3897 @@
+{
+  "schema": "mantle-stagex-lineage-provider-receipt-v1",
+  "provider_kind": "stagex-lineage",
+  "audited_seed_digest": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80",
+  "lineage_manifest_digest": "4ad1f3b14dfa219fc64faf752dd0050e678f293af7828a65262f510cc4228e2a",
+  "stage_graph_digest": "71b288859a9b05d624f55ccd1015a51b3724c2aa200c2277766783cd2e5dc33f",
+  "normalized_provider_digest": "37d33a89003cfd30d78052f20a1d3957ec8908038924ea27afe0ac79f698e615",
+  "transition_report_digest_blake3": "b9088a74ea4693ad2a9985b673a236adbcf94a9ccf87008bcd75d34f3ec6064c",
+  "provider_validation_audit_digest_blake3": "b895024ed20acd76d7438ca9e2b7a99566e3c2140e040ca16fc77103d683123c",
+  "provider_validation_report_digest_blake3": "a42ae56c41f4d3edd64c24bcd40d136852665d3974f2b41188f0aabd7d444cb6",
+  "receipt_payload_digest_blake3": "21da57d48d7f5d889d9f9f701743411394899668c09e22ff0f3dfe48f12d658d",
+  "provider_outputs": [
+    {
+      "role": "headers",
+      "artifact_ids": [
+        "stagex-native-musl-headers",
+        "stagex-binutils-headers"
+      ],
+      "digest_blake3": "189aa42743814f935eaca27967fee67cb755a07d0ac07b0a46b6dd6ad317841f"
+    },
+    {
+      "role": "libraries",
+      "artifact_ids": [
+        "stagex-native-musl-libraries",
+        "stagex-tinycc-runtime",
+        "stagex-binutils-ldscripts"
+      ],
+      "digest_blake3": "1cf601ee65cee2c2044b5ded01e5dcd3d6e4f71d99397c9083c8acbee22aae1a"
+    },
+    {
+      "role": "provider_metadata",
+      "artifact_ids": [
+        "share/crunch-bootstrap/provider.json"
+      ],
+      "digest_blake3": "f8db16d441ba9ede05875ac9115c10ffa63315bb075aafde4f5e3259964358cc"
+    },
+    {
+      "role": "target_prefixed_tools",
+      "artifact_ids": [
+        "stagex-selfhosted-tinycc",
+        "stagex-binutils-as",
+        "stagex-binutils-ld",
+        "stagex-binutils-ar",
+        "stagex-binutils-ranlib",
+        "stagex-binutils-nm",
+        "stagex-binutils-objcopy",
+        "stagex-binutils-objdump",
+        "stagex-binutils-readelf",
+        "stagex-binutils-size",
+        "stagex-binutils-strings",
+        "stagex-binutils-strip"
+      ],
+      "digest_blake3": "082ffe867c86b53e1b42b530a47b08e9fe1690d4cfbad7aeb2e6b6e48e1bdda1"
+    }
+  ],
+  "bounded_claim": "Intermediate StageX provider publication from the protected TinyCC/native-musl/binutils closure.",
+  "stage_report_output_binding": "Live artifacts use observed BLAKE3 identities. Exact allowlisted report-only observations use a domain-separated BLAKE3 projection over the artifact ID, plan digest, and complete transition-report digest.",
+  "executable_authorization_binding": "Stage reports bind the complete declared executable-authorization set only after every exact path-plus-digest identity appears in a kernel-intercepted allowed protected execve or execveat audit decision. Identity-equivalent IDs may share one event.",
+  "non_claims": [
+    "This receipt does not claim final native GCC provider admission.",
+    "This receipt does not prove compiler correctness or complete musl/binutils behavior.",
+    "This receipt does not prove Mantle self-build completion, release reproducibility, or release eligibility.",
+    "A protected exec decision proves a kernel-intercepted executable identity, not successful process completion or behavior.",
+    "The original v81 pueue command log was unavailable; retained plan, report, audit, inventories, and artifacts are the publication evidence."
+  ],
+  "schema_version": "mantle-stagex-lineage-provider-receipt-v1",
+  "lineage_receipt_status": "complete",
+  "plan_digest_blake3": "a303fdfd6e5d86bdb701c806bd162502562b19e43984f6b223255a95f2413a31",
+  "lineage_manifest_digest_blake3": "4ad1f3b14dfa219fc64faf752dd0050e678f293af7828a65262f510cc4228e2a",
+  "stage_graph_digest_blake3": "71b288859a9b05d624f55ccd1015a51b3724c2aa200c2277766783cd2e5dc33f",
+  "source_state_digest_blake3": "18b54c3ac3fdd7931453a849f15c76ea642d248d2b597b1b8c7849ae97f4a772",
+  "normalized_provider_digest_blake3": "37d33a89003cfd30d78052f20a1d3957ec8908038924ea27afe0ac79f698e615",
+  "output_digest_blake3": "6f6e9d6c12e2185a7742aa0741cd6ec886d4bed521541455e6002be661ccd1c9",
+  "protected_exec_audit_digest_blake3": "f7528f3df9ecc5e8d2925bef5cb9dcee63a9b93ecd47e512f0bc433c29f21d0b",
+  "final_bundle_digest_blake3": "f4e2613c993f99fa0a645c587cfca8fec4961ac48d4dc7c841ca68b59ac7dabf",
+  "fallback_events": [],
+  "stage_reports": [
+    {
+      "stage_id": "hex0-reproduction",
+      "stage_plan_digest_blake3": "5f38dbdb600eda8511c9ad973bfa1caf54c3353c7bc3eda2c1ef99dfdea83887",
+      "predecessor_reports": [],
+      "executable_event_ids": [
+        "exec:hex0-seed"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "hex0-reproduced",
+          "digest_blake3": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "kaem-materialization",
+      "stage_plan_digest_blake3": "7eaedcb95c351de3bedb405f97051617bfeeda18922e6fc947bee21086ed96da",
+      "predecessor_reports": [
+        {
+          "stage_id": "hex0-reproduction",
+          "report_digest_blake3": "a50ac54dd4df19ea1544742e516b0bb6d4428b26a3cc35d329aebc59a0e5890b"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:hex0-reproduced"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "kaem-0",
+          "digest_blake3": "edc664d028b349824cc8c66030a8883b81bdc03d07bc871e44e60ecb4311ab2a"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "kaem-smoke",
+      "stage_plan_digest_blake3": "869f54e00fc37dd259e7c3d2cbb898d8666af019cf69bfdb8f029b74b670f1f9",
+      "predecessor_reports": [
+        {
+          "stage_id": "kaem-materialization",
+          "report_digest_blake3": "2d38038d97eef7100ce85540f4bd43115e6904f67674c354e7c73869df19624f"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:kaem-0"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "kaem-smoke-observation",
+          "digest_blake3": "aedf8bf945950d23c46115e03fe101ad7d08108ef023916613b904e90290721d"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-hex1",
+      "stage_plan_digest_blake3": "194f563da1445db3b886e10fb600272af7bb2b559a967269edb8b16b4ed9df62",
+      "predecessor_reports": [
+        {
+          "stage_id": "kaem-materialization",
+          "report_digest_blake3": "2d38038d97eef7100ce85540f4bd43115e6904f67674c354e7c73869df19624f"
+        },
+        {
+          "stage_id": "hex0-reproduction",
+          "report_digest_blake3": "a50ac54dd4df19ea1544742e516b0bb6d4428b26a3cc35d329aebc59a0e5890b"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-hex1:kaem-0",
+        "exec:stage0-hex1:stage0-hex0-copy"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-hex0-copy",
+          "digest_blake3": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80"
+        },
+        {
+          "artifact_id": "stage0-hex1",
+          "digest_blake3": "580b8b771a6dc2b91feb34775ea7152623cc096b37013382f166f2fa9c6d1e40"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-hex2-bootstrap",
+      "stage_plan_digest_blake3": "5f860b378dab45a393e24dbcb5cf5446ace9450b3ab56f9d03ae908cf2734827",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-hex1",
+          "report_digest_blake3": "ea4bbbaf414a37b17c862c102eced91a85f23a9bb4397ea1006c0769ca6e8ff5"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-hex2-bootstrap:stage0-hex1"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-hex2-bootstrap",
+          "digest_blake3": "84c05689d80bacb397a41eb22c02b3e8e827c648b3b1b5f941d4545decbae0b3"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-catm",
+      "stage_plan_digest_blake3": "248320b8a26c237a7d982e7c22dd3f31353c5a296434b5bb846f24b9e9c08926",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-hex2-bootstrap",
+          "report_digest_blake3": "e65ca24e4379c7b0b684a742222b2a6ee687b4f0e0e0fb27e3b3c74d031a9b11"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-catm:stage0-hex2-bootstrap"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-catm",
+          "digest_blake3": "0d2c2c14eaf77c130f5ffaaea777e7b6f7eab1408acf57c8b516b5f56c451899"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-m0",
+      "stage_plan_digest_blake3": "65f1f1d41a19150882263feba8c091d6aae9725504c7d4acc9f5204d9de971f2",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-catm",
+          "report_digest_blake3": "e62f4325512ad29045543fd7690e475e639b098391508856ef51f8a6fda5729e"
+        },
+        {
+          "stage_id": "stage0-hex2-bootstrap",
+          "report_digest_blake3": "e65ca24e4379c7b0b684a742222b2a6ee687b4f0e0e0fb27e3b3c74d031a9b11"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-m0:stage0-catm",
+        "exec:stage0-m0:stage0-hex2-bootstrap"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-m0",
+          "digest_blake3": "080eca455a46f2cab998f0ff78b401077294ad612d829397309df7be23fa5a8e"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-cc-amd64",
+      "stage_plan_digest_blake3": "5cf2a1c1fd87a2d13c659eb85116a1446dae71ea879762ed550b7d05ab4a0362",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-m0",
+          "report_digest_blake3": "7d9ef4c6d383f50dc292c33aed56e579c7293097c783df2d6ee3972964e3487b"
+        },
+        {
+          "stage_id": "stage0-catm",
+          "report_digest_blake3": "e62f4325512ad29045543fd7690e475e639b098391508856ef51f8a6fda5729e"
+        },
+        {
+          "stage_id": "stage0-hex2-bootstrap",
+          "report_digest_blake3": "e65ca24e4379c7b0b684a742222b2a6ee687b4f0e0e0fb27e3b3c74d031a9b11"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-cc-amd64:stage0-m0",
+        "exec:stage0-cc-amd64:stage0-catm",
+        "exec:stage0-cc-amd64:stage0-hex2-bootstrap"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-cc-amd64",
+          "digest_blake3": "e91376dee1ac7aa4ef6dc5b86c3e73f08b71fc78b5e069f5e80035955eb971e4"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-m2",
+      "stage_plan_digest_blake3": "ada1aebe3a6be1504d65c9680eae57532482e140c62d4613cea29146a5936bab",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-cc-amd64",
+          "report_digest_blake3": "7e0de5d72ac6447c38df8ce8ee43b2c8d0abf66119837fceaad0088cb400df37"
+        },
+        {
+          "stage_id": "stage0-m0",
+          "report_digest_blake3": "7d9ef4c6d383f50dc292c33aed56e579c7293097c783df2d6ee3972964e3487b"
+        },
+        {
+          "stage_id": "stage0-catm",
+          "report_digest_blake3": "e62f4325512ad29045543fd7690e475e639b098391508856ef51f8a6fda5729e"
+        },
+        {
+          "stage_id": "stage0-hex2-bootstrap",
+          "report_digest_blake3": "e65ca24e4379c7b0b684a742222b2a6ee687b4f0e0e0fb27e3b3c74d031a9b11"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-m2:stage0-cc-amd64",
+        "exec:stage0-m2:stage0-m0",
+        "exec:stage0-m2:stage0-catm",
+        "exec:stage0-m2:stage0-hex2-bootstrap"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-m2",
+          "digest_blake3": "2d583c15ad3fa677883b769e7d8e91c7847ea30cff93013e1f0307b5451d70ed"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-blood-elf-bootstrap",
+      "stage_plan_digest_blake3": "f11c97f60cc0f57824e9214ad46e09c2905f42a8bb63dd712a8e91766c840cce",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-m2",
+          "report_digest_blake3": "f21f35fbea090fb0e5dcfe9dad79b0d7049efcd8b045ce84dfb00184fe66cbf7"
+        },
+        {
+          "stage_id": "stage0-catm",
+          "report_digest_blake3": "e62f4325512ad29045543fd7690e475e639b098391508856ef51f8a6fda5729e"
+        },
+        {
+          "stage_id": "stage0-m0",
+          "report_digest_blake3": "7d9ef4c6d383f50dc292c33aed56e579c7293097c783df2d6ee3972964e3487b"
+        },
+        {
+          "stage_id": "stage0-hex2-bootstrap",
+          "report_digest_blake3": "e65ca24e4379c7b0b684a742222b2a6ee687b4f0e0e0fb27e3b3c74d031a9b11"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-blood-elf-bootstrap:stage0-m2",
+        "exec:stage0-blood-elf-bootstrap:stage0-catm",
+        "exec:stage0-blood-elf-bootstrap:stage0-m0",
+        "exec:stage0-blood-elf-bootstrap:stage0-hex2-bootstrap"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-blood-elf-bootstrap",
+          "digest_blake3": "2f4f5d787f886552ef4600ab8b7e31c612e78b59a341e79ed2911558c9180eda"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-m1-bootstrap",
+      "stage_plan_digest_blake3": "3888dc089b5da9897607c38321d3e43c54e06277eebc90f1997b509b386af83a",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-m2",
+          "report_digest_blake3": "f21f35fbea090fb0e5dcfe9dad79b0d7049efcd8b045ce84dfb00184fe66cbf7"
+        },
+        {
+          "stage_id": "stage0-blood-elf-bootstrap",
+          "report_digest_blake3": "f385b687374b608f945d0d52767581b7948cd91e800abdd81094ae3709b9ef23"
+        },
+        {
+          "stage_id": "stage0-m0",
+          "report_digest_blake3": "7d9ef4c6d383f50dc292c33aed56e579c7293097c783df2d6ee3972964e3487b"
+        },
+        {
+          "stage_id": "stage0-catm",
+          "report_digest_blake3": "e62f4325512ad29045543fd7690e475e639b098391508856ef51f8a6fda5729e"
+        },
+        {
+          "stage_id": "stage0-hex2-bootstrap",
+          "report_digest_blake3": "e65ca24e4379c7b0b684a742222b2a6ee687b4f0e0e0fb27e3b3c74d031a9b11"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-m1-bootstrap:stage0-m2",
+        "exec:stage0-m1-bootstrap:stage0-blood-elf-bootstrap",
+        "exec:stage0-m1-bootstrap:stage0-m0",
+        "exec:stage0-m1-bootstrap:stage0-catm",
+        "exec:stage0-m1-bootstrap:stage0-hex2-bootstrap"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-m1-bootstrap",
+          "digest_blake3": "78be6fd6f49cee594969f3f82c8677a7b771e2907c023380c637628eff92c760"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-hex2-intermediate",
+      "stage_plan_digest_blake3": "c6ab7711ebee6c2db95fdb9b45ef8d730c6f30695cd32faef20e0ce735fe6878",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-m2",
+          "report_digest_blake3": "f21f35fbea090fb0e5dcfe9dad79b0d7049efcd8b045ce84dfb00184fe66cbf7"
+        },
+        {
+          "stage_id": "stage0-blood-elf-bootstrap",
+          "report_digest_blake3": "f385b687374b608f945d0d52767581b7948cd91e800abdd81094ae3709b9ef23"
+        },
+        {
+          "stage_id": "stage0-m1-bootstrap",
+          "report_digest_blake3": "db765d1de449e9e76431bfd34662076c6d087f0ed85edfe53ed36350f4b211e1"
+        },
+        {
+          "stage_id": "stage0-catm",
+          "report_digest_blake3": "e62f4325512ad29045543fd7690e475e639b098391508856ef51f8a6fda5729e"
+        },
+        {
+          "stage_id": "stage0-hex2-bootstrap",
+          "report_digest_blake3": "e65ca24e4379c7b0b684a742222b2a6ee687b4f0e0e0fb27e3b3c74d031a9b11"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-hex2-intermediate:stage0-m2",
+        "exec:stage0-hex2-intermediate:stage0-blood-elf-bootstrap",
+        "exec:stage0-hex2-intermediate:stage0-m1-bootstrap",
+        "exec:stage0-hex2-intermediate:stage0-catm",
+        "exec:stage0-hex2-intermediate:stage0-hex2-bootstrap"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-hex2-intermediate",
+          "digest_blake3": "2954bef3c2eeae38f0de55556d920c51491f9dd4e74ed482fecbc43c83ef3c1a"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-m1",
+      "stage_plan_digest_blake3": "f614494083c02665c09696c5a030bb8252dfdce160b7f074ebc406721aa9a7d6",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-m2",
+          "report_digest_blake3": "f21f35fbea090fb0e5dcfe9dad79b0d7049efcd8b045ce84dfb00184fe66cbf7"
+        },
+        {
+          "stage_id": "stage0-blood-elf-bootstrap",
+          "report_digest_blake3": "f385b687374b608f945d0d52767581b7948cd91e800abdd81094ae3709b9ef23"
+        },
+        {
+          "stage_id": "stage0-m1-bootstrap",
+          "report_digest_blake3": "db765d1de449e9e76431bfd34662076c6d087f0ed85edfe53ed36350f4b211e1"
+        },
+        {
+          "stage_id": "stage0-hex2-intermediate",
+          "report_digest_blake3": "ed359b727fdb7d2e66124d30e50aa58dc9022ffb42c474d5d3c4f7cef23748a4"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-m1:stage0-m2",
+        "exec:stage0-m1:stage0-blood-elf-bootstrap",
+        "exec:stage0-m1:stage0-m1-bootstrap",
+        "exec:stage0-m1:stage0-hex2-intermediate"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-m1",
+          "digest_blake3": "b58f328ad2106ed666e68c485b1e1504ef893e09aed44fbe9805f2a534543642"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-hex2",
+      "stage_plan_digest_blake3": "78baa64eda5c129d3673f9b53cfcaf2c60af41f5ab28645834fbaa9bb75fe024",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-m2",
+          "report_digest_blake3": "f21f35fbea090fb0e5dcfe9dad79b0d7049efcd8b045ce84dfb00184fe66cbf7"
+        },
+        {
+          "stage_id": "stage0-blood-elf-bootstrap",
+          "report_digest_blake3": "f385b687374b608f945d0d52767581b7948cd91e800abdd81094ae3709b9ef23"
+        },
+        {
+          "stage_id": "stage0-m1",
+          "report_digest_blake3": "388e9736c2d4c68574526725ede28a3986320f4c76a7bc12d71f1c192db823be"
+        },
+        {
+          "stage_id": "stage0-hex2-intermediate",
+          "report_digest_blake3": "ed359b727fdb7d2e66124d30e50aa58dc9022ffb42c474d5d3c4f7cef23748a4"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-hex2:stage0-m2",
+        "exec:stage0-hex2:stage0-blood-elf-bootstrap",
+        "exec:stage0-hex2:stage0-m1",
+        "exec:stage0-hex2:stage0-hex2-intermediate"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-hex2",
+          "digest_blake3": "2954bef3c2eeae38f0de55556d920c51491f9dd4e74ed482fecbc43c83ef3c1a"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-kaem",
+      "stage_plan_digest_blake3": "bc7c61f238e67646f7860b95e84d3d79e9dc7a81644e09598174371af86f7ae9",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-m2",
+          "report_digest_blake3": "f21f35fbea090fb0e5dcfe9dad79b0d7049efcd8b045ce84dfb00184fe66cbf7"
+        },
+        {
+          "stage_id": "stage0-blood-elf-bootstrap",
+          "report_digest_blake3": "f385b687374b608f945d0d52767581b7948cd91e800abdd81094ae3709b9ef23"
+        },
+        {
+          "stage_id": "stage0-m1",
+          "report_digest_blake3": "388e9736c2d4c68574526725ede28a3986320f4c76a7bc12d71f1c192db823be"
+        },
+        {
+          "stage_id": "stage0-hex2",
+          "report_digest_blake3": "2ebc35d9cb50c655f98ab167040e55378f3c7b3d317e5584270227b877659f56"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-kaem:stage0-m2",
+        "exec:stage0-kaem:stage0-blood-elf-bootstrap",
+        "exec:stage0-kaem:stage0-m1",
+        "exec:stage0-kaem:stage0-hex2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-kaem",
+          "digest_blake3": "c6c2f9136a41ec16b049e2af0a017d87804d69f4cad882b20eefbbc6725ea854"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-full-m2-mesoplanet",
+      "stage_plan_digest_blake3": "62f04cb887561fe2cf4f5dd9ae7b5a132afb6c4f549dcc675818fa71c4cf5789",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-kaem",
+          "report_digest_blake3": "cc2f48ebe81f57fe4fbb07ac1b892e70f5e6c83916f04f5d9e84553dae046d71"
+        },
+        {
+          "stage_id": "stage0-m2",
+          "report_digest_blake3": "f21f35fbea090fb0e5dcfe9dad79b0d7049efcd8b045ce84dfb00184fe66cbf7"
+        },
+        {
+          "stage_id": "stage0-blood-elf-bootstrap",
+          "report_digest_blake3": "f385b687374b608f945d0d52767581b7948cd91e800abdd81094ae3709b9ef23"
+        },
+        {
+          "stage_id": "stage0-m1",
+          "report_digest_blake3": "388e9736c2d4c68574526725ede28a3986320f4c76a7bc12d71f1c192db823be"
+        },
+        {
+          "stage_id": "stage0-hex2",
+          "report_digest_blake3": "2ebc35d9cb50c655f98ab167040e55378f3c7b3d317e5584270227b877659f56"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-full-m2-mesoplanet:stage0-kaem",
+        "exec:stage0-full-m2-mesoplanet:stage0-m2",
+        "exec:stage0-full-m2-mesoplanet:stage0-blood-elf-bootstrap",
+        "exec:stage0-full-m2-mesoplanet:stage0-m1",
+        "exec:stage0-full-m2-mesoplanet:stage0-hex2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-full-m2-mesoplanet",
+          "digest_blake3": "e473c5670f6a2cfc0af270d75c72405930c24d741febbe4577d28f4cbf90cd36"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-full-blood-elf",
+      "stage_plan_digest_blake3": "1659e2c191bc45c659cb90f38cfc5179a2dd9bb2a99d6da89c012df459168ecb",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-full-m2-mesoplanet",
+          "report_digest_blake3": "2e9cf5c525817ae9ecb487be2735416a7706cedcd34fe6f8c553709d9e77f7a9"
+        },
+        {
+          "stage_id": "stage0-m2",
+          "report_digest_blake3": "f21f35fbea090fb0e5dcfe9dad79b0d7049efcd8b045ce84dfb00184fe66cbf7"
+        },
+        {
+          "stage_id": "stage0-blood-elf-bootstrap",
+          "report_digest_blake3": "f385b687374b608f945d0d52767581b7948cd91e800abdd81094ae3709b9ef23"
+        },
+        {
+          "stage_id": "stage0-m1",
+          "report_digest_blake3": "388e9736c2d4c68574526725ede28a3986320f4c76a7bc12d71f1c192db823be"
+        },
+        {
+          "stage_id": "stage0-hex2",
+          "report_digest_blake3": "2ebc35d9cb50c655f98ab167040e55378f3c7b3d317e5584270227b877659f56"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-full-blood-elf:stage0-m2",
+        "exec:stage0-full-blood-elf:stage0-blood-elf-bootstrap",
+        "exec:stage0-full-blood-elf:stage0-m1",
+        "exec:stage0-full-blood-elf:stage0-hex2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-full-blood-elf",
+          "digest_blake3": "23154d5fdfc6b669714a5551587feb34d4964759729dd28bc51581960fd19c25"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-full-get-machine",
+      "stage_plan_digest_blake3": "1c72548ecf59c6b9cc8ce447462de378f485d8a1c63af49f716d825f2da11980",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-full-blood-elf",
+          "report_digest_blake3": "d5ee6a4bc6af4637239b76c0e8741929c0edcfd712bd0a2aa42c0a1cf1f3a0df"
+        },
+        {
+          "stage_id": "stage0-m2",
+          "report_digest_blake3": "f21f35fbea090fb0e5dcfe9dad79b0d7049efcd8b045ce84dfb00184fe66cbf7"
+        },
+        {
+          "stage_id": "stage0-m1",
+          "report_digest_blake3": "388e9736c2d4c68574526725ede28a3986320f4c76a7bc12d71f1c192db823be"
+        },
+        {
+          "stage_id": "stage0-hex2",
+          "report_digest_blake3": "2ebc35d9cb50c655f98ab167040e55378f3c7b3d317e5584270227b877659f56"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-full-get-machine:stage0-m2",
+        "exec:stage0-full-get-machine:stage0-full-blood-elf",
+        "exec:stage0-full-get-machine:stage0-m1",
+        "exec:stage0-full-get-machine:stage0-hex2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-full-get-machine",
+          "digest_blake3": "94eb62461a1e94ca7fef4c5c90fa017505696dc22e3235df6b9cc341cf5234e3"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-full-m2-planet",
+      "stage_plan_digest_blake3": "573d46e2ff537c1af2fc7d94ca13d84c0dd7b2994ce54fad10a4f4929303b019",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-full-get-machine",
+          "report_digest_blake3": "76331870df83fb778313e77e6fef2fd5759366575c45f3fb5636b5af26506c08"
+        },
+        {
+          "stage_id": "stage0-full-blood-elf",
+          "report_digest_blake3": "d5ee6a4bc6af4637239b76c0e8741929c0edcfd712bd0a2aa42c0a1cf1f3a0df"
+        },
+        {
+          "stage_id": "stage0-m2",
+          "report_digest_blake3": "f21f35fbea090fb0e5dcfe9dad79b0d7049efcd8b045ce84dfb00184fe66cbf7"
+        },
+        {
+          "stage_id": "stage0-m1",
+          "report_digest_blake3": "388e9736c2d4c68574526725ede28a3986320f4c76a7bc12d71f1c192db823be"
+        },
+        {
+          "stage_id": "stage0-hex2",
+          "report_digest_blake3": "2ebc35d9cb50c655f98ab167040e55378f3c7b3d317e5584270227b877659f56"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-full-m2-planet:stage0-m2",
+        "exec:stage0-full-m2-planet:stage0-full-blood-elf",
+        "exec:stage0-full-m2-planet:stage0-m1",
+        "exec:stage0-full-m2-planet:stage0-hex2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-full-m2-planet",
+          "digest_blake3": "9133f106b326b9badb5945fa50a7a5f36cffa2bdea76ad0568328cb06685f166"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-full-extras",
+      "stage_plan_digest_blake3": "7f57a5301000999e163f27c298515f94f6c87dd76951335384b7cfff4c9c1dbe",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-full-m2-planet",
+          "report_digest_blake3": "ebb877cd058552e07dbb5987f0761d88f6c0a2f427f7e503784e817bef4f3d09"
+        },
+        {
+          "stage_id": "stage0-full-m2-mesoplanet",
+          "report_digest_blake3": "2e9cf5c525817ae9ecb487be2735416a7706cedcd34fe6f8c553709d9e77f7a9"
+        },
+        {
+          "stage_id": "stage0-full-blood-elf",
+          "report_digest_blake3": "d5ee6a4bc6af4637239b76c0e8741929c0edcfd712bd0a2aa42c0a1cf1f3a0df"
+        },
+        {
+          "stage_id": "stage0-m1",
+          "report_digest_blake3": "388e9736c2d4c68574526725ede28a3986320f4c76a7bc12d71f1c192db823be"
+        },
+        {
+          "stage_id": "stage0-hex2",
+          "report_digest_blake3": "2ebc35d9cb50c655f98ab167040e55378f3c7b3d317e5584270227b877659f56"
+        },
+        {
+          "stage_id": "stage0-kaem",
+          "report_digest_blake3": "cc2f48ebe81f57fe4fbb07ac1b892e70f5e6c83916f04f5d9e84553dae046d71"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-full-extras:stage0-kaem",
+        "exec:stage0-full-extras:stage0-full-m2-mesoplanet",
+        "exec:stage0-full-extras:stage0-full-m2-planet",
+        "exec:stage0-full-extras:stage0-full-blood-elf",
+        "exec:stage0-full-extras:stage0-m1",
+        "exec:stage0-full-extras:stage0-hex2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-full-sha256sum",
+          "digest_blake3": "c507561a47ca67648247eaa06d054193d9aac21160708a7671987dc2f1c48a61"
+        },
+        {
+          "artifact_id": "stage0-full-match",
+          "digest_blake3": "b6862c346146a63d7e334c3e057e54eb77ce841e788583f0d0a824879cff0c97"
+        },
+        {
+          "artifact_id": "stage0-full-mkdir",
+          "digest_blake3": "a023e38258367002b7f9dde5fcb49cec445c34cce08a8b63c8933fa3fab5cf62"
+        },
+        {
+          "artifact_id": "stage0-full-untar",
+          "digest_blake3": "794461d61868aa601955182f5abc1fbc6f840a1402ece32855c41b59efb2bdf0"
+        },
+        {
+          "artifact_id": "stage0-full-ungz",
+          "digest_blake3": "d7e6dae760f6635196ebd80f203aada32ad83eb8fb0d013b7b09f879dc45290d"
+        },
+        {
+          "artifact_id": "stage0-full-unbz2",
+          "digest_blake3": "51319fe1892cd3b43fee2751ef3d00ec4ae1ff2a70a6fa72c0764cf9d9e75010"
+        },
+        {
+          "artifact_id": "stage0-full-unxz",
+          "digest_blake3": "8a1543cab9d6290e9c9306e16efc83ac0d230307c9c394b048e2d0b41b719771"
+        },
+        {
+          "artifact_id": "stage0-full-catm",
+          "digest_blake3": "2ecde44089def1bb3496368f90d17fbba30d8938cf4109383375e3845ce52be3"
+        },
+        {
+          "artifact_id": "stage0-full-cp",
+          "digest_blake3": "636b9ee7cc548bfb59fd3425d9fd7cdfe9340766f2ea23e85c98f76f5276c23b"
+        },
+        {
+          "artifact_id": "stage0-full-chmod",
+          "digest_blake3": "1ce14e51cd2020400ecaa356a8d67cb8fa6d53357a63e236c45901ee9759ac63"
+        },
+        {
+          "artifact_id": "stage0-full-rm",
+          "digest_blake3": "e7a77376f5a41340b42929b679da8af84ff508ceda13b0f077e6f77e06423e20"
+        },
+        {
+          "artifact_id": "stage0-full-replace",
+          "digest_blake3": "4e67d5271e052629f8d92a11979ec8a93e7d8c416070544b71266d189f37dbbd"
+        },
+        {
+          "artifact_id": "stage0-full-wrap",
+          "digest_blake3": "1d08486cfb920032a821c7603f56410af6c0372c0a4b78546d6c8d8bb1c0f9e0"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-full-sha256-verify",
+      "stage_plan_digest_blake3": "faefc655725afdaa626dafa35f09d7595a4c2e513e01dd9b40f858ffdd6612c3",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-full-extras",
+          "report_digest_blake3": "3556b94d116c9c562407efc5d0bb29c487a76056dae916423d98b590e93115ad"
+        },
+        {
+          "stage_id": "stage0-full-m2-mesoplanet",
+          "report_digest_blake3": "2e9cf5c525817ae9ecb487be2735416a7706cedcd34fe6f8c553709d9e77f7a9"
+        },
+        {
+          "stage_id": "stage0-full-m2-planet",
+          "report_digest_blake3": "ebb877cd058552e07dbb5987f0761d88f6c0a2f427f7e503784e817bef4f3d09"
+        },
+        {
+          "stage_id": "stage0-full-blood-elf",
+          "report_digest_blake3": "d5ee6a4bc6af4637239b76c0e8741929c0edcfd712bd0a2aa42c0a1cf1f3a0df"
+        },
+        {
+          "stage_id": "stage0-full-get-machine",
+          "report_digest_blake3": "76331870df83fb778313e77e6fef2fd5759366575c45f3fb5636b5af26506c08"
+        },
+        {
+          "stage_id": "stage0-m1",
+          "report_digest_blake3": "388e9736c2d4c68574526725ede28a3986320f4c76a7bc12d71f1c192db823be"
+        },
+        {
+          "stage_id": "stage0-hex2",
+          "report_digest_blake3": "2ebc35d9cb50c655f98ab167040e55378f3c7b3d317e5584270227b877659f56"
+        },
+        {
+          "stage_id": "stage0-kaem",
+          "report_digest_blake3": "cc2f48ebe81f57fe4fbb07ac1b892e70f5e6c83916f04f5d9e84553dae046d71"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-full-sha256-verify:stage0-full-sha256sum"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-full-sha256-verification",
+          "digest_blake3": "1c432c6894c083741e8e174872c9dce320041c7b4f0d7f23108c065b0fd6b3bb"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "stage0-full-after-smoke",
+      "stage_plan_digest_blake3": "a4adaeb79e48e747b65318620176a221935225401702cfa5826ce9e8aef63aed",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-full-sha256-verify",
+          "report_digest_blake3": "86a87c69562fb65abcef07698875dece91efe66eddf03439ada59734aedcdadd"
+        },
+        {
+          "stage_id": "stage0-kaem",
+          "report_digest_blake3": "cc2f48ebe81f57fe4fbb07ac1b892e70f5e6c83916f04f5d9e84553dae046d71"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:stage0-full-after-smoke:stage0-kaem"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "stage0-full-after-observation",
+          "digest_blake3": "b2a4afd85210171c4724e1c7f9530fd82a9b53c9294dc8596be733739f8295f7"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "mes-m2-materialization",
+      "stage_plan_digest_blake3": "aee4aa480c1ae6e5888e5f87ce2fe92871ab52757a5990dc2ecb449b18d713bb",
+      "predecessor_reports": [
+        {
+          "stage_id": "stage0-full-after-smoke",
+          "report_digest_blake3": "a5c7bcf019d0e27d97be1f9f1bbdff9f2e7279cece5b5d29a0a3fbc546ff7dfd"
+        },
+        {
+          "stage_id": "stage0-kaem",
+          "report_digest_blake3": "cc2f48ebe81f57fe4fbb07ac1b892e70f5e6c83916f04f5d9e84553dae046d71"
+        },
+        {
+          "stage_id": "stage0-m1",
+          "report_digest_blake3": "388e9736c2d4c68574526725ede28a3986320f4c76a7bc12d71f1c192db823be"
+        },
+        {
+          "stage_id": "stage0-hex2",
+          "report_digest_blake3": "2ebc35d9cb50c655f98ab167040e55378f3c7b3d317e5584270227b877659f56"
+        },
+        {
+          "stage_id": "stage0-full-m2-planet",
+          "report_digest_blake3": "ebb877cd058552e07dbb5987f0761d88f6c0a2f427f7e503784e817bef4f3d09"
+        },
+        {
+          "stage_id": "stage0-full-blood-elf",
+          "report_digest_blake3": "d5ee6a4bc6af4637239b76c0e8741929c0edcfd712bd0a2aa42c0a1cf1f3a0df"
+        },
+        {
+          "stage_id": "stage0-full-extras",
+          "report_digest_blake3": "3556b94d116c9c562407efc5d0bb29c487a76056dae916423d98b590e93115ad"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:mes-m2-materialization:stage0-kaem",
+        "exec:mes-m2-materialization:stage0-m1",
+        "exec:mes-m2-materialization:stage0-hex2",
+        "exec:mes-m2-materialization:stage0-full-m2-planet",
+        "exec:mes-m2-materialization:stage0-full-blood-elf",
+        "exec:mes-m2-materialization:stage0-full-mkdir",
+        "exec:mes-m2-materialization:stage0-full-cp"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "mes-m2",
+          "digest_blake3": "de4f20cdc2ad232ca79c5aee20c1ef491a71ce95fcfdb28020fc0c9a4c51ea3d"
+        },
+        {
+          "artifact_id": "mes",
+          "digest_blake3": "de4f20cdc2ad232ca79c5aee20c1ef491a71ce95fcfdb28020fc0c9a4c51ea3d"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "mes-m2-smoke",
+      "stage_plan_digest_blake3": "5d12fbfe578fc34f2eb16dda4ece3793290d1b3f66318bec163d4469accae4b6",
+      "predecessor_reports": [
+        {
+          "stage_id": "mes-m2-materialization",
+          "report_digest_blake3": "c769bb53496a9705281649b211d41540aa0f601d637682a9937f42321d6414a2"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:mes-m2-smoke:mes-m2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "mes-m2-smoke-observation",
+          "digest_blake3": "fdd5089e1a1acc396f49238fcbfc2e59f167d2a5223cbf3f82740c424c8de5bf"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "mes-nyacc-regeneration",
+      "stage_plan_digest_blake3": "282999905dcefc47bfbf63036c3fba6f51456de2e9ebd72dccbf4144f254f12a",
+      "predecessor_reports": [
+        {
+          "stage_id": "mes-m2-materialization",
+          "report_digest_blake3": "c769bb53496a9705281649b211d41540aa0f601d637682a9937f42321d6414a2"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:mes-nyacc-regeneration:mes-m2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "nyacc-generated-tables",
+          "digest_blake3": "3c0966c38de7d48dc9dbb1a29f7a2e8f8c5bf13a138163fc724f072f94a4de64"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "mes-runtime-materialization",
+      "stage_plan_digest_blake3": "e809e37cdf2cd87785ecfb60b6c4c5b4b7305c8ece126b50a6f458d772b686d3",
+      "predecessor_reports": [
+        {
+          "stage_id": "mes-nyacc-regeneration",
+          "report_digest_blake3": "b4eab4a29538809c2fd42dd2013a406958dfb2f42454031dcad44f00cbd0a6d3"
+        },
+        {
+          "stage_id": "mes-m2-materialization",
+          "report_digest_blake3": "c769bb53496a9705281649b211d41540aa0f601d637682a9937f42321d6414a2"
+        },
+        {
+          "stage_id": "stage0-m1",
+          "report_digest_blake3": "388e9736c2d4c68574526725ede28a3986320f4c76a7bc12d71f1c192db823be"
+        },
+        {
+          "stage_id": "stage0-full-blood-elf",
+          "report_digest_blake3": "d5ee6a4bc6af4637239b76c0e8741929c0edcfd712bd0a2aa42c0a1cf1f3a0df"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:mes-runtime-materialization:mes-m2",
+        "exec:mes-runtime-materialization:stage0-m1",
+        "exec:mes-runtime-materialization:stage0-full-blood-elf"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "mescc-entrypoint",
+          "digest_blake3": "34ecfa676a692c79fe14fe85882dbd3b325c6f6f732e475ab94b9240f18cf445"
+        },
+        {
+          "artifact_id": "mes-crt1",
+          "digest_blake3": "e49c87f324b58369183ab753fb1f346aeb28fc2974956d2872e046f8ef27416d"
+        },
+        {
+          "artifact_id": "mes-x86_64-m1",
+          "digest_blake3": "a1107fe39ca1c6486dc57bccf82ad40569fa13e34695e8f2c119fbb892b02892"
+        },
+        {
+          "artifact_id": "mes-libc-mini",
+          "digest_blake3": "12f9ee98f249da9a85158df6f242f5382c1e2d9a590dc84d521c70249d01dda1"
+        },
+        {
+          "artifact_id": "mes-libmes",
+          "digest_blake3": "2f7c7eb4d002097cf68ad3b84ffecbb107195563fd21f27672b9918c3cfad2bd"
+        },
+        {
+          "artifact_id": "mes-libmescc",
+          "digest_blake3": "6a8d1e0a5f9dea02ae863552744e36f721833e57d054c993466d74c83eed7cdc"
+        },
+        {
+          "artifact_id": "mes-libc",
+          "digest_blake3": "d70f11fe75e9eaa59b0aa4d0d92d8c663afe33a0e8f60e3864d364b45d0105c4"
+        },
+        {
+          "artifact_id": "mes-libc-tcc",
+          "digest_blake3": "348f304db99daa3dc1eec807133cb232d28768b0d20a563bf8f6d68b493440d7"
+        },
+        {
+          "artifact_id": "mes-libtcc1",
+          "digest_blake3": "c11be20d8d70e8ed3a88f1cea0a54ade5c64f8035c50974859dccb77f1bea055"
+        },
+        {
+          "artifact_id": "mes-libgetopt",
+          "digest_blake3": "04806a625d31f6a1ae4c92343e23ac4d355bcaa880f8aaa55b372f4a3785f135"
+        },
+        {
+          "artifact_id": "mes-elf-header",
+          "digest_blake3": "892b042fe8e7d17b9774e89c83979c35f79f067fa2bdfd2bcc7279ac2858d8d4"
+        },
+        {
+          "artifact_id": "mes-elf-footer",
+          "digest_blake3": "b23189272376d99464531e041d1367b5a93086665513280645c1f41ce7ecda79"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tinycc-mes-materialization",
+      "stage_plan_digest_blake3": "073c74b350468637aca0604ac74d05480fa994f1849b2cfa672c223dbf21e4b3",
+      "predecessor_reports": [
+        {
+          "stage_id": "mes-runtime-materialization",
+          "report_digest_blake3": "ae8e89c1b4918752a46af99f541697e923a90d3d38deea39c374d9b4776c4be0"
+        },
+        {
+          "stage_id": "mes-m2-materialization",
+          "report_digest_blake3": "c769bb53496a9705281649b211d41540aa0f601d637682a9937f42321d6414a2"
+        },
+        {
+          "stage_id": "stage0-m1",
+          "report_digest_blake3": "388e9736c2d4c68574526725ede28a3986320f4c76a7bc12d71f1c192db823be"
+        },
+        {
+          "stage_id": "stage0-hex2",
+          "report_digest_blake3": "2ebc35d9cb50c655f98ab167040e55378f3c7b3d317e5584270227b877659f56"
+        },
+        {
+          "stage_id": "stage0-full-blood-elf",
+          "report_digest_blake3": "d5ee6a4bc6af4637239b76c0e8741929c0edcfd712bd0a2aa42c0a1cf1f3a0df"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tinycc-mes-materialization:mes-m2",
+        "exec:tinycc-mes-materialization:stage0-m1",
+        "exec:tinycc-mes-materialization:stage0-hex2",
+        "exec:tinycc-mes-materialization:stage0-full-blood-elf"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tcc-mes-assembly",
+          "digest_blake3": "e0ba00a46c7eca314aaed4dc1cd0fdd1bbb5e17591e619f206f0126116b14ec0"
+        },
+        {
+          "artifact_id": "tcc-mes",
+          "digest_blake3": "ef10b32c5de0b9322dfdcc5653bab9f0b9e8d5ee57b248ec8cb570c2ae10e9b3"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tinycc-runtime-refresh",
+      "stage_plan_digest_blake3": "26f22def3f5c51d5bc620de10b6c5c912e2507f223d5fb59fa661061b6ef5530",
+      "predecessor_reports": [
+        {
+          "stage_id": "tinycc-mes-materialization",
+          "report_digest_blake3": "babdfacafe2966c5da81acbcdfb42685edf0307fe13efe756f68e2c7d295c432"
+        },
+        {
+          "stage_id": "mes-runtime-materialization",
+          "report_digest_blake3": "ae8e89c1b4918752a46af99f541697e923a90d3d38deea39c374d9b4776c4be0"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tinycc-runtime-refresh:tcc-mes"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tinycc-crt1",
+          "digest_blake3": "d3fec15bd12fd72fdbdf4248d6df6b21a44cfb6a3e2c9d787a0d081ff7143df1"
+        },
+        {
+          "artifact_id": "tinycc-libc",
+          "digest_blake3": "cbc10117c34515b9b3ad14f3e4dc73a37708c6206f36cd51dc6f1e8a98093f8c"
+        },
+        {
+          "artifact_id": "tinycc-libtcc1",
+          "digest_blake3": "0e8b75458ad70ab03142b27a3014af68f57c03004f4d22a65702e60d531140e9"
+        },
+        {
+          "artifact_id": "tinycc-libgetopt",
+          "digest_blake3": "1fb5e11a952e173ec451601f2f11c09b2703d48e20b6533d327dc83b6b520449"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tinycc-boot0-materialization",
+      "stage_plan_digest_blake3": "5b6b4dc2d666d7af52f57d0281ec40d42da928afbdb344f2c456b23d069312dc",
+      "predecessor_reports": [
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        },
+        {
+          "stage_id": "tinycc-mes-materialization",
+          "report_digest_blake3": "babdfacafe2966c5da81acbcdfb42685edf0307fe13efe756f68e2c7d295c432"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tinycc-boot0-materialization:tcc-mes"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tcc-boot0",
+          "digest_blake3": "8b3f20ef69f2356e64d513b82d26afb5c67bce9e51c045bbfbbf14784d13c66f"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tinycc-boot0-smoke",
+      "stage_plan_digest_blake3": "895eef4c6e6ba5ca55ea8500f55d49bffe5e350fe2b464674a90b112bbf49286",
+      "predecessor_reports": [
+        {
+          "stage_id": "tinycc-boot0-materialization",
+          "report_digest_blake3": "c4d6f10d879f4bd00c75fc1a7840ebf6a997cfe8c4fb4bf8fef6713141b3be52"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tinycc-boot0-smoke:tcc-boot0"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tcc-boot0-smoke-observation",
+          "digest_blake3": "ed52b12564345bbe4a37f0b1ea7e84da1594bcb47035cff823440e203b06f2f3"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tinycc-final-materialization",
+      "stage_plan_digest_blake3": "cd2b92a7f05b785ff9570366defe3228918f682233a2517234309f8a2a27bef2",
+      "predecessor_reports": [
+        {
+          "stage_id": "tinycc-boot0-smoke",
+          "report_digest_blake3": "9d5c2945d1b9b47f03ef0b9be7a18046753d803d0929456703684c986977a1db"
+        },
+        {
+          "stage_id": "tinycc-mes-materialization",
+          "report_digest_blake3": "babdfacafe2966c5da81acbcdfb42685edf0307fe13efe756f68e2c7d295c432"
+        },
+        {
+          "stage_id": "mes-m2-materialization",
+          "report_digest_blake3": "c769bb53496a9705281649b211d41540aa0f601d637682a9937f42321d6414a2"
+        },
+        {
+          "stage_id": "stage0-m1",
+          "report_digest_blake3": "388e9736c2d4c68574526725ede28a3986320f4c76a7bc12d71f1c192db823be"
+        },
+        {
+          "stage_id": "stage0-hex2",
+          "report_digest_blake3": "2ebc35d9cb50c655f98ab167040e55378f3c7b3d317e5584270227b877659f56"
+        },
+        {
+          "stage_id": "stage0-full-blood-elf",
+          "report_digest_blake3": "d5ee6a4bc6af4637239b76c0e8741929c0edcfd712bd0a2aa42c0a1cf1f3a0df"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tinycc-final-materialization:mes-m2",
+        "exec:tinycc-final-materialization:stage0-m1",
+        "exec:tinycc-final-materialization:stage0-hex2",
+        "exec:tinycc-final-materialization:stage0-full-blood-elf"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tcc-final-assembly",
+          "digest_blake3": "e65c1d42b0157f756eead7053f3a47b8fc2d197cd22da6427614fab945a7f9e4"
+        },
+        {
+          "artifact_id": "tinycc-0.9.26",
+          "digest_blake3": "ef10b32c5de0b9322dfdcc5653bab9f0b9e8d5ee57b248ec8cb570c2ae10e9b3"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tinycc-final-smoke",
+      "stage_plan_digest_blake3": "90c9abe089d69e71a84dacdb8653745d6a24227752199beae4cb0b3e8dd0e38d",
+      "predecessor_reports": [
+        {
+          "stage_id": "tinycc-final-materialization",
+          "report_digest_blake3": "a7ec3e34c57d44d527f4a39075cb8125e11b3b0f4869e8f46107b5e205334833"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tinycc-final-smoke:tinycc"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tinycc-final-smoke-observation",
+          "digest_blake3": "7cbcebf991273990a6d8a10bd83d3c7af2f19f4aea7d7c71768fb14e7f107013"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tinycc27-runtime-refresh",
+      "stage_plan_digest_blake3": "b554f92a8def273ad0315ba9ed46698d3d13dd333a9c323726217813452e838f",
+      "predecessor_reports": [
+        {
+          "stage_id": "tinycc-final-smoke",
+          "report_digest_blake3": "c3e3906fcf0db6bd2fcee68754b050a88e884722df30bad13b7146750efa8f9d"
+        },
+        {
+          "stage_id": "tinycc-final-materialization",
+          "report_digest_blake3": "a7ec3e34c57d44d527f4a39075cb8125e11b3b0f4869e8f46107b5e205334833"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tinycc27-runtime-refresh:tinycc26"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tinycc27-va-list",
+          "digest_blake3": "0374e6d6c06eb731b2189d02283736cb93a0caa66ef4022737f2617ae037c7e8"
+        },
+        {
+          "artifact_id": "tinycc27-libc",
+          "digest_blake3": "bd46a4a350e17ec4a7870be6c6dea82f7327c513ee4e2720bebb7b6e26f20d85"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tinycc27-materialization",
+      "stage_plan_digest_blake3": "a70117ca71b179eab86ed6778c6bc1d4fed92b9e59daba3de1f3bc5c92b60026",
+      "predecessor_reports": [
+        {
+          "stage_id": "tinycc27-runtime-refresh",
+          "report_digest_blake3": "e6106efc7ca68c5b1e21c91185bba1e6849ab4593b43267eaa82216b8fa0383b"
+        },
+        {
+          "stage_id": "tinycc-final-materialization",
+          "report_digest_blake3": "a7ec3e34c57d44d527f4a39075cb8125e11b3b0f4869e8f46107b5e205334833"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tinycc27-materialization:tinycc26"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tinycc-0.9.27",
+          "digest_blake3": "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39"
+        },
+        {
+          "artifact_id": "tinycc27-alias",
+          "digest_blake3": "51a5345bd89dbdb0537340f90151c663d144f34343a60c56c0110cd5a15dee39"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tinycc27-smoke",
+      "stage_plan_digest_blake3": "06c37e4238fa4e359c7c96d210386ddddf670ac7934ce82c6c91042bbdfe0b12",
+      "predecessor_reports": [
+        {
+          "stage_id": "tinycc27-materialization",
+          "report_digest_blake3": "3ef7f8ba15e6050d07fc8c49864f271e6467e8c6073e8e438cf2b2d5f9ad0d3b"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tinycc27-smoke:tinycc27"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tinycc27-positive-object",
+          "digest_blake3": "19efdabfedafc9bf94f3ddc49967773a2a5e5b5f28128c6f95ac4f36184fdb92"
+        },
+        {
+          "artifact_id": "tinycc27-version-observation",
+          "digest_blake3": "0f342f52136f364c5f02aa1cae5d01c629620eb60f6903aadb80021065d66479"
+        },
+        {
+          "artifact_id": "tinycc27-negative-observation",
+          "digest_blake3": "fe8cf617f564dca54083cdfa7f5fcca0fef1caf0ecf0a3018c122a84257ca3c2"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "make-recipe-runner-materialization",
+      "stage_plan_digest_blake3": "46242b11dd41ecf9c493078bb5e968862dd56889cc39d21fc4a834d6d27606bc",
+      "predecessor_reports": [
+        {
+          "stage_id": "tinycc27-materialization",
+          "report_digest_blake3": "3ef7f8ba15e6050d07fc8c49864f271e6467e8c6073e8e438cf2b2d5f9ad0d3b"
+        },
+        {
+          "stage_id": "tinycc27-runtime-refresh",
+          "report_digest_blake3": "e6106efc7ca68c5b1e21c91185bba1e6849ab4593b43267eaa82216b8fa0383b"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:make-recipe-runner-materialization:tinycc27"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "make-recipe-runner",
+          "digest_blake3": "028ececbb67a3394595027c9273a44ed2ba5b465c209767589b5a989032b93d1"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "make-materialization",
+      "stage_plan_digest_blake3": "2c2c67990097b6b0c9fbc9cf7992277aca75b8031dd12990cb8772f3216e996b",
+      "predecessor_reports": [
+        {
+          "stage_id": "tinycc27-materialization",
+          "report_digest_blake3": "3ef7f8ba15e6050d07fc8c49864f271e6467e8c6073e8e438cf2b2d5f9ad0d3b"
+        },
+        {
+          "stage_id": "tinycc27-runtime-refresh",
+          "report_digest_blake3": "e6106efc7ca68c5b1e21c91185bba1e6849ab4593b43267eaa82216b8fa0383b"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:make-materialization:tinycc27"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "make-3.82",
+          "digest_blake3": "8a5aa115eab6069a8f69cf1b2c63c69c478d64b271bc13fda7ea4e3531b841d1"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "make-smoke",
+      "stage_plan_digest_blake3": "3599a6d0b49145c83760f3265703b2b33acfd855a71da8d79d32ca58e2dbc628",
+      "predecessor_reports": [
+        {
+          "stage_id": "make-materialization",
+          "report_digest_blake3": "de191e2c3d8948d9bf98ee4297cace2ef6e1e8ac992e18858aa7f6d5e20a7b72"
+        },
+        {
+          "stage_id": "make-recipe-runner-materialization",
+          "report_digest_blake3": "2dfef03f350c7b676a5bee9e07c6751cacb25fed463972b3beb7a7134a6adb20"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:make-smoke:make",
+        "exec:make-smoke:recipe-runner"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "make-recipe-smoke",
+          "digest_blake3": "8dd632d8df367d6751cc2e2497e8d9c38e0c5a1e58b100d59e1c0fdac235e3a2"
+        },
+        {
+          "artifact_id": "make-version-observation",
+          "digest_blake3": "6866d168aa111862617e5bf103f60e677ef40070f183bb44a41061da7ddc1932"
+        },
+        {
+          "artifact_id": "make-malformed-observation",
+          "digest_blake3": "b6c768d8c1ff926db8d2f24cb2d257d034f209069d5fdbd7177aa7c35f70452f"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "gnu-patch-materialization",
+      "stage_plan_digest_blake3": "692a93acf5ae82425bcbadc05e4f78b827dfe734029bd5f3bbdd207d04035d5b",
+      "predecessor_reports": [
+        {
+          "stage_id": "make-smoke",
+          "report_digest_blake3": "bd3d77b4c39381fa0829dd6465f33eb5bc0e7ab4aa56645d3504db0369c7f2ea"
+        },
+        {
+          "stage_id": "tinycc27-materialization",
+          "report_digest_blake3": "3ef7f8ba15e6050d07fc8c49864f271e6467e8c6073e8e438cf2b2d5f9ad0d3b"
+        },
+        {
+          "stage_id": "tinycc27-runtime-refresh",
+          "report_digest_blake3": "e6106efc7ca68c5b1e21c91185bba1e6849ab4593b43267eaa82216b8fa0383b"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:gnu-patch-materialization:tinycc27"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "gnu-patch-2.5.9",
+          "digest_blake3": "2193ea653bfbc16acc2609a5c7ef6c0b03a7a65dc50e6525d23868598e25fbcb"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "gnu-patch-smoke",
+      "stage_plan_digest_blake3": "1082a9a44a6e315f9ca2454b4fe34911b94d62981c334389a5bdf8b8ed81edc0",
+      "predecessor_reports": [
+        {
+          "stage_id": "gnu-patch-materialization",
+          "report_digest_blake3": "d95f8bbcf2be20dc9324f5c2322c1f290ccafd1d5cae029f9d10cb847a4f3f9a"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:gnu-patch-smoke:patch"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "gnu-patch-smoke",
+          "digest_blake3": "79d1d8da0b625035cdbfc9d51841030861b9f4cf7c5abbe442a8d13efc352170"
+        },
+        {
+          "artifact_id": "gnu-patch-version-observation",
+          "digest_blake3": "b68b0f2bc1079e78aa5054ca5db63329437c2f9c25c1e491f390a3336dbafd72"
+        },
+        {
+          "artifact_id": "gnu-patch-negative-observation",
+          "digest_blake3": "584bd6a888198825c4a4c0cca2e3a3f754f9e3070850b185dbebe7caedafdd6f"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "gzip-generator-materialization",
+      "stage_plan_digest_blake3": "7cd94fe1415e7b45dd68311da418c65c83f1e683766312803a11609796c83299",
+      "predecessor_reports": [
+        {
+          "stage_id": "gnu-patch-smoke",
+          "report_digest_blake3": "9f41a0ce3316a2921f5a3abbf6cec3299b805b5ae15deb6a61973bf36951481e"
+        },
+        {
+          "stage_id": "tinycc27-materialization",
+          "report_digest_blake3": "3ef7f8ba15e6050d07fc8c49864f271e6467e8c6073e8e438cf2b2d5f9ad0d3b"
+        },
+        {
+          "stage_id": "tinycc27-runtime-refresh",
+          "report_digest_blake3": "e6106efc7ca68c5b1e21c91185bba1e6849ab4593b43267eaa82216b8fa0383b"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:gzip-generator-materialization:tinycc27"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "gzip-makecrc",
+          "digest_blake3": "dd10648de513f76a1ecdbfa23cc88953f8c6e46848311a6372de7498aed43c6e"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "gzip-generator-execution",
+      "stage_plan_digest_blake3": "faa07304a6e2ad208e4329c0717558c14e2750153930f6ad931eaf699ebc4b63",
+      "predecessor_reports": [
+        {
+          "stage_id": "gzip-generator-materialization",
+          "report_digest_blake3": "362d2e85ba131320775fbf59bfd7ad56c1f003ce1e0c93aa81d5f75e2fa5bb57"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:gzip-generator-execution:makecrc"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "gzip-crc-table",
+          "digest_blake3": "19a3f07c4b071fe898927d1da2c3b64d37e02b0e8cf309d2a9fc4d70ac9d8fa1"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "gzip-materialization",
+      "stage_plan_digest_blake3": "ef32f3957896ecf1fe6f17f966b57659f547d26c757c43b08d47328eede77ed4",
+      "predecessor_reports": [
+        {
+          "stage_id": "gzip-generator-execution",
+          "report_digest_blake3": "9d58ea1ea879917377f11e14e22f7e84399de5ab7c56c561b4fa4c3cb5dd7c75"
+        },
+        {
+          "stage_id": "tinycc27-materialization",
+          "report_digest_blake3": "3ef7f8ba15e6050d07fc8c49864f271e6467e8c6073e8e438cf2b2d5f9ad0d3b"
+        },
+        {
+          "stage_id": "tinycc27-runtime-refresh",
+          "report_digest_blake3": "e6106efc7ca68c5b1e21c91185bba1e6849ab4593b43267eaa82216b8fa0383b"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:gzip-materialization:tinycc27"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "gzip-1.2.4",
+          "digest_blake3": "d2939461715a694222c1a612c0908754e599eb2d268fe012c525845367eff04a"
+        },
+        {
+          "artifact_id": "gunzip-1.2.4",
+          "digest_blake3": "d2939461715a694222c1a612c0908754e599eb2d268fe012c525845367eff04a"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "gzip-smoke",
+      "stage_plan_digest_blake3": "4a0d255c058dfa5088604051c1e9d484fec4ec6328bf25681326cc814fbf23d0",
+      "predecessor_reports": [
+        {
+          "stage_id": "gzip-materialization",
+          "report_digest_blake3": "48fc7c7ac116dac3118d12b8fd311efc84e64f303b0b38dead3742973d2776b1"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:gzip-smoke:gzip",
+        "exec:gzip-smoke:gunzip"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "gzip-smoke",
+          "digest_blake3": "78abaccbae9efa7039ff82d80215d2fbd3c4cd0221dadd85dd9df731f15d8751"
+        },
+        {
+          "artifact_id": "gzip-help-observation",
+          "digest_blake3": "7adc0648a8ad7cd28a61ccb7c2eaa74097aeefc7d34a060c351b82d7178c13d3"
+        },
+        {
+          "artifact_id": "gzip-negative-observation",
+          "digest_blake3": "23049bda4797e1357af82879f26a493acae48be62ee58418446a5c72ba0dcdba"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tar-materialization",
+      "stage_plan_digest_blake3": "46c5474dbeabacf494cda0333240c4a071dfc87c3ba62358d13372b8413626dc",
+      "predecessor_reports": [
+        {
+          "stage_id": "gzip-smoke",
+          "report_digest_blake3": "5e289a4f8b052394029d08f55c8880cc43389f9fbb77e484bf89b8d150f639e3"
+        },
+        {
+          "stage_id": "tinycc27-materialization",
+          "report_digest_blake3": "3ef7f8ba15e6050d07fc8c49864f271e6467e8c6073e8e438cf2b2d5f9ad0d3b"
+        },
+        {
+          "stage_id": "tinycc27-runtime-refresh",
+          "report_digest_blake3": "e6106efc7ca68c5b1e21c91185bba1e6849ab4593b43267eaa82216b8fa0383b"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tar-materialization:tinycc27"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tar-1.12",
+          "digest_blake3": "57c861b961bfc2c1047ab7f175c0f16024ea91787ba5a5e43600c721b5eff6ca"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tar-smoke",
+      "stage_plan_digest_blake3": "a6ea82a6a3132e00880f532b367ab2577f04d1606b2b11d3b3aaaa3b37dcea17",
+      "predecessor_reports": [
+        {
+          "stage_id": "tar-materialization",
+          "report_digest_blake3": "cf60b14dd81ed84f44015272a0e0bee39f7e366b2b54d616f41b0aa39d023467"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tar-smoke:tar"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tar-smoke",
+          "digest_blake3": "59392bf4bef63f5688ff8604868a22adcecfe94f75c1234fe7c9df1107038be2"
+        },
+        {
+          "artifact_id": "tar-version-observation",
+          "digest_blake3": "8c66ae39cc7b67ded068cda5b73270d923a8f7e57a9fe46ba3bec964fb2866ea"
+        },
+        {
+          "artifact_id": "tar-negative-observation",
+          "digest_blake3": "afdf37f50d501223428fcfcca95690d89a5f5d912b943f4ca3aaf8080e41f9bf"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "sed-materialization",
+      "stage_plan_digest_blake3": "55f12780dad83c54eabb9f517df8d5b6b3e1131a19e12adee4f4a2ebedd55c39",
+      "predecessor_reports": [
+        {
+          "stage_id": "tar-smoke",
+          "report_digest_blake3": "9345c4d62e1ab301d14ca1699f6616ead12a148c8406f53eebd97d80cc843b4a"
+        },
+        {
+          "stage_id": "tinycc27-materialization",
+          "report_digest_blake3": "3ef7f8ba15e6050d07fc8c49864f271e6467e8c6073e8e438cf2b2d5f9ad0d3b"
+        },
+        {
+          "stage_id": "tinycc27-runtime-refresh",
+          "report_digest_blake3": "e6106efc7ca68c5b1e21c91185bba1e6849ab4593b43267eaa82216b8fa0383b"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:sed-materialization:tinycc27"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "sed-4.0.9",
+          "digest_blake3": "cc4bc898fbad65d9c0a07eab85c61c99abdb9d7d7d747948067bea7d9954618a"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "sed-smoke",
+      "stage_plan_digest_blake3": "65504ac6180706fcb0e1ec489bd514251002967e095e2a94b0186dee1aeed640",
+      "predecessor_reports": [
+        {
+          "stage_id": "sed-materialization",
+          "report_digest_blake3": "c093b80d4c519eaef31586518ce2f76d333776022e05b15f829f68019858e6b1"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:sed-smoke:sed"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "sed-smoke",
+          "digest_blake3": "91f02abc6d98e0f00da4f3b1249ae0acd29544f7b19304f190d29f523885c077"
+        },
+        {
+          "artifact_id": "sed-version-observation",
+          "digest_blake3": "7014b180dbe91c8b76cb58ae6163aa80772b317d73991df2db0835caa319d9a5"
+        },
+        {
+          "artifact_id": "sed-negative-observation",
+          "digest_blake3": "13b107979d7e9a6fdbbef0c6f2af97ac46e2975ee073809aaa9d57516b7d34af"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "bzip2-source-rewrite",
+      "stage_plan_digest_blake3": "f0d851daf154dd4b387e3251f547cd45a8eec8ced7ed6a3158001864876c2b8c",
+      "predecessor_reports": [
+        {
+          "stage_id": "sed-materialization",
+          "report_digest_blake3": "c093b80d4c519eaef31586518ce2f76d333776022e05b15f829f68019858e6b1"
+        },
+        {
+          "stage_id": "sed-smoke",
+          "report_digest_blake3": "c66ebf701fdd26b61ce1c224b0af16406fc9ecb0a35c5df1b35ad048da30e5d4"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:bzip2-source-rewrite:sed"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "bzip2-configured-source",
+          "digest_blake3": "a3e8d977c0652889d2714f7eb9d1cfbe48581c05c7b7e3b79405334504fedd73"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "bzip2-materialization",
+      "stage_plan_digest_blake3": "32c8f77aa5cdecf0500212e7cda2d238874df41580033aef469aff1a93b5b1a1",
+      "predecessor_reports": [
+        {
+          "stage_id": "bzip2-source-rewrite",
+          "report_digest_blake3": "2449f8b7f08af6f4423df13910dfa7c4a38c2b11aa84ad43d8840f498900b830"
+        },
+        {
+          "stage_id": "tinycc27-materialization",
+          "report_digest_blake3": "3ef7f8ba15e6050d07fc8c49864f271e6467e8c6073e8e438cf2b2d5f9ad0d3b"
+        },
+        {
+          "stage_id": "tinycc27-runtime-refresh",
+          "report_digest_blake3": "e6106efc7ca68c5b1e21c91185bba1e6849ab4593b43267eaa82216b8fa0383b"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:bzip2-materialization:tinycc27"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "bzip2-1.0.8",
+          "digest_blake3": "b6911b1a367e8b159264078e7976d363e3cb9d268a1dd074ddca51a76916b8a7"
+        },
+        {
+          "artifact_id": "bzip2recover-1.0.8",
+          "digest_blake3": "f4bf3e19bd09bcd64503def65eb7bd7eaa5ea43af94536b8d6e638a48501e0a0"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "bzip2-smoke",
+      "stage_plan_digest_blake3": "d66d52e48a51b05983565e0be4a8ddc84c0765aab3754b52beeb34a2ed5dbc17",
+      "predecessor_reports": [
+        {
+          "stage_id": "bzip2-materialization",
+          "report_digest_blake3": "f79bcf2157337cba8f09ae887247fd0a8bac3637eb738eda76dae5064a4f83d6"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:bzip2-smoke:bzip2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "bzip2-smoke",
+          "digest_blake3": "b37fa30b2c16ae67d4e023b19fbecf3b10dab989e5fdedec510c29780cc5793b"
+        },
+        {
+          "artifact_id": "bzip2-help-observation",
+          "digest_blake3": "acc51657ee543eb2a3277aadd7cdeda29004c53c4f912e15be9055dc760f6bef"
+        },
+        {
+          "artifact_id": "bzip2-negative-observation",
+          "digest_blake3": "9bb8c47b5a131a8e71ea10af4a59f16d82c857a19f6343cc10f08e4c7b2e431f"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "coreutils-source-patch",
+      "stage_plan_digest_blake3": "b242bf03b1ec6f4d80367443ca9bf137e11caa1703897e837d3f5e6fa29e659d",
+      "predecessor_reports": [
+        {
+          "stage_id": "bzip2-materialization",
+          "report_digest_blake3": "f79bcf2157337cba8f09ae887247fd0a8bac3637eb738eda76dae5064a4f83d6"
+        },
+        {
+          "stage_id": "bzip2-smoke",
+          "report_digest_blake3": "db22ea2e1d0b6e73c4b9c020348db6538ce3bbbebd1b02c394c387510bc37cb1"
+        },
+        {
+          "stage_id": "gnu-patch-materialization",
+          "report_digest_blake3": "d95f8bbcf2be20dc9324f5c2322c1f290ccafd1d5cae029f9d10cb847a4f3f9a"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:coreutils-source-patch:patch"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "coreutils-configured-source",
+          "digest_blake3": "232ccf0c23c2e8a028c5ca42cbb46f3afa1aad664a5d5187e11fecdcb04334d4"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "coreutils-materialization",
+      "stage_plan_digest_blake3": "3e1f44711c647b9771e247a0bf7783fccf83ba01a05c968111cbf82bcee854fe",
+      "predecessor_reports": [
+        {
+          "stage_id": "coreutils-source-patch",
+          "report_digest_blake3": "bd9ebaa81caaffee664dc25f349c145cb12ae4e5d4d1f4ef6bd5c47f7b3b54d3"
+        },
+        {
+          "stage_id": "tinycc27-materialization",
+          "report_digest_blake3": "3ef7f8ba15e6050d07fc8c49864f271e6467e8c6073e8e438cf2b2d5f9ad0d3b"
+        },
+        {
+          "stage_id": "tinycc27-runtime-refresh",
+          "report_digest_blake3": "e6106efc7ca68c5b1e21c91185bba1e6849ab4593b43267eaa82216b8fa0383b"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:coreutils-materialization:tinycc27"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "coreutils-cat",
+          "digest_blake3": "3d9de9e7f81612a74e75312f22d038b665e69c5d9590662c293843e9711cf020"
+        },
+        {
+          "artifact_id": "coreutils-chmod",
+          "digest_blake3": "8fe8251243646c8e44ffe50e827cb27f2197eed344c498b31c365c7d27e07779"
+        },
+        {
+          "artifact_id": "coreutils-cp",
+          "digest_blake3": "8c11ead9af84f2371178ce892afbac6daa416c445f2575a2300b2b5ffadf17f3"
+        },
+        {
+          "artifact_id": "coreutils-echo",
+          "digest_blake3": "3ce3cfec07fda35f97485b30fddd8a14f4cb04bd8427d2aa3acc4e94fd650a3f"
+        },
+        {
+          "artifact_id": "coreutils-install",
+          "digest_blake3": "7f332bcf208b458595c202f4b1f2faf3fffadd80f7cd34ff67c711ee6183b210"
+        },
+        {
+          "artifact_id": "coreutils-ln",
+          "digest_blake3": "8146091298782331503b99b3f0bf02b0a92de93a5fe7b57fba08b5d870087c33"
+        },
+        {
+          "artifact_id": "coreutils-ls",
+          "digest_blake3": "32e2fcd7893befd1096a15b0a44992dcfd522044aed0601df96f434b39a60683"
+        },
+        {
+          "artifact_id": "coreutils-mkdir",
+          "digest_blake3": "b94fc26390ef29d55b71e608b800fa0451ff477b33c15ff3d2be3c8a2a06621b"
+        },
+        {
+          "artifact_id": "coreutils-mv",
+          "digest_blake3": "d765750db422dcaf98b1203911d1bbd0569a1cbe5a2e7006c2e26a476e420886"
+        },
+        {
+          "artifact_id": "coreutils-rm",
+          "digest_blake3": "f1bf6e9330c0b9e1a88b85185f5834a38b2b89526b4ca95bbb095930e57714da"
+        },
+        {
+          "artifact_id": "coreutils-rmdir",
+          "digest_blake3": "0a8235d566edcd18d68ed94df5ed2449e0fa9a4d37394367cb832536fa554dbc"
+        },
+        {
+          "artifact_id": "coreutils-sort",
+          "digest_blake3": "8b861f615fa0f7e868107b5c788562ba1d4dc2fff2ed9e9bca0f7d7df6c455bf"
+        },
+        {
+          "artifact_id": "coreutils-test",
+          "digest_blake3": "87baf4f61820a2861bbb1a08b3bd9b4c7a5b8baed66ddb0e152d7a981ae27669"
+        },
+        {
+          "artifact_id": "coreutils-true",
+          "digest_blake3": "deb8e7848bca7728c6594600c9d5a1b40d64beb6729fec2e71785236af2cc1e9"
+        },
+        {
+          "artifact_id": "coreutils-false",
+          "digest_blake3": "b476958f8326512fe4fa9563cb97bf79a658900b646f64c8f9f84426ae099ac9"
+        },
+        {
+          "artifact_id": "coreutils-head",
+          "digest_blake3": "71a84fad92471f61509ba9b781414934bb3b0975fd1635cef51709f952bf682b"
+        },
+        {
+          "artifact_id": "coreutils-tail",
+          "digest_blake3": "d0840c1a769287b4c1acf913dd8c4cc396294158dd57e9cd5bcf3e7cdca06962"
+        },
+        {
+          "artifact_id": "coreutils-wc",
+          "digest_blake3": "bc5ae003d38d9c4ca64568d97fe444d23e62258c93a936015e242806fb028f49"
+        },
+        {
+          "artifact_id": "coreutils-basename",
+          "digest_blake3": "e6c5b456a4f2279400f46ff272734dfb68829281c9e702c9fcc1e1c852eb1074"
+        },
+        {
+          "artifact_id": "coreutils-dirname",
+          "digest_blake3": "b21c5d4963d0d336150374699a4398c920fb2b323c265be463baf5264dae940e"
+        },
+        {
+          "artifact_id": "coreutils-tr",
+          "digest_blake3": "8c7c183c9af7a4fddcf526b8f0318ffb847faea0be75967de1bb72e0d51b4ea0"
+        },
+        {
+          "artifact_id": "coreutils-uniq",
+          "digest_blake3": "fadb7ca3f75ac06d73d01e8e304c86f06364a91f6001ba13717e69eb1dcbc328"
+        },
+        {
+          "artifact_id": "coreutils-expr",
+          "digest_blake3": "75770b1702a18bec30618d11cc55eb07eafc5f1349ca0d1d0567e24534b437f2"
+        },
+        {
+          "artifact_id": "coreutils-tee",
+          "digest_blake3": "d5ec19db795aef5f981b4f99e310a4e977c0543dffbf192cc4539bcb0fff3975"
+        },
+        {
+          "artifact_id": "coreutils-touch",
+          "digest_blake3": "a2b77b46e85c94390f459f158ebb33c529bbc5eb730c7719f24632f1fd6b6a4c"
+        },
+        {
+          "artifact_id": "coreutils-bracket",
+          "digest_blake3": "87baf4f61820a2861bbb1a08b3bd9b4c7a5b8baed66ddb0e152d7a981ae27669"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "coreutils-smoke",
+      "stage_plan_digest_blake3": "bec82159502343e2010db69c062116730ff720e6c00fcb4dd8114b2fcb588ffd",
+      "predecessor_reports": [
+        {
+          "stage_id": "coreutils-materialization",
+          "report_digest_blake3": "71c90aa8f5c8ae728d794e180310819bcd436c1092822cbb5e3fcea5443398e0"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:coreutils-smoke:mkdir",
+        "exec:coreutils-smoke:echo",
+        "exec:coreutils-smoke:cp",
+        "exec:coreutils-smoke:cat",
+        "exec:coreutils-smoke:test"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "coreutils-smoke",
+          "digest_blake3": "fd65316f83e13de60a964675b6ab49ee8bd0e40db3aef391c8c1cbee240375d8"
+        },
+        {
+          "artifact_id": "coreutils-negative-observation",
+          "digest_blake3": "e7495c8bbb5670b02776d523b06821b478f6bcea2a0c7110d59209f6034ad487"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "oyacc-source-patch",
+      "stage_plan_digest_blake3": "9e5056d6e8f3d276b589e64bc54ae409d68217060375517ad3d5e6b75c573c0c",
+      "predecessor_reports": [
+        {
+          "stage_id": "coreutils-materialization",
+          "report_digest_blake3": "71c90aa8f5c8ae728d794e180310819bcd436c1092822cbb5e3fcea5443398e0"
+        },
+        {
+          "stage_id": "coreutils-smoke",
+          "report_digest_blake3": "76ca036087970709f34a043f195e780ec3541595e64fe8c6a483355304eec11f"
+        },
+        {
+          "stage_id": "gnu-patch-materialization",
+          "report_digest_blake3": "d95f8bbcf2be20dc9324f5c2322c1f290ccafd1d5cae029f9d10cb847a4f3f9a"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:oyacc-source-patch:patch"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "oyacc-configured-source",
+          "digest_blake3": "f4cde58315dcbfc49c47928f9258debd030140c54e249cb2a11beef1eba30296"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "oyacc-materialization",
+      "stage_plan_digest_blake3": "4969aaa98d564fd6c59afa37bc0c2b397e96eabc67828e22a3071832172cc8b8",
+      "predecessor_reports": [
+        {
+          "stage_id": "oyacc-source-patch",
+          "report_digest_blake3": "35957874f76416d8b9abeb0f92611849be18d7f170a89b4f068e876b9d6f40f0"
+        },
+        {
+          "stage_id": "tinycc27-materialization",
+          "report_digest_blake3": "3ef7f8ba15e6050d07fc8c49864f271e6467e8c6073e8e438cf2b2d5f9ad0d3b"
+        },
+        {
+          "stage_id": "tinycc27-runtime-refresh",
+          "report_digest_blake3": "e6106efc7ca68c5b1e21c91185bba1e6849ab4593b43267eaa82216b8fa0383b"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:oyacc-materialization:tinycc27"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "oyacc-6.6",
+          "digest_blake3": "0b073649ea023167a293495f25302cc3debc4dd6727d9214ce6be9361503aa50"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "oyacc-smoke",
+      "stage_plan_digest_blake3": "7c0bf0e2b29895b306379d92572f82a8ee5b6b743a7290d9c5302d8890af6b89",
+      "predecessor_reports": [
+        {
+          "stage_id": "oyacc-materialization",
+          "report_digest_blake3": "27a562eb1fc1cfadb9e3fab157bfe77ccec85af88946448d080ee5331f28737c"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:oyacc-smoke:yacc"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "oyacc-smoke-output",
+          "digest_blake3": "6e719a5fc57aa5e8a06b7f7f37c6fdf672cd2ef2f91c27a7ca1daff128ac65a2"
+        },
+        {
+          "artifact_id": "oyacc-negative-observation",
+          "digest_blake3": "3310607af3cd387ccff12c9ae5e5de13632f15512eed47ecf57ef15d1d78b550"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "bash-materialization",
+      "stage_plan_digest_blake3": "e68a7c9a21c806952dee709d30b73dd2801cf3c6cc42589ce93b0a0cc8b95ee7",
+      "predecessor_reports": [
+        {
+          "stage_id": "oyacc-materialization",
+          "report_digest_blake3": "27a562eb1fc1cfadb9e3fab157bfe77ccec85af88946448d080ee5331f28737c"
+        },
+        {
+          "stage_id": "oyacc-smoke",
+          "report_digest_blake3": "439afcbdef538ef936577fd5f9fbb7372aa52e877207eb4bbfdd350f5eae275b"
+        },
+        {
+          "stage_id": "coreutils-smoke",
+          "report_digest_blake3": "76ca036087970709f34a043f195e780ec3541595e64fe8c6a483355304eec11f"
+        },
+        {
+          "stage_id": "tinycc27-materialization",
+          "report_digest_blake3": "3ef7f8ba15e6050d07fc8c49864f271e6467e8c6073e8e438cf2b2d5f9ad0d3b"
+        },
+        {
+          "stage_id": "tinycc27-runtime-refresh",
+          "report_digest_blake3": "e6106efc7ca68c5b1e21c91185bba1e6849ab4593b43267eaa82216b8fa0383b"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:bash-materialization:tinycc27"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "bash-configured-source",
+          "digest_blake3": "acd33bededf76dc149f7c7fa14a2e1a1246c5dafe2ef65eee18cf0d82e3d6bcd"
+        },
+        {
+          "artifact_id": "bash-2.05b",
+          "digest_blake3": "f7326a0fcc0878e7cd3616640cee376f71bab5583460b5459cac91168809c03f"
+        },
+        {
+          "artifact_id": "sh-2.05b",
+          "digest_blake3": "f7326a0fcc0878e7cd3616640cee376f71bab5583460b5459cac91168809c03f"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "bash-smoke",
+      "stage_plan_digest_blake3": "22c8a48528347a09f6dafed754a1b699e9d16bdf2742951140ebf32c913d52d8",
+      "predecessor_reports": [
+        {
+          "stage_id": "bash-materialization",
+          "report_digest_blake3": "e8453bc5b646e5d5a8de05b85231a1ea61b7e18045c899652dbd488bb5c1b2c0"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:bash-smoke:bash"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "bash-smoke-output",
+          "digest_blake3": "f9bb7985b1ac20ccbfdd1195397be795edb7996ab02e6f173d166517c19eb579"
+        },
+        {
+          "artifact_id": "bash-negative-observation",
+          "digest_blake3": "966ae11551220fa035922210b8bdf4ffa41dade83b295b76cf23b7d67a9a83c9"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tcc-musl-prep-materialization",
+      "stage_plan_digest_blake3": "9e256fe9ef5bf2b3f12418701956cbb7a82b1595d127d309ed3cae0e1067fb2b",
+      "predecessor_reports": [
+        {
+          "stage_id": "bash-materialization",
+          "report_digest_blake3": "e8453bc5b646e5d5a8de05b85231a1ea61b7e18045c899652dbd488bb5c1b2c0"
+        },
+        {
+          "stage_id": "bash-smoke",
+          "report_digest_blake3": "248d522ad05c587a1b4812acbd3c8a959d2b30875322eb76217254f19b809280"
+        },
+        {
+          "stage_id": "tinycc27-materialization",
+          "report_digest_blake3": "3ef7f8ba15e6050d07fc8c49864f271e6467e8c6073e8e438cf2b2d5f9ad0d3b"
+        },
+        {
+          "stage_id": "tinycc27-runtime-refresh",
+          "report_digest_blake3": "e6106efc7ca68c5b1e21c91185bba1e6849ab4593b43267eaa82216b8fa0383b"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tcc-musl-prep-materialization:tinycc27"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tcc-musl-prep-configured-source",
+          "digest_blake3": "29489150a78ce433dac24acfaf58ec66a4cd37d3eb93e223c5b9150f5c71a0aa"
+        },
+        {
+          "artifact_id": "tcc-musl-prep",
+          "digest_blake3": "4add5639d2016d79b1ac258aa502098fc941354ded0acd91bf8cafea42240a77"
+        },
+        {
+          "artifact_id": "tcc-musl-prep-alias",
+          "digest_blake3": "4add5639d2016d79b1ac258aa502098fc941354ded0acd91bf8cafea42240a77"
+        },
+        {
+          "artifact_id": "tcc-musl-prep-libc",
+          "digest_blake3": "bd46a4a350e17ec4a7870be6c6dea82f7327c513ee4e2720bebb7b6e26f20d85"
+        },
+        {
+          "artifact_id": "tcc-musl-prep-crt1",
+          "digest_blake3": "d3fec15bd12fd72fdbdf4248d6df6b21a44cfb6a3e2c9d787a0d081ff7143df1"
+        },
+        {
+          "artifact_id": "tcc-musl-prep-libtcc1",
+          "digest_blake3": "0e8b75458ad70ab03142b27a3014af68f57c03004f4d22a65702e60d531140e9"
+        },
+        {
+          "artifact_id": "tcc-musl-prep-headers",
+          "digest_blake3": "2577c43f136d52c8d7b61ba8f7cab614b31898586d3fab634bebe6e1fd14cb7d"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tcc-musl-prep-smoke",
+      "stage_plan_digest_blake3": "7588d9f86e8ba40694292227f6e55827a0a05a0e3e68b4a92321ca7743255519",
+      "predecessor_reports": [
+        {
+          "stage_id": "tcc-musl-prep-materialization",
+          "report_digest_blake3": "67b33c7f04641596e3aa0813dc97192d49613c0ca5efc62b67cb0b7d990a8c84"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tcc-musl-prep-smoke:tcc"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tcc-musl-prep-positive-object",
+          "digest_blake3": "41c08a115f275f00099aa397872090612e853be0fb5f13ba55ddb89737e42377"
+        },
+        {
+          "artifact_id": "tcc-musl-prep-negative-observation",
+          "digest_blake3": "294f118b4c9cfd824a4a68fd036362f2dc64a8bbc7227c475ed58de7204eab70"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "musl-materialization",
+      "stage_plan_digest_blake3": "9e6aaca25ec3d69834bc94a8c5d1cf25ea383f70bc74a7e045717a5cbe2159ef",
+      "predecessor_reports": [
+        {
+          "stage_id": "tcc-musl-prep-materialization",
+          "report_digest_blake3": "67b33c7f04641596e3aa0813dc97192d49613c0ca5efc62b67cb0b7d990a8c84"
+        },
+        {
+          "stage_id": "tcc-musl-prep-smoke",
+          "report_digest_blake3": "672ad887465859244b33cd6a45a33a678cb29eda564f4f7345069cc675d9d170"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:musl-materialization:tcc-musl-prep"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "musl-configured-source",
+          "digest_blake3": "d1d3f1b8c7b99ba3902a4b999f55ee4ba3410cfd7ebac9462176f2d1d7565dcf"
+        },
+        {
+          "artifact_id": "musl-libc",
+          "digest_blake3": "b3a7f8bd311e8d3eaa6b1767e87276d3d02dce04a95808ed187082b05bb6211d"
+        },
+        {
+          "artifact_id": "musl-crt1",
+          "digest_blake3": "701c5afce9f5e09d0bcca0702764c64148fcacfe7e1477e2321b249b03af66be"
+        },
+        {
+          "artifact_id": "musl-crti",
+          "digest_blake3": "ecf4006e5ea51c3ad49a243165909cd4f9eddfbe181b576ac43513ede8578be4"
+        },
+        {
+          "artifact_id": "musl-crtn",
+          "digest_blake3": "b3b3153225cc100b8c429f5916ae36b96ef4903169b86f841f86498c0fd7251d"
+        },
+        {
+          "artifact_id": "musl-libm",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-librt",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-libpthread",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-libcrypt",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-libutil",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-libxnet",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-libresolv",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-libdl",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-headers",
+          "digest_blake3": "4d5a63f48ef27c8377a5319d3d68cd1a2b724a974ee5d8281a67f8fb0b5dc1c7"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "musl-smoke",
+      "stage_plan_digest_blake3": "d29cf3e4e77499231e7f34173f529e3772363ca2657cc33eb4dbaaa18d0c4744",
+      "predecessor_reports": [
+        {
+          "stage_id": "musl-materialization",
+          "report_digest_blake3": "57e76b025817de490ef1561eee12fa2b7ba885a9c10f3223ed688c394a87d240"
+        },
+        {
+          "stage_id": "tcc-musl-prep-materialization",
+          "report_digest_blake3": "67b33c7f04641596e3aa0813dc97192d49613c0ca5efc62b67cb0b7d990a8c84"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:musl-smoke:tcc-musl-prep"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "musl-smoke-binary",
+          "digest_blake3": "92ebe6be234ab289a07f5560ce0f25b1a696917d4515d2ec92c330fa0cd3a8a4"
+        },
+        {
+          "artifact_id": "musl-negative-observation",
+          "digest_blake3": "2637ff47e16ef32f1fee7510077cecf77ac9e0ae6be98a0f4b8f02fe5be282b7"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tcc-musl-materialization",
+      "stage_plan_digest_blake3": "05b01ee9049a8eec3f0096a1a4824c91bc95369492cb7e7a46199c836dd7e1f2",
+      "predecessor_reports": [
+        {
+          "stage_id": "tcc-musl-prep-materialization",
+          "report_digest_blake3": "67b33c7f04641596e3aa0813dc97192d49613c0ca5efc62b67cb0b7d990a8c84"
+        },
+        {
+          "stage_id": "musl-materialization",
+          "report_digest_blake3": "57e76b025817de490ef1561eee12fa2b7ba885a9c10f3223ed688c394a87d240"
+        },
+        {
+          "stage_id": "musl-smoke",
+          "report_digest_blake3": "38e4b69fd7d640a9c311c85fe84de2c3df0f9a6ea5a3e49afff7c0397f988fcf"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tcc-musl-materialization:tcc-musl-prep"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tcc-musl-configured-source",
+          "digest_blake3": "679e40759989e2bf0886a430ac3cb00ef22b045dd18fa50fdeddba44230c7674"
+        },
+        {
+          "artifact_id": "tcc-musl",
+          "digest_blake3": "053f36a66503797b3aaee40d2b0962dc643554e4ecf35d00ee2b7f947601f2af"
+        },
+        {
+          "artifact_id": "tcc-musl-alias",
+          "digest_blake3": "053f36a66503797b3aaee40d2b0962dc643554e4ecf35d00ee2b7f947601f2af"
+        },
+        {
+          "artifact_id": "tcc-musl-libtcc1",
+          "digest_blake3": "0e8b75458ad70ab03142b27a3014af68f57c03004f4d22a65702e60d531140e9"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tcc-musl-smoke",
+      "stage_plan_digest_blake3": "ed91b3afcd148f33ce67ab3187df52a0f94850d280dd376c6ae605a8f03bf307",
+      "predecessor_reports": [
+        {
+          "stage_id": "tcc-musl-materialization",
+          "report_digest_blake3": "f1ea611b3742e95f287770a784b09f721181b1ccd99476a58c67f1f77dda2b13"
+        },
+        {
+          "stage_id": "musl-materialization",
+          "report_digest_blake3": "57e76b025817de490ef1561eee12fa2b7ba885a9c10f3223ed688c394a87d240"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tcc-musl-smoke:tcc"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tcc-musl-positive-object",
+          "digest_blake3": "f7d6cd4379debd6239bbbcfffdd602d87ad9e8cfabe322902a85fa5ace902fc6"
+        },
+        {
+          "artifact_id": "tcc-musl-positive-binary",
+          "digest_blake3": "92ebe6be234ab289a07f5560ce0f25b1a696917d4515d2ec92c330fa0cd3a8a4"
+        },
+        {
+          "artifact_id": "tcc-musl-negative-observation",
+          "digest_blake3": "41cf8533e7a10fdf9b55e128e3fd0af0d40a872de2099be9e2e99a8209172837"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "musl-pass2-materialization",
+      "stage_plan_digest_blake3": "f12db9881519740a667c62e6d977bd5df5e9993fc1790c0161c940fbe1f13db8",
+      "predecessor_reports": [
+        {
+          "stage_id": "tcc-musl-materialization",
+          "report_digest_blake3": "f1ea611b3742e95f287770a784b09f721181b1ccd99476a58c67f1f77dda2b13"
+        },
+        {
+          "stage_id": "tcc-musl-smoke",
+          "report_digest_blake3": "46c195d2ed6d356ec7a59fd22c20ba0c76203e3d2320ade850b91b4cff9fc6f1"
+        },
+        {
+          "stage_id": "musl-materialization",
+          "report_digest_blake3": "57e76b025817de490ef1561eee12fa2b7ba885a9c10f3223ed688c394a87d240"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:musl-pass2-materialization:tcc-musl"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "musl-pass2-configured-source",
+          "digest_blake3": "575e19d9e8f5d23be1ae0e87b9e40bebbaa3be7845632980586f38ef2d906e5d"
+        },
+        {
+          "artifact_id": "musl-pass2-libc",
+          "digest_blake3": "86f238f807b2580bcb814ef914a64a288e34bb89101c8b5f094cd2a124febaed"
+        },
+        {
+          "artifact_id": "musl-pass2-crt1",
+          "digest_blake3": "c34258edb3d4de07a67e1d20c7dc5946543ce4ba078ace182b0b99cd4bbb7257"
+        },
+        {
+          "artifact_id": "musl-pass2-crti",
+          "digest_blake3": "ecf4006e5ea51c3ad49a243165909cd4f9eddfbe181b576ac43513ede8578be4"
+        },
+        {
+          "artifact_id": "musl-pass2-crtn",
+          "digest_blake3": "b3b3153225cc100b8c429f5916ae36b96ef4903169b86f841f86498c0fd7251d"
+        },
+        {
+          "artifact_id": "musl-pass2-libm",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-pass2-librt",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-pass2-libpthread",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-pass2-libcrypt",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-pass2-libutil",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-pass2-libxnet",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-pass2-libresolv",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-pass2-libdl",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-pass2-headers",
+          "digest_blake3": "4d5a63f48ef27c8377a5319d3d68cd1a2b724a974ee5d8281a67f8fb0b5dc1c7"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "musl-pass2-smoke",
+      "stage_plan_digest_blake3": "bf21788658c4b111ea75704eea5e02f9b6586190da9aa2316ced38182aad95e3",
+      "predecessor_reports": [
+        {
+          "stage_id": "musl-pass2-materialization",
+          "report_digest_blake3": "9e30f9e23ae5d58a8767f8032c45c96cf4a121ebd9007ef4db217985fe8d9b41"
+        },
+        {
+          "stage_id": "tcc-musl-materialization",
+          "report_digest_blake3": "f1ea611b3742e95f287770a784b09f721181b1ccd99476a58c67f1f77dda2b13"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:musl-pass2-smoke:tcc-musl"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "musl-pass2-smoke-binary",
+          "digest_blake3": "30c18329ab3981639dba0dbdef48cd01beae52abab89c8b732f8f6eb1248fc57"
+        },
+        {
+          "artifact_id": "musl-pass2-negative-observation",
+          "digest_blake3": "4d7315c652e21290c959ba6bdcc8d6e4abb0ac0e0cc89c239c72b570e2de3acb"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tcc-musl-v2-materialization",
+      "stage_plan_digest_blake3": "b694320d4bc78380dd876aafe6d4a70f930fd2bbbddd7bc7c914b2bd9e0ff35a",
+      "predecessor_reports": [
+        {
+          "stage_id": "tinycc-final-materialization",
+          "report_digest_blake3": "a7ec3e34c57d44d527f4a39075cb8125e11b3b0f4869e8f46107b5e205334833"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        },
+        {
+          "stage_id": "tcc-musl-prep-materialization",
+          "report_digest_blake3": "67b33c7f04641596e3aa0813dc97192d49613c0ca5efc62b67cb0b7d990a8c84"
+        },
+        {
+          "stage_id": "musl-pass2-materialization",
+          "report_digest_blake3": "9e30f9e23ae5d58a8767f8032c45c96cf4a121ebd9007ef4db217985fe8d9b41"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tcc-musl-v2-materialization:tinycc26"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tcc-musl-v2-configured-source",
+          "digest_blake3": "b68ec9f7c46ca1cbec5508a98476f771e4bcc4d90b4e088a237065aac1c6061b"
+        },
+        {
+          "artifact_id": "tcc-musl-v2",
+          "digest_blake3": "a17643b015db05bd452918841ba7811b8e063edfe29328672388f6b693a1b8ec"
+        },
+        {
+          "artifact_id": "tcc-musl-v2-alias",
+          "digest_blake3": "a17643b015db05bd452918841ba7811b8e063edfe29328672388f6b693a1b8ec"
+        },
+        {
+          "artifact_id": "tcc-musl-v2-libtcc1",
+          "digest_blake3": "c201ffd35a5466b4171345fc924b64a75c650fabbe7d0c20d365cfe08faf0860"
+        },
+        {
+          "artifact_id": "tcc-musl-v2-source-tree",
+          "digest_blake3": "5461df0d2a3503f2a7d124859d2ddedab87694f16bd81b644b9cdb8fffdfa367"
+        },
+        {
+          "artifact_id": "tcc-musl-v2-header-tree",
+          "digest_blake3": "2fa068749df350a62721e60696d625b6d5b0e3061019929a4c67970155833424"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tcc-musl-v2-smoke",
+      "stage_plan_digest_blake3": "1b2f9c8f2c08558cadc18782c2d56e67a89ff635592a777a100857e98c6ac229",
+      "predecessor_reports": [
+        {
+          "stage_id": "tcc-musl-v2-materialization",
+          "report_digest_blake3": "283cfa6b83bc37a9810eb733bf621e95d149738fad9dd1d1416e10cd5a478ceb"
+        },
+        {
+          "stage_id": "musl-pass2-materialization",
+          "report_digest_blake3": "9e30f9e23ae5d58a8767f8032c45c96cf4a121ebd9007ef4db217985fe8d9b41"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tcc-musl-v2-smoke:tcc"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tcc-musl-v2-positive-object",
+          "digest_blake3": "a507376f7e9af418c78cc9f9121e7b182c8b1ef3b741de98741d6320f6f301b2"
+        },
+        {
+          "artifact_id": "tcc-musl-v2-positive-binary",
+          "digest_blake3": "2a6733b887417ec6f848ece381d125e10d5d5544f0839dcfa896eacc88529fa6"
+        },
+        {
+          "artifact_id": "tcc-musl-v2-negative-observation",
+          "digest_blake3": "a1870779de0566bcada1ee958925a859bbfbf1f35f12a443f903abdba7531166"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tcc-musl-v2-execution",
+      "stage_plan_digest_blake3": "7c7e5f6c2cbfcd70d2f93e8beff12b956cb9d59aa6577b3461f7d9f69f363774",
+      "predecessor_reports": [
+        {
+          "stage_id": "tcc-musl-v2-smoke",
+          "report_digest_blake3": "e9b4749ee1c7f0129cdb61a1263a6441c49b7ecd1e84c1ac938dd1163b0bec99"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tcc-musl-v2-execution:positive"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tcc-musl-v2-positive-execution",
+          "digest_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tcc-musl-selfhost-build",
+      "stage_plan_digest_blake3": "2d9fc76aa61c8f6b1c9acd7a82d539c3becbcf44410894691c96150eace252fe",
+      "predecessor_reports": [
+        {
+          "stage_id": "tcc-musl-v2-materialization",
+          "report_digest_blake3": "283cfa6b83bc37a9810eb733bf621e95d149738fad9dd1d1416e10cd5a478ceb"
+        },
+        {
+          "stage_id": "tcc-musl-v2-smoke",
+          "report_digest_blake3": "e9b4749ee1c7f0129cdb61a1263a6441c49b7ecd1e84c1ac938dd1163b0bec99"
+        },
+        {
+          "stage_id": "tcc-musl-v2-execution",
+          "report_digest_blake3": "83e71d2c3419f922df96a75a4f0606c83ce5776e6a9cbe22b0e8ef1d73ad7a68"
+        },
+        {
+          "stage_id": "tinycc-final-materialization",
+          "report_digest_blake3": "a7ec3e34c57d44d527f4a39075cb8125e11b3b0f4869e8f46107b5e205334833"
+        },
+        {
+          "stage_id": "tinycc-runtime-refresh",
+          "report_digest_blake3": "a6cdd8f0555ec585b2c28ad3088083cf50721ebe935831454960ce86acefdc49"
+        },
+        {
+          "stage_id": "musl-pass2-materialization",
+          "report_digest_blake3": "9e30f9e23ae5d58a8767f8032c45c96cf4a121ebd9007ef4db217985fe8d9b41"
+        },
+        {
+          "stage_id": "musl-pass2-smoke",
+          "report_digest_blake3": "07ec675622e3e19d48e34029c0181c757b5581c70a5168d767a8547bb3d53f7d"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tcc-musl-selfhost-build:tcc-v2",
+        "exec:tcc-musl-selfhost-build:tinycc26"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tcc-musl-selfhost",
+          "digest_blake3": "8e6580da40c5892b941423ae108d6218b3636ebd3643bc3ba1e78e33d6c4898a"
+        },
+        {
+          "artifact_id": "tcc-musl-selfhost-alias",
+          "digest_blake3": "8e6580da40c5892b941423ae108d6218b3636ebd3643bc3ba1e78e33d6c4898a"
+        },
+        {
+          "artifact_id": "tcc-musl-selfhost-libtcc",
+          "digest_blake3": "fb9f87834e0d81214fd9654820ea482a5adedecafc6359a1d32729874b2a1267"
+        },
+        {
+          "artifact_id": "tcc-musl-selfhost-main-object",
+          "digest_blake3": "22f5f8579f023fee1afb35595d4e99c76132bf2fec75dc2451c25ed2f10cc16b"
+        },
+        {
+          "artifact_id": "tcc-musl-selfhost-patched-source",
+          "digest_blake3": "5e918d19d4d7151f17a5a81bd07d25fd8a55e57037b4735f038344365326b3d4"
+        },
+        {
+          "artifact_id": "tcc-musl-selfhost-object-tree",
+          "digest_blake3": "2f3fcb41daa227dac3e1d206c4c7aeabd6ff6341fe975399e950629e8a281880"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "tcc-musl-selfhost-smoke",
+      "stage_plan_digest_blake3": "45645799843b6de26c5099e38cce484a2429204deb827a7b94b158f8e37f2b30",
+      "predecessor_reports": [
+        {
+          "stage_id": "tcc-musl-selfhost-build",
+          "report_digest_blake3": "db085afb974c43f6f9807943a3bce437f0abb4e1d6a1d506990123df7168adf8"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:tcc-musl-selfhost-smoke:tcc"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "tcc-musl-selfhost-smoke-object",
+          "digest_blake3": "cc40480286f053fc69e7d17431b4cf5de82b477b0f84e646717cd6c3c71cecb1"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "musl-native-materialization",
+      "stage_plan_digest_blake3": "6edd6508d6a6244337e42bf157e3120337f89cc343e599b8a33d499ff48e4ae1",
+      "predecessor_reports": [
+        {
+          "stage_id": "tcc-musl-selfhost-build",
+          "report_digest_blake3": "db085afb974c43f6f9807943a3bce437f0abb4e1d6a1d506990123df7168adf8"
+        },
+        {
+          "stage_id": "tcc-musl-selfhost-smoke",
+          "report_digest_blake3": "7355224142947ebf82d3b2d27554eebeeb40964ce949166e927eedc0abf9885a"
+        },
+        {
+          "stage_id": "tcc-musl-v2-materialization",
+          "report_digest_blake3": "283cfa6b83bc37a9810eb733bf621e95d149738fad9dd1d1416e10cd5a478ceb"
+        },
+        {
+          "stage_id": "tcc-musl-v2-smoke",
+          "report_digest_blake3": "e9b4749ee1c7f0129cdb61a1263a6441c49b7ecd1e84c1ac938dd1163b0bec99"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:musl-native-build:selfhost",
+        "exec:musl-native-build:predecessor"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "musl-native-configured-source",
+          "digest_blake3": "25136ba596733447cbb6259862f4e0b37dd557fc4dd8cc4392912e2f34880f18"
+        },
+        {
+          "artifact_id": "musl-native-libc",
+          "digest_blake3": "a9aa627c3a70fce68d928e0a7ccd423370472a87ae9fde795a85db4d0899366c"
+        },
+        {
+          "artifact_id": "musl-native-crt1",
+          "digest_blake3": "bcfefaf8179325fd26e8ecaa83b22a87fe75d3bbadb411e32113b4cb69f21f66"
+        },
+        {
+          "artifact_id": "musl-native-crti",
+          "digest_blake3": "ecf4006e5ea51c3ad49a243165909cd4f9eddfbe181b576ac43513ede8578be4"
+        },
+        {
+          "artifact_id": "musl-native-crtn",
+          "digest_blake3": "b3b3153225cc100b8c429f5916ae36b96ef4903169b86f841f86498c0fd7251d"
+        },
+        {
+          "artifact_id": "musl-native-libm",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-native-librt",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-native-libpthread",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-native-libcrypt",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-native-libutil",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-native-libxnet",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-native-libresolv",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-native-libdl",
+          "digest_blake3": "3ba363b1c314e158a3ed3769a2d8c73272b3a01da712c43ecc25af2e4295a3bb"
+        },
+        {
+          "artifact_id": "musl-native-headers",
+          "digest_blake3": "315e38bd3f318804adf63fadc9689a9b692ee69986e26c6fddd4670190498700"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "musl-native-smoke",
+      "stage_plan_digest_blake3": "c2530b71d1b7c738f024cfff1a6b47e6ec17e51c4a86f221ffce26e2177f674a",
+      "predecessor_reports": [
+        {
+          "stage_id": "musl-native-materialization",
+          "report_digest_blake3": "826772682a0e54504d4385cd72a00587d532d1f5aef3cf99b7622416bc281b47"
+        },
+        {
+          "stage_id": "tcc-musl-selfhost-build",
+          "report_digest_blake3": "db085afb974c43f6f9807943a3bce437f0abb4e1d6a1d506990123df7168adf8"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:musl-native-smoke:selfhost"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "musl-native-smoke-binary",
+          "digest_blake3": "37b452f13fc423d7a1a5cc061264e4a897b305d144b0e214648738d106cb3e49"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "musl-native-execution",
+      "stage_plan_digest_blake3": "10dc267c829194aab951147afe517e3ed59e1789f375f4cfcccf50597ec5fc01",
+      "predecessor_reports": [
+        {
+          "stage_id": "musl-native-smoke",
+          "report_digest_blake3": "cc7f01e20cc71d676b332ba2e591df2789a66951a99efbf6a0b10c8736ff82e0"
+        },
+        {
+          "stage_id": "tcc-musl-v2-materialization",
+          "report_digest_blake3": "283cfa6b83bc37a9810eb733bf621e95d149738fad9dd1d1416e10cd5a478ceb"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:musl-native-execution:binary",
+        "exec:musl-native-execution:predecessor"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "musl-native-validation-receipt",
+          "digest_blake3": "f578c82fb2c9eb48d87b171daedaef41f63c7f82b64d26b14e6f686f9c3f230e"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "m4-materialization",
+      "stage_plan_digest_blake3": "a7f4ed4a8864b4cbc6ca513ac8a9cbc2283b0ab8a9e40de930ff90fe7d6f490f",
+      "predecessor_reports": [
+        {
+          "stage_id": "musl-native-materialization",
+          "report_digest_blake3": "826772682a0e54504d4385cd72a00587d532d1f5aef3cf99b7622416bc281b47"
+        },
+        {
+          "stage_id": "musl-native-smoke",
+          "report_digest_blake3": "cc7f01e20cc71d676b332ba2e591df2789a66951a99efbf6a0b10c8736ff82e0"
+        },
+        {
+          "stage_id": "musl-native-execution",
+          "report_digest_blake3": "3af9f9eb1539094c9a8edbf2274981177be47d260952e134506ebe6881f8c1f4"
+        },
+        {
+          "stage_id": "tcc-musl-v2-materialization",
+          "report_digest_blake3": "283cfa6b83bc37a9810eb733bf621e95d149738fad9dd1d1416e10cd5a478ceb"
+        },
+        {
+          "stage_id": "tcc-musl-v2-smoke",
+          "report_digest_blake3": "e9b4749ee1c7f0129cdb61a1263a6441c49b7ecd1e84c1ac938dd1163b0bec99"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:m4-materialization:tcc-musl-v2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "m4-configured-source",
+          "digest_blake3": "dbd75c146b108dfe62f23aeb29675b68d0d41bc8ca5b5dfd137d346a284376ac"
+        },
+        {
+          "artifact_id": "m4-1.4.7",
+          "digest_blake3": "3dfd2a1223ff6e0c2c540bc2507a097948ab24e2465f232e2363944e5b704741"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "m4-smoke",
+      "stage_plan_digest_blake3": "54bee9b4df0ca858addf9455efe11717c5d1694c317f0d42f03d4b26e397d180",
+      "predecessor_reports": [
+        {
+          "stage_id": "m4-materialization",
+          "report_digest_blake3": "dfdbcf29fa6c609d0ddd0dfbf140a8b524eeac009d3fb54e525542e721b8bf6d"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:m4-smoke:m4"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "m4-version-observation",
+          "digest_blake3": "c9b69698f54279bd5ce4b9cba7442ba625e7ba92717ee139d3152093331c0e75"
+        },
+        {
+          "artifact_id": "m4-macro-observation",
+          "digest_blake3": "f737ffa0d1bffb14295a97110f43d0f9cf059d5cbffc7ff6187b2182250d34ca"
+        },
+        {
+          "artifact_id": "m4-prefix-observation",
+          "digest_blake3": "6277dd4b0cbd4b080f3a4c4e561d05f128ffee445dadefa2116cc8e3b079e26c"
+        },
+        {
+          "artifact_id": "m4-malformed-rejection",
+          "digest_blake3": "675bd6ec5c382c78909a394f1f5a59e8b51e7e617f9ad9537e466fd799553420"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "diffutils-materialization",
+      "stage_plan_digest_blake3": "986c4aaaddca481696a5960e868a1d6e5695005993188b03ab1910fa31a46894",
+      "predecessor_reports": [
+        {
+          "stage_id": "m4-smoke",
+          "report_digest_blake3": "3db2258eeea3df0322c4ae490f573019df77973df7cff32bd26335a52ce3f51f"
+        },
+        {
+          "stage_id": "musl-native-materialization",
+          "report_digest_blake3": "826772682a0e54504d4385cd72a00587d532d1f5aef3cf99b7622416bc281b47"
+        },
+        {
+          "stage_id": "musl-native-smoke",
+          "report_digest_blake3": "cc7f01e20cc71d676b332ba2e591df2789a66951a99efbf6a0b10c8736ff82e0"
+        },
+        {
+          "stage_id": "musl-native-execution",
+          "report_digest_blake3": "3af9f9eb1539094c9a8edbf2274981177be47d260952e134506ebe6881f8c1f4"
+        },
+        {
+          "stage_id": "tcc-musl-v2-materialization",
+          "report_digest_blake3": "283cfa6b83bc37a9810eb733bf621e95d149738fad9dd1d1416e10cd5a478ceb"
+        },
+        {
+          "stage_id": "tcc-musl-v2-smoke",
+          "report_digest_blake3": "e9b4749ee1c7f0129cdb61a1263a6441c49b7ecd1e84c1ac938dd1163b0bec99"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:diffutils-materialization:tcc-musl-v2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "diffutils-configured-source",
+          "digest_blake3": "00d79a6f09d23d7a3430ccfd407a8cac0351aa5ecc6efc122f8cf093989cbbe5"
+        },
+        {
+          "artifact_id": "diffutils-diff-2.7",
+          "digest_blake3": "054ba2636aef71a1cbda93de3358ff8b8a7c92127ce951dcb7cc5814ac0e2d66"
+        },
+        {
+          "artifact_id": "diffutils-cmp-2.7",
+          "digest_blake3": "145c05e3557ba74a8ce85912c08feee01b7616fcc273e92279a96dbe18a8793b"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "diffutils-smoke",
+      "stage_plan_digest_blake3": "50acc374c8dadf4c691acf2d5e6329aec6c5d75f6b62a12ffb45f0fbd3c511e4",
+      "predecessor_reports": [
+        {
+          "stage_id": "diffutils-materialization",
+          "report_digest_blake3": "ac09ed9082f17b1be518ca58dbaed4d7143fff9893fce31a8dc8329930fd67ad"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:diffutils-smoke:diff",
+        "exec:diffutils-smoke:cmp"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "diffutils-version-observation",
+          "digest_blake3": "33510988f98a66cf0bc0e53661c6af77e8ed062faa45eac70734aef40a65ce6c"
+        },
+        {
+          "artifact_id": "diffutils-diff-observation",
+          "digest_blake3": "db3c58f16a007600d256c0be6306d55101919037d37ed4ece231bab4c3bbe2ca"
+        },
+        {
+          "artifact_id": "diffutils-cmp-observation",
+          "digest_blake3": "5d5856604bb2fa260c00b5ed8bcaa9a6b0bb89a644c7b23a2b678bf0e9127f6e"
+        },
+        {
+          "artifact_id": "diffutils-malformed-rejection",
+          "digest_blake3": "202fa55131223d7bc743f2ff8d6896e001df815d001f698d58be1bc451ea5725"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "grep-materialization",
+      "stage_plan_digest_blake3": "697084dee61fd33714ede145e387fe2899a0698b17ea050e692d5864ece648fd",
+      "predecessor_reports": [
+        {
+          "stage_id": "diffutils-smoke",
+          "report_digest_blake3": "8a98d2821b09733c4928f3930894e9f744c9f3d256da7e4629fb46067ada7767"
+        },
+        {
+          "stage_id": "musl-native-materialization",
+          "report_digest_blake3": "826772682a0e54504d4385cd72a00587d532d1f5aef3cf99b7622416bc281b47"
+        },
+        {
+          "stage_id": "musl-native-smoke",
+          "report_digest_blake3": "cc7f01e20cc71d676b332ba2e591df2789a66951a99efbf6a0b10c8736ff82e0"
+        },
+        {
+          "stage_id": "musl-native-execution",
+          "report_digest_blake3": "3af9f9eb1539094c9a8edbf2274981177be47d260952e134506ebe6881f8c1f4"
+        },
+        {
+          "stage_id": "tcc-musl-v2-materialization",
+          "report_digest_blake3": "283cfa6b83bc37a9810eb733bf621e95d149738fad9dd1d1416e10cd5a478ceb"
+        },
+        {
+          "stage_id": "tcc-musl-v2-smoke",
+          "report_digest_blake3": "e9b4749ee1c7f0129cdb61a1263a6441c49b7ecd1e84c1ac938dd1163b0bec99"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:grep-materialization:tcc-musl-v2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "grep-configured-source",
+          "digest_blake3": "d86dde390ef4ab7b4456f0371cbd29afa8b0e31ca297e7acc85b5f9544775c40"
+        },
+        {
+          "artifact_id": "grep-2.4-runner",
+          "digest_blake3": "b4adac2bf1f29e3e3b8ec736207a0cdfc3eb5b51c658a2f9f8eff85aee4ef71d"
+        },
+        {
+          "artifact_id": "egrep-2.4-runner",
+          "digest_blake3": "b4adac2bf1f29e3e3b8ec736207a0cdfc3eb5b51c658a2f9f8eff85aee4ef71d"
+        },
+        {
+          "artifact_id": "fgrep-2.4-runner",
+          "digest_blake3": "b4adac2bf1f29e3e3b8ec736207a0cdfc3eb5b51c658a2f9f8eff85aee4ef71d"
+        },
+        {
+          "artifact_id": "grep-2.4-bridge-script",
+          "digest_blake3": "3da22b084c98e1ebef50ddcbe404c681d6a7d81b29389d26151729b1c74127de"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "grep-smoke",
+      "stage_plan_digest_blake3": "5c90b1913fa5a8cd8d36d4aeea832a4b7a41f0fb6acaec72498642f6328ff194",
+      "predecessor_reports": [
+        {
+          "stage_id": "grep-materialization",
+          "report_digest_blake3": "c67c000793f597b66c5e554a015ac5ce9de8712f2c4b9a32a06996edaa619ef7"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:grep-smoke:grep"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "grep-literal-observation",
+          "digest_blake3": "8e4c7c1b99dbfd50e7a95185fead5ee1448fa904a2fdd778eaf5f2dbfd629a99"
+        },
+        {
+          "artifact_id": "grep-quiet-observation",
+          "digest_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+        },
+        {
+          "artifact_id": "grep-anchored-observation",
+          "digest_blake3": "aa95faeede7041e63c6056bdcf10e6fbf709a355e539259da51a067e5dd27802"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "gawk-materialization",
+      "stage_plan_digest_blake3": "442432efae5cf5aeb843b225c2b52f00c8fd853c0c09c22e49dc10efba478595",
+      "predecessor_reports": [
+        {
+          "stage_id": "grep-smoke",
+          "report_digest_blake3": "590df44d73d30c607cd367540efd9e9c4df6c832d3e26886c7f8d871cdfd3fab"
+        },
+        {
+          "stage_id": "musl-native-materialization",
+          "report_digest_blake3": "826772682a0e54504d4385cd72a00587d532d1f5aef3cf99b7622416bc281b47"
+        },
+        {
+          "stage_id": "musl-native-smoke",
+          "report_digest_blake3": "cc7f01e20cc71d676b332ba2e591df2789a66951a99efbf6a0b10c8736ff82e0"
+        },
+        {
+          "stage_id": "musl-native-execution",
+          "report_digest_blake3": "3af9f9eb1539094c9a8edbf2274981177be47d260952e134506ebe6881f8c1f4"
+        },
+        {
+          "stage_id": "tcc-musl-v2-materialization",
+          "report_digest_blake3": "283cfa6b83bc37a9810eb733bf621e95d149738fad9dd1d1416e10cd5a478ceb"
+        },
+        {
+          "stage_id": "tcc-musl-v2-smoke",
+          "report_digest_blake3": "e9b4749ee1c7f0129cdb61a1263a6441c49b7ecd1e84c1ac938dd1163b0bec99"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:gawk-materialization:tcc-musl-v2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "gawk-configured-source",
+          "digest_blake3": "ccf0a5c408f8d60f4c8d72413c4c0ec0f8a49e29884c54c229ede61284dc7988"
+        },
+        {
+          "artifact_id": "gawk-3.0.4",
+          "digest_blake3": "1608d2ac4b0f9faaecd91494502942fccfcec3fd6298aa610f2dfd4308aaf5d1"
+        },
+        {
+          "artifact_id": "awk-3.0.4-alias",
+          "digest_blake3": "1608d2ac4b0f9faaecd91494502942fccfcec3fd6298aa610f2dfd4308aaf5d1"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "gawk-smoke",
+      "stage_plan_digest_blake3": "082f6090d45e4e1a529cf9b399c3072f1d0e61f6c1bb30e487187d6653afb1d2",
+      "predecessor_reports": [
+        {
+          "stage_id": "gawk-materialization",
+          "report_digest_blake3": "7354c46c49856c26a4a6cb9c9bbbaf65ee696937b5ec17b7bf463715e22b241e"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:gawk-smoke:gawk"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "gawk-behavior-observation",
+          "digest_blake3": "e8d40a8383b8b65278313f2589e148f294e19cba489e3517f3153c38d8603f7f"
+        },
+        {
+          "artifact_id": "gawk-numeric-observation",
+          "digest_blake3": "c95e800034a073abe91702b1faca0c3bf102d53fdebcd4d0cf46b39c524a98ba"
+        },
+        {
+          "artifact_id": "gawk-decimal-observation",
+          "digest_blake3": "49124bf4f7f37328738ac34216a60dcd5f58bb198c5c3f6719b6becafb7e7882"
+        },
+        {
+          "artifact_id": "gawk-length-observation",
+          "digest_blake3": "b9a1a3183dd350f0e896d0f4b59c87e7bda8b1ed3a1af76afc86c1cb8f7cbbde"
+        },
+        {
+          "artifact_id": "gawk-hex-observation",
+          "digest_blake3": "320b59884ca4a418f85cef0916f3761d8a7225abda1b1069cb2182a9a15bdde9"
+        },
+        {
+          "artifact_id": "gawk-negative-observation",
+          "digest_blake3": "9633428410d0cea43777d103fa8f7aa73048977e6b3421ee6d8ea663f7722e65"
+        },
+        {
+          "artifact_id": "gawk-installed-observation",
+          "digest_blake3": "b59a7a3ea06ce3059bdb45f57197d14ea5d2ecae9fb8b840cf7f486fc9685f33"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "bison-materialization",
+      "stage_plan_digest_blake3": "e1fe083c28703364ddcde080666cebc42d848de38fbd9aa1c4fc1c36a64a9a90",
+      "predecessor_reports": [
+        {
+          "stage_id": "gawk-smoke",
+          "report_digest_blake3": "fc8c22b48ca4b848b972c223c585c2a6885839915d89013cebb3133d405a2184"
+        },
+        {
+          "stage_id": "m4-materialization",
+          "report_digest_blake3": "dfdbcf29fa6c609d0ddd0dfbf140a8b524eeac009d3fb54e525542e721b8bf6d"
+        },
+        {
+          "stage_id": "m4-smoke",
+          "report_digest_blake3": "3db2258eeea3df0322c4ae490f573019df77973df7cff32bd26335a52ce3f51f"
+        },
+        {
+          "stage_id": "musl-native-materialization",
+          "report_digest_blake3": "826772682a0e54504d4385cd72a00587d532d1f5aef3cf99b7622416bc281b47"
+        },
+        {
+          "stage_id": "musl-native-smoke",
+          "report_digest_blake3": "cc7f01e20cc71d676b332ba2e591df2789a66951a99efbf6a0b10c8736ff82e0"
+        },
+        {
+          "stage_id": "tcc-musl-v2-materialization",
+          "report_digest_blake3": "283cfa6b83bc37a9810eb733bf621e95d149738fad9dd1d1416e10cd5a478ceb"
+        },
+        {
+          "stage_id": "tcc-musl-v2-smoke",
+          "report_digest_blake3": "e9b4749ee1c7f0129cdb61a1263a6441c49b7ecd1e84c1ac938dd1163b0bec99"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:bison-materialization:tcc-musl-v2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "bison-configured-source",
+          "digest_blake3": "7b9699a83f7028fb22c8aa5bffaa5e314e2a9e1ad8625c0304c2a7bbbf37f121"
+        },
+        {
+          "artifact_id": "bison-2.3",
+          "digest_blake3": "3db09397aa2752eea9c438a4cb1c5ebd27605f58b56ec43781baf411c3f2b983"
+        },
+        {
+          "artifact_id": "bison-2.3-runtime-data",
+          "digest_blake3": "f3d4a63ba0b8049557c690ad7db8d48d954c3dd6e45cfdd9488fe6d75d01bc7c"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "bison-smoke",
+      "stage_plan_digest_blake3": "037677c31059486cdf2843bc0dca453ff75224634618b29a76e9e6027054f768",
+      "predecessor_reports": [
+        {
+          "stage_id": "bison-materialization",
+          "report_digest_blake3": "0cd57efcc08e4ac203709561c75461c318dcae94be1e2549405aae176ff53ff3"
+        },
+        {
+          "stage_id": "m4-materialization",
+          "report_digest_blake3": "dfdbcf29fa6c609d0ddd0dfbf140a8b524eeac009d3fb54e525542e721b8bf6d"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:bison-smoke:bison",
+        "exec:bison-smoke:m4"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "bison-version-observation",
+          "digest_blake3": "a83fcaecff55230ffd6fb2ff09b2018392e8c403a3e2a8087d2cb68115f383c3"
+        },
+        {
+          "artifact_id": "bison-positive-parser-source",
+          "digest_blake3": "bf73d7f6db6f0dd4a96706a1efb9e23dd287cbf847badd17f64d4c7ed235c923"
+        },
+        {
+          "artifact_id": "bison-positive-parser-header",
+          "digest_blake3": "afa05cc327a73b17e33baf53fb44030b1a111aa993db60f01565a2a80dc8f913"
+        },
+        {
+          "artifact_id": "bison-negative-observation",
+          "digest_blake3": "d0c674aaeab59c3efab1090e74cb598ae4df44bbcd42bc451a0a3f1a1257dcb4"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "flex-materialization",
+      "stage_plan_digest_blake3": "40ec402c6cb64ce5e900fbfaeae13e5a8650027a06b4d762b7b33e5f3392e5ea",
+      "predecessor_reports": [
+        {
+          "stage_id": "bison-smoke",
+          "report_digest_blake3": "42f37be91e9daef35fe3616e47c1acb2659159d37bd523179ea681d705d7179d"
+        },
+        {
+          "stage_id": "m4-materialization",
+          "report_digest_blake3": "dfdbcf29fa6c609d0ddd0dfbf140a8b524eeac009d3fb54e525542e721b8bf6d"
+        },
+        {
+          "stage_id": "m4-smoke",
+          "report_digest_blake3": "3db2258eeea3df0322c4ae490f573019df77973df7cff32bd26335a52ce3f51f"
+        },
+        {
+          "stage_id": "musl-native-materialization",
+          "report_digest_blake3": "826772682a0e54504d4385cd72a00587d532d1f5aef3cf99b7622416bc281b47"
+        },
+        {
+          "stage_id": "musl-native-smoke",
+          "report_digest_blake3": "cc7f01e20cc71d676b332ba2e591df2789a66951a99efbf6a0b10c8736ff82e0"
+        },
+        {
+          "stage_id": "tcc-musl-v2-materialization",
+          "report_digest_blake3": "283cfa6b83bc37a9810eb733bf621e95d149738fad9dd1d1416e10cd5a478ceb"
+        },
+        {
+          "stage_id": "tcc-musl-v2-smoke",
+          "report_digest_blake3": "e9b4749ee1c7f0129cdb61a1263a6441c49b7ecd1e84c1ac938dd1163b0bec99"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:flex-materialization:tcc-musl-v2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "flex-configured-source",
+          "digest_blake3": "d2d7e2a0ed46329fc2e37d58d25dab8f17c01b5c9b7b97de09930ef3e25fe3b7"
+        },
+        {
+          "artifact_id": "flex-2.6.4",
+          "digest_blake3": "502324a00e1b35d6fc18a6cf6c3a257d3578b7d5fd8bffc27ce41b9da3c1ebbf"
+        },
+        {
+          "artifact_id": "flex-libfl",
+          "digest_blake3": "45c3a2d2e338eae19d24fa17df35127f5c61c16dca0ce98dce45efb13b920bfa"
+        },
+        {
+          "artifact_id": "flex-cxx-header",
+          "digest_blake3": "713ca824326279098cc1eb9b18ddd200e7506335c502cf2d79b4af7aaa330cdf"
+        },
+        {
+          "artifact_id": "flex-libfl-consumer",
+          "digest_blake3": "9d13005da4640c131d85edff0a255a83471b136d31ce41d2b04534c8a7b533b4"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "flex-smoke",
+      "stage_plan_digest_blake3": "e2447b3c4e7fcc9d872f1591ff00a3ffa8aa6b59305e44b7321534041eeaffea",
+      "predecessor_reports": [
+        {
+          "stage_id": "flex-materialization",
+          "report_digest_blake3": "e52591739384491706ed15c7c909c728a23777ec7c463cdb768cb6b3a51789ba"
+        },
+        {
+          "stage_id": "m4-materialization",
+          "report_digest_blake3": "dfdbcf29fa6c609d0ddd0dfbf140a8b524eeac009d3fb54e525542e721b8bf6d"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:flex-smoke:flex",
+        "exec:flex-smoke:libfl-consumer",
+        "exec:flex-smoke:m4"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "flex-version-observation",
+          "digest_blake3": "3697eccbbb98cf059d94cc199ff12f77bee88f5097ad8f0826c86bcf1fcbd5a7"
+        },
+        {
+          "artifact_id": "flex-positive-scanner-source",
+          "digest_blake3": "fb2c93883438dca7366f41ba363944da66b78787f76be32767cb697943b26732"
+        },
+        {
+          "artifact_id": "flex-negative-observation",
+          "digest_blake3": "f1180cfefce605bb56ee38ccfec3bbd99f448e2d5f391bec146f4a02cdff336f"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "bash-full-generator-materialization",
+      "stage_plan_digest_blake3": "b5b16356d2f591d1e96d7411131918106d7d03f233373c83c862059a49063b88",
+      "predecessor_reports": [
+        {
+          "stage_id": "flex-smoke",
+          "report_digest_blake3": "9b8a184c4a0ce2c6c6cf6961a30b7d7a4d9412a77a1138e00eb92e6a01264918"
+        },
+        {
+          "stage_id": "bash-materialization",
+          "report_digest_blake3": "e8453bc5b646e5d5a8de05b85231a1ea61b7e18045c899652dbd488bb5c1b2c0"
+        },
+        {
+          "stage_id": "bash-smoke",
+          "report_digest_blake3": "248d522ad05c587a1b4812acbd3c8a959d2b30875322eb76217254f19b809280"
+        },
+        {
+          "stage_id": "musl-native-materialization",
+          "report_digest_blake3": "826772682a0e54504d4385cd72a00587d532d1f5aef3cf99b7622416bc281b47"
+        },
+        {
+          "stage_id": "musl-native-smoke",
+          "report_digest_blake3": "cc7f01e20cc71d676b332ba2e591df2789a66951a99efbf6a0b10c8736ff82e0"
+        },
+        {
+          "stage_id": "tcc-musl-v2-materialization",
+          "report_digest_blake3": "283cfa6b83bc37a9810eb733bf621e95d149738fad9dd1d1416e10cd5a478ceb"
+        },
+        {
+          "stage_id": "tcc-musl-v2-smoke",
+          "report_digest_blake3": "e9b4749ee1c7f0129cdb61a1263a6441c49b7ecd1e84c1ac938dd1163b0bec99"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:bash-full-generator-materialization:tcc-musl-v2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "bash-full-mkbuiltins",
+          "digest_blake3": "725e682bc5f91728a92f72a81332dda87537ff0ec27b20134b9644b5f2cd43a7"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "bash-full-generator-execution",
+      "stage_plan_digest_blake3": "8ac7781239c7d19821ae587d2de4e958596c0eb5d53e2353d9f236051d06cc03",
+      "predecessor_reports": [
+        {
+          "stage_id": "bash-full-generator-materialization",
+          "report_digest_blake3": "5fda776cba590b2df2e5d781a5c1748b26d405957bdd57f4e974996b61e3b255"
+        },
+        {
+          "stage_id": "bash-materialization",
+          "report_digest_blake3": "e8453bc5b646e5d5a8de05b85231a1ea61b7e18045c899652dbd488bb5c1b2c0"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:bash-full-generator-execution:mkbuiltins"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "bash-full-generated-builtins",
+          "digest_blake3": "1797cb39c0507d6fbb40afbbd58299ffd9a0eb7d0e983bbe64742499a3fdc9c9"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "bash-full-materialization",
+      "stage_plan_digest_blake3": "29e0a6b60a7c28b0cc35fd2ae6f42e97bdb5404ffc90112271a99cd92547c227",
+      "predecessor_reports": [
+        {
+          "stage_id": "bash-full-generator-execution",
+          "report_digest_blake3": "e0fd1f762982116cedc76a68f00fdd0decfab72287aaf2859f39b7a3c3dffdfc"
+        },
+        {
+          "stage_id": "bash-materialization",
+          "report_digest_blake3": "e8453bc5b646e5d5a8de05b85231a1ea61b7e18045c899652dbd488bb5c1b2c0"
+        },
+        {
+          "stage_id": "musl-native-materialization",
+          "report_digest_blake3": "826772682a0e54504d4385cd72a00587d532d1f5aef3cf99b7622416bc281b47"
+        },
+        {
+          "stage_id": "musl-native-smoke",
+          "report_digest_blake3": "cc7f01e20cc71d676b332ba2e591df2789a66951a99efbf6a0b10c8736ff82e0"
+        },
+        {
+          "stage_id": "tcc-musl-v2-materialization",
+          "report_digest_blake3": "283cfa6b83bc37a9810eb733bf621e95d149738fad9dd1d1416e10cd5a478ceb"
+        },
+        {
+          "stage_id": "tcc-musl-v2-smoke",
+          "report_digest_blake3": "e9b4749ee1c7f0129cdb61a1263a6441c49b7ecd1e84c1ac938dd1163b0bec99"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:bash-full-materialization:tcc-musl-v2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "bash-full-configured-source",
+          "digest_blake3": "dc3fd01b5f34af5e2f3031c10cda243f43b3c9ce45a0fd2181693727fb629a2e"
+        },
+        {
+          "artifact_id": "bash-2.05b-full",
+          "digest_blake3": "3f166d5bb28aee29982ec38ba07f8b1dca3c488390737a0e78d35950876e4d4e"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "bash-full-smoke",
+      "stage_plan_digest_blake3": "61669c742bf597936a1501184c95a683f6f78836165cfc94246eb2cd3ff9cd98",
+      "predecessor_reports": [
+        {
+          "stage_id": "bash-full-materialization",
+          "report_digest_blake3": "ac413a6f12ddb814aef3a8aae0854e5a17d3d80c2046aec72c5016c8238c1c7a"
+        },
+        {
+          "stage_id": "make-materialization",
+          "report_digest_blake3": "de191e2c3d8948d9bf98ee4297cace2ef6e1e8ac992e18858aa7f6d5e20a7b72"
+        },
+        {
+          "stage_id": "make-smoke",
+          "report_digest_blake3": "bd3d77b4c39381fa0829dd6465f33eb5bc0e7ab4aa56645d3504db0369c7f2ea"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:bash-full-smoke:bash-full",
+        "exec:bash-full-smoke:make"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "bash-full-version-observation",
+          "digest_blake3": "1cb581932f76e9f3870af0a75060141d692acd438ef5663ebb182798642fa20e"
+        },
+        {
+          "artifact_id": "bash-full-functional-observation",
+          "digest_blake3": "6687d0952325979e333ab55180b9aea8835ff490e46b7652ea5ec204c94b9c2a"
+        },
+        {
+          "artifact_id": "bash-full-negative-observation",
+          "digest_blake3": "f1184a47cefae3e975232299de76d9a96ea5a9354c87f19f77413895583d8da3"
+        },
+        {
+          "artifact_id": "bash-full-external-child-observation",
+          "digest_blake3": "deb003aad7485e87e9a7ec33306fe4e89ca6774d39eeea26371b78d21cd8c292"
+        },
+        {
+          "artifact_id": "bash-full-make-shell-observation",
+          "digest_blake3": "97ce45a8f015be46bbbd66c2abd778940a5aed257069c4e9dfd432b751c968d8"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "binutils-canonicalizer-materialization",
+      "stage_plan_digest_blake3": "e2683d0ea5b34df8fb5691600c4fdc3d9b7d2ae22da49a19e390f03f4008dcee",
+      "predecessor_reports": [
+        {
+          "stage_id": "tcc-musl-v2-materialization",
+          "report_digest_blake3": "283cfa6b83bc37a9810eb733bf621e95d149738fad9dd1d1416e10cd5a478ceb"
+        },
+        {
+          "stage_id": "tcc-musl-v2-smoke",
+          "report_digest_blake3": "e9b4749ee1c7f0129cdb61a1263a6441c49b7ecd1e84c1ac938dd1163b0bec99"
+        },
+        {
+          "stage_id": "musl-native-materialization",
+          "report_digest_blake3": "826772682a0e54504d4385cd72a00587d532d1f5aef3cf99b7622416bc281b47"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:binutils-canonicalizer:tcc-musl-v2"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "binutils-elf-symbol-canonicalizer",
+          "digest_blake3": "1a7a10d6ce97f3cea18ffc4f956fe28bdb10d94568146d89670016a80d1de06a"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "binutils-helper-materialization",
+      "stage_plan_digest_blake3": "3e0284567d6a7de0d9af0f3d1b8d67dd3ec85a04b146f7deea7b4025fa465239",
+      "predecessor_reports": [
+        {
+          "stage_id": "binutils-canonicalizer-materialization",
+          "report_digest_blake3": "40aa3aec508176c26d694ee33042c53a354680d30157ecb959d76736a8f972d0"
+        },
+        {
+          "stage_id": "bash-full-materialization",
+          "report_digest_blake3": "ac413a6f12ddb814aef3a8aae0854e5a17d3d80c2046aec72c5016c8238c1c7a"
+        },
+        {
+          "stage_id": "bash-full-smoke",
+          "report_digest_blake3": "a5b8ca5064cf1a52b741dcb700cdd3e0984e183a7af477f377126d246af47503"
+        },
+        {
+          "stage_id": "tcc-musl-v2-materialization",
+          "report_digest_blake3": "283cfa6b83bc37a9810eb733bf621e95d149738fad9dd1d1416e10cd5a478ceb"
+        },
+        {
+          "stage_id": "tcc-musl-v2-smoke",
+          "report_digest_blake3": "e9b4749ee1c7f0129cdb61a1263a6441c49b7ecd1e84c1ac938dd1163b0bec99"
+        },
+        {
+          "stage_id": "coreutils-materialization",
+          "report_digest_blake3": "71c90aa8f5c8ae728d794e180310819bcd436c1092822cbb5e3fcea5443398e0"
+        },
+        {
+          "stage_id": "coreutils-smoke",
+          "report_digest_blake3": "76ca036087970709f34a043f195e780ec3541595e64fe8c6a483355304eec11f"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:binutils-helper:tcc-musl-v2",
+        "exec:binutils-helper:bash-full",
+        "exec:binutils-helper-materialization:coreutils-cat",
+        "exec:binutils-helper-materialization:coreutils-chmod",
+        "exec:binutils-helper-materialization:coreutils-mkdir",
+        "exec:binutils-helper-materialization:coreutils-rm",
+        "exec:binutils-helper-materialization:coreutils-wc",
+        "exec:binutils-helper-materialization:elf-canonicalizer"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "binutils-sed-bridge-launcher",
+          "digest_blake3": "9b4d6a5eca05f55c407a70f7e426f756f482c9ae8f76d0a22d1b1b46e7dba1a1"
+        },
+        {
+          "artifact_id": "binutils-configure-utility",
+          "digest_blake3": "a0d4f306ed84086cb0cebff1dffb0f5fea0a93e9ee4085e6e5e0acc3e4df201f"
+        },
+        {
+          "artifact_id": "binutils-ylwrap-runner",
+          "digest_blake3": "d675a75869cba2e3c7cdb932ee75106a4a6094161e4d95fc196c08aa7b9723f8"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "binutils-generator-materialization",
+      "stage_plan_digest_blake3": "0506b1c1e1c6cf192c66441da82564fdd645a84bf8ddef118fd86ed09dac9f87",
+      "predecessor_reports": [
+        {
+          "stage_id": "binutils-canonicalizer-materialization",
+          "report_digest_blake3": "40aa3aec508176c26d694ee33042c53a354680d30157ecb959d76736a8f972d0"
+        },
+        {
+          "stage_id": "binutils-helper-materialization",
+          "report_digest_blake3": "7926d6a296b355c4497ae8d0b4af474bd956fe3f84ac8e4c87728e0222b10d75"
+        },
+        {
+          "stage_id": "bash-full-materialization",
+          "report_digest_blake3": "ac413a6f12ddb814aef3a8aae0854e5a17d3d80c2046aec72c5016c8238c1c7a"
+        },
+        {
+          "stage_id": "tcc-musl-v2-materialization",
+          "report_digest_blake3": "283cfa6b83bc37a9810eb733bf621e95d149738fad9dd1d1416e10cd5a478ceb"
+        },
+        {
+          "stage_id": "sed-materialization",
+          "report_digest_blake3": "c093b80d4c519eaef31586518ce2f76d333776022e05b15f829f68019858e6b1"
+        },
+        {
+          "stage_id": "grep-materialization",
+          "report_digest_blake3": "c67c000793f597b66c5e554a015ac5ce9de8712f2c4b9a32a06996edaa619ef7"
+        },
+        {
+          "stage_id": "diffutils-materialization",
+          "report_digest_blake3": "ac09ed9082f17b1be518ca58dbaed4d7143fff9893fce31a8dc8329930fd67ad"
+        },
+        {
+          "stage_id": "gawk-materialization",
+          "report_digest_blake3": "7354c46c49856c26a4a6cb9c9bbbaf65ee696937b5ec17b7bf463715e22b241e"
+        },
+        {
+          "stage_id": "m4-materialization",
+          "report_digest_blake3": "dfdbcf29fa6c609d0ddd0dfbf140a8b524eeac009d3fb54e525542e721b8bf6d"
+        },
+        {
+          "stage_id": "bison-materialization",
+          "report_digest_blake3": "0cd57efcc08e4ac203709561c75461c318dcae94be1e2549405aae176ff53ff3"
+        },
+        {
+          "stage_id": "flex-materialization",
+          "report_digest_blake3": "e52591739384491706ed15c7c909c728a23777ec7c463cdb768cb6b3a51789ba"
+        },
+        {
+          "stage_id": "make-materialization",
+          "report_digest_blake3": "de191e2c3d8948d9bf98ee4297cace2ef6e1e8ac992e18858aa7f6d5e20a7b72"
+        },
+        {
+          "stage_id": "coreutils-materialization",
+          "report_digest_blake3": "71c90aa8f5c8ae728d794e180310819bcd436c1092822cbb5e3fcea5443398e0"
+        },
+        {
+          "stage_id": "coreutils-smoke",
+          "report_digest_blake3": "76ca036087970709f34a043f195e780ec3541595e64fe8c6a483355304eec11f"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:binutils-generator-materialization:tcc-musl-v2",
+        "exec:binutils-generator-materialization:bash-full",
+        "exec:binutils-generator-materialization:sed",
+        "exec:binutils-generator-materialization:grep",
+        "exec:binutils-generator-materialization:diff",
+        "exec:binutils-generator-materialization:cmp",
+        "exec:binutils-generator-materialization:gawk",
+        "exec:binutils-generator-materialization:m4",
+        "exec:binutils-generator-materialization:bison",
+        "exec:binutils-generator-materialization:flex",
+        "exec:binutils-generator-materialization:make",
+        "exec:binutils-generator-materialization:coreutils-cat",
+        "exec:binutils-generator-materialization:coreutils-chmod",
+        "exec:binutils-generator-materialization:coreutils-cp",
+        "exec:binutils-generator-materialization:coreutils-echo",
+        "exec:binutils-generator-materialization:coreutils-install",
+        "exec:binutils-generator-materialization:coreutils-ln",
+        "exec:binutils-generator-materialization:coreutils-ls",
+        "exec:binutils-generator-materialization:coreutils-mkdir",
+        "exec:binutils-generator-materialization:coreutils-mv",
+        "exec:binutils-generator-materialization:coreutils-rm",
+        "exec:binutils-generator-materialization:coreutils-rmdir",
+        "exec:binutils-generator-materialization:coreutils-sort",
+        "exec:binutils-generator-materialization:coreutils-test",
+        "exec:binutils-generator-materialization:coreutils-head",
+        "exec:binutils-generator-materialization:coreutils-wc",
+        "exec:binutils-generator-materialization:coreutils-basename",
+        "exec:binutils-generator-materialization:coreutils-dirname",
+        "exec:binutils-generator-materialization:coreutils-tr",
+        "exec:binutils-generator-materialization:coreutils-expr",
+        "exec:binutils-generator-materialization:coreutils-touch",
+        "exec:binutils-generator-materialization:sed-launcher",
+        "exec:binutils-generator-materialization:configure-utility",
+        "exec:binutils-generator-materialization:ylwrap-runner",
+        "exec:binutils-generator-materialization:elf-canonicalizer"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "binutils-bfd-chew",
+          "digest_blake3": "8df489a85fdb18b2bcff0e78f6fd5462ac2bf24b0c0b425ce742049c8f16cecd"
+        },
+        {
+          "artifact_id": "binutils-configure-probe-executables",
+          "digest_blake3": "4f9a84d073f9a7293cd8ddcc65e68d57fe47dfa28fb192c10a744c73c7d77a5c"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "binutils-component-materialization",
+      "stage_plan_digest_blake3": "3e7adffcaa69d799c3c020512093ea097d2a642e329a94cb2966ded3f78e9ce2",
+      "predecessor_reports": [
+        {
+          "stage_id": "binutils-generator-materialization",
+          "report_digest_blake3": "3bc6095f4bfe38d3b0b39cd535b5b3649120243021e8ef1303ef74601d1d057c"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:binutils-component-materialization:tcc-musl-v2",
+        "exec:binutils-component-materialization:bash-full",
+        "exec:binutils-component-materialization:sed",
+        "exec:binutils-component-materialization:grep",
+        "exec:binutils-component-materialization:diff",
+        "exec:binutils-component-materialization:cmp",
+        "exec:binutils-component-materialization:gawk",
+        "exec:binutils-component-materialization:m4",
+        "exec:binutils-component-materialization:bison",
+        "exec:binutils-component-materialization:flex",
+        "exec:binutils-component-materialization:make",
+        "exec:binutils-component-materialization:coreutils-cat",
+        "exec:binutils-component-materialization:coreutils-chmod",
+        "exec:binutils-component-materialization:coreutils-cp",
+        "exec:binutils-component-materialization:coreutils-echo",
+        "exec:binutils-component-materialization:coreutils-install",
+        "exec:binutils-component-materialization:coreutils-ln",
+        "exec:binutils-component-materialization:coreutils-ls",
+        "exec:binutils-component-materialization:coreutils-mkdir",
+        "exec:binutils-component-materialization:coreutils-mv",
+        "exec:binutils-component-materialization:coreutils-rm",
+        "exec:binutils-component-materialization:coreutils-rmdir",
+        "exec:binutils-component-materialization:coreutils-sort",
+        "exec:binutils-component-materialization:coreutils-test",
+        "exec:binutils-component-materialization:coreutils-head",
+        "exec:binutils-component-materialization:coreutils-wc",
+        "exec:binutils-component-materialization:coreutils-basename",
+        "exec:binutils-component-materialization:coreutils-dirname",
+        "exec:binutils-component-materialization:coreutils-tr",
+        "exec:binutils-component-materialization:coreutils-expr",
+        "exec:binutils-component-materialization:coreutils-touch",
+        "exec:binutils-component-materialization:bfd-chew",
+        "exec:binutils-component-materialization:sed-launcher",
+        "exec:binutils-component-materialization:configure-utility",
+        "exec:binutils-component-materialization:ylwrap-runner",
+        "exec:binutils-component-materialization:elf-canonicalizer",
+        "exec:binutils-component-materialization:bfd-a-out",
+        "exec:binutils-component-materialization:bfd-conftest-daae",
+        "exec:binutils-component-materialization:bfd-conftest-e5e6",
+        "exec:binutils-component-materialization:binutils-a-out",
+        "exec:binutils-component-materialization:binutils-conftest",
+        "exec:binutils-component-materialization:binutils-sysinfo",
+        "exec:binutils-component-materialization:gas-a-out",
+        "exec:binutils-component-materialization:gprof-a-out",
+        "exec:binutils-component-materialization:intl-a-out",
+        "exec:binutils-component-materialization:intl-conftest-5572",
+        "exec:binutils-component-materialization:intl-conftest-daae",
+        "exec:binutils-component-materialization:ld-a-out",
+        "exec:binutils-component-materialization:ld-conftest",
+        "exec:binutils-component-materialization:libiberty-a-out",
+        "exec:binutils-component-materialization:libiberty-conftest-6800",
+        "exec:binutils-component-materialization:libiberty-conftest-6dfb",
+        "exec:binutils-component-materialization:libiberty-conftest-7dae",
+        "exec:binutils-component-materialization:libiberty-conftest-b9cf",
+        "exec:binutils-component-materialization:libiberty-conftest-daae",
+        "exec:binutils-component-materialization:libiberty-conftest-e5e6",
+        "exec:binutils-component-materialization:opcodes-a-out",
+        "exec:binutils-component-materialization:opcodes-i386-gen",
+        "exec:binutils-component-materialization:zlib-a-out",
+        "exec:binutils-component-materialization:zlib-conftest"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "binutils-libiberty-archive",
+          "digest_blake3": "d19e0d15373a237fe94b0d915f3edba43182343739da15f837c1a9a1ea426236"
+        },
+        {
+          "artifact_id": "binutils-zlib-archive",
+          "digest_blake3": "b922a8528a2491568debfc87c017514986a44516f43c3865c10a72884bb4eb53"
+        },
+        {
+          "artifact_id": "binutils-bfd-archive",
+          "digest_blake3": "f45500a900c2294cd23bcd0c7fd013e31a7b4028bce48f765108d7f309169e53"
+        },
+        {
+          "artifact_id": "binutils-opcodes-archive",
+          "digest_blake3": "1f9d0deabd406f82dcabaaddf6faff6b5fdb7475b3e59d000b27b70251200fac"
+        },
+        {
+          "artifact_id": "binutils-size-build-output",
+          "digest_blake3": "812bd48e35d078b759192073cb2de2accaf9620c075c2ae24df9329c5623a7dd"
+        },
+        {
+          "artifact_id": "binutils-as-build-output",
+          "digest_blake3": "36bb17408403b4fd8283bf80f78410ae76eedb4e1565f0fc6db0f7a8c0a1eac4"
+        },
+        {
+          "artifact_id": "binutils-gprof-build-output",
+          "digest_blake3": "37321441797634fb44356c1cbfba5d4b59bb4fec97fd39f49df7124f258cbb9e"
+        },
+        {
+          "artifact_id": "binutils-ld-build-output",
+          "digest_blake3": "e2939e05b0e115efa3530f66d60b63ef06627a1ba0c0c1a70ce71fabcf4ca158"
+        },
+        {
+          "artifact_id": "binutils-generated-sources",
+          "digest_blake3": "a9150c02522df31403eb09560363db38936be2a9e3e005afaf7e06a8d1c0f5e7"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "binutils-install-materialization",
+      "stage_plan_digest_blake3": "d27fdd5b8cec3db847f2fcb0c0e3ff1a300a033c24234957b88609f69a6b9462",
+      "predecessor_reports": [
+        {
+          "stage_id": "binutils-component-materialization",
+          "report_digest_blake3": "13324168c6c6b583c13be8d8d12407e1cc90a57d2f54c5606f738ef8b5e8d97a"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:binutils-install-materialization:tcc-musl-v2",
+        "exec:binutils-install-materialization:bash-full",
+        "exec:binutils-install-materialization:sed",
+        "exec:binutils-install-materialization:grep",
+        "exec:binutils-install-materialization:diff",
+        "exec:binutils-install-materialization:cmp",
+        "exec:binutils-install-materialization:gawk",
+        "exec:binutils-install-materialization:m4",
+        "exec:binutils-install-materialization:bison",
+        "exec:binutils-install-materialization:flex",
+        "exec:binutils-install-materialization:make",
+        "exec:binutils-install-materialization:coreutils-cat",
+        "exec:binutils-install-materialization:coreutils-chmod",
+        "exec:binutils-install-materialization:coreutils-cp",
+        "exec:binutils-install-materialization:coreutils-echo",
+        "exec:binutils-install-materialization:coreutils-install",
+        "exec:binutils-install-materialization:coreutils-ln",
+        "exec:binutils-install-materialization:coreutils-ls",
+        "exec:binutils-install-materialization:coreutils-mkdir",
+        "exec:binutils-install-materialization:coreutils-mv",
+        "exec:binutils-install-materialization:coreutils-rm",
+        "exec:binutils-install-materialization:coreutils-rmdir",
+        "exec:binutils-install-materialization:coreutils-sort",
+        "exec:binutils-install-materialization:coreutils-test",
+        "exec:binutils-install-materialization:coreutils-head",
+        "exec:binutils-install-materialization:coreutils-wc",
+        "exec:binutils-install-materialization:coreutils-basename",
+        "exec:binutils-install-materialization:coreutils-dirname",
+        "exec:binutils-install-materialization:coreutils-tr",
+        "exec:binutils-install-materialization:coreutils-expr",
+        "exec:binutils-install-materialization:coreutils-touch",
+        "exec:binutils-install-materialization:sed-launcher",
+        "exec:binutils-install-materialization:configure-utility",
+        "exec:binutils-install-materialization:ylwrap-runner",
+        "exec:binutils-install-materialization:elf-canonicalizer"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "binutils-installed-as",
+          "digest_blake3": "36bb17408403b4fd8283bf80f78410ae76eedb4e1565f0fc6db0f7a8c0a1eac4"
+        },
+        {
+          "artifact_id": "binutils-installed-ld",
+          "digest_blake3": "e2939e05b0e115efa3530f66d60b63ef06627a1ba0c0c1a70ce71fabcf4ca158"
+        },
+        {
+          "artifact_id": "binutils-installed-ar",
+          "digest_blake3": "c5836470e484f7b9137abc3bbdffbec7155a7700fdf094662b4253a576e76600"
+        },
+        {
+          "artifact_id": "binutils-installed-ranlib",
+          "digest_blake3": "8c6d65ff0cc4b6936e6f93a016782890dd39e556ef2f99d1699d0071c6691533"
+        },
+        {
+          "artifact_id": "binutils-installed-nm",
+          "digest_blake3": "bd92671b478f6f88d3aea88d910335cb024079bebcf4432c8abba77a51d1b00b"
+        },
+        {
+          "artifact_id": "binutils-installed-objcopy",
+          "digest_blake3": "919f6ad3c798a023395ca4d1d4574f395c8316b5595b25fbdf3bdafc891552e3"
+        },
+        {
+          "artifact_id": "binutils-installed-objdump",
+          "digest_blake3": "f48859e9dbfb3594a92cc52ba2281879c7f02855a5679a03ed5349489a019ca1"
+        },
+        {
+          "artifact_id": "binutils-installed-readelf",
+          "digest_blake3": "9c13500d32b180628d9768d0c56c3eabdd242f35dee79119c60e7b52f4ad3e0d"
+        },
+        {
+          "artifact_id": "binutils-installed-size",
+          "digest_blake3": "812bd48e35d078b759192073cb2de2accaf9620c075c2ae24df9329c5623a7dd"
+        },
+        {
+          "artifact_id": "binutils-installed-strings",
+          "digest_blake3": "8ff50f5ca1c25ab91d259225eb8fc7ed85584e9071d732192a80d82f9c24866f"
+        },
+        {
+          "artifact_id": "binutils-installed-strip",
+          "digest_blake3": "d5505e1aa9e5b016a0b976b067aa0c7d096c84d0e875a41ff456be612d8ccc07"
+        },
+        {
+          "artifact_id": "binutils-positive-smoke-executable",
+          "digest_blake3": "4deb353a3e09f526f5c041a1614727deb0d8746fd72a23c521afbc16b6a5d974"
+        }
+      ],
+      "status": "complete"
+    },
+    {
+      "stage_id": "binutils-install-smoke",
+      "stage_plan_digest_blake3": "73bb51127d245ab1c8176ee357616251e2581a67d133678b2fa9f5fb0df1aeb0",
+      "predecessor_reports": [
+        {
+          "stage_id": "binutils-install-materialization",
+          "report_digest_blake3": "89e9510a5f4cf6ac59edd36150737c86e79af3c22d38d0f8c753b864d415ed1c"
+        }
+      ],
+      "executable_event_ids": [
+        "exec:binutils-install-smoke:as",
+        "exec:binutils-install-smoke:ld",
+        "exec:binutils-install-smoke:ar",
+        "exec:binutils-install-smoke:ranlib",
+        "exec:binutils-install-smoke:nm",
+        "exec:binutils-install-smoke:objcopy",
+        "exec:binutils-install-smoke:objdump",
+        "exec:binutils-install-smoke:readelf",
+        "exec:binutils-install-smoke:positive"
+      ],
+      "output_observations": [
+        {
+          "artifact_id": "binutils-runtime-smoke",
+          "digest_blake3": "b757685413b7b4308d01cef12129c23560b8084c48a4da6435e0fb4d87d2c3d7"
+        }
+      ],
+      "status": "complete"
+    }
+  ]
+}

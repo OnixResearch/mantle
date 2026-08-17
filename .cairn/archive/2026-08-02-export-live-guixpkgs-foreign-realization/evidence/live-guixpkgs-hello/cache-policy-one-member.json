@@ -1,0 +1,7 @@
+{
+  "max_depth": 128,
+  "max_nar_bytes": 8589934592,
+  "max_paths": 1,
+  "max_references": 65536,
+  "schema": "mantle-foreign-cache-closure-policy-v1"
+}

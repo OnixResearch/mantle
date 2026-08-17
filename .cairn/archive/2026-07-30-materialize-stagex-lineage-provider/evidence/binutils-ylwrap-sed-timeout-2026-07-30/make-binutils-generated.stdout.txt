@@ -1,0 +1,3 @@
+make: Entering directory `/home/brittonr/.cargo-target/stagex-binutils-generated-source-probe1-20260730/source/binutils'
+/home/brittonr/.cargo-target/stagex-protected-transition-v77-bash-full-final-20260729/bash-full-stage/runtime/output/bin/bash-full ./../ylwrap arparse.y y.tab.c arparse.c y.tab.h arparse.h y.output arparse.output -- `if [ -f ../bison/bison ]; then echo ../bison/bison -y -L./../bison/; else echo bison -y; fi`  -d
+/home/brittonr/.cargo-target/stagex-binutils-generated-source-probe1-20260730/source/binutils/ylwrap431860

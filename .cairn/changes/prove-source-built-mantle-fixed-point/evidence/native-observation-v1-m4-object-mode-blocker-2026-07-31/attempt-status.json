@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "95dd9d1acbe1620319383e50d96af595e5217ec8ad9809d02577eefbef95e32d",
+  "blocker": "error: build failed\nsource-built fixed-point blocked: StageX transition failed: StageX protected execution failed: GNU M4 runtime failed: Mes process /home/brittonr/.cargo-target/mantle-source-built-fixed-point-runs-v2/.native-digest-observation-v1-20260731.source-built-fixed-point-staging-325816/native-store/ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition/tcc-musl-v2-stage/runtime/output/bin/tcc-0.9.27-musl-v2 failed with status Some(1): tcc: error: file 'lib/cloexec.o' not found\ntcc: error: file 'lib/cloexec.o' not found\n"
+}

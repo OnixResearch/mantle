@@ -1,0 +1,10 @@
+{
+  "schema": "mantle-stagex-authorization-binding-review-v1",
+  "transition_root": "/home/brittonr/.cargo-target/stagex-protected-transition-v86-auth-bound-final-20260730",
+  "event_count": 76576,
+  "denied_event_count": 0,
+  "non_protected_event_count": 0,
+  "missing_authorization_bindings": {},
+  "claim": "Every declared stage authorization path and BLAKE3 digest identity appears in an allowed protected execve or execveat audit decision.",
+  "non_claim": "This report does not prove successful process completion, process behavior, compiler correctness, or per-stage temporal attribution for identity-equivalent authorization IDs."
+}

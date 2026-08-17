@@ -1,0 +1,47 @@
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: /home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/cairn/changes/resolve-mantlepkgs-version-revisions/specs/mantlepkgs-version-resolution/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "/home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/cairn/changes/resolve-mantlepkgs-version-revisions/specs/mantlepkgs-version-resolution/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "resolve-mantlepkgs-version-revisions",
+  "delta_specs": [
+    "/home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/cairn/changes/resolve-mantlepkgs-version-revisions/specs/mantlepkgs-version-resolution/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "b7c98d518da59f158d26c7de2e4797b7eb507649cd4810878ba0cb72ddd36d44",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "68759d5db9dcbf3dd29f4b37839009811f0ab942b4190cb803c2549cd957085b",
+          "exists": true,
+          "path": "./cairn/specs/mantlepkgs-version-resolution/spec.md"
+        }
+      ],
+      "manifest_hash": "43d7b909799ea4171e54ed0a285216c2ba9d5c0122b360e50472d6a730600ea7"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./cairn/specs/mantlepkgs-version-resolution/spec.md"
+        }
+      ],
+      "manifest_hash": "f204350db9162e030ab6b9a2713fb94f8a308d854be2aaf930186ee71ebdd419"
+    },
+    "kind": "sync",
+    "manifest_hash": "44866fd62d6cf29f7a11e8d1e4540cb7a5194c875c8128dd199d4cc2ffbdecfc"
+  },
+  "plan_hash": "e54e336c630d279d7c048012e0dc7c735509ba84c2a964d333f7da8abdc63d9e",
+  "policy": "mantle-default",
+  "policy_hash": "810cfa56991a9d1f10038ca79bf9a7a0996a2ee756c4e62324f1cd3f8628c848",
+  "reasons": [],
+  "receipt_hash": "8579c747bc5ff4aa2eae3792275804e3fa647163635a8d3c9cc5838b866fd767"
+}

@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 blake3 = { version = "=1.8.2", default-features = false }
+bounded-tree-core = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "b0fd0103bc9eed2c1b6d852045959462d105d8f1" }
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 

@@ -1,0 +1,21 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: resolve-mantlepkgs-version-revisions",
+      "kind": "archive_change",
+      "path": "/home/brittonr/git/OnixResearch/.worktrees/mantle-resolve-mantlepkgs-version-revisions/cairn/changes/resolve-mantlepkgs-version-revisions"
+    }
+  ],
+  "blocked": false,
+  "change": "resolve-mantlepkgs-version-revisions",
+  "dry_run": true,
+  "input_hash": "44cf250fbb5da8c25b86d05749db4835c71bcda9627af913bd26a72cc6702919",
+  "layout": "cairn",
+  "mutated": false,
+  "mutation_manifest": null,
+  "plan_hash": "f4ab5bc1a2c8cbfe8b2f4ee07bf3dbbbbe8dbef5c5da0fbadd8f8a164e0c7d53",
+  "policy": "mantle-default",
+  "policy_hash": "810cfa56991a9d1f10038ca79bf9a7a0996a2ee756c4e62324f1cd3f8628c848",
+  "reasons": [],
+  "receipt_hash": "16dd609116221c6b26c472d3edcda3743d86eebd3a969717c351edc02fce42e7"
+}

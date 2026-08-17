@@ -1,0 +1,6 @@
+# Focused runbook/docs/diagnostics checks for offline-build-operator-runbook.
+nix develop -c cargo fmt --check -p mantle -v
+nix develop -c cargo test -p mantle --bin mantle source_offline_preflight -- --nocapture
+nix develop -c cargo test -p mantle --bin mantle offline_cargo_evidence -- --nocapture
+nix develop -c cargo test -p mantle --test source_bundle_cli source_bundle_cli_preflight -- --nocapture
+nix develop -c cargo test -p mantle --test offline_build_runbook_docs -- --nocapture

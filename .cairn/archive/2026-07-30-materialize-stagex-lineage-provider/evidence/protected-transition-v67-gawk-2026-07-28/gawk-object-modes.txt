@@ -1,0 +1,16 @@
+640 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/array.o
+640 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/awktab.o
+640 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/builtin.o
+650 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/dfa.o
+640 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/eval.o
+640 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/field.o
+640 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/gawkmisc.o
+650 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/io.o
+640 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/main.o
+650 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/mantle_decimal.o
+650 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/msg.o
+640 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/node.o
+640 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/random.o
+640 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/regex.o
+650 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/re.o
+640 /home/brittonr/.cargo-target/stagex-protected-transition-v67-gawk-final-20260728/gawk-stage/runtime/gawk-3.0.4/version.o

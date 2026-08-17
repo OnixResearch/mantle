@@ -1,0 +1,64 @@
+command: cached preserved-scratch run_rustc frontier probe
+scratch: /home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R
+mrustc_source: /home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0
+build_dir: /home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/build
+make_program: /nix/store/0rn2xh3zciwdr8sjg79ir79dbr6lnmfb-gnumake-4.4.1/bin/make
+--- command output start ---
+make: Entering directory '/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/run_rustc'
+[CARGO] ../rustc-1.90.0-src/library/test/Cargo.toml > output/build-std2
+warning: `/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/run_rustc/output/prefix/cargo_home/config` is deprecated in favor of `config.toml`
+note: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+       Fresh core v0.0.0 (/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/rustc-1.90.0-src/library/core)
+       Fresh compiler_builtins v0.1.160 (/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/rustc-1.90.0-src/library/compiler-builtins/compiler-builtins)
+       Fresh rustc-std-workspace-core v1.99.0 (/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/rustc-1.90.0-src/library/rustc-std-workspace-core)
+       Fresh alloc v0.0.0 (/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/rustc-1.90.0-src/library/alloc)
+       Fresh libc v0.2.174
+       Fresh cfg-if v1.0.1
+       Fresh unwind v0.0.0 (/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/rustc-1.90.0-src/library/unwind)
+       Fresh rustc-std-workspace-alloc v1.99.0 (/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/rustc-1.90.0-src/library/rustc-std-workspace-alloc)
+       Fresh hashbrown v0.15.4
+       Fresh panic_unwind v0.0.0 (/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/rustc-1.90.0-src/library/panic_unwind)
+       Fresh std_detect v0.1.5 (/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/rustc-1.90.0-src/library/std_detect)
+       Fresh panic_abort v0.0.0 (/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/rustc-1.90.0-src/library/panic_abort)
+       Fresh rustc-demangle v0.1.25
+       Fresh std v0.0.0 (/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/rustc-1.90.0-src/library/std)
+warning: dropping unsupported crate type `dylib` for target `x86_64-unknown-linux-musl`
+
+warning: `std` (lib) generated 1 warning
+       Fresh rustc-std-workspace-std v1.99.0 (/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/rustc-1.90.0-src/library/rustc-std-workspace-std)
+       Fresh unicode-width v0.2.1
+       Fresh getopts v0.2.23
+       Fresh rustc-literal-escaper v0.0.5
+       Fresh proc_macro v0.0.0 (/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/rustc-1.90.0-src/library/proc_macro)
+       Fresh test v0.0.0 (/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/rustc-1.90.0-src/library/test)
+       Fresh sysroot v0.0.0 (/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/rustc-1.90.0-src/library/sysroot)
+    Finished `release` profile [optimized] target(s) in 0.60s
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/liballoc-092a290efa1e4d4f.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/libcfg_if-3791c792661c968b.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/libcompiler_builtins-140bbbf562126d8a.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/libcore-a191e85979c9ce33.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/libgetopts-8da96966833b302d.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/libhashbrown-b5103578f77255e8.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/liblibc-d34c8f53ec716866.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/libpanic_abort-7b1b7e7f5caeb1a6.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/libpanic_unwind-ba257e858297e54d.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/libproc_macro-49dabc4b13121cf8.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/librustc_demangle-9969f147870b8045.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/librustc_literal_escaper-8bc6d77c96899cde.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/librustc_std_workspace_alloc-69af193f5d7deb0e.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/librustc_std_workspace_core-749add902f04cd35.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/librustc_std_workspace_std-3d65705718bcb958.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/libstd_detect-bebeb9a17328e53e.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/libstd.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/libsysroot-08e1d01325502f42.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/libtest-79eac707c335c2b4.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/libunicode_width-4ea3338fcca7fcf6.rlib' specified more than once
+cp: warning: source file 'output/build-std2/x86_64-unknown-linux-musl/release/deps/libunwind-19b42f809b050934.rlib' specified more than once
+[CARGO] ../rustc-1.90.0-src/compiler/rustc/Cargo.toml > output/build-rustc/
+warning: `/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/run_rustc/output/prefix/cargo_home/config` is deprecated in favor of `config.toml`
+note: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+error: cannot produce dylib for `rustc_driver v0.0.0 (/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/rustc-1.90.0-src/compiler/rustc_driver)` as the target `x86_64-unknown-linux-musl` does not support these crate types
+make: *** [Makefile:207: output/prefix/bin/rustc] Error 101
+make: Leaving directory '/home/brittonr/git/mantle/target/rust-source-provider-target-linker-probe/tmp/mantle-rust-source-provider-cKga6R/sources/mrustc-0.12.0/run_rustc'
+--- command output end ---
+exit_status: 2
