@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 use serde::Serialize;
 
+mod core;
 mod external_batch;
 mod remote_attempt;
 mod remote_attempt_log;
@@ -450,19 +451,19 @@ pub enum RemoteFailureDecision {
 pub fn validate_remote_build_service_request(
     request: &snix_build::buildservice::BuildRequest,
 ) -> Result<(), RemoteBuildServiceDispatchError> {
-    if request.command_args.is_empty() {
-        return Err(RemoteBuildServiceDispatchError::Phase {
-            phase: REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION,
-            reason: "remote-build-service-raw-eval-request".to_string(),
-        });
-    }
-    if request.outputs.is_empty() {
-        return Err(RemoteBuildServiceDispatchError::Phase {
-            phase: REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION,
-            reason: "remote-build-service-outputs-empty".to_string(),
-        });
-    }
-    Ok(())
+    // The vendor request never enters the pure core. The shell projects
+    // bounded counts, the core decides, and the shell maps the typed core
+    // error back to the public dispatch error.
+    //
+    // r[impl realization_routing.distributed_core_boundary.scenario.vendor_type]
+    let facts = core::RemoteBuildServiceRequestFacts {
+        command_args_count: request.command_args.len().try_into().unwrap_or(u32::MAX),
+        outputs_count: request.outputs.len().try_into().unwrap_or(u32::MAX),
+    };
+    core::validate_remote_build_service_request(&facts).map_err(|error| RemoteBuildServiceDispatchError::Phase {
+        phase: REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION,
+        reason: error.reason,
+    })
 }
 
 pub fn classify_remote_build_service_failure(
@@ -470,12 +471,20 @@ pub fn classify_remote_build_service_failure(
     phase: &'static str,
     reason: impl Into<String>,
 ) -> RemoteFailureDecision {
+    // The fallback disposition is a pure core decision; this shell only
+    // projects the policy choice and maps the typed disposition back.
+    //
+    // r[impl realization_routing.distributed_core_boundary.scenario.effect_call]
     let reason = reason.into();
-    match policy {
-        RemoteBuildFallbackPolicy::Never => {
+    let core_policy = match policy {
+        RemoteBuildFallbackPolicy::Never => core::FallbackPolicy::Never,
+        RemoteBuildFallbackPolicy::OnRemoteFailure => core::FallbackPolicy::OnRemoteFailure,
+    };
+    match core::classify_failure(core_policy, phase, &reason) {
+        core::FallbackDecision::ReturnFailure { phase, reason } => {
             RemoteFailureDecision::ReturnFailure(RemoteBuildServiceDispatchError::Phase { phase, reason })
         }
-        RemoteBuildFallbackPolicy::OnRemoteFailure => RemoteFailureDecision::FallbackToLocal { phase, reason },
+        core::FallbackDecision::FallbackToLocal { phase, reason } => RemoteFailureDecision::FallbackToLocal { phase, reason },
     }
 }
 
@@ -496,6 +505,8 @@ pub enum RemoteGoalAttachment {
 pub enum RemoteScheduleError {
     #[error("too many ready remote goals; maximum is {max}")]
     TooManyReadyGoals { max: usize },
+    #[error("attachment plan rejected: {0}")]
+    Attachment(String),
     #[error(transparent)]
     Key(#[from] RealizationKeyError),
 }
@@ -508,32 +519,63 @@ pub fn plan_remote_goal_attachments<D>(
 where
     D: RealizationKeyDeriver,
 {
+    // The `RealizationKeyDeriver` port call and the typed key round-trip
+    // belong to the shell; the core plans over plain string facts.
+    //
+    // r[impl realization_routing.distributed_core_boundary]
     if ready.len() > MAX_READY_REMOTE_GOALS {
         return Err(RemoteScheduleError::TooManyReadyGoals {
             max: MAX_READY_REMOTE_GOALS,
         });
     }
-    let mut owners = active_remote_jobs.clone();
-    let mut attachments = Vec::with_capacity(ready.len());
+    let mut projected: Vec<(String, String)> = Vec::with_capacity(ready.len());
+    let mut derived: Vec<(String, RealizationKey)> = Vec::with_capacity(ready.len());
     for goal in ready {
         let realization_key = deriver.derive_key(&goal.request)?;
-        if let Some(owner_goal_key) = owners.get(&realization_key) {
-            attachments.push(RemoteGoalAttachment::AttachToExisting {
-                goal_key: goal.goal_key.clone(),
-                realization_key,
-                owner_goal_key: owner_goal_key.clone(),
-            });
-        } else {
-            owners.insert(realization_key.clone(), goal.goal_key.clone());
-            attachments.push(RemoteGoalAttachment::StartRemote {
-                goal_key: goal.goal_key.clone(),
-                realization_key,
-            });
-        }
+        projected.push((goal.goal_key.clone(), realization_key.as_str().to_string()));
+        derived.push((goal.goal_key.clone(), realization_key));
     }
-    debug_assert_eq!(attachments.len(), ready.len());
+    let active_projection: BTreeMap<String, String> = active_remote_jobs
+        .iter()
+        .map(|(key, owner)| (key.as_str().to_string(), owner.clone()))
+        .collect();
+    let plans = core::plan_goal_attachments(&projected, &active_projection)
+        .map_err(|error| RemoteScheduleError::Attachment(attachment_error_text(error)))?;
+    let by_key: BTreeMap<String, RealizationKey> = derived
+        .iter()
+        .map(|(goal_key, key)| (goal_key.clone(), key.clone()))
+        .collect();
+    debug_assert_eq!(plans.len(), ready.len());
+    let mut attachments = Vec::with_capacity(plans.len());
+    for plan in plans {
+        let realization_key = by_key
+            .get(&plan.goal_key)
+            .expect("projected goal keys must round-trip")
+            .clone();
+        attachments.push(match plan.owner_goal_key {
+            None => RemoteGoalAttachment::StartRemote {
+                goal_key: plan.goal_key,
+                realization_key,
+            },
+            Some(owner_goal_key) => RemoteGoalAttachment::AttachToExisting {
+                goal_key: plan.goal_key,
+                realization_key,
+                owner_goal_key,
+            },
+        });
+    }
     debug_assert!(attachments.len() <= MAX_READY_REMOTE_GOALS);
     Ok(attachments)
+}
+
+fn attachment_error_text(error: core::AttachmentError) -> String {
+    match error {
+        core::AttachmentError::TooManyReadyGoals { max } => {
+            format!("too many ready remote goals; maximum is {max}")
+        }
+        core::AttachmentError::EmptyGoalKey => "ready goal carried an empty goal key".to_string(),
+        core::AttachmentError::EmptyOwnerGoalKey => "active owner map contained an empty goal key".to_string(),
+    }
 }
 
 #[derive(Debug, Clone)]
