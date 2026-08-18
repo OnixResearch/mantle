@@ -1,0 +1,41 @@
+{
+  "schema": "mantle-distributed-evaluation-declared-facts-v1",
+  "inventory": {
+    "seams": [
+      "embedded-evaluator",
+      "isolated-worker-sessions",
+      "strict-worker-protocol",
+      "evaluation-stream-workers",
+      "evaluation-budget-core",
+      "portable-client-boundary",
+      "source-staging",
+      "remote-build-data-plane"
+    ],
+    "bindings": [
+      "embedded-evaluator=#crates/crunch-eval/src/lib.rs",
+      "isolated-worker-sessions=#crates/crunch-eval/src/session.rs",
+      "strict-worker-protocol=adr/0074-enforce-evaluation-budgets-with-an-owned-worker.md",
+      "evaluation-stream-workers=#crates/crunch-pipeline/src/evaluation_stream.rs",
+      "evaluation-budget-core=#crates/crunch-eval-budget-core",
+      "portable-client-boundary=#crates/mantle-portable-client-core",
+      "source-staging=cairn/specs/store-transports/spec.md",
+      "remote-build-data-plane=docs/remote-transfer.md"
+    ]
+  },
+  "eval_service": {
+    "transport_bounded": true,
+    "source_staged_by_digest": true,
+    "streaming_overlap_evidence": false,
+    "dynamic_goal_evidence": false,
+    "suspension_evidence": false,
+    "authority_blocker": false,
+    "hidden_host_local_reads": false
+  },
+  "evaluate_once": {
+    "source_staged_by_digest": true,
+    "exported_graph_evidence": true,
+    "producer_bound_evidence": true,
+    "artifacts_digest_bound": true,
+    "authority_blocker": false
+  }
+}

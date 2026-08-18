@@ -1,0 +1,95 @@
+{
+  "schema": "mantle-distributed-evaluation-assessment-v1",
+  "inventory_source_digest": "5cadaa28e011c34836c0bdaf06eebf88634767d422b2c86c5b52688cc5d2cd22",
+  "outcomes": [
+    {
+      "route": "eval-service",
+      "outcome": "blocked",
+      "reasons": [
+        "missing cross-boundary streaming-overlap evidence",
+        "missing cross-boundary dynamic-goal evidence",
+        "missing evaluator suspension evidence"
+      ]
+    },
+    {
+      "route": "evaluate-once",
+      "outcome": "candidate",
+      "reasons": [
+        "route evaluate-once passes all assessment gates"
+      ]
+    }
+  ],
+  "facts": {
+    "inventory": {
+      "seams": [
+        "embedded-evaluator",
+        "evaluation-budget-core",
+        "evaluation-stream-workers",
+        "isolated-worker-sessions",
+        "portable-client-boundary",
+        "remote-build-data-plane",
+        "source-staging",
+        "strict-worker-protocol"
+      ],
+      "bindings": [
+        "embedded-evaluator=#crates/crunch-eval/src/lib.rs",
+        "evaluation-budget-core=#crates/crunch-eval-budget-core",
+        "evaluation-stream-workers=#crates/crunch-pipeline/src/evaluation_stream.rs",
+        "isolated-worker-sessions=#crates/crunch-eval/src/session.rs",
+        "portable-client-boundary=#crates/mantle-portable-client-core",
+        "remote-build-data-plane=docs/remote-transfer.md",
+        "source-staging=cairn/specs/store-transports/spec.md",
+        "strict-worker-protocol=adr/0074-enforce-evaluation-budgets-with-an-owned-worker.md"
+      ]
+    },
+    "routes": [
+      {
+        "route": "eval-service",
+        "response_matches": true,
+        "worker_error_observed": false,
+        "hidden_host_local_reads": false,
+        "transport_bounded": true,
+        "source_staged_by_digest": true,
+        "streaming_overlap_evidence": false,
+        "dynamic_goal_evidence": false,
+        "suspension_evidence": false,
+        "exported_graph_evidence": false,
+        "producer_bound_evidence": false,
+        "artifacts_digest_bound": false,
+        "authority_blocker": false,
+        "fresh_nickel_served": true,
+        "evidence_digests": [
+          "f42c0d3427444453a86844f152b36373009808bd7b8c2ac9a0783326f4e9c8d7",
+          "5cadaa28e011c34836c0bdaf06eebf88634767d422b2c86c5b52688cc5d2cd22"
+        ]
+      },
+      {
+        "route": "evaluate-once",
+        "response_matches": false,
+        "worker_error_observed": false,
+        "hidden_host_local_reads": false,
+        "transport_bounded": false,
+        "source_staged_by_digest": true,
+        "streaming_overlap_evidence": false,
+        "dynamic_goal_evidence": false,
+        "suspension_evidence": false,
+        "exported_graph_evidence": true,
+        "producer_bound_evidence": true,
+        "artifacts_digest_bound": true,
+        "authority_blocker": false,
+        "fresh_nickel_served": false,
+        "evidence_digests": [
+          "5cadaa28e011c34836c0bdaf06eebf88634767d422b2c86c5b52688cc5d2cd22"
+        ]
+      }
+    ]
+  },
+  "non_claims": [
+    "This report does not claim distributed evaluation in the product.",
+    "This report does not claim evaluator equivalence.",
+    "This report does not claim remote-build correctness.",
+    "This report does not claim cross-boundary streaming or dynamic-goal feasibility.",
+    "This report does not claim release eligibility.",
+    "A candidate outcome authorizes only a later Cairn change with separate evidence."
+  ]
+}

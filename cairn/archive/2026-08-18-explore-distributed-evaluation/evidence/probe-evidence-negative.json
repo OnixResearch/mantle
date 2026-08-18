@@ -1,0 +1,12 @@
+{
+  "schema": "mantle-distributed-evaluation-probe-evidence-v1",
+  "request_source_blake3": "3f28de419a35adbc6b807c76d901a60ad24ca81169eb252893d5d10a708505a0",
+  "response_source_blake3": "3f28de419a35adbc6b807c76d901a60ad24ca81169eb252893d5d10a708505a0",
+  "client_result_json": "",
+  "worker_result_json": "",
+  "response_matches": false,
+  "worker_error_observed": true,
+  "worker_error_class": "eval",
+  "worker_error_message": "evaluation boundary error: no root with label 'does-not-exist'; available roots: greeting, message",
+  "framed_transport_used": true
+}

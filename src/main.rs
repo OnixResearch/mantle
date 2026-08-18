@@ -99,6 +99,10 @@ mod operator_diagnostics;
 // `evaluate-picolibc-stagex-runtime`; until then only core tests consume it.
 #[allow(dead_code)]
 mod picolibc_comparison;
+// Core tests for the distributed-evaluation feasibility assessment; the probe
+// shell (`distributed_eval_assess`) is the only other consumer.
+#[allow(dead_code)]
+mod distributed_eval_assessment;
 mod pin_import;
 #[allow(dead_code)]
 mod portable_receipt;

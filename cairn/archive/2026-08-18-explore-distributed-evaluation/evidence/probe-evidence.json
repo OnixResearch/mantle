@@ -1,0 +1,12 @@
+{
+  "schema": "mantle-distributed-evaluation-probe-evidence-v1",
+  "request_source_blake3": "3f28de419a35adbc6b807c76d901a60ad24ca81169eb252893d5d10a708505a0",
+  "response_source_blake3": "3f28de419a35adbc6b807c76d901a60ad24ca81169eb252893d5d10a708505a0",
+  "client_result_json": "\"hello-from-client\"",
+  "worker_result_json": "\"hello-from-client\"",
+  "response_matches": true,
+  "worker_error_observed": false,
+  "worker_error_class": null,
+  "worker_error_message": null,
+  "framed_transport_used": true
+}

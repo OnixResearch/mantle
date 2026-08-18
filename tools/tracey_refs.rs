@@ -1095,3 +1095,14 @@
 // Implementation and positive/negative tests live under vendored Snix paths,
 // which Tracey does not scan. The active Cairn change ledger and evidence bind
 // those adaptations to the selected upstream behavior and local claim limits.
+
+// Distributed-evaluation feasibility bridge.
+//
+// r[impl distributed_evaluation.feasibility_assessment]
+// r[verify distributed_evaluation.feasibility_assessment]
+// The pure assessment core and its positive and negative tests live in
+// root-package `src/distributed_eval_assessment.rs`, and the probe shell is
+// `examples/distributed_eval_assess.rs`. The bridge exists because the Tracey
+// rail scans `tools/` and not the package root. Evidence: positive and
+// negative probe transcripts, the deterministic report, inventory, oracle
+// checkpoint, and ADR 0078 under the active change `explore-distributed-evaluation`.
