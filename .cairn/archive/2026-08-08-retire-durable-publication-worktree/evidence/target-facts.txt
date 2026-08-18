@@ -1,0 +1,11 @@
+schema=mantle-worktree-retirement-observation-v1
+target_path=/home/brittonr/git/OnixResearch/.pi/worktrees/mantle-durable-publication
+target_exists=false
+target_registered=false
+origin_main=6e670046c31fcc47169e857795c67a2b6a75bb69
+promotion_archive=bd614a7fd6fa90a49e278cf5b683edc17fe518f6
+promotion_archive_is_ancestor=true
+removal_attempted=false
+recursive_delete_attempted=false
+branch_delete_attempted=false
+decision=obsolete-no-op

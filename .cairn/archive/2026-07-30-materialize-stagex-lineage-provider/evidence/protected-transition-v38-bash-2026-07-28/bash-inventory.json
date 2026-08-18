@@ -1,0 +1,31 @@
+{
+  "format": "mantle-stagex-bash-2.05b-inventory-v1",
+  "configured_source_digest_blake3": "acd33bededf76dc149f7c7fa14a2e1a1246c5dafe2ef65eee18cf0d82e3d6bcd",
+  "helper_count": 10,
+  "source_compile_count": 92,
+  "build_command_count": 93,
+  "smoke_command_count": 3,
+  "outputs": [
+    {
+      "artifact_id": "bash-2.05b",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v38-bash-20260728/bash-stage/runtime/output/bin/bash",
+      "bytes_len": 424360,
+      "digest_blake3": "f7326a0fcc0878e7cd3616640cee376f71bab5583460b5459cac91168809c03f"
+    },
+    {
+      "artifact_id": "sh-2.05b",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v38-bash-20260728/bash-stage/runtime/output/bin/sh",
+      "bytes_len": 424360,
+      "digest_blake3": "f7326a0fcc0878e7cd3616640cee376f71bab5583460b5459cac91168809c03f"
+    },
+    {
+      "artifact_id": "bash-smoke-output",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v38-bash-20260728/bash-stage/runtime/bash-2.05b/smoke/positive.txt",
+      "bytes_len": 8,
+      "digest_blake3": "f9bb7985b1ac20ccbfdd1195397be795edb7996ab02e6f173d166517c19eb579"
+    }
+  ],
+  "protected_exec_enforced": true,
+  "fallback_events": [],
+  "non_claim": "this inventory binds the bounded non-interactive bash 2.05b handoff and positive and negative command observations only; it does not prove a complete interactive shell or provider admission"
+}

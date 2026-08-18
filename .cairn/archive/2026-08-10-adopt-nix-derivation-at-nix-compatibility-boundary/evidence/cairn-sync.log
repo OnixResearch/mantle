@@ -1,0 +1,63 @@
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: /home/brittonr/git/OnixResearch/.worktrees/mantle-adopt-nix-derivation-at-nix-compatibility-boundary/cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/specs/foreign-derivation-import/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "/home/brittonr/git/OnixResearch/.worktrees/mantle-adopt-nix-derivation-at-nix-compatibility-boundary/cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/specs/foreign-derivation-import/spec.md"
+    },
+    {
+      "description": "merge delta spec into main specs: /home/brittonr/git/OnixResearch/.worktrees/mantle-adopt-nix-derivation-at-nix-compatibility-boundary/cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/specs/nix-producer-adapter/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "/home/brittonr/git/OnixResearch/.worktrees/mantle-adopt-nix-derivation-at-nix-compatibility-boundary/cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/specs/nix-producer-adapter/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "adopt-nix-derivation-at-nix-compatibility-boundary",
+  "delta_specs": [
+    "/home/brittonr/git/OnixResearch/.worktrees/mantle-adopt-nix-derivation-at-nix-compatibility-boundary/cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/specs/foreign-derivation-import/spec.md",
+    "/home/brittonr/git/OnixResearch/.worktrees/mantle-adopt-nix-derivation-at-nix-compatibility-boundary/cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/specs/nix-producer-adapter/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "f2f8c800d4da3896b96f012fb19aabfe4595b746bb6a5ea8c35ce1e88d265425",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "08b0c4dd27bc3bb3e6c534787107101d55c8e1bddafdcf7cd9352b17f493e070",
+          "exists": true,
+          "path": "./cairn/specs/foreign-derivation-import/spec.md"
+        },
+        {
+          "content_hash": "e3f5a03ba971d95c7a6c8cafed8aefe72376ddab6960d30c5932be0f78d147b3",
+          "exists": true,
+          "path": "./cairn/specs/nix-producer-adapter/spec.md"
+        }
+      ],
+      "manifest_hash": "fdb4a72a0c0d02b381974295cc3986f5b3fc6b56ae466a0655eb91f3ef34ed15"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "9865e1b0a4f4e03d4c2caa76590dbca5cb335d7af895829e05c363aa7c414e7f",
+          "exists": true,
+          "path": "./cairn/specs/foreign-derivation-import/spec.md"
+        },
+        {
+          "content_hash": "49f441ecc8e31c43ce639ed47e8ec0f5c66d48c69dbd808df96040a43892668f",
+          "exists": true,
+          "path": "./cairn/specs/nix-producer-adapter/spec.md"
+        }
+      ],
+      "manifest_hash": "cd28c9bc32a507aa3b7553d9ce15204aa9ed62358df33e2a6dd805e9ebf1ef7e"
+    },
+    "kind": "sync",
+    "manifest_hash": "ce9dda37a2e7ca06efce4d55d0ec25aec74ec2c553bca084ca5595608c2e28a6"
+  },
+  "plan_hash": "b616edc4ee280dc235f2d7f91b204c9c4a83a1f2f10b2321ac3b500f9b9eb79b",
+  "policy": "mantle-default",
+  "policy_hash": "810cfa56991a9d1f10038ca79bf9a7a0996a2ee756c4e62324f1cd3f8628c848",
+  "reasons": [],
+  "receipt_hash": "688f914eb47926ee0ec3ac54c01df2bdb461154dc4d692665dd3b9d2a278315b"
+}

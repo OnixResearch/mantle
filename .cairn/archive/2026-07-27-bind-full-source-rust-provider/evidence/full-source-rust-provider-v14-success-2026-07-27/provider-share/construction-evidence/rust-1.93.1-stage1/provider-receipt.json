@@ -1,0 +1,111 @@
+{
+  "schema": "mantle-rust-source-provider-receipt-v1",
+  "receipt_id": "rustc-stage1-build",
+  "provider_id": "mantle-rust-source-provider",
+  "host_triple": "x86_64-unknown-linux-musl",
+  "target_triple": "x86_64-unknown-linux-musl",
+  "source_ids": [
+    "rust-1.93.1",
+    "rust-1.93.1-stage1-bootstrap-provider"
+  ],
+  "output_artifacts": [
+    {
+      "role": "rustc",
+      "name": "rustc",
+      "path": "bin/rustc",
+      "content_digest_blake3": "fc8954789b9c63e3fa820aefeb882158d4abec75acf339d8b62fe005f5104b61"
+    },
+    {
+      "role": "cargo",
+      "name": "cargo",
+      "path": "bin/cargo",
+      "content_digest_blake3": "d3c5a0fdda5d1aad2b49a0d10d449b97c86a500f4f7b7ed633664bbcbf1cd5c1"
+    },
+    {
+      "role": "host-rustlib",
+      "name": "host-rustlib",
+      "path": "lib/rustlib/x86_64-unknown-linux-musl/lib",
+      "content_digest_blake3": "9440c2aa3bbd40c2ac2ec29d17d35f3bdb51fa8721f848bf96eaf2fe4c193de1"
+    },
+    {
+      "role": "target-rustlib",
+      "name": "target-rustlib",
+      "path": "lib/rustlib/x86_64-unknown-linux-musl/lib",
+      "content_digest_blake3": "9440c2aa3bbd40c2ac2ec29d17d35f3bdb51fa8721f848bf96eaf2fe4c193de1"
+    }
+  ],
+  "build_steps": [
+    {
+      "name": "acquire-rustc-stage1-source",
+      "program": "mantle-rust-source-fetch",
+      "arguments": [
+        "rust-1.93.1"
+      ]
+    },
+    {
+      "name": "validate-bootstrap-provider",
+      "program": "mantle-provider-validator",
+      "arguments": [
+        "metadata-digest=9e52929827042ead4e7dd3e3bc8f3e692d69f55f19dabd51c0f1eb95c61bf894",
+        "policy-digest=33660dbf651f1b493266e06c2099f3f29dd26df5e657796ba36c5a6bd2235581"
+      ]
+    },
+    {
+      "name": "run-rustc-stage1",
+      "program": "mantle-rustc-stage1-build.sh",
+      "arguments": [
+        "version=1.93.1",
+        "host=x86_64-unknown-linux-musl",
+        "target=x86_64-unknown-linux-musl"
+      ]
+    },
+    {
+      "name": "record-rustc-stage1-products",
+      "program": "mantle-provider-digest",
+      "arguments": [
+        "rustc",
+        "cargo",
+        "host-rustlib",
+        "target-rustlib"
+      ]
+    },
+    {
+      "name": "record-stage-construction-identity",
+      "program": "mantle-provider-digest",
+      "arguments": [
+        "stage-plan-blake3=5964d26e40523ce87d3c3241451be040b6e45e39927d82e87a80471fd89880e0",
+        "script-blake3=12bba279d341cc1774aff3441f76acdcadeb488cdc508e628fdae30c26ee0243",
+        "parallel-jobs=4",
+        "native-provider-id=full-source-v1",
+        "native-provider-metadata-blake3=107a4a6d7d17b7da362b4bb64830cbb4ffc64ba3ce68772aabfe05584781be23",
+        "native-provider-output-blake3=f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f",
+        "source-closure-blake3=7e93ccc7a29bacc1da6f75c10ae90655ee83afd0d95ca282c8d270c225372f45",
+        "admission-report-blake3=74a676a66ace24b311147d13075ba156ce3c4b3a696afa0e5d4471a75f3faf4c",
+        "host-tool-manifest-blake3=40770f9c28943bd07b65c31d837bc19882ecde79155ec06157be4066c18b3dac",
+        "linux-headers-blake3=0fdac41832c7b489a3896fb70d7395110c7542a18bbf511432c78fe3757e3778"
+      ]
+    },
+    {
+      "name": "record-rust-bootstrap-patch-plan",
+      "program": "mantle-rust-bootstrap-patch-plan",
+      "arguments": [
+        "schema=mantle-rust-bootstrap-patch-plan-v1",
+        "stage=RustBootstrap",
+        "stage-id=rust-1.93.1-stage1",
+        "route=rust-source-musl-host-plan",
+        "host=x86_64-unknown-linux-musl",
+        "target=x86_64-unknown-linux-musl",
+        "rust-version=1.93.1",
+        "input-digest=c833eab50aff9f9c455708e1de005dd8c1474e65e88e28540df736113c2a5ce1",
+        "output-digest=c8c7a8f797090b17d82570025bd45bb19430c133ee0065ae497fb630167d51b0",
+        "operation-count=6",
+        "operation=rust-bootstrap-target-tool-config:RustBootstrapTargetToolConfig:bind source-root target tools and runtime paths in Rust bootstrap config:source=rust-1.93.1",
+        "operation=rust-bootstrap-workspace-isolation:RustBootstrapWorkspaceIsolation:keep optional compiler workspaces outside the bootstrap member set:source=rust-1.93.1",
+        "operation=rust-bootstrap-rustc-driver-rlib:RustBootstrapRustcDriverRlib:build rustc_driver as rlib for static musl compiler host:source=rust-1.93.1",
+        "operation=rust-bootstrap-sysroot-fallback:RustBootstrapSysrootFallback:prefer explicit sysroot environment before dynamic compiler fallback:source=rust-1.93.1",
+        "operation=rust-bootstrap-rustc-private-tool-rlibs:RustBootstrapRustcPrivateToolRlibLookup:teach rustc-private tools where stage2 compiler rlibs live:source=rust-1.93.1",
+        "operation=provider-contract-assertion:ProviderContractAssertion:assert provider contract mantle-rust-source-provider-v1 from explicit route facts"
+      ]
+    }
+  ]
+}

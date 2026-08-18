@@ -1,0 +1,21 @@
+{
+  "schema": "mantle-foreign-import-cli-v1",
+  "command": "produce-nix",
+  "verdict": "accepted",
+  "accepted": true,
+  "diagnostics": [],
+  "receipt": null,
+  "plan": null,
+  "producer_artifacts": {
+    "graph_path": "cairn/changes/live-nixpkgs-foreign-import-proof/evidence/live-nixpkgs-hello/artifacts/nixpkgs.graph.json",
+    "package_index_path": "cairn/changes/live-nixpkgs-foreign-import-proof/evidence/live-nixpkgs-hello/artifacts/nixpkgs.index.json"
+  },
+  "non_claims": [
+    "not-build-success",
+    "not-package-correctness",
+    "not-bootstrap-parity",
+    "not-output-trust",
+    "not-reproducibility",
+    "not-foreign-frontend-availability"
+  ]
+}

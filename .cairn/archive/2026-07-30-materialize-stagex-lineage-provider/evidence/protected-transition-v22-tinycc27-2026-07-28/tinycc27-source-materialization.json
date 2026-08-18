@@ -1,0 +1,10 @@
+{
+  "format": "mantle-stagex-tinycc27-source-materialization-v1",
+  "source_bundle_manifest_blake3": "7e93ccc7a29bacc1da6f75c10ae90655ee83afd0d95ca282c8d270c225372f45",
+  "artifact_id": "tinycc-0.9.27-source",
+  "record_name": "tcc-0.9.27-src",
+  "record_identity": "fixed-url-767003cf551d3f2e8409b6666cc3e000e1377f298a55fbf20daea3867bd3aed4",
+  "record_content_blake3": "a3417d7e6218de60bfb3b30cab2db9fbe3e65891d9b3e765f09a4ac87539d03d",
+  "output_path": "/home/brittonr/.cargo-target/stagex-tinycc27-source-v1-20260728/tinycc-0.9.27",
+  "non_claim": "TinyCC 0.9.27 source materialization proves authenticated offline archive identity and fixed-output parity only"
+}

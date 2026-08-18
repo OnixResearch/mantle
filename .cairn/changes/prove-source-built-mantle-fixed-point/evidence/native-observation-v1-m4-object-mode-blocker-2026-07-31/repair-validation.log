@@ -1,0 +1,22 @@
+pueue task 7279
+
+test result: ok. 10 passed; 0 failed; 2 ignored; 0 measured; 1983 filtered out; finished in 0.01s
+
+pueue task 7281
+
+test stagex_m4::tests::derives_retained_m4_inventory ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1994 filtered out; finished in 0.68s
+
+pueue task 7285
+
+all retained object modes:
+29 644
+
+sample normalized retained object modes:
+644 1008 m4-1.4.7/lib/cloexec.o
+644 1244 m4-1.4.7/lib/close-stream.o
+644 17848 m4-1.4.7/src/m4.o
+
+M4 output BLAKE3:
+3dfd2a1223ff6e0c2c540bc2507a097948ab24e2465f232e2363944e5b704741

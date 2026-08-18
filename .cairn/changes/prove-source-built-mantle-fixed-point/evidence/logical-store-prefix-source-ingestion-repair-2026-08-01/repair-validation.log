@@ -1,0 +1,56 @@
+pueue task 7203
+
+running 2 tests
+test error::tests::source_not_found_display_uses_configured_store_prefix ... ok
+test error::tests::source_not_found_display_keeps_nix_compatibility ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 652 filtered out; finished in 0.00s
+
+pueue task 7221
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.63s
+
+pueue task 7247
+
+running 2 tests
+test orchestrate::tests::custom_logical_store_prefix_controls_source_lookup_and_diagnostics ... ok
+test orchestrate::tests::custom_logical_store_prefix_controls_transitive_source_inputs ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 653 filtered out; finished in 0.01s
+
+pueue task 7252
+
+Checking crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-build)
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.59s
+
+git diff --check: passed
+
+pueue task 7235
+
+command status: completed successfully
+report: /home/brittonr/.cargo-target/mantle-native-stage0-posix-diagnostic-v2-20260801/stdout.json
+stderr: /home/brittonr/.cargo-target/mantle-native-stage0-posix-diagnostic-v2-20260801/stderr.log
+logical_store_prefix: /mantle/store
+succeeded_total: 1
+built_total: 1
+cached_total: 0
+failed_total: 0
+drv_key: /mantle/store/p90ywdba4lhl0isjgypr5bf3f91qskvi-stage0-posix.drv
+
+pueue task 7244
+
+command status: failed with exit code 1
+report: /home/brittonr/.cargo-target/mantle-native-stage0-posix-diagnostic-v2-20260801/binutils-stdout.json
+stderr: /home/brittonr/.cargo-target/mantle-native-stage0-posix-diagnostic-v2-20260801/binutils-stderr.log
+source input not found in store: not present
+root: binutils-2.41-gcc10-v1
+drv_key: /mantle/store/23fyqnqzc7kcsi6p3470651z77n8yixv-binutils-2.41-gcc10-v1.drv
+message: dependency binutils-2.30-gcc-pass4-v16.drv failed
+next stderr blocker: /bin/sh: kaem: not found
+
+pueue task 7208
+
+test result: FAILED. 649 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+first unrelated failure: fetcher::tests::fetch_git_git_transport_ignores_fake_git_versions_and_keeps_errors_crunch_owned
+first diagnostic: git daemon log: git: 'daemon' is not a git command
+follow-on failures: shared PATH mutex poisoned

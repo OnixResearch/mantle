@@ -1,0 +1,10 @@
+make: the `-l' option requires a positive integral argument
+make: the `-l' option requires a positive integral argument
+make: the `-l' option requires a positive integral argument
+make: the `-l' option requires a positive integral argument
+make: the `-l' option requires a positive integral argument
+make: the `-l' option requires a positive integral argument
+make: the `-l' option requires a positive integral argument
+make: the `-l' option requires a positive integral argument
+make: the `-l' option requires a positive integral argument
+make: the `-l' option requires a positive integral argument

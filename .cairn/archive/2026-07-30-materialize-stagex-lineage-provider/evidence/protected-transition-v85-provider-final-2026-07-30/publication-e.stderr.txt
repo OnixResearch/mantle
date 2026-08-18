@@ -1,0 +1,20 @@
+warning: variant `Unimplemented` is never constructed
+   --> vendor/snix-castore/src/directoryservice/combinators.rs:181:5
+    |
+167 | pub enum Error {
+    |          ----- variant in this enum
+...
+181 |     Unimplemented,
+    |     ^^^^^^^^^^^^^
+    |
+    = note: `Error` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+StageX intermediate provider published:
+  output: /home/brittonr/.cargo-target/stagex-intermediate-provider-v85-e-20260730
+  receipt: /home/brittonr/.cargo-target/stagex-intermediate-provider-v85-e-20260730/share/crunch-bootstrap/stagex-lineage-receipt.json
+  normalized_provider_digest_blake3: 37d33a89003cfd30d78052f20a1d3957ec8908038924ea27afe0ac79f698e615
+  output_digest_blake3: ce00c92751f01d43f2e3396b4e69f0d4db8cd884995e5871d38ce6067a722873
+  final_bundle_digest_blake3: 29c802239208b30a308473d02bcc0ad0b7d79e4279f28d02e9a138a354767fd8
+  provider_validation_audit_digest_blake3: b895024ed20acd76d7438ca9e2b7a99566e3c2140e040ca16fc77103d683123c
+  provider_validation_report_digest_blake3: a42ae56c41f4d3edd64c24bcd40d136852665d3974f2b41188f0aabd7d444cb6

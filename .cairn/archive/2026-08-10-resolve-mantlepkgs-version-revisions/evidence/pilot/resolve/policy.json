@@ -1,0 +1,19 @@
+{
+  "schema": "mantlepkgs-version-selection-policy-v1",
+  "policy_identity_blake3": "2279d3d0a3b86c0c6715fe4143100c36dac144f85bbfecb403823188b1773292",
+  "method": "newest-published-revision-for-reported-version",
+  "system": "x86_64-linux",
+  "accepted_cohort_identity_blake3": "efa3591a4b81ceace11c103af83c7e9c53cfaf80ea7364bfe43b0eba525d21ee",
+  "accepted_observation_set_identity_blake3": "6faa060b78d74ee042920d6a5e6622720dc4df70814729f3d7199c704e556850",
+  "accepted_index_identity_blake3": "3956447f10a1373f80ca2d58fa664db045ea308b3a15fe5cfe7c8a9ddfbac3e2",
+  "limits": {
+    "max_revisions": 2,
+    "max_attributes": 1,
+    "max_observations": 2,
+    "max_requests": 2,
+    "max_groups": 2,
+    "max_diagnostics": 16,
+    "max_aliases_per_request": 2,
+    "max_text_bytes": 256
+  }
+}

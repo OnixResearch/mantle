@@ -1,0 +1,14 @@
+{
+  "admission_report": "/home/brittonr/.cargo-target/mantle-source-built-fixed-point-v12-native-admission-20260803.json",
+  "expected_native_provider_blake3": "9f47f75ab2677afe2e789eeb8486da7abeffa20427130e3d7403bf9d200759dd",
+  "observed_entry_count": 1173,
+  "provider_id": "full-source-v1",
+  "required_runtime_count": 10,
+  "required_tool_count": 18,
+  "runtime_smoke_step_count": 25,
+  "schema": "mantle-source-built-diagnostic-summary-v1",
+  "source_closure_blake3": "64b72d956cdc1e301347ce3f8265e0344d1d12c387d59416c8d68538f7ce7890",
+  "source_closure_record_count": 53,
+  "status": "admitted",
+  "v12_plan_digest_blake3": "9e0b85b1e40f1322fd9efda7b645755a1ea8abfbd7f1e9dddedc470e11f1e2d2"
+}

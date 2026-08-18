@@ -1,0 +1,47 @@
+{
+  "schema": "mantlepkgs-version-recheck-set-v1",
+  "recheck_set_identity_blake3": "a141198ab35fb5edd978d19c999bb9dfffe76e2675c3f5fb182373c035978df5",
+  "plan_identity_blake3": "6eeeefcd0fe87eee1526b76dddbdf2baa8959ce86373b11af692e481ee679478",
+  "rechecks": [
+    {
+      "schema": "mantlepkgs-version-recheck-v1",
+      "recheck_identity_blake3": "eb03140f76a3b9862179ca80a51fab5474e5359d802d0930292bc70e7ebe552a",
+      "group_identity_blake3": "2b99abd6c8185f8908f6937d81cd72df65882239763a7f86138db4db5d726ed4",
+      "source_reference": "github:NixOS/nixpkgs/241313f4e8e508cb9b13278c2b0fa25b9ca27163",
+      "revision": "241313f4e8e508cb9b13278c2b0fa25b9ca27163",
+      "nar_hash": "sha256-vlHUuqAcbcH2RKmHbPiuQzbv1pnzzavXnI62RD0bqCU=",
+      "source_tree_blake3": "3ec6c13885467ce23bd05a77917ca0a6b3f9e144ced1f29267d008036fbbf4a9",
+      "entries": [
+        {
+          "receipt_identity_blake3": "2bd8dd45902883f4f5456919cf9b9c3e513058a718f292699485839760798b81",
+          "attribute": "hello",
+          "expected_version": "2.12.3",
+          "observed_version": "2.12.3",
+          "status": "success",
+          "reason_codes": []
+        }
+      ],
+      "reason_codes": []
+    },
+    {
+      "schema": "mantlepkgs-version-recheck-v1",
+      "recheck_identity_blake3": "02f30bc40f3c7134236981fbc6e0ebfa554e1c34bd53c683d4b6edf55545f90f",
+      "group_identity_blake3": "53aad3b17f18087111c34c973dd4668415d8567fef1f4df0baabbfac5d038fd6",
+      "source_reference": "github:NixOS/nixpkgs/b40629efe5d6ec48dd1efba650c797ddbd39ace0",
+      "revision": "b40629efe5d6ec48dd1efba650c797ddbd39ace0",
+      "nar_hash": "sha256-TJ3lSQtW0E2JrznGVm8hOQGVpXjJyXY2guAxku2O9A4=",
+      "source_tree_blake3": "c8dd5e518c3a80141b91c61af57142119a57a91cee08097640f45d17d69d3f96",
+      "entries": [
+        {
+          "receipt_identity_blake3": "be80a6f55d19699375896b20652cc87941a9f5cc2dfbef7401195f00924d8dc5",
+          "attribute": "hello",
+          "expected_version": "2.12.2",
+          "observed_version": "2.12.2",
+          "status": "success",
+          "reason_codes": []
+        }
+      ],
+      "reason_codes": []
+    }
+  ]
+}

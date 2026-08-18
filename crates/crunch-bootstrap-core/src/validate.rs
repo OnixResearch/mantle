@@ -111,8 +111,7 @@ fn validate_digest_entry(entry: &crate::lineage::DigestEntry, context: &str, err
     }
 
     if entry.is_blake3() {
-        let hex = Blake3Hex::new(entry.hex_value.clone());
-        if !hex.is_valid_format() {
+        if Blake3Hex::new(entry.hex_value.clone()).is_err() {
             errors.push(LineageError::MalformedBlake3Hex(format!("{context}: {}", entry.hex_value)));
         }
     } else if entry.interoperability_reason.as_ref().is_none_or(|r| r.is_empty()) {
@@ -221,7 +220,7 @@ mod tests {
     use crate::lineage::*;
 
     fn valid_blake3() -> Blake3Hex {
-        Blake3Hex::new("a".repeat(BLAKE3_HEX_LENGTH))
+        Blake3Hex::new("a".repeat(BLAKE3_HEX_LENGTH)).unwrap()
     }
 
     fn valid_digest() -> DigestEntry {
@@ -395,7 +394,11 @@ mod tests {
     #[test]
     fn uppercase_blake3_rejected() {
         let mut m = minimal_manifest();
-        m.seed.seed_digest = DigestEntry::blake3(Blake3Hex::new("A".repeat(64)));
+        m.seed.seed_digest = DigestEntry {
+            algorithm: "blake3".to_string(),
+            hex_value: "A".repeat(BLAKE3_HEX_LENGTH),
+            interoperability_reason: None,
+        };
         let result = validate_lineage(&m);
         assert!(result.errors.iter().any(|e| matches!(e, LineageError::MalformedBlake3Hex(_))));
     }
@@ -403,7 +406,11 @@ mod tests {
     #[test]
     fn short_blake3_rejected() {
         let mut m = minimal_manifest();
-        m.seed.seed_digest = DigestEntry::blake3(Blake3Hex::new("abcd".to_string()));
+        m.seed.seed_digest = DigestEntry {
+            algorithm: "blake3".to_string(),
+            hex_value: "abcd".to_string(),
+            interoperability_reason: None,
+        };
         let result = validate_lineage(&m);
         assert!(result.errors.iter().any(|e| matches!(e, LineageError::MalformedBlake3Hex(_))));
     }
@@ -713,8 +720,12 @@ mod tests {
     fn mixed_hex_case_blake3_rejected() {
         let mut m = minimal_manifest();
         let mixed = "aAbBcCdDeEfF00112233445566778899aAbBcCdDeEfF00112233445566778899";
-        assert_eq!(mixed.len(), 64);
-        m.seed.seed_digest = DigestEntry::blake3(Blake3Hex::new(mixed.to_string()));
+        assert_eq!(mixed.len(), BLAKE3_HEX_LENGTH);
+        m.seed.seed_digest = DigestEntry {
+            algorithm: "blake3".to_string(),
+            hex_value: mixed.to_string(),
+            interoperability_reason: None,
+        };
         let result = validate_lineage(&m);
         assert!(result.errors.iter().any(|e| matches!(e, LineageError::MalformedBlake3Hex(_))));
     }

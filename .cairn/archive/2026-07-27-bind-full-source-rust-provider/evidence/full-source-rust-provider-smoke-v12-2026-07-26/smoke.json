@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "artifact_count": 6,
+    "evidence_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-smoke-v12-2026-07-26/provider-metadata.json",
+    "host_triple": "x86_64-unknown-linux-musl",
+    "metadata_digest_blake3": "11766cf2be6892caf5b08fadf576baee90e112673d53f91afc1ab42206218d93",
+    "original_path": "/home/brittonr/.cargo-target/mantle-full-source-rust-provider-detached-v14-20260726/share/mantle-rust-provider/provider.json",
+    "policy_digest_blake3": "ddabe7ec45c2a3450c9eae851fd0c96871dcec27e80658f7d7fba46c4af190c8",
+    "receipt_count": 1,
+    "source_count": 2,
+    "target_triple": "x86_64-unknown-linux-musl"
+  },
+  "output_digest_blake3": "ddf23d812b8e6a5f805238cb377f8638d9d07513037c15a603267b88a5be3ab7",
+  "output_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-smoke-v12-2026-07-26/smoke-output.rlib",
+  "provider_path": "/home/brittonr/.cargo-target/mantle-full-source-rust-provider-detached-v14-20260726",
+  "rustc_path": "/home/brittonr/.cargo-target/mantle-full-source-rust-provider-detached-v14-20260726/bin/rustc",
+  "schema": "mantle-rust-source-provider-smoke-evidence-v1",
+  "source_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-smoke-v12-2026-07-26/smoke-source.rs",
+  "stderr_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-smoke-v12-2026-07-26/smoke-stderr.txt",
+  "stdout_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-provider-smoke-v12-2026-07-26/smoke-stdout.txt",
+  "target_triple": "x86_64-unknown-linux-musl"
+}

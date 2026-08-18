@@ -1,0 +1,31 @@
+{
+  "format": "mantle-stagex-bzip2-1.0.8-inventory-v1",
+  "configured_source_digest_blake3": "a3e8d977c0652889d2714f7eb9d1cfbe48581c05c7b7e3b79405334504fedd73",
+  "rewrite_command_count": 3,
+  "source_compile_count": 9,
+  "build_command_count": 11,
+  "smoke_command_count": 4,
+  "outputs": [
+    {
+      "artifact_id": "bzip2-1.0.8",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v32-bzip2-20260728/bzip2-stage/runtime/output/bin/bzip2",
+      "bytes_len": 189176,
+      "digest_blake3": "b6911b1a367e8b159264078e7976d363e3cb9d268a1dd074ddca51a76916b8a7"
+    },
+    {
+      "artifact_id": "bzip2recover-1.0.8",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v32-bzip2-20260728/bzip2-stage/runtime/output/bin/bzip2recover",
+      "bytes_len": 57552,
+      "digest_blake3": "f4bf3e19bd09bcd64503def65eb7bd7eaa5ea43af94536b8d6e638a48501e0a0"
+    },
+    {
+      "artifact_id": "bzip2-smoke",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v32-bzip2-20260728/bzip2-stage/runtime/bzip2-1.0.8/smoke/smoke.txt",
+      "bytes_len": 13,
+      "digest_blake3": "b37fa30b2c16ae67d4e023b19fbecf3b10dab989e5fdedec510c29780cc5793b"
+    }
+  ],
+  "protected_exec_enforced": true,
+  "fallback_events": [],
+  "non_claim": "this inventory binds bzip2 1.0.8, protected source rewrites, and positive and negative compression observations only; it does not prove later bootstrap utilities or provider admission"
+}

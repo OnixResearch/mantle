@@ -1,0 +1,15 @@
+test stagex_binutils::tests::rejects_duplicate_configure_class ... ok
+test stagex_binutils::tests::accepts_exact_ylwrap_sed_audit_suffix ... ok
+test stagex_binutils::tests::rejects_incomplete_sed_bridge_audit ... ok
+test stagex_binutils::tests::rejects_substituted_binutils_source_authority ... ok
+test stagex_binutils::tests::validates_exact_binutils_source_record_and_recipe ... ok
+test stagex_binutils::tests::rejects_incomplete_ylwrap_sed_audit_suffix ... ok
+test stagex_binutils::tests::canonicalizes_complete_sed_bridge_audit ... ok
+test stagex_binutils::tests::rejects_recipe_source_transform_drift ... ok
+test stagex_binutils::tests::repairs_exact_recipe_source_text ... ok
+test stagex_binutils::tests::rejects_substituted_sed_bridge_source ... ok
+test stagex_binutils::tests::rejects_unbounded_ambient_file_relocation ... ok
+test stagex_binutils::tests::rejects_existing_source_scratch_before_bundle_access ... ok
+
+test result: ok. 12 passed; 0 failed; 4 ignored; 0 measured; 1865 filtered out; finished in 0.01s
+

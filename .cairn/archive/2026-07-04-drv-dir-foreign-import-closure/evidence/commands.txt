@@ -1,0 +1,39 @@
+# `.drv` directory foreign import closure evidence
+
+Date: 2026-07-04
+
+## Baseline
+
+- `pueue_run` task 90 before edits: `nix develop -c cargo test -p mantle --bin mantle foreign_derivation_import:: && nix develop -c cargo test -p mantle --test foreign_import_cli` completed successfully; CLI portion reported `test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s`.
+
+## Implementation validation
+
+- `pueue_run` task 142: `nix develop -c cargo test -p mantle --bin mantle foreign_derivation_import::` passed with `test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 1137 filtered out; finished in 0.00s`.
+- `pueue_run` task 143: `nix develop -c cargo test -p mantle --test foreign_import_cli` passed with `test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s`.
+- `pueue_run` task 144: `nix develop -c cargo fmt -p mantle --check` completed successfully.
+- `pueue_run` task 145: `git diff --check` completed successfully.
+- `pueue_run` task 150: `nix run path:/home/brittonr/git/cairn#cairn -- validate --root .` returned `valid: true`, `issues: []`, `changes: 1`, `specs_validated: 17`.
+- `pueue_run` task 151: `nix run path:/home/brittonr/git/cairn#cairn -- gate tasks drv-dir-foreign-import-closure --root .` returned `stage: tasks`, `valid: true`, `verdict: PASS`, `issues: []`.
+
+## Scope notes
+
+- Positive coverage proves `foreign-import produce-nix --drv-dir <dir>` runs with fake `PATH`, emits graph/index artifacts, validates, plans, and filters an unrelated `.drv` file out of the selected root graph.
+- Negative coverage proves a directory that omits a reachable input `.drv` fails with `missing-nix-input-derivation` and emits no graph/index artifacts.
+- This evidence proves only explicit directory-bundle artifact production, validation, and planning. It does not prove host store discovery, substitution, rebuild compatibility, output trust, package correctness, reproducibility, or Nixpkgs source evaluation.
+
+## Post-archive validation
+
+Command: `nix run path:/home/brittonr/git/cairn#cairn -- validate --root .`
+
+```text
+{
+  "change_issues": [],
+  "changes": 0,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 16,
+  "valid": true
+}
+```

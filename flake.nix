@@ -37,6 +37,10 @@
       url = "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f";
       flake = false;
     };
+    boundedTreeSource = {
+      url = "git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1";
+      flake = false;
+    };
     octet.url = "github:OnixResearch/octet/86ee46b3b9257b145d2dbeb6ce9d9897607db99c";
   };
 
@@ -53,6 +57,7 @@
       nickelExportCore,
       artifactAuthSource,
       durablePublicationSource,
+      boundedTreeSource,
       octet,
       ...
     }:
@@ -159,6 +164,45 @@
             && durablePublicationManifest.package.publish == false
           ) "Mantle durable-file-publication Cargo/Nix source identity, package, RID, or license drifted";
           true;
+        boundedTreeRevision = "b0fd0103bc9eed2c1b6d852045959462d105d8f1";
+        boundedTreeRid = "rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX";
+        boundedTreeRepository = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git";
+        boundedTreePackageNames = [
+          "bounded-tree-cap"
+          "bounded-tree-core"
+        ];
+        boundedTreeReleaseCoreManifest = builtins.fromTOML (
+          builtins.readFile ./crates/crunch-release-core/Cargo.toml
+        );
+        boundedTreeCargoDependencies = [
+          cargoManifest.dependencies.bounded-tree-cap
+          cargoManifest.dependencies.bounded-tree-core
+          boundedTreeReleaseCoreManifest.dependencies.bounded-tree-core
+        ];
+        boundedTreeLockPackages = builtins.filter (
+          package: builtins.elem package.name boundedTreePackageNames
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        boundedTreeExpectedLockSource = "git+${boundedTreeRepository}?rev=${boundedTreeRevision}#${boundedTreeRevision}";
+        boundedTreeWorkspace = builtins.fromTOML (builtins.readFile (boundedTreeSource + "/Cargo.toml"));
+        boundedTreeSourceAdmitted =
+          assert pkgs.lib.assertMsg (
+            builtins.all (
+              dependency: dependency.git == boundedTreeRepository && dependency.rev == boundedTreeRevision
+            ) boundedTreeCargoDependencies
+            && boundedTreeSource.rev == boundedTreeRevision
+            &&
+              builtins.sort builtins.lessThan (map (package: package.name) boundedTreeLockPackages)
+              == builtins.sort builtins.lessThan boundedTreePackageNames
+            && builtins.all (package: package.source == boundedTreeExpectedLockSource) boundedTreeLockPackages
+            &&
+              builtins.sort builtins.lessThan boundedTreeWorkspace.workspace.members == [
+                "crates/bounded-tree-cap"
+                "crates/bounded-tree-core"
+              ]
+            && boundedTreeWorkspace.workspace.package.repository == boundedTreeRid
+            && boundedTreeWorkspace.workspace.package.license == "AGPL-3.0-or-later"
+          ) "Mantle bounded-tree Cargo/Nix source identity, package set, RID, or license drifted";
+          true;
         nickelExportCoreRevision = "257fafc1c746f1faf156207043a4c826bfb16d49";
         nickelExportCoreSource =
           assert pkgs.lib.assertMsg (
@@ -262,6 +306,13 @@
             then
               checkout.overrideAttrs (_old: {
                 src = durablePublicationSource;
+              })
+            else if
+              boundedTreeSourceAdmitted
+              && builtins.any (package: builtins.elem package.name boundedTreePackageNames) packages
+            then
+              checkout.overrideAttrs (_old: {
+                src = boundedTreeSource;
               })
             else
               checkout;
@@ -1138,6 +1189,25 @@
 
         checks = {
           inherit crunch;
+          bounded-tree-source-admission =
+            assert boundedTreeSourceAdmitted;
+            pkgs.runCommand "mantle-bounded-tree-source-admission"
+              {
+                inherit src;
+                nativeBuildInputs = [ pkgs.ripgrep ];
+              }
+              ''
+                set -eu
+                cd "$src"
+                rg -Fq '${boundedTreeRevision}' docs/bounded-tree-adoption.md
+                rg -Fq '${boundedTreeRid}' docs/bounded-tree-adoption.md README.md
+                if rg -n 'github\.com/OnixResearch/bounded-tree|bounded-tree-(core|cap)[[:space:]]*=[[:space:]]*\{[[:space:]]*path' \
+                  Cargo.toml Cargo.lock flake.nix crates/crunch-release-core/Cargo.toml; then
+                  echo 'bounded-tree fallback or sibling path is not admitted' >&2
+                  exit 1
+                fi
+                touch "$out"
+              '';
           ast-grep-package-identity = astGrepPackageIdentity;
           wasm-component-toolchain-identity = wasmComponentToolchainIdentity;
           wasm-component-toolchain-compatibility = wasmComponentToolchainCompatibility;

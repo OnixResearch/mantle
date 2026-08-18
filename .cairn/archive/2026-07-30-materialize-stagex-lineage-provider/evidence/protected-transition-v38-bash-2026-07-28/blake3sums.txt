@@ -1,0 +1,4 @@
+bf5733ed84147431f226b06877e7e20c57bd789ef60414147f1d9ad1bc8bb2a0  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v38-bash-2026-07-28/bash-inventory.json
+7d4b3e8e3c4179a472ebbbd2cd2dee6cdf96389c8fa85d6b4d9ab7533c8b0069  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v38-bash-2026-07-28/protected-exec-audit.json
+9489f11512b56598b12ecc10e547c7e4ef37344a581924fb2a29b04cdefeb385  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v38-bash-2026-07-28/transition-plan.json
+fa7e3f026dd96729da5329dab76291177908569b0ae03f768790ff07267d09c3  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v38-bash-2026-07-28/transition-report.json

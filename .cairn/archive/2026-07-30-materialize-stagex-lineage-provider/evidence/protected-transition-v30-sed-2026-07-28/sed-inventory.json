@@ -1,0 +1,24 @@
+{
+  "format": "mantle-stagex-sed-4.0.9-inventory-v1",
+  "configured_source_digest_blake3": "3e96d4952cf6c52707082fc120d9a372def665c73bef7ec13609abbfc201b99c",
+  "source_compile_count": 13,
+  "build_command_count": 14,
+  "smoke_command_count": 3,
+  "outputs": [
+    {
+      "artifact_id": "sed-4.0.9",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v30-sed-fresh-20260728/sed-stage/runtime/output/bin/sed",
+      "bytes_len": 201720,
+      "digest_blake3": "cc4bc898fbad65d9c0a07eab85c61c99abdb9d7d7d747948067bea7d9954618a"
+    },
+    {
+      "artifact_id": "sed-smoke",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v30-sed-fresh-20260728/sed-stage/runtime/sed-4.0.9/smoke/smoke.txt",
+      "bytes_len": 10,
+      "digest_blake3": "91f02abc6d98e0f00da4f3b1249ae0acd29544f7b19304f190d29f523885c077"
+    }
+  ],
+  "protected_exec_enforced": true,
+  "fallback_events": [],
+  "non_claim": "this inventory binds GNU sed 4.0.9 and positive and negative substitution observations only; it does not prove later bootstrap utilities or provider admission"
+}

@@ -84,15 +84,11 @@ const COVERAGE_ROW_DOMAIN: &str = "mantle.content-bound-requirement-coverage-row
 const RELEASE_LINK_DOMAIN: &str = "mantle.content-bound-release-link.v1";
 const RELEASE_EVIDENCE_DOMAIN: &str = "mantle.content-bound-release-requirement-evidence.v1";
 const DOMAIN_SEPARATOR: u8 = 0;
-const BLAKE3_HEX_LENGTH: usize = 64;
 const GIT_SHA1_HEX_LENGTH: usize = 40;
 const GIT_SHA256_HEX_LENGTH: usize = 64;
 const JUJUTSU_REVISION_MIN_HEX_LENGTH: usize = 16;
 const JUJUTSU_REVISION_MAX_HEX_LENGTH: usize = 64;
-const MAX_REPOSITORY_ID_BYTES: usize = 256;
 const MAX_OPAQUE_REVISION_BYTES: usize = 256;
-const MAX_REQUIREMENT_ID_BYTES: usize = 512;
-const MAX_RELATIVE_PATH_BYTES: usize = 4_096;
 const MAX_SYMBOL_BYTES: usize = 512;
 const MAX_REGISTRY_COUNT: usize = 32;
 const MAX_REQUIREMENT_REFERENCE_COUNT: usize = 4_096;
@@ -2263,7 +2259,14 @@ fn validate_requirement_digest(
             "Valence digest role does not match the field semantic domain",
         );
     }
-    validate_blake3(&digest.blake3, &format!("{field_path}.blake3"), issues);
+    if crate::CheckedRequirementDigest::new(digest.domain.clone(), &digest.blake3).is_err() {
+        push_issue(
+            issues,
+            ContentBoundRequirementIssueCodeV1::Blake3Invalid,
+            &format!("{field_path}.blake3"),
+            "BLAKE3 identity must use 64 lowercase hexadecimal characters",
+        );
+    }
 }
 
 fn validate_content_digest(
@@ -2280,22 +2283,20 @@ fn validate_content_digest(
             "Mantle digest role does not match the field semantic domain",
         );
     }
-    validate_blake3(&digest.blake3, &format!("{field_path}.blake3"), issues);
+    if crate::CheckedContentBoundDigest::new(digest.domain, &digest.blake3).is_err() {
+        push_issue(
+            issues,
+            ContentBoundRequirementIssueCodeV1::Blake3Invalid,
+            &format!("{field_path}.blake3"),
+            "BLAKE3 identity must use 64 lowercase hexadecimal characters",
+        );
+    }
 }
 
 // Internal validator: semantic parameter names keep all local call sites explicit.
 #[allow(tigerstyle::ambiguous_params)]
 fn validate_repository_id(repository_id: &str, field_path: &str, issues: &mut Vec<ContentBoundRequirementIssueV1>) {
-    let components = repository_id.split('/').collect::<Vec<_>>();
-    let is_valid = !repository_id.is_empty()
-        && repository_id.len() <= MAX_REPOSITORY_ID_BYTES
-        && repository_id.trim() == repository_id
-        && repository_id
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'/'))
-        && !repository_id.starts_with('/')
-        && components.iter().all(|component| !component.is_empty() && *component != "." && *component != "..");
-    if !is_valid {
+    if crate::ContentBoundRepositoryId::new(repository_id).is_err() {
         push_issue(
             issues,
             ContentBoundRequirementIssueCodeV1::RepositoryIdInvalid,
@@ -2380,13 +2381,7 @@ fn validate_opaque_revision(revision: &str, field_path: &str, issues: &mut Vec<C
 
 #[allow(tigerstyle::ambiguous_params)]
 fn validate_requirement_id(requirement_id: &str, field_path: &str, issues: &mut Vec<ContentBoundRequirementIssueV1>) {
-    let is_valid = !requirement_id.is_empty()
-        && requirement_id.len() <= MAX_REQUIREMENT_ID_BYTES
-        && requirement_id.contains('.')
-        && requirement_id
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b'-'));
-    if !is_valid {
+    if crate::ContentBoundRequirementId::new(requirement_id).is_err() {
         push_issue(
             issues,
             ContentBoundRequirementIssueCodeV1::RequirementIdInvalid,
@@ -2398,8 +2393,7 @@ fn validate_requirement_id(requirement_id: &str, field_path: &str, issues: &mut 
 
 #[allow(tigerstyle::ambiguous_params)]
 fn validate_specification_path(path: &str, field_path: &str, issues: &mut Vec<ContentBoundRequirementIssueV1>) {
-    let is_valid = safe_relative_path(path) && path.starts_with("cairn/specs/") && path.ends_with("/spec.md");
-    if !is_valid {
+    if crate::ContentBoundSpecificationPath::new(path).is_err() {
         push_issue(
             issues,
             ContentBoundRequirementIssueCodeV1::SpecificationPathUnsafe,
@@ -2416,10 +2410,12 @@ fn validate_safe_relative_path(
     require_bundle_prefix: bool,
     issues: &mut Vec<ContentBoundRequirementIssueV1>,
 ) {
-    let is_valid = path.len() <= MAX_RELATIVE_PATH_BYTES
-        && safe_relative_path(path)
-        && (!require_bundle_prefix || path.starts_with("requirement-evidence/"));
-    if !is_valid {
+    let admitted = if require_bundle_prefix {
+        crate::ContentBoundEvidencePath::new_bundle_path(path)
+    } else {
+        crate::ContentBoundEvidencePath::new_repository_path(path)
+    };
+    if admitted.is_err() {
         push_issue(
             issues,
             ContentBoundRequirementIssueCodeV1::SpecificationPathUnsafe,
@@ -2427,13 +2423,6 @@ fn validate_safe_relative_path(
             "evidence path is not a safe normalized relative path",
         );
     }
-}
-
-fn safe_relative_path(path: &str) -> bool {
-    if path.is_empty() || path.starts_with('/') || path.contains('\\') {
-        return false;
-    }
-    path.split('/').all(|component| !component.is_empty() && component != "." && component != "..")
 }
 
 fn validate_required_non_claims(
@@ -2456,7 +2445,7 @@ fn validate_required_non_claims(
 
 #[allow(tigerstyle::ambiguous_params)]
 fn validate_blake3(value: &str, field_path: &str, issues: &mut Vec<ContentBoundRequirementIssueV1>) {
-    if value.len() != BLAKE3_HEX_LENGTH || !is_lower_hex(value) {
+    if crate::CheckedBlake3Hex::new(value).is_err() {
         push_issue(
             issues,
             ContentBoundRequirementIssueCodeV1::Blake3Invalid,
@@ -2514,11 +2503,7 @@ fn validate_binary_digest_values(
 
 #[allow(tigerstyle::ambiguous_params)]
 fn validate_release_id(release_id: &str, field_path: &str, issues: &mut Vec<ContentBoundRequirementIssueV1>) {
-    let is_valid = !release_id.is_empty()
-        && release_id.len() <= MAX_SYMBOL_BYTES
-        && release_id.trim() == release_id
-        && !release_id.chars().any(char::is_control);
-    if !is_valid {
+    if crate::ContentBoundReleaseId::new(release_id).is_err() {
         push_issue(
             issues,
             ContentBoundRequirementIssueCodeV1::ReleaseIdMismatch,

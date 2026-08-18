@@ -899,9 +899,14 @@ pub fn drv_key_for(store_dir: &str, drv_path: &StorePath<String>) -> String {
     drv_path.to_absolute_path_with_prefix(store_dir)
 }
 
-#[allow(tigerstyle::ambiguous_params)]
+#[allow(
+    tigerstyle::ambiguous_params,
+    reason = "stable compatibility wrapper admits logical prefix and derivation key into distinct roles"
+)]
 pub fn parse_drv_key(store_dir: &str, drv_key: &str) -> Option<StorePath<String>> {
-    StorePath::from_absolute_path_with_prefix(drv_key.as_bytes(), store_dir).ok()
+    let store_dir = crunch_build::LogicalStorePrefix::new(store_dir).ok()?;
+    let drv_key = crunch_build::DerivationKey::new(drv_key).ok()?;
+    StorePath::from_absolute_path_with_prefix(drv_key.as_str().as_bytes(), store_dir.as_str()).ok()
 }
 
 pub fn label_for_key<'a>(result: &'a PipelineResult, drv_key: &str) -> Option<&'a str> {

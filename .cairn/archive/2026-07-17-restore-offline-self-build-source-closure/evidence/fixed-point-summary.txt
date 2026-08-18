@@ -1,0 +1,44 @@
+schema: mantle-self-hosting-proof-v2
+generated_unix_s: 1784319051
+repo_root: /home/brittonr/git/OnixResearch/mantle
+bundle_dir: /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/run-20260717T153536Z-3902008
+store_dir: /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/tmp/.tmpZYwclz/store
+staged_source: /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/tmp/.tmpZYwclz/store/mjai2dkm5mdr7c8pdj832j5h9li9yvcj-mantle-src
+proof_mode: FixedPoint
+selected_provider_kind: legacy-fetch
+protected_exec_result: success
+protected_exec_audit: 524880a5757781df55f9134720fa17c82960c098535b2f797ffeb54577ff255d protected-exec-audit.json
+stage0_inventory_copy: none
+declared_seed_artifacts: 0
+stage0_path_strategy: inherited
+stage0_path_dir: <inherited>
+stage0_nix_binaries_absent: []
+stage0_host_binaries_absent: []
+stage0_inventory_doc: d2802046e2cb8de2e574f8a3e07ec2fdcc8b343303ea440594a23fa8a8c3f9f4 stage0-prerequisites/inventory.md
+sandbox_shell: ac277a3b87ae477a75067b89de22865222d1d01e1cb7f91ca5f5eeca8e8ef6bc /nix/store/8mf4s8c4xjvlkj12p299qylrb30g7zzh-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox
+stage0_state: /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/tmp/.tmpZYwclz/state0
+stage2_state: /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/tmp/.tmpZYwclz/state2
+store_mantle_entries: ["9nbspi05619pz927i98vh0988j3gs9vb-mantle"]
+store_bwrap_entries: ["00000000000000000000000000000000-stale-bwrap", "pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap"]
+store_busybox_entries: ["00000000000000000000000000000000-stale-busybox", "wp1dyh7nl2ld4yl0ia730cdfm7js9mza-busybox"]
+checkout_binary: 160c2285c3c00e71463cf87c1424aab91bc0772fc7b95bc1a08e051b0c547a85 /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/cargo-target/debug/crunch
+stage1_binary: 8e9d0530274c3bb51969db33078822f42ea4dae2c4df2005ab4f4312aff2cba4 binaries/stage1-mantle
+stage2_binary: 8e9d0530274c3bb51969db33078822f42ea4dae2c4df2005ab4f4312aff2cba4 binaries/stage2-mantle
+stage0_bwrap: 93cacbf9a523c439d160745228073492be1121b62074889345e676858fd1adf2 /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/tmp/.tmpZYwclz/store/pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap/bin/bwrap
+stage0_busybox: ce321b321d0f06650ebbb24b834f4d2d600f5765d9f5828fb09c41a3ccd31ed5 /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/tmp/.tmpZYwclz/store/wp1dyh7nl2ld4yl0ia730cdfm7js9mza-busybox/bin/busybox
+stage2_bwrap: 93cacbf9a523c439d160745228073492be1121b62074889345e676858fd1adf2 /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/tmp/.tmpZYwclz/store/pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap/bin/bwrap
+stage2_busybox: ce321b321d0f06650ebbb24b834f4d2d600f5765d9f5828fb09c41a3ccd31ed5 /home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/tmp/.tmpZYwclz/store/wp1dyh7nl2ld4yl0ia730cdfm7js9mza-busybox/bin/busybox
+stage1_equals_stage2: true
+stage1_vs_stage2: same_size=true size_delta_bytes=0 first_diff_offset=None
+stage0_bwrap_equals_stage2_bwrap: true
+stage0_busybox_equals_stage2_busybox: true
+stage1_embedded_store_paths: []
+stage2_embedded_store_paths: []
+stage0_hermeticity_mode: practical
+stage0_fallback_events: ["bwrap-host-fallback:/nix/store/g7svy17fhkg2cq3q4lfzzc0mmsl3d8hq-bubblewrap-0.11.2/bin/bwrap", "source-host-discovery:/home/brittonr/git/OnixResearch/mantle"]
+stage0_report: mantle-built:/home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/tmp/.tmpZYwclz/store/pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap/bin
+stage0_protected_transition: Some(ProofProtectedTransition { bwrap_path: "/home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/tmp/.tmpZYwclz/store/pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap/bin/bwrap", bwrap_digest: "93cacbf9a523c439d160745228073492be1121b62074889345e676858fd1adf2", bwrap_store_name: "pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap", busybox_path: "/home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/tmp/.tmpZYwclz/store/wp1dyh7nl2ld4yl0ia730cdfm7js9mza-busybox/bin/busybox", busybox_digest: "ce321b321d0f06650ebbb24b834f4d2d600f5765d9f5828fb09c41a3ccd31ed5", busybox_store_name: "wp1dyh7nl2ld4yl0ia730cdfm7js9mza-busybox" })
+stage2_hermeticity_mode: strict
+stage2_fallback_events: []
+stage2_report: mantle-built:/home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/tmp/.tmpZYwclz/store/pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap/bin
+stage2_protected_transition: Some(ProofProtectedTransition { bwrap_path: "/home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/tmp/.tmpZYwclz/store/pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap/bin/bwrap", bwrap_digest: "93cacbf9a523c439d160745228073492be1121b62074889345e676858fd1adf2", bwrap_store_name: "pys6ig7mb98pf53s7cq35iafz2wll35f-bwrap", busybox_path: "/home/brittonr/git/OnixResearch/mantle/target/self-hosting-proof/work/tmp/.tmpZYwclz/store/wp1dyh7nl2ld4yl0ia730cdfm7js9mza-busybox/bin/busybox", busybox_digest: "ce321b321d0f06650ebbb24b834f4d2d600f5765d9f5828fb09c41a3ccd31ed5", busybox_store_name: "wp1dyh7nl2ld4yl0ia730cdfm7js9mza-busybox" })

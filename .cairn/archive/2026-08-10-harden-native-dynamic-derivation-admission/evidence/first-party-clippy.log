@@ -1,0 +1,76 @@
+[clippy] first-party strict gate
+running: cargo clippy --workspace --all-targets --no-deps --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- -D warnings
+warning: /home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/Cargo.toml: file `/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling serde_json v1.0.149
+   Compiling nix-compat v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/vendor/nix-compat)
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/vendor/nix-compat-derive)
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/vendor/fuse-backend-rs)
+   Compiling snix-castore v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/vendor/snix-castore)
+   Compiling snix-store v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/vendor/snix-store)
+   Compiling snix-build v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/vendor/snix-build)
+    Checking crunch-composition-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-composition-core)
+    Checking crunch-overlay-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-overlay-core)
+    Checking crunch-repair-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-repair-core)
+    Checking crunch-gc-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-gc-core)
+    Checking crunch-delta-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-delta-core)
+    Checking crunch-evaluation-stream-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-evaluation-stream-core)
+    Checking crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-eval-budget-core)
+    Checking mantle-portable-client-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/mantle-portable-client-core)
+    Checking reqwest v0.13.2
+    Checking crunch-attestation-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-attestation-core)
+    Checking crunch-action-result-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-action-result-core)
+    Checking oci-spec v0.7.1
+    Checking crunch-rust-cache-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-rust-cache-core)
+    Checking nickel-lang-parser v0.1.1
+    Checking crunch-shell-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-shell-core)
+    Checking crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-wasm-component-core)
+    Checking mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/mantlepkgs-core)
+    Checking crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-release-core)
+    Checking secretspec v0.17.0
+    Checking nix-derivation v0.1.0
+    Checking nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+    Checking crunch-bootstrap-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-bootstrap-core)
+    Checking crunch-kernelscript-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-kernelscript-core)
+    Checking crunch-hardware-simulation-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-hardware-simulation-core)
+    Checking crunch-spacewasm-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-spacewasm-core)
+    Checking crunch-shell v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-shell)
+    Checking reqwest-middleware v0.5.1
+    Checking object_store v0.14.0
+    Checking crunch-attestation v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-attestation)
+    Checking gix-transport v0.55.1
+    Checking reqwest-tracing v0.6.0
+    Checking crunch-project-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-project-core)
+    Checking crunch-spacewasm v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-spacewasm)
+    Checking crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-hardware-simulation)
+    Checking snix-tracing v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/vendor/snix-tracing)
+    Checking gix-protocol v0.59.0
+    Checking crunch-kernelscript-adapter v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-kernelscript-adapter)
+    Checking crunch-nar v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-nar)
+    Checking crunch-glue v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-glue)
+    Checking gix v0.81.0
+    Checking crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-wasm-component)
+    Checking crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/mantle-harden-native-dynamic-derivation-admission/crates/crunch-project)
+error: this comparison involving the minimum or maximum element for this type contains a case that is always true or always false
+   --> crates/mantlepkgs-core/src/versions.rs:995:19
+    |
+995 |     debug_assert!(diagnostics.len() <= usize::MAX);
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: because `usize::MAX` is the maximum value for this type, this comparison is always true
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#absurd_extreme_comparisons
+    = note: `#[deny(clippy::absurd_extreme_comparisons)]` on by default
+
+error: this comparison involving the minimum or maximum element for this type contains a case that is always true or always false
+    --> crates/mantlepkgs-core/src/versions.rs:1970:19
+     |
+1970 |     debug_assert!(diagnostics.len() <= usize::MAX);
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: because `usize::MAX` is the maximum value for this type, this comparison is always true
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#absurd_extreme_comparisons
+
+error: could not compile `mantlepkgs-core` (lib) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `mantlepkgs-core` (lib test) due to 2 previous errors

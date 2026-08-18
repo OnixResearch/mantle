@@ -1,0 +1,17 @@
+{
+  "schema": "foreign-package-index-v1",
+  "entries": [
+    {
+      "name": "hello@2.12.3",
+      "system": "x86_64-linux",
+      "root_derivation_id": "nix:vvjw1pyn64q08yfil2z8mdaqdhz7skqh-hello-2.12.3.drv",
+      "aliases": [
+        "hello",
+        "hello-2.12.3"
+      ],
+      "provenance_ref": "github:NixOS/nixpkgs/241313f4e8e508cb9b13278c2b0fa25b9ca27163#hello",
+      "metadata_digest": "462a9dc07f430f8a76d224970fcd21cd286cf078c7b27c1be1d3bf62d1d3d64c",
+      "unsupported_metadata_classes": []
+    }
+  ]
+}

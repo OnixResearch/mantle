@@ -532,15 +532,8 @@ pub(crate) fn validate_stagex_lineage_manifest(
         )]
     })?;
 
-    let result = crunch_bootstrap_core::validate_lineage(&manifest);
-    if !result.is_valid() {
-        let diagnostics = result
-            .errors
-            .into_iter()
-            .map(|e| ManifestDiagnostic::new("stagex-lineage-validation", e.to_string()))
-            .collect();
-        return Err(diagnostics);
-    }
+    crunch_bootstrap_core::admit_lineage_manifest(&manifest)
+        .map_err(|error| vec![ManifestDiagnostic::new("stagex-lineage-admission", error.to_string())])?;
 
     Ok(manifest)
 }

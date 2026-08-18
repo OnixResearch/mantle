@@ -1,0 +1,20 @@
+make: Entering directory `/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/source/gprof'
+/home/brittonr/.cargo-target/stagex-protected-transition-v77-bash-full-final-20260729/make-stage/runtime/output/bin/make  install-recursive
+make: Entering an unknown directory
+Making install in po
+make: Entering an unknown directory
+make[2]: Nothing to be done for `install'.
+make[2]: Leaving directory `/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/source/gprof/po'
+make: Entering an unknown directory
+make: Entering an unknown directory
+ /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/tools/mkdir -p '/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/bin'
+  /home/brittonr/.cargo-target/stagex-protected-transition-v77-bash-full-final-20260729/bash-full-stage/runtime/output/bin/bash-full ./libtool   --mode=install /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/tools/install -c gprof '/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/bin'
+libtool: install: /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/tools/install -c gprof /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/bin/gprof
+ /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/tools/mkdir -p '/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/share/info'
+ /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/tools/install -c -m 644 ./gprof.info '/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/share/info'
+ /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/tools/mkdir -p '/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/share/man/man1'
+ /home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/tools/install -c -m 644 gprof.1 '/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/share/man/man1'
+make[3]: Leaving directory `/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/source/gprof'
+make[2]: Leaving directory `/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/source/gprof'
+make[1]: Leaving directory `/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/source/gprof'
+make: Leaving directory `/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/source/gprof'

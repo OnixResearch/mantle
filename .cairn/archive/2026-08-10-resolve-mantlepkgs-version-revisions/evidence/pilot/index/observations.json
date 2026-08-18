@@ -1,0 +1,39 @@
+{
+  "schema": "mantlepkgs-version-observation-set-v1",
+  "observation_set_identity_blake3": "6faa060b78d74ee042920d6a5e6622720dc4df70814729f3d7199c704e556850",
+  "cohort_identity_blake3": "efa3591a4b81ceace11c103af83c7e9c53cfaf80ea7364bfe43b0eba525d21ee",
+  "observations": [
+    {
+      "schema": "mantlepkgs-version-observation-v1",
+      "observation_identity_blake3": "188c93559d70c1fb20a5d3f79af26b559915b4a477f2a9a51fcc557657937ee7",
+      "cohort_identity_blake3": "efa3591a4b81ceace11c103af83c7e9c53cfaf80ea7364bfe43b0eba525d21ee",
+      "system": "x86_64-linux",
+      "source_reference": "github:NixOS/nixpkgs/241313f4e8e508cb9b13278c2b0fa25b9ca27163",
+      "revision": "241313f4e8e508cb9b13278c2b0fa25b9ca27163",
+      "published_order": 2,
+      "nar_hash": "sha256-vlHUuqAcbcH2RKmHbPiuQzbv1pnzzavXnI62RD0bqCU=",
+      "attribute": "hello",
+      "method": "package-version-attribute",
+      "status": "success",
+      "reported_version": "2.12.3",
+      "response_identity_blake3": "65117a7aff1a4165d86c572134f3d60067002c7209402fa31e02aeb4a2ba31b8",
+      "reason_codes": []
+    },
+    {
+      "schema": "mantlepkgs-version-observation-v1",
+      "observation_identity_blake3": "73028be647ab6b0c6770421be7e5aed4d4c4f5399424ce02e36ca3acd340287f",
+      "cohort_identity_blake3": "efa3591a4b81ceace11c103af83c7e9c53cfaf80ea7364bfe43b0eba525d21ee",
+      "system": "x86_64-linux",
+      "source_reference": "github:NixOS/nixpkgs/b40629efe5d6ec48dd1efba650c797ddbd39ace0",
+      "revision": "b40629efe5d6ec48dd1efba650c797ddbd39ace0",
+      "published_order": 1,
+      "nar_hash": "sha256-TJ3lSQtW0E2JrznGVm8hOQGVpXjJyXY2guAxku2O9A4=",
+      "attribute": "hello",
+      "method": "package-version-attribute",
+      "status": "success",
+      "reported_version": "2.12.2",
+      "response_identity_blake3": "19be5da6d95009617d783d291eb8a9dbc4e197335d7d892cc0ed4f81e13bb1d3",
+      "reason_codes": []
+    }
+  ]
+}

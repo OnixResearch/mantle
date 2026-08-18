@@ -601,6 +601,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "bounded-tree-cap"
+version = "0.1.0"
+source = "git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103bc9eed2c1b6d852045959462d105d8f1"
+dependencies = [
+ "blake3",
+ "bounded-tree-core",
+ "cap-fs-ext",
+ "cap-std",
+]
+
+[[package]]
+name = "bounded-tree-core"
+version = "0.1.0"
+source = "git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103bc9eed2c1b6d852045959462d105d8f1"
+
+[[package]]
 name = "bstr"
 version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1651,6 +1667,7 @@ name = "crunch-release-core"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "bounded-tree-core",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -4797,6 +4814,8 @@ dependencies = [
  "assert_cmd",
  "base64",
  "blake3",
+ "bounded-tree-cap",
+ "bounded-tree-core",
  "bstr",
  "cap-fs-ext",
  "cap-std",

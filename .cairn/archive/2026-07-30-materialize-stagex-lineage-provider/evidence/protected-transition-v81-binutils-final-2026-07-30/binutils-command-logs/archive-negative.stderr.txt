@@ -1,0 +1,1 @@
+/home/brittonr/.cargo-target/stagex-protected-transition-v81-binutils-final-20260730/binutils-stage/runtime/install-destdir/mantle/stagex/binutils-probe-output/bin/ar: rejected.a: File format not recognized

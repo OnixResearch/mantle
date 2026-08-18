@@ -1,0 +1,31 @@
+{
+  "exact_layout_match": true,
+  "fixture_version": "github.com/distribution/distribution/v3 v3.1.0+unknown",
+  "import_receipt_blake3": "533a84d7f7c10068464c78a9ef2e677bb58057a420d77f46684ae617a0e171c3",
+  "import_state": "admitted",
+  "manifest_digest": "sha256:58346d409d871b4ff16b0c703f29e9bd5bb82aadab69e6e6d69432f12bc993e2",
+  "metadata_manifest_digest": "sha256:895eb936be7262c0b88db90f1df72145fd5aeb03f834d5f71b1a4adb4ef39ee7",
+  "non_claims": [
+    "arbitrary registry compatibility",
+    "authenticated registry deployment",
+    "registry authorization",
+    "redirect or proxy behavior",
+    "TLS or PKI correctness",
+    "tag immutability",
+    "OCI Referrers API support",
+    "artifact correctness",
+    "bootability",
+    "deployability",
+    "release eligibility"
+  ],
+  "policy_blake3": "ad45c4728f086ed75a4e8e625847126a24437842cfe5bca80dba88a7d9ef39ab",
+  "schema": "mantle-oci-external-registry-compatibility-v1",
+  "signature_manifest_digest": "sha256:8f33c17c25a8e06a811b9a1f9510b11b3984c4218b76ae3dde8a9258c07cda16",
+  "verified_public_key_blake3": [
+    "cad153db7d4f564bbfab4e10b6f31460ec672cdd5f296ab1a33d19371f028fab"
+  ],
+  "verified_signers": [
+    "cache.example.com-1"
+  ],
+  "wrong_signature_manifest_digest_rejected_without_outputs": true
+}

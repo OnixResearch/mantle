@@ -1,0 +1,2 @@
+Generated signing key: crunch-britton-desktop-1 (/tmp/mantle-live-nixpkgs-proof/state-untrusted/signing-key)
+{"error":"pull closure: store: http-closure-untrusted-narinfo: nm7p8wxflggcwxfzayhysq4z6a1wg373-hello-2.12.3","code":3,"kind":"internal"}

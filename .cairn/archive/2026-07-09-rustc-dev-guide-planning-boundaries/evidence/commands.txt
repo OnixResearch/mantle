@@ -1,0 +1,7 @@
+# Focused rustc-dev-guide planning-boundary validation
+nix develop -c rustfmt --check --config skip_children=true src/main.rs src/rustc_dev_guide.rs
+nix develop -c cargo test -p mantle --bin mantle rustc_dev_guide
+nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- validate --root .
+nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- gate proposal rustc-dev-guide-planning-boundaries --root .
+nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- gate design rustc-dev-guide-planning-boundaries --root .
+nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- gate tasks rustc-dev-guide-planning-boundaries --root .

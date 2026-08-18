@@ -1,0 +1,38 @@
+[
+  {
+    "pid": 2355502,
+    "syscall": "execve",
+    "executable_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v1-2026-07-27/hex0-seed",
+    "tracee_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v1-2026-07-27/hex0-seed",
+    "resolved_host_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v1-2026-07-27/hex0-seed",
+    "digest_hex": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80",
+    "reason": "execute the audited StageX hex0 seed after the protected transition",
+    "phase": "protected",
+    "inventory_entry_id": "stagex:seed:hex0",
+    "policy_decision": "allowed"
+  },
+  {
+    "pid": 2355503,
+    "syscall": "execve",
+    "executable_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v1-2026-07-27/hex0-reproduced",
+    "tracee_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v1-2026-07-27/hex0-reproduced",
+    "resolved_host_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v1-2026-07-27/hex0-reproduced",
+    "digest_hex": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80",
+    "reason": "verified output of declared source hex0-reproduction",
+    "phase": "protected",
+    "inventory_entry_id": "promoted:hex0-reproduction:/home/brittonr/git/OnixResearch/mantle/cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v1-2026-07-27/hex0-reproduced",
+    "policy_decision": "allowed"
+  },
+  {
+    "pid": 2355504,
+    "syscall": "execve",
+    "executable_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v1-2026-07-27/kaem-0",
+    "tracee_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v1-2026-07-27/kaem-0",
+    "resolved_host_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v1-2026-07-27/kaem-0",
+    "digest_hex": "edc664d028b349824cc8c66030a8883b81bdc03d07bc871e44e60ecb4311ab2a",
+    "reason": "verified output of declared source kaem-materialization",
+    "phase": "protected",
+    "inventory_entry_id": "promoted:kaem-materialization:/home/brittonr/git/OnixResearch/mantle/cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v1-2026-07-27/kaem-0",
+    "policy_decision": "allowed"
+  }
+]

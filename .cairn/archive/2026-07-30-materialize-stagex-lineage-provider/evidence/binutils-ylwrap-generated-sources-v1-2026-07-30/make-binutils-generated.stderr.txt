@@ -1,0 +1,4 @@
+conflicts: 27 shift/reduce
+conflicts: 1 shift/reduce
+conflicts: 58 shift/reduce, 10 reduce/reduce
+conflicts: 1 shift/reduce

@@ -1,0 +1,31 @@
+{
+  "schema": "mantle-full-source-rust-host-tool-construction-v1",
+  "receipt_id": "full-source-rust-host-make-construction",
+  "role": "make",
+  "source_policy": "authenticated-offline-only",
+  "source_id": "gnu-make-4.4.1",
+  "source_url": "https://mirrors.kernel.org/gnu/make/make-4.4.1.tar.gz",
+  "source_sha256_hex": "dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3",
+  "native_provider_output_digest_blake3": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f",
+  "executable_path": "/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/zgmmrsrq5kmcvmg70rjixz0g3lns6hig-make-4.4.1-full-source-gcc10-v1/bin/make",
+  "executable_digest_blake3": "11e99bd96b27689e78797520566b915d3b519f4550197ebb6678a67bed215866",
+  "artifact_attestation_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-host-tool-attestations-v2-2026-07-26/make-attestation.json",
+  "artifact_attestation_digest_blake3": "be4bd6c13801fdbf6e98957db5ca7bfe4fc6301006fd80e02385fa4ab0f1342f",
+  "artifact_attestation_file_digest_blake3": "be4bd6c13801fdbf6e98957db5ca7bfe4fc6301006fd80e02385fa4ab0f1342f",
+  "positive_checks": [
+    "version",
+    "recipe-execution",
+    "copied-tree-version"
+  ],
+  "rejection_checks": [
+    "malformed-makefile-rejected"
+  ],
+  "dependency_digests_blake3": {
+    "native-provider": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f"
+  },
+  "ambient_tool_discovery": false,
+  "fallback_events": [],
+  "environmental_assumptions": [
+    "sandbox-orchestration:declared-bwrap-and-builder-shell-outside-installed-host-tool-claim"
+  ]
+}

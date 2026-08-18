@@ -1,0 +1,15 @@
+warning: variant `Unimplemented` is never constructed
+   --> vendor/snix-castore/src/directoryservice/combinators.rs:181:5
+    |
+167 | pub enum Error {
+    |          ----- variant in this enum
+...
+181 |     Unimplemented,
+    |     ^^^^^^^^^^^^^
+    |
+    = note: `Error` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `snix-castore` (lib) generated 1 warning
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 24.14s

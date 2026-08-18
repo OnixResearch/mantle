@@ -1,0 +1,37 @@
+{
+  "schema": "mantle-full-source-rust-host-tool-construction-v1",
+  "receipt_id": "full-source-rust-host-perl-construction",
+  "role": "perl",
+  "source_policy": "authenticated-offline-only",
+  "source_id": "perl-5.10.1",
+  "source_url": "https://www.cpan.org/src/5.0/perl-5.10.1.tar.gz",
+  "source_sha256_hex": "cb7f26ea4b2b28d6644354d87a269d01cac1b635287dae64e88eeafa24b44f35",
+  "native_provider_output_digest_blake3": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f",
+  "executable_path": "/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/jg59by00lr0nsaparmgldp02hqpc1y5z-perl-5.10.1-full-source-gcc10-v5/bin/perl",
+  "executable_digest_blake3": "b6897f368b0a5bff5e5216a2f637533861ceda0233d95715682670e2fc3cdf9e",
+  "artifact_attestation_path": "/home/brittonr/git/OnixResearch/mantle/cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-host-perl-v5-attestation-2026-07-26.json",
+  "artifact_attestation_digest_blake3": "f9c056721a89e69214f5e4c4f042d9c0809d577eb484fbd95541fdc215acd5e7",
+  "artifact_attestation_file_digest_blake3": "f9c056721a89e69214f5e4c4f042d9c0809d577eb484fbd95541fdc215acd5e7",
+  "positive_checks": [
+    "version",
+    "openssl-configure-core-modules",
+    "openssl-generator-re",
+    "openssl-param-decoder-scalar-capture",
+    "copied-tree-execution"
+  ],
+  "rejection_checks": [
+    "malformed-perl-rejected"
+  ],
+  "dependency_digests_blake3": {
+    "busybox": "da5b5b1ca280f8a545eb750c27894766311c1b10b326da5ce10e6e1ee8c7f4c8",
+    "linux-headers": "0fdac41832c7b489a3896fb70d7395110c7542a18bbf511432c78fe3757e3778",
+    "linux-headers-attestation": "ee761748d6d860cad63a2d4582e7992cc077f818d53172ede6477160e9760f35",
+    "make": "11e99bd96b27689e78797520566b915d3b519f4550197ebb6678a67bed215866",
+    "native-provider": "f36d3759145d09b45ce9d45fcb832eeca3677e2e75527ef0d9e1553100acf66f"
+  },
+  "ambient_tool_discovery": false,
+  "fallback_events": [],
+  "environmental_assumptions": [
+    "sandbox-orchestration:declared-bwrap-and-builder-shell-outside-installed-host-tool-claim"
+  ]
+}

@@ -1,0 +1,5 @@
+b081fd63b3bc7db18252e93ced4d74e36e022a85d6b104456f8006fec49dc0cd  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v12-direct-header-receipt-cancellation-2026-07-26/driver.sh
+de472570d81e8eea46c8fafb5d47133bc13ded1244282104838787d11a2024ef  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v12-direct-header-receipt-cancellation-2026-07-26/driver.log.zst
+4648b481623b4ce5b1f8a8bf3f0d266c1cc705a0e0ed499f9844631522f15b9d  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v12-direct-header-receipt-cancellation-2026-07-26/mrustc-first-stage-plan.json
+eb390fcbc15f2dafd51ef86d9638506880c3c939a96477a135206f903f851e4f  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v12-direct-header-receipt-cancellation-2026-07-26/run-mrustc-first-stage.sh
+9f45592c29dc6515d4c2561c11e45e6271eb240b353279f8d82bd403a0b198fe  cairn/changes/bind-full-source-rust-provider/evidence/full-source-rust-v12-direct-header-receipt-cancellation-2026-07-26/mrustc-first-stage-build.log.zst

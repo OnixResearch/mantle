@@ -1,0 +1,7 @@
+d19e0d15373a237fe94b0d915f3edba43182343739da15f837c1a9a1ea426236  /home/brittonr/.cargo-target/stagex-binutils-canonicalized-strict3-20260730/source/libiberty/libiberty.a
+b922a8528a2491568debfc87c017514986a44516f43c3865c10a72884bb4eb53  /home/brittonr/.cargo-target/stagex-binutils-canonicalized-strict3-20260730/source/zlib/libz.a
+f45500a900c2294cd23bcd0c7fd013e31a7b4028bce48f765108d7f309169e53  /home/brittonr/.cargo-target/stagex-binutils-canonicalized-strict3-20260730/source/bfd/.libs/libbfd.a
+1f9d0deabd406f82dcabaaddf6faff6b5fdb7475b3e59d000b27b70251200fac  /home/brittonr/.cargo-target/stagex-binutils-canonicalized-strict3-20260730/source/opcodes/.libs/libopcodes.a
+1a7a10d6ce97f3cea18ffc4f956fe28bdb10d94568146d89670016a80d1de06a  /home/brittonr/.cargo-target/stagex-binutils-canonicalized-strict3-20260730/stagex-elf-local-symbol-canonicalizer
+188411279a7f243e7caff51f368d1d5bfd748fa4b3e8a9b00a6c9c5b5a2397d4  /home/brittonr/.cargo-target/stagex-binutils-canonicalized-strict3-20260730/elf-canonicalizer-smoke-a.o
+188411279a7f243e7caff51f368d1d5bfd748fa4b3e8a9b00a6c9c5b5a2397d4  /home/brittonr/.cargo-target/stagex-binutils-canonicalized-strict3-20260730/elf-canonicalizer-smoke-b.o

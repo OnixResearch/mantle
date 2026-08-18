@@ -1,0 +1,59 @@
+{
+  "schema": "mantle-cargo-free-fixed-point-receipt-summary-v1",
+  "pueue_task": 62,
+  "bundle": "/tmp/mantle-cargo-free-fixed-point-proof/run-final2-20260530T051100Z",
+  "meta": {
+    "status": "success",
+    "fixed_point": true,
+    "stage1": {
+      "success": true,
+      "units": 599,
+      "failed": 0,
+      "binary_blake3": "90c5ca1e91207c38d85131e7c988af61cb4477c0053f0042fae6a6989f95cf99",
+      "cargo_marker_absent": true,
+      "blocker": null
+    },
+    "stage2": {
+      "success": true,
+      "units": 599,
+      "failed": 0,
+      "binary_blake3": "90c5ca1e91207c38d85131e7c988af61cb4477c0053f0042fae6a6989f95cf99",
+      "cargo_marker_absent": true,
+      "blocker": null
+    }
+  },
+  "mantle_bin_units": {
+    "stage1": {
+      "unit_id": "native:1fc2e4df2754965843d6bc52a50096861e4b8bf8d03d66d1056582704ed93bd2:path+native#mantle@0.1.0:mantle:bin:build",
+      "source_digest": {
+        "algorithm": "blake3-tree-v1",
+        "value": "a1c3578a81188be5c4ea9af0f57d4dd5e232e460a7ae223deedc10caf3c8f4bb"
+      },
+      "rustc_args_digest_blake3": "ee8b249941dc057cbd61b41acd278f0eda47ded6fa2e230ea0621695bc82cd25",
+      "environment_digest_blake3": "bc82f2a34084c78e13e9c9251caba240639279c6c8ead7fa83c8c17b4c4b881e",
+      "output_artifact_digests": [
+        {
+          "path": "declared-output/mantle",
+          "blake3": "90c5ca1e91207c38d85131e7c988af61cb4477c0053f0042fae6a6989f95cf99"
+        }
+      ],
+      "execution_status": "success"
+    },
+    "stage2": {
+      "unit_id": "native:1fc2e4df2754965843d6bc52a50096861e4b8bf8d03d66d1056582704ed93bd2:path+native#mantle@0.1.0:mantle:bin:build",
+      "source_digest": {
+        "algorithm": "blake3-tree-v1",
+        "value": "a1c3578a81188be5c4ea9af0f57d4dd5e232e460a7ae223deedc10caf3c8f4bb"
+      },
+      "rustc_args_digest_blake3": "ee8b249941dc057cbd61b41acd278f0eda47ded6fa2e230ea0621695bc82cd25",
+      "environment_digest_blake3": "bc82f2a34084c78e13e9c9251caba240639279c6c8ead7fa83c8c17b4c4b881e",
+      "output_artifact_digests": [
+        {
+          "path": "declared-output/mantle",
+          "blake3": "90c5ca1e91207c38d85131e7c988af61cb4477c0053f0042fae6a6989f95cf99"
+        }
+      ],
+      "execution_status": "success"
+    }
+  }
+}

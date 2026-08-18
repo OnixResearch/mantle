@@ -1,0 +1,23 @@
+{
+  "schema": "mantle-octet-nominal-domain-check/v1",
+  "command": "nix run path:/home/brittonr/git/OnixResearch/octet#cargo-octet --option substituters '' --option builders '' -- check --output-format json --artifact-dir /tmp/mantle-nominal-octet-artifacts",
+  "scope": [
+    "-p",
+    "crunch-build"
+  ],
+  "octet_source_revision": "2dc082246aedac749ff7a7182a69c3c85ad41e77",
+  "policy_binding_blake3": "76b82ab58db137a1b3d0172faea971ff37564435fa8b6cefa95b483f9fff834c",
+  "status": "warning-only",
+  "findings": 842,
+  "warnings": 842,
+  "errors": 0,
+  "targeted_findings": {
+    "primitive_domain_alias": 0,
+    "raw_domain_value": 0,
+    "newtype_invariant_bypass": 0
+  },
+  "non_claims": [
+    "This check proves configured source-shape conformance only.",
+    "It does not prove store presence, build success, sandbox enforcement, source trust, compiler correctness, or release eligibility."
+  ]
+}

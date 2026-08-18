@@ -1,0 +1,55 @@
+{
+  "format": "mantle-stagex-flex-2.6.4-inventory-v1",
+  "configured_source_digest_blake3": "d2d7e2a0ed46329fc2e37d58d25dab8f17c01b5c9b7b97de09930ef3e25fe3b7",
+  "source_compile_count": 21,
+  "build_command_count": 25,
+  "smoke_command_count": 4,
+  "negative_exit_code": 1,
+  "outputs": [
+    {
+      "artifact_id": "flex-2.6.4",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v74-flex-final-20260729/flex-stage/runtime/output/bin/flex",
+      "bytes_len": 430120,
+      "digest_blake3": "1adcaf70694b47268ddbaa32c834c78ee11f5a01a5fe45f07857607915b0507b"
+    },
+    {
+      "artifact_id": "flex-libfl",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v74-flex-final-20260729/flex-stage/runtime/output/lib/libfl.a",
+      "bytes_len": 748,
+      "digest_blake3": "45c3a2d2e338eae19d24fa17df35127f5c61c16dca0ce98dce45efb13b920bfa"
+    },
+    {
+      "artifact_id": "flex-cxx-header",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v74-flex-final-20260729/flex-stage/runtime/output/include/FlexLexer.h",
+      "bytes_len": 6893,
+      "digest_blake3": "713ca824326279098cc1eb9b18ddd200e7506335c502cf2d79b4af7aaa330cdf"
+    },
+    {
+      "artifact_id": "flex-libfl-consumer",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v74-flex-final-20260729/flex-stage/runtime/libfl-consumer",
+      "bytes_len": 5076,
+      "digest_blake3": "9d13005da4640c131d85edff0a255a83471b136d31ce41d2b04534c8a7b533b4"
+    },
+    {
+      "artifact_id": "flex-version-observation",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v74-flex-final-20260729/flex-stage/runtime/smoke/version.out",
+      "bytes_len": 11,
+      "digest_blake3": "3697eccbbb98cf059d94cc199ff12f77bee88f5097ad8f0826c86bcf1fcbd5a7"
+    },
+    {
+      "artifact_id": "flex-positive-scanner-source",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v74-flex-final-20260729/flex-stage/runtime/smoke/positive.c",
+      "bytes_len": 44570,
+      "digest_blake3": "fb2c93883438dca7366f41ba363944da66b78787f76be32767cb697943b26732"
+    },
+    {
+      "artifact_id": "flex-negative-observation",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v74-flex-final-20260729/flex-stage/runtime/smoke/negative.stderr.txt",
+      "bytes_len": 98,
+      "digest_blake3": "f1180cfefce605bb56ee38ccfec3bbd99f448e2d5f391bec146f4a02cdff336f"
+    }
+  ],
+  "protected_exec_enforced": true,
+  "fallback_events": [],
+  "non_claim": "this inventory binds GNU Flex 2.6.4, its exact bounded source normalization and compatibility runtime, its declared GNU M4 child, and positive and negative scanner observations only; it does not prove arbitrary scanner semantics, binutils, native TinyCC, compiler correctness, or provider admission"
+}

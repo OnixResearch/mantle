@@ -1,0 +1,349 @@
+{
+    "version": 1,
+    "artifacts": [
+        {
+            "name": "linux-headers",
+            "source": "https://mirrors.edge.kernel.org/pub/linux/kernel/v6.x/linux-6.6.32.tar.xz",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "13ab70012fff6a33fa85b080d6c35d3c032174152257351a08ef05ca0359e38f"
+            },
+            "extraction": {
+                "kind": "tar.xz",
+                "strip_prefix": "linux-6.6.32"
+            },
+            "provenance": "Linux 6.6.32 release tarball mirrored by mirrors.edge.kernel.org for headers_install input",
+            "patches": []
+        },
+        {
+            "name": "musl",
+            "source": "https://codeload.github.com/ifduyue/musl/tar.gz/refs/tags/v1.2.5",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "b55145baf7ae74514283ea1fcb488df2549b41a7526454a8ae9625b53d2ee4e0"
+            },
+            "extraction": {
+                "kind": "tar.gz",
+                "strip_prefix": "musl-1.2.5"
+            },
+            "provenance": "musl 1.2.5 source tree mirror tag archive; upstream musl.libc.org was unreachable from this host during validation",
+            "patches": []
+        },
+        {
+            "name": "binutils",
+            "source": "https://mirrors.kernel.org/gnu/binutils/binutils-2.41.tar.xz",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "fb22cae8831f1f753677513f313683dc0334a33b056bd13866ec6377037ad8b2"
+            },
+            "extraction": {
+                "kind": "tar.xz",
+                "strip_prefix": "binutils-2.41"
+            },
+            "provenance": "GNU binutils 2.41 release tarball mirrored by mirrors.kernel.org",
+            "patches": []
+        },
+        {
+            "name": "gcc",
+            "source": "https://mirrors.kernel.org/gnu/gcc/gcc-10.5.0/gcc-10.5.0.tar.xz",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "12c39a2cb6dd4d257c0d15eb1cc28efddee19fa4e3a15e6ec11a97f6e810eecc"
+            },
+            "extraction": {
+                "kind": "tar.xz",
+                "strip_prefix": "gcc-10.5.0"
+            },
+            "provenance": "GNU GCC 10.5.0 release tarball mirrored by mirrors.kernel.org",
+            "patches": []
+        },
+        {
+            "name": "gmp",
+            "source": "https://mirrors.kernel.org/gnu/gmp/gmp-6.2.1.tar.xz",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "52cecfbbe286820d1f8bc118769008acb6451bd074fe6dea9e868d54b2ada855"
+            },
+            "extraction": {
+                "kind": "tar.xz",
+                "strip_prefix": "gmp-6.2.1"
+            },
+            "provenance": "GNU GMP 6.2.1 release tarball mirrored by mirrors.kernel.org",
+            "patches": []
+        },
+        {
+            "name": "mpfr",
+            "source": "https://mirrors.kernel.org/gnu/mpfr/mpfr-4.1.0.tar.xz",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "956f9b16d0377b777e21b07d27962ec1153236ef2e94039ec1ad375859c01fc9"
+            },
+            "extraction": {
+                "kind": "tar.xz",
+                "strip_prefix": "mpfr-4.1.0"
+            },
+            "provenance": "GNU MPFR 4.1.0 release tarball mirrored by mirrors.kernel.org",
+            "patches": []
+        },
+        {
+            "name": "mpc",
+            "source": "https://mirrors.kernel.org/gnu/mpc/mpc-1.2.1.tar.gz",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "f967a250c85296a88bf6a2471b74558d89a59fe548e119f6d74fccb7cb73b13e"
+            },
+            "extraction": {
+                "kind": "tar.gz",
+                "strip_prefix": "mpc-1.2.1"
+            },
+            "provenance": "GNU MPC 1.2.1 release tarball mirrored by mirrors.kernel.org",
+            "patches": []
+        }
+    ],
+    "patches": [],
+    "network_trust_roots": [],
+    "trust_notes": [
+        {
+            "name": "host-provider-build-tools",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "580f09662a8cf1f3ae8606209875fb60fa50e903a96dc2dfcfb40c0bfbde2c43"
+            },
+            "provenance": "Provider materialization uses host compiler/build tools to construct a normalized source-root seed provider; this is progress only and not the source-built toolchain closure proof.",
+            "scope": "provider materialization only; excluded from source-built closure success claim",
+            "rationale": "Current I4 requires a real normalized provider output before end-to-end closure proof work can proceed; host-tool-free closure proof remains a later unchecked task."
+        }
+    ],
+    "expected_outputs": [
+        {
+            "name": "x86_64-linux-musl-gcc",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "ec41e59d6c7673b1a67464fa86e49af9af87ee2f36357934e42cb7d3d5d49d66"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-gcc"
+        },
+        {
+            "name": "x86_64-linux-musl-g++",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "8f67bf2111411df8f4172d9efc5799c9ca3127feb57dde86282cb8b363892405"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-g++"
+        },
+        {
+            "name": "x86_64-linux-musl-c++",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "e27247568b6cba55489e1dc2aa127594fda518271a1b9b6fbcea164fa8d4e76a"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-c++"
+        },
+        {
+            "name": "x86_64-linux-musl-cpp",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "dea31fdea130ce9af01218499d7116158d5014b26e19a9b23664e3531537e03e"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-cpp"
+        },
+        {
+            "name": "x86_64-linux-musl-gcc-ar",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "ba1e68abad71875df59fbaea6f6bfe37f76f859928cae4bef9e2867e34ca4086"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-gcc-ar"
+        },
+        {
+            "name": "x86_64-linux-musl-gcc-nm",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "fa7d67061033ab54e61e4755dd4b1d229f714fbc2653ed9a3c27e8a586b63323"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-gcc-nm"
+        },
+        {
+            "name": "x86_64-linux-musl-gcc-ranlib",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "7822604efba43ae3eb4155fb5afe252baf6f6226ef2609ee13a33b700e64e1cf"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-gcc-ranlib"
+        },
+        {
+            "name": "x86_64-linux-musl-ar",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "ff5281ba76b2b7c52123e1c0fea205f4177cb0254fa6e4c5685662dda0a9775d"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-ar"
+        },
+        {
+            "name": "x86_64-linux-musl-as",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "436d0f46588cb37201b1ba44b52562cf2877b0c9148f88c93918a5c5e082ed7f"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-as"
+        },
+        {
+            "name": "x86_64-linux-musl-ld",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "f43a54f8620b0d91d687603dd594f9a072f1bd6d543049c721c5d1c1a57b0527"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-ld"
+        },
+        {
+            "name": "x86_64-linux-musl-nm",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "777b3dcc66dc9ac8f842d37454f8f5f2a08efd30bea47d2e60a6facab9b78e6c"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-nm"
+        },
+        {
+            "name": "x86_64-linux-musl-objcopy",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "b2609595211ff597593f09f820abdfdedd1a6e306ebe09d098c864ac0f0fa4f4"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-objcopy"
+        },
+        {
+            "name": "x86_64-linux-musl-objdump",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "405877781aa0dc59f7f624b488cd8aeb1f6c58a7c2cef59ed6d8087d95e91769"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-objdump"
+        },
+        {
+            "name": "x86_64-linux-musl-ranlib",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "3b28e397f393e37f6aaaed1379689d34fdd0915e7e015660ec466d4d38e4137f"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-ranlib"
+        },
+        {
+            "name": "x86_64-linux-musl-readelf",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "f3f9edf99d590983454cfaf77ba7c3e1368769df6427610a555bcbcf98a6e519"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-readelf"
+        },
+        {
+            "name": "x86_64-linux-musl-size",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "27f9938b63e3a0d5c577130b1fc7f18925c606095bca7bbd283821a0b01b786b"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-size"
+        },
+        {
+            "name": "x86_64-linux-musl-strings",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "e3987647775248d1e478ddbd94deb4947ac268bc42696cbb7f24219d154b5eeb"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-strings"
+        },
+        {
+            "name": "x86_64-linux-musl-strip",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "58c628296f64bcff82893ebc06a44b0f22651c67be5027194854a86c90d2d8de"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-strip"
+        },
+        {
+            "name": "x86_64-linux-musl-include",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "361b9356a3b5f8a719aa9b9e30c492f759fe460fa3f9182c62b0feafec3fb46d"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-include"
+        },
+        {
+            "name": "x86_64-linux-musl-libgcc_s.so.1",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "54372af7a327e97bdb8cb7cac8ccb81fd1396b9d507aac81c9090a8e3f19a6a9"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-libgcc_s.so.1"
+        },
+        {
+            "name": "x86_64-linux-musl-libc.so",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "beeb3514440d96de438f57200068f885fccbf64aeb5212673b8cbc8dc09d8b79"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-libc.so"
+        },
+        {
+            "name": "x86_64-linux-musl-cxx-runtime",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "0ced9520d1f7edefec6a67fc99094d2a175a23fb6ba388adf82f669cd63fca85"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "x86_64-linux-musl-cxx-runtime"
+        },
+        {
+            "name": "share/crunch-bootstrap/provider.json",
+            "kind": "provider-contract-role",
+            "digest": {
+                "algorithm": "blake3",
+                "value": "4770135014dc99e46535709f1699c670bedd3f8ddceaf97dd5b0a50395095703"
+            },
+            "provenance": "BLAKE3 of contract role name; final materialized output digest is recorded separately in provider transcript",
+            "contract_role": "share/crunch-bootstrap/provider.json"
+        }
+    ]
+}

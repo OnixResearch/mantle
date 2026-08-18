@@ -1,0 +1,53 @@
+{
+  "format": "mantle-stagex-tcc-musl-prep-inventory-v1",
+  "configured_source_digest_blake3": "29489150a78ce433dac24acfaf58ec66a4cd37d3eb93e223c5b9150f5c71a0aa",
+  "build_command_count": 2,
+  "smoke_command_count": 3,
+  "outputs": [
+    {
+      "artifact_id": "tcc-musl-prep",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v41-tcc-musl-prep-20260728/tcc-musl-prep-stage/runtime/output/bin/tcc-musl-prep",
+      "bytes_len": 347424,
+      "digest_blake3": "4add5639d2016d79b1ac258aa502098fc941354ded0acd91bf8cafea42240a77"
+    },
+    {
+      "artifact_id": "tcc-musl-prep-alias",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v41-tcc-musl-prep-20260728/tcc-musl-prep-stage/runtime/output/bin/tcc",
+      "bytes_len": 347424,
+      "digest_blake3": "4add5639d2016d79b1ac258aa502098fc941354ded0acd91bf8cafea42240a77"
+    },
+    {
+      "artifact_id": "tcc-musl-prep-libc",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v41-tcc-musl-prep-20260728/tcc-musl-prep-stage/runtime/output/lib/mes/libc.a",
+      "bytes_len": 93630,
+      "digest_blake3": "bd46a4a350e17ec4a7870be6c6dea82f7327c513ee4e2720bebb7b6e26f20d85"
+    },
+    {
+      "artifact_id": "tcc-musl-prep-crt1",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v41-tcc-musl-prep-20260728/tcc-musl-prep-stage/runtime/output/lib/mes/crt1.o",
+      "bytes_len": 932,
+      "digest_blake3": "d3fec15bd12fd72fdbdf4248d6df6b21a44cfb6a3e2c9d787a0d081ff7143df1"
+    },
+    {
+      "artifact_id": "tcc-musl-prep-libtcc1",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v41-tcc-musl-prep-20260728/tcc-musl-prep-stage/runtime/output/lib/mes/tcc/libtcc1.a",
+      "bytes_len": 2510,
+      "digest_blake3": "0e8b75458ad70ab03142b27a3014af68f57c03004f4d22a65702e60d531140e9"
+    },
+    {
+      "artifact_id": "tcc-musl-prep-headers",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v41-tcc-musl-prep-20260728/tcc-musl-prep-stage/runtime/output/include/mes",
+      "bytes_len": 194259,
+      "digest_blake3": "2577c43f136d52c8d7b61ba8f7cab614b31898586d3fab634bebe6e1fd14cb7d"
+    },
+    {
+      "artifact_id": "tcc-musl-prep-positive-object",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v41-tcc-musl-prep-20260728/tcc-musl-prep-stage/runtime/smoke/positive.o",
+      "bytes_len": 680,
+      "digest_blake3": "41c08a115f275f00099aa397872090612e853be0fb5f13ba55ddb89737e42377"
+    }
+  ],
+  "protected_exec_enforced": true,
+  "fallback_events": [],
+  "non_claim": "this inventory binds the Mes-linked TinyCC compiler prepared for the first musl handoff and bounded object-compilation observations only; it does not prove musl or provider admission"
+}

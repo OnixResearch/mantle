@@ -1,0 +1,59 @@
+StageX graph cutover validation
+Date: 2026-08-01
+
+Command:
+cargo test -p crunch-pipeline --lib -- --nocapture
+
+Observed result:
+test derivation_file::tests::full_source_graph_cuts_legacy_edges_at_stagex_sources ... ok
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.65s
+Pueue task: 7150
+
+Command:
+cargo clippy -p crunch-pipeline --lib --no-deps -- -D warnings
+
+Observed result:
+Checking crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/crates/crunch-pipeline)
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 30.43s
+The printed `snix-castore` dead-code warning came from a dependency. The first-party `crunch-pipeline` check completed successfully.
+Pueue task: 7156
+
+Command:
+cargo fmt --check -p crunch-pipeline && git diff --check
+
+Observed result:
+Exit status: 0
+Pueue task: 7161
+
+Command:
+mantle --json --store <retained-diagnostic-store> --store-prefix /mantle/store --state-dir <retained-diagnostic-state> build bootstrap/gcc-4.0-native.ncl --import-path lib --import-path bootstrap --no-substitute --strict-hermetic --jobs 1
+
+Observed result:
+Exit status: 1
+Pueue task: 7121
+
+Builder observations:
+checking for C compiler default output file name... a.out
+checking whether the C compiler works... yes
+checking size of int... 4
+/tmp/gcc40-tcc-wrapper ... /tmp/gcc-4.0.4-native/pass1-src/libiberty/regex.c -o regex.o
+Segmentation fault (core dumped)
+gcc40-tcc-wrapper: retry self-host compiler for /tmp/gcc-4.0.4-native/pass1-src/libiberty/regex.c
+Segmentation fault (core dumped)
+gcc40-tcc-wrapper: retry older compiler for /tmp/gcc-4.0.4-native/pass1-src/libiberty/regex.c
+Segmentation fault (core dumped)
+make: *** [regex.o] Error 139
+ERROR: pass1 gcc missing
+
+Builder log:
+/home/brittonr/.cargo-target/mantle-native-stage0-posix-diagnostic-v2-20260801/state/logs/y2ndm9kvycpg1wh9cajil9si30snp6bi-gcc-4.0.4-native-gas-v45.drv.log
+
+Rejected temporary-rebuild observation:
+gcc40-native-tcc: compile tcc.c
+Segmentation fault (core dumped)
+
+Rejected-candidate builder log:
+/home/brittonr/.cargo-target/mantle-native-stage0-posix-diagnostic-v2-20260801/state/logs/lc9cv0mmqqd2daxc7wimqsr8wph53mha-gcc-4.0.4-native-gas-v45.drv.log
+
+Conclusion:
+The graph cutover is validated. The runtime chain is blocked because the accepted StageX provider does not carry a native-musl-linked TCC that can compile the first conventional GCC sources.

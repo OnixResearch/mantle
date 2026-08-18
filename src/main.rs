@@ -141,6 +141,7 @@ mod release_tree_copy;
 mod remote_attempt_log_store;
 mod remote_credential_state;
 mod remote_credentials;
+mod remote_nominal;
 mod remote_service_secrets;
 // Remote build messages retain complete protocol payloads; boxing would change established internal
 // handoff shapes.

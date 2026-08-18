@@ -1,0 +1,7 @@
+Task 7530
+Status: success
+Command:
+  mantle source bundle verify --from /home/brittonr/.cargo-target/mantle-source-built-fixed-point-profile-v26-pass4-relocation-20260803.json
+Observed output:
+  manifest_blake3=1a7e3fcce3b1d00956d78845fdc6ae3fe41e6799c806b426ad0a489c6b29381d readiness=Ready missing=0 stale=0 unsupported=0 untrusted=0
+  non_claim=source bundle evidence proves declared source/input availability and identity only

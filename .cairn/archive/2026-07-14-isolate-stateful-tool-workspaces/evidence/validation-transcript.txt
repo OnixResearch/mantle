@@ -1,0 +1,2869 @@
+
+$ cargo test -p snix-build workspace_ --lib -- --nocapture
+warning: /tmp/mantle-stateful-workspaces/Cargo.toml: file `/tmp/mantle-stateful-workspaces/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling snix-tracing v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/snix-tracing)
+   Compiling snix-castore v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/snix-castore)
+warning: variant `Unimplemented` is never constructed
+   --> vendor/snix-castore/src/directoryservice/combinators.rs:181:5
+    |
+167 | pub enum Error {
+    |          ----- variant in this enum
+...
+181 |     Unimplemented,
+    |     ^^^^^^^^^^^^^
+    |
+    = note: `Error` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `snix-castore` (lib) generated 1 warning
+   Compiling snix-build v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/snix-build)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.30s
+     Running unittests src/lib.rs (/home/brittonr/.cache/mantle-drain-targets/stateful-workspaces/debug/deps/snix_build-1fb4fd19d999448b)
+
+running 2 tests
+test buildservice::bwrap::tests::workspace_mounts_are_mode_specific_and_host_paths_stay_runtime_only ... ok
+test proto::tests::workspace_transport_omits_runtime_host_path_and_round_trips_declared_fields ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 55 filtered out; finished in 0.00s
+
+
+$ cargo test -p crunch-build workspace --lib -- --nocapture
+warning: /tmp/mantle-stateful-workspaces/Cargo.toml: file `/tmp/mantle-stateful-workspaces/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling snix-tracing v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/snix-tracing)
+   Compiling snix-castore v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/snix-castore)
+warning: variant `Unimplemented` is never constructed
+   --> vendor/snix-castore/src/directoryservice/combinators.rs:181:5
+    |
+167 | pub enum Error {
+    |          ----- variant in this enum
+...
+181 |     Unimplemented,
+    |     ^^^^^^^^^^^^^
+    |
+    = note: `Error` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling snix-store v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/snix-store)
+   Compiling snix-build v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/snix-build)
+warning: `snix-castore` (lib) generated 1 warning
+   Compiling crunch-store v0.1.0 (/tmp/mantle-stateful-workspaces/crates/crunch-store)
+warning: unused import: `crate::layer::StoreLayer`
+  --> crates/crunch-store/src/handle.rs:61:5
+   |
+61 | use crate::layer::StoreLayer;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::metadata_cache::MetadataCacheKey`
+  --> crates/crunch-store/src/handle.rs:63:5
+   |
+63 | use crate::metadata_cache::MetadataCacheKey;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::metadata_cache::MetadataSchemaVersion`
+  --> crates/crunch-store/src/handle.rs:65:5
+   |
+65 | use crate::metadata_cache::MetadataSchemaVersion;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::metadata_cache::MetadataValidity`
+  --> crates/crunch-store/src/handle.rs:66:5
+   |
+66 | use crate::metadata_cache::MetadataValidity;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+  --> crates/crunch-store/src/publisher.rs:11:5
+   |
+11 | use std::sync::Arc;
+   |     ^^^^^^^^^^^^^^
+
+warning: value assigned to `saw_eof` is never read
+   --> crates/crunch-store/src/export.rs:150:23
+    |
+150 |     let mut saw_eof = false;
+    |                       ^^^^^ this value is reassigned later and never used
+...
+155 |             saw_eof = true;
+    |             -------------- `saw_eof` is overwritten here before the previous value is read
+    |
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `overlay_pathinfo` is never read
+   --> crates/crunch-store/src/handle.rs:394:5
+    |
+388 | pub struct StoreHandle {
+    |            ----------- field in this struct
+...
+394 |     overlay_pathinfo: Arc<dyn PathInfoService>,
+    |     ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `RecordingPublisher` is never constructed
+  --> crates/crunch-store/src/publisher.rs:48:12
+   |
+48 | pub struct RecordingPublisher {
+   |            ^^^^^^^^^^^^^^^^^^
+
+warning: associated items `new`, `fail_next`, `calls`, and `call_count` are never used
+  --> crates/crunch-store/src/publisher.rs:54:12
+   |
+53 | impl RecordingPublisher {
+   | ----------------------- associated items in this implementation
+54 |     pub fn new() -> Self {
+   |            ^^^
+...
+61 |     pub fn fail_next(&self) {
+   |            ^^^^^^^^^
+...
+65 |     pub fn calls(&self) -> Vec<String> {
+   |            ^^^^^
+...
+69 |     pub fn call_count(&self) -> usize {
+   |            ^^^^^^^^^^
+
+warning: `crunch-store` (lib) generated 9 warnings (run `cargo fix --lib -p crunch-store` to apply 5 suggestions)
+   Compiling crunch-build v0.1.0 (/tmp/mantle-stateful-workspaces/crates/crunch-build)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.41s
+     Running unittests src/lib.rs (/home/brittonr/.cache/mantle-drain-targets/stateful-workspaces/debug/deps/crunch_build-d46b0c913809c13d)
+
+running 23 tests
+test workspace::tests::clean_comparison_records_only_output_set_agreement_and_divergence ... ok
+test workspace::tests::compatibility_digest_is_stable_and_order_is_explicitly_validated ... ok
+test workspace::tests::compatible_lease_acquire_renew_release_is_deterministic ... ok
+test workspace::tests::invalid_guest_paths_quota_overflow_symlink_escape_secret_and_host_paths_quarantine ... ok
+test workspace::tests::explicit_modes_validate_and_missing_mode_never_silently_falls_back ... ok
+test workspace::tests::mutable_claim_never_publishes_or_satisfies_strong_reuse_even_after_clean_match ... ok
+test workspace::tests::retention_preserves_active_workspaces_and_evicts_old_idle_and_bounded_quarantine ... ok
+test workspace::tests::stale_cross_worker_cross_authority_and_concurrent_owners_are_rejected_without_mutation ... ok
+test workspace::tests::unknown_mode_and_overflow_are_rejected ... ok
+test workspace::tests::immutable_snapshot_manifest_is_order_independent_and_content_addressed ... ok
+test build_request::tests::invalid_workspace_policy_fails_closed ... ok
+test build_request::tests::declared_mutable_workspace_becomes_runtime_request_without_environment_leak ... ok
+test workspace_shell::tests::path_escape_and_symlinked_state_root_are_rejected ... ok
+test workspace_shell::tests::quota_failure_quarantines_and_reports_no_host_path ... ok
+test workspace_shell::tests::immutable_snapshot_is_content_addressed_and_secret_input_is_rejected ... ok
+test workspace_shell::tests::symlink_escape_and_secret_content_quarantine_without_following_target ... ok
+test workspace_shell::tests::concurrent_and_foreign_attempts_are_rejected_and_restart_record_survives ... ok
+test orchestrate::tests::mutable_workspace_bypasses_strong_shared_cache_lookup ... ok
+test workspace_shell::tests::abandoned_cleanup_quarantines_instead_of_reusing_unknown_state ... ok
+test workspace_shell::tests::mutable_workspace_persists_warm_state_and_scrubs_sensitive_paths ... ok
+test workspace_shell::tests::tool_fixture_reuses_warm_state_at_stable_guest_path_with_downgraded_claim ... ok
+test workspace_shell::tests::retention_eviction_is_applied_before_new_workspace_admission ... ok
+test workspace_shell::tests::clean_comparison_never_relabels_or_publishes_original_mutable_execution ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 555 filtered out; finished in 0.05s
+
+
+$ cargo test -p mantle --test integration_build workspace -- --nocapture
+warning: /tmp/mantle-stateful-workspaces/Cargo.toml: file `/tmp/mantle-stateful-workspaces/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: variant `Unimplemented` is never constructed
+   --> vendor/snix-castore/src/directoryservice/combinators.rs:181:5
+    |
+167 | pub enum Error {
+    |          ----- variant in this enum
+...
+181 |     Unimplemented,
+    |     ^^^^^^^^^^^^^
+    |
+    = note: `Error` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `snix-castore` (lib) generated 1 warning
+warning: unused import: `crate::layer::StoreLayer`
+  --> crates/crunch-store/src/handle.rs:61:5
+   |
+61 | use crate::layer::StoreLayer;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::metadata_cache::MetadataCacheKey`
+  --> crates/crunch-store/src/handle.rs:63:5
+   |
+63 | use crate::metadata_cache::MetadataCacheKey;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::metadata_cache::MetadataSchemaVersion`
+  --> crates/crunch-store/src/handle.rs:65:5
+   |
+65 | use crate::metadata_cache::MetadataSchemaVersion;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::metadata_cache::MetadataValidity`
+  --> crates/crunch-store/src/handle.rs:66:5
+   |
+66 | use crate::metadata_cache::MetadataValidity;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+  --> crates/crunch-store/src/publisher.rs:11:5
+   |
+11 | use std::sync::Arc;
+   |     ^^^^^^^^^^^^^^
+
+warning: value assigned to `saw_eof` is never read
+   --> crates/crunch-store/src/export.rs:150:23
+    |
+150 |     let mut saw_eof = false;
+    |                       ^^^^^ this value is reassigned later and never used
+...
+155 |             saw_eof = true;
+    |             -------------- `saw_eof` is overwritten here before the previous value is read
+    |
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `overlay_pathinfo` is never read
+   --> crates/crunch-store/src/handle.rs:394:5
+    |
+388 | pub struct StoreHandle {
+    |            ----------- field in this struct
+...
+394 |     overlay_pathinfo: Arc<dyn PathInfoService>,
+    |     ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `RecordingPublisher` is never constructed
+  --> crates/crunch-store/src/publisher.rs:48:12
+   |
+48 | pub struct RecordingPublisher {
+   |            ^^^^^^^^^^^^^^^^^^
+
+warning: associated items `new`, `fail_next`, `calls`, and `call_count` are never used
+  --> crates/crunch-store/src/publisher.rs:54:12
+   |
+53 | impl RecordingPublisher {
+   | ----------------------- associated items in this implementation
+54 |     pub fn new() -> Self {
+   |            ^^^
+...
+61 |     pub fn fail_next(&self) {
+   |            ^^^^^^^^^
+...
+65 |     pub fn calls(&self) -> Vec<String> {
+   |            ^^^^^
+...
+69 |     pub fn call_count(&self) -> usize {
+   |            ^^^^^^^^^^
+
+warning: `crunch-store` (lib) generated 9 warnings (run `cargo fix --lib -p crunch-store` to apply 5 suggestions)
+warning: unused import: `crunch_store::metadata_cache::AdmissionSummary`
+   --> src/cache_substitution.rs:248:9
+    |
+248 | pub use crunch_store::metadata_cache::AdmissionSummary;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crunch_store::metadata_cache::DEFAULT_METADATA_TTL_SECS`
+   --> src/cache_substitution.rs:249:9
+    |
+249 | pub use crunch_store::metadata_cache::DEFAULT_METADATA_TTL_SECS;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_store::metadata_cache::MAX_METADATA_CACHE_ENTRIES`
+   --> src/cache_substitution.rs:250:9
+    |
+250 | pub use crunch_store::metadata_cache::MAX_METADATA_CACHE_ENTRIES;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_store::metadata_cache::MetadataCacheEntry`
+   --> src/cache_substitution.rs:251:9
+    |
+251 | pub use crunch_store::metadata_cache::MetadataCacheEntry;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_store::metadata_cache::MetadataSchemaVersion`
+   --> src/cache_substitution.rs:254:9
+    |
+254 | pub use crunch_store::metadata_cache::MetadataSchemaVersion;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_store::metadata_cache::MetadataValidity`
+   --> src/cache_substitution.rs:255:9
+    |
+255 | pub use crunch_store::metadata_cache::MetadataValidity;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_store::metadata_cache::NEGATIVE_MISS_TTL_SECS`
+   --> src/cache_substitution.rs:256:9
+    |
+256 | pub use crunch_store::metadata_cache::NEGATIVE_MISS_TTL_SECS;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_store::metadata_cache::RefreshPolicy`
+   --> src/cache_substitution.rs:257:9
+    |
+257 | pub use crunch_store::metadata_cache::RefreshPolicy;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_store::metadata_cache::check_metadata_validity`
+   --> src/cache_substitution.rs:259:9
+    |
+259 | pub use crunch_store::metadata_cache::check_metadata_validity;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_store::metadata_cache::metadata_ttl_for_class`
+   --> src/cache_substitution.rs:260:9
+    |
+260 | pub use crunch_store::metadata_cache::metadata_ttl_for_class;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_store::metadata_cache::new_metadata_entry`
+   --> src/cache_substitution.rs:261:9
+    |
+261 | pub use crunch_store::metadata_cache::new_metadata_entry;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_release_core::KANI_NON_CLAIM_RELEASE_ELIGIBILITY`
+  --> src/release_evidence.rs:16:5
+   |
+16 | use crunch_release_core::KANI_NON_CLAIM_RELEASE_ELIGIBILITY;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_release_core::KANI_NON_CLAIM_SEMANTICS`
+  --> src/release_evidence.rs:17:5
+   |
+17 | use crunch_release_core::KANI_NON_CLAIM_SEMANTICS;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_release_core::KANI_NON_CLAIM_VERIFIER_SOUNDNESS`
+  --> src/release_evidence.rs:18:5
+   |
+18 | use crunch_release_core::KANI_NON_CLAIM_VERIFIER_SOUNDNESS;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_release_core::KANI_NON_CLAIM_WHOLE_PROGRAM`
+  --> src/release_evidence.rs:19:5
+   |
+19 | use crunch_release_core::KANI_NON_CLAIM_WHOLE_PROGRAM;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_release_core::KANI_RECEIPT_EVIDENCE_ROLE`
+  --> src/release_evidence.rs:20:5
+   |
+20 | use crunch_release_core::KANI_RECEIPT_EVIDENCE_ROLE;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_release_core::KANI_SOLVER_KIND_CBMC_DEFAULT`
+  --> src/release_evidence.rs:21:5
+   |
+21 | use crunch_release_core::KANI_SOLVER_KIND_CBMC_DEFAULT;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crunch_build::distributed::RemoteAttemptLogReasonCode`
+  --> src/remote_build.rs:32:9
+   |
+32 | pub use crunch_build::distributed::RemoteAttemptLogReasonCode;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: fields `immutable_log` and `exporters` are never read
+    --> src/main.rs:3768:5
+     |
+3767 | struct RemoteFailureObservabilityOutcome {
+     |        --------------------------------- fields in this struct
+3768 |     immutable_log: Result<remote_build::RemoteAttemptLogControlSummary, String>,
+     |     ^^^^^^^^^^^^^
+3769 |     exporters: remote_telemetry_export::RemoteTelemetryExportReport,
+     |     ^^^^^^^^^
+     |
+     = note: `RemoteFailureObservabilityOutcome` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `MAX_CACHE_CANDIDATES` is never used
+  --> src/cache_substitution.rs:15:11
+   |
+15 | pub const MAX_CACHE_CANDIDATES: usize = 32;
+   |           ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_CACHE_IDENTITY_BYTES` is never used
+  --> src/cache_substitution.rs:17:11
+   |
+17 | pub const MAX_CACHE_IDENTITY_BYTES: usize = 512;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `TRUST_POLICY_DIGEST_BYTES` is never used
+  --> src/cache_substitution.rs:19:7
+   |
+19 | const TRUST_POLICY_DIGEST_BYTES: usize = 64;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `CacheCandidate` is never constructed
+  --> src/cache_substitution.rs:23:12
+   |
+23 | pub struct CacheCandidate {
+   |            ^^^^^^^^^^^^^^
+
+warning: struct `CacheCandidateSet` is never constructed
+  --> src/cache_substitution.rs:38:12
+   |
+38 | pub struct CacheCandidateSet {
+   |            ^^^^^^^^^^^^^^^^^
+
+warning: enum `CacheAdmissionReason` is never used
+  --> src/cache_substitution.rs:45:10
+   |
+45 | pub enum CacheAdmissionReason {
+   |          ^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `as_str` and `is_hit` are never used
+  --> src/cache_substitution.rs:69:12
+   |
+68 | impl CacheAdmissionReason {
+   | ------------------------- methods in this implementation
+69 |     pub fn as_str(self) -> &'static str {
+   |            ^^^^^^
+...
+84 |     pub fn is_hit(self) -> bool {
+   |            ^^^^^^
+
+warning: struct `CacheAdmissionEvent` is never constructed
+  --> src/cache_substitution.rs:91:12
+   |
+91 | pub struct CacheAdmissionEvent {
+   |            ^^^^^^^^^^^^^^^^^^^
+
+warning: function `parse_cache_candidate_set` is never used
+   --> src/cache_substitution.rs:102:8
+    |
+102 | pub fn parse_cache_candidate_set(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `sanitize_cache_identity` is never used
+   --> src/cache_substitution.rs:156:8
+    |
+156 | pub fn sanitize_cache_identity(raw_url: &str) -> Option<String> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `candidates_have_trust_conflict` is never used
+   --> src/cache_substitution.rs:195:8
+    |
+195 | pub fn candidates_have_trust_conflict(a: &CacheCandidate, b: &CacheCandidate) -> bool {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_trust_policy_digest` is never used
+   --> src/cache_substitution.rs:200:4
+    |
+200 | fn validate_trust_policy_digest(digest: &str) -> Result<(), CacheCandidateError> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: enum `CacheCandidateError` is never used
+   --> src/cache_substitution.rs:212:10
+    |
+212 | pub enum CacheCandidateError {
+    |          ^^^^^^^^^^^^^^^^^^^
+
+warning: function `build_metadata_cache_key_from_candidate` is never used
+   --> src/cache_substitution.rs:264:8
+    |
+264 | pub fn build_metadata_cache_key_from_candidate(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `child_blocker` is never used
+    --> src/cargo_free_self_build.rs:1558:4
+     |
+1558 | fn child_blocker(status_code: Option<i32>, execution_status: &str, cargo_marker_absent: bool) -> Option<String> {
+     |    ^^^^^^^^^^^^^
+
+warning: constant `MAX_NIX_EVIDENCE_ROWS` is never used
+ --> src/nix_evidence_core.rs:3:7
+  |
+3 | const MAX_NIX_EVIDENCE_ROWS: usize = 256;
+  |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `STORE_HASH_LENGTH` is never used
+ --> src/nix_evidence_core.rs:4:7
+  |
+4 | const STORE_HASH_LENGTH: usize = 32;
+  |       ^^^^^^^^^^^^^^^^^
+
+warning: constant `BLAKE3_HEX_LENGTH` is never used
+ --> src/nix_evidence_core.rs:5:7
+  |
+5 | const BLAKE3_HEX_LENGTH: usize = 64;
+  |       ^^^^^^^^^^^^^^^^^
+
+warning: constant `NIX_HASH_ALPHABET` is never used
+ --> src/nix_evidence_core.rs:6:7
+  |
+6 | const NIX_HASH_ALPHABET: &str = "0123456789abcdfghijklmnpqrsvwxyz";
+  |       ^^^^^^^^^^^^^^^^^
+
+warning: constant `REQUIRED_NON_CLAIM` is never used
+ --> src/nix_evidence_core.rs:7:7
+  |
+7 | const REQUIRED_NON_CLAIM: &str = "not build correctness";
+  |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant `NIX_BOUNDARY_NON_CLAIM` is never used
+ --> src/nix_evidence_core.rs:8:7
+  |
+8 | const NIX_BOUNDARY_NON_CLAIM: &str = "Nix evidence is realization identity only";
+  |       ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `SUPPORTED_ROLES` is never used
+ --> src/nix_evidence_core.rs:9:7
+  |
+9 | const SUPPORTED_ROLES: &[&str] = &[
+  |       ^^^^^^^^^^^^^^^
+
+warning: constant `SUPPORTED_ADAPTERS` is never used
+  --> src/nix_evidence_core.rs:15:7
+   |
+15 | const SUPPORTED_ADAPTERS: &[&str] = &[
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant `OVERCLAIM_FRAGMENTS` is never used
+  --> src/nix_evidence_core.rs:22:7
+   |
+22 | const OVERCLAIM_FRAGMENTS: &[&str] = &[
+   |       ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `NixStorePathRef` is never constructed
+  --> src/nix_evidence_core.rs:31:19
+   |
+31 | pub(crate) struct NixStorePathRef {
+   |                   ^^^^^^^^^^^^^^^
+
+warning: struct `NixEvidenceRow` is never constructed
+  --> src/nix_evidence_core.rs:37:19
+   |
+37 | pub(crate) struct NixEvidenceRow {
+   |                   ^^^^^^^^^^^^^^
+
+warning: struct `NixEvidenceInput` is never constructed
+  --> src/nix_evidence_core.rs:53:19
+   |
+53 | pub(crate) struct NixEvidenceInput {
+   |                   ^^^^^^^^^^^^^^^^
+
+warning: struct `NixEvidenceReport` is never constructed
+  --> src/nix_evidence_core.rs:58:19
+   |
+58 | pub(crate) struct NixEvidenceReport {
+   |                   ^^^^^^^^^^^^^^^^^
+
+warning: function `validate_nix_evidence` is never used
+  --> src/nix_evidence_core.rs:66:15
+   |
+66 | pub(crate) fn validate_nix_evidence(input: &NixEvidenceInput) -> NixEvidenceReport {
+   |               ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_row` is never used
+  --> src/nix_evidence_core.rs:81:4
+   |
+81 | fn validate_row(row: &NixEvidenceRow, row_ids: &mut BTreeSet<String>, diagnostics: &mut Vec<String>) {
+   |    ^^^^^^^^^^^^
+
+warning: function `validate_store_path` is never used
+   --> src/nix_evidence_core.rs:103:4
+    |
+103 | fn validate_store_path(path_ref: &NixStorePathRef, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_adapter` is never used
+   --> src/nix_evidence_core.rs:127:4
+    |
+127 | fn validate_adapter(adapter: &str, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^
+
+warning: function `validate_output_name` is never used
+   --> src/nix_evidence_core.rs:133:4
+    |
+133 | fn validate_output_name(row: &NixEvidenceRow, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_role` is never used
+   --> src/nix_evidence_core.rs:141:4
+    |
+141 | fn validate_role(role: &str, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^
+
+warning: function `validate_caveats` is never used
+   --> src/nix_evidence_core.rs:147:4
+    |
+147 | fn validate_caveats(caveats: &[String], diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^
+
+warning: function `validate_non_claims` is never used
+   --> src/nix_evidence_core.rs:156:4
+    |
+156 | fn validate_non_claims(non_claims: &[String], diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_digest` is never used
+   --> src/nix_evidence_core.rs:167:4
+    |
+167 | fn validate_digest(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^
+
+warning: function `push_nonempty` is never used
+   --> src/nix_evidence_core.rs:173:4
+    |
+173 | fn push_nonempty(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^
+
+warning: function `push_no_overclaim` is never used
+   --> src/nix_evidence_core.rs:179:4
+    |
+179 | fn push_no_overclaim(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: function `nix_free_demo_claim` is never used
+   --> src/nix_free_demo_bundle.rs:216:15
+    |
+216 | pub(crate) fn nix_free_demo_claim(summary: &NixFreeDemoMachineSummary) -> Option<String> {
+    |               ^^^^^^^^^^^^^^^^^^^
+
+warning: constant `TRUST_WINDOW_START_UNIX_S` is never used
+  --> src/portable_receipt.rs:33:7
+   |
+33 | const TRUST_WINDOW_START_UNIX_S: u64 = 0;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `build_receipt_bundle` is never used
+   --> src/portable_receipt.rs:230:8
+    |
+230 | pub fn build_receipt_bundle(
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `verify_receipt_bundle_against_state` is never used
+   --> src/portable_receipt.rs:328:8
+    |
+328 | pub fn verify_receipt_bundle_against_state(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `verify_receipt_bundle_against_archive_report` is never used
+   --> src/portable_receipt.rs:357:8
+    |
+357 | pub fn verify_receipt_bundle_against_archive_report(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_CARRIER_ROWS` is never used
+ --> src/preserves_release_carrier.rs:3:7
+  |
+3 | const MAX_CARRIER_ROWS: usize = 128;
+  |       ^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_ADAPTER_FACTS` is never used
+ --> src/preserves_release_carrier.rs:4:7
+  |
+4 | const MAX_ADAPTER_FACTS: usize = 256;
+  |       ^^^^^^^^^^^^^^^^^
+
+warning: constant `BLAKE3_HEX_LENGTH` is never used
+ --> src/preserves_release_carrier.rs:5:7
+  |
+5 | const BLAKE3_HEX_LENGTH: usize = 64;
+  |       ^^^^^^^^^^^^^^^^^
+
+warning: constant `NON_CLAIM_FRAGMENT` is never used
+ --> src/preserves_release_carrier.rs:6:7
+  |
+6 | const NON_CLAIM_FRAGMENT: &str = "not release correctness";
+  |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant `OPACITY_FRAGMENT` is never used
+ --> src/preserves_release_carrier.rs:7:7
+  |
+7 | const OPACITY_FRAGMENT: &str = "opaque carrier";
+  |       ^^^^^^^^^^^^^^^^
+
+warning: constant `SUPPORTED_ROLES` is never used
+ --> src/preserves_release_carrier.rs:8:7
+  |
+8 | const SUPPORTED_ROLES: &[&str] = &[
+  |       ^^^^^^^^^^^^^^^
+
+warning: constant `OVERCLAIM_FRAGMENTS` is never used
+  --> src/preserves_release_carrier.rs:12:7
+   |
+12 | const OVERCLAIM_FRAGMENTS: &[&str] = &[
+   |       ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `PreservesCarrierRow` is never constructed
+  --> src/preserves_release_carrier.rs:21:19
+   |
+21 | pub(crate) struct PreservesCarrierRow {
+   |                   ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `PreservesCarrierValidationInput` is never constructed
+  --> src/preserves_release_carrier.rs:34:19
+   |
+34 | pub(crate) struct PreservesCarrierValidationInput {
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `PreservesCarrierValidationReport` is never constructed
+  --> src/preserves_release_carrier.rs:39:19
+   |
+39 | pub(crate) struct PreservesCarrierValidationReport {
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_preserves_release_carriers` is never used
+  --> src/preserves_release_carrier.rs:46:15
+   |
+46 | pub(crate) fn validate_preserves_release_carriers(
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_carrier` is never used
+  --> src/preserves_release_carrier.rs:63:4
+   |
+63 | fn validate_carrier(carrier: &PreservesCarrierRow, carrier_ids: &mut BTreeSet<String>, diagnostics: &mut Vec<String>) {
+   |    ^^^^^^^^^^^^^^^^
+
+warning: function `validate_role` is never used
+  --> src/preserves_release_carrier.rs:76:4
+   |
+76 | fn validate_role(role: &str, diagnostics: &mut Vec<String>) {
+   |    ^^^^^^^^^^^^^
+
+warning: function `validate_adapter_shape` is never used
+  --> src/preserves_release_carrier.rs:82:4
+   |
+82 | fn validate_adapter_shape(carrier: &PreservesCarrierRow, diagnostics: &mut Vec<String>) {
+   |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_non_claims` is never used
+   --> src/preserves_release_carrier.rs:104:4
+    |
+104 | fn validate_non_claims(non_claims: &[String], diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_digest` is never used
+   --> src/preserves_release_carrier.rs:115:4
+    |
+115 | fn validate_digest(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^
+
+warning: function `push_nonempty` is never used
+   --> src/preserves_release_carrier.rs:121:4
+    |
+121 | fn push_nonempty(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^
+
+warning: function `push_no_overclaim` is never used
+   --> src/preserves_release_carrier.rs:127:4
+    |
+127 | fn push_no_overclaim(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: function `route_plan_for_existing_build_action` is never used
+   --> src/realization_routing.rs:499:8
+    |
+499 | pub fn route_plan_for_existing_build_action(action: &str, detail: Option<&str>) -> RoutePlanReport {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `route_plan_for_build_action_with_remote` is never used
+   --> src/realization_routing.rs:503:8
+    |
+503 | pub fn route_plan_for_build_action_with_remote(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variants `WitnessRebuild`, `Bootstrap`, and `Store` are never constructed
+  --> src/release_capability.rs:28:5
+   |
+24 | pub(crate) enum ReleaseRootKind {
+   |                 --------------- variants in this enum
+...
+28 |     WitnessRebuild,
+   |     ^^^^^^^^^^^^^^
+29 |     Bootstrap,
+   |     ^^^^^^^^^
+30 |     BuildArtifact,
+31 |     Store,
+   |     ^^^^^
+   |
+   = note: `ReleaseRootKind` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: associated items `open_ambient`, `read`, and `write` are never used
+   --> src/release_capability.rs:77:19
+    |
+ 76 | impl ReleaseCapabilityRoot {
+    | -------------------------- associated items in this implementation
+ 77 |     pub(crate) fn open_ambient(kind: ReleaseRootKind, root_path: &Path) -> io::Result<Self> {
+    |                   ^^^^^^^^^^^^
+...
+107 |     pub(crate) fn read(&self, path: &ValidatedReleasePath) -> io::Result<Vec<u8>> {
+    |                   ^^^^
+...
+122 |     pub(crate) fn write(&self, path: &ValidatedReleasePath, bytes: &[u8]) -> io::Result<()> {
+    |                   ^^^^^
+
+warning: fields `stage_path`, `final_path`, and `plan_identity_blake3` are never read
+   --> src/release_evidence.rs:203:9
+    |
+202 | pub(crate) struct PublicationShellContext<'a> {
+    |                   ----------------------- fields in this struct
+203 |     pub stage_path: &'a Path,
+    |         ^^^^^^^^^^
+204 |     pub final_path: &'a Path,
+    |         ^^^^^^^^^^
+205 |     pub plan_identity_blake3: &'a str,
+    |         ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `write_manifest_file` is never used
+    --> src/release_evidence.rs:1520:4
+     |
+1520 | fn write_manifest_file(bundle_dir: &Path, manifest: &ReleaseEvidenceManifest) -> Result<(), RunError> {
+     |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `existing_absolute_rebuild_arg_paths` is never used
+   --> src/release_reproducibility.rs:854:4
+    |
+854 | fn existing_absolute_rebuild_arg_paths(args: &[OsString]) -> Vec<PathBuf> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `absolutize_existing_path` is never used
+   --> src/release_reproducibility.rs:915:4
+    |
+915 | fn absolutize_existing_path(path: &Path, label: &str) -> Result<PathBuf, RunError> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `remote_attempt_log_manifest_path` is never used
+   --> src/remote_attempt_log_store.rs:573:15
+    |
+573 | pub(crate) fn remote_attempt_log_manifest_path(state_dir: &Path, scope: &RemoteAttemptLogScope) -> PathBuf {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `remote_attempt_log_segment_path` is never used
+   --> src/remote_attempt_log_store.rs:577:15
+    |
+577 | pub(crate) fn remote_attempt_log_segment_path(
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `remote_attempt_log_anchor_path` is never used
+   --> src/remote_attempt_log_store.rs:585:15
+    |
+585 | pub(crate) fn remote_attempt_log_anchor_path(
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_REMOTE_INLINE_FIXTURE_BOOTSTRAP_BYTES` is never used
+  --> src/remote_transfer.rs:43:11
+   |
+43 | pub const MAX_REMOTE_INLINE_FIXTURE_BOOTSTRAP_BYTES: u64 = 262_144;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: enum `RemoteInlinePayloadCapability` is never used
+  --> src/remote_transfer.rs:66:10
+   |
+66 | pub enum RemoteInlinePayloadCapability {
+   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `prepare_inline_fixture_or_bootstrap_artifact` is never used
+   --> src/remote_transfer.rs:363:8
+    |
+363 | pub fn prepare_inline_fixture_or_bootstrap_artifact(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `prepare_castore_blob_transfer_artifact` is never used
+   --> src/remote_transfer.rs:449:14
+    |
+449 | pub async fn prepare_castore_blob_transfer_artifact(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `prepare_castore_directory_transfer_artifact` is never used
+   --> src/remote_transfer.rs:480:14
+    |
+480 | pub async fn prepare_castore_directory_transfer_artifact(
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `prepare_pathinfo_transfer_artifact` is never used
+   --> src/remote_transfer.rs:512:8
+    |
+512 | pub fn prepare_pathinfo_transfer_artifact(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `prepare_attestation_transfer_artifact` is never used
+   --> src/remote_transfer.rs:542:8
+    |
+542 | pub fn prepare_attestation_transfer_artifact(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `prepare_source_bundle_transfer_artifact` is never used
+   --> src/remote_transfer.rs:567:8
+    |
+567 | pub fn prepare_source_bundle_transfer_artifact(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `prepare_delta_transfer_artifacts` is never used
+   --> src/remote_transfer.rs:587:8
+    |
+587 | pub fn prepare_delta_transfer_artifacts(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `copy_async_reader_bounded` is never used
+   --> src/remote_transfer.rs:677:10
+    |
+677 | async fn copy_async_reader_bounded<R: AsyncRead + Unpin>(reader: R, path: &Path, max_bytes: u64) -> Result<(), String> {
+    |          ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `prepare_delta_bytes` is never used
+   --> src/remote_transfer.rs:689:4
+    |
+689 | fn prepare_delta_bytes(
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: method `manifest` is never used
+   --> src/remote_transfer.rs:777:12
+    |
+776 | impl RemoteTransferReceiveSession {
+    | --------------------------------- method in this implementation
+777 |     pub fn manifest(&self) -> &CanonicalRemoteTransferManifest {
+    |            ^^^^^^^^
+
+warning: function `execute_prepared_remote_transfer` is never used
+   --> src/remote_transfer.rs:911:8
+    |
+911 | pub fn execute_prepared_remote_transfer(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `run_missing_chunks` is never used
+   --> src/remote_transfer.rs:960:4
+    |
+960 | fn run_missing_chunks(
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `transfer_one_chunk` is never used
+    --> src/remote_transfer.rs:1047:4
+     |
+1047 | fn transfer_one_chunk(
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `transfer_lease` is never used
+    --> src/remote_transfer.rs:1340:4
+     |
+1340 | fn transfer_lease(
+     |    ^^^^^^^^^^^^^^
+
+warning: function `should_interrupt` is never used
+    --> src/remote_transfer.rs:1442:4
+     |
+1442 | fn should_interrupt(limit: Option<u32>, sent_count: usize) -> Result<bool, String> {
+     |    ^^^^^^^^^^^^^^^^
+
+warning: function `hash_file_blake3` is never used
+    --> src/remote_transfer.rs:1585:4
+     |
+1585 | fn hash_file_blake3(path: &Path) -> Result<RemoteTransferDigest, String> {
+     |    ^^^^^^^^^^^^^^^^
+
+warning: function `copy_file_bounded` is never used
+    --> src/remote_transfer.rs:1630:4
+     |
+1630 | fn copy_file_bounded(source: &Path, target: &Path, max_bytes: u64) -> Result<(), String> {
+     |    ^^^^^^^^^^^^^^^^^
+
+warning: struct `RemoteTransferFallbackReport` is never constructed
+    --> src/remote_transfer.rs:1867:12
+     |
+1867 | pub struct RemoteTransferFallbackReport {
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `execute_delta_with_full_nar_fallback` is never used
+    --> src/remote_transfer.rs:1874:8
+     |
+1874 | pub fn execute_delta_with_full_nar_fallback(
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `RUST_UNIT_REPLAY_EVIDENCE_MAX_KIBIBYTES` is never used
+   --> src/rust_plan.rs:122:7
+    |
+122 | const RUST_UNIT_REPLAY_EVIDENCE_MAX_KIBIBYTES: usize = 16;
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES` is never used
+   --> src/rust_plan.rs:123:7
+    |
+123 | const RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES: usize = RUST_UNIT_REPLAY_EVIDENCE_MAX_KIBIBYTES * BYTES_PER_KIBIBYTE;
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_GUIDE_REFERENCES` is never used
+ --> src/rustc_dev_guide.rs:3:7
+  |
+3 | const MAX_GUIDE_REFERENCES: usize = 64;
+  |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_EVIDENCE_ROWS` is never used
+ --> src/rustc_dev_guide.rs:4:7
+  |
+4 | const MAX_EVIDENCE_ROWS: usize = 128;
+  |       ^^^^^^^^^^^^^^^^^
+
+warning: constant `BLAKE3_HEX_LENGTH` is never used
+ --> src/rustc_dev_guide.rs:5:7
+  |
+5 | const BLAKE3_HEX_LENGTH: usize = 64;
+  |       ^^^^^^^^^^^^^^^^^
+
+warning: constant `COMPILER_NON_CLAIM_FRAGMENT` is never used
+ --> src/rustc_dev_guide.rs:6:7
+  |
+6 | const COMPILER_NON_CLAIM_FRAGMENT: &str = "not compiler correctness";
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `PROGRAM_NON_CLAIM_FRAGMENT` is never used
+ --> src/rustc_dev_guide.rs:7:7
+  |
+7 | const PROGRAM_NON_CLAIM_FRAGMENT: &str = "not program correctness";
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MOVING_REVISIONS` is never used
+ --> src/rustc_dev_guide.rs:9:7
+  |
+9 | const MOVING_REVISIONS: &[&str] = &["main", "master", "HEAD"];
+  |       ^^^^^^^^^^^^^^^^
+
+warning: constant `OVERCLAIM_FRAGMENTS` is never used
+  --> src/rustc_dev_guide.rs:10:7
+   |
+10 | const OVERCLAIM_FRAGMENTS: &[&str] = &[
+   |       ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `RustcGuideReference` is never constructed
+  --> src/rustc_dev_guide.rs:19:19
+   |
+19 | pub(crate) struct RustcGuideReference {
+   |                   ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `RustcBackendInvocationEvidence` is never constructed
+  --> src/rustc_dev_guide.rs:29:19
+   |
+29 | pub(crate) struct RustcBackendInvocationEvidence {
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `RustPlanningEvidence` is never constructed
+  --> src/rustc_dev_guide.rs:43:19
+   |
+43 | pub(crate) struct RustPlanningEvidence {
+   |                   ^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `CompilerPolicyAdapterReceipt` is never constructed
+  --> src/rustc_dev_guide.rs:51:19
+   |
+51 | pub(crate) struct CompilerPolicyAdapterReceipt {
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `RustProviderPatchPlan` is never constructed
+  --> src/rustc_dev_guide.rs:62:19
+   |
+62 | pub(crate) struct RustProviderPatchPlan {
+   |                   ^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `RustcDevGuideValidationInput` is never constructed
+  --> src/rustc_dev_guide.rs:73:19
+   |
+73 | pub(crate) struct RustcDevGuideValidationInput {
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `RustcDevGuideValidationReport` is never constructed
+  --> src/rustc_dev_guide.rs:81:19
+   |
+81 | pub(crate) struct RustcDevGuideValidationReport {
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_rustc_dev_guide_boundaries` is never used
+  --> src/rustc_dev_guide.rs:90:15
+   |
+90 | pub(crate) fn validate_rustc_dev_guide_boundaries(
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_count` is never used
+   --> src/rustc_dev_guide.rs:113:4
+    |
+113 | fn validate_count(field_name: &str, count: usize, max_count: usize, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `validate_references` is never used
+   --> src/rustc_dev_guide.rs:119:4
+    |
+119 | fn validate_references(references: &[RustcGuideReference], diagnostics: &mut Vec<String>) -> BTreeSet<String> {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_pinned_revision` is never used
+   --> src/rustc_dev_guide.rs:136:4
+    |
+136 | fn validate_pinned_revision(revision: &str, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_optional_digest` is never used
+   --> src/rustc_dev_guide.rs:143:4
+    |
+143 | fn validate_optional_digest(value: &Option<String>, field_name: &str, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_planning_evidence` is never used
+   --> src/rustc_dev_guide.rs:149:4
+    |
+149 | fn validate_planning_evidence(
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_invocation` is never used
+   --> src/rustc_dev_guide.rs:167:4
+    |
+167 | fn validate_invocation(invocation: &RustcBackendInvocationEvidence, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_compiler_policy_receipts` is never used
+   --> src/rustc_dev_guide.rs:185:4
+    |
+185 | fn validate_compiler_policy_receipts(
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_provider_patch_plans` is never used
+   --> src/rustc_dev_guide.rs:206:4
+    |
+206 | fn validate_provider_patch_plans(
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_reference_links` is never used
+   --> src/rustc_dev_guide.rs:227:4
+    |
+227 | fn validate_reference_links(
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_non_claims` is never used
+   --> src/rustc_dev_guide.rs:243:4
+    |
+243 | fn validate_non_claims(non_claims: &[String], field_name: &str, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_digest` is never used
+   --> src/rustc_dev_guide.rs:254:4
+    |
+254 | fn validate_digest(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^
+
+warning: function `push_nonempty` is never used
+   --> src/rustc_dev_guide.rs:260:4
+    |
+260 | fn push_nonempty(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^
+
+warning: function `push_no_overclaim` is never used
+   --> src/rustc_dev_guide.rs:266:4
+    |
+266 | fn push_no_overclaim(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_VENDOR_ROWS` is never used
+ --> src/vendor_source_manifest.rs:7:7
+  |
+7 | const MAX_VENDOR_ROWS: usize = 128;
+  |       ^^^^^^^^^^^^^^^
+
+warning: constant `MAX_VENDOR_FILES` is never used
+ --> src/vendor_source_manifest.rs:8:7
+  |
+8 | const MAX_VENDOR_FILES: usize = 100_000;
+  |       ^^^^^^^^^^^^^^^^
+
+warning: constant `VENDOR_NON_CLAIM_FRAGMENT` is never used
+ --> src/vendor_source_manifest.rs:9:7
+  |
+9 | const VENDOR_NON_CLAIM_FRAGMENT: &str = "identity/freshness only";
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `BLAKE3_HEX_LENGTH` is never used
+  --> src/vendor_source_manifest.rs:10:7
+   |
+10 | const BLAKE3_HEX_LENGTH: usize = 64;
+   |       ^^^^^^^^^^^^^^^^^
+
+warning: struct `VendorFileIdentity` is never constructed
+  --> src/vendor_source_manifest.rs:13:19
+   |
+13 | pub(crate) struct VendorFileIdentity {
+   |                   ^^^^^^^^^^^^^^^^^^
+
+warning: struct `VendorManifestRow` is never constructed
+  --> src/vendor_source_manifest.rs:19:19
+   |
+19 | pub(crate) struct VendorManifestRow {
+   |                   ^^^^^^^^^^^^^^^^^
+
+warning: struct `MeasuredVendorFile` is never constructed
+  --> src/vendor_source_manifest.rs:31:19
+   |
+31 | pub(crate) struct MeasuredVendorFile {
+   |                   ^^^^^^^^^^^^^^^^^^
+
+warning: struct `VendorManifestValidationInput` is never constructed
+  --> src/vendor_source_manifest.rs:37:19
+   |
+37 | pub(crate) struct VendorManifestValidationInput {
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `VendorManifestValidationReport` is never constructed
+  --> src/vendor_source_manifest.rs:43:19
+   |
+43 | pub(crate) struct VendorManifestValidationReport {
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_vendor_manifest` is never used
+  --> src/vendor_source_manifest.rs:49:15
+   |
+49 | pub(crate) fn validate_vendor_manifest(input: &VendorManifestValidationInput) -> VendorManifestValidationReport {
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `measure_vendor_files` is never used
+  --> src/vendor_source_manifest.rs:64:15
+   |
+64 | pub(crate) fn measure_vendor_files(
+   |               ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_count` is never used
+  --> src/vendor_source_manifest.rs:84:4
+   |
+84 | fn validate_count(field_name: &str, count: usize, max_count: usize, diagnostics: &mut Vec<String>) {
+   |    ^^^^^^^^^^^^^^
+
+warning: function `measured_file_map` is never used
+  --> src/vendor_source_manifest.rs:90:4
+   |
+90 | fn measured_file_map(measured_files: &[MeasuredVendorFile], diagnostics: &mut Vec<String>) -> BTreeMap<String, String> {
+   |    ^^^^^^^^^^^^^^^^^
+
+warning: function `validate_vendor_row` is never used
+   --> src/vendor_source_manifest.rs:106:4
+    |
+106 | fn validate_vendor_row(row: &VendorManifestRow, measured: &BTreeMap<String, String>, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_non_claims` is never used
+   --> src/vendor_source_manifest.rs:118:4
+    |
+118 | fn validate_non_claims(non_claims: &[String], diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_selected_paths` is never used
+   --> src/vendor_source_manifest.rs:124:4
+    |
+124 | fn validate_selected_paths(paths: &[String], diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_local_edits` is never used
+   --> src/vendor_source_manifest.rs:135:4
+    |
+135 | fn validate_local_edits(local_edits: &[String], diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_expected_files` is never used
+   --> src/vendor_source_manifest.rs:143:4
+    |
+143 | fn validate_expected_files(
+    |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_expected_file_path` is never used
+   --> src/vendor_source_manifest.rs:164:4
+    |
+164 | fn validate_expected_file_path(row: &VendorManifestRow, expected: &VendorFileIdentity, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_undeclared_measured_files` is never used
+   --> src/vendor_source_manifest.rs:174:4
+    |
+174 | fn validate_undeclared_measured_files(
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `push_nonempty` is never used
+   --> src/vendor_source_manifest.rs:189:4
+    |
+189 | fn push_nonempty(value: &str, field_name: &str, diagnostics: &mut Vec<String>) {
+    |    ^^^^^^^^^^^^^
+
+warning: function `is_safe_relative_path` is never used
+   --> src/vendor_source_manifest.rs:195:4
+    |
+195 | fn is_safe_relative_path(value: &str) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `path_is_under` is never used
+   --> src/vendor_source_manifest.rs:203:4
+    |
+203 | fn path_is_under(path: &str, selected: &str) -> bool {
+    |    ^^^^^^^^^^^^^
+
+warning: function `is_blake3_hex` is never used
+   --> src/vendor_source_manifest.rs:207:4
+    |
+207 | fn is_blake3_hex(value: &str) -> bool {
+    |    ^^^^^^^^^^^^^
+
+warning: unused `std::result::Result` that must be used
+   --> src/cache_substitution.rs:175:5
+    |
+175 |     sanitized.set_username("");
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+    = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+    |
+175 |     let _ = sanitized.set_username("");
+    |     +++++++
+
+warning: unused `std::result::Result` that must be used
+   --> src/cache_substitution.rs:176:5
+    |
+176 |     sanitized.set_password(None);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+    |
+176 |     let _ = sanitized.set_password(None);
+    |     +++++++
+
+warning: `mantle` (bin "mantle") generated 169 warnings (run `cargo fix --bin "mantle" -p mantle` to apply 18 suggestions)
+warning: `mantle` (bin "crunch") generated 169 warnings (169 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running tests/integration_build.rs (/home/brittonr/.cache/mantle-drain-targets/stateful-workspaces/debug/deps/integration_build-65ab5e7743469375)
+
+running 2 tests
+test workspace_action_identity_uses_snapshot_ref_but_clean_derivation_drops_mutable_identity ... ok
+test typed_nickel_workspace_policy_matches_rust_and_rejects_invalid_bounds ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.08s
+
+
+$ cargo test -p mantle --bin mantle workspace -- --nocapture
+warning: /tmp/mantle-stateful-workspaces/Cargo.toml: file `/tmp/mantle-stateful-workspaces/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: variant `Unimplemented` is never constructed
+   --> vendor/snix-castore/src/directoryservice/combinators.rs:181:5
+    |
+167 | pub enum Error {
+    |          ----- variant in this enum
+...
+181 |     Unimplemented,
+    |     ^^^^^^^^^^^^^
+    |
+    = note: `Error` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `snix-castore` (lib) generated 1 warning
+warning: unused import: `crate::layer::StoreLayer`
+  --> crates/crunch-store/src/handle.rs:61:5
+   |
+61 | use crate::layer::StoreLayer;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::metadata_cache::MetadataCacheKey`
+  --> crates/crunch-store/src/handle.rs:63:5
+   |
+63 | use crate::metadata_cache::MetadataCacheKey;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::metadata_cache::MetadataSchemaVersion`
+  --> crates/crunch-store/src/handle.rs:65:5
+   |
+65 | use crate::metadata_cache::MetadataSchemaVersion;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::metadata_cache::MetadataValidity`
+  --> crates/crunch-store/src/handle.rs:66:5
+   |
+66 | use crate::metadata_cache::MetadataValidity;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+  --> crates/crunch-store/src/publisher.rs:11:5
+   |
+11 | use std::sync::Arc;
+   |     ^^^^^^^^^^^^^^
+
+warning: value assigned to `saw_eof` is never read
+   --> crates/crunch-store/src/export.rs:150:23
+    |
+150 |     let mut saw_eof = false;
+    |                       ^^^^^ this value is reassigned later and never used
+...
+155 |             saw_eof = true;
+    |             -------------- `saw_eof` is overwritten here before the previous value is read
+    |
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `overlay_pathinfo` is never read
+   --> crates/crunch-store/src/handle.rs:394:5
+    |
+388 | pub struct StoreHandle {
+    |            ----------- field in this struct
+...
+394 |     overlay_pathinfo: Arc<dyn PathInfoService>,
+    |     ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `RecordingPublisher` is never constructed
+  --> crates/crunch-store/src/publisher.rs:48:12
+   |
+48 | pub struct RecordingPublisher {
+   |            ^^^^^^^^^^^^^^^^^^
+
+warning: associated items `new`, `fail_next`, `calls`, and `call_count` are never used
+  --> crates/crunch-store/src/publisher.rs:54:12
+   |
+53 | impl RecordingPublisher {
+   | ----------------------- associated items in this implementation
+54 |     pub fn new() -> Self {
+   |            ^^^
+...
+61 |     pub fn fail_next(&self) {
+   |            ^^^^^^^^^
+...
+65 |     pub fn calls(&self) -> Vec<String> {
+   |            ^^^^^
+...
+69 |     pub fn call_count(&self) -> usize {
+   |            ^^^^^^^^^^
+
+warning: `crunch-store` (lib) generated 9 warnings (run `cargo fix --lib -p crunch-store` to apply 5 suggestions)
+warning: unused import: `crunch_store::metadata_cache::MAX_METADATA_CACHE_ENTRIES`
+   --> src/cache_substitution.rs:250:9
+    |
+250 | pub use crunch_store::metadata_cache::MAX_METADATA_CACHE_ENTRIES;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crunch_store::metadata_cache::MetadataCacheEntry`
+   --> src/cache_substitution.rs:251:9
+    |
+251 | pub use crunch_store::metadata_cache::MetadataCacheEntry;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+    --> src/remote_build.rs:9859:13
+     |
+9859 |         let mut receiver =
+     |             ----^^^^^^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+     --> src/remote_build.rs:10287:13
+      |
+10287 |         let mut ticket = fixture_ticket();
+      |             ----^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variants `MalformedUrl`, `StorePrefixMismatch`, and `FixedOutputRemoteHit` are never constructed
+  --> src/cache_substitution.rs:53:5
+   |
+45 | pub enum CacheAdmissionReason {
+   |          -------------------- variants in this enum
+...
+53 |     MalformedUrl,
+   |     ^^^^^^^^^^^^
+...
+59 |     StorePrefixMismatch,
+   |     ^^^^^^^^^^^^^^^^^^^
+60 |     /// Fixed-output remote hit not admitted (requires local build).
+61 |     FixedOutputRemoteHit,
+   |     ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `CacheAdmissionReason` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: variants `WitnessRebuild` and `Bootstrap` are never constructed
+  --> src/release_capability.rs:28:5
+   |
+24 | pub(crate) enum ReleaseRootKind {
+   |                 --------------- variants in this enum
+...
+28 |     WitnessRebuild,
+   |     ^^^^^^^^^^^^^^
+29 |     Bootstrap,
+   |     ^^^^^^^^^
+   |
+   = note: `ReleaseRootKind` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `absolutize_existing_path` is never used
+   --> src/release_reproducibility.rs:915:4
+    |
+915 | fn absolutize_existing_path(path: &Path, label: &str) -> Result<PathBuf, RunError> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variant `Bootstrap` is never constructed
+  --> src/remote_transfer.rs:68:5
+   |
+66 | pub enum RemoteInlinePayloadCapability {
+   |          ----------------------------- variant in this enum
+67 |     Fixture,
+68 |     Bootstrap,
+   |     ^^^^^^^^^
+   |
+   = note: `RemoteInlinePayloadCapability` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: method `manifest` is never used
+   --> src/remote_transfer.rs:777:12
+    |
+776 | impl RemoteTransferReceiveSession {
+    | --------------------------------- method in this implementation
+777 |     pub fn manifest(&self) -> &CanonicalRemoteTransferManifest {
+    |            ^^^^^^^^
+
+warning: function `hash_file_blake3` is never used
+    --> src/remote_transfer.rs:1585:4
+     |
+1585 | fn hash_file_blake3(path: &Path) -> Result<RemoteTransferDigest, String> {
+     |    ^^^^^^^^^^^^^^^^
+
+warning: unused `std::result::Result` that must be used
+   --> src/cache_substitution.rs:175:5
+    |
+175 |     sanitized.set_username("");
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+    = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+    |
+175 |     let _ = sanitized.set_username("");
+    |     +++++++
+
+warning: unused `std::result::Result` that must be used
+   --> src/cache_substitution.rs:176:5
+    |
+176 |     sanitized.set_password(None);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+    |
+176 |     let _ = sanitized.set_password(None);
+    |     +++++++
+
+warning: `mantle` (bin "mantle" test) generated 12 warnings (run `cargo fix --bin "mantle" -p mantle --tests` to apply 4 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running unittests src/main.rs (/home/brittonr/.cache/mantle-drain-targets/stateful-workspaces/debug/deps/mantle-1f1d88d72b611f9e)
+
+running 11 tests
+test cargo_import::tests::cargo_import_shell_rejects_non_utf8_workspace_roots ... ok
+test cargo_import::tests::cargo_import_plan_generates_build_shaped_files_for_local_binary_workspace ... ok
+test remote_farm_config::tests::workspace_registration_rejects_duplicate_modes_and_zero_quota ... ok
+test remote_build::tests::mutable_workspace_jobs_never_attach_or_publish_live_output_claims ... ok
+test rust_plan::tests::parse_native_manifest_text_extracts_core_workspace_package_target_and_dependency_facts ... ok
+test remote_build::tests::remote_workspace_binding_uses_current_job_attempt_and_fence ... ok
+test rust_plan::tests::native_cargo_package_env_inherits_optional_workspace_metadata ... ok
+test rust_plan::tests::native_package_target_fragment_matches_supported_path_workspace ... ok
+test rust_plan::tests::native_manifest_workspace_edition_feeds_target_derivation_args ... ok
+test remote_build::tests::remote_workspace_registration_and_fenced_lease_survive_restart ... ok
+test remote_farm_config::tests::nickel_workspace_registration_round_trips_and_defaults_are_fail_closed ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 1451 filtered out; finished in 0.04s
+
+
+$ cargo test -p mantle --bin mantle build_report::tests::build_json_report_includes_artifact_attestation_reference -- --nocapture
+warning: /tmp/mantle-stateful-workspaces/Cargo.toml: file `/tmp/mantle-stateful-workspaces/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: variant `Unimplemented` is never constructed
+   --> vendor/snix-castore/src/directoryservice/combinators.rs:181:5
+    |
+167 | pub enum Error {
+    |          ----- variant in this enum
+...
+181 |     Unimplemented,
+    |     ^^^^^^^^^^^^^
+    |
+    = note: `Error` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `snix-castore` (lib) generated 1 warning
+warning: unused import: `crate::layer::StoreLayer`
+  --> crates/crunch-store/src/handle.rs:61:5
+   |
+61 | use crate::layer::StoreLayer;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::metadata_cache::MetadataCacheKey`
+  --> crates/crunch-store/src/handle.rs:63:5
+   |
+63 | use crate::metadata_cache::MetadataCacheKey;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::metadata_cache::MetadataSchemaVersion`
+  --> crates/crunch-store/src/handle.rs:65:5
+   |
+65 | use crate::metadata_cache::MetadataSchemaVersion;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::metadata_cache::MetadataValidity`
+  --> crates/crunch-store/src/handle.rs:66:5
+   |
+66 | use crate::metadata_cache::MetadataValidity;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+  --> crates/crunch-store/src/publisher.rs:11:5
+   |
+11 | use std::sync::Arc;
+   |     ^^^^^^^^^^^^^^
+
+warning: value assigned to `saw_eof` is never read
+   --> crates/crunch-store/src/export.rs:150:23
+    |
+150 |     let mut saw_eof = false;
+    |                       ^^^^^ this value is reassigned later and never used
+...
+155 |             saw_eof = true;
+    |             -------------- `saw_eof` is overwritten here before the previous value is read
+    |
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `overlay_pathinfo` is never read
+   --> crates/crunch-store/src/handle.rs:394:5
+    |
+388 | pub struct StoreHandle {
+    |            ----------- field in this struct
+...
+394 |     overlay_pathinfo: Arc<dyn PathInfoService>,
+    |     ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `RecordingPublisher` is never constructed
+  --> crates/crunch-store/src/publisher.rs:48:12
+   |
+48 | pub struct RecordingPublisher {
+   |            ^^^^^^^^^^^^^^^^^^
+
+warning: associated items `new`, `fail_next`, `calls`, and `call_count` are never used
+  --> crates/crunch-store/src/publisher.rs:54:12
+   |
+53 | impl RecordingPublisher {
+   | ----------------------- associated items in this implementation
+54 |     pub fn new() -> Self {
+   |            ^^^
+...
+61 |     pub fn fail_next(&self) {
+   |            ^^^^^^^^^
+...
+65 |     pub fn calls(&self) -> Vec<String> {
+   |            ^^^^^
+...
+69 |     pub fn call_count(&self) -> usize {
+   |            ^^^^^^^^^^
+
+warning: `crunch-store` (lib) generated 9 warnings (run `cargo fix --lib -p crunch-store` to apply 5 suggestions)
+warning: unused import: `crunch_store::metadata_cache::MAX_METADATA_CACHE_ENTRIES`
+   --> src/cache_substitution.rs:250:9
+    |
+250 | pub use crunch_store::metadata_cache::MAX_METADATA_CACHE_ENTRIES;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crunch_store::metadata_cache::MetadataCacheEntry`
+   --> src/cache_substitution.rs:251:9
+    |
+251 | pub use crunch_store::metadata_cache::MetadataCacheEntry;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+    --> src/remote_build.rs:9859:13
+     |
+9859 |         let mut receiver =
+     |             ----^^^^^^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+     --> src/remote_build.rs:10287:13
+      |
+10287 |         let mut ticket = fixture_ticket();
+      |             ----^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variants `MalformedUrl`, `StorePrefixMismatch`, and `FixedOutputRemoteHit` are never constructed
+  --> src/cache_substitution.rs:53:5
+   |
+45 | pub enum CacheAdmissionReason {
+   |          -------------------- variants in this enum
+...
+53 |     MalformedUrl,
+   |     ^^^^^^^^^^^^
+...
+59 |     StorePrefixMismatch,
+   |     ^^^^^^^^^^^^^^^^^^^
+60 |     /// Fixed-output remote hit not admitted (requires local build).
+61 |     FixedOutputRemoteHit,
+   |     ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `CacheAdmissionReason` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: variants `WitnessRebuild` and `Bootstrap` are never constructed
+  --> src/release_capability.rs:28:5
+   |
+24 | pub(crate) enum ReleaseRootKind {
+   |                 --------------- variants in this enum
+...
+28 |     WitnessRebuild,
+   |     ^^^^^^^^^^^^^^
+29 |     Bootstrap,
+   |     ^^^^^^^^^
+   |
+   = note: `ReleaseRootKind` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `absolutize_existing_path` is never used
+   --> src/release_reproducibility.rs:915:4
+    |
+915 | fn absolutize_existing_path(path: &Path, label: &str) -> Result<PathBuf, RunError> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variant `Bootstrap` is never constructed
+  --> src/remote_transfer.rs:68:5
+   |
+66 | pub enum RemoteInlinePayloadCapability {
+   |          ----------------------------- variant in this enum
+67 |     Fixture,
+68 |     Bootstrap,
+   |     ^^^^^^^^^
+   |
+   = note: `RemoteInlinePayloadCapability` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: method `manifest` is never used
+   --> src/remote_transfer.rs:777:12
+    |
+776 | impl RemoteTransferReceiveSession {
+    | --------------------------------- method in this implementation
+777 |     pub fn manifest(&self) -> &CanonicalRemoteTransferManifest {
+    |            ^^^^^^^^
+
+warning: function `hash_file_blake3` is never used
+    --> src/remote_transfer.rs:1585:4
+     |
+1585 | fn hash_file_blake3(path: &Path) -> Result<RemoteTransferDigest, String> {
+     |    ^^^^^^^^^^^^^^^^
+
+warning: unused `std::result::Result` that must be used
+   --> src/cache_substitution.rs:175:5
+    |
+175 |     sanitized.set_username("");
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+    = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+    |
+175 |     let _ = sanitized.set_username("");
+    |     +++++++
+
+warning: unused `std::result::Result` that must be used
+   --> src/cache_substitution.rs:176:5
+    |
+176 |     sanitized.set_password(None);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+    |
+176 |     let _ = sanitized.set_password(None);
+    |     +++++++
+
+warning: `mantle` (bin "mantle" test) generated 12 warnings (run `cargo fix --bin "mantle" -p mantle --tests` to apply 4 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running unittests src/main.rs (/home/brittonr/.cache/mantle-drain-targets/stateful-workspaces/debug/deps/mantle-1f1d88d72b611f9e)
+
+running 1 test
+test build_report::tests::build_json_report_includes_artifact_attestation_reference ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1461 filtered out; finished in 0.00s
+
+
+$ cargo test -p mantle --bin mantle machine_contract_producer_tests::doctor_and_build_reports_serialize_to_registered_positive_fixtures -- --nocapture
+warning: /tmp/mantle-stateful-workspaces/Cargo.toml: file `/tmp/mantle-stateful-workspaces/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: variant `Unimplemented` is never constructed
+   --> vendor/snix-castore/src/directoryservice/combinators.rs:181:5
+    |
+167 | pub enum Error {
+    |          ----- variant in this enum
+...
+181 |     Unimplemented,
+    |     ^^^^^^^^^^^^^
+    |
+    = note: `Error` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `snix-castore` (lib) generated 1 warning
+warning: unused import: `crate::layer::StoreLayer`
+  --> crates/crunch-store/src/handle.rs:61:5
+   |
+61 | use crate::layer::StoreLayer;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::metadata_cache::MetadataCacheKey`
+  --> crates/crunch-store/src/handle.rs:63:5
+   |
+63 | use crate::metadata_cache::MetadataCacheKey;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::metadata_cache::MetadataSchemaVersion`
+  --> crates/crunch-store/src/handle.rs:65:5
+   |
+65 | use crate::metadata_cache::MetadataSchemaVersion;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::metadata_cache::MetadataValidity`
+  --> crates/crunch-store/src/handle.rs:66:5
+   |
+66 | use crate::metadata_cache::MetadataValidity;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+  --> crates/crunch-store/src/publisher.rs:11:5
+   |
+11 | use std::sync::Arc;
+   |     ^^^^^^^^^^^^^^
+
+warning: value assigned to `saw_eof` is never read
+   --> crates/crunch-store/src/export.rs:150:23
+    |
+150 |     let mut saw_eof = false;
+    |                       ^^^^^ this value is reassigned later and never used
+...
+155 |             saw_eof = true;
+    |             -------------- `saw_eof` is overwritten here before the previous value is read
+    |
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `overlay_pathinfo` is never read
+   --> crates/crunch-store/src/handle.rs:394:5
+    |
+388 | pub struct StoreHandle {
+    |            ----------- field in this struct
+...
+394 |     overlay_pathinfo: Arc<dyn PathInfoService>,
+    |     ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `RecordingPublisher` is never constructed
+  --> crates/crunch-store/src/publisher.rs:48:12
+   |
+48 | pub struct RecordingPublisher {
+   |            ^^^^^^^^^^^^^^^^^^
+
+warning: associated items `new`, `fail_next`, `calls`, and `call_count` are never used
+  --> crates/crunch-store/src/publisher.rs:54:12
+   |
+53 | impl RecordingPublisher {
+   | ----------------------- associated items in this implementation
+54 |     pub fn new() -> Self {
+   |            ^^^
+...
+61 |     pub fn fail_next(&self) {
+   |            ^^^^^^^^^
+...
+65 |     pub fn calls(&self) -> Vec<String> {
+   |            ^^^^^
+...
+69 |     pub fn call_count(&self) -> usize {
+   |            ^^^^^^^^^^
+
+warning: `crunch-store` (lib) generated 9 warnings (run `cargo fix --lib -p crunch-store` to apply 5 suggestions)
+warning: unused import: `crunch_store::metadata_cache::MAX_METADATA_CACHE_ENTRIES`
+   --> src/cache_substitution.rs:250:9
+    |
+250 | pub use crunch_store::metadata_cache::MAX_METADATA_CACHE_ENTRIES;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crunch_store::metadata_cache::MetadataCacheEntry`
+   --> src/cache_substitution.rs:251:9
+    |
+251 | pub use crunch_store::metadata_cache::MetadataCacheEntry;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+    --> src/remote_build.rs:9859:13
+     |
+9859 |         let mut receiver =
+     |             ----^^^^^^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+     --> src/remote_build.rs:10287:13
+      |
+10287 |         let mut ticket = fixture_ticket();
+      |             ----^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variants `MalformedUrl`, `StorePrefixMismatch`, and `FixedOutputRemoteHit` are never constructed
+  --> src/cache_substitution.rs:53:5
+   |
+45 | pub enum CacheAdmissionReason {
+   |          -------------------- variants in this enum
+...
+53 |     MalformedUrl,
+   |     ^^^^^^^^^^^^
+...
+59 |     StorePrefixMismatch,
+   |     ^^^^^^^^^^^^^^^^^^^
+60 |     /// Fixed-output remote hit not admitted (requires local build).
+61 |     FixedOutputRemoteHit,
+   |     ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `CacheAdmissionReason` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: variants `WitnessRebuild` and `Bootstrap` are never constructed
+  --> src/release_capability.rs:28:5
+   |
+24 | pub(crate) enum ReleaseRootKind {
+   |                 --------------- variants in this enum
+...
+28 |     WitnessRebuild,
+   |     ^^^^^^^^^^^^^^
+29 |     Bootstrap,
+   |     ^^^^^^^^^
+   |
+   = note: `ReleaseRootKind` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `absolutize_existing_path` is never used
+   --> src/release_reproducibility.rs:915:4
+    |
+915 | fn absolutize_existing_path(path: &Path, label: &str) -> Result<PathBuf, RunError> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variant `Bootstrap` is never constructed
+  --> src/remote_transfer.rs:68:5
+   |
+66 | pub enum RemoteInlinePayloadCapability {
+   |          ----------------------------- variant in this enum
+67 |     Fixture,
+68 |     Bootstrap,
+   |     ^^^^^^^^^
+   |
+   = note: `RemoteInlinePayloadCapability` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: method `manifest` is never used
+   --> src/remote_transfer.rs:777:12
+    |
+776 | impl RemoteTransferReceiveSession {
+    | --------------------------------- method in this implementation
+777 |     pub fn manifest(&self) -> &CanonicalRemoteTransferManifest {
+    |            ^^^^^^^^
+
+warning: function `hash_file_blake3` is never used
+    --> src/remote_transfer.rs:1585:4
+     |
+1585 | fn hash_file_blake3(path: &Path) -> Result<RemoteTransferDigest, String> {
+     |    ^^^^^^^^^^^^^^^^
+
+warning: unused `std::result::Result` that must be used
+   --> src/cache_substitution.rs:175:5
+    |
+175 |     sanitized.set_username("");
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+    = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+    |
+175 |     let _ = sanitized.set_username("");
+    |     +++++++
+
+warning: unused `std::result::Result` that must be used
+   --> src/cache_substitution.rs:176:5
+    |
+176 |     sanitized.set_password(None);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+    |
+176 |     let _ = sanitized.set_password(None);
+    |     +++++++
+
+warning: `mantle` (bin "mantle" test) generated 12 warnings (run `cargo fix --bin "mantle" -p mantle --tests` to apply 4 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running unittests src/main.rs (/home/brittonr/.cache/mantle-drain-targets/stateful-workspaces/debug/deps/mantle-1f1d88d72b611f9e)
+
+running 1 test
+test machine_contract_producer_tests::doctor_and_build_reports_serialize_to_registered_positive_fixtures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1461 filtered out; finished in 0.00s
+
+
+$ cargo -Zscript scripts/check-machine-schema-contracts.rs
+machine schema contract check: PASS (16 contracted, 45 classified)
+
+$ cargo -Zscript scripts/check-machine-schema-contracts.rs --self-test
+machine schema contract self-test: PASS
+
+validation-status: PASS
+
+$ rustfmt --edition 2024 --config skip_children=true --check crates/crunch-build/src/lib.rs crates/crunch-build/src/workspace.rs crates/crunch-build/src/workspace_shell.rs crates/crunch-build/src/build_request.rs crates/crunch-build/src/orchestrate.rs crates/crunch-glue/src/types.rs crates/crunch-pipeline/src/lib.rs src/remote_build.rs src/remote_farm_config.rs src/build_report.rs src/self_build.rs src/machine_contract_producer_tests.rs tests/integration_build.rs vendor/snix-build/src/buildservice/build_request.rs vendor/snix-build/src/buildservice/bwrap.rs vendor/snix-build/src/bwrap/mod.rs vendor/snix-build/src/generated/snix.build.v1.rs vendor/snix-build/src/proto/mod.rs vendor/snix-build/src/sandbox/mod.rs
+exit-status: 0
+
+$ git diff --check
+exit-status: 0
+
+$ ./scripts/check-first-party-clippy.sh
+[clippy] first-party strict gate
+running: cargo clippy --workspace --all-targets --no-deps --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- -D warnings
+warning: /tmp/mantle-stateful-workspaces/Cargo.toml: file `/tmp/mantle-stateful-workspaces/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking tokio-util v0.7.18
+    Checking crunch-attestation-core v0.1.0 (/tmp/mantle-stateful-workspaces/crates/crunch-attestation-core)
+    Checking tower v0.5.3
+    Checking tokio-rustls v0.26.4
+   Compiling nix-compat v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/nix-compat)
+    Checking tokio-stream v0.1.18
+   Compiling nix-compat-derive v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/nix-compat-derive)
+   Compiling fuse-backend-rs v0.12.0 (/tmp/mantle-stateful-workspaces/vendor/fuse-backend-rs)
+   Compiling snix-castore v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/snix-castore)
+    Checking async-compression v0.4.19
+   Compiling snix-store v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/snix-store)
+    Checking gix-worktree v0.50.0
+    Checking nickel-lang-core v0.16.1
+   Compiling snix-build v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/snix-build)
+    Checking crunch-shell-core v0.1.0 (/tmp/mantle-stateful-workspaces/crates/crunch-shell-core)
+    Checking crunch-wasm-component v0.1.0 (/tmp/mantle-stateful-workspaces/crates/crunch-wasm-component)
+    Checking normalize-line-endings v0.3.0
+    Checking difflib v0.4.0
+    Checking predicates-tree v1.0.13
+    Checking getrandom v0.3.4
+    Checking bit-vec v0.8.0
+    Checking gix-diff v0.61.0
+    Checking tower-http v0.6.8
+    Checking astral-tokio-tar v0.6.3
+    Checking fastcdc v3.2.1
+    Checking gix-dir v0.23.0
+    Checking gix-worktree-state v0.28.0
+    Checking predicates v3.1.4
+    Checking rand_core v0.9.5
+    Checking quick-error v1.2.3
+    Checking unarray v0.1.4
+    Checking crunch-kernelscript-adapter v0.1.0 (/tmp/mantle-stateful-workspaces/crates/crunch-kernelscript-adapter)
+    Checking libbz2-rs-sys v0.2.3
+    Checking crunch-delta-core v0.1.0 (/tmp/mantle-stateful-workspaces/crates/crunch-delta-core)
+    Checking crunch-release-core v0.1.0 (/tmp/mantle-stateful-workspaces/crates/crunch-release-core)
+    Checking rusty-fork v0.3.1
+    Checking crunch-bootstrap-core v0.1.0 (/tmp/mantle-stateful-workspaces/crates/crunch-bootstrap-core)
+    Checking gix-status v0.28.0
+    Checking gix-blame v0.11.0
+    Checking rand_chacha v0.9.0
+error: this `if` statement can be collapsed
+   --> crates/crunch-shell-core/src/profile.rs:286:5
+    |
+286 | /     if let Some(hook) = &profile.hook {
+287 | |         if hook.len() > MAX_PROFILE_HOOK_BYTES {
+288 | |             diagnostics.push(diagnostic(
+289 | |                 "hook-too-large",
+...   |
+294 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#collapsible_if
+    = note: `-D clippy::collapsible-if` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::collapsible_if)]`
+help: collapse nested if block
+    |
+286 ~     if let Some(hook) = &profile.hook
+287 ~         && hook.len() > MAX_PROFILE_HOOK_BYTES {
+288 |             diagnostics.push(diagnostic(
+...
+292 |             ));
+293 ~         }
+    |
+
+    Checking rand_xorshift v0.4.0
+error: could not compile `crunch-shell-core` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error[E0599]: no method named `to_hex` found for struct `GenericArray<u8, UInt<UInt<UInt<UInt<..., ...>, ...>, ...>, ...>>` in the current scope
+   --> crates/crunch-kernelscript-adapter/src/lib.rs:674:62
+    |
+674 |         blake3: Blake3Digest::parse(blake3_hasher.finalize().to_hex().to_string()).expect("BLAKE3 emits lowercase hex"),
+    |                                                              ^^^^^^
+    |
+    = note: the full name for the type has been written to '/home/brittonr/.cache/mantle-drain-targets/stateful-workspaces/debug/deps/crunch_kernelscript_adapter-6636c8d295ff223a.long-type-16590643762989642940.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+help: there is a method `to_vec` with a similar name
+    |
+674 -         blake3: Blake3Digest::parse(blake3_hasher.finalize().to_hex().to_string()).expect("BLAKE3 emits lowercase hex"),
+674 +         blake3: Blake3Digest::parse(blake3_hasher.finalize().to_vec().to_string()).expect("BLAKE3 emits lowercase hex"),
+    |
+
+error[E0599]: no method named `to_hex` found for struct `GenericArray<u8, UInt<UInt<UInt<UInt<..., ...>, ...>, ...>, ...>>` in the current scope
+   --> crates/crunch-kernelscript-adapter/src/lib.rs:674:62
+    |
+674 |         blake3: Blake3Digest::parse(blake3_hasher.finalize().to_hex().to_string()).expect("BLAKE3 emits lowercase hex"),
+    |                                                              ^^^^^^
+    |
+    = note: the full name for the type has been written to '/home/brittonr/.cache/mantle-drain-targets/stateful-workspaces/debug/deps/crunch_kernelscript_adapter-0a6fe85bec902e69.long-type-7541372675132295101.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+help: there is a method `to_vec` with a similar name
+    |
+674 -         blake3: Blake3Digest::parse(blake3_hasher.finalize().to_hex().to_string()).expect("BLAKE3 emits lowercase hex"),
+674 +         blake3: Blake3Digest::parse(blake3_hasher.finalize().to_vec().to_string()).expect("BLAKE3 emits lowercase hex"),
+    |
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `crunch-kernelscript-adapter` (lib) due to 1 previous error
+error: could not compile `crunch-shell-core` (lib test) due to 1 previous error
+error: could not compile `crunch-kernelscript-adapter` (lib test) due to 1 previous error
+exit-status: 101 (known repository-wide blocker)
+
+$ cargo clippy -p crunch-build --lib --no-deps -- -D warnings -A clippy::derivable-impls -A clippy::needless-lifetimes -A clippy::result-large-err -A clippy::large-enum-variant -A clippy::type-complexity
+warning: /tmp/mantle-stateful-workspaces/Cargo.toml: file `/tmp/mantle-stateful-workspaces/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling fuse-backend-rs v0.12.0 (/tmp/mantle-stateful-workspaces/vendor/fuse-backend-rs)
+   Compiling snix-castore v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/snix-castore)
+   Compiling nix-compat v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/nix-compat)
+   Compiling nix-compat-derive v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/nix-compat-derive)
+   Compiling snix-store v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/snix-store)
+    Checking crunch-attestation-core v0.1.0 (/tmp/mantle-stateful-workspaces/crates/crunch-attestation-core)
+   Compiling snix-build v0.1.0 (/tmp/mantle-stateful-workspaces/vendor/snix-build)
+    Checking crunch-attestation v0.1.0 (/tmp/mantle-stateful-workspaces/crates/crunch-attestation)
+warning: variant `Unimplemented` is never constructed
+   --> vendor/snix-castore/src/directoryservice/combinators.rs:181:5
+    |
+167 | pub enum Error {
+    |          ----- variant in this enum
+...
+181 |     Unimplemented,
+    |     ^^^^^^^^^^^^^
+    |
+    = note: `Error` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `snix-castore` (lib) generated 1 warning
+    Checking crunch-store v0.1.0 (/tmp/mantle-stateful-workspaces/crates/crunch-store)
+warning: unused import: `crate::layer::StoreLayer`
+  --> crates/crunch-store/src/handle.rs:61:5
+   |
+61 | use crate::layer::StoreLayer;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::metadata_cache::MetadataCacheKey`
+  --> crates/crunch-store/src/handle.rs:63:5
+   |
+63 | use crate::metadata_cache::MetadataCacheKey;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::metadata_cache::MetadataSchemaVersion`
+  --> crates/crunch-store/src/handle.rs:65:5
+   |
+65 | use crate::metadata_cache::MetadataSchemaVersion;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::metadata_cache::MetadataValidity`
+  --> crates/crunch-store/src/handle.rs:66:5
+   |
+66 | use crate::metadata_cache::MetadataValidity;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+  --> crates/crunch-store/src/publisher.rs:11:5
+   |
+11 | use std::sync::Arc;
+   |     ^^^^^^^^^^^^^^
+
+warning: value assigned to `saw_eof` is never read
+   --> crates/crunch-store/src/export.rs:150:23
+    |
+150 |     let mut saw_eof = false;
+    |                       ^^^^^ this value is reassigned later and never used
+...
+155 |             saw_eof = true;
+    |             -------------- `saw_eof` is overwritten here before the previous value is read
+    |
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `overlay_pathinfo` is never read
+   --> crates/crunch-store/src/handle.rs:394:5
+    |
+388 | pub struct StoreHandle {
+    |            ----------- field in this struct
+...
+394 |     overlay_pathinfo: Arc<dyn PathInfoService>,
+    |     ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `RecordingPublisher` is never constructed
+  --> crates/crunch-store/src/publisher.rs:48:12
+   |
+48 | pub struct RecordingPublisher {
+   |            ^^^^^^^^^^^^^^^^^^
+
+warning: associated items `new`, `fail_next`, `calls`, and `call_count` are never used
+  --> crates/crunch-store/src/publisher.rs:54:12
+   |
+53 | impl RecordingPublisher {
+   | ----------------------- associated items in this implementation
+54 |     pub fn new() -> Self {
+   |            ^^^
+...
+61 |     pub fn fail_next(&self) {
+   |            ^^^^^^^^^
+...
+65 |     pub fn calls(&self) -> Vec<String> {
+   |            ^^^^^
+...
+69 |     pub fn call_count(&self) -> usize {
+   |            ^^^^^^^^^^
+
+warning: `crunch-store` (lib) generated 9 warnings (run `cargo clippy --fix --lib -p crunch-store -- --no-deps -D warnings -A clippy::derivable-impls -A clippy::needless-lifetimes -A clippy::result-large-err -A clippy::large-enum-variant -A clippy::type-complexity` to apply 5 suggestions)
+    Checking crunch-build v0.1.0 (/tmp/mantle-stateful-workspaces/crates/crunch-build)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.63s
+exit-status: 0
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- tracey coverage --root .
+{
+  "command": "traceability coverage",
+  "dangling": [
+    "mantle.build_correctness.hermetic_handoff.fixtures.negative",
+    "mantle.build_correctness.hermetic_handoff.fixtures.positive",
+    "mantle.build_correctness.onix_release_strict_hermeticity",
+    "mantle.build_correctness.release_determinism.fixtures.negative.target_copy",
+    "mantle.build_correctness.source_root_capability",
+    "mantle.build_correctness.source_root_capability.boundary",
+    "mantle.operator_diagnostics.release_verification.fixtures.negative",
+    "mantle.operator_diagnostics.release_verification.json_contract",
+    "mantle.operator_diagnostics.release_verification.json_negative",
+    "mantle.operator_diagnostics.release_verification.render_boundary",
+    "mantle.operator_diagnostics.release_verification.render_boundary.test",
+    "mantle.operator_diagnostics.release_verification.terminal_verdict",
+    "mantle.release_provenance.cairn_evidence_handoff.bypass_protection",
+    "mantle.release_provenance.cairn_evidence_handoff.measured_inputs",
+    "mantle.release_provenance.cairn_evidence_handoff.production_wiring",
+    "mantle.release_provenance.trellis_proof_sidecars.negative",
+    "mantle.release_provenance.trellis_proof_sidecars.positive"
+  ],
+  "input_hash": "b77128b728a31b69985cc7bbb1c97badb69e049e74f9330fce2eb39b2b2aae42",
+  "missing": [
+    "mantle.release_provenance.bundle_publication.boundary",
+    "mantle.release_provenance.bundle_publication.boundary.test",
+    "mantle.release_provenance.bundle_publication.staging_validation",
+    "mantle.release_provenance.bundle_publication.validation",
+    "mantle.release_provenance.bundle_tree_copy.destination_confinement",
+    "mantle.release_provenance.bundle_tree_copy.fixtures.negative.target",
+    "mantle.release_provenance.bundle_tree_copy.fixtures.negative.type_drift",
+    "mantle.release_provenance.bundle_tree_copy.no_follow",
+    "mantle.release_provenance.bundle_tree_copy.plan",
+    "mantle.release_provenance.bundle_tree_copy.plan.invalid",
+    "mantle.release_provenance.bundle_tree_copy.symlink_policy",
+    "mantle.release_provenance.bundle_tree_copy.validation",
+    "mantle.release_provenance.cairn_evidence_handoff.contract",
+    "mantle.release_provenance.cairn_evidence_handoff.docs",
+    "mantle.release_provenance.cairn_evidence_handoff.fixtures.negative",
+    "mantle.release_provenance.cairn_evidence_handoff.fixtures.positive",
+    "mantle.release_provenance.cairn_evidence_handoff.validation",
+    "mantle.release_provenance.cap_std_boundary.conversion",
+    "mantle.release_provenance.cap_std_boundary.dependency",
+    "mantle.release_provenance.cap_std_boundary.docs",
+    "mantle.release_provenance.cap_std_boundary.root_wrappers",
+    "mantle.release_provenance.cap_std_boundary.tests.negative",
+    "mantle.release_provenance.cap_std_boundary.tests.positive",
+    "mantle.release_provenance.cap_std_boundary.validation",
+    "mantle.release_provenance.deterministic_rebuild_admission.contract",
+    "mantle.release_provenance.deterministic_rebuild_admission.fixtures.negative",
+    "mantle.release_provenance.function_address_evidence.binding",
+    "mantle.release_provenance.function_address_evidence.binding.binary_source",
+    "mantle.release_provenance.function_address_evidence.binding.digests",
+    "mantle.release_provenance.function_address_evidence.binding.stale",
+    "mantle.release_provenance.function_address_evidence.docs",
+    "mantle.release_provenance.function_address_evidence.docs.boundary",
+    "mantle.release_provenance.function_address_evidence.final_validation",
+    "mantle.release_provenance.function_address_evidence.final_validation.fixtures",
+    "mantle.release_provenance.function_address_evidence.fixtures.negative",
+    "mantle.release_provenance.function_address_evidence.fixtures.negative.required",
+    "mantle.release_provenance.function_address_evidence.fixtures.positive",
+    "mantle.release_provenance.function_address_evidence.fixtures.positive.modes",
+    "mantle.release_provenance.function_address_evidence.policy",
+    "mantle.release_provenance.function_address_evidence.policy.optional_absent",
+    "mantle.release_provenance.function_address_evidence.policy.required_missing",
+    "mantle.release_provenance.function_address_evidence.policy.required_valid",
+    "mantle.release_provenance.function_address_evidence.validation",
+    "mantle.release_provenance.function_address_evidence.validation.boundary",
+    "mantle.release_provenance.function_address_evidence.validation.opaque",
+    "mantle.release_provenance.nix_evidence_core.adapters",
+    "mantle.release_provenance.nix_evidence_core.contract",
+    "mantle.release_provenance.nix_evidence_core.docs",
+    "mantle.release_provenance.nix_evidence_core.final_validation",
+    "mantle.release_provenance.nix_evidence_core.fixtures.negative",
+    "mantle.release_provenance.nix_evidence_core.fixtures.positive",
+    "mantle.release_provenance.nix_evidence_core.validation",
+    "mantle.release_provenance.opaque_evidence_sidecar_binding.contract",
+    "mantle.release_provenance.opaque_evidence_sidecar_binding.links",
+    "mantle.release_provenance.opaque_evidence_sidecar_binding.validation",
+    "mantle.release_provenance.preserves_carriers.contract",
+    "mantle.release_provenance.preserves_carriers.docs",
+    "mantle.release_provenance.preserves_carriers.final_validation",
+    "mantle.release_provenance.preserves_carriers.fixtures.negative",
+    "mantle.release_provenance.preserves_carriers.fixtures.positive",
+    "mantle.release_provenance.preserves_carriers.validation",
+    "mantle.release_provenance.stack_profile.constants",
+    "mantle.release_provenance.stack_profile.constants.drift",
+    "mantle.release_provenance.stack_profile.constants.match",
+    "mantle.release_provenance.stack_profile.docs",
+    "mantle.release_provenance.stack_profile.docs.boundary",
+    "mantle.release_provenance.stack_profile.negative.invalid",
+    "mantle.release_provenance.stack_profile.positive",
+    "mantle.release_provenance.stack_profile.required_absent",
+    "mantle.release_provenance.stack_profile.validation",
+    "mantle.release_provenance.stack_profile.validation.fixtures",
+    "mantle.release_provenance.valence_required_policy",
+    "mantle.release_provenance.verification_decision.boundary",
+    "mantle.release_provenance.verification_decision.boundary.test",
+    "mantle.release_provenance.verification_decision.completeness",
+    "mantle.release_provenance.verification_decision.completeness.test",
+    "mantle.release_provenance.verification_decision.fixtures.negative",
+    "mantle.release_provenance.verification_decision.fixtures.positive"
+  ],
+  "policy": "mantle-default",
+  "policy_hash": "d74df84554f5c11df44bab7edd16241150bc70f545bf5b058957516beab43d9c",
+  "profile": {
+    "evidence_sources": [
+      {
+        "extensions": [
+          "rs"
+        ],
+        "root": "src/release_evidence.rs",
+        "source_kind": "rust_source"
+      },
+      {
+        "extensions": [
+          "rs"
+        ],
+        "root": "src/release_cmd.rs",
+        "source_kind": "rust_source"
+      },
+      {
+        "extensions": [
+          "rs"
+        ],
+        "root": "src/function_address_binding_cmd.rs",
+        "source_kind": "rust_source"
+      },
+      {
+        "extensions": [
+          "rs"
+        ],
+        "root": "crates/crunch-release-core/src/manifest.rs",
+        "source_kind": "rust_source"
+      },
+      {
+        "extensions": [
+          "rs"
+        ],
+        "root": "crates/crunch-release-core/src/function_address_binding.rs",
+        "source_kind": "rust_source"
+      },
+      {
+        "extensions": [
+          "rs"
+        ],
+        "root": "tests/release_cli.rs",
+        "source_kind": "rust_source"
+      },
+      {
+        "extensions": [
+          "md"
+        ],
+        "root": "README.md",
+        "source_kind": "tool_source"
+      }
+    ],
+    "id": "mantle-default",
+    "marker_verbs": [
+      "impl",
+      "verify",
+      "depends",
+      "related"
+    ],
+    "requirement_sources": [
+      {
+        "extensions": [
+          "md"
+        ],
+        "root": "cairn/specs/release-provenance/spec.md",
+        "source_kind": "accepted_specs"
+      }
+    ]
+  },
+  "profile_id": "mantle-default",
+  "receipt_hash": "60ea4bfc82de11e4f48734c6fdd68e6fd22119df25c65649dabbf8bcd8358f14",
+  "referenced": 56,
+  "requirements": 134,
+  "root": ".",
+  "source_summary": {
+    "evidence_files": 7,
+    "evidence_manifest_hash": "bf3b70e6c247790363a1dbbdb7f2a6b716c01a657351c3d6bae5fa188dc669fd",
+    "requirement_files": 1,
+    "requirement_manifest_hash": "39fa57911a0e11f76955443f50e365cf98e593c34c4fe63b60a6ab518207f695"
+  },
+  "valid": false,
+  "verdict": "fail"
+}
+error: tracey coverage failed
+exit-status: 1 (known repository-wide blocker)
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 8,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 35,
+  "valid": true
+}
+exit-status: 0
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate proposal isolate-stateful-tool-workspaces --root .
+{
+  "change": "isolate-stateful-tool-workspaces",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "0505ed1a6fe1bf000e81d1a8d64e117bf2e1c5a398ba62527f26fdba66885827",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "d74df84554f5c11df44bab7edd16241150bc70f545bf5b058957516beab43d9c",
+  "receipt_hash": "3c35a054f2627bfd40de227a69d4e5d3e1bac2ee36631532b12413722bc8a650",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+exit-status: 0
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design isolate-stateful-tool-workspaces --root .
+{
+  "change": "isolate-stateful-tool-workspaces",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "0ea36dd3574bcc08714af40e03da8dd8dd038cad67f42656423b31d773ef57c8",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "d74df84554f5c11df44bab7edd16241150bc70f545bf5b058957516beab43d9c",
+  "receipt_hash": "e896cc19fa9f932230355a826e1487b0f05b02d029f55f80384a86a3fc8af76a",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+exit-status: 0
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks isolate-stateful-tool-workspaces --root .
+{
+  "change": "isolate-stateful-tool-workspaces",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "f4b181889d27287c7be3c02f6c1e4858e83c3b4badfd21e7b47b7b81bf8db08d",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "d74df84554f5c11df44bab7edd16241150bc70f545bf5b058957516beab43d9c",
+  "receipt_hash": "bd60a2eaab3211f2c88646c2959cfc7c7c5e6627b680d99040f09c73140fdd7b",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+exit-status: 0
+
+final-gate-status: PASS except recorded repository-wide Clippy and Tracey blockers
+
+$ cargo test -p mantle --bin mantle machine_contract_producer_tests::doctor_and_build_reports_serialize_to_registered_positive_fixtures -- --nocapture
+warning: /tmp/mantle-stateful-workspaces/Cargo.toml: file `/tmp/mantle-stateful-workspaces/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: variant `Unimplemented` is never constructed
+   --> vendor/snix-castore/src/directoryservice/combinators.rs:181:5
+    |
+167 | pub enum Error {
+    |          ----- variant in this enum
+...
+181 |     Unimplemented,
+    |     ^^^^^^^^^^^^^
+    |
+    = note: `Error` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `snix-castore` (lib) generated 1 warning
+warning: unused import: `crate::layer::StoreLayer`
+  --> crates/crunch-store/src/handle.rs:61:5
+   |
+61 | use crate::layer::StoreLayer;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::metadata_cache::MetadataCacheKey`
+  --> crates/crunch-store/src/handle.rs:63:5
+   |
+63 | use crate::metadata_cache::MetadataCacheKey;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::metadata_cache::MetadataSchemaVersion`
+  --> crates/crunch-store/src/handle.rs:65:5
+   |
+65 | use crate::metadata_cache::MetadataSchemaVersion;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::metadata_cache::MetadataValidity`
+  --> crates/crunch-store/src/handle.rs:66:5
+   |
+66 | use crate::metadata_cache::MetadataValidity;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+  --> crates/crunch-store/src/publisher.rs:11:5
+   |
+11 | use std::sync::Arc;
+   |     ^^^^^^^^^^^^^^
+
+warning: value assigned to `saw_eof` is never read
+   --> crates/crunch-store/src/export.rs:150:23
+    |
+150 |     let mut saw_eof = false;
+    |                       ^^^^^ this value is reassigned later and never used
+...
+155 |             saw_eof = true;
+    |             -------------- `saw_eof` is overwritten here before the previous value is read
+    |
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `overlay_pathinfo` is never read
+   --> crates/crunch-store/src/handle.rs:394:5
+    |
+388 | pub struct StoreHandle {
+    |            ----------- field in this struct
+...
+394 |     overlay_pathinfo: Arc<dyn PathInfoService>,
+    |     ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: struct `RecordingPublisher` is never constructed
+  --> crates/crunch-store/src/publisher.rs:48:12
+   |
+48 | pub struct RecordingPublisher {
+   |            ^^^^^^^^^^^^^^^^^^
+
+warning: associated items `new`, `fail_next`, `calls`, and `call_count` are never used
+  --> crates/crunch-store/src/publisher.rs:54:12
+   |
+53 | impl RecordingPublisher {
+   | ----------------------- associated items in this implementation
+54 |     pub fn new() -> Self {
+   |            ^^^
+...
+61 |     pub fn fail_next(&self) {
+   |            ^^^^^^^^^
+...
+65 |     pub fn calls(&self) -> Vec<String> {
+   |            ^^^^^
+...
+69 |     pub fn call_count(&self) -> usize {
+   |            ^^^^^^^^^^
+
+warning: `crunch-store` (lib) generated 9 warnings (run `cargo fix --lib -p crunch-store` to apply 5 suggestions)
+warning: unused import: `crunch_store::metadata_cache::MAX_METADATA_CACHE_ENTRIES`
+   --> src/cache_substitution.rs:250:9
+    |
+250 | pub use crunch_store::metadata_cache::MAX_METADATA_CACHE_ENTRIES;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crunch_store::metadata_cache::MetadataCacheEntry`
+   --> src/cache_substitution.rs:251:9
+    |
+251 | pub use crunch_store::metadata_cache::MetadataCacheEntry;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+    --> src/remote_build.rs:9859:13
+     |
+9859 |         let mut receiver =
+     |             ----^^^^^^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+     --> src/remote_build.rs:10287:13
+      |
+10287 |         let mut ticket = fixture_ticket();
+      |             ----^^^^^^
+      |             |
+      |             help: remove this `mut`
+
+warning: variants `MalformedUrl`, `StorePrefixMismatch`, and `FixedOutputRemoteHit` are never constructed
+  --> src/cache_substitution.rs:53:5
+   |
+45 | pub enum CacheAdmissionReason {
+   |          -------------------- variants in this enum
+...
+53 |     MalformedUrl,
+   |     ^^^^^^^^^^^^
+...
+59 |     StorePrefixMismatch,
+   |     ^^^^^^^^^^^^^^^^^^^
+60 |     /// Fixed-output remote hit not admitted (requires local build).
+61 |     FixedOutputRemoteHit,
+   |     ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `CacheAdmissionReason` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: variants `WitnessRebuild` and `Bootstrap` are never constructed
+  --> src/release_capability.rs:28:5
+   |
+24 | pub(crate) enum ReleaseRootKind {
+   |                 --------------- variants in this enum
+...
+28 |     WitnessRebuild,
+   |     ^^^^^^^^^^^^^^
+29 |     Bootstrap,
+   |     ^^^^^^^^^
+   |
+   = note: `ReleaseRootKind` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `absolutize_existing_path` is never used
+   --> src/release_reproducibility.rs:915:4
+    |
+915 | fn absolutize_existing_path(path: &Path, label: &str) -> Result<PathBuf, RunError> {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variant `Bootstrap` is never constructed
+  --> src/remote_transfer.rs:68:5
+   |
+66 | pub enum RemoteInlinePayloadCapability {
+   |          ----------------------------- variant in this enum
+67 |     Fixture,
+68 |     Bootstrap,
+   |     ^^^^^^^^^
+   |
+   = note: `RemoteInlinePayloadCapability` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: method `manifest` is never used
+   --> src/remote_transfer.rs:777:12
+    |
+776 | impl RemoteTransferReceiveSession {
+    | --------------------------------- method in this implementation
+777 |     pub fn manifest(&self) -> &CanonicalRemoteTransferManifest {
+    |            ^^^^^^^^
+
+warning: function `hash_file_blake3` is never used
+    --> src/remote_transfer.rs:1585:4
+     |
+1585 | fn hash_file_blake3(path: &Path) -> Result<RemoteTransferDigest, String> {
+     |    ^^^^^^^^^^^^^^^^
+
+warning: unused `std::result::Result` that must be used
+   --> src/cache_substitution.rs:175:5
+    |
+175 |     sanitized.set_username("");
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+    = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+help: use `let _ = ...` to ignore the resulting value
+    |
+175 |     let _ = sanitized.set_username("");
+    |     +++++++
+
+warning: unused `std::result::Result` that must be used
+   --> src/cache_substitution.rs:176:5
+    |
+176 |     sanitized.set_password(None);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: this `Result` may be an `Err` variant, which should be handled
+help: use `let _ = ...` to ignore the resulting value
+    |
+176 |     let _ = sanitized.set_password(None);
+    |     +++++++
+
+warning: `mantle` (bin "mantle" test) generated 12 warnings (run `cargo fix --bin "mantle" -p mantle --tests` to apply 4 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.25s
+     Running unittests src/main.rs (/home/brittonr/.cache/mantle-drain-targets/stateful-workspaces/debug/deps/mantle-1f1d88d72b611f9e)
+
+running 1 test
+test machine_contract_producer_tests::doctor_and_build_reports_serialize_to_registered_positive_fixtures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1461 filtered out; finished in 0.00s
+
+exit-status: 0
+
+$ cargo -Zscript scripts/check-machine-schema-contracts.rs
+machine schema contract check: PASS (16 contracted, 45 classified)
+exit-status: 0
+
+$ git diff --check
+exit-status: 0
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .
+{
+  "change_issues": [],
+  "changes": 8,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "spec_issues": [],
+  "specs_validated": 35,
+  "valid": true
+}
+exit-status: 0
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate proposal isolate-stateful-tool-workspaces --root .
+{
+  "change": "isolate-stateful-tool-workspaces",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "0505ed1a6fe1bf000e81d1a8d64e117bf2e1c5a398ba62527f26fdba66885827",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "d74df84554f5c11df44bab7edd16241150bc70f545bf5b058957516beab43d9c",
+  "receipt_hash": "3c35a054f2627bfd40de227a69d4e5d3e1bac2ee36631532b12413722bc8a650",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+exit-status: 0
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design isolate-stateful-tool-workspaces --root .
+{
+  "change": "isolate-stateful-tool-workspaces",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "0ea36dd3574bcc08714af40e03da8dd8dd038cad67f42656423b31d773ef57c8",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "d74df84554f5c11df44bab7edd16241150bc70f545bf5b058957516beab43d9c",
+  "receipt_hash": "e896cc19fa9f932230355a826e1487b0f05b02d029f55f80384a86a3fc8af76a",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+exit-status: 0
+
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks isolate-stateful-tool-workspaces --root .
+{
+  "change": "isolate-stateful-tool-workspaces",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "f4b181889d27287c7be3c02f6c1e4858e83c3b4badfd21e7b47b7b81bf8db08d",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "d74df84554f5c11df44bab7edd16241150bc70f545bf5b058957516beab43d9c",
+  "receipt_hash": "bd60a2eaab3211f2c88646c2959cfc7c7c5e6627b680d99040f09c73140fdd7b",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+exit-status: 0
+
+post-review-final-status: PASS
+
+## 2026-07-14 closeout evidence
+
+Historical broad-rail blockers are resolved. The checked-in first-party Clippy
+rail passed with `CARGO_INCREMENTAL=0`; focused workspace, sandbox, store,
+remote, report, scheduling-policy, and Nickel positive/negative suites passed;
+and both serial root binary unit suites reported `1487 passed; 0 failed`.
+Machine-schema generation, adversarial self-test, and freshness validation
+passed with 16 contracted and 45 classified surfaces. Focused formatting and
+`git diff --check` passed.
+
+Cairn validation reported `valid=true`, 12 active changes, 39 specs, and no
+issues. Tracey `mantle-default` passed 134/134 with receipt
+`3c118cff47cda8a584d85d371958b4627fe6b5206c0b51170676f5b98195d9b1`.
+`remote-build-drain` passed 12/12 with no missing or dangling refs and receipt
+`0b39082b9305fcd79b9fb25a8a42b2bda5c97e15d35f001dda2edf0455fa5686`.
+Final post-checkoff gate receipts: proposal
+`715a8da65336cbf249241ea732e592b90e3de5d6ce5d7b9431141a925c282c9c`,
+design `362aa89037951a4b5baea991f69eb456eb44e31586db0f64159a8f7aea8d70a1`,
+tasks `42f18e0302f522477524f6ac61f4b19e8f0f9a6968dbabfa0121eecafebe3585`.
+
+The broad all-target probe separately encountered three unrelated
+bwrap-backed `attest_cli` build failures with empty stderr. They do not replace
+the focused workspace verification above. Sync and archive are not claimed by
+this pre-archive transcript.

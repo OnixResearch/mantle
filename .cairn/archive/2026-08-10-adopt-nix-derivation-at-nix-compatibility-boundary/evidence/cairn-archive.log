@@ -1,0 +1,281 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: adopt-nix-derivation-at-nix-compatibility-boundary",
+      "kind": "archive_change",
+      "path": "/home/brittonr/git/OnixResearch/.worktrees/mantle-adopt-nix-derivation-at-nix-compatibility-boundary/cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary"
+    }
+  ],
+  "blocked": false,
+  "change": "adopt-nix-derivation-at-nix-compatibility-boundary",
+  "dry_run": false,
+  "input_hash": "f2f8c800d4da3896b96f012fb19aabfe4595b746bb6a5ea8c35ce1e88d265425",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "edc44149f181599502eadeb4c2c6b138e7866664982bfbe796952c764803bc77",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/design.md"
+        },
+        {
+          "content_hash": "1f142adfc7963d4d5a58a672a3fa1ff0524ac787bdeaa53909e6ed3dfd76a438",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/adoption-receipt.ncl"
+        },
+        {
+          "content_hash": "39781f5e00cf0892a84802fbb0693da81ab05966ab66c51b02a4bd8298dcb4e5",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/artifact-blake3.log"
+        },
+        {
+          "content_hash": "bdd7027ded7eb766bd55f8a7b8fa1df8ad0f6f336b54cc73ae64b26f90a65093",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/baseline-tests.log"
+        },
+        {
+          "content_hash": "4bab3731579263288d45bc21b5d47d24b862ee30aeacac2fb87ddf1c9fdf79ec",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/cairn-active-validation.log"
+        },
+        {
+          "content_hash": "b2cad269843d1840f13e5f23b01290f6bf9dbb0fc88528699c5cfca83d1d1782",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/cairn-post-sync-validation.log"
+        },
+        {
+          "content_hash": "03103baa2317fdb8df69428e0b007dd1cab3fedc1346d9e27e538e256ab806d1",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/cairn-sync.log"
+        },
+        {
+          "content_hash": "606c1f5b600d90abd7d703f9446047eef45bb9ab3713350ed891acafa0d883cd",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/final-focused-validation.log"
+        },
+        {
+          "content_hash": "abdc2198cc6d766d8337eee0685a84bbf539455cea432ccf5d618e1e87385cd9",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/fmt-all.log"
+        },
+        {
+          "content_hash": "b99fdfcbeea4bd93f8ed4d794adf5300070788d899c5c361fd192669462bd92e",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/focused-clippy.log"
+        },
+        {
+          "content_hash": "ab4eee4f2b4064d8deb27414efc63c78b7b3d44b44d05d36b6697acd2d20c50b",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/implementation-validation.md"
+        },
+        {
+          "content_hash": "657b2a75210943dbda814f58dbb6617be39ee6c62d66cc44470fdee4619eba76",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/nix-package-check.log"
+        },
+        {
+          "content_hash": "cef2968a8d7c55c37ff7d4917f100376cc83e83a2ef7e420971a5d8e21cf3113",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/portfolio-search.md"
+        },
+        {
+          "content_hash": "82f1d3a934f182e061d4566538c5f3ca769ce2c0b93afcd52f6437ad04ec746a",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/scaffold-validation.log"
+        },
+        {
+          "content_hash": "b541ec5df6124315fa8d8897036148fb1049a65b285e8fe3a7df0d32afcb5689",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/source-admission-audit.md"
+        },
+        {
+          "content_hash": "4b8157e8540775143807c1c0eec8b6063d39c5dc21cc206f2553f4722e79b95d",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/source-admission-validation.log"
+        },
+        {
+          "content_hash": "23a4758275e9ee2fe5789501972f666f82d2eb80ef13bc7f3ea7924bf47d4ced",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/vendor-offline-validation.log"
+        },
+        {
+          "content_hash": "405a446f5accf69c23e692dcf132f77290c08429a80399db2b674588091fbe55",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/workspace-clippy.log"
+        },
+        {
+          "content_hash": "6211a3539bc0c8423dd81a509e0114a944517771c0afc09b3d0e4e33e9e53bd0",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/workspace-main-baseline-reproduction.log"
+        },
+        {
+          "content_hash": "1debe073597b34494ceed10179800f06a25cd9fb09282adb10c0cc4d465dc1c6",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/evidence/workspace-tests.log"
+        },
+        {
+          "content_hash": "ec712b2f617f7cc280341e11da20c74858bef93df566e932eba576b558f2685d",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/proposal.md"
+        },
+        {
+          "content_hash": "58677096781250fa5533729a9b20a012545c8eff7f2c9cd8d009c545303cee1f",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/specs/foreign-derivation-import/spec.md"
+        },
+        {
+          "content_hash": "16a189fef487805750b2e1c063059699d33deabc9c253c7dc15553a1619136e7",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/specs/nix-producer-adapter/spec.md"
+        },
+        {
+          "content_hash": "273af8dd19c0f3f23ef6dba6dcd5aba57fe3d9d85191b89d388c6f64293c5488",
+          "exists": true,
+          "path": "./cairn/archive/1970-01-01-adopt-nix-derivation-at-nix-compatibility-boundary/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary"
+        }
+      ],
+      "manifest_hash": "71c872f46e8266135b70677c87887dde2ece65417de2d2ffbd08b27f88360506"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "edc44149f181599502eadeb4c2c6b138e7866664982bfbe796952c764803bc77",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/design.md"
+        },
+        {
+          "content_hash": "1f142adfc7963d4d5a58a672a3fa1ff0524ac787bdeaa53909e6ed3dfd76a438",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/adoption-receipt.ncl"
+        },
+        {
+          "content_hash": "39781f5e00cf0892a84802fbb0693da81ab05966ab66c51b02a4bd8298dcb4e5",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/artifact-blake3.log"
+        },
+        {
+          "content_hash": "bdd7027ded7eb766bd55f8a7b8fa1df8ad0f6f336b54cc73ae64b26f90a65093",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/baseline-tests.log"
+        },
+        {
+          "content_hash": "4bab3731579263288d45bc21b5d47d24b862ee30aeacac2fb87ddf1c9fdf79ec",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/cairn-active-validation.log"
+        },
+        {
+          "content_hash": "b2cad269843d1840f13e5f23b01290f6bf9dbb0fc88528699c5cfca83d1d1782",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/cairn-post-sync-validation.log"
+        },
+        {
+          "content_hash": "03103baa2317fdb8df69428e0b007dd1cab3fedc1346d9e27e538e256ab806d1",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/cairn-sync.log"
+        },
+        {
+          "content_hash": "606c1f5b600d90abd7d703f9446047eef45bb9ab3713350ed891acafa0d883cd",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/final-focused-validation.log"
+        },
+        {
+          "content_hash": "abdc2198cc6d766d8337eee0685a84bbf539455cea432ccf5d618e1e87385cd9",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/fmt-all.log"
+        },
+        {
+          "content_hash": "b99fdfcbeea4bd93f8ed4d794adf5300070788d899c5c361fd192669462bd92e",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/focused-clippy.log"
+        },
+        {
+          "content_hash": "ab4eee4f2b4064d8deb27414efc63c78b7b3d44b44d05d36b6697acd2d20c50b",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/implementation-validation.md"
+        },
+        {
+          "content_hash": "657b2a75210943dbda814f58dbb6617be39ee6c62d66cc44470fdee4619eba76",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/nix-package-check.log"
+        },
+        {
+          "content_hash": "cef2968a8d7c55c37ff7d4917f100376cc83e83a2ef7e420971a5d8e21cf3113",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/portfolio-search.md"
+        },
+        {
+          "content_hash": "82f1d3a934f182e061d4566538c5f3ca769ce2c0b93afcd52f6437ad04ec746a",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/scaffold-validation.log"
+        },
+        {
+          "content_hash": "b541ec5df6124315fa8d8897036148fb1049a65b285e8fe3a7df0d32afcb5689",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/source-admission-audit.md"
+        },
+        {
+          "content_hash": "4b8157e8540775143807c1c0eec8b6063d39c5dc21cc206f2553f4722e79b95d",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/source-admission-validation.log"
+        },
+        {
+          "content_hash": "23a4758275e9ee2fe5789501972f666f82d2eb80ef13bc7f3ea7924bf47d4ced",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/vendor-offline-validation.log"
+        },
+        {
+          "content_hash": "405a446f5accf69c23e692dcf132f77290c08429a80399db2b674588091fbe55",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/workspace-clippy.log"
+        },
+        {
+          "content_hash": "6211a3539bc0c8423dd81a509e0114a944517771c0afc09b3d0e4e33e9e53bd0",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/workspace-main-baseline-reproduction.log"
+        },
+        {
+          "content_hash": "1debe073597b34494ceed10179800f06a25cd9fb09282adb10c0cc4d465dc1c6",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/evidence/workspace-tests.log"
+        },
+        {
+          "content_hash": "ec712b2f617f7cc280341e11da20c74858bef93df566e932eba576b558f2685d",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/proposal.md"
+        },
+        {
+          "content_hash": "58677096781250fa5533729a9b20a012545c8eff7f2c9cd8d009c545303cee1f",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/specs/foreign-derivation-import/spec.md"
+        },
+        {
+          "content_hash": "16a189fef487805750b2e1c063059699d33deabc9c253c7dc15553a1619136e7",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/specs/nix-producer-adapter/spec.md"
+        },
+        {
+          "content_hash": "273af8dd19c0f3f23ef6dba6dcd5aba57fe3d9d85191b89d388c6f64293c5488",
+          "exists": true,
+          "path": "./cairn/changes/adopt-nix-derivation-at-nix-compatibility-boundary/tasks.md"
+        }
+      ],
+      "manifest_hash": "be78e4a32b3f690b64f1434bb07320c3fb47259838b30ebcd7d5dc457378a590"
+    },
+    "kind": "archive",
+    "manifest_hash": "877a3d3b3b168b50b808ca119b1f05a6ff9f0964685e43d2232584fd5a14396e"
+  },
+  "plan_hash": "65374ddaa4886625904ba3a72922d66dbcd9c9b0fec2e19bc33204d1f7015a71",
+  "policy": "mantle-default",
+  "policy_hash": "810cfa56991a9d1f10038ca79bf9a7a0996a2ee756c4e62324f1cd3f8628c848",
+  "reasons": [],
+  "receipt_hash": "b819ffc442b4e97104ff0cf95adbf4067ae49eceff83403dd6d521b51d8f0c85"
+}
+
+manual_archive_rename=1970-01-01-to-2026-08-10

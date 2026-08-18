@@ -1,0 +1,108 @@
+# Design: P2P remote builders
+
+## Architecture
+
+Remote building is a build-tool feature, not a frontend feature. The client evaluates Nickel or accepts already-lowered build inputs locally, then sends a concrete remote-build request that the builder can validate without understanding frontend module semantics. The builder runs Mantle's normal build executor against admitted inputs and returns output metadata and transfer capability data.
+
+Tribuchet's hub/worker shape should become an optional Mantle coordinator mode, not a Nix compatibility layer. In direct P2P mode the client can speak to one builder. In coordinator mode, clients submit concrete requests to a local or shared coordinator while workers initiate long-lived sessions, making NATed builders usable without inbound SSH. The coordinator is a scheduler and log fanout point, not an output-trust root: workers still sign outputs, and clients still verify PathInfo, artifact attestations, store prefix, and requested build identity before import.
+
+Worker registration carries endpoint identity, protocol version, systems, feature labels, sandbox/network modes, concurrency, output signing-key identities, and resumable job summaries. The coordinator derives a normalized build key from concrete build identity, requested outputs, hermeticity mode, input manifest digests, capability requirements, and store prefix; per-attempt temp paths, log cursors, and transport session ids stay out of that key. Identical keys attach to one in-flight job and receive the same bounded log replay and final result. A different request that claims the same live output lease or transfer id is rejected rather than coalesced.
+
+Keep the functional core pure: request validation, ticket policy checks, protocol state transitions, worker-registration admission, capability matching, normalized request-key derivation, dedupe decisions, input-missing set calculation, output trust decisions, failure classification, session-lease planning, log retention planning, and status redaction should be deterministic functions over in-memory data. The imperative shell owns transport endpoints, filesystem/state reads, clocks, store locks, actual blob transfer, process execution, and stdout/stderr.
+
+Client-facing code should cross one remote boundary. Store-input negotiation, build execution, logs, output transfer, and status are messages on the same `RemoteBuilderSession`; they should not grow separate remote providers per domain.
+
+## Protocol shape
+
+Use a versioned ALPN such as `mantle-remote-build/1`. The control stream should be a small explicit state machine:
+
+1. `Hello { version, endpoint_id, capabilities }`
+2. `AuthTicket` or `AuthTrustedClient`
+3. `AuthOk { builder_signing_keys, accepted_capabilities }`
+4. `BuildRequest { request_id, action_or_derivation_graph, requested_outputs, hermeticity_mode, output_mode }`
+5. `InputManifest` chunks from client
+6. `MissingInputs` chunks from builder
+7. `InputUploadReady` and bounded data streams for missing CAS objects/source inputs
+8. `BuildQueued`, `BuildStarted`, `BuildLog`, `BuildFinished`
+9. `OutputClosure`, `OutputTransferReady`, `OutputTransferDone`, `Done` or `Error`
+
+Every variable-length list must have explicit chunk, item, and byte limits. Version mismatch, endpoint identity mismatch, unexpected message order, unsupported capabilities, and oversized messages fail closed.
+
+Coordinator mode uses the same framed protocol core with additional worker-side messages such as `WorkerRegister`, `WorkerHeartbeat`, `WorkerResumeSummary`, `JobOffer`, `JobAccepted`, `JobLogCursor`, and `JobResultAvailable`. These messages must not bypass ordinary `BuildRequest`, input-sync, executor, output-trust, or status-redaction checks. Capability matching is data-driven over Mantle capability labels, not kernel-name shortcuts or Nix daemon state.
+
+`ConcreteBuildRequest` now carries bounded executable payload identity: either an action spec (`action_id`, serialized concrete action JSON) or a derivation spec (`drv_path`, serialized derivation JSON), plus explicit expected output names and optional logical paths. Input-addressed outputs carry known logical paths; content-addressed outputs leave the path absent until execution returns a signed final PathInfo. Raw frontend/Nickel evaluation remains rejected at the remote boundary. The current executor-boundary core parses action payloads as `mantle-remote-action-v1`, converts derivation payloads through `crunch_glue::convert`, checks declared output identities, and emits an internal command/env executable plan. Builder response planning now crosses a `RemoteBuildExecutor` seam, validates the returned execution outcome against that plan, frames per-output PathInfo-signing-key/artifact-digest metadata for client admission, frames bounded NAR payload artifacts for local-build outputs, and can run derivation-backed plans through a local Mantle `StoreHandle` executor on Linux. The implemented input path admits non-empty derivation input refs when the upload manifest matches the request, serializes nested derivation payloads for graph reconstruction, and carries bounded source-input NAR artifacts that the local-build executor ingests and exports before dispatch; chunked arbitrary CAS/source upload remains later work.
+
+## Frame and first-binding decision
+
+The first concrete frame format is `u32be-length-prefixed-json`: a four-byte big-endian payload length followed by one JSON `RemoteFrame` payload. The decoder rejects incomplete headers, payload lengths above `MAX_REMOTE_FRAME_BYTES`, JSON errors, and trailing or missing bytes. This makes stdio pollution deterministic: ordinary human stdout starts with bytes that cannot satisfy the frame contract and fails before queue admission.
+
+Preserves is a plausible later codec because it has a syntax-neutral data model, Rust support, schema tooling, and canonical binary syntax. Do not switch this change to Preserves while the request/executor semantics are still moving: the current validation and CLI fixture depend on readable framed JSON evidence. Revisit Preserves when the protocol fields stabilize and the work is mostly codec/schema generation rather than behavioral semantics.
+
+The first implementation binding is in-process loopback over the same `RemoteFrame` state machine. Stdio and SSH-stdio use the same length-prefixed frame contract when the shell grows process spawning. Production P2P remains a later binding and must not add a second protocol core.
+
+The stdio binding shell validates child output with the same frame decoder: stdout is decoded only as a sequence of length-prefixed frames, stderr is retained as bounded diagnostics, and child exit failure or unframed stdout is classified before queue admission. This keeps human logs from becoming control data while preserving stderr for operator debugging.
+
+A deterministic `serve_stdio_remote_once` seam now exercises the same exchange over generic `Read`/`Write`: read bounded client frame stream, validate Hello/auth/build/input/upload order, plan missing inputs, redeem the ticket only after valid upload, run the executor seam, and write framed builder responses. `mantle remote serve --binding stdio-once` exposes this as an explicit operator/test fixture that reads one framed stdin exchange, persists ticket redemption, and writes only framed responses to stdout. The default `remote serve` remains metadata-only; a production daemon loop and real sandbox executor adapter are still separate work.
+
+## Transport bindings and stdio discipline
+
+The remote-build state machine is independent of its byte transport. A `RemoteLink` binding can be in-process loopback, child stdio, SSH-stdio, or a NAT-friendly P2P stream such as Iroh. Each binding presents authenticated ordered frames to the same protocol core; transport-specific setup, keepalive, process spawning, and endpoint discovery stay in the imperative shell.
+
+Stdio mode is deliberately strict. Stdout is reserved for framed remote-build protocol bytes. Logs, progress diagnostics, tracing, and human-readable errors must go to stderr or through an explicit framed `BuildLog` message. Any unframed stdout byte is a protocol error and must fail the session before queue admission or output import. Client-side stdio exchange validation now turns a successful child stdout frame stream into an output-admission report and classifies untrusted remote output keys as `output-import` failures, not transport failures. The integration fixture starts the real `mantle remote serve --binding stdio-once` binary, sends framed stdin, validates framed stdout, and checks ticket redemption in state. Temp-store smoke coverage now exercises the default self-spawn `local-build` executor for both content-addressed outputs and nested derivation input refs.
+
+The initial handshake must be cheap. `Hello`, authorization, and capability reporting should complete before expensive store scans, process-table-like host probes, missing-input walks, or build scheduling. Remote platform and capability facts come from Mantle's own capability message and builder configuration, not from a kernel-name shortcut such as `uname`.
+
+## Access model
+
+The server supports two access paths:
+
+- Trusted clients configured by endpoint id and policy.
+- Bearer tickets that embed the builder endpoint address plus a generated secret.
+
+Ticket state lives on the builder and includes display name, creation time, expiry time, uses remaining, maximum build time, maximum upload bytes, optional bound client endpoint id, and revoked state. Operators can create, inspect, list, reveal, and revoke tickets. List and status views must never print bearer secrets; reveal is the explicit secret-disclosure command.
+
+The server may check a ticket during auth, but it should redeem uses only after the build request has passed shape validation and the job has entered the queue. That prevents malformed requests from consuming one-use tickets.
+
+## Output trust model
+
+Builder access and output import trust are separate. A ticket only authorizes CPU, disk, and upload quota on the builder. The client must still trust the builder signing key, release/attestation policy, or configured remote-output authority before importing PathInfo or artifact attestations. If trust is missing, the client can fail before dispatch or after auth preflight, but it must not accept remote outputs simply because auth succeeded.
+
+Remote output import should reuse Mantle's existing signed PathInfo, artifact attestation, and substitution report surfaces. The builder signs output PathInfo and attaches artifact/closure attestations. The client verifies signatures, store prefix, expected output identity, and action/derivation match before accepting the result.
+
+The current bounded admission core validates framed builder results before any import side effect: request id and store prefix must match the original concrete request, the output digest must be canonical lowercase BLAKE3 hex, the transfer report must be self-consistent, the transfer key must match the build result key, known input-addressed output paths must match exactly, content-addressed output paths must stay under the configured store prefix, and the builder key must be trusted by the client. Serialized signed PathInfo artifacts and bounded NAR payload artifacts can now be durably imported with artifact attestations and substitution reports, with NAR bytes ingested into local castore before output export; bounded source-input NAR artifacts can be ingested and exported in the builder store before dispatch. Chunked arbitrary CAS/source input transfer, chunked large-output transfer, and production delta/full P2P transport remain separate work.
+
+## Input synchronization
+
+The client sends an input manifest containing concrete derivations/action specs, PathInfo refs, source-input refs, CAS object refs, and declared closure metadata. The builder computes the missing set against its local state, replies with only missing refs, and accepts bounded upload streams for those refs. Uploads must verify content digests and PathInfo signatures before the build sandbox starts.
+
+This is a Mantle-native replacement for drv-thru's `nix-store --export` path. It must not assume `/nix/store` and must respect the configured logical store prefix.
+
+## Output transfer
+
+After a successful build, the builder computes the requested output closure and advertises transfer capabilities. The client should prefer delta transfer when both sides support compatible protocol versions and candidate manifests. It falls back to full object/NAR/castore transfer when delta is unavailable or fails. The build report records mode, transferred bytes, reused bytes, fallback reason when present, builder identity, and verified signing key identity.
+
+Do not copy Tribuchet's identical-scratch-path contract into Mantle. Remote workers may use different physical scratch paths, logical store prefixes, or content-addressed provisional paths while executing. Output admission is based on signed PathInfo, artifact attestations, CAS object digests, requested output identity, and configured logical store prefix; a raw path populated on a remote host is never sufficient.
+
+## Status and limits
+
+The server persists a redacted status snapshot with endpoint id, configured concurrency, queued jobs, active jobs, recent jobs, phases, durations, and short errors. Status must redact bearer ticket secrets, uploaded path contents, environment values, and any untrusted log payload that could be interpreted as structured control data.
+
+Live logs are data-plane messages with bounded replay. The coordinator or direct builder records log chunks behind explicit per-job byte limits, silent-time limits, and cursor semantics. Reconnected clients can request replay from a cursor, but slow subscribers are dropped or truncated according to policy instead of causing unbounded buffering.
+
+Concurrency, maximum build time, maximum upload bytes, path/object list limits, and parallel transfer limits are enforced by the server. The client receives deterministic diagnostics when a limit is exceeded.
+
+## Session lifecycle and failure taxonomy
+
+Each remote spawn or connection attempt has a stable session identity that survives client proxy/object recreation. Reconnect logic compares this stable identity, not a freshly materialized client object, so a dead transport cannot trigger an event-loop-speed reconnect spin.
+
+Coordinator and worker reloads should be restart-adoptable when the transport binding supports it. Workers re-register resumable running or finished job keys, retained log cursors, and result availability; clients reconnect and resubmit the same normalized build key; the coordinator either reattaches to the worker-owned job/result or reports a phase-classified loss instead of launching an accidental duplicate.
+
+Failures are classified by phase before reporting or retry. Transport and network failures are retryable according to client policy. Authentication, ticket, builder configuration, capability, and output-trust failures are terminal until operator action changes the inputs. Build failures remain build outcomes, not transport failures. Every user-requested reconnect or build dispatch must surface the real error instead of resolving success from stale state.
+
+Live remote-build artifacts need explicit leases or roots scoped to the active session or queued job. Helper binaries, uploaded inputs, produced outputs, and temporary transfer state must not be collected while they can still be referenced, and they should become collectible when the session/job lease is replaced or released.
+
+## Validation strategy
+
+- Pure core tests for protocol state transitions, ticket validation, output-trust selection, input-missing calculation, transport-failure classification, session-lease planning, list limit checks, and status redaction.
+- Positive integration test with a local in-process or stdio/loopback fixture: ticket auth, one missing input upload, remote build success, signed output import, and build report substitution details. A later Iroh fixture should reuse the same protocol core rather than a second remote-build implementation.
+- Negative tests for expired/revoked/bound tickets, malformed requests not consuming one-use tickets, stdout protocol pollution in stdio mode, untrusted builder signing key, version mismatch, oversized lists, digest mismatch on uploaded input, output signature mismatch, reconnect spin guards, and delta failure falling back to full transfer without claiming a delta hit.

@@ -1,0 +1,81 @@
+# Implementation validation — 2026-07-27
+
+## Question
+
+Does the current implementation pass the focused code, source, format, lint, and build checks required before Cairn gates?
+
+## Inspected evidence
+
+- `nix develop -c cargo test -p mantle --bin mantle rust_source_provider`
+  - pueue task `1177`
+  - `test result: ok. 94 passed; 0 failed; 0 ignored; 0 measured; 1564 filtered out`
+- `nix develop -c cargo test -p mantle --bin mantle source_toolchain_closure`
+  - pueue task `1182`
+  - `test result: ok. 54 passed; 0 failed; 0 ignored; 0 measured; 1604 filtered out`
+- `nix develop -c cargo test -p mantle --bin mantle bootstrap_rust_source_provider`
+  - pueue task `1184`
+  - `test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1646 filtered out`
+- `nix develop -c cargo test -p mantle --bin mantle full_source_rust_binding`
+  - pueue task `1186`
+  - `test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 1615 filtered out`
+- `nix develop -c cargo test -p mantle --bin mantle full_source_provider`
+  - pueue task `1187`
+  - `test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 1647 filtered out`
+- Source-pin audit:
+  - The direct command could not start because the outer environment had no `cargo`.
+  - The Nix-shell Cargo is not a rustup proxy and cannot process the script's `+nightly` shebang.
+  - The equivalent explicit nightly Cargo-script invocation was pueue task `1200`.
+  - Result: `source-pin audit: 6 files, 3 fetch blocks, 0 issues`.
+- `nix develop -c cargo fmt --check -p mantle -v`
+  - pueue task `1201`
+  - status `0`.
+- `nix develop -c ./scripts/check-first-party-clippy.sh`
+  - pueue task `1202`
+  - status `0`; first-party `mantle` completed. One existing vendored `snix-castore` dead-code warning remained outside the denied first-party scope.
+- `nix develop -c cargo build -p mantle --bin mantle`
+  - pueue task `1203`
+  - status `0`.
+- `git diff --check`
+  - pueue task `1205`
+  - status `0`.
+
+## Decision
+
+The focused implementation checks pass. The source-pin script also passes when invoked with the required nightly Cargo-script runner and the six touched Nickel files.
+
+## Owner
+
+Mantle full-source bootstrap implementation.
+
+## Committed-tree Cairn receipts
+
+Implementation commit: `9e939c26`.
+
+An initial committed-tree run passed before V3 was checked. After the task and evidence update, final pueue tasks `1232` through `1235` ran the four commands again:
+
+- Cairn validation: `valid: true`, `issues: []`, four active changes and 37 specs validated. Full receipt: `cairn-validate-final-2026-07-27.json`.
+- Proposal gate: `PASS`, receipt hash `b0fe5af9d7084e1a8920682a1dd57254ddf79fa4c84ad7f2c4fba8b7da4473ea`.
+- Design gate: `PASS`, receipt hash `0aa8b931cda78f5286d6ca784aadd2ecc82c2fd220f439f72da4165a0a76d01a`.
+- Tasks gate: `PASS`, seven tasks done and zero tasks remaining, receipt hash `80e859e9196d6bf05905b85b0e235ef900ac6b3d002903ea620a5ea8be50166e`.
+
+The final gate stderr files are empty.
+
+## Accepted-spec synchronization
+
+Pueue task `1248` ran the dry-run. Pueue task `1250` executed the sync with no reasons and receipt hash `b7d7e832fd5562ab063ed22cca168bbe861247ad6a1d42da83cd404ab50c4367`.
+
+Inspection confirmed that `r[bootstrap_inventory.full_source_rust_provider_binding]` and `r[rust_package_planning.full_source_rust_provider_binding]` now exist in the accepted specs with the reviewed scenarios. The sync receipts and empty stderr files are preserved in this evidence directory.
+
+Post-sync pueue tasks `1258` through `1261` reported `valid: true`, 37 specs validated, and proposal/design/tasks verdicts `PASS`. The tasks packet still has seven completed tasks and zero remaining tasks. The gate receipt hashes stayed `b0fe5af9d7084e1a8920682a1dd57254ddf79fa4c84ad7f2c4fba8b7da4473ea`, `0aa8b931cda78f5286d6ca784aadd2ecc82c2fd220f439f72da4165a0a76d01a`, and `80e859e9196d6bf05905b85b0e235ef900ac6b3d002903ea620a5ea8be50166e`.
+
+## Archive and post-archive validation
+
+The archive dry-run had no reasons and receipt hash `ebe4aa78a869ad14e7df5bde45143c19cecccb534a5b5c99c56e019397d08376`. The executed archive had no reasons and receipt hash `9c88f9d705abb6edd3e7b404cde8bed66f9d0d01767ed56fb750a1f3577f3d27`.
+
+Cairn created `cairn/archive/1970-01-01-bind-full-source-rust-provider` because of the known archive-date bug. The directory was manually renamed to `cairn/archive/2026-07-27-bind-full-source-rust-provider` before validation.
+
+Pueue task `1277` ran post-archive validation. `cairn-post-archive-validate-2026-07-27.json` reports three active changes, 35 specs validated, `issues: []`, and `valid: true`. Its stderr file is empty.
+
+## Next action
+
+Commit this archived packet. Then start the ordered StageX lineage-provider change.

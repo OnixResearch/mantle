@@ -1,0 +1,183 @@
+# offline-bootstrap-source-bundles validation evidence
+Captured: 2026-07-04T23:42:15-04:00
+
+## Focused Rust checks
+$ cargo fmt -p mantle -- --check
+
+$ cargo test -p mantle --bin crunch source_bundle::
+warning: /home/brittonr/git/mantle/Cargo.toml: file `/home/brittonr/git/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/crunch-f5359da809e7cefb)
+
+running 40 tests
+test source_bundle::tests::source_bundle_rejects_unfixed_builtin_fetcher_in_build_root ... ok
+test source_bundle::tests::source_bundle_export_rejects_remote_fetcher_without_local_payload ... ok
+test source_bundle::tests::source_bundle_rejects_unsafe_identity ... ok
+test source_bundle::tests::source_bundle_rejects_file_below_symlink_record ... ok
+test source_bundle::tests::source_bundle_derives_vcs_snapshot_from_git_fetcher ... ok
+test source_bundle::tests::source_bundle_preserves_fetch_policy_metadata_from_fetch_derivation ... ok
+test source_bundle::tests::source_bundle_derives_fetcher_and_store_path_inputs_from_build_root ... ok
+test source_bundle::tests::source_bundle_rejects_vcs_snapshot_without_revision_identity ... ok
+test source_bundle::tests::source_bundle_canonicalizes_equivalent_traversal ... ok
+test source_bundle::tests::source_bundle_accepts_single_file_payload_root ... ok
+test source_bundle::tests::source_bundle_export_rejects_local_vcs_revision_mismatch ... ok
+test source_bundle::tests::source_bundle_rejects_tampered_file_payload_and_store_prefix ... ok
+test source_bundle::tests::source_bundle_export_uses_imported_state_for_remote_fetcher_payload ... ok
+test source_bundle::tests::source_bundle_export_rejects_imported_remote_payload_with_wrong_metadata ... ok
+test source_bundle::tests::source_offline_preflight_reports_remote_network_requirement ... ok
+test source_bundle::tests::source_bundle_import_and_verify_are_idempotent ... ok
+test source_bundle::tests::source_offline_preflight_reports_unsupported_adapter ... ok
+test source_bundle::tests::source_bundle_export_materializes_local_vcs_snapshot_without_dot_git ... ok
+test source_bundle::tests::source_fetch_override_plan_rejects_unpinned_imported_fetcher_payload ... ok
+test source_bundle::tests::source_bundle_rejects_incomplete_adapter_metadata ... ok
+test source_bundle::tests::source_bundle_rejects_malformed_roots_and_record_order ... ok
+test source_bundle::tests::source_offline_preflight_reports_missing_local_source_state ... ok
+test source_bundle::tests::bootstrap_source_profile_rejects_missing_vendor_for_self_build ... ok
+test source_bundle::tests::bootstrap_source_profile_rejects_wrong_provider_kind ... ok
+test source_bundle::tests::source_bundle_verify_reports_missing_state ... ok
+test source_bundle::tests::source_offline_preflight_allows_roots_without_source_requirements ... ok
+test source_bundle::tests::source_offline_preflight_reports_untrusted_adapter ... ok
+test source_bundle::tests::source_offline_preflight_accepts_pinned_imported_file_payload ... ok
+test source_bundle::tests::source_fetch_override_plan_rejects_wrong_vcs_revision_metadata ... ok
+test source_bundle::tests::source_bundle_accepts_language_neutral_package_adapters ... ok
+test source_bundle::tests::source_bundle_rejects_unsafe_symlink ... ok
+test source_bundle::tests::source_bundle_covers_bootstrap_provider_toolchain_and_proof_records ... ok
+test source_bundle::tests::source_bundle_export_materializes_local_file_fetcher_payload ... ok
+test source_bundle::tests::bootstrap_source_profile_rejects_provider_manifest_without_reduction ... ok
+test source_bundle::tests::source_offline_preflight_rejects_unpinned_imported_source ... ok
+test source_bundle::tests::bootstrap_source_profile_fetch_override_rejects_unpinned_provider_archive ... ok
+test source_bundle::tests::source_fetch_override_plan_materializes_pinned_file_fetcher_payload ... ok
+test source_bundle::tests::source_fetch_override_plan_materializes_tarball_and_vcs_payloads ... ok
+test source_bundle::tests::bootstrap_source_profile_fetch_override_consumes_pinned_provider_archive ... ok
+test source_bundle::tests::bootstrap_source_profile_exports_imports_and_preflights_ready ... ok
+
+test result: ok. 40 passed; 0 failed; 0 ignored; 0 measured; 1169 filtered out; finished in 0.01s
+
+
+$ cargo test -p mantle --bin crunch bootstrap::
+warning: /home/brittonr/git/mantle/Cargo.toml: file `/home/brittonr/git/mantle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/crunch-f5359da809e7cefb)
+
+running 16 tests
+test bootstrap::tests::fetch_seed_metadata_logical_path_appends_provider_json ... ok
+test bootstrap::tests::generate_seed_empty_packages ... ok
+test bootstrap::tests::generate_seed_sanitizes_hyphens ... ok
+test bootstrap::tests::generate_seed_valid_structure ... ok
+test bootstrap::tests::resolve_failure_reports_package ... ok
+test bootstrap::tests::resolve_empty_path_rejected ... ok
+test bootstrap::tests::resolve_success ... ok
+test bootstrap::tests::source_tree_file_candidates_walk_up_from_current_dir ... ok
+test bootstrap::tests::generate_source_root_seed_ncl_structure ... ok
+test bootstrap::tests::source_tree_file_candidates_empty_without_current_dir ... ok
+test bootstrap::tests::fetch_seed_provider_loads_shared_seed_module ... ok
+test bootstrap::tests::generate_fetch_seed_ncl_structure ... ok
+test bootstrap::tests::fetch_seed_provider_records_reduction_surface ... ok
+test bootstrap::tests::fetch_seed_provider_loads_with_embedded_stdlib ... ok
+test bootstrap::tests::write_provider_metadata_records_shared_schema ... ok
+test bootstrap::tests::stage_reduced_seed_provider_materializes_kernel_headers_in_target_include ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 1193 filtered out; finished in 0.07s
+
+
+## Cairn validation and gates
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root /home/brittonr/git/mantle
+{
+  "change_issues": [],
+  "changes": 3,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 19,
+  "valid": true
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate proposal offline-bootstrap-source-bundles --root /home/brittonr/git/mantle
+{
+  "change": "offline-bootstrap-source-bundles",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "90d308ed14da3a1022209fda63ef202e65e3f4efd02c0882126261717f22eb2e",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "8f58b8a0cbd1393678caeacadb7f344136413117d0ea60645cbdda302154fc0d",
+  "stage": "proposal",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate design offline-bootstrap-source-bundles --root /home/brittonr/git/mantle
+{
+  "change": "offline-bootstrap-source-bundles",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "f95a0a261905aa5ada5d542c38b8e33e9f1a64f8fd3fb2a22cc0ab97990e2733",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "090bad389dc7451244e4e818cce71af7fa74808b17395df7e9a91f975a0dbecc",
+  "stage": "design",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- gate tasks offline-bootstrap-source-bundles --root /home/brittonr/git/mantle
+{
+  "change": "offline-bootstrap-source-bundles",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "692df1e87bfb478fe39c448a19c292a72af6071ca3828530226109a5e3f38777",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "2ba17ace71e36a2d8f03f0dc5eaa805a6008e970f2e56a53ff72b891601de119",
+  "receipt_hash": "caa8af3c2467ff9a78ee098119f8151fcbf2bbfe11d8a8c94e00e2081e83ed07",
+  "stage": "tasks",
+  "valid": true,
+  "verdict": "PASS"
+}
+
+## Archive execution and post-archive validation
+Archive execution: CAIRN_ARCHIVE_DATE=2026-07-04 nix run path:/home/brittonr/git/cairn#cairn -- archive offline-bootstrap-source-bundles --root /home/brittonr/git/mantle --execute
+Archive execution evidence: pueue task 874 completed, then validate reported changes=2 and valid=true.
+
+$ nix run path:/home/brittonr/git/cairn#cairn -- validate --root /home/brittonr/git/mantle
+{
+  "change_issues": [],
+  "changes": 2,
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "spec_issues": [],
+  "specs_validated": 18,
+  "valid": true
+}

@@ -1,0 +1,10 @@
+{
+  "legacy_authoritative": true,
+  "phase": "restart-replay",
+  "result": "pass",
+  "rollback_available": true,
+  "schema": "mantle-artifact-auth-canary-summary-v1",
+  "standalone_authority_admitted": false,
+  "standalone_passed": true,
+  "statement_ref": "blake3:12bd47af2eccb9692c087d068d33d32c9624e49f133a77da430aab73784fbabd"
+}

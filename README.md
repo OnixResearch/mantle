@@ -316,7 +316,8 @@ in thin Rust adapters.
 
 The `mantle-plan-v1` boundary decodes structural wire records before it admits
 checked IDs, output names, logical store paths, and role-specific BLAKE3 values.
-See [Nominal dynamic-plan types](docs/nominal-dynamic-plan-types.md).
+See [Nominal dynamic-plan types](docs/nominal-dynamic-plan-types.md) and
+[Nominal trust boundaries](docs/nominal-trust-boundaries.md).
 
 The scheduler creates goals lazily, deduplicates them by store identity, and
 dispatches eligible work under explicit concurrency and policy bounds. A build
@@ -586,3 +587,4 @@ notices.
 - Celld provides the reviewed immutable-release and atomic-current-pointer layout reference. Mantle does not claim installer parity or implementation equivalence.
 - [fzakaria/nixpkgs-multiverse](https://github.com/fzakaria/nixpkgs-multiverse) provides the compact historical Nixpkgs revision-index reference. Mantle retains producer, source-admission, package-identity, and evidence authority.
 - [cachix/nix-derivation](https://github.com/cachix/nix-derivation) provides the reviewed Nix 2.34 derivation parsing, validation, serialization, and store-path compatibility candidate. Mantle retains native BLAKE3, configurable-prefix, build, store, evidence, and release authority.
+- `bounded-tree` at `rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX`, revision `b0fd0103bc9eed2c1b6d852045959462d105d8f1`, provides product-neutral bounded tree planning, capability-relative observation, revalidation, and copy mechanics. Mantle retains product identity, evidence, publication, and release authority.

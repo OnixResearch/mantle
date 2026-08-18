@@ -1,0 +1,83 @@
+{
+  "schema": "mantlepkgs-catalog-v1",
+  "catalog_identity_blake3": "74da1be5ec74dcb97ebb2bb7e9e22b9e52062c946e2ba872aedf4053fc85dd81",
+  "plan_identity_blake3": "47f62414635ec44e8bcbc6add3a32541d2ef7ccc51cac256e6596a647bc1d733",
+  "manifest_digest_blake3": "68a361a7a8348fa5dc75412e7c49aee032b48278db39f1387086a0701f60238e",
+  "source_lock": {
+    "reference": "github:NixOS/nixpkgs/241313f4e8e508cb9b13278c2b0fa25b9ca27163",
+    "revision": "241313f4e8e508cb9b13278c2b0fa25b9ca27163",
+    "lock_digest_blake3": "3ec6c13885467ce23bd05a77917ca0a6b3f9e144ced1f29267d008036fbbf4a9"
+  },
+  "systems": [
+    "x86_64-linux"
+  ],
+  "target_store_prefix": "/mantle/store",
+  "packages": [
+    {
+      "name": "hello@2.12.3",
+      "attribute": "hello",
+      "system": "x86_64-linux",
+      "aliases": [
+        "hello",
+        "hello-2.12.3"
+      ],
+      "disposition": {
+        "status": "buildable",
+        "root_node_id": "nix:vvjw1pyn64q08yfil2z8mdaqdhz7skqh-hello-2.12.3.drv",
+        "graph_digest_blake3": "f9701e68d2e8077d023ebbaddf18a71a9c7d48ee237091b5d8b9eaade3d2fa17",
+        "index_digest_blake3": "23c981780b3a18714d6e62db84bc6283da7d50e0f8986146c9dc771ac1467938"
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "role": "execution-profile",
+      "path": "policies/execution-profile.json",
+      "digest_blake3": "054ec6754f08d60088cf3388f43295ad37621e5115e979f702a2a5c5d0eefcb8",
+      "bytes": 674
+    },
+    {
+      "role": "package-index",
+      "path": "artifacts/packages.index.json",
+      "digest_blake3": "d4b8e9e8728ad588b3b04487198e352d7e184dbf783e227f06ec9da8a380c12a",
+      "bytes": 519
+    },
+    {
+      "role": "producer-receipt",
+      "path": "producer-receipt.json",
+      "digest_blake3": "e847f660b4d3be087fac425d49394fc7200075b991a97cceb440670d6c01a68d",
+      "bytes": 2352
+    },
+    {
+      "role": "shared-foreign-graph",
+      "path": "artifacts/shared.graph.json",
+      "digest_blake3": "57965640d00b3a9d4d7cfb35af89d39c56fc66b7bbc400365c9e7b27917efbc8",
+      "bytes": 2504672
+    },
+    {
+      "role": "source-requirement-inventory",
+      "path": "artifacts/source-requirements.json",
+      "digest_blake3": "e63547a4332ef55ac4a4dbb993507328702f3ad8893e8c8278059530b0982f20",
+      "bytes": 68325
+    },
+    {
+      "role": "translation-policy",
+      "path": "policies/translation.json",
+      "digest_blake3": "18eaa36031cfa19529089febc9439dc4c540f27f279be21b5d8f10fef618e415",
+      "bytes": 552
+    }
+  ],
+  "producer_receipt_digest_blake3": "116a991e5fd54d819b038eb4858bbd8cc1ca75f3ba8fca91ecf9ec92a1445073",
+  "shared_node_count": 599,
+  "source_requirement_count": 287,
+  "max_artifact_bytes": 536870912,
+  "non_claims": [
+    "not-nix-source-translation",
+    "not-nix-evaluator-parity",
+    "not-full-nixpkgs-coverage",
+    "not-package-correctness",
+    "not-reproducibility",
+    "not-bootstrap-parity",
+    "not-release-eligibility"
+  ]
+}

@@ -1,0 +1,18 @@
+# Tasks
+
+## Evaluation and conversion rails
+
+- [x] [serial] Parameterize `tests/examples_eval.rs` or a new inventory test over the catalog so every eligible Nickel example is evaluated and converted according to its declared support tier. r[examples.validation_matrix] Evidence: `tests/examples_eval.rs::cataloged_eval_examples_export_json`; `evidence/implementation-validation-2026-06-01.md` records `cargo test -p mantle --test examples_eval --test examples_build -- --nocapture` with `examples_eval` `7 passed`.
+- [x] [serial] Add negative evaluation tests for malformed Nickel, missing generated seed material, bad project selectors, and intentionally failing diagnostic examples. r[examples.validation_matrix] r[examples.output_execution] Evidence: `tests/examples_eval.rs::{malformed_example_fails_before_export,seed_dependent_example_without_seed_fails_loudly}` and `tests/examples_build.rs::{project_missing_selector_fails_before_build_success,fail_example_reports_expected_failure}`; `evidence/implementation-validation-2026-06-01.md` records those focused tests passing.
+
+## Build and output rails
+
+- [x] [serial] Expand `tests/examples_build.rs` with fast/offline smoke builds that use temp store/state roots and explicit Linux/bwrap capability skips. r[examples.validation_matrix] Evidence: `tests/examples_build.rs` now builds `hello`, `multi-step`, local multi-output, project check, and the existing fetch-crate smoke with temp store/state roots; `evidence/implementation-validation-2026-06-01.md` records `examples_build` `7 passed; 1 ignored`.
+- [x] [serial] Add output execution or inspection assertions for runnable examples, multi-output layouts, and project check outputs. r[examples.output_execution] Evidence: `tests/examples_build.rs::{hello_example_builds_flat_output,multi_step_example_builds_structured_output,local_multi_output_fixture_builds_named_layout,project_check_fixture_builds_result_output,build_crate_crc64_example_builds_binary}`; `evidence/implementation-validation-2026-06-01.md` records the non-ignored output inspections passing and the heavyweight binary execution test preserved as ignored.
+- [x] [serial] Keep heavyweight real-crate/bootstrap examples behind ignored tests or explicit scripts with documented commands and expected evidence locations. r[examples.validation_matrix] Evidence: `tests/examples_build.rs::build_crate_crc64_example_builds_binary` remains ignored with an explicit heavyweight reason, and `examples/README.md` documents the heavyweight command; `evidence/implementation-validation-2026-06-01.md` records `1 ignored` for that test.
+
+## Verification
+
+- [x] [serial] Run focused examples eval tests and record output. r[examples.validation_matrix] Evidence: `evidence/implementation-validation-2026-06-01.md` records `examples_eval` with `test result: ok. 7 passed; 0 failed`.
+- [x] [serial] Run focused examples build/output tests on a capable host or record explicit capability blockers. r[examples.validation_matrix] r[examples.output_execution] Evidence: `evidence/implementation-validation-2026-06-01.md` records `examples_build` with `test result: ok. 7 passed; 0 failed; 1 ignored` using an existing busybox-static sandbox shell.
+- [x] [serial] Run `cairn validate --root .` and the tasks gate, then archive only after completed tasks cite durable evidence. r[examples.validation_matrix] r[examples.output_execution] Evidence: `evidence/implementation-validation-2026-06-01.md` records `cairn validate --root .` with `"valid": true` and `cairn gate tasks examples-deterministic-validation --root .` with `"verdict": "PASS"`.

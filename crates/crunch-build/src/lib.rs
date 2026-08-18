@@ -34,6 +34,7 @@ pub mod scheduling;
 pub mod signing;
 #[cfg(test)]
 pub(crate) mod test_support;
+mod trust_boundary_nominal;
 pub mod worker;
 pub mod workspace;
 pub mod workspace_shell;
@@ -169,6 +170,7 @@ pub use signing::sign_pathinfo;
 pub use signing::sign_pathinfo_with_store_dir;
 pub use signing::verify_pathinfo_signatures;
 pub use signing::verify_pathinfo_signatures_with_store_dir;
+pub use trust_boundary_nominal::*;
 pub use worker::EvalMessage;
 pub use worker::FailedGoal;
 pub use worker::NativeDynamicPlanReport;

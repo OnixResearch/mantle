@@ -1,0 +1,41 @@
+{
+  "format": "mantle-stagex-tcc-musl-inventory-v1",
+  "configured_source_digest_blake3": "679e40759989e2bf0886a430ac3cb00ef22b045dd18fa50fdeddba44230c7674",
+  "build_command_count": 2,
+  "smoke_command_count": 4,
+  "outputs": [
+    {
+      "artifact_id": "tcc-musl",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v45-tcc-musl-20260728/tcc-musl-stage/runtime/output/bin/tcc-0.9.27-musl",
+      "bytes_len": 346816,
+      "digest_blake3": "053f36a66503797b3aaee40d2b0962dc643554e4ecf35d00ee2b7f947601f2af"
+    },
+    {
+      "artifact_id": "tcc-musl-alias",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v45-tcc-musl-20260728/tcc-musl-stage/runtime/output/bin/tcc",
+      "bytes_len": 346816,
+      "digest_blake3": "053f36a66503797b3aaee40d2b0962dc643554e4ecf35d00ee2b7f947601f2af"
+    },
+    {
+      "artifact_id": "tcc-musl-libtcc1",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v45-tcc-musl-20260728/tcc-musl-stage/runtime/output/lib/tcc/libtcc1.a",
+      "bytes_len": 2510,
+      "digest_blake3": "0e8b75458ad70ab03142b27a3014af68f57c03004f4d22a65702e60d531140e9"
+    },
+    {
+      "artifact_id": "tcc-musl-positive-object",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v45-tcc-musl-20260728/tcc-musl-stage/runtime/smoke/positive.o",
+      "bytes_len": 672,
+      "digest_blake3": "f7d6cd4379debd6239bbbcfffdd602d87ad9e8cfabe322902a85fa5ace902fc6"
+    },
+    {
+      "artifact_id": "tcc-musl-positive-binary",
+      "path": "/home/brittonr/.cargo-target/stagex-protected-transition-v45-tcc-musl-20260728/tcc-musl-stage/runtime/smoke/positive",
+      "bytes_len": 1564,
+      "digest_blake3": "92ebe6be234ab289a07f5560ce0f25b1a696917d4515d2ec92c330fa0cd3a8a4"
+    }
+  ],
+  "protected_exec_enforced": true,
+  "fallback_events": [],
+  "non_claim": "this inventory binds the first TinyCC compiler configured for reduced musl and bounded compile/link observations only; it does not prove a complete musl toolchain or provider admission"
+}

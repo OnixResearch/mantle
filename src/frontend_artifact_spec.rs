@@ -1,5 +1,9 @@
 #![allow(dead_code)]
 
+// r[impl build_correctness.nominal_boundaries.admission]
+// r[impl build_correctness.nominal_boundaries.identities]
+// r[impl build_correctness.nominal_boundaries.digests]
+
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
@@ -20,9 +24,99 @@ pub const FRONTEND_ARTIFACT_DIAG_SPEC_BINDING_MISMATCH: &str = "frontend-artifac
 pub const FRONTEND_ARTIFACT_DIAG_HIDDEN_FALLBACK: &str = "frontend-artifact-hidden-fallback";
 pub const FRONTEND_ARTIFACT_DIAG_INVALID_SPEC_MATERIAL: &str = "frontend-artifact-invalid-spec-material";
 pub const FRONTEND_ARTIFACT_DIAG_KIND_NOT_ALLOWED: &str = "frontend-artifact-kind-not-allowed";
+pub const FRONTEND_ARTIFACT_DIAG_INVALID_NOMINAL: &str = "frontend-artifact-invalid-nominal";
 
 const HEX_CHARS_PER_BYTE: usize = 2;
+const MAX_FRONTEND_NOMINAL_TEXT_BYTES: usize = 4_096;
 const BLAKE3_HEX_LENGTH: usize = blake3::OUT_LEN.saturating_mul(HEX_CHARS_PER_BYTE);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FrontendNominalError {
+    Empty,
+    Oversized,
+    ControlCharacter,
+    Blake3Invalid,
+}
+
+impl FrontendNominalError {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Empty => "empty",
+            Self::Oversized => "oversized",
+            Self::ControlCharacter => "control-character",
+            Self::Blake3Invalid => "blake3-invalid",
+        }
+    }
+}
+
+fn admit_frontend_text(value: String) -> Result<String, FrontendNominalError> {
+    if value.is_empty() {
+        return Err(FrontendNominalError::Empty);
+    }
+    if value.len() > MAX_FRONTEND_NOMINAL_TEXT_BYTES {
+        return Err(FrontendNominalError::Oversized);
+    }
+    if value.chars().any(char::is_control) {
+        return Err(FrontendNominalError::ControlCharacter);
+    }
+    Ok(value)
+}
+
+macro_rules! frontend_nominal_text {
+    ($name:ident) => {
+        #[derive(Clone, Debug, PartialEq, Eq)]
+        pub struct $name(String);
+
+        impl $name {
+            pub fn new(value: impl Into<String>) -> Result<Self, FrontendNominalError> {
+                admit_frontend_text(value.into()).map(Self)
+            }
+
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
+        }
+    };
+}
+
+frontend_nominal_text!(FrontendSpecId);
+frontend_nominal_text!(FrontendSpecVersion);
+frontend_nominal_text!(FrontendValidatorKind);
+frontend_nominal_text!(FrontendValidatorRef);
+frontend_nominal_text!(FrontendArtifactKind);
+frontend_nominal_text!(FrontendArtifactRef);
+frontend_nominal_text!(FrontendTargetIdentity);
+frontend_nominal_text!(FrontendBuildRoot);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FrontendSpecHash(String);
+
+impl FrontendSpecHash {
+    pub fn new(value: impl Into<String>) -> Result<Self, FrontendNominalError> {
+        let value = value.into();
+        if !is_blake3_hex(&value) {
+            return Err(FrontendNominalError::Blake3Invalid);
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct AdmittedFrontendArtifactRequest {
+    spec_id: FrontendSpecId,
+    spec_version: FrontendSpecVersion,
+    validator_kind: FrontendValidatorKind,
+    validator_ref: FrontendValidatorRef,
+    spec_hash: FrontendSpecHash,
+    artifact_kind: FrontendArtifactKind,
+    artifact_ref: FrontendArtifactRef,
+    target_identity: Option<FrontendTargetIdentity>,
+    build_root: FrontendBuildRoot,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FrontendArtifactSpecRef {
@@ -115,24 +209,31 @@ pub fn admit_frontend_artifact(request: &FrontendArtifactAdmissionRequest<'_>) -
 
     validate_spec_ref(spec, request.spec_material, request.supported_validator_kinds, &mut diagnostics);
     validate_manifest_binding(spec, request.manifest, &mut diagnostics);
+    let admitted = if diagnostics.is_empty() {
+        admit_frontend_request(spec, request.manifest, request.build_root, &mut diagnostics)
+    } else {
+        None
+    };
     if diagnostics.is_empty() {
         execute_declared_validator(spec, request.manifest, request.spec_material, &mut diagnostics);
     }
 
-    if diagnostics.is_empty() {
+    if diagnostics.is_empty()
+        && let Some(admitted) = admitted
+    {
         return report(
             Some(FrontendArtifactAdmissionAttestation {
-                spec_id: spec.id.clone(),
-                spec_version: spec.version.clone(),
+                spec_id: admitted.spec_id.as_str().to_string(),
+                spec_version: admitted.spec_version.as_str().to_string(),
                 spec_hash_algorithm: spec.hash_algorithm.clone(),
-                spec_hash: spec.hash.clone(),
-                validator_kind: spec.validator_kind.clone(),
-                validator_ref: spec.validator_ref.clone(),
-                artifact_kind: request.manifest.kind.clone(),
-                artifact_ref: request.manifest.artifact_ref.clone(),
+                spec_hash: admitted.spec_hash.as_str().to_string(),
+                validator_kind: admitted.validator_kind.as_str().to_string(),
+                validator_ref: admitted.validator_ref.as_str().to_string(),
+                artifact_kind: admitted.artifact_kind.as_str().to_string(),
+                artifact_ref: admitted.artifact_ref.as_str().to_string(),
                 artifact_digest: request.manifest.artifact_digest.clone(),
-                target_identity: request.manifest.target_identity.clone(),
-                build_root: request.build_root.to_string(),
+                target_identity: admitted.target_identity.map(|value| value.as_str().to_string()),
+                build_root: admitted.build_root.as_str().to_string(),
                 validation_result: FRONTEND_ARTIFACT_VALIDATION_RESULT_ADMITTED.to_string(),
                 no_hidden_fallback: request.manifest.no_hidden_fallback,
             }),
@@ -141,6 +242,83 @@ pub fn admit_frontend_artifact(request: &FrontendArtifactAdmissionRequest<'_>) -
     }
 
     report(None, diagnostics)
+}
+
+fn admit_frontend_request(
+    spec: &FrontendArtifactSpecRef,
+    manifest: &FrontendArtifactManifest,
+    build_root: &str,
+    diagnostics: &mut Vec<FrontendArtifactAdmissionDiagnostic>,
+) -> Option<AdmittedFrontendArtifactRequest> {
+    let spec_id = admit_nominal("spec.id", FrontendSpecId::new(&spec.id), diagnostics);
+    let spec_version = admit_nominal("spec.version", FrontendSpecVersion::new(&spec.version), diagnostics);
+    let validator_kind =
+        admit_nominal("spec.validator_kind", FrontendValidatorKind::new(&spec.validator_kind), diagnostics);
+    let validator_ref =
+        admit_nominal("spec.validator_ref", FrontendValidatorRef::new(&spec.validator_ref), diagnostics);
+    let spec_hash = admit_nominal("spec.hash", FrontendSpecHash::new(&spec.hash), diagnostics);
+    let artifact_kind = admit_nominal("manifest.kind", FrontendArtifactKind::new(&manifest.kind), diagnostics);
+    let artifact_ref =
+        admit_nominal("manifest.artifact_ref", FrontendArtifactRef::new(&manifest.artifact_ref), diagnostics);
+    let target_identity = manifest
+        .target_identity
+        .as_ref()
+        .and_then(|value| admit_nominal("manifest.target_identity", FrontendTargetIdentity::new(value), diagnostics));
+    let build_root = admit_nominal("build_root", FrontendBuildRoot::new(build_root), diagnostics);
+    let (
+        Some(spec_id),
+        Some(spec_version),
+        Some(validator_kind),
+        Some(validator_ref),
+        Some(spec_hash),
+        Some(artifact_kind),
+        Some(artifact_ref),
+        Some(build_root),
+    ) = (
+        spec_id,
+        spec_version,
+        validator_kind,
+        validator_ref,
+        spec_hash,
+        artifact_kind,
+        artifact_ref,
+        build_root,
+    )
+    else {
+        return None;
+    };
+    if manifest.target_identity.is_some() && target_identity.is_none() {
+        return None;
+    }
+    Some(AdmittedFrontendArtifactRequest {
+        spec_id,
+        spec_version,
+        validator_kind,
+        validator_ref,
+        spec_hash,
+        artifact_kind,
+        artifact_ref,
+        target_identity,
+        build_root,
+    })
+}
+
+fn admit_nominal<T>(
+    field: &str,
+    value: Result<T, FrontendNominalError>,
+    diagnostics: &mut Vec<FrontendArtifactAdmissionDiagnostic>,
+) -> Option<T> {
+    match value {
+        Ok(value) => Some(value),
+        Err(error) => {
+            diagnostics.push(diagnostic(
+                FRONTEND_ARTIFACT_DIAG_INVALID_NOMINAL,
+                field,
+                format!("frontend artifact nominal value is invalid: {}", error.as_str()),
+            ));
+            None
+        }
+    }
 }
 
 pub fn render_frontend_artifact_admission_sidecar(
@@ -373,6 +551,7 @@ mod tests {
     const SAMPLE_SPEC_MATERIAL: &[u8] = br#"{"schema":"mantle-frontend-artifact-kind-allowlist-v1","allowed_kinds":["example-activation-closure","mantle-onix-activation-closure","nixos-activation-closure","onix-service-role","onix-tag","onix-provider"]}"#;
     const DISALLOWED_ARTIFACT_KIND: &str = "not-in-spec";
     const BAD_BLAKE3_HEX: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab";
+    const OVERSIZED_FRONTEND_NOMINAL_BYTES: usize = 4_097;
 
     fn sample_hash() -> String {
         blake3::hash(SAMPLE_SPEC_MATERIAL).to_hex().to_string()
@@ -439,6 +618,28 @@ mod tests {
         assert_eq!(attestation.build_root, SAMPLE_BUILD_ROOT);
         assert_eq!(attestation.validation_result, FRONTEND_ARTIFACT_VALIDATION_RESULT_ADMITTED);
         assert!(attestation.no_hidden_fallback);
+    }
+
+    #[test]
+    fn nominal_frontend_roles_reject_control_and_oversized_values() {
+        let mut control_spec = sample_spec();
+        control_spec.id = "spec\ncontrol".to_string();
+        let control_manifest = sample_manifest(&control_spec);
+        let control_report = admit_frontend_artifact(&sample_request(Some(&control_spec), &control_manifest));
+
+        let spec = sample_spec();
+        let oversized_manifest = sample_manifest(&spec);
+        let oversized_root = "a".repeat(OVERSIZED_FRONTEND_NOMINAL_BYTES);
+        let oversized_request = FrontendArtifactAdmissionRequest {
+            build_root: &oversized_root,
+            ..sample_request(Some(&spec), &oversized_manifest)
+        };
+        let oversized_report = admit_frontend_artifact(&oversized_request);
+
+        assert!(!control_report.admitted);
+        assert!(control_report.diagnostics.iter().any(|item| item.code == FRONTEND_ARTIFACT_DIAG_INVALID_NOMINAL));
+        assert!(!oversized_report.admitted);
+        assert!(oversized_report.diagnostics.iter().any(|item| item.code == FRONTEND_ARTIFACT_DIAG_INVALID_NOMINAL));
     }
 
     #[test]

@@ -34,21 +34,41 @@ pub fn generate_ca_marker(output_name: &str, provisional_len: usize) -> Vec<u8> 
     marker
 }
 
-/// Compute the CA output path name from a derivation name and output name.
-///
-/// For the "out" output, returns the base derivation name (without ".drv").
-/// For other outputs, returns "{base_name}-{output_name}".
-#[allow(tigerstyle::ambiguous_params)] // drv_name vs output_name: distinct semantics validated by assertions
-pub fn ca_output_path_name(drv_name: &str, output_name: &str) -> String {
-    assert!(!drv_name.is_empty(), "drv_name must not be empty");
-    assert!(!output_name.is_empty(), "output_name must not be empty");
+/// Typed request for CA output-name planning.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaOutputNameRequest {
+    pub derivation: crate::DerivationName,
+    pub output: crate::OutputName,
+}
 
-    let base_name = drv_name.strip_suffix(".drv").unwrap_or(drv_name);
-    if output_name == "out" {
+impl CaOutputNameRequest {
+    pub fn new(drv_name: &str, output_name: &str) -> Result<Self, crate::TrustBoundaryNominalError> {
+        Ok(Self {
+            derivation: crate::DerivationName::new(drv_name)?,
+            output: crate::OutputName::new(output_name)?,
+        })
+    }
+}
+
+/// Compute the CA output path name from admitted role-specific values.
+pub fn ca_output_path_name_typed(request: &CaOutputNameRequest) -> String {
+    let base_name = request.derivation.as_str().strip_suffix(".drv").unwrap_or(request.derivation.as_str());
+    if request.output.as_str() == "out" {
         base_name.to_string()
     } else {
-        format!("{base_name}-{output_name}")
+        format!("{base_name}-{}", request.output.as_str())
     }
+}
+
+/// Compute the CA output path name from the stable compatibility API.
+#[allow(
+    tigerstyle::ambiguous_params,
+    reason = "stable compatibility wrapper admits values into the typed CA output-name request"
+)]
+pub fn ca_output_path_name(drv_name: &str, output_name: &str) -> String {
+    let request = CaOutputNameRequest::new(drv_name, output_name)
+        .unwrap_or_else(|error| panic!("invalid CA output-name request: {}", error.as_str()));
+    ca_output_path_name_typed(&request)
 }
 
 /// Compute a content-addressed store path from the NAR hash.
@@ -60,12 +80,20 @@ pub fn compute_ca_store_path(
     nar_sha256: [u8; 32],
     store_dir: &str,
 ) -> Result<StorePath<String>, crate::Error> {
-    assert!(!path_name.is_empty(), "path_name must not be empty");
-    assert!(!store_dir.is_empty(), "store_dir must not be empty");
+    let path_name = crate::DerivationName::new(path_name)
+        .map_err(|error| crate::Error::Store(format!("invalid CA path name: {}", error.as_str())))?;
+    let store_dir = crate::LogicalStorePrefix::new(store_dir)
+        .map_err(|error| crate::Error::Store(format!("invalid CA store prefix: {}", error.as_str())))?;
 
     let ca_hash = nix_compat::nixhash::CAHash::Nar(nix_compat::nixhash::NixHash::Sha256(nar_sha256));
-    nix_compat::store_path::build_ca_path_with_store_dir(path_name, &ca_hash, Vec::<&str>::new(), false, store_dir)
-        .map_err(|e| crate::Error::Store(format!("computing CA path: {e}")))
+    nix_compat::store_path::build_ca_path_with_store_dir(
+        path_name.as_str(),
+        &ca_hash,
+        Vec::<&str>::new(),
+        false,
+        store_dir.as_str(),
+    )
+    .map_err(|e| crate::Error::Store(format!("computing CA path: {e}")))
 }
 
 /// Planned CA output: the result of pure planning before any I/O.
@@ -93,6 +121,8 @@ pub fn plan_ca_outputs(
     assert!(!outputs.is_empty(), "derivation must have at least one output");
     assert!(!drv_name.is_empty(), "drv_name must not be empty");
 
+    let derivation = crate::DerivationName::new(drv_name)
+        .unwrap_or_else(|error| panic!("invalid derivation name: {}", error.as_str()));
     outputs
         .keys()
         .map(|name| {
@@ -102,7 +132,12 @@ pub fn plan_ca_outputs(
             } else {
                 generate_ca_marker(name, provisional.len())
             };
-            let path_name = ca_output_path_name(drv_name, name);
+            let output =
+                crate::OutputName::new(name).unwrap_or_else(|error| panic!("invalid output name: {}", error.as_str()));
+            let path_name = ca_output_path_name_typed(&CaOutputNameRequest {
+                derivation: derivation.clone(),
+                output,
+            });
             CaOutputPlan {
                 output_name: name.clone(),
                 provisional,

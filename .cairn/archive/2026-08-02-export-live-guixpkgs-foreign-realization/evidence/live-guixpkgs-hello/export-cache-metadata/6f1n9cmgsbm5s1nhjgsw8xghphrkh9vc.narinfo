@@ -1,0 +1,11 @@
+StorePath: /nix/store/6f1n9cmgsbm5s1nhjgsw8xghphrkh9vc-glibc-2.41
+URL: nar/1rjwrm7r2rby0m537narya5hipsh65rvv9njd4by0mdjhm5nvc91.nar.xz
+Compression: xz
+FileHash: sha256:1rjwrm7r2rby0m537narya5hipsh65rvv9njd4by0mdjhm5nvc91
+FileSize: 9208340
+NarHash: sha256:0hhsjng9r2lfzpimd1zdqiqcj610i6bq4hd6bjayjis11nbk3w1h
+NarSize: 41145792
+References: 6f1n9cmgsbm5s1nhjgsw8xghphrkh9vc-glibc-2.41 y7d6l50mnhy92w81k48k7was6kzaip1p-bash-static-5.2.37
+Deriver: 424mrddaf4aiwpisixqxj3jnbjvihzpl-glibc-2.41.drv
+Sig: guixpkgs.cachix.org-1:w01jYwTchI378ERU5wS7+pSp7F1NBN+0yAJtrCxvHQ7gw3cU0/b1xWl9BzKYxsHvC2ijnJXxZx4GzNF06MZzDQ==
+Sig: mantle-live-guixpkgs-export-1:uTuHq4stwGobDCn50k/AZw8o5rfTDo9Br6AJriH1cESaYxAj2rYP5qnLxSMlgp5qrK/E1IlsfkaeHuSxwZLQCQ==
