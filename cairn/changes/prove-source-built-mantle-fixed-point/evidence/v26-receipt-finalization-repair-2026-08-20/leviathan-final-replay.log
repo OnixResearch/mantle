@@ -1,0 +1,20 @@
+Thu Aug 20 03:56:44 AM EDT 2026
+=== preserved StageX tree ===
+
+running 1 test
+test source_built_fixed_point_receipt::tests::preserved_stagex_transition_tree_fixture_hashes_under_receipt_policy has been running for over 60 seconds
+preserved-stagex-tree: entries=83046 bytes=1081565462 blake3=de61852c41a9bf7f7ba94d9d8db29d13c0b38486444d5166705c37b33f268c1e
+test source_built_fixed_point_receipt::tests::preserved_stagex_transition_tree_fixture_hashes_under_receipt_policy ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2400 filtered out; finished in 120.06s
+
+=== durable proof projection ===
+
+running 1 test
+test source_built_fixed_point_receipt::tests::preserved_proof_bundle_fixture_fits_receipt_entry_policy has been running for over 60 seconds
+preserved-proof-bundle: entries=136135 blake3=de3b4a0918bd3441162b914b2d4303a212cdecd46ac71efc2bdb9b2dd5eb4e6b
+test source_built_fixed_point_receipt::tests::preserved_proof_bundle_fixture_fits_receipt_entry_policy ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2400 filtered out; finished in 1380.74s
+
+Thu Aug 20 04:21:45 AM EDT 2026

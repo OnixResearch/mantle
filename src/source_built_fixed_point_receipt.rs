@@ -74,12 +74,19 @@ const REBUILD_AUTHORITY_SCHEMA: &str = "mantle-rebuild-authority-plan-v1";
 const PROOF_WORKFLOW: &str = "mantle-deterministic-proof-receipt-v2";
 const STAGE_STATUS_COMPLETE: &str = "complete";
 const STAGE_STATUS_SUCCESS: &str = "success";
-const RECEIPT_BUNDLE_DIGEST_DOMAIN: &[u8] = b"mantle-source-built-fixed-point-proof-bundle-v1\0";
+const RECEIPT_BUNDLE_DIGEST_DOMAIN: &[u8] = b"mantle-source-built-fixed-point-proof-bundle-v2\0";
 const APPROVED_READ_DIGEST_DOMAIN: &[u8] = b"mantle-source-built-fixed-point-approved-reads-v1\0";
 const PROVIDER_IDENTITY_DIGEST_DOMAIN: &[u8] = b"mantle-source-built-fixed-point-provider-identity-v1\0";
 const BLAKE3_HEX_LENGTH: usize = 64;
 const HASH_BUFFER_BYTES: usize = 64 * 1_024;
 const PROOF_ENTRY_COUNT_MAX: usize = 2_000_000;
+const NON_DURABLE_PROOF_DIRECTORIES: &[&str] = &[
+    "cargo-free-fixed-point/execution",
+    "home",
+    "native-state",
+    "rust-provider-scratch",
+    "tmp",
+];
 const STAGE_EVIDENCE_COUNT: usize = 6;
 const REQUIRED_SOURCE_COUNT: usize = 6;
 const REQUIRED_RUN_COUNT: usize = 2;
@@ -450,6 +457,8 @@ fn stage_evidence(
     let transition_root = &providers.stagex_transition_execution_dir;
     let transition_report = transition_root.join(STAGEX_TRANSITION_REPORT_FILE);
     let transition_audit = transition_root.join(STAGEX_TRANSITION_AUDIT_FILE);
+    let transition_identity =
+        hash_preserved_stagex_transition_tree(transition_root, plan.resource_bounds.disk_bytes_max)?;
     let stagex_receipt = providers.stagex_provider_report.receipt_path.clone();
     let stagex_validation = providers
         .stagex_provider_report
@@ -475,7 +484,7 @@ fn stage_evidence(
             audit_paths: vec![relative_path(proof_root, &transition_audit)?],
             audit_digests_blake3: vec![hash_file(&transition_audit)?],
             output_path: relative_path(proof_root, transition_root)?,
-            output_digest_blake3: hash_tree(transition_root)?.1,
+            output_digest_blake3: transition_identity.digest_blake3,
             authority_violations: Vec::new(),
             fallback_events: Vec::new(),
         },
@@ -969,12 +978,22 @@ fn write_extended_receipt(
 }
 
 fn proof_bundle_digest(proof_root: &Path) -> Result<ProofBundleObservation, RunError> {
+    proof_bundle_digest_with_limit(proof_root, PROOF_ENTRY_COUNT_MAX)
+}
+
+fn proof_bundle_digest_with_limit(
+    proof_root: &Path,
+    entries_count_max: usize,
+) -> Result<ProofBundleObservation, RunError> {
+    if entries_count_max == 0 {
+        return Err(receipt_error("proof bundle entry limit must be positive".to_string()));
+    }
     let mut entries = Vec::new();
-    collect_bundle_files(proof_root, proof_root, &mut entries)?;
+    collect_bundle_files(proof_root, proof_root, entries_count_max, &mut entries)?;
     entries.sort_by(|left, right| left.0.cmp(&right.0));
-    if entries.is_empty() || entries.len() > PROOF_ENTRY_COUNT_MAX {
+    if entries.is_empty() || entries.len() > entries_count_max {
         return Err(receipt_error(format!(
-            "proof bundle entry count must be within 1..={PROOF_ENTRY_COUNT_MAX}, got {}",
+            "proof bundle entry count must be within 1..={entries_count_max}, got {}",
             entries.len()
         )));
     }
@@ -988,7 +1007,7 @@ fn proof_bundle_digest(proof_root: &Path) -> Result<ProofBundleObservation, RunE
             hasher.update(target.as_os_str().as_encoded_bytes());
         } else {
             hasher.update(b"file\0");
-            hasher.update(hash_file(path)?.as_bytes());
+            hasher.update(hash_file_allow_empty(path)?.as_bytes());
         }
         hasher.update(&[0]);
     }
@@ -1004,11 +1023,9 @@ fn proof_bundle_digest(proof_root: &Path) -> Result<ProofBundleObservation, RunE
 fn collect_bundle_files(
     proof_root: &Path,
     current: &Path,
+    entries_count_max: usize,
     entries: &mut Vec<(String, PathBuf, Option<PathBuf>)>,
 ) -> Result<(), RunError> {
-    if entries.len() > PROOF_ENTRY_COUNT_MAX {
-        return Err(receipt_error("proof bundle entry limit exceeded".to_string()));
-    }
     let mut children = fs::read_dir(current)
         .map_err(|error| receipt_error(format!("reading proof bundle directory {}: {error}", current.display())))?
         .collect::<Result<Vec<_>, _>>()
@@ -1024,12 +1041,16 @@ fn collect_bundle_files(
                 let target = fs::read_link(&path).map_err(|error| {
                     receipt_error(format!("reading proof bundle symlink {}: {error}", path.display()))
                 })?;
-                entries.push((relative, path, Some(target)));
+                push_bundle_entry(entries, entries_count_max, (relative, path, Some(target)))?;
             }
             continue;
         }
         if metadata.is_dir() {
-            collect_bundle_files(proof_root, &path, entries)?;
+            let relative = relative_path(proof_root, &path)?;
+            if excluded_directory_from_bundle_digest(&relative) {
+                continue;
+            }
+            collect_bundle_files(proof_root, &path, entries_count_max, entries)?;
             continue;
         }
         if !metadata.is_file() {
@@ -1039,11 +1060,29 @@ fn collect_bundle_files(
         if excluded_from_bundle_digest(&relative) {
             continue;
         }
-        entries.push((relative, path, None));
+        push_bundle_entry(entries, entries_count_max, (relative, path, None))?;
     }
-    assert!(entries.len() <= PROOF_ENTRY_COUNT_MAX);
+    assert!(entries.len() <= entries_count_max);
     debug_assert!(current.starts_with(proof_root));
     Ok(())
+}
+
+fn push_bundle_entry(
+    entries: &mut Vec<(String, PathBuf, Option<PathBuf>)>,
+    entries_count_max: usize,
+    entry: (String, PathBuf, Option<PathBuf>),
+) -> Result<(), RunError> {
+    if entries.len() >= entries_count_max {
+        return Err(receipt_error(format!("proof bundle entry count exceeds {entries_count_max}")));
+    }
+    entries.push(entry);
+    assert!(entries.len() <= entries_count_max);
+    debug_assert!(!entries.is_empty());
+    Ok(())
+}
+
+fn excluded_directory_from_bundle_digest(relative: &str) -> bool {
+    NON_DURABLE_PROOF_DIRECTORIES.contains(&relative)
 }
 
 fn excluded_from_bundle_digest(relative: &str) -> bool {
@@ -1053,6 +1092,28 @@ fn excluded_from_bundle_digest(relative: &str) -> bool {
             | crate::source_built_fixed_point_shell::FINAL_BUNDLE_DIGEST_FILE
             | "attempt-status.json"
     )
+}
+
+fn hash_preserved_stagex_transition_tree(
+    root: &Path,
+    total_file_bytes_max: u64,
+) -> Result<crate::preserved_evidence_tree::PreservedEvidenceTreeIdentity, RunError> {
+    let entries_count_max = u32::try_from(PROOF_ENTRY_COUNT_MAX)
+        .map_err(|_| receipt_error("proof entry limit does not fit u32".to_string()))?;
+    let release_limits = crunch_release_core::TreeCopyLimits::RELEASE_BUNDLE;
+    let limits = crate::preserved_evidence_tree::PreservedEvidenceTreeLimits {
+        entries_count_max,
+        depth_count_max: release_limits.depth_count_max,
+        path_bytes_max: release_limits.path_bytes_max,
+        symlink_target_bytes_max: release_limits.path_bytes_max,
+        total_file_bytes_max,
+    };
+    let identity = crate::preserved_evidence_tree::hash_preserved_evidence_tree(root, limits).map_err(|error| {
+        receipt_error(format!("hashing preserved StageX transition tree {}: {error}", root.display()))
+    })?;
+    assert!(identity.entry_count <= entries_count_max);
+    assert!(identity.total_file_bytes <= total_file_bytes_max);
+    Ok(identity)
 }
 
 fn hash_tree(root: &Path) -> Result<(u64, String), RunError> {
@@ -1178,6 +1239,11 @@ mod tests {
 
     const DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const TOO_SMALL_BUNDLE_ENTRY_LIMIT: usize = 1;
+    #[cfg(unix)]
+    const NO_ACCESS_DIRECTORY_MODE: u32 = 0o000;
+    #[cfg(unix)]
+    const RESTORED_DIRECTORY_MODE: u32 = 0o700;
 
     #[test]
     fn stage_evidence_rejects_fallbacks_and_duplicate_ids() {
@@ -1209,22 +1275,56 @@ mod tests {
         assert!(duplicate.to_string().contains("duplicate stage evidence id"));
     }
 
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
     #[test]
     fn bundle_digest_excludes_only_self_referential_receipt_files() {
         let temp = tempfile::tempdir().unwrap();
         fs::write(temp.path().join("evidence.txt"), "evidence").unwrap();
+        fs::write(temp.path().join("second-evidence.txt"), "second").unwrap();
+        fs::write(temp.path().join("empty-evidence.txt"), "").unwrap();
+        fs::create_dir(temp.path().join("rust-provider-scratch")).unwrap();
+        fs::write(temp.path().join("rust-provider-scratch/ignored.txt"), "ignored").unwrap();
         fs::write(temp.path().join(crate::source_built_fixed_point_shell::FINAL_RECEIPT_FILE), "one").unwrap();
         fs::write(temp.path().join(crate::source_built_fixed_point_shell::FINAL_BUNDLE_DIGEST_FILE), "two").unwrap();
         fs::write(temp.path().join("attempt-status.json"), "running").unwrap();
         let first = proof_bundle_digest(temp.path()).unwrap();
         fs::write(temp.path().join(crate::source_built_fixed_point_shell::FINAL_RECEIPT_FILE), "changed").unwrap();
         fs::write(temp.path().join("attempt-status.json"), "complete").unwrap();
+        fs::write(temp.path().join("rust-provider-scratch/ignored.txt"), "changed ignored scratch").unwrap();
         let second = proof_bundle_digest(temp.path()).unwrap();
         fs::write(temp.path().join("evidence.txt"), "changed evidence").unwrap();
         let changed = proof_bundle_digest(temp.path()).unwrap();
+        let limit_error = proof_bundle_digest_with_limit(temp.path(), TOO_SMALL_BUNDLE_ENTRY_LIMIT).unwrap_err();
+        let limit_message = format!("entry count exceeds {TOO_SMALL_BUNDLE_ENTRY_LIMIT}");
 
         assert_eq!(first.digest_blake3, second.digest_blake3);
         assert_ne!(second.digest_blake3, changed.digest_blake3);
+        assert!(limit_error.to_string().contains(&limit_message));
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
+    #[test]
+    #[cfg(unix)]
+    fn bundle_digest_skips_declared_unreadable_scratch_but_rejects_unknown_unreadable_content() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join("evidence.txt"), "evidence").unwrap();
+        let declared_scratch = temp.path().join("tmp");
+        let unknown_content = temp.path().join("unknown-content");
+        fs::create_dir(&declared_scratch).unwrap();
+        fs::create_dir(&unknown_content).unwrap();
+        fs::set_permissions(&declared_scratch, fs::Permissions::from_mode(NO_ACCESS_DIRECTORY_MODE)).unwrap();
+
+        let accepted = proof_bundle_digest(temp.path()).unwrap();
+        fs::set_permissions(&unknown_content, fs::Permissions::from_mode(NO_ACCESS_DIRECTORY_MODE)).unwrap();
+        let rejected = proof_bundle_digest(temp.path()).unwrap_err();
+        fs::set_permissions(&declared_scratch, fs::Permissions::from_mode(RESTORED_DIRECTORY_MODE)).unwrap();
+        fs::set_permissions(&unknown_content, fs::Permissions::from_mode(RESTORED_DIRECTORY_MODE)).unwrap();
+
+        assert_eq!(accepted.entry_count, TOO_SMALL_BUNDLE_ENTRY_LIMIT);
+        assert_eq!(accepted.digest_blake3.len(), BLAKE3_HEX_LENGTH);
+        assert!(rejected.to_string().contains("unknown-content"));
     }
 
     #[test]
@@ -1238,5 +1338,45 @@ mod tests {
         assert_ne!(first, swapped);
         assert_ne!(first, substituted);
         assert_eq!(first.len(), BLAKE3_HEX_LENGTH);
+    }
+
+    #[test]
+    #[ignore = "requires a preserved source-built proof bundle"]
+    fn preserved_proof_bundle_fixture_fits_receipt_entry_policy() {
+        const PROOF_ROOT_ENV: &str = "MANTLE_TEST_PRESERVED_PROOF_ROOT";
+
+        let root = PathBuf::from(std::env::var_os(PROOF_ROOT_ENV).expect("preserved proof root must be set"));
+        let observation = proof_bundle_digest(&root).unwrap();
+        println!("preserved-proof-bundle: entries={} blake3={}", observation.entry_count, observation.digest_blake3);
+
+        let release_entry_limit = usize::try_from(crunch_release_core::RELEASE_TREE_COPY_MAX_ENTRIES_COUNT).unwrap();
+        assert!(root.is_dir());
+        assert!(root.join("rust-provider-scratch").is_dir());
+        assert!(observation.entry_count > release_entry_limit);
+        assert!(observation.entry_count <= PROOF_ENTRY_COUNT_MAX);
+        assert_eq!(observation.digest_blake3.len(), BLAKE3_HEX_LENGTH);
+    }
+
+    #[test]
+    #[ignore = "requires a preserved source-built StageX transition tree"]
+    fn preserved_stagex_transition_tree_fixture_hashes_under_receipt_policy() {
+        const TREE_PATH_ENV: &str = "MANTLE_TEST_PRESERVED_STAGEX_TREE";
+        const TOTAL_FILE_BYTES_MAX_ENV: &str = "MANTLE_TEST_PRESERVED_STAGEX_TREE_BYTES_MAX";
+
+        let root = PathBuf::from(std::env::var_os(TREE_PATH_ENV).expect("preserved StageX tree path must be set"));
+        let total_file_bytes_max = std::env::var(TOTAL_FILE_BYTES_MAX_ENV)
+            .expect("preserved StageX tree byte bound must be set")
+            .parse::<u64>()
+            .expect("preserved StageX tree byte bound must be a u64");
+        let identity = hash_preserved_stagex_transition_tree(&root, total_file_bytes_max).unwrap();
+        println!(
+            "preserved-stagex-tree: entries={} bytes={} blake3={}",
+            identity.entry_count, identity.total_file_bytes, identity.digest_blake3
+        );
+
+        assert!(root.is_dir());
+        assert!(identity.entry_count > crunch_release_core::RELEASE_TREE_COPY_MAX_ENTRIES_COUNT);
+        assert!(identity.total_file_bytes <= total_file_bytes_max);
+        assert_eq!(identity.digest_blake3.len(), BLAKE3_HEX_LENGTH);
     }
 }

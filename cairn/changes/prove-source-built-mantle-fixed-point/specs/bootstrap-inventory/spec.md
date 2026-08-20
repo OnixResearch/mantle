@@ -44,6 +44,8 @@ AND an unknown event, missing required event, digest drift, producer drift, coun
 GIVEN both stages complete
 WHEN Mantle evaluates fixed-point success
 THEN stage1 and stage2 Mantle binary BLAKE3 digests MUST match and a verified `mantle-deterministic-proof-receipt-v2` MUST bind source/rebuild descriptors, authority plan, provider/closure identities, stage receipts, action-trust plan, observed execution reconciliation, approved reads, effects, audits, outputs, and final proof-bundle digest
+AND the durable proof-bundle digest MUST retain the complete StageX execution evidence while excluding only declared non-durable working scratch
+AND evidence observation MUST NOT weaken source admission for absolute or escaping symlinks
 AND any mismatch, malformed receipt, fallback, unapproved effect, action-trust violation, or incomplete evidence MUST preserve a failed proof without updating successful aliases.
 
 #### Scenario: fixed-point claim remains bounded

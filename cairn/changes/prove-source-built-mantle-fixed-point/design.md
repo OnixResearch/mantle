@@ -60,6 +60,12 @@ The Tailscale DNS name is an operator routing label, not execution authority. Pr
 
 **Rationale:** The current parity verifier intentionally rejects the historical v1 receipt. The new action-trust identities must also be content-bound rather than inferred from producer status.
 
+### Decision: separate durable evidence from working scratch
+
+**Choice:** The final proof-bundle digest covers a declared durable projection. It retains the complete StageX execution tree, provider outputs, source authority, stage outputs, receipts, audits, transcripts, and action-trust evidence. It excludes only Cargo-free execution intermediates, proof home and temporary directories, native store state, and Rust-provider scratch. The StageX tree uses a bounded, no-follow observation digest that records opaque symlink target bytes without granting source authority. Unknown unreadable content still fails closed. ADR 0079 records this boundary.
+
+**Rationale:** The V26 working root contained more than 2.5 million files and links plus intentionally unreadable overlay work directories. Those bytes are useful attempt diagnostics, not durable proof evidence. Applying source-admission rules to the complete StageX evidence tree also conflicts with ADR 0052 because its negative fixtures intentionally contain absolute and escaping links.
+
 ### Decision: make mismatch and failure durable
 
 **Choice:** Each proof attempt writes preflight, provider, closure, stage, audit, stdout/stderr, digest, status, and blocker artifacts before success evaluation. Only a complete matching proof may update `latest` or release aliases.

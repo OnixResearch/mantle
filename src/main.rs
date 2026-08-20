@@ -109,6 +109,7 @@ mod portable_receipt;
 // Preserves carrier types intentionally encode the full external evidence graph and optional
 // compatibility surfaces.
 mod content_bound_requirement_evidence;
+mod preserved_evidence_tree;
 #[allow(dead_code, clippy::type_complexity)]
 mod preserves_release_carrier;
 mod project_build;
