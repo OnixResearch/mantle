@@ -84,7 +84,20 @@ task `6319` recorded `local-validation.log`. It passed:
 
 The subprocess test runs from a temporary source root. It reads the selected
 package manifest through `/proc/self/cwd` and rejects the nonexistent logical
-release path. A corrected preserved-provider replay is still required.
+release path.
+
+Remote pueue task `266` used source commit `0cd57953` and orchestrator BLAKE3
+`bc3b8544df2db9540bd112413920a7ad44f025bf804c3a57884bed009342534e`.
+The corrected plan binds crossterm to
+`/proc/self/cwd/vendor-deps/crossterm`; see
+`crossterm-unit-manifest-fix.json`. Execution ordering stopped at a different
+unit before crossterm ran, so this is plan evidence, not crossterm execution
+evidence.
+
+Task `266` produced 708 stage1 unit receipts and exposed the next independent
+blocker in `num-bigint-dig@0.8.6`. See
+`cargo-free-fixed-point-manifest-fix-meta.json` and
+`num-bigint-dig-unit.json`.
 
 ## Non-claims
 

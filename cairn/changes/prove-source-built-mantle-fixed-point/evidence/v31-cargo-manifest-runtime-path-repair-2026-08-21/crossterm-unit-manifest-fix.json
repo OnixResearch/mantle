@@ -1,0 +1,171 @@
+{
+  "consumed_host_artifacts": [
+    {
+      "artifact": "host-artifact:28:proc-macro:document_features",
+      "metadata_digest_blake3": null,
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#document-features@0.2.12",
+      "producer_unit_id": "28:registry+https://github.com/rust-lang/crates.io-index#document-features@0.2.12:document_features:proc-macro:build",
+      "target_kind": "proc-macro",
+      "target_name": "document_features"
+    }
+  ],
+  "crate_types": [
+    "lib"
+  ],
+  "dependency_artifacts": [
+    {
+      "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0:bitflags",
+      "name": "bitflags",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0"
+    },
+    {
+      "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#derive_more@2.1.1:derive_more",
+      "name": "derive_more",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#derive_more@2.1.1"
+    },
+    {
+      "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#mio@1.2.0:mio",
+      "name": "mio",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#mio@1.2.0"
+    },
+    {
+      "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#parking_lot@0.12.5:parking_lot",
+      "name": "parking_lot",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#parking_lot@0.12.5"
+    },
+    {
+      "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#rustix@1.1.4:rustix",
+      "name": "rustix",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#rustix@1.1.4"
+    },
+    {
+      "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#signal-hook-mio@0.2.5:signal_hook_mio",
+      "name": "signal_hook_mio",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#signal-hook-mio@0.2.5"
+    },
+    {
+      "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#signal-hook@0.3.18:signal_hook",
+      "name": "signal_hook",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#signal-hook@0.3.18"
+    }
+  ],
+  "derivation": {
+    "addressing_mode": "content-addressed",
+    "args": [
+      "--crate-name",
+      "crossterm",
+      "--edition",
+      "2021",
+      "vendor-deps/crossterm/src/lib.rs",
+      "--emit=link",
+      "--crate-type",
+      "lib",
+      "-C",
+      "opt-level=0",
+      "-C",
+      "debuginfo=2",
+      "-C",
+      "debug-assertions=true",
+      "-C",
+      "overflow-checks=true",
+      "-C",
+      "codegen-units=256",
+      "-C",
+      "metadata=79138f68e3b5ed9f",
+      "--cfg",
+      "feature=\"bracketed-paste\"",
+      "--cfg",
+      "feature=\"default\"",
+      "--cfg",
+      "feature=\"derive-more\"",
+      "--cfg",
+      "feature=\"events\"",
+      "--cfg",
+      "feature=\"windows\"",
+      "--cap-lints",
+      "allow",
+      "--extern",
+      "bitflags=artifact:registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0:bitflags",
+      "--extern",
+      "derive_more=artifact:registry+https://github.com/rust-lang/crates.io-index#derive_more@2.1.1:derive_more",
+      "--extern",
+      "mio=artifact:registry+https://github.com/rust-lang/crates.io-index#mio@1.2.0:mio",
+      "--extern",
+      "parking_lot=artifact:registry+https://github.com/rust-lang/crates.io-index#parking_lot@0.12.5:parking_lot",
+      "--extern",
+      "rustix=artifact:registry+https://github.com/rust-lang/crates.io-index#rustix@1.1.4:rustix",
+      "--extern",
+      "signal_hook_mio=artifact:registry+https://github.com/rust-lang/crates.io-index#signal-hook-mio@0.2.5:signal_hook_mio",
+      "--extern",
+      "signal_hook=artifact:registry+https://github.com/rust-lang/crates.io-index#signal-hook@0.3.18:signal_hook",
+      "--remap-path-prefix",
+      "/home/brittonr/mantle-runs/receipt-fix-v30/.source-built-fixed-point-v30-binutils-middle-closure-20260821.source-built-fixed-point-staging-3659374/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain=/mantle/release/provider/c-toolchain",
+      "--remap-path-prefix",
+      "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point-manifest-fix/execution=/mantle/release/execution",
+      "--remap-path-prefix",
+      "/home/brittonr/mantle-runs/receipt-fix-v31/source-0cd57953=/mantle/release/source"
+    ],
+    "builder": "rustc",
+    "env": {
+      "CARGO_MANIFEST_DIR": "/proc/self/cwd/vendor-deps/crossterm",
+      "CARGO_MANIFEST_LINKS": "",
+      "CARGO_PKG_AUTHORS": "T. Post",
+      "CARGO_PKG_DESCRIPTION": "A crossplatform terminal library for manipulating terminals.",
+      "CARGO_PKG_HOMEPAGE": "",
+      "CARGO_PKG_LICENSE": "MIT",
+      "CARGO_PKG_LICENSE_FILE": "",
+      "CARGO_PKG_NAME": "crossterm",
+      "CARGO_PKG_README": "README.md",
+      "CARGO_PKG_REPOSITORY": "https://github.com/crossterm-rs/crossterm",
+      "CARGO_PKG_RUST_VERSION": "1.63.0",
+      "CARGO_PKG_VERSION": "0.29.0",
+      "CARGO_PKG_VERSION_MAJOR": "0",
+      "CARGO_PKG_VERSION_MINOR": "29",
+      "CARGO_PKG_VERSION_PATCH": "0",
+      "CARGO_PKG_VERSION_PRE": "",
+      "CRATE_KIND": "lib",
+      "MANTLE_CARGO_PROFILE_DUAL_HOST_POLICY": "{\"selected_profile\":\"dev\",\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"incremental\":false,\"build_override\":{\"dual_use\":true,\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"environment\":{\"DEBUG\":\"true\",\"NUM_JOBS\":\"1\",\"OPT_LEVEL\":\"0\"}}}",
+      "MANTLE_CARGO_PROFILE_HOST_POLICY": "{\"selected_profile\":\"dev\",\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"incremental\":false,\"build_override\":{\"dual_use\":false,\"settings\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"environment\":{\"DEBUG\":\"false\",\"NUM_JOBS\":\"1\",\"OPT_LEVEL\":\"0\"}}}",
+      "MANTLE_CARGO_PROFILE_POLICY": "{\"selected_profile\":\"dev\",\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"incremental\":false}",
+      "MANTLE_RUST_UNIT_EXECUTION_KIND": "target",
+      "MODE": "build",
+      "PACKAGE_ID": "registry+https://github.com/rust-lang/crates.io-index#crossterm@0.29.0",
+      "PROFILE": "dev",
+      "SNIX_BUILD_SANDBOX_SHELL": "/mantle/release/provider/sandbox-shell",
+      "SOURCE_CLOSURE_DIGEST": "696c4060f7d14a2b5cf287cf79d096baace2a2c626496f9062766019648c1909",
+      "TARGET": "x86_64-unknown-linux-musl"
+    },
+    "inputs": [
+      "artifact:registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0:bitflags",
+      "artifact:registry+https://github.com/rust-lang/crates.io-index#derive_more@2.1.1:derive_more",
+      "artifact:registry+https://github.com/rust-lang/crates.io-index#mio@1.2.0:mio",
+      "artifact:registry+https://github.com/rust-lang/crates.io-index#parking_lot@0.12.5:parking_lot",
+      "artifact:registry+https://github.com/rust-lang/crates.io-index#rustix@1.1.4:rustix",
+      "artifact:registry+https://github.com/rust-lang/crates.io-index#signal-hook-mio@0.2.5:signal_hook_mio",
+      "artifact:registry+https://github.com/rust-lang/crates.io-index#signal-hook@0.3.18:signal_hook",
+      "host-artifact:28:proc-macro:document_features",
+      "source:registry+https://github.com/rust-lang/crates.io-index#crossterm@0.29.0:591294ba3a8e17386a9b3f5ef817c6608f1b65c8a92773323238ccac92e128ff"
+    ],
+    "name": "rust-unit-0-crossterm",
+    "outputs": [
+      "out"
+    ],
+    "system": "x86_64-linux"
+  },
+  "execution_kind": "target",
+  "generated_metadata": null,
+  "metadata_dependencies": [],
+  "mode": "build",
+  "package_id": "registry+https://github.com/rust-lang/crates.io-index#crossterm@0.29.0",
+  "profile": "dev",
+  "rustc_args_digest_blake3": "71a5558024c2afd4603768993a6276f9b559d5769455d0cb3cfac573512e29a1",
+  "rustc_metadata_hash": "79138f68e3b5ed9f",
+  "selected_triple": "x86_64-unknown-linux-musl",
+  "source_digest": {
+    "algorithm": "blake3-tree-v1",
+    "value": "591294ba3a8e17386a9b3f5ef817c6608f1b65c8a92773323238ccac92e128ff"
+  },
+  "target_kind": "lib",
+  "target_name": "crossterm",
+  "unit_id": "native:2656d92faa82b2b8e6083b935bdcd2ac5a303aed9f802879648b6df1c7c39aaa:registry+https://github.com/rust-lang/crates.io-index#crossterm@0.29.0:crossterm:lib:build"
+}

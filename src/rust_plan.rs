@@ -7085,6 +7085,12 @@ fn resolve_native_features(request: NativeFeatureResolutionRequest) -> NativeFea
                     }
                 }
                 Ok(NativeFeatureEntry::DependencyFeature(edge)) => {
+                    if !edge.weak && request.optional_dependencies.contains(&edge.dependency) {
+                        activated_optional_dependencies.insert(edge.dependency.clone());
+                        if optional_dependency_exposes_implicit_feature(&request.feature_defs, &edge.dependency) {
+                            push_native_feature(&edge.dependency, &mut selected_features, &mut queue);
+                        }
+                    }
                     dependency_feature_edges.insert(edge);
                 }
                 Err(blocker) => {
@@ -7108,6 +7114,15 @@ fn resolve_native_feature_roles(request: NativeFeatureRoleResolutionRequest) -> 
         build: resolve_native_features(request.build),
         host: resolve_native_features(request.host),
     }
+}
+
+fn optional_dependency_exposes_implicit_feature(
+    feature_defs: &BTreeMap<String, Vec<String>>,
+    dependency: &str,
+) -> bool {
+    debug_assert!(!dependency.is_empty());
+    let explicit_dependency_entry = format!("dep:{dependency}");
+    !feature_defs.values().flatten().any(|entry| entry == &explicit_dependency_entry)
 }
 
 fn seed_native_feature_queue(
@@ -19455,6 +19470,59 @@ mod tests {
             weak: true,
         }));
         assert!(resolution.blockers.iter().any(|blocker| blocker.class == "unknown-feature-entry"));
+    }
+
+    #[test]
+    fn native_feature_resolver_exposes_nonweak_optional_dependency_feature_edge() {
+        let optional_dependencies = BTreeSet::from(["rand".to_string()]);
+        let mut feature_defs = BTreeMap::new();
+        feature_defs.insert("prime".to_string(), vec!["rand/std_rng".to_string()]);
+        let activated = resolve_native_features(NativeFeatureResolutionRequest {
+            feature_defs,
+            optional_dependencies: optional_dependencies.clone(),
+            explicit_features: vec!["prime".to_string()],
+            all_features: false,
+            no_default_features: true,
+        });
+        let mut weak_defs = BTreeMap::new();
+        weak_defs.insert("prime".to_string(), vec!["rand?/std_rng".to_string()]);
+        let weak = resolve_native_features(NativeFeatureResolutionRequest {
+            feature_defs: weak_defs,
+            optional_dependencies: optional_dependencies.clone(),
+            explicit_features: vec!["prime".to_string()],
+            all_features: false,
+            no_default_features: true,
+        });
+        let mut suppressed_defs = BTreeMap::new();
+        suppressed_defs.insert("prime".to_string(), vec!["rand/std_rng".to_string()]);
+        suppressed_defs.insert("internal-rand".to_string(), vec!["dep:rand".to_string()]);
+        let suppressed = resolve_native_features(NativeFeatureResolutionRequest {
+            feature_defs: suppressed_defs,
+            optional_dependencies,
+            explicit_features: vec!["prime".to_string()],
+            all_features: false,
+            no_default_features: true,
+        });
+
+        assert!(activated.blockers.is_empty(), "{:#?}", activated.blockers);
+        assert_eq!(activated.selected_features, vec!["prime".to_string(), "rand".to_string()]);
+        assert_eq!(activated.activated_optional_dependencies, vec!["rand".to_string()]);
+        assert!(activated.dependency_feature_edges.contains(&NativeDependencyFeatureEdge {
+            dependency: "rand".to_string(),
+            feature: "std_rng".to_string(),
+            weak: false,
+        }));
+        assert!(weak.blockers.is_empty(), "{:#?}", weak.blockers);
+        assert_eq!(weak.selected_features, vec!["prime".to_string()]);
+        assert!(weak.activated_optional_dependencies.is_empty());
+        assert!(weak.dependency_feature_edges.contains(&NativeDependencyFeatureEdge {
+            dependency: "rand".to_string(),
+            feature: "std_rng".to_string(),
+            weak: true,
+        }));
+        assert!(suppressed.blockers.is_empty(), "{:#?}", suppressed.blockers);
+        assert_eq!(suppressed.selected_features, vec!["prime".to_string()]);
+        assert_eq!(suppressed.activated_optional_dependencies, vec!["rand".to_string()]);
     }
 
     #[test]
