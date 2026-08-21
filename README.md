@@ -91,6 +91,8 @@ mantle build examples/hello.ncl --no-substitute
 
 Use `mantle --json build ...` for the stable aggregate build report. Its compatibility identifier is `crunch-build-report-v1`.
 
+External CI consumers can bind normalized requests and observations through the host-independent [`mantle-build-contract`](docs/build-interchange-contract.md) component. This contract does not import build or store authority.
+
 Use `mantle build --evaluation-stream ...` for bounded NDJSON selected-root events. Stdout contains only `mantle-evaluation-stream-v1` records. See [the evaluation stream contract](docs/evaluation-stream-contract.md) for ordering, status, cancellation, and compatibility rules.
 
 ## Core workflows

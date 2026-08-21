@@ -4882,6 +4882,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mantle-build-contract"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "mantle-portable-client-core"
 version = "0.1.0"
 dependencies = [
