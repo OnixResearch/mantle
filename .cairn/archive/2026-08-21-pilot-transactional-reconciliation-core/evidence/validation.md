@@ -9,8 +9,9 @@
 ## Gates
 
 - `cargo clippy -p mantle --lib --no-deps -- -D warnings`: passed.
-- Scoped tigerstyle on `-p mantle`: 33 findings, all in `src/operator_contract.rs` and `src/protected_exec_seccomp.rs`, which this pilot does not touch. A parent-revision control run confirms they are pre-existing (see below).
+- Scoped tigerstyle on `-p mantle`: 33 findings, all in `src/operator_contract.rs` and `src/protected_exec_seccomp.rs`, which this pilot does not touch. A parent-revision control at base `43f07de5` reports 34 findings in the same files: pre-existing, zero introduced.
 - Whole-workspace quality and tigerstyle wrappers: pre-existing failures in `mantlepkgs-core` and vendored crates unrelated to this pilot.
+- `nix flake check -L`: fails on exactly one check, `bootstrap-blocker-inventory`, identically at base `43f07de5` and on this branch (115 findings, enforce=true). Parent-revision control confirms the failure is pre-existing; the pilot introduces no new Nix-check failures.
 
 ## Pre-existing environment blocker
 
