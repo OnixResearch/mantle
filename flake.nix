@@ -46,6 +46,7 @@
       flake = false;
     };
     octet.url = "github:OnixResearch/octet/86ee46b3b9257b145d2dbeb6ce9d9897607db99c";
+    cairn.url = "github:OnixResearch/cairn/695124d459574ba7aeba6097310d237f393c243c";
   };
 
   outputs =
@@ -64,6 +65,7 @@
       boundedTreeSource,
       transactionalReconciliationSource,
       octet,
+      cairn,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -1623,6 +1625,7 @@
             ]
             ++ [
               astGrepToolchain
+              cairn.packages.${system}.default
               checkNickelConfigs
               checkStoreRetentionPolicy
               checkStoreOverlayPolicy
