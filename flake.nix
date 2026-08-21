@@ -263,6 +263,8 @@
             || pkgs.lib.hasPrefix "${toString ./cairn/archive}/" pathString
             || pathString == toString ./config
             || pkgs.lib.hasPrefix "${toString ./config}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./contracts}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./fixtures/mantle-build-contract}/" pathString
             || builtins.elem pathString catalogExamplePaths
             || pathString == toString ./examples/catalog.ncl
             || pathString == toString ./examples/README.md
@@ -1438,6 +1440,46 @@
                 rg -Fq 'CommittedDurabilityUnknown' src/remote_attempt_log_store.rs
                 rg -Fq 'commit_manifest_with_hook' src/remote_attempt_log_store.rs
 
+                touch "$out"
+              '';
+
+          mantle-build-contract = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p mantle-build-contract --all-targets";
+          };
+
+          mantle-build-contract-wasm = craneLib.cargoBuild {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoExtraArgs = "-p mantle-build-contract --lib --target wasm32-unknown-unknown";
+          };
+
+          mantle-build-contract-nickel =
+            pkgs.runCommand "mantle-build-contract-nickel"
+              {
+                nativeBuildInputs = [ pkgs.nickel ];
+              }
+              ''
+                for fixture in ${self}/fixtures/mantle-build-contract/positive/*.ncl; do
+                  nickel typecheck "$fixture"
+                  nickel export --format json "$fixture" > /dev/null
+                done
+                for fixture in ${self}/fixtures/mantle-build-contract/negative/*.ncl; do
+                  if nickel export --format json "$fixture" >negative.out 2>negative.err; then
+                    echo "negative Mantle build contract fixture unexpectedly passed: $fixture" >&2
+                    exit 1
+                  fi
+                  test -s negative.err
+                done
                 touch "$out"
               '';
 

@@ -1,0 +1,137 @@
+{
+  "cache_success": {
+    "builder_identity": "b3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "cache": {
+      "kind": "substitution",
+      "source_identity": "b3:2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "identity": "b3:210b7c1ca8bf09e3f02861915fb394a0334f04891dca9eb051240037280b9d6a",
+    "logs": [
+      "b3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    ],
+    "metrics": [
+      {
+        "name": "duration-ms",
+        "value": 1
+      }
+    ],
+    "non_claims": [
+      "build observation does not prove build correctness",
+      "build observation does not prove sandbox completeness",
+      "cache observation does not prove cache truth",
+      "product admission does not prove product semantics",
+      "build observation does not prove reproducibility",
+      "build observation does not establish release readiness"
+    ],
+    "outcome": "success",
+    "products": [
+      {
+        "artifact_identity": "b3:8888888888888888888888888888888888888888888888888888888888888888",
+        "name": "binary",
+        "store_identity": "b3:9999999999999999999999999999999999999999999999999999999999999999"
+      },
+      {
+        "artifact_identity": "b3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "name": "metadata",
+        "store_identity": "b3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "receipt_identity": "b3:1111111111111111111111111111111111111111111111111111111111111111",
+    "request_identity": "b3:4b8df50057dca9c8795c27908d7dec326d1e1778858b6918dd687c6c6c6ca9d1",
+    "schema": "mantle.build-observation.v1",
+    "store_identity": "b3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "worker_identity": "b3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "failure": {
+    "builder_identity": "b3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "cache": {
+      "kind": "none",
+      "source_identity": null
+    },
+    "identity": "b3:b6e173fb19f6d78c8fedcaa28aa10ba2c190793853bd4c4b3686b984d5445a8c",
+    "logs": [
+      "b3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    ],
+    "metrics": [
+      {
+        "name": "duration-ms",
+        "value": 1
+      }
+    ],
+    "non_claims": [
+      "build observation does not prove build correctness",
+      "build observation does not prove sandbox completeness",
+      "cache observation does not prove cache truth",
+      "product admission does not prove product semantics",
+      "build observation does not prove reproducibility",
+      "build observation does not establish release readiness"
+    ],
+    "outcome": "failed",
+    "products": [],
+    "receipt_identity": "b3:1111111111111111111111111111111111111111111111111111111111111111",
+    "request_identity": "b3:4b8df50057dca9c8795c27908d7dec326d1e1778858b6918dd687c6c6c6ca9d1",
+    "schema": "mantle.build-observation.v1",
+    "store_identity": "b3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "worker_identity": "b3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "request": {
+    "attempt_identity": "b3:3333333333333333333333333333333333333333333333333333333333333333",
+    "candidate_identity": "b3:4444444444444444444444444444444444444444444444444444444444444444",
+    "effect_identity": "b3:2222222222222222222222222222222222222222222222222222222222222222",
+    "idempotency_key": "b3:1111111111111111111111111111111111111111111111111111111111111111",
+    "identity": "b3:4b8df50057dca9c8795c27908d7dec326d1e1778858b6918dd687c6c6c6ca9d1",
+    "pipeline_revision_identity": "b3:5555555555555555555555555555555555555555555555555555555555555555",
+    "plan_identity": "b3:6666666666666666666666666666666666666666666666666666666666666666",
+    "platform": "x86_64-linux",
+    "policy_identity": "b3:7777777777777777777777777777777777777777777777777777777777777777",
+    "required_products": [
+      "binary",
+      "metadata"
+    ],
+    "schema": "mantle.build-request.v1"
+  },
+  "schema": "mantle.build-producer-fixtures.v1",
+  "success": {
+    "builder_identity": "b3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "cache": {
+      "kind": "none",
+      "source_identity": null
+    },
+    "identity": "b3:bd397f9128459edec87655bbf921f9a45c54a71b1a4ef865fe2e2a3a7204e72a",
+    "logs": [
+      "b3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    ],
+    "metrics": [
+      {
+        "name": "duration-ms",
+        "value": 1
+      }
+    ],
+    "non_claims": [
+      "build observation does not prove build correctness",
+      "build observation does not prove sandbox completeness",
+      "cache observation does not prove cache truth",
+      "product admission does not prove product semantics",
+      "build observation does not prove reproducibility",
+      "build observation does not establish release readiness"
+    ],
+    "outcome": "success",
+    "products": [
+      {
+        "artifact_identity": "b3:8888888888888888888888888888888888888888888888888888888888888888",
+        "name": "binary",
+        "store_identity": "b3:9999999999999999999999999999999999999999999999999999999999999999"
+      },
+      {
+        "artifact_identity": "b3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "name": "metadata",
+        "store_identity": "b3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ],
+    "receipt_identity": "b3:1111111111111111111111111111111111111111111111111111111111111111",
+    "request_identity": "b3:4b8df50057dca9c8795c27908d7dec326d1e1778858b6918dd687c6c6c6ca9d1",
+    "schema": "mantle.build-observation.v1",
+    "store_identity": "b3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "worker_identity": "b3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  }
+}
