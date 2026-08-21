@@ -6,7 +6,7 @@ The hydrated full-source-provider proof reaches matching Mantle binaries but ins
 
 ### Decision: construct providers inside the proof authority
 
-**Choice:** The promoted evidence run starts with empty transition, native-provider, Rust-provider, and Mantle output authorities. Its inputs contain authenticated source records and seed/lineage authority, never prebuilt provider directories. Development runs may use receipt-validated caches, but cached provider outputs cannot satisfy this proof.
+**Choice:** The promoted evidence run starts with empty transition, native-provider, Rust-provider, and Mantle output authorities. Its inputs contain authenticated source records and seed/lineage authority, never prebuilt provider directories. Development runs may use receipt-validated caches, but cached provider outputs cannot satisfy this proof. Profile refresh replaces the Mantle source and checked vendor records together. Proof preflight validates their lock, package, and file-checksum closure before StageX. ADR 0080 records this pairing.
 
 **Rationale:** Importing or revalidating a previously built provider would prove consumption, not the claimed source-to-Mantle lineage.
 

@@ -1,6 +1,6 @@
 # Mantle command reference
 
-Catalog BLAKE3: `72acdf422788614d163966a8e464623276ee49535fb936c629e45f5554ec1277`
+Catalog BLAKE3: `b2a3b648323b4a064b176e61acadf5e1aa76a7e65dbb93910abadf6a036b65ef`
 
 ## Daily commands
 
@@ -1286,7 +1286,7 @@ Compare build-root source requirements with imported source state before buildin
 
 ### `mantle source bundle refresh-mantle-source`
 
-Replace only the Mantle source record in a verified source-built profile
+Replace the Mantle source and its checked vendor record in a verified source-built profile
 
 - Mutation: `project-files`
 - Network: `required`

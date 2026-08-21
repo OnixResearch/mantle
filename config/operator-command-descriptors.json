@@ -3374,7 +3374,7 @@
       "-h",
       "-v"
     ],
-    "help": "Replace only the Mantle source record in a verified source-built profile",
+    "help": "Replace the Mantle source and its checked vendor record in a verified source-built profile",
     "supports_json": true
   },
   {

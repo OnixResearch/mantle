@@ -1,6 +1,6 @@
 {
   "schema": "mantle-operator-command-catalog-v1",
-  "identity_blake3": "72acdf422788614d163966a8e464623276ee49535fb936c629e45f5554ec1277",
+  "identity_blake3": "b2a3b648323b4a064b176e61acadf5e1aa76a7e65dbb93910abadf6a036b65ef",
   "entries": [
     {
       "descriptor": {
@@ -9450,7 +9450,7 @@
           "-h",
           "-v"
         ],
-        "help": "Replace only the Mantle source record in a verified source-built profile",
+        "help": "Replace the Mantle source and its checked vendor record in a verified source-built profile",
         "supports_json": true
       },
       "policy": {

@@ -3054,7 +3054,7 @@ pub enum SourceBundleAction {
         #[arg(long)]
         preflight: bool,
     },
-    /// Replace only the Mantle source record in a verified source-built profile
+    /// Replace the Mantle source and its checked vendor record in a verified source-built profile
     RefreshMantleSource {
         /// Existing source-built fixed-point profile
         #[arg(long)]

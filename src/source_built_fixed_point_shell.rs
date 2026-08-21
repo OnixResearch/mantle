@@ -18,9 +18,9 @@ use crate::cargo_free_self_build::CargoFreeSelfBuildOptions;
 use crate::errors::RunError;
 use crate::full_source_rust_binding_shell::FullSourceRustHostToolMaterializationRequest;
 use crate::native_toolchain_closure::NativeToolchainClosureOptions;
-use crate::source_built_fixed_point::plan_source_built_fixed_point;
 use crate::source_built_fixed_point::InitialOutputAuthorityState;
 use crate::source_built_fixed_point::ProofHermeticityMode;
+use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
 use crate::source_built_fixed_point::SourceAuthorityInput;
 use crate::source_built_fixed_point::SourceAuthorityRole;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPlan;
@@ -28,24 +28,24 @@ use crate::source_built_fixed_point::SourceBuiltFixedPointPlanInput;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPolicies;
 use crate::source_built_fixed_point::SourceBuiltFixedPointResourceBounds;
 use crate::source_built_fixed_point::SourceContentKind;
-use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
+use crate::source_built_fixed_point::plan_source_built_fixed_point;
+use crate::source_built_fixed_point_dev_cache::DEV_CACHE_ENTRY_FILE;
+use crate::source_built_fixed_point_dev_cache::DevCachePolicies;
+use crate::source_built_fixed_point_dev_cache::DevProviderCacheEntry;
+use crate::source_built_fixed_point_dev_cache::DevProviderCacheLookup;
+use crate::source_built_fixed_point_dev_cache::FAST_FAIL_SCHEMA;
+use crate::source_built_fixed_point_dev_cache::FastFailDecision;
+use crate::source_built_fixed_point_dev_cache::StageCompletionMarker;
+use crate::source_built_fixed_point_dev_cache::StageMarkerValidation;
 use crate::source_built_fixed_point_dev_cache::dev_provider_cache_key;
 use crate::source_built_fixed_point_dev_cache::evaluate_fast_fail;
 use crate::source_built_fixed_point_dev_cache::evaluate_provider_cache_lookup;
 use crate::source_built_fixed_point_dev_cache::validate_stage_marker;
-use crate::source_built_fixed_point_dev_cache::DevCachePolicies;
-use crate::source_built_fixed_point_dev_cache::DevProviderCacheEntry;
-use crate::source_built_fixed_point_dev_cache::DevProviderCacheLookup;
-use crate::source_built_fixed_point_dev_cache::FastFailDecision;
-use crate::source_built_fixed_point_dev_cache::StageCompletionMarker;
-use crate::source_built_fixed_point_dev_cache::StageMarkerValidation;
-use crate::source_built_fixed_point_dev_cache::DEV_CACHE_ENTRY_FILE;
-use crate::source_built_fixed_point_dev_cache::FAST_FAIL_SCHEMA;
+use crate::source_bundle::SourceBuiltFixedPointProfileRecords;
+use crate::source_bundle::SourceRecord;
 use crate::source_bundle::assemble_source_bundle;
 use crate::source_bundle::materialize_source_record_payload;
 use crate::source_bundle::source_built_fixed_point_profile_records;
-use crate::source_bundle::SourceBuiltFixedPointProfileRecords;
-use crate::source_bundle::SourceRecord;
 use crate::stagex_provider::StagexProviderRequest;
 use crate::stagex_transition::StagexTransitionRequest;
 
@@ -512,6 +512,11 @@ fn enforce_open_file_descriptor_limit(_required_limit: u64) -> Result<(), RunErr
     Err(proof_error("source-built fixed-point open-file descriptor enforcement requires Linux".to_string()))
 }
 
+fn validate_materialized_vendor_inputs(source_root: &Path) -> Result<(), RunError> {
+    crate::self_build::require_checked_vendor_inputs(source_root)
+        .map_err(|error| proof_error(format!("validating materialized vendored Cargo inputs: {error}")))
+}
+
 fn prepare_attempt(
     options: &SourceBuiltFixedPointOptions<'_>,
     started_at: Instant,
@@ -541,6 +546,7 @@ fn prepare_attempt(
     let mantle_source_digest = hash_materialized_source(&source_root)?;
     let vendor_root = source_root.join(VENDOR_RELATIVE_PATH);
     materialize_source_record_payload(records.vendor_inputs, &vendor_root)?;
+    validate_materialized_vendor_inputs(&source_root)?;
     let vendor_inputs_digest = hash_materialized_source(&vendor_root)?;
     let stagex_seed_root = inputs_dir.join(STAGEX_SEED_DIR);
     materialize_source_record_payload(records.stagex_seed, &stagex_seed_root)?;
@@ -2295,6 +2301,44 @@ mod tests {
     const RETAINED_TRANSITION_SOURCE_STATE_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SOURCE_STATE";
     const OPEN_FILE_LIMIT_CHILD_ENV: &str = "MANTLE_TEST_OPEN_FILE_LIMIT_CHILD";
     const OPEN_FILE_LIMIT_TEST_MAX: u64 = 256;
+    const VENDOR_FIXTURE_MANIFEST: &[u8] = b"[package]\nname = \"vendor-fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[lib]\npath = \"src/lib.rs\"\n";
+    const VENDOR_FIXTURE_LIBRARY: &[u8] = b"pub fn fixture() {}\n";
+    const VENDOR_FIXTURE_REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    fn fixture_cargo_sha256(bytes: &[u8]) -> String {
+        use sha2::Digest as _;
+
+        data_encoding::HEXLOWER.encode(&sha2::Sha256::digest(bytes))
+    }
+
+    fn write_materialized_vendor_fixture(source_root: &Path) {
+        let cargo_dir = source_root.join(".cargo");
+        let package_dir = source_root.join(VENDOR_RELATIVE_PATH).join("vendor-fixture");
+        fs::create_dir_all(package_dir.join("src")).unwrap();
+        fs::create_dir_all(&cargo_dir).unwrap();
+        fs::write(cargo_dir.join("vendor-config.toml"), "[source.vendored-sources]\ndirectory = \"vendor-deps\"\n")
+            .unwrap();
+        fs::write(
+            source_root.join("Cargo.lock"),
+            format!(
+                "version = 4\n\n[[package]]\nname = \"vendor-fixture\"\nversion = \"0.1.0\"\nsource = \"git+https://example.invalid/vendor-fixture?rev={VENDOR_FIXTURE_REVISION}#{VENDOR_FIXTURE_REVISION}\"\n"
+            ),
+        )
+        .unwrap();
+        fs::write(package_dir.join("Cargo.toml"), VENDOR_FIXTURE_MANIFEST).unwrap();
+        fs::write(package_dir.join("src/lib.rs"), VENDOR_FIXTURE_LIBRARY).unwrap();
+        let files = BTreeMap::from([
+            ("Cargo.toml", fixture_cargo_sha256(VENDOR_FIXTURE_MANIFEST)),
+            ("src/lib.rs", fixture_cargo_sha256(VENDOR_FIXTURE_LIBRARY)),
+        ]);
+        fs::write(
+            package_dir.join(".cargo-checksum.json"),
+            serde_json::to_vec(&serde_json::json!({ "files": files, "package": null })).unwrap(),
+        )
+        .unwrap();
+        assert!(source_root.join("Cargo.lock").is_file());
+        assert!(package_dir.join(".cargo-checksum.json").is_file());
+    }
 
     fn write_stagex_transition_handoff_fixture(execution_root: &Path) {
         for relative in STAGEX_TRANSITION_HANDOFF_DIRECTORIES {
@@ -2309,6 +2353,19 @@ mod tests {
         fs::write(execution_root.join(STAGEX_TRANSITION_AUDIT_FILE), b"[]").unwrap();
         assert!(execution_root.join(STAGEX_TRANSITION_REPORT_FILE).is_file());
         assert!(STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES.iter().all(|path| execution_root.join(path).is_file()));
+    }
+
+    #[test]
+    fn materialized_vendor_inputs_are_checked_before_construction() {
+        let temp = tempfile::tempdir().unwrap();
+        write_materialized_vendor_fixture(temp.path());
+
+        validate_materialized_vendor_inputs(temp.path()).unwrap();
+        fs::remove_dir_all(temp.path().join(VENDOR_RELATIVE_PATH).join("vendor-fixture")).unwrap();
+        let error = validate_materialized_vendor_inputs(temp.path()).unwrap_err();
+
+        assert!(error.to_string().contains("validating materialized vendored Cargo inputs"));
+        assert!(error.to_string().contains("missing from vendor-deps"));
     }
 
     #[test]

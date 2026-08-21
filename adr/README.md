@@ -86,3 +86,4 @@ compatibility surface, crate name, or historical decision.
 | [0077](0077-adopt-nix-derivation-at-the-nix-compatibility-boundary.md) | Adopt `nix-derivation` at the Nix compatibility boundary | Accepted |
 | [0078](0078-explore-distributed-evaluation.md) | Explore distributed evaluation feasibility | Accepted |
 | [0079](0079-separate-source-fixed-point-evidence-from-working-scratch.md) | Separate source fixed-point evidence from working scratch | Accepted |
+| [0080](0080-refresh-source-and-vendor-inputs-as-one-authority-pair.md) | Refresh source and vendor inputs as one authority pair | Accepted |
