@@ -4830,6 +4830,7 @@ dependencies = [
  "crunch-eval",
  "crunch-eval-budget-core",
  "crunch-evaluation-stream-core",
+ "crunch-gc-core",
  "crunch-glue",
  "crunch-hardware-simulation",
  "crunch-hardware-simulation-core",
@@ -4876,6 +4877,7 @@ dependencies = [
  "toml 0.8.23",
  "tracing",
  "tracing-subscriber",
+ "transactional-reconciliation-core",
  "ureq",
  "url",
  "zeroize",
@@ -8462,6 +8464,11 @@ dependencies = [
  "cc",
  "windows-targets 0.52.6",
 ]
+
+[[package]]
+name = "transactional-reconciliation-core"
+version = "0.1.0"
+source = "git+https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9#606489b5f40298181214bb76bc3457b607f225d9"
 
 [[package]]
 name = "try-lock"

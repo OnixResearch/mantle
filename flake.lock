@@ -451,6 +451,7 @@
         "rust-overlay": "rust-overlay_4",
         "secretSpecSource": "secretSpecSource",
         "tigerstyle": "tigerstyle",
+        "transactionalReconciliationSource": "transactionalReconciliationSource",
         "wasi-virt": "wasi-virt"
       }
     },
@@ -694,6 +695,23 @@
         "ref": "main",
         "type": "git",
         "url": "ssh://git@github.com/brittonr/tigerstyle-rs.git"
+      }
+    },
+    "transactionalReconciliationSource": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1787325508,
+        "narHash": "sha256-uAA4IL/t246RbPmOKcevUjx9kqTMRfO4puFD71zcQFw=",
+        "ref": "refs/heads/main",
+        "rev": "606489b5f40298181214bb76bc3457b607f225d9",
+        "revCount": 5,
+        "type": "git",
+        "url": "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git"
+      },
+      "original": {
+        "rev": "606489b5f40298181214bb76bc3457b607f225d9",
+        "type": "git",
+        "url": "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git"
       }
     },
     "valence": {

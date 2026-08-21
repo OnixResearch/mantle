@@ -41,6 +41,10 @@
       url = "git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1";
       flake = false;
     };
+    transactionalReconciliationSource = {
+      url = "git+https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9";
+      flake = false;
+    };
     octet.url = "github:OnixResearch/octet/86ee46b3b9257b145d2dbeb6ce9d9897607db99c";
   };
 
@@ -58,6 +62,7 @@
       artifactAuthSource,
       durablePublicationSource,
       boundedTreeSource,
+      transactionalReconciliationSource,
       octet,
       ...
     }:
@@ -203,6 +208,36 @@
             && boundedTreeWorkspace.workspace.package.license == "AGPL-3.0-or-later"
           ) "Mantle bounded-tree Cargo/Nix source identity, package set, RID, or license drifted";
           true;
+        transactionalReconciliationRevision = "606489b5f40298181214bb76bc3457b607f225d9";
+        transactionalReconciliationRid = "rad:z4Tky6zvC8w4Y6c4YBzNxVbq5n752";
+        transactionalReconciliationRepository = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git";
+        transactionalReconciliationDependency =
+          cargoManifest.dev-dependencies."transactional-reconciliation-core";
+        transactionalReconciliationLockPackages = builtins.filter (
+          package: package.name == "transactional-reconciliation-core"
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        transactionalReconciliationExpectedLockSource = "git+${transactionalReconciliationRepository}?rev=${transactionalReconciliationRevision}#${transactionalReconciliationRevision}";
+        transactionalReconciliationWorkspace = builtins.fromTOML (
+          builtins.readFile (transactionalReconciliationSource + "/Cargo.toml")
+        );
+        transactionalReconciliationSourceAdmitted =
+          assert pkgs.lib.assertMsg (
+            transactionalReconciliationDependency.git == transactionalReconciliationRepository
+            && transactionalReconciliationDependency.rev == transactionalReconciliationRevision
+            && transactionalReconciliationSource.rev == transactionalReconciliationRevision
+            && map (package: package.name) transactionalReconciliationLockPackages == [
+              "transactional-reconciliation-core"
+            ]
+            && builtins.all (
+              package: package.source == transactionalReconciliationExpectedLockSource
+            ) transactionalReconciliationLockPackages
+            && transactionalReconciliationWorkspace.workspace.members == [
+              "crates/transactional-reconciliation-core"
+            ]
+            && transactionalReconciliationWorkspace.workspace.package.repository == transactionalReconciliationRepository
+            && transactionalReconciliationWorkspace.workspace.package.license == "MIT"
+          ) "Mantle transactional reconciliation Cargo/Nix source identity, package, RID, or license drifted";
+          true;
         nickelExportCoreRevision = "257fafc1c746f1faf156207043a4c826bfb16d49";
         nickelExportCoreSource =
           assert pkgs.lib.assertMsg (
@@ -315,6 +350,13 @@
             then
               checkout.overrideAttrs (_old: {
                 src = boundedTreeSource;
+              })
+            else if
+              transactionalReconciliationSourceAdmitted
+              && builtins.any (package: package.name == "transactional-reconciliation-core") packages
+            then
+              checkout.overrideAttrs (_old: {
+                src = transactionalReconciliationSource;
               })
             else
               checkout;
@@ -1206,6 +1248,26 @@
                 if rg -n 'github\.com/OnixResearch/bounded-tree|bounded-tree-(core|cap)[[:space:]]*=[[:space:]]*\{[[:space:]]*path' \
                   Cargo.toml Cargo.lock flake.nix crates/crunch-release-core/Cargo.toml; then
                   echo 'bounded-tree fallback or sibling path is not admitted' >&2
+                  exit 1
+                fi
+                touch "$out"
+              '';
+          transactional-reconciliation-source-admission =
+            assert transactionalReconciliationSourceAdmitted;
+            pkgs.runCommand "mantle-transactional-reconciliation-source-admission"
+              {
+                inherit src;
+                nativeBuildInputs = [ pkgs.ripgrep ];
+              }
+              ''
+                set -eu
+                cd "$src"
+                rg -Fq '${transactionalReconciliationRevision}' Cargo.toml Cargo.lock flake.nix README.md
+                rg -Fq '${transactionalReconciliationRid}' README.md
+                rg -Fq 'transactional_reconciliation_core::admit_dispatch' tests/transactional_reconciliation_pilot.rs
+                if rg -n 'github\.com/OnixResearch/transactional-reconciliation-core|transactional-reconciliation-core[[:space:]]*=[[:space:]]*\{[[:space:]]*path' \
+                  Cargo.toml Cargo.lock flake.nix; then
+                  echo 'transactional reconciliation fallback or sibling path is not admitted' >&2
                   exit 1
                 fi
                 touch "$out"
