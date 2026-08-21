@@ -15,6 +15,11 @@ replace-with = "vendored-sources"
 git = "https://github.com/tvlfyi/wu-manber.git"
 replace-with = "vendored-sources"
 
+[source."git+https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9"]
+git = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git"
+rev = "606489b5f40298181214bb76bc3457b607f225d9"
+replace-with = "vendored-sources"
+
 [source."git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1"]
 git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git"
 rev = "b0fd0103bc9eed2c1b6d852045959462d105d8f1"
