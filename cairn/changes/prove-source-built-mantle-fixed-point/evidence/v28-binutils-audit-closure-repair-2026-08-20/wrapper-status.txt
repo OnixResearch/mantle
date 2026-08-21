@@ -1,0 +1,7 @@
+started_at=2026-08-20T21:27:57-04:00
+wrapper_pid=3263285
+profile_blake3=bd9afb4c02dd734a5448fc940b62770041fd642053ad2217092b58d28d9a4802
+orchestrator=/home/brittonr/mantle-runs/receipt-fix-v28/mantle-df346d30-release
+output=/home/brittonr/mantle-runs/receipt-fix-v28/source-built-fixed-point-v28-tools-source-closure-20260820
+finished_at=2026-08-20T22:37:18-04:00
+exit_code=1

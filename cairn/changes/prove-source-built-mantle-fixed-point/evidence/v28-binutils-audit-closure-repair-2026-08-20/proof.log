@@ -1,0 +1,48 @@
+mantle-runtime-fingerprint {"schema":"mantle-runtime-fingerprint-v1","mantle_version":"0.1.0","command":"self-build","logical_store_prefix":"/mantle/store","physical_store_dir":"/nix/store","state_dir":"/home/brittonr/.local/state/crunch","json_mode":false,"verbosity_source":"verbose-flag","diagnostic_scope":"selected-runtime-context-only","hermeticity_mode":"strict","substitution_mode":"disabled","substituter_count":0,"signing_key_selected":false,"trusted_public_key_count":0,"trust_unsigned":false}
+[2m2026-08-21T01:34:12.704605Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T01:34:12.706891Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T01:34:12.829572Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T01:34:12.831577Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T01:59:38.227469Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T01:59:38.229488Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T01:59:38.377361Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T01:59:38.379470Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:18:23.922337Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:18:23.924334Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:18:27.779542Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:18:27.781562Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:18:29.662976Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:18:29.664976Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:18:31.001141Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:18:31.003150Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:18:32.347892Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:18:32.349891Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:18:34.020808Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:18:34.022810Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:18:35.757096Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:18:35.759133Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:18:45.463010Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:18:45.465196Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:18:51.734165Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:18:51.736164Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:18:53.004817Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:18:53.006822Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:18:57.608935Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:18:57.610938Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:19:29.774208Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:19:29.776232Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:19:31.734395Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:19:31.736396Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:19:33.228711Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:19:33.230769Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:19:34.519813Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:19:34.522222Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:19:36.834413Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:19:36.836463Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:19:39.711040Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:19:39.713041Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+[2m2026-08-21T02:19:53.730342Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })"
+[2m2026-08-21T02:19:53.732390Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "InMemoryBackend(RwLock { data: [], poisoned: false, .. })" not shutdown cleanly. Repairing
+error: build failed
+source-built fixed-point proof failed closed: error: build failed
+source-built fixed-point blocked: StageX transition failed: invalid StageX protected-exec audit: GNU binutils event count is outside the accepted closure: observed 73980; preserved_attempt=/home/brittonr/mantle-runs/receipt-fix-v28/.source-built-fixed-point-v28-tools-source-closure-20260820.source-built-fixed-point-staging-3263290
