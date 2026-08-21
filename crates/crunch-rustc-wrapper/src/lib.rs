@@ -1575,9 +1575,18 @@ fn rename_noreplace(source: &Path, destination: &Path) -> std::io::Result<()> {
         .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
     // SAFETY: Both C strings are NUL-terminated path buffers that remain live
     // for this call. `AT_FDCWD` selects process-relative absolute paths, and
-    // `RENAME_NOREPLACE` gives the required atomic no-clobber publication.
+    // Linux `RENAME_NOREPLACE` gives the required atomic no-clobber publication.
+    // Use the kernel ABI because the libc crate does not expose the renameat2
+    // function on every Linux libc target, including musl.
     let result = unsafe {
-        libc::renameat2(libc::AT_FDCWD, source.as_ptr(), libc::AT_FDCWD, destination.as_ptr(), libc::RENAME_NOREPLACE)
+        libc::syscall(
+            libc::SYS_renameat2,
+            libc::AT_FDCWD,
+            source.as_ptr(),
+            libc::AT_FDCWD,
+            destination.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
     };
     if result == 0 {
         return Ok(());

@@ -1,0 +1,276 @@
+{
+  "artifact_identity_digest_blake3": "a20c7f5cc29cdc822d9922d728795b629d012e7bd4b2dfb205311c28d6b06a68",
+  "blocker": {
+    "class": "rustc-failed",
+    "message": "error[E0425]: cannot find function `renameat2` in crate `libc`\n    --> crates/crunch-rustc-wrapper/src/lib.rs:1580:15\n     |\n1580 |           libc::renameat2(libc::AT_FDCWD, source.as_ptr(), libc::AT_FDCWD, destination.as_ptr(), libc::RENAME_NOREPLACE)\n     |                 ^^^^^^^^^\n     |\n    ::: vendor-deps/libc/src/unix/mod.rs:1022:5\n     |\n1022 | /     pub fn renameat(\n1023 | |         olddirfd: c_int,\n1024 | |         oldpath: *const c_char,\n1025 | |         newdirfd: c_int,"
+  },
+  "consumed_artifact_roles": [
+    {
+      "name": "crunch_rust_cache_core",
+      "package_id": "path+native#crunch-rust-cache-core@0.1.0",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    },
+    {
+      "name": "crunch_rust_cache",
+      "package_id": "path+native#crunch-rust-cache@0.1.0",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    },
+    {
+      "name": "crunch_store",
+      "package_id": "path+native#crunch-store@0.1.0",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    },
+    {
+      "name": "blake3",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.2",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    },
+    {
+      "name": "data_encoding",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#data-encoding@2.10.0",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    },
+    {
+      "name": "ed25519_dalek",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    },
+    {
+      "name": "libc",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    },
+    {
+      "name": "serde",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    },
+    {
+      "name": "serde_json",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    },
+    {
+      "name": "tempfile",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#tempfile@3.27.0",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    }
+  ],
+  "declared_outputs": [
+    "out"
+  ],
+  "dependency_artifact_digests": [
+    {
+      "blake3": "c2aea4164e5fd39600bb172d0e1bee8415ed4b0f2634195fb2d0f9199c980351",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point-feature-fix/execution/native_04e5650f7b7ed7c3129334987082084b5beb7f6d3f1d157dbdad7cab65db5d4a_path_native_crunch-rust-cache_0.1.0_crunch-rust-cache_lib_build/libcrunch_rust_cache.rlib"
+    },
+    {
+      "blake3": "e8c4550421419765df0aea92f2fa13b04c3ac30fffad188457a01c11d21c492e",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point-feature-fix/execution/native_203d90a3d13beaacb5ddbb9f14973ffb1e00e2a776205b4f5ea0e9895359d3c6_registry_https___github.com_rust-lang_crates.io-index_blake3_1.8.2_blake3_lib_build/libblake3.rlib"
+    },
+    {
+      "blake3": "d907400ffe2f6a33d071cd5f8fd3f7f2053dd01bd9158313bfd8e48fef9d2efa",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point-feature-fix/execution/native_31c6df90bae97f018b5e63f8fcce327bbbcf66f7e7991b145a4bf402a8e74d4c_path_native_crunch-rust-cache-core_0.1.0_crunch-rust-cache-core_lib_build/libcrunch_rust_cache_core.rlib"
+    },
+    {
+      "blake3": "6805a53d642d5518d1b9532538b35da7e8b41d1870bf5bc85edda00808a60ab4",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point-feature-fix/execution/native_6d7011e0dff5f346ff9c9bf5cd5d3c026c8ba09a181f02e6ebbae39ea77fe484_registry_https___github.com_rust-lang_crates.io-index_serde_1.0.228_serde_lib_build/libserde.rlib"
+    },
+    {
+      "blake3": "ba5c9887b794f71cf14e23c4b0042f8ec64dffe928ef13f7131b3afcb05f3eaf",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point-feature-fix/execution/native_71175ddca7481c00bdef5f89c36b02cf5f368af7355670f1b765871d0fa34024_registry_https___github.com_rust-lang_crates.io-index_tempfile_3.27.0_tempfile_lib_build/libtempfile.rlib"
+    },
+    {
+      "blake3": "7183e566d4eda39cbddd3d030271b00408ed36292d6026872870c7ab7d2e65b3",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point-feature-fix/execution/native_b7c96d502099956f9eed4ec7f32e9bc461ba9fb9d994ce6e86a20a6fca6e2339_path_native_crunch-store_0.1.0_crunch-store_lib_build/libcrunch_store.rlib"
+    },
+    {
+      "blake3": "2f0dd41620b7292e2a64ae2c247a8c8c0c65624ae7d4d55df25424cb4cbb48e6",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point-feature-fix/execution/native_b90dec377c3c52b2af0bb94b5285549f939d8bcb14d38734f326ea2c353a934c_registry_https___github.com_rust-lang_crates.io-index_serde_json_1.0.149_serde_json_lib_build/libserde_json.rlib"
+    },
+    {
+      "blake3": "5cd79c5afa5bf0aa00747d91ce4b73774bf859d6f4ee9be9b642755c7da08893",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point-feature-fix/execution/native_bd4d644841c17bbddf9c08d0c66c0224ac4dfcfbeb9af2234e88bf0f1903083e_registry_https___github.com_rust-lang_crates.io-index_libc_0.2.186_libc_lib_build/liblibc.rlib"
+    },
+    {
+      "blake3": "3a02382e545680cad0437f4a16a3ff171946deef3c88b5b8e01f1e26b3f74cfd",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point-feature-fix/execution/native_bedcaea273ecce3b22a67699c3938818667f64aa862b670caccc004cdba77a39_registry_https___github.com_rust-lang_crates.io-index_ed25519-dalek_2.2.0_ed25519_dalek_lib_build/libed25519_dalek.rlib"
+    },
+    {
+      "blake3": "af8bf67b15cf6de6ec8ac203dc5e6db392e45db846c2a46e22071c79576c448d",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point-feature-fix/execution/native_ebc474b14e6d28936699464f3ca27a837078823b8ebfad5f7bd15a782b7076b2_registry_https___github.com_rust-lang_crates.io-index_data-encoding_2.10.0_data_encoding_lib_build/libdata_encoding.rlib"
+    }
+  ],
+  "diagnostic_context": {
+    "artifact_roles": [
+      {
+        "name": "crunch_rust_cache_core",
+        "package_id": "path+native#crunch-rust-cache-core@0.1.0",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      },
+      {
+        "name": "crunch_rust_cache",
+        "package_id": "path+native#crunch-rust-cache@0.1.0",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      },
+      {
+        "name": "crunch_store",
+        "package_id": "path+native#crunch-store@0.1.0",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      },
+      {
+        "name": "blake3",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.2",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      },
+      {
+        "name": "data_encoding",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#data-encoding@2.10.0",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      },
+      {
+        "name": "ed25519_dalek",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      },
+      {
+        "name": "libc",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      },
+      {
+        "name": "serde",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      },
+      {
+        "name": "serde_json",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      },
+      {
+        "name": "tempfile",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#tempfile@3.27.0",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      }
+    ],
+    "blocker_class": "rustc-failed",
+    "execution_kind": "target",
+    "package_id": "path+native#crunch-rustc-wrapper@0.1.0",
+    "selected_triple": "x86_64-unknown-linux-musl",
+    "target_kind": "lib",
+    "target_name": "crunch-rustc-wrapper",
+    "unit_id": "native:be7e3fe00bf7c85c754981a51e03e8c7f8515a88a70ea4264c17794e210245c3:path+native#crunch-rustc-wrapper@0.1.0:crunch-rustc-wrapper:lib:build"
+  },
+  "environment_digest_blake3": "df4dc73c4c19069d01f237ebb060ec9e9e78abf9dd73fa8157bdd7fc0dba2ac9",
+  "execution_kind": "target",
+  "execution_status": "failed",
+  "host_artifact_digests": [],
+  "output_artifact_digests": [],
+  "package_id": "path+native#crunch-rustc-wrapper@0.1.0",
+  "profile_policy": {
+    "incremental": false,
+    "selected_profile": "dev",
+    "settings": {
+      "cargo_incremental": true,
+      "codegen_units": 256,
+      "debug_assertions": true,
+      "debuginfo": 2,
+      "lto": "false",
+      "opt_level": "0",
+      "overflow_checks": true,
+      "panic": "unwind",
+      "rpath": false,
+      "split_debuginfo": "platform-default",
+      "strip": "none"
+    }
+  },
+  "rebuild_reason": "rustc-exit-nonzero",
+  "receipt_hash": "74451b26dfea88edd787b2d2289b947ac865e2eb36f8a79404c34bcf5894c26e",
+  "replay_evidence": {
+    "artifact_identity_digest_blake3": "a20c7f5cc29cdc822d9922d728795b629d012e7bd4b2dfb205311c28d6b06a68",
+    "blocker_class": "rustc-failed",
+    "consumed_artifact_role_count": 10,
+    "consumed_artifact_roles_digest_blake3": "981a478219ebd379bac17ed10a7280431b1bef6057bda0c8820fea6351d2308c",
+    "declared_output_count": 1,
+    "declared_outputs_digest_blake3": "98a78f285a60f79f0075d0ef56f4d242a9dda7001bd6173c6a84fb737c375614",
+    "dependency_artifact_count": 10,
+    "dependency_artifacts_digest_blake3": "4ba19d9f4518f759a8bf8dbbbb5250e56abe3761d2615002c27214f810d036b9",
+    "environment_digest_blake3": "df4dc73c4c19069d01f237ebb060ec9e9e78abf9dd73fa8157bdd7fc0dba2ac9",
+    "execution_kind": "target",
+    "host_artifact_count": 0,
+    "host_artifacts_digest_blake3": "d53d18c23212ea7b6300594bb89bce60218f6eff2b9d628b8cc42d3e79bbd5ab",
+    "output_artifact_count": 0,
+    "output_artifacts_digest_blake3": "d53d18c23212ea7b6300594bb89bce60218f6eff2b9d628b8cc42d3e79bbd5ab",
+    "package_id": "path+native#crunch-rustc-wrapper@0.1.0",
+    "rustc_args_digest_blake3": "e09fde0cc86050059e72c17108eafa7d08d0a2bd00a4466e6119611eb6720b7b",
+    "rustc_metadata_hash": "04e3b40d4b0c5143",
+    "schema_version": 1,
+    "selected_triple": "x86_64-unknown-linux-musl",
+    "source_digest": {
+      "algorithm": "blake3-tree-v1",
+      "value": "1524121f7a1b913f7d5db0ffb59c69c10bf9d7fd9b64a92aa2ef52d85fb8e09e"
+    },
+    "target_kind": "lib",
+    "target_name": "crunch-rustc-wrapper",
+    "toolchain_policy_digest_blake3": "eadfcb51f27a2d9298f9ee68227c95be68447238e8853917dd4e652e4927b45f",
+    "unit_id": "native:be7e3fe00bf7c85c754981a51e03e8c7f8515a88a70ea4264c17794e210245c3:path+native#crunch-rustc-wrapper@0.1.0:crunch-rustc-wrapper:lib:build"
+  },
+  "rustc_args_digest_blake3": "e09fde0cc86050059e72c17108eafa7d08d0a2bd00a4466e6119611eb6720b7b",
+  "rustc_metadata_hash": "04e3b40d4b0c5143",
+  "schema_version": 1,
+  "selected_triple": "x86_64-unknown-linux-musl",
+  "source_digest": {
+    "algorithm": "blake3-tree-v1",
+    "value": "1524121f7a1b913f7d5db0ffb59c69c10bf9d7fd9b64a92aa2ef52d85fb8e09e"
+  },
+  "target_kind": "lib",
+  "target_name": "crunch-rustc-wrapper",
+  "toolchain": {
+    "tool": "rustc",
+    "version_digest_blake3": "d908bb50907f28b913a2a1136b141a831e7862107510962a02967985c00e3a76",
+    "version_verbose": "rustc 1.94.0 (4a4ef493e 2026-03-02) (built from a source tarball)\nbinary: rustc\ncommit-hash: 4a4ef493e3a1488c6e321570238084b38948f6db\ncommit-date: 2026-03-02\nhost: x86_64-unknown-linux-musl\nrelease: 1.94.0\nLLVM version: 21.1.8"
+  },
+  "toolchain_policy_digest_blake3": "eadfcb51f27a2d9298f9ee68227c95be68447238e8853917dd4e652e4927b45f",
+  "unit_id": "native:be7e3fe00bf7c85c754981a51e03e8c7f8515a88a70ea4264c17794e210245c3:path+native#crunch-rustc-wrapper@0.1.0:crunch-rustc-wrapper:lib:build"
+}
