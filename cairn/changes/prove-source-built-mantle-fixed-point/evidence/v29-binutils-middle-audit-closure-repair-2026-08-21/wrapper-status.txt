@@ -1,0 +1,7 @@
+started_at=2026-08-20T23:19:55-04:00
+wrapper_pid=3373456
+profile_blake3=630e7c034f891cb49cf22df0802c66d7678efa43800d150df5286edd92ffc3e3
+orchestrator=/home/brittonr/mantle-runs/receipt-fix-v29/mantle-9476dd10-release
+output=/home/brittonr/mantle-runs/receipt-fix-v29/source-built-fixed-point-v29-binutils-audit-closure-20260820
+finished_at=2026-08-21T00:30:30-04:00
+exit_code=1

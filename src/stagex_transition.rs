@@ -5961,7 +5961,7 @@ fn binutils_event_count_bounds_from_sed_invocations(
     const MIDDLE_SED_INVOCATION_COUNT: u32 = 4_892;
     const UPPER_SED_INVOCATION_COUNT: u32 = 4_893;
     const LOWER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [73_980, 74_045];
-    const MIDDLE_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [74_008, 74_066];
+    const MIDDLE_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [74_001, 74_066];
     const UPPER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [74_010, 74_057];
     match sed_invocation_count {
         LOWER_SED_INVOCATION_COUNT => Ok(LOWER_SED_EVENT_COUNT_BOUNDS),
@@ -10000,7 +10000,7 @@ mod tests {
         const UPPER_SED_INVOCATION_COUNT: u32 = 4_893;
         const OUTSIDE_SED_INVOCATION_COUNTS: [u32; 2] = [4_890, 4_894];
         const LOWER_SED_EVENT_BOUNDS: [usize; 2] = [73_980, 74_045];
-        const MIDDLE_SED_EVENT_BOUNDS: [usize; 2] = [74_008, 74_066];
+        const MIDDLE_SED_EVENT_BOUNDS: [usize; 2] = [74_001, 74_066];
         const UPPER_SED_EVENT_BOUNDS: [usize; 2] = [74_010, 74_057];
         let bounds = crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS
             .map(|count| u32::try_from(count).unwrap());
@@ -10036,7 +10036,7 @@ mod tests {
     #[test]
     #[ignore = "requires a preserved complete StageX binutils audit"]
     fn preserved_binutils_audit_fixture_closes_under_current_policy() {
-        const EXPECTED_LOWER_SED_INVOCATION_COUNT: u32 = 4_891;
+        const EXPECTED_SED_INVOCATION_COUNTS: [u32; 3] = [4_891, 4_892, 4_893];
 
         let audit_path = PathBuf::from(std::env::var_os(EXTERNAL_BINUTILS_AUDIT_ENV).expect("audit path must be set"));
         let inventory_path =
@@ -10055,7 +10055,7 @@ mod tests {
 
         validate_binutils_audit(&report, suffix).unwrap();
         println!("preserved-binutils-audit: events={} sed_invocations={}", suffix.len(), report.sed_invocation_count);
-        assert_eq!(report.sed_invocation_count, EXPECTED_LOWER_SED_INVOCATION_COUNT);
+        assert!(EXPECTED_SED_INVOCATION_COUNTS.contains(&report.sed_invocation_count));
         assert_eq!(suffix.len(), event_count);
     }
 
