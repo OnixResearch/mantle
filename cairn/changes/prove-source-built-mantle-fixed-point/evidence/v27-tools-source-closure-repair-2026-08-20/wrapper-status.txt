@@ -1,0 +1,7 @@
+started_at=2026-08-20T06:15:04-04:00
+wrapper_pid=3264564
+profile_blake3=15ee4e3fbbd041eb6b134c0d39213fead45ab5e67c0af52a3be75f3c79a62ea9
+orchestrator=/home/brittonr/mantle-runs/receipt-fix-v27/mantle-bb31cef7-release
+output=/home/brittonr/mantle-runs/receipt-fix-v27/source-built-fixed-point-v27-receipt-finalization-20260820
+finished_at=2026-08-20T20:47:53-04:00
+exit_code=1

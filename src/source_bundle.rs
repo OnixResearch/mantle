@@ -5349,6 +5349,8 @@ pub fn print_offline_preflight_report(
 mod tests {
     use super::*;
 
+    const TEST_ROOT_TOOL_RELATIVE_PATH: &str = "tools/generate_operator_command_contract.rs";
+
     fn write_fixture(root: &Path) {
         fs::create_dir_all(root.join("src")).unwrap();
         fs::write(root.join("src/main.txt"), b"hello").unwrap();
@@ -5495,6 +5497,8 @@ mod tests {
         write_provider_manifest(&provider_manifest, BOOTSTRAP_PROVIDER_KIND_LEGACY_SEED);
         write_fixture(&bootstrap_source);
         write_fixture(&mantle_source);
+        fs::create_dir_all(mantle_source.join("tools")).unwrap();
+        fs::write(mantle_source.join(TEST_ROOT_TOOL_RELATIVE_PATH), b"fn main() {}\n").unwrap();
         write_fixture(&mantle_source.join(VENDOR_DEPS_DIR_NAME));
         fs::write(mantle_source.join("not-build-input.txt"), b"excluded").unwrap();
         write_fixture(&vendor_deps);
@@ -6442,7 +6446,13 @@ mod tests {
                     == Some(BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE)
             })
             .expect("Mantle source record");
-        assert!(mantle_source_record.files.iter().all(|file| file.path.starts_with("src/")));
+        assert!(mantle_source_record.files.iter().any(|file| file.path == TEST_ROOT_TOOL_RELATIVE_PATH));
+        assert!(
+            mantle_source_record
+                .files
+                .iter()
+                .all(|file| file.path.starts_with("src/") || file.path.starts_with("tools/"))
+        );
         assert!(!mantle_source_record.files.iter().any(|file| file.path.starts_with("vendor-deps/")));
         assert!(!mantle_source_record.files.iter().any(|file| file.path == "not-build-input.txt"));
         assert!(manifest.records.iter().any(|record| record.kind == SourceRecordKind::LocalPath));
@@ -6462,7 +6472,9 @@ mod tests {
         let original = require_single_profile_record(&manifest, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap().clone();
         let replacement_root = temp.path().join("replacement-mantle-source");
         write_fixture(&replacement_root);
+        fs::create_dir_all(replacement_root.join("tools")).unwrap();
         fs::write(replacement_root.join("src/main.txt"), b"refreshed Mantle source").unwrap();
+        fs::write(replacement_root.join(TEST_ROOT_TOOL_RELATIVE_PATH), b"fn main() {}\n").unwrap();
         let replacement =
             source_built_mantle_source_record(&replacement_root, &original.identity, &manifest.store_prefix).unwrap();
         let supplemental_payload = temp.path().join("host-tool-source.tar");
@@ -6484,6 +6496,7 @@ mod tests {
         assert_ne!(report.input_manifest_blake3, report.output_manifest_blake3);
         assert_ne!(report.previous_mantle_source_blake3, report.replacement_mantle_source_blake3);
         assert_eq!(report.replacement_mantle_source_blake3, replacement.content_blake3);
+        assert!(replacement.files.iter().any(|file| file.path == TEST_ROOT_TOOL_RELATIVE_PATH));
         assert_eq!(report.preserved_record_count as usize, original_records.len() - 1);
         assert_eq!(report.added_record_count, 1);
         assert!(refreshed.records.contains(&supplemental));
