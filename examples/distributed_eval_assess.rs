@@ -32,13 +32,13 @@ use std::process::ExitCode;
 #[path = "../src/distributed_eval_assessment.rs"]
 mod distributed_eval_assessment;
 
-use distributed_eval_assessment::classify;
-use distributed_eval_assessment::validate_facts;
 use distributed_eval_assessment::AssessmentFacts;
 use distributed_eval_assessment::AssessmentOutcome;
 use distributed_eval_assessment::InventoryFacts;
 use distributed_eval_assessment::Route;
 use distributed_eval_assessment::RouteFacts;
+use distributed_eval_assessment::classify;
+use distributed_eval_assessment::validate_facts;
 
 const PROBE_REQUEST_SCHEMA: &str = "mantle-distributed-evaluation-probe-request-v1";
 const PROBE_RESPONSE_SCHEMA: &str = "mantle-distributed-evaluation-probe-response-v1";

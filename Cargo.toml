@@ -236,9 +236,11 @@ fuse-backend-rs = { path = "vendor/fuse-backend-rs" }
 
 [dev-dependencies]
 crunch-hardware-simulation-core = { path = "crates/crunch-hardware-simulation-core" }
+crunch-gc-core = { path = "crates/crunch-gc-core" }
 crunch-hardware-simulation = { path = "crates/crunch-hardware-simulation" }
 crunch-kernelscript-core = { path = "crates/crunch-kernelscript-core" }
 crunch-wasm-component-core = { path = "crates/crunch-wasm-component-core" }
+transactional-reconciliation-core = { git = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git", rev = "606489b5f40298181214bb76bc3457b607f225d9" }
 pretty_assertions = "1.0"
 tempfile = "3"
 assert_cmd = "2"
