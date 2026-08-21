@@ -1,0 +1,241 @@
+{
+  "artifact_identity_digest_blake3": "e581f329961bafe7d197d71b6795d1f25a740becabdab4ce85e1a21399427c05",
+  "blocker": {
+    "class": "rustc-failed",
+    "message": "error: Can't open Cargo.toml: Os { code: 2, kind: NotFound, message: \"No such file or directory\" }\n   --> vendor-deps/crossterm/src/lib.rs:230:10\n    |\n230 | #![doc = document_features::document_features!()]\n    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |\n    = note: this error originates in the macro `document_features::document_features` (in Nightly builds, run with -Z macro-backtrace for more info)\n\nerror: attribute value must be a literal\n   --> vendor-deps/crossterm/src/lib.rs:230:10\n    |\n230 | #![doc = document_features::document_features!()]"
+  },
+  "consumed_artifact_roles": [
+    {
+      "name": "bitflags",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    },
+    {
+      "name": "derive_more",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#derive_more@2.1.1",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    },
+    {
+      "name": "document_features",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#document-features@0.2.12",
+      "producer_unit_id": "28:registry+https://github.com/rust-lang/crates.io-index#document-features@0.2.12:document_features:proc-macro:build",
+      "role": "host",
+      "selected_triple": "x86_64-unknown-linux-gnu"
+    },
+    {
+      "name": "mio",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#mio@1.2.0",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    },
+    {
+      "name": "parking_lot",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#parking_lot@0.12.5",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    },
+    {
+      "name": "rustix",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#rustix@1.1.4",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    },
+    {
+      "name": "signal_hook_mio",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#signal-hook-mio@0.2.5",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    },
+    {
+      "name": "signal_hook",
+      "package_id": "registry+https://github.com/rust-lang/crates.io-index#signal-hook@0.3.18",
+      "producer_unit_id": null,
+      "role": "target",
+      "selected_triple": "x86_64-unknown-linux-musl"
+    }
+  ],
+  "declared_outputs": [
+    "out"
+  ],
+  "dependency_artifact_digests": [
+    {
+      "blake3": "2216ec24b87d56eb18a3364bdcbd3fd834d9cd8d8d0d047c7f5a082776460302",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point/execution/native_0663f0658142d6deb3bb61d0c3ed7713752b0e111c874c0d0fce4145f5ade62b_registry_https___github.com_rust-lang_crates.io-index_mio_1.2.0_mio_lib_build/libmio.rlib"
+    },
+    {
+      "blake3": "7e03738c81d5b0403663d6ab766986b6c43a3b252faed83ec001e9f4cb317a8c",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point/execution/native_22eee167c38bd7d465abf3a1dec779aa0cac33eb682a3824fe6a16c59e2dade4_registry_https___github.com_rust-lang_crates.io-index_derive_more_2.1.1_derive_more_lib_build/libderive_more.rlib"
+    },
+    {
+      "blake3": "6b9f86f8e8dec996a61cae06049aa27eea0b76b8075e2ef26dc1b35b7a33828c",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point/execution/native_56b91d688a9d0d2bba0c82cf027aafd26e5d42cbaff88e1e496cc007e3cba7c9_registry_https___github.com_rust-lang_crates.io-index_rustix_1.1.4_rustix_lib_build/librustix.rlib"
+    },
+    {
+      "blake3": "073510b937152a754e4d7266a1a8ce03144ca2e9c0cde9da52e3797d474d6e85",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point/execution/native_6faca2cd806748c7bc900d76660d61d2128f0ce8d638ee993f9c5248136b8925_registry_https___github.com_rust-lang_crates.io-index_signal-hook_0.3.18_signal_hook_lib_build/libsignal_hook.rlib"
+    },
+    {
+      "blake3": "762afee1c43a8310e143a8d83355ab4d7da8a338444f08287e2e9c306c4678f9",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point/execution/native_770b00c2e540d1dfa5dbde3b9fdbaf559d4aba2d1ab8f46354e663bcc7e3d9da_registry_https___github.com_rust-lang_crates.io-index_bitflags_2.11.0_bitflags_lib_build/libbitflags.rlib"
+    },
+    {
+      "blake3": "d593b0aa46a28664c66d74c08c4615f609e88505196c9ff0970156207c99ca81",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point/execution/native_9b11f61557db2ab0b591ea42ba2a2ca621c7e8990eec1fd62ea34dfdf55046f4_registry_https___github.com_rust-lang_crates.io-index_parking_lot_0.12.5_parking_lot_lib_build/libparking_lot.rlib"
+    },
+    {
+      "blake3": "2e361da15c4fe8a243d6d71df15a3275de8cf60470031ecb7006612fdebb3449",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point/execution/native_fee23b500b30215c3673ac223318f7c930d195fd073f2ea4482d015dd5c964b6_registry_https___github.com_rust-lang_crates.io-index_signal-hook-mio_0.2.5_signal_hook_mio_lib_build/libsignal_hook_mio.rlib"
+    }
+  ],
+  "diagnostic_context": {
+    "artifact_roles": [
+      {
+        "name": "bitflags",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      },
+      {
+        "name": "derive_more",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#derive_more@2.1.1",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      },
+      {
+        "name": "document_features",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#document-features@0.2.12",
+        "producer_unit_id": "28:registry+https://github.com/rust-lang/crates.io-index#document-features@0.2.12:document_features:proc-macro:build",
+        "role": "host",
+        "selected_triple": "x86_64-unknown-linux-gnu"
+      },
+      {
+        "name": "mio",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#mio@1.2.0",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      },
+      {
+        "name": "parking_lot",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#parking_lot@0.12.5",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      },
+      {
+        "name": "rustix",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#rustix@1.1.4",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      },
+      {
+        "name": "signal_hook_mio",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#signal-hook-mio@0.2.5",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      },
+      {
+        "name": "signal_hook",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#signal-hook@0.3.18",
+        "producer_unit_id": null,
+        "role": "target",
+        "selected_triple": "x86_64-unknown-linux-musl"
+      }
+    ],
+    "blocker_class": "rustc-failed",
+    "execution_kind": "target",
+    "package_id": "registry+https://github.com/rust-lang/crates.io-index#crossterm@0.29.0",
+    "selected_triple": "x86_64-unknown-linux-musl",
+    "target_kind": "lib",
+    "target_name": "crossterm",
+    "unit_id": "native:2656d92faa82b2b8e6083b935bdcd2ac5a303aed9f802879648b6df1c7c39aaa:registry+https://github.com/rust-lang/crates.io-index#crossterm@0.29.0:crossterm:lib:build"
+  },
+  "environment_digest_blake3": "da98209f78d1a43832e17f8f12dfb17b33332cbe031067e07f77d1faf14ebe10",
+  "execution_kind": "target",
+  "execution_status": "failed",
+  "host_artifact_digests": [
+    {
+      "blake3": "855ae5588ab0fe31aa0779d005cb68cfdaa136d817d11cd77ce9301fcf026267",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point/execution/28_registry_https___github.com_rust-lang_crates.io-index_document-features_0.2.12_document_features_proc-macro_build/libdocument_features.so"
+    }
+  ],
+  "output_artifact_digests": [],
+  "package_id": "registry+https://github.com/rust-lang/crates.io-index#crossterm@0.29.0",
+  "profile_policy": {
+    "incremental": false,
+    "selected_profile": "dev",
+    "settings": {
+      "cargo_incremental": true,
+      "codegen_units": 256,
+      "debug_assertions": true,
+      "debuginfo": 2,
+      "lto": "false",
+      "opt_level": "0",
+      "overflow_checks": true,
+      "panic": "unwind",
+      "rpath": false,
+      "split_debuginfo": "platform-default",
+      "strip": "none"
+    }
+  },
+  "rebuild_reason": "rustc-exit-nonzero",
+  "receipt_hash": "e3191e1838b2403e449b431d0705cb67ef15be35a43dbdf79a65ff6bb1207f42",
+  "replay_evidence": {
+    "artifact_identity_digest_blake3": "e581f329961bafe7d197d71b6795d1f25a740becabdab4ce85e1a21399427c05",
+    "blocker_class": "rustc-failed",
+    "consumed_artifact_role_count": 8,
+    "consumed_artifact_roles_digest_blake3": "6fc1fb554257cb3dd4ec078009d3eae9956c4e8a973688fd4a3cc88892c604d3",
+    "declared_output_count": 1,
+    "declared_outputs_digest_blake3": "98a78f285a60f79f0075d0ef56f4d242a9dda7001bd6173c6a84fb737c375614",
+    "dependency_artifact_count": 7,
+    "dependency_artifacts_digest_blake3": "4fa7de6d24ca43a3794bccb94caaff2b3bd3984edf12ce4d6213a9864afbc6fd",
+    "environment_digest_blake3": "da98209f78d1a43832e17f8f12dfb17b33332cbe031067e07f77d1faf14ebe10",
+    "execution_kind": "target",
+    "host_artifact_count": 1,
+    "host_artifacts_digest_blake3": "941944309b8196d3ddc25241e360c1e10de770e51ae2300637120601dcbb279e",
+    "output_artifact_count": 0,
+    "output_artifacts_digest_blake3": "d53d18c23212ea7b6300594bb89bce60218f6eff2b9d628b8cc42d3e79bbd5ab",
+    "package_id": "registry+https://github.com/rust-lang/crates.io-index#crossterm@0.29.0",
+    "rustc_args_digest_blake3": "fe0d44e90a92ff4e634739d3310379e292c475741f767b84c4352ffa97c7918d",
+    "rustc_metadata_hash": "79138f68e3b5ed9f",
+    "schema_version": 1,
+    "selected_triple": "x86_64-unknown-linux-musl",
+    "source_digest": {
+      "algorithm": "blake3-tree-v1",
+      "value": "591294ba3a8e17386a9b3f5ef817c6608f1b65c8a92773323238ccac92e128ff"
+    },
+    "target_kind": "lib",
+    "target_name": "crossterm",
+    "toolchain_policy_digest_blake3": "eadfcb51f27a2d9298f9ee68227c95be68447238e8853917dd4e652e4927b45f",
+    "unit_id": "native:2656d92faa82b2b8e6083b935bdcd2ac5a303aed9f802879648b6df1c7c39aaa:registry+https://github.com/rust-lang/crates.io-index#crossterm@0.29.0:crossterm:lib:build"
+  },
+  "rustc_args_digest_blake3": "fe0d44e90a92ff4e634739d3310379e292c475741f767b84c4352ffa97c7918d",
+  "rustc_metadata_hash": "79138f68e3b5ed9f",
+  "schema_version": 1,
+  "selected_triple": "x86_64-unknown-linux-musl",
+  "source_digest": {
+    "algorithm": "blake3-tree-v1",
+    "value": "591294ba3a8e17386a9b3f5ef817c6608f1b65c8a92773323238ccac92e128ff"
+  },
+  "target_kind": "lib",
+  "target_name": "crossterm",
+  "toolchain": {
+    "tool": "rustc",
+    "version_digest_blake3": "d908bb50907f28b913a2a1136b141a831e7862107510962a02967985c00e3a76",
+    "version_verbose": "rustc 1.94.0 (4a4ef493e 2026-03-02) (built from a source tarball)\nbinary: rustc\ncommit-hash: 4a4ef493e3a1488c6e321570238084b38948f6db\ncommit-date: 2026-03-02\nhost: x86_64-unknown-linux-musl\nrelease: 1.94.0\nLLVM version: 21.1.8"
+  },
+  "toolchain_policy_digest_blake3": "eadfcb51f27a2d9298f9ee68227c95be68447238e8853917dd4e652e4927b45f",
+  "unit_id": "native:2656d92faa82b2b8e6083b935bdcd2ac5a303aed9f802879648b6df1c7c39aaa:registry+https://github.com/rust-lang/crates.io-index#crossterm@0.29.0:crossterm:lib:build"
+}

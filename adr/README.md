@@ -87,3 +87,4 @@ compatibility surface, crate name, or historical decision.
 | [0078](0078-explore-distributed-evaluation.md) | Explore distributed evaluation feasibility | Accepted |
 | [0079](0079-separate-source-fixed-point-evidence-from-working-scratch.md) | Separate source fixed-point evidence from working scratch | Accepted |
 | [0080](0080-refresh-source-and-vendor-inputs-as-one-authority-pair.md) | Refresh source and vendor inputs as one authority pair | Accepted |
+| [0081](0081-expose-remapped-rust-manifests-through-the-compiler-working-directory.md) | Expose remapped Rust manifests through the compiler working directory | Accepted |

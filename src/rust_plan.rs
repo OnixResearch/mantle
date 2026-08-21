@@ -190,6 +190,7 @@ const RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES: usize =
     RUST_UNIT_REPLAY_EVIDENCE_MAX_KIBIBYTES.saturating_mul(BYTES_PER_KIBIBYTE);
 const RUST_UNIT_REPLAY_EVIDENCE_MAX_BOUNDARY_ITEMS: u32 = 4096;
 const DETERMINISTIC_RELEASE_SOURCE_PREFIX: &str = "/mantle/release/source";
+const DETERMINISTIC_COMPILE_CWD_PREFIX: &str = "/proc/self/cwd";
 const DETERMINISTIC_RELEASE_EXECUTION_PREFIX: &str = "/mantle/release/execution";
 const DETERMINISTIC_RELEASE_PROVIDER_C_TOOLCHAIN_PREFIX: &str = "/mantle/release/provider/c-toolchain";
 const DETERMINISTIC_RELEASE_SANDBOX_SHELL: &str = "/mantle/release/provider/sandbox-shell";
@@ -9623,8 +9624,13 @@ fn compile_time_manifest_dir(inputs: CompileTimeManifestDirInputs<'_>) -> String
     if target_kind == "custom-build" {
         return normalize_path_string(path);
     }
-    if options.deterministic_release_paths {
-        return remap_normalized_path_string(path, &options.path_remaps);
+    if options.deterministic_release_paths
+        && let Ok(relative) = path.strip_prefix(&options.root)
+    {
+        let runtime_path = Path::new(DETERMINISTIC_COMPILE_CWD_PREFIX).join(relative);
+        debug_assert!(runtime_path.is_absolute());
+        debug_assert!(runtime_path.starts_with(DETERMINISTIC_COMPILE_CWD_PREFIX));
+        return normalize_path_string(&runtime_path);
     }
     normalize_path_string(path)
 }
@@ -18597,6 +18603,8 @@ mod tests {
     const PROCESS_GLOBAL_ENV_REMOVE_FN: &str = "remove_var";
     const PROCESS_GLOBAL_ENV_SAMPLE_KEY: &str = "MANTLE_TEST_RACY_ENV";
     const PROCESS_GLOBAL_ENV_SAMPLE_VALUE: &str = "bad";
+    const MANIFEST_CWD_CHILD_ENV: &str = "MANTLE_MANIFEST_CWD_CHILD";
+    const MANIFEST_CWD_CHILD_VALUE: &str = "read-manifest";
 
     struct FixedOracle {
         cargo_version: CargoOutput,
@@ -19981,7 +19989,7 @@ mod tests {
         ));
         assert_eq!(
             derivation.derivation.env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV).unwrap(),
-            DETERMINISTIC_RELEASE_SOURCE_PREFIX
+            DETERMINISTIC_COMPILE_CWD_PREFIX
         );
         assert_eq!(
             derivation.derivation.env.get(SNIX_BUILD_SANDBOX_SHELL_ENV).unwrap(),
@@ -19991,6 +19999,71 @@ mod tests {
             derivation.derivation.env.get("SOURCE_CLOSURE_DIGEST").unwrap(),
             &execution_source_closure_digest(&source_closure, &plan_options)
         );
+    }
+
+    #[test]
+    fn deterministic_manifest_dir_uses_process_cwd_package_alias() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("source");
+        let package_root = root.join("vendor-deps/crossterm");
+        let mut plan_options = options(&root);
+        plan_options.deterministic_release_paths = true;
+        plan_options.path_remaps = deterministic_release_path_remaps(&root, None);
+
+        let manifest_dir = compile_time_manifest_dir(CompileTimeManifestDirInputs {
+            package_root: &normalize_path_string(&package_root),
+            target_kind: "lib",
+            options: &plan_options,
+        });
+
+        assert_eq!(manifest_dir, "/proc/self/cwd/vendor-deps/crossterm");
+        assert_ne!(manifest_dir, normalize_path_string(&package_root));
+        assert!(Path::new(&manifest_dir).is_absolute());
+    }
+
+    #[test]
+    fn deterministic_manifest_dir_is_readable_from_compiler_working_directory() {
+        let temp = TempDir::new().unwrap();
+        let package_root = temp.path().join("vendor-deps/crossterm");
+        std::fs::create_dir_all(&package_root).unwrap();
+        std::fs::write(package_root.join("Cargo.toml"), "[package]\nname = \"crossterm\"\n").unwrap();
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "rust_plan::tests::deterministic_manifest_dir_child_reads_package_manifest",
+                "--nocapture",
+            ])
+            .current_dir(temp.path())
+            .env(MANIFEST_CWD_CHILD_ENV, MANIFEST_CWD_CHILD_VALUE)
+            .output()
+            .unwrap();
+
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(String::from_utf8_lossy(&output.stdout).contains("manifest-cwd-child-ok"));
+    }
+
+    #[test]
+    fn deterministic_manifest_dir_child_reads_package_manifest() {
+        if std::env::var(MANIFEST_CWD_CHILD_ENV).as_deref() != Ok(MANIFEST_CWD_CHILD_VALUE) {
+            return;
+        }
+        let root = std::env::current_dir().unwrap();
+        let package_root = root.join("vendor-deps/crossterm");
+        let mut plan_options = options(&root);
+        plan_options.deterministic_release_paths = true;
+        plan_options.path_remaps = deterministic_release_path_remaps(&root, None);
+        let manifest_dir = compile_time_manifest_dir(CompileTimeManifestDirInputs {
+            package_root: &normalize_path_string(&package_root),
+            target_kind: "lib",
+            options: &plan_options,
+        });
+        let manifest = std::fs::read_to_string(Path::new(&manifest_dir).join("Cargo.toml")).unwrap();
+        let inaccessible_logical =
+            Path::new(DETERMINISTIC_RELEASE_SOURCE_PREFIX).join("vendor-deps/crossterm/Cargo.toml");
+
+        assert!(manifest.contains("name = \"crossterm\""));
+        assert!(std::fs::read_to_string(inaccessible_logical).is_err());
+        println!("manifest-cwd-child-ok");
     }
 
     #[test]

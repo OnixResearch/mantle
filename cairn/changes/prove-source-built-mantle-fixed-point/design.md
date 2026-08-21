@@ -30,6 +30,12 @@ The Tailscale DNS name is an operator routing label, not execution authority. Pr
 
 **Rationale:** A fixed point requires the produced tool to repeat the build under equivalent authority.
 
+### Decision: make remapped Cargo manifests readable through rustc's working directory
+
+**Choice:** Deterministic non-custom Rust units receive `/proc/self/cwd/<package-relative-path>` as `CARGO_MANIFEST_DIR`. Rustc already runs from the admitted source root. Custom-build compiler and child environments keep their physical package roots. The `/mantle/release/source` rustc remap remains unchanged. ADR 0081 records this lowering.
+
+**Rationale:** Compile-time macros can read the selected `Cargo.toml` through an absolute stable path. Physical paths are forbidden because rustc does not remap arbitrary `env!` output.
+
 ### Decision: require strict no-fallback execution
 
 **Choice:** Both stages forbid live source acquisition, Cargo invocation, ambient tool discovery, host rustc/linker use, practical hermeticity fallback, protected-exec denial bypass, and undeclared store/checkout reads. Every attempted violation becomes durable failed evidence.

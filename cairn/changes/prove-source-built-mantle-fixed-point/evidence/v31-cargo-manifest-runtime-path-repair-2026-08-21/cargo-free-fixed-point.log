@@ -1,0 +1,6 @@
+Cargo-free fixed-point: blocked
+bundle: /home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point
+hermeticity_mode: strict
+strict_proof_admission: true
+error: build failed
+stage1 blocked: topology execution status was blocked; classification=blocked-unit; blocked unit classified with blocker class rustc-failed; unit=native:2656d92faa82b2b8e6083b935bdcd2ac5a303aed9f802879648b6df1c7c39aaa:registry+https://github.com/rust-lang/crates.io-index#crossterm@0.29.0:crossterm:lib:build; package=registry+https://github.com/rust-lang/crates.io-index#crossterm@0.29.0; role=target; triple=x86_64-unknown-linux-musl; target_kind=lib; predecessor_status=success; blocker_class=rustc-failed
