@@ -1,0 +1,14 @@
+{
+  "id": 279,
+  "created_at": "2026-08-21T23:55:30.181972095-04:00",
+  "command": "/home/brittonr/mantle-runs/receipt-fix-v31/run-proof-v37-binutils-middle-closure.sh",
+  "path": "/home/brittonr/mantle-runs/receipt-fix-v31",
+  "group": "receipt-v31",
+  "label": "v37-promoted-source-built-fixed-point",
+  "status": {
+    "Running": {
+      "enqueued_at": "2026-08-21T23:55:30.181929234-04:00",
+      "start": "2026-08-21T23:55:30.244611375-04:00"
+    }
+  }
+}
