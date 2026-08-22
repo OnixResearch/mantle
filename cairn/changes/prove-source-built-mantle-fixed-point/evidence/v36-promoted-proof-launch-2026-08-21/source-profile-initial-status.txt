@@ -1,0 +1,5 @@
+started_at=2026-08-21T21:47:14-04:00
+source_commit=082bde0f
+source_transfer_parity=exact
+from=/home/brittonr/mantle-runs/receipt-fix-v30/authority/source-built-fixed-point-sources-v30-cc3b14d5.json
+to=/home/brittonr/mantle-runs/receipt-fix-v31/authority/source-built-fixed-point-sources-v31-082bde0f.json

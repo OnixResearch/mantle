@@ -1,0 +1,135 @@
+{
+  "blocker": null,
+  "bundle_dir": ".",
+  "fixed_point": true,
+  "hermeticity_mode": "strict",
+  "non_claims": [
+    "not-crunch-bootstrap",
+    "not-release-reproducibility",
+    "not-full-cargo-compatibility"
+  ],
+  "proof_eligibility": {
+    "admitted": true,
+    "audit_event_set_digest_blake3": "d53d18c23212ea7b6300594bb89bce60218f6eff2b9d628b8cc42d3e79bbd5ab",
+    "audit_policy_basis": "mantle-proof-audit-policy-v1:strict-default",
+    "blocked_audit_events": [],
+    "blocked_classes": [],
+    "closure_status": "satisfied",
+    "diagnostics": [],
+    "hermeticity_mode": "strict",
+    "host_tool_status": "satisfied",
+    "narrower_claims": [],
+    "policy_version": "mantle-strict-proof-eligibility-v1",
+    "protected_environment_status": "satisfied",
+    "requested_claim": "self-hosting",
+    "strict_claim_satisfied": true,
+    "verdict": "admitted",
+    "workflow": "self-hosting"
+  },
+  "root": "/home/brittonr/mantle-runs/receipt-fix-v31/source-082bde0f",
+  "rust_source_provider": {
+    "artifact_count": 6,
+    "host_triple": "x86_64-unknown-linux-musl",
+    "metadata_digest_blake3": "84e7d1812c55f8d1576760acd7818f932704b7b3ade1d10178590dccb696a2aa",
+    "metadata_path": "/home/brittonr/mantle-runs/receipt-fix-v30/.source-built-fixed-point-v30-binutils-middle-closure-20260821.source-built-fixed-point-staging-3659374/rust-provider/share/mantle-rust-provider/provider.json",
+    "policy_digest_blake3": "9976950fb3a67b55b34a87fd9f89fc754084cb6fc008a64c7c85d25ca9ed1d54",
+    "provider_dir": "/home/brittonr/mantle-runs/receipt-fix-v30/.source-built-fixed-point-v30-binutils-middle-closure-20260821.source-built-fixed-point-staging-3659374/rust-provider",
+    "receipt_count": 1,
+    "rustc_path": "/home/brittonr/mantle-runs/receipt-fix-v30/.source-built-fixed-point-v30-binutils-middle-closure-20260821.source-built-fixed-point-staging-3659374/rust-provider/bin/rustc",
+    "schema": "mantle-cargo-free-rust-source-provider-binding-v1",
+    "source_count": 2,
+    "status": "validated",
+    "target_triple": "x86_64-unknown-linux-musl"
+  },
+  "rustc_compatibility": {
+    "normalization": "none",
+    "requested_rustc": "/home/brittonr/mantle-runs/receipt-fix-v30/.source-built-fixed-point-v30-binutils-middle-closure-20260821.source-built-fixed-point-staging-3659374/rust-provider/bin/rustc",
+    "stage_rustc": "/home/brittonr/mantle-runs/receipt-fix-v30/.source-built-fixed-point-v30-binutils-middle-closure-20260821.source-built-fixed-point-staging-3659374/rust-provider/bin/rustc",
+    "wrapper": null,
+    "wrapper_blake3": null
+  },
+  "schema": "mantle-cargo-free-fixed-point-proof-v1",
+  "source_built_toolchain_closure": {
+    "claim": true,
+    "manifest_path": "/home/brittonr/mantle-runs/receipt-fix-v30/.source-built-fixed-point-v30-binutils-middle-closure-20260821.source-built-fixed-point-staging-3659374/source-built-toolchain-closure.json",
+    "member_count": 17,
+    "policy_digest_blake3": "ac1fe0d21931a8b8d30f7f05a6bfef9b5d529b380dfba51d3d50fe81d6caa8f7",
+    "schema": "mantle-source-built-toolchain-closure-v1",
+    "seed_exception_count": 0,
+    "source_built_member_count": 17,
+    "status": "enforced-source-built"
+  },
+  "stage1": {
+    "binary": "stage1/mantle",
+    "binary_blake3": "7ed29eac630d7d500ae04d06d0d3cd12064e938d990df47411f72b3213442fb3",
+    "blocker": null,
+    "cargo_marker_absent": true,
+    "dir": "stage1",
+    "execution_dir": "execution",
+    "execution_status": "success",
+    "failed_unit_count": 0,
+    "name": "stage1",
+    "receipt": "stage1/receipt.json",
+    "selected_c_compiler": {
+      "build_receipt": {
+        "digest_blake3": "281615af3158122f084e4839cce8955ca2cbc9759e5d8def9bf4387a26fe4475",
+        "kind": "external-attested-build",
+        "name": "mantle-source-built-native-root-receipt"
+      },
+      "compiler_family": "gcc",
+      "content_digest_blake3": "d7a9976841679e85b6dfeabbef802e0fb2f78730d3c6e0e95b590184113256af",
+      "execution_path": "/home/brittonr/mantle-runs/receipt-fix-v30/.source-built-fixed-point-v30-binutils-middle-closure-20260821.source-built-fixed-point-staging-3659374/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-gcc",
+      "name": "cc",
+      "role": "c-compiler",
+      "source": {
+        "digest_blake3": "281615af3158122f084e4839cce8955ca2cbc9759e5d8def9bf4387a26fe4475",
+        "kind": "local-tree",
+        "name": "mantle-source-built-native-root"
+      }
+    },
+    "smoke_status_code": 0,
+    "source_built_toolchain_closure_policy_digest_blake3": "ac1fe0d21931a8b8d30f7f05a6bfef9b5d529b380dfba51d3d50fe81d6caa8f7",
+    "status": "stage1/status.txt",
+    "status_code": 0,
+    "stderr": "stage1/stderr.txt",
+    "success": true,
+    "unit_count": 789
+  },
+  "stage2": {
+    "binary": "stage2/mantle",
+    "binary_blake3": "7ed29eac630d7d500ae04d06d0d3cd12064e938d990df47411f72b3213442fb3",
+    "blocker": null,
+    "cargo_marker_absent": true,
+    "dir": "stage2",
+    "execution_dir": "execution",
+    "execution_status": "success",
+    "failed_unit_count": 0,
+    "name": "stage2",
+    "receipt": "stage2/receipt.json",
+    "selected_c_compiler": {
+      "build_receipt": {
+        "digest_blake3": "281615af3158122f084e4839cce8955ca2cbc9759e5d8def9bf4387a26fe4475",
+        "kind": "external-attested-build",
+        "name": "mantle-source-built-native-root-receipt"
+      },
+      "compiler_family": "gcc",
+      "content_digest_blake3": "d7a9976841679e85b6dfeabbef802e0fb2f78730d3c6e0e95b590184113256af",
+      "execution_path": "/home/brittonr/mantle-runs/receipt-fix-v30/.source-built-fixed-point-v30-binutils-middle-closure-20260821.source-built-fixed-point-staging-3659374/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-gcc",
+      "name": "cc",
+      "role": "c-compiler",
+      "source": {
+        "digest_blake3": "281615af3158122f084e4839cce8955ca2cbc9759e5d8def9bf4387a26fe4475",
+        "kind": "local-tree",
+        "name": "mantle-source-built-native-root"
+      }
+    },
+    "smoke_status_code": 0,
+    "source_built_toolchain_closure_policy_digest_blake3": "ac1fe0d21931a8b8d30f7f05a6bfef9b5d529b380dfba51d3d50fe81d6caa8f7",
+    "status": "stage2/status.txt",
+    "status_code": 0,
+    "stderr": "stage2/stderr.txt",
+    "success": true,
+    "unit_count": 789
+  },
+  "status": "success"
+}

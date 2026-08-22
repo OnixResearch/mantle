@@ -35,11 +35,26 @@ unchanged.
 
 The host target type test, focused strict Clippy, changed-file formatting, and
 `git diff --check` passed in pueue tasks `6970` and `6985`. See
-`local-validation.log`. The source-built Rust provider must supply the musl
-compile evidence.
+`local-validation.log`.
+
+Remote pueue task `269` then used source commit `082bde0f`, release
+orchestrator BLAKE3
+`ec0f416ad1be0f467fd09dd39274619fe343dfab308137cda8a853214f2d572a`,
+and the preserved V30 Rust provider. Both strict Cargo-free stages completed
+789 units with no failed units. Their Mantle binaries were byte-identical and
+had BLAKE3
+`7ed29eac630d7d500ae04d06d0d3cd12064e938d990df47411f72b3213442fb3`.
+The receipt reports strict proof admission and an enforced 17-member
+source-built toolchain closure. See `preserved-provider-fixed-point-meta.json`,
+`preserved-provider-fixed-point.log`, and `pueue-task-269.json`.
+
+## Decision
+
+The musl resource alias is accepted for the promoted proof source. No further
+Cargo-free source portability blocker was observed.
 
 ## Non-claims
 
-This diagnostic reuses provider outputs and cannot satisfy the promoted proof.
-The type alias does not change the configured limits or add a practical
+This diagnostic reused provider outputs and does not satisfy the promoted
+proof. The type alias does not change the configured limits or add a practical
 fallback.

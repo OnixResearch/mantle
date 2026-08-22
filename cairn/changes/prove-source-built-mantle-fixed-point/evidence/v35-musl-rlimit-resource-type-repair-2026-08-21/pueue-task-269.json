@@ -1,0 +1,16 @@
+{
+  "id": 269,
+  "created_at": "2026-08-21T20:03:56.598669654-04:00",
+  "command": "/home/brittonr/mantle-runs/receipt-fix-v31/run-v35-cargo-free-rlimit-fix.sh",
+  "path": "/home/brittonr/mantle-runs/receipt-fix-v31/source-082bde0f",
+  "group": "receipt-v31",
+  "label": "v35-musl-rlimit-fix",
+  "status": {
+    "Done": {
+      "enqueued_at": "2026-08-21T20:03:56.598642332-04:00",
+      "start": "2026-08-21T20:03:56.774553705-04:00",
+      "end": "2026-08-21T21:42:22.746810374-04:00",
+      "result": "Success"
+    }
+  }
+}

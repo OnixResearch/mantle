@@ -1,0 +1,14 @@
+{
+  "id": 277,
+  "created_at": "2026-08-21T22:12:20.859837114-04:00",
+  "command": "/home/brittonr/mantle-runs/receipt-fix-v31/run-proof-v31-final-receipt.sh",
+  "path": "/home/brittonr/mantle-runs/receipt-fix-v31",
+  "group": "receipt-v31",
+  "label": "v31-promoted-source-built-fixed-point",
+  "status": {
+    "Running": {
+      "enqueued_at": "2026-08-21T22:12:20.859813790-04:00",
+      "start": "2026-08-21T22:12:20.939565056-04:00"
+    }
+  }
+}
