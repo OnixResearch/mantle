@@ -1,0 +1,25 @@
+{
+  "unit_id": "native:23519c95622cc3b6f710c2cfcc65f674a3fdb2fb4c2b2c8bf2677c9ee61569da:path+native#mantle@0.1.0:mantle:bin:build",
+  "package_id": "path+native#mantle@0.1.0",
+  "target_name": "mantle",
+  "target_kind": "bin",
+  "execution_kind": "target",
+  "selected_triple": "x86_64-unknown-linux-musl",
+  "execution_status": "failed",
+  "rebuild_reason": "rustc-exit-nonzero",
+  "blocker": {
+    "class": "rustc-failed",
+    "message": "error: couldn't read `src/../mantlepkgs/contracts.ncl`: No such file or directory (os error 2)\n  --> src/mantlepkgs_version_cmd.rs:73:41\n   |\n73 | const VERSION_MANIFEST_CONTRACT: &str = include_str!(\"../mantlepkgs/contracts.ncl\");\n   |                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\nerror: aborting due to 1 previous error\n"
+  },
+  "receipt_hash": "97e189694e28826ca3d09734bc91bc838faac7ca742cc6b95dd5976173126e1d",
+  "source_digest": {
+    "algorithm": "blake3-tree-v1",
+    "value": "72385703a6ad6b2d6d150a9fb387f62280aca191633173e8565dcaf3b37a95f6"
+  },
+  "rustc_args_digest_blake3": "d5ee4219052098a9798fe88c0ee2621049987a68b3312c9b4e71ad0785704128",
+  "toolchain": {
+    "tool": "rustc",
+    "version_digest_blake3": "d908bb50907f28b913a2a1136b141a831e7862107510962a02967985c00e3a76",
+    "version_verbose": "rustc 1.94.0 (4a4ef493e 2026-03-02) (built from a source tarball)\nbinary: rustc\ncommit-hash: 4a4ef493e3a1488c6e321570238084b38948f6db\ncommit-date: 2026-03-02\nhost: x86_64-unknown-linux-musl\nrelease: 1.94.0\nLLVM version: 21.1.8"
+  }
+}

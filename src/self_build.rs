@@ -97,6 +97,7 @@ pub(crate) const STAGED_SOURCE_TOP_LEVEL_ENTRIES: &[&str] = &[
     "config",
     "crates",
     "lib",
+    "mantlepkgs",
     "rust-toolchain.toml",
     "src",
     "tools",
@@ -3965,6 +3966,14 @@ mod tests {
         assert!(!stage.path().join("target").exists());
         assert!(!stage.path().join("scratch.txt").exists());
         assert!(!stage.path().join("vendor").join(".pi").exists());
+    }
+
+    #[test]
+    fn staged_source_inventory_covers_root_compile_time_inputs() {
+        assert!(STAGED_SOURCE_TOP_LEVEL_ENTRIES.contains(&"mantlepkgs"));
+        assert!(STAGED_SOURCE_TOP_LEVEL_ENTRIES.contains(&"config"));
+        assert!(STAGED_SOURCE_TOP_LEVEL_ENTRIES.contains(&"tools"));
+        assert!(!STAGED_SOURCE_TOP_LEVEL_ENTRIES.contains(&"target"));
     }
 
     #[test]
