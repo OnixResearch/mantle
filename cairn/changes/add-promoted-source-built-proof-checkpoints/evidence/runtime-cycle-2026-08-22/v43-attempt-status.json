@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "f587cadaf56521febc244f621ed216df137109b2d06a357324c88e46ec7d04ab",
+  "blocker": "error: build failed\nsource-built fixed-point receipt blocked: stage evidence does not match plan: planned stagex-provider-publication StagexProvider, observed stagex-provider StagexProvider"
+}
