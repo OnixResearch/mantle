@@ -30,18 +30,24 @@ Task `287` admitted and restored that checkpoint into a fresh proof root. It rev
 
 The restore path now keeps the exact closure payload under `provider-checkpoint-origin/`. It derives a current closure from the restored providers. A pure validator requires identical schema, seeds, member identities, content digests, trust, source, build receipts, and provider-relative paths. Only the two absolute provider roots may change.
 
+The V43 profile verified at BLAKE3 `7a1cf089b63282efba8c4f42836d77144155f3c5daf035ee383a512693134596`. Task `290` admitted and restored checkpoint `3894008488d95be470c97ebe6994eda40af98564dd0d69ffd05ae801693ba6b3`. Its closure relocation report and restore transcript were present before stage1.
+
+Both strict Cargo-free stages succeeded. Their Mantle binaries matched at BLAKE3 `4e48a03ef41c18bf98525c9c72d20b99e446db546ede971dc2c5f0118c3ecda7`. The run reported `strict_proof_admission: true`.
+
+Final receipt construction then failed closed. The plan named `stagex-provider-publication`, but evidence used `stagex-provider`. The same stale alias pattern affected `stage1` and `stage2`. Receipt stage IDs now come from the same canonical constants as the plan.
+
 ## Decision
 
-Keep the producer-owned StageX receipt layout. Repair checkpoint reconstruction rather than copying or inventing a second receipt. Keep the original closure as immutable evidence, but use a validated path-rebound closure for current stage execution.
+Keep the producer-owned StageX receipt layout. Repair checkpoint reconstruction rather than copying or inventing a second receipt. Keep the original closure as immutable evidence, but use a validated path-rebound closure for current stage execution. Use the immutable plan's six stage identifiers in final evidence.
 
 ## Owner
 
-The promoted checkpoint integration shell owns report reconstruction. The StageX provider owns its receipt layout and exported relative-path constant.
+The promoted checkpoint integration shell owns report reconstruction. The StageX provider owns its receipt layout and exported relative-path constant. The fixed-point plan owns canonical stage identifiers.
 
 ## Next action
 
-Build and transfer the closure-relocation repair, refresh the Mantle source record, and rerun the checkpoint-backed proof. The existing checkpoint remains valid because no provider authority changed.
+Build and transfer the receipt stage-ID repair, refresh the Mantle source record, and rerun the checkpoint-backed proof. The existing checkpoint remains valid because no provider authority changed.
 
 ## Non-claims
 
-Task `285` published a provider checkpoint, and task `287` restored it. Stage1 continuation, fixed-point equality, and the final receipt are not proven yet.
+Task `290` proves checkpoint restore, stage1 continuation, stage2 completion, strict admission, and fixed-point equality. The final v2 receipt is not proven yet.

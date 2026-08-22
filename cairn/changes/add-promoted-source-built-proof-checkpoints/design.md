@@ -52,6 +52,8 @@ The closure payload contains absolute paths from its origin attempt. Mantle keep
 
 A final receipt identifies each stage as `executed` or `restored`. A restored stage includes the checkpoint-manifest digest and the original promoted execution-evidence digest.
 
+Stage evidence uses the six canonical stage identifiers owned by the immutable plan. Receipt construction does not invent shorter aliases for provider publication or Mantle build stages.
+
 Planned-versus-observed reconciliation uses the original bound observations for restored stages. It does not require duplicate current-run execution events.
 
 The completed proof claim is compositional: every stage was executed under admitted authority, but not necessarily in one process attempt.

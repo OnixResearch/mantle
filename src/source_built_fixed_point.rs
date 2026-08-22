@@ -14,6 +14,12 @@ pub(crate) const SOURCE_BUILT_FIXED_POINT_PLAN_SCHEMA: &str = "mantle-source-bui
 pub(crate) const SOURCE_BUILT_FIXED_POINT_PROOF_WORKFLOW: &str = "mantle-deterministic-proof-receipt-v2";
 pub(crate) const SOURCE_BUILT_FIXED_POINT_PROVIDER_KIND: &str = "full-source";
 pub(crate) const SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX: u64 = 4_096;
+pub(crate) const STAGEX_TRANSITION_STAGE_ID: &str = "stagex-transition";
+pub(crate) const STAGEX_PROVIDER_STAGE_ID: &str = "stagex-provider-publication";
+pub(crate) const FULL_SOURCE_NATIVE_STAGE_ID: &str = "full-source-native-provider";
+pub(crate) const FULL_SOURCE_RUST_STAGE_ID: &str = "full-source-rust-provider";
+pub(crate) const MANTLE_STAGE1_STAGE_ID: &str = "mantle-stage1";
+pub(crate) const MANTLE_STAGE2_STAGE_ID: &str = "mantle-stage2";
 const SOURCE_AUTHORITY_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-source-authority-v1";
 const PLAN_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-plan-v3";
 const BUILD_EFFECT_POLICY_VERSION: &str = "mantle-build-effects-v1";
@@ -553,7 +559,7 @@ fn source_input_for_role(
     Ok(input)
 }
 
-fn expected_stage_plans() -> Vec<SourceBuiltFixedPointStagePlan> {
+pub(crate) fn expected_stage_plans() -> Vec<SourceBuiltFixedPointStagePlan> {
     let stages = vec![
         stagex_transition_stage(),
         stagex_provider_stage(),
@@ -569,7 +575,7 @@ fn expected_stage_plans() -> Vec<SourceBuiltFixedPointStagePlan> {
 
 fn stagex_transition_stage() -> SourceBuiltFixedPointStagePlan {
     stage_plan(
-        "stagex-transition",
+        STAGEX_TRANSITION_STAGE_ID,
         ProofStageKind::StagexTransition,
         ProofOrchestrator::HostMantle,
         vec![
@@ -586,7 +592,7 @@ fn stagex_transition_stage() -> SourceBuiltFixedPointStagePlan {
 
 fn stagex_provider_stage() -> SourceBuiltFixedPointStagePlan {
     stage_plan(
-        "stagex-provider-publication",
+        STAGEX_PROVIDER_STAGE_ID,
         ProofStageKind::StagexProviderPublication,
         ProofOrchestrator::HostMantle,
         vec![
@@ -601,7 +607,7 @@ fn stagex_provider_stage() -> SourceBuiltFixedPointStagePlan {
 
 fn full_source_native_stage() -> SourceBuiltFixedPointStagePlan {
     stage_plan(
-        "full-source-native-provider",
+        FULL_SOURCE_NATIVE_STAGE_ID,
         ProofStageKind::FullSourceNativeProvider,
         ProofOrchestrator::HostMantle,
         vec![
@@ -619,7 +625,7 @@ fn full_source_native_stage() -> SourceBuiltFixedPointStagePlan {
 
 fn full_source_rust_stage() -> SourceBuiltFixedPointStagePlan {
     stage_plan(
-        "full-source-rust-provider",
+        FULL_SOURCE_RUST_STAGE_ID,
         ProofStageKind::FullSourceRustProvider,
         ProofOrchestrator::HostMantle,
         vec![
@@ -637,7 +643,7 @@ fn full_source_rust_stage() -> SourceBuiltFixedPointStagePlan {
 
 fn mantle_stage1_plan() -> SourceBuiltFixedPointStagePlan {
     stage_plan(
-        "mantle-stage1",
+        MANTLE_STAGE1_STAGE_ID,
         ProofStageKind::MantleStage1,
         ProofOrchestrator::HostMantle,
         mantle_build_inputs(false),
@@ -647,7 +653,7 @@ fn mantle_stage1_plan() -> SourceBuiltFixedPointStagePlan {
 
 fn mantle_stage2_plan() -> SourceBuiltFixedPointStagePlan {
     stage_plan(
-        "mantle-stage2",
+        MANTLE_STAGE2_STAGE_ID,
         ProofStageKind::MantleStage2,
         ProofOrchestrator::Stage1Mantle,
         mantle_build_inputs(true),

@@ -519,6 +519,17 @@ fn is_provider_checkpoint_role(role: ProofOutputRole) -> bool {
     )
 }
 
+fn canonical_stage_id(role: ProofOutputRole) -> &'static str {
+    match role {
+        ProofOutputRole::StagexTransition => crate::source_built_fixed_point::STAGEX_TRANSITION_STAGE_ID,
+        ProofOutputRole::StagexProvider => crate::source_built_fixed_point::STAGEX_PROVIDER_STAGE_ID,
+        ProofOutputRole::FullSourceNativeProvider => crate::source_built_fixed_point::FULL_SOURCE_NATIVE_STAGE_ID,
+        ProofOutputRole::FullSourceRustProvider => crate::source_built_fixed_point::FULL_SOURCE_RUST_STAGE_ID,
+        ProofOutputRole::MantleStage1 => crate::source_built_fixed_point::MANTLE_STAGE1_STAGE_ID,
+        ProofOutputRole::MantleStage2 => crate::source_built_fixed_point::MANTLE_STAGE2_STAGE_ID,
+    }
+}
+
 fn stage_evidence(
     proof_root: &Path,
     plan: &SourceBuiltFixedPointPlan,
@@ -560,7 +571,7 @@ fn stage_evidence(
     let rust_executable = rust_binding.executable_identity(&rustc_digest);
     let evidence = vec![
         SourceBuiltStageEvidence {
-            stage_id: "stagex-transition".to_string(),
+            stage_id: canonical_stage_id(ProofOutputRole::StagexTransition).to_string(),
             output_role: ProofOutputRole::StagexTransition,
             status: STAGE_STATUS_COMPLETE.to_string(),
             execution_origin: transition_binding.origin,
@@ -578,7 +589,7 @@ fn stage_evidence(
             fallback_events: Vec::new(),
         },
         SourceBuiltStageEvidence {
-            stage_id: "stagex-provider".to_string(),
+            stage_id: canonical_stage_id(ProofOutputRole::StagexProvider).to_string(),
             output_role: ProofOutputRole::StagexProvider,
             status: STAGE_STATUS_COMPLETE.to_string(),
             execution_origin: stagex_binding.origin,
@@ -596,7 +607,7 @@ fn stage_evidence(
             fallback_events: Vec::new(),
         },
         SourceBuiltStageEvidence {
-            stage_id: "full-source-native-provider".to_string(),
+            stage_id: canonical_stage_id(ProofOutputRole::FullSourceNativeProvider).to_string(),
             output_role: ProofOutputRole::FullSourceNativeProvider,
             status: STAGE_STATUS_COMPLETE.to_string(),
             execution_origin: native_binding.origin,
@@ -614,7 +625,7 @@ fn stage_evidence(
             fallback_events: Vec::new(),
         },
         SourceBuiltStageEvidence {
-            stage_id: "full-source-rust-provider".to_string(),
+            stage_id: canonical_stage_id(ProofOutputRole::FullSourceRustProvider).to_string(),
             output_role: ProofOutputRole::FullSourceRustProvider,
             status: STAGE_STATUS_COMPLETE.to_string(),
             execution_origin: rust_binding.origin,
@@ -632,7 +643,7 @@ fn stage_evidence(
             fallback_events: Vec::new(),
         },
         SourceBuiltStageEvidence {
-            stage_id: STAGE1_RUN_ID.to_string(),
+            stage_id: canonical_stage_id(ProofOutputRole::MantleStage1).to_string(),
             output_role: ProofOutputRole::MantleStage1,
             status: STAGE_STATUS_COMPLETE.to_string(),
             execution_origin: stage1_binding.origin,
@@ -656,7 +667,7 @@ fn stage_evidence(
             fallback_events: Vec::new(),
         },
         SourceBuiltStageEvidence {
-            stage_id: STAGE2_RUN_ID.to_string(),
+            stage_id: canonical_stage_id(ProofOutputRole::MantleStage2).to_string(),
             output_role: ProofOutputRole::MantleStage2,
             status: STAGE_STATUS_COMPLETE.to_string(),
             execution_origin: stage2_binding.origin,
@@ -758,10 +769,17 @@ fn validate_stage_plan_alignment(
     plan: &SourceBuiltFixedPointPlan,
     evidence: &[SourceBuiltStageEvidence],
 ) -> Result<(), RunError> {
-    if plan.stages.len() != evidence.len() {
+    validate_stage_plan_entries(&plan.stages, evidence)
+}
+
+fn validate_stage_plan_entries(
+    planned_stages: &[crate::source_built_fixed_point::SourceBuiltFixedPointStagePlan],
+    evidence: &[SourceBuiltStageEvidence],
+) -> Result<(), RunError> {
+    if planned_stages.len() != evidence.len() {
         return Err(receipt_error("plan and stage evidence counts differ".to_string()));
     }
-    for (planned, observed) in plan.stages.iter().zip(evidence) {
+    for (planned, observed) in planned_stages.iter().zip(evidence) {
         if planned.stage_id != observed.stage_id || planned.output != observed.output_role {
             return Err(receipt_error(format!(
                 "stage evidence does not match plan: planned {} {:?}, observed {} {:?}",
@@ -769,7 +787,7 @@ fn validate_stage_plan_alignment(
             )));
         }
     }
-    assert_eq!(plan.stages.len(), STAGE_EVIDENCE_COUNT);
+    assert_eq!(planned_stages.len(), STAGE_EVIDENCE_COUNT);
     debug_assert_eq!(evidence.len(), STAGE_EVIDENCE_COUNT);
     Ok(())
 }
@@ -1381,6 +1399,31 @@ mod tests {
     const NO_ACCESS_DIRECTORY_MODE: u32 = 0o000;
     #[cfg(unix)]
     const RESTORED_DIRECTORY_MODE: u32 = 0o700;
+
+    #[test]
+    fn stage_evidence_ids_match_the_plan_and_reject_stale_aliases() {
+        let planned = crate::source_built_fixed_point::expected_stage_plans();
+        let mut evidence = planned
+            .iter()
+            .map(|stage| {
+                let mut evidence = test_stage_evidence(stage.output);
+                evidence.stage_id = canonical_stage_id(stage.output).to_string();
+                evidence
+            })
+            .collect::<Vec<_>>();
+
+        validate_stage_plan_entries(&planned, &evidence).unwrap();
+        evidence[1].stage_id = "stagex-provider".to_string();
+        let stagex_error = validate_stage_plan_entries(&planned, &evidence).unwrap_err();
+        evidence[1].stage_id = canonical_stage_id(ProofOutputRole::StagexProvider).to_string();
+        evidence[4].stage_id = STAGE1_RUN_ID.to_string();
+        let stage1_error = validate_stage_plan_entries(&planned, &evidence).unwrap_err();
+
+        assert!(stagex_error.to_string().contains("planned stagex-provider-publication"));
+        assert!(stage1_error.to_string().contains("planned mantle-stage1"));
+        assert_ne!(canonical_stage_id(ProofOutputRole::StagexProvider), "stagex-provider");
+        assert_ne!(canonical_stage_id(ProofOutputRole::MantleStage1), STAGE1_RUN_ID);
+    }
 
     #[test]
     fn stage_evidence_rejects_fallbacks_and_duplicate_ids() {
