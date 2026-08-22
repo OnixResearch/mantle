@@ -465,6 +465,14 @@ struct StageExecutionBinding {
     origin: StageExecutionOrigin,
     checkpoint_digest_blake3: Option<String>,
     execution_evidence_digest_blake3: Option<String>,
+    producer_executable_digest_blake3: Option<String>,
+}
+
+impl StageExecutionBinding {
+    fn executable_identity(&self, executed_digest_blake3: &str) -> String {
+        let digest = self.producer_executable_digest_blake3.as_deref().unwrap_or(executed_digest_blake3);
+        format!("blake3:{digest}")
+    }
 }
 
 fn stage_execution_binding(
@@ -488,6 +496,7 @@ fn stage_execution_binding(
         origin: StageExecutionOrigin::RestoredCheckpoint,
         checkpoint_digest_blake3: Some(checkpoint.admission.checkpoint_digest_blake3.clone()),
         execution_evidence_digest_blake3: Some(record.execution_evidence_digest_blake3.clone()),
+        producer_executable_digest_blake3: Some(record.producer_executable_digest_blake3.clone()),
     })
 }
 
@@ -496,6 +505,7 @@ fn executed_stage_binding() -> StageExecutionBinding {
         origin: StageExecutionOrigin::Executed,
         checkpoint_digest_blake3: None,
         execution_evidence_digest_blake3: None,
+        producer_executable_digest_blake3: None,
     }
 }
 
@@ -544,6 +554,10 @@ fn stage_evidence(
     let rust_binding = stage_execution_binding(providers, ProofOutputRole::FullSourceRustProvider)?;
     let stage1_binding = stage_execution_binding(providers, ProofOutputRole::MantleStage1)?;
     let stage2_binding = stage_execution_binding(providers, ProofOutputRole::MantleStage2)?;
+    let transition_executable = transition_binding.executable_identity(&current_executable_digest);
+    let stagex_executable = stagex_binding.executable_identity(&current_executable_digest);
+    let native_executable = native_binding.executable_identity(&current_executable_digest);
+    let rust_executable = rust_binding.executable_identity(&rustc_digest);
     let evidence = vec![
         SourceBuiltStageEvidence {
             stage_id: "stagex-transition".to_string(),
@@ -553,7 +567,7 @@ fn stage_evidence(
             checkpoint_digest_blake3: transition_binding.checkpoint_digest_blake3,
             original_execution_evidence_digest_blake3: transition_binding.execution_evidence_digest_blake3,
             orchestrator: "host-mantle".to_string(),
-            executable_identity: format!("blake3:{current_executable_digest}"),
+            executable_identity: transition_executable,
             transcript_path: relative_path(proof_root, &transition_report)?,
             transcript_digest_blake3: hash_file(&transition_report)?,
             audit_paths: vec![relative_path(proof_root, &transition_audit)?],
@@ -571,7 +585,7 @@ fn stage_evidence(
             checkpoint_digest_blake3: stagex_binding.checkpoint_digest_blake3,
             original_execution_evidence_digest_blake3: stagex_binding.execution_evidence_digest_blake3,
             orchestrator: "host-mantle".to_string(),
-            executable_identity: format!("blake3:{current_executable_digest}"),
+            executable_identity: stagex_executable,
             transcript_path: relative_path(proof_root, &stagex_receipt)?,
             transcript_digest_blake3: hash_file(&stagex_receipt)?,
             audit_paths: vec![relative_path(proof_root, &stagex_validation)?],
@@ -589,7 +603,7 @@ fn stage_evidence(
             checkpoint_digest_blake3: native_binding.checkpoint_digest_blake3,
             original_execution_evidence_digest_blake3: native_binding.execution_evidence_digest_blake3,
             orchestrator: "host-mantle".to_string(),
-            executable_identity: format!("blake3:{current_executable_digest}"),
+            executable_identity: native_executable,
             transcript_path: relative_path(proof_root, &providers.native_provider.transcript_path)?,
             transcript_digest_blake3: providers.native_provider.transcript_digest_blake3.clone(),
             audit_paths: vec![relative_path(proof_root, &providers.native_admission_report_path)?],
@@ -607,7 +621,7 @@ fn stage_evidence(
             checkpoint_digest_blake3: rust_binding.checkpoint_digest_blake3,
             original_execution_evidence_digest_blake3: rust_binding.execution_evidence_digest_blake3,
             orchestrator: "host-mantle".to_string(),
-            executable_identity: format!("blake3:{rustc_digest}"),
+            executable_identity: rust_executable,
             transcript_path: RUST_PROVIDER_BUILD_RECEIPT.to_string(),
             transcript_digest_blake3: hash_file(&rust_build_receipt)?,
             audit_paths: vec![RUST_PROVIDER_BINDING_RECEIPT.to_string()],
