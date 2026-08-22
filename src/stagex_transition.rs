@@ -111,7 +111,7 @@ pub(crate) const BINUTILS_COMPONENT_BUILD_STAGE_ID: &str = "binutils-component-m
 pub(crate) const BINUTILS_INSTALL_STAGE_ID: &str = "binutils-install-materialization";
 pub(crate) const BINUTILS_INSTALL_SMOKE_STAGE_ID: &str = "binutils-install-smoke";
 const BINUTILS_EXECUTED_COREUTILS_TOOL_COUNT: usize = 20;
-const BINUTILS_MKDIR_EXEC_COUNT_BOUNDS: [u32; 2] = [5_369, 5_425];
+const BINUTILS_MKDIR_EXEC_COUNT_BOUNDS: [u32; 2] = [5_366, 5_425];
 const BINUTILS_EXECUTED_COREUTILS_TOOL_NAMES: [&str; BINUTILS_EXECUTED_COREUTILS_TOOL_COUNT] = [
     "cat", "chmod", "cp", "echo", "install", "ln", "ls", "mkdir", "mv", "rm", "rmdir", "sort", "test", "head", "wc",
     "basename", "dirname", "tr", "expr", "touch",
@@ -5961,7 +5961,7 @@ fn binutils_event_count_bounds_from_sed_invocations(
     const MIDDLE_SED_INVOCATION_COUNT: u32 = 4_892;
     const UPPER_SED_INVOCATION_COUNT: u32 = 4_893;
     const LOWER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [73_980, 74_045];
-    const MIDDLE_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [74_001, 74_066];
+    const MIDDLE_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [73_994, 74_066];
     const UPPER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [74_010, 74_057];
     match sed_invocation_count {
         LOWER_SED_INVOCATION_COUNT => Ok(LOWER_SED_EVENT_COUNT_BOUNDS),
@@ -10000,12 +10000,15 @@ mod tests {
         const UPPER_SED_INVOCATION_COUNT: u32 = 4_893;
         const OUTSIDE_SED_INVOCATION_COUNTS: [u32; 2] = [4_890, 4_894];
         const LOWER_SED_EVENT_BOUNDS: [usize; 2] = [73_980, 74_045];
-        const MIDDLE_SED_EVENT_BOUNDS: [usize; 2] = [74_001, 74_066];
+        const MIDDLE_SED_EVENT_BOUNDS: [usize; 2] = [73_994, 74_066];
         const UPPER_SED_EVENT_BOUNDS: [usize; 2] = [74_010, 74_057];
+        const OBSERVED_MIDDLE_SED_EVENT_COUNT: usize = 73_994;
         let bounds = crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS
             .map(|count| u32::try_from(count).unwrap());
         let below = crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS[0].checked_sub(1).unwrap();
         let above = crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS[1].checked_add(1).unwrap();
+        let middle_below = MIDDLE_SED_EVENT_BOUNDS[0].checked_sub(1).unwrap();
+        let middle_bounds = MIDDLE_SED_EVENT_BOUNDS.map(|count| u32::try_from(count).unwrap());
         assert!(binutils_event_count_within_bounds(
             bounds,
             crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS[0]
@@ -10024,6 +10027,8 @@ mod tests {
             binutils_event_count_bounds_from_sed_invocations(MIDDLE_SED_INVOCATION_COUNT).unwrap(),
             MIDDLE_SED_EVENT_BOUNDS
         );
+        assert!(binutils_event_count_within_bounds(middle_bounds, OBSERVED_MIDDLE_SED_EVENT_COUNT));
+        assert!(!binutils_event_count_within_bounds(middle_bounds, middle_below));
         assert_eq!(
             binutils_event_count_bounds_from_sed_invocations(UPPER_SED_INVOCATION_COUNT).unwrap(),
             UPPER_SED_EVENT_BOUNDS

@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "bf49429a43aa54bc47c7fb31715e71a93021c3b55802e6c2e31ea8ae05e7fab3",
+  "blocker": "error: build failed\nsource-built fixed-point blocked: StageX transition failed: invalid StageX protected-exec audit: GNU binutils event count is not closed: bounds [73980, 74066], sed bounds [74001, 74066], observed 73994"
+}

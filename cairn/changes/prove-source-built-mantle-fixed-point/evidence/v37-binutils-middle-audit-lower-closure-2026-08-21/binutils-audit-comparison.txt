@@ -1,0 +1,36 @@
+V28_EVENT_COUNT=73980
+V28_SED_INVOCATION_COUNT=4891
+V29_EVENT_COUNT=74001
+V29_SED_INVOCATION_COUNT=4892
+V31_EVENT_COUNT=73994
+V31_SED_INVOCATION_COUNT=4892
+=== V29 TO V31 IDENTITY COUNT DIFF ===
+--- /home/brittonr/mantle-runs/receipt-fix-v31/binutils-audit-counts/v29.tsv	2026-08-21 23:24:49.197664967 -0400
++++ /home/brittonr/mantle-runs/receipt-fix-v31/binutils-audit-counts/v31.tsv	2026-08-21 23:24:50.950677016 -0400
+@@ -1,4 +1,4 @@
+-planned:bash-full-materialization:exec:bash-full-smoke:bash-full	7626
++planned:bash-full-materialization:exec:bash-full-smoke:bash-full	7624
+ planned:binutils-canonicalizer-materialization:exec:binutils-helper:elf-canonicalizer	941
+ planned:binutils-generator-materialization:exec:binutils-component:bfd-chew	47
+ planned:binutils-generator-materialization:exec:binutils-generated:bfd-a-out	2
+@@ -39,7 +39,7 @@
+ planned:binutils-install-materialization:exec:binutils-smoke:readelf	1
+ planned:bison-materialization:exec:bison-smoke:bison	9
+ planned:coreutils-materialization:exec:binutils-policy:coreutils-basename	359
+-planned:coreutils-materialization:exec:binutils-policy:coreutils-chmod	994
++planned:coreutils-materialization:exec:binutils-policy:coreutils-chmod	993
+ planned:coreutils-materialization:exec:binutils-policy:coreutils-dirname	1267
+ planned:coreutils-materialization:exec:binutils-policy:coreutils-expr	364
+ planned:coreutils-materialization:exec:binutils-policy:coreutils-head	4892
+@@ -54,9 +54,9 @@
+ planned:coreutils-materialization:exec:binutils-policy:coreutils-tr	23
+ planned:coreutils-materialization:exec:binutils-policy:coreutils-wc	10532
+ planned:coreutils-materialization:exec:coreutils-smoke:cat	9630
+-planned:coreutils-materialization:exec:coreutils-smoke:cp	105
++planned:coreutils-materialization:exec:coreutils-smoke:cp	104
+ planned:coreutils-materialization:exec:coreutils-smoke:echo	17
+-planned:coreutils-materialization:exec:coreutils-smoke:mkdir	5369
++planned:coreutils-materialization:exec:coreutils-smoke:mkdir	5366
+ planned:diffutils-materialization:exec:diffutils-smoke:cmp	36
+ planned:diffutils-materialization:exec:diffutils-smoke:diff	107
+ planned:flex-materialization:exec:flex-smoke:flex	7
