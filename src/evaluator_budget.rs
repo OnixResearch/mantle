@@ -648,8 +648,13 @@ fn configure_worker_limits(_command: &mut Command, _policy: &EvaluationBudgetPol
     Err(RunError::Eval("evaluation-budget-unsupported:worker-limits".to_string()))
 }
 
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+type LinuxRlimitResource = libc::__rlimit_resource_t;
+#[cfg(all(target_os = "linux", target_env = "musl"))]
+type LinuxRlimitResource = libc::c_int;
+
 #[cfg(target_os = "linux")]
-fn set_resource_limit(resource: libc::__rlimit_resource_t, soft: libc::rlim_t, hard: libc::rlim_t) -> io::Result<()> {
+fn set_resource_limit(resource: LinuxRlimitResource, soft: libc::rlim_t, hard: libc::rlim_t) -> io::Result<()> {
     let limit = libc::rlimit {
         rlim_cur: soft,
         rlim_max: hard,
@@ -659,6 +664,20 @@ fn set_resource_limit(resource: libc::__rlimit_resource_t, soft: libc::rlim_t, h
         return Err(io::Error::last_os_error());
     }
     Ok(())
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod resource_limit_tests {
+    use super::LinuxRlimitResource;
+
+    fn accepts_resource(_resource: LinuxRlimitResource) {}
+
+    #[test]
+    fn evaluator_resource_ids_match_the_selected_linux_libc_signature() {
+        accepts_resource(libc::RLIMIT_AS);
+        accepts_resource(libc::RLIMIT_CPU);
+        assert_ne!(libc::RLIMIT_AS, libc::RLIMIT_CPU);
+    }
 }
 
 fn configure_worker_command(command: &mut Command) {

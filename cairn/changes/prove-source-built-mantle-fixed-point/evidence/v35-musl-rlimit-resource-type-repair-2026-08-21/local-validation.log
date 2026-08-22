@@ -1,0 +1,21 @@
+$ rustfmt evaluator budget
+$ Linux libc resource type test
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Blocking waiting for file lock on build directory
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 52.82s
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-89263e91c19d52cc)
+
+running 1 test
+test evaluator_budget::resource_limit_tests::evaluator_resource_ids_match_the_selected_linux_libc_signature ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2408 filtered out; finished in 0.00s
+
+$ focused strict Clippy with recorded baseline allowances
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Blocking waiting for file lock on build directory
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 12s
+$ git diff --check
