@@ -24,9 +24,15 @@ share/crunch-bootstrap/stagex-lineage-receipt.json
 
 The import and restore reconstruction paths now use `stagex_provider::PROVIDER_RECEIPT_RELATIVE_PATH`. A positive test requires the published path. A negative test rejects the obsolete root path.
 
+The V42 profile then verified at BLAKE3 `e99cd591cf76435d9e5a10b7b70dadfb7a35b9bcf174b9ede73830be4d129dd2`. Task `285` imported checkpoint `3894008488d95be470c97ebe6994eda40af98564dd0d69ffd05ae801693ba6b3`. Its manifest records promoted origin, four completed stages, seven payloads, no authority violations, and no fallback events.
+
+Task `287` admitted and restored that checkpoint into a fresh proof root. It revalidated the native provider, but rejected stage1 before execution because the exact closure payload still named the origin attempt's absolute Rust and native provider paths.
+
+The restore path now keeps the exact closure payload under `provider-checkpoint-origin/`. It derives a current closure from the restored providers. A pure validator requires identical schema, seeds, member identities, content digests, trust, source, build receipts, and provider-relative paths. Only the two absolute provider roots may change.
+
 ## Decision
 
-Keep the producer-owned StageX receipt layout. Repair checkpoint reconstruction rather than copying or inventing a second receipt.
+Keep the producer-owned StageX receipt layout. Repair checkpoint reconstruction rather than copying or inventing a second receipt. Keep the original closure as immutable evidence, but use a validated path-rebound closure for current stage execution.
 
 ## Owner
 
@@ -34,8 +40,8 @@ The promoted checkpoint integration shell owns report reconstruction. The StageX
 
 ## Next action
 
-Build and transfer the repaired orchestrator, refresh the Mantle source record, rerun the stopped-attempt import, then start a fresh checkpoint-backed proof.
+Build and transfer the closure-relocation repair, refresh the Mantle source record, and rerun the checkpoint-backed proof. The existing checkpoint remains valid because no provider authority changed.
 
 ## Non-claims
 
-Task `283` did not publish a checkpoint. No provider restore, stage1 continuation, fixed point, or final receipt is proven yet.
+Task `285` published a provider checkpoint, and task `287` restored it. Stage1 continuation, fixed-point equality, and the final receipt are not proven yet.

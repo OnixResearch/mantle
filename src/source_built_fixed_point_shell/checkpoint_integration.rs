@@ -1,5 +1,9 @@
 use super::*;
 
+const CHECKPOINT_ORIGIN_TOOLCHAIN_CLOSURE_FILE: &str = "source-built-toolchain-closure.json";
+const CHECKPOINT_CLOSURE_RELOCATION_REPORT_FILE: &str = "provider-checkpoint-closure-relocation.json";
+const CHECKPOINT_CLOSURE_RELOCATION_REPORT_SCHEMA: &str = "mantle-source-built-checkpoint-closure-relocation-v1";
+
 pub(super) fn import_provider_checkpoint_attempt(
     options: &SourceBuiltFixedPointOptions<'_>,
     prepared: &PreparedAttempt,
@@ -316,6 +320,7 @@ struct RestoredProviderPaths {
     rust_provider: PathBuf,
     origin_native_admission: PathBuf,
     origin_native_transcript: PathBuf,
+    origin_toolchain_closure: PathBuf,
     toolchain_closure: PathBuf,
 }
 
@@ -332,6 +337,7 @@ impl RestoredProviderPaths {
             rust_provider: prepared.staging_dir.join(RUST_PROVIDER_DIR),
             origin_native_admission: origin.join("native-admission.json"),
             origin_native_transcript: origin.join("native-provider.json"),
+            origin_toolchain_closure: origin.join(CHECKPOINT_ORIGIN_TOOLCHAIN_CLOSURE_FILE),
             toolchain_closure: prepared.staging_dir.join(TOOLCHAIN_CLOSURE_FILE),
         })
     }
@@ -374,7 +380,7 @@ impl RestoredProviderPaths {
             ),
             checkpoint_restore(
                 crate::source_built_fixed_point_checkpoint::PAYLOAD_TOOLCHAIN_CLOSURE,
-                &self.toolchain_closure,
+                &self.origin_toolchain_closure,
                 CheckpointPayloadKind::RegularFile,
             ),
         ]
@@ -436,6 +442,7 @@ fn validate_restored_provider_checkpoint(
         .map_err(|error| proof_error(format!("validating restored Rust provider: {error}")))?;
     let recipe_digest = crate::protected_exec::blake3_file_hex(&prepared.source_root.join(RUST_RECIPE_NCL))
         .map_err(|error| proof_error(format!("hashing restored Rust provider recipe: {error}")))?;
+    materialize_relocated_toolchain_closure(prepared, &paths, &restored)?;
     let native_provider = restored_native_provider_observation(
         prepared,
         &paths.native_provider,
@@ -460,6 +467,69 @@ fn validate_restored_provider_checkpoint(
         toolchain_closure_path: paths.toolchain_closure,
         provider_checkpoint: Some(restored),
     })
+}
+
+fn materialize_relocated_toolchain_closure(
+    prepared: &PreparedAttempt,
+    paths: &RestoredProviderPaths,
+    restored: &crate::source_built_fixed_point_checkpoint_shell::RestoredProviderCheckpoint,
+) -> Result<(), RunError> {
+    crate::native_toolchain_closure::cmd_materialize_native_toolchain_closure(NativeToolchainClosureOptions {
+        rust_source_provider: &paths.rust_provider,
+        host_root: &paths.native_provider,
+        target_root: &paths.native_provider,
+        output: &paths.toolchain_closure,
+    })?;
+    let origin = read_toolchain_closure_manifest(&paths.origin_toolchain_closure)?;
+    let relocated = read_toolchain_closure_manifest(&paths.toolchain_closure)?;
+    let validation = crate::source_toolchain_closure::validate_relocated_toolchain_closure(&origin, &relocated)
+        .map_err(|error| proof_error(format!("validating restored toolchain closure relocation: {error}")))?;
+    let required_count = crate::source_toolchain_closure::required_native_closure_member_names().len();
+    if validation.member_count != required_count {
+        return Err(proof_error(format!(
+            "restored toolchain closure relocation has {} members, expected {required_count}",
+            validation.member_count
+        )));
+    }
+    write_toolchain_closure_relocation_report(prepared, paths, restored, &validation)
+}
+
+fn read_toolchain_closure_manifest(
+    path: &Path,
+) -> Result<crate::source_toolchain_closure::ToolchainClosureManifest, RunError> {
+    let bytes = fs::read(path)
+        .map_err(|error| proof_error(format!("reading toolchain closure {}: {error}", path.display())))?;
+    serde_json::from_slice(&bytes)
+        .map_err(|error| proof_error(format!("parsing toolchain closure {}: {error}", path.display())))
+}
+
+fn write_toolchain_closure_relocation_report(
+    prepared: &PreparedAttempt,
+    paths: &RestoredProviderPaths,
+    restored: &crate::source_built_fixed_point_checkpoint_shell::RestoredProviderCheckpoint,
+    validation: &crate::source_toolchain_closure::ToolchainClosureRelocationValidation,
+) -> Result<(), RunError> {
+    let origin_digest = crate::protected_exec::blake3_file_hex(&paths.origin_toolchain_closure)
+        .map_err(|error| proof_error(format!("hashing checkpoint origin closure: {error}")))?;
+    let relocated_digest = crate::protected_exec::blake3_file_hex(&paths.toolchain_closure)
+        .map_err(|error| proof_error(format!("hashing relocated checkpoint closure: {error}")))?;
+    let report = serde_json::json!({
+        "schema": CHECKPOINT_CLOSURE_RELOCATION_REPORT_SCHEMA,
+        "checkpoint_digest_blake3": restored.admission.checkpoint_digest_blake3,
+        "origin_closure": {
+            "path": paths.origin_toolchain_closure,
+            "digest_blake3": origin_digest,
+            "policy_digest_blake3": validation.origin_policy_digest_blake3,
+        },
+        "relocated_closure": {
+            "path": paths.toolchain_closure,
+            "digest_blake3": relocated_digest,
+            "policy_digest_blake3": validation.relocated_policy_digest_blake3,
+        },
+        "member_count": validation.member_count,
+        "non_claim": "closure relocation changes only absolute provider roots and does not repeat provider execution",
+    });
+    write_json_create_new(&prepared.staging_dir.join(CHECKPOINT_CLOSURE_RELOCATION_REPORT_FILE), &report)
 }
 
 fn restored_native_provider_observation(
@@ -807,6 +877,30 @@ mod tests {
         assert_eq!(report.receipt_path, receipt_path);
         assert!(report.receipt_path.is_file());
         assert_ne!(report.receipt_path, provider_root.join("provider-receipt.json"));
+    }
+
+    #[test]
+    fn restored_paths_keep_the_checkpoint_closure_as_origin_evidence() {
+        let paths = RestoredProviderPaths {
+            stagex_transition: PathBuf::from("/proof/stagex-transition"),
+            stagex_provider: PathBuf::from("/proof/native-store/stagex"),
+            native_provider: PathBuf::from("/proof/native-store/native"),
+            rust_provider: PathBuf::from("/proof/rust-provider"),
+            origin_native_admission: PathBuf::from("/proof/origin/native-admission.json"),
+            origin_native_transcript: PathBuf::from("/proof/origin/native-provider.json"),
+            origin_toolchain_closure: PathBuf::from("/proof/origin/source-built-toolchain-closure.json"),
+            toolchain_closure: PathBuf::from("/proof/source-built-toolchain-closure.json"),
+        };
+
+        let requests = paths.requests();
+        let closure = requests
+            .iter()
+            .find(|request| request.payload_id == crate::source_built_fixed_point_checkpoint::PAYLOAD_TOOLCHAIN_CLOSURE)
+            .expect("toolchain closure restore request");
+
+        assert_eq!(closure.destination_path, paths.origin_toolchain_closure);
+        assert_ne!(closure.destination_path, paths.toolchain_closure);
+        assert_eq!(closure.kind, crate::source_built_fixed_point_checkpoint::CheckpointPayloadKind::RegularFile);
     }
 
     #[test]

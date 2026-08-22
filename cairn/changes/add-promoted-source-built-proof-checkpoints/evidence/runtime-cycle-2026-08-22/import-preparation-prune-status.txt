@@ -1,0 +1,7 @@
+finished_at=2026-08-22T16:23:27-04:00
+removed_bytes=50537592712
+free_bytes_after=764979048448
+retained_failed_import=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-provider-checkpoint-import-v41-a18d9819-20260822.source-built-fixed-point-staging-4125442
+retained_complete_import=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-provider-checkpoint-import-v42-f93d378b-20260822.source-built-fixed-point-staging-4126665
+retained_checkpoint_store=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-proof-checkpoints
+retained_status_plans_reports=true

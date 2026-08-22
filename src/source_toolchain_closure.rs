@@ -405,6 +405,13 @@ pub(crate) struct ToolchainClosureValidation {
     pub(crate) seed_exception_count: usize,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub(crate) struct ToolchainClosureRelocationValidation {
+    pub(crate) origin_policy_digest_blake3: String,
+    pub(crate) relocated_policy_digest_blake3: String,
+    pub(crate) member_count: usize,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ToolchainObservedInput {
     pub(crate) role: ToolchainRole,
@@ -476,6 +483,7 @@ pub(crate) enum ToolchainClosureErrorKind {
     MissingRustProviderRole,
     DuplicateRustProviderItem,
     DigestMismatch,
+    RelocationMismatch,
     Serialization,
 }
 
@@ -572,6 +580,33 @@ pub(crate) fn validate_toolchain_closure_manifest(
 ) -> Result<ToolchainClosureValidation, ToolchainClosureError> {
     let normalized = normalize_manifest(manifest)?;
     validation_from_normalized_manifest(&normalized)
+}
+
+pub(crate) fn validate_relocated_toolchain_closure(
+    origin: &ToolchainClosureManifest,
+    relocated: &ToolchainClosureManifest,
+) -> Result<ToolchainClosureRelocationValidation, ToolchainClosureError> {
+    let origin = normalize_manifest(origin)?;
+    let relocated = normalize_manifest(relocated)?;
+    require_relocation_manifest_shape(&origin, &relocated)?;
+    let origin_roots = closure_provider_roots(&origin)?;
+    let relocated_roots = closure_provider_roots(&relocated)?;
+    if origin_roots == relocated_roots {
+        return Err(relocation_error("toolchain provider roots did not move into the fresh proof root"));
+    }
+    for (origin_member, relocated_member) in origin.members.iter().zip(&relocated.members) {
+        require_relocated_member(origin_member, relocated_member, &origin_roots, &relocated_roots)?;
+    }
+    let origin_validation = validation_from_normalized_manifest(&origin)?;
+    let relocated_validation = validation_from_normalized_manifest(&relocated)?;
+    if origin_validation.policy_digest_blake3 == relocated_validation.policy_digest_blake3 {
+        return Err(relocation_error("relocated toolchain policy digest did not change with its absolute roots"));
+    }
+    Ok(ToolchainClosureRelocationValidation {
+        origin_policy_digest_blake3: origin_validation.policy_digest_blake3,
+        relocated_policy_digest_blake3: relocated_validation.policy_digest_blake3,
+        member_count: relocated.members.len(),
+    })
 }
 
 pub(crate) fn enforce_observed_toolchain_inputs(
@@ -729,6 +764,108 @@ impl fmt::Display for ToolchainClosureError {
 }
 
 impl std::error::Error for ToolchainClosureError {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ToolchainProviderRoots {
+    rust: PathBuf,
+    native: PathBuf,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ProviderRelativePath {
+    Rust(PathBuf),
+    Native(PathBuf),
+}
+
+fn require_relocation_manifest_shape(
+    origin: &ToolchainClosureManifest,
+    relocated: &ToolchainClosureManifest,
+) -> Result<(), ToolchainClosureError> {
+    if origin.schema != relocated.schema || origin.seed_exceptions != relocated.seed_exceptions {
+        return Err(relocation_error("relocated toolchain schema or seed authority changed"));
+    }
+    if origin.members.len() != relocated.members.len() {
+        return Err(relocation_error("relocated toolchain member count changed"));
+    }
+    assert!(!origin.members.is_empty());
+    assert!(!relocated.members.is_empty());
+    Ok(())
+}
+
+fn closure_provider_roots(
+    manifest: &ToolchainClosureManifest,
+) -> Result<ToolchainProviderRoots, ToolchainClosureError> {
+    let sysroot = required_closure_member(manifest, ToolchainRole::Sysroot, NATIVE_HOST_SYSROOT_NAME)?;
+    let compiler = required_closure_member(manifest, ToolchainRole::CCompiler, NATIVE_HOST_CC_NAME)?;
+    let rust = PathBuf::from(&sysroot.execution_path);
+    let compiler_path = Path::new(&compiler.execution_path);
+    let bin = compiler_path.parent().ok_or_else(|| relocation_error("C compiler path has no bin directory"))?;
+    if bin.file_name().and_then(|name| name.to_str()) != Some("bin") {
+        return Err(relocation_error("C compiler path is not under the native provider bin directory"));
+    }
+    let native = bin.parent().ok_or_else(|| relocation_error("C compiler bin directory has no provider root"))?;
+    if rust == native {
+        return Err(relocation_error("Rust and native provider roots overlap"));
+    }
+    Ok(ToolchainProviderRoots {
+        rust,
+        native: native.to_path_buf(),
+    })
+}
+
+fn required_closure_member<'a>(
+    manifest: &'a ToolchainClosureManifest,
+    role: ToolchainRole,
+    name: &str,
+) -> Result<&'a ToolchainClosureMember, ToolchainClosureError> {
+    manifest
+        .members
+        .iter()
+        .find(|member| member.role == role && member.name == name)
+        .ok_or_else(|| relocation_error(format!("toolchain relocation is missing member {name}")))
+}
+
+fn require_relocated_member(
+    origin: &ToolchainClosureMember,
+    relocated: &ToolchainClosureMember,
+    origin_roots: &ToolchainProviderRoots,
+    relocated_roots: &ToolchainProviderRoots,
+) -> Result<(), ToolchainClosureError> {
+    if member_key(origin) != member_key(relocated)
+        || origin.content_digest_blake3 != relocated.content_digest_blake3
+        || origin.trust != relocated.trust
+        || origin.source != relocated.source
+        || origin.build_receipt != relocated.build_receipt
+    {
+        return Err(relocation_error(format!("toolchain member authority changed for {}", origin.name)));
+    }
+    let origin_path = provider_relative_path(&origin.execution_path, origin_roots)?;
+    let relocated_path = provider_relative_path(&relocated.execution_path, relocated_roots)?;
+    if origin_path != relocated_path {
+        return Err(relocation_error(format!("toolchain member relative path changed for {}", origin.name)));
+    }
+    Ok(())
+}
+
+fn provider_relative_path(
+    execution_path: &str,
+    roots: &ToolchainProviderRoots,
+) -> Result<ProviderRelativePath, ToolchainClosureError> {
+    let path = Path::new(execution_path);
+    let rust = path.strip_prefix(&roots.rust).ok();
+    let native = path.strip_prefix(&roots.native).ok();
+    match (rust, native) {
+        (Some(relative), None) => Ok(ProviderRelativePath::Rust(relative.to_path_buf())),
+        (None, Some(relative)) => Ok(ProviderRelativePath::Native(relative.to_path_buf())),
+        _ => Err(relocation_error(format!(
+            "toolchain member path is outside one distinct provider root: {execution_path}"
+        ))),
+    }
+}
+
+fn relocation_error(message: impl Into<String>) -> ToolchainClosureError {
+    error(ToolchainClosureErrorKind::RelocationMismatch, message)
+}
 
 fn normalize_manifest(manifest: &ToolchainClosureManifest) -> Result<ToolchainClosureManifest, ToolchainClosureError> {
     validate_schema(&manifest.schema)?;
@@ -2166,6 +2303,48 @@ mod tests {
     }
 
     #[test]
+    fn relocation_accepts_only_fresh_provider_roots() {
+        let origin = relocatable_manifest("/proof/old-attempt");
+        let relocated = relocatable_manifest("/proof/new-attempt");
+
+        let validation = validate_relocated_toolchain_closure(&origin, &relocated).unwrap();
+
+        assert_eq!(validation.member_count, REQUIRED_TOOLCHAIN_ROLES.len());
+        assert_ne!(validation.origin_policy_digest_blake3, validation.relocated_policy_digest_blake3);
+        assert!(validation.origin_policy_digest_blake3.len() == BLAKE3_HEX_CHAR_COUNT);
+        assert!(validation.relocated_policy_digest_blake3.len() == BLAKE3_HEX_CHAR_COUNT);
+    }
+
+    #[test]
+    fn relocation_rejects_changed_member_authority() {
+        let origin = relocatable_manifest("/proof/old-attempt");
+        let mut relocated = relocatable_manifest("/proof/new-attempt");
+        relocated.members[0].content_digest_blake3 = DIGEST_F.to_string();
+
+        let error = validate_relocated_toolchain_closure(&origin, &relocated).unwrap_err();
+
+        assert_eq!(error.kind(), ToolchainClosureErrorKind::RelocationMismatch);
+        assert!(error.message().contains("member authority changed"));
+    }
+
+    #[test]
+    fn relocation_rejects_changed_provider_relative_path() {
+        let origin = relocatable_manifest("/proof/old-attempt");
+        let mut relocated = relocatable_manifest("/proof/new-attempt");
+        let rustc = relocated
+            .members
+            .iter_mut()
+            .find(|member| member.role == ToolchainRole::Rustc)
+            .expect("rustc member");
+        rustc.execution_path = "/proof/new-attempt/rust-provider/bin/rustc-renamed".to_string();
+
+        let error = validate_relocated_toolchain_closure(&origin, &relocated).unwrap_err();
+
+        assert_eq!(error.kind(), ToolchainClosureErrorKind::RelocationMismatch);
+        assert!(error.message().contains("relative path changed for rustc"));
+    }
+
+    #[test]
     fn json_fixture_parses_seed_exception_and_counts_source_built_members() {
         let manifest = serde_json::from_value::<ToolchainClosureManifest>(serde_json::json!({
             "schema": SOURCE_BUILT_TOOLCHAIN_CLOSURE_SCHEMA,
@@ -2958,6 +3137,24 @@ mod tests {
         assert_eq!(err.kind(), ToolchainClosureErrorKind::AmbiguousCCompilerRoute);
         assert!(err.message().contains("no receipt-bound clang route"));
         assert!(err.message().contains("alt-gcc"));
+    }
+
+    fn relocatable_manifest(attempt_root: &str) -> ToolchainClosureManifest {
+        let mut manifest = valid_manifest();
+        for member in &mut manifest.members {
+            let relative = match member.role {
+                ToolchainRole::Rustc => "rust-provider/bin/rustc",
+                ToolchainRole::Linker => "native-provider/bin/ld",
+                ToolchainRole::CCompiler => "native-provider/bin/x86_64-linux-musl-gcc",
+                ToolchainRole::Sysroot => "rust-provider",
+                _ => unreachable!("relocation fixture has only required roles"),
+            };
+            if member.role == ToolchainRole::Sysroot {
+                member.name = NATIVE_HOST_SYSROOT_NAME.to_string();
+            }
+            member.execution_path = Path::new(attempt_root).join(relative).display().to_string();
+        }
+        manifest
     }
 
     fn valid_manifest() -> ToolchainClosureManifest {

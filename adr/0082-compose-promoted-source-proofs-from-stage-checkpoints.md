@@ -31,7 +31,7 @@ Mantle source and vendor inputs do not enter the provider lookup key because the
 
 A lookup key discovers candidates but grants no authority. Mantle remeasures each candidate and admits only promoted origin with complete prior execution evidence and exact payload identity. Multiple candidates with equal semantic outputs are equivalent. Conflicting semantic outputs fail closed.
 
-An adopting attempt copies the selected payload into a fresh root. It remeasures the restored bytes before stage1. The final receipt marks the first four stages as `restored-checkpoint` and binds the checkpoint plus original execution-evidence digests.
+An adopting attempt copies the selected payload into a fresh root. It remeasures the restored bytes before stage1. The original closure remains byte-exact origin evidence because it contains origin-attempt absolute paths. Mantle derives a current path-bound closure from the restored providers and admits it only when member authority and provider-relative paths are unchanged. The final receipt marks the first four stages as `restored-checkpoint` and binds the checkpoint plus original execution-evidence digests.
 
 A preserved stopped attempt can seed the checkpoint store only after its status, plan, stage authorities, recipe projection, provider admissions, receipts, and payloads revalidate. A running attempt cannot be imported.
 

@@ -46,6 +46,8 @@ The shell copies the admitted payload into a new staging directory. It preserves
 
 The shell rehashes restored payloads before it continues. It never executes from the checkpoint directory.
 
+The closure payload contains absolute paths from its origin attempt. Mantle keeps those exact bytes under checkpoint-origin evidence. It derives a current closure from the restored providers, then requires identical member authority and provider-relative paths. Only the two fresh absolute provider roots may change. A relocation report binds both closure identities.
+
 ### Decision: Compose prior stage evidence without claiming current execution
 
 A final receipt identifies each stage as `executed` or `restored`. A restored stage includes the checkpoint-manifest digest and the original promoted execution-evidence digest.
