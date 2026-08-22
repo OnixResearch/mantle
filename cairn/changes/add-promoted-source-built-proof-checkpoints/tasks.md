@@ -1,0 +1,21 @@
+## Phase 1: Authority and checkpoint core
+
+- [x] [serial] I1 Record existing dev cache, persistent store, action-result, and unfinished cross-run resume mechanisms. r[bootstrap_inventory.source_built_mantle_checkpoint_reuse] [covers=bootstrap_inventory.source_built_mantle_checkpoint_reuse]
+  - Evidence: `evidence/architecture-search-2026-08-22/summary.md` records the distinct mechanisms, selected boundary, and rejected false completions.
+- [x] [serial] I2 Add a pure provider-checkpoint core with stage-specific authority, lookup, construction, and promoted admission. r[bootstrap_inventory.source_built_mantle_checkpoint_reuse] [covers=bootstrap_inventory.source_built_mantle_checkpoint_reuse]
+  - Evidence: `src/source_built_fixed_point_checkpoint.rs` binds the first four stages and has positive and negative core tests.
+- [x] [serial] I3 Add bounded no-follow checkpoint payload observation, immutable publication, and fresh-root restore. r[bootstrap_inventory.source_built_mantle_checkpoint_reuse] [covers=bootstrap_inventory.source_built_mantle_checkpoint_reuse]
+  - Evidence: `src/preserved_evidence_tree.rs` and `src/source_built_fixed_point_checkpoint_shell.rs` copy into create-new roots, remeasure every payload, and publish with Linux no-replace rename.
+- [x] [serial] I4 Publish a provider checkpoint before stage1 and adopt only an admitted promoted checkpoint. r[bootstrap_inventory.source_built_mantle_checkpoint_reuse] [covers=bootstrap_inventory.source_built_mantle_checkpoint_reuse]
+  - Evidence: the source-built shell publishes after provider construction and restores admitted payloads before the cold provider path.
+- [x] [serial] I5 Record executed and restored origins in stage evidence and the final v2 receipt. r[bootstrap_inventory.source_built_mantle_checkpoint_reuse] [covers=bootstrap_inventory.source_built_mantle_checkpoint_reuse]
+  - Evidence: `SourceBuiltStageEvidence` records `executed` or `restored-checkpoint` plus checkpoint and original execution-evidence digests.
+- [x] [serial] I6 Add operator flags and an attempt-import path so preserved promoted attempts can seed the checkpoint store. r[bootstrap_inventory.source_built_mantle_checkpoint_reuse] [covers=bootstrap_inventory.source_built_mantle_checkpoint_reuse]
+  - Evidence: `--proof-checkpoint-store` and `--proof-checkpoint-import-attempt` are conflict-checked CLI surfaces. Import rejects running or mismatched attempts.
+
+## Phase 2: Verification
+
+- [x] [serial] V1 Add positive publication/adoption tests and negative tests for dev, stale, modified, partial, conflicting, unknown, and mismatched checkpoints. r[bootstrap_inventory.source_built_mantle_checkpoint_reuse] [covers=bootstrap_inventory.source_built_mantle_checkpoint_reuse] [evidence=evidence/checkpoint-validation-2026-08-22.log]
+- [ ] [depends:prove-source-built-mantle-fixed-point] [serial] V2 Import or publish one complete promoted provider checkpoint, restore it into a fresh proof root, and continue from stage1. r[bootstrap_inventory.source_built_mantle_checkpoint_reuse] [covers=bootstrap_inventory.source_built_mantle_checkpoint_reuse] [evidence=evidence/runtime-cycle-2026-08-22/summary.md]
+- [x] [serial] V3 Prove a Mantle-only source change preserves the provider lookup key while a relevant provider-source or policy change rejects it. r[bootstrap_inventory.source_built_mantle_checkpoint_reuse] [covers=bootstrap_inventory.source_built_mantle_checkpoint_reuse] [evidence=evidence/stage-specific-key-2026-08-22.log]
+- [ ] [serial] V4 Run focused tests, formatting, Clippy, `git diff --check`, Cairn validation, Tracey coverage, all three gates, and relevant Nix checks. r[bootstrap_inventory.source_built_mantle_checkpoint_reuse] [covers=bootstrap_inventory.source_built_mantle_checkpoint_reuse] [evidence=evidence/final-validation-2026-08-22.log]

@@ -8,15 +8,24 @@ r[bootstrap_inventory.source_built_mantle_fixed_point] Mantle MUST claim a full-
 
 GIVEN a fresh proof root and independently authenticated source bundle
 WHEN the full-bootstrap proof begins
-THEN it MUST validate the audited seed, lineage manifest, native and Rust source records, vendor inputs, source-state identity, policy identities, resource bounds, and empty native-provider, Rust-provider, and Mantle output authorities before construction
-AND an imported or cache-hit native provider, Rust provider, Mantle binary, missing source, wrong digest, stale state, or producer-checkout path authority MUST fail preflight.
+THEN it MUST validate the audited seed, lineage manifest, native and Rust source records, provider recipe projection, vendor inputs, source-state identity, policy identities, and resource bounds before construction or restore
+AND an unbound imported or cache-hit native provider, Rust provider, Mantle binary, missing source, wrong digest, stale state, or producer-checkout path authority MUST fail preflight.
+
+#### Scenario: promoted provider checkpoint composes prior execution
+
+GIVEN a prior promoted attempt completed the first four provider stages
+AND its immutable checkpoint binds exact stage-specific sources, recipes, policies, resources, predecessor outputs, semantic outputs, execution evidence, and payloads
+WHEN a new attempt validates that checkpoint in a fresh proof root
+THEN it MUST restore and remeasure those provider payloads before stage1
+AND the final receipt MUST distinguish restored stages from current execution
+AND a dev, partial, stale, modified, conflicting, or mismatched checkpoint MUST fail closed.
 
 #### Scenario: root action trust is complete before execution
 
 GIVEN the proof inputs, policies, and six-stage authority plan are valid
 WHEN Mantle admits the proof for execution
 THEN it MUST emit a deterministic root-scoped action trust plan that enumerates every reachable action, broad stage, producer edge, fixed or produced executable authority, input authority, output, local-only execution rule, event-count bound, and resource limit
-AND a generated path without a producer action and output identity, an incomplete action adapter, an unknown input authority, remote execution, or cache-only completion MUST fail before construction.
+AND a generated path without a producer action and output identity, an incomplete action adapter, an unknown input authority, remote execution, or cache-only completion without promoted stage receipts MUST fail before construction.
 
 #### Scenario: stage1 uses the constructed closure
 

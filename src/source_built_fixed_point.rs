@@ -10,14 +10,14 @@ use std::fmt;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub(crate) const SOURCE_BUILT_FIXED_POINT_PLAN_SCHEMA: &str = "mantle-source-built-fixed-point-plan-v2";
+pub(crate) const SOURCE_BUILT_FIXED_POINT_PLAN_SCHEMA: &str = "mantle-source-built-fixed-point-plan-v3";
 pub(crate) const SOURCE_BUILT_FIXED_POINT_PROOF_WORKFLOW: &str = "mantle-deterministic-proof-receipt-v2";
 pub(crate) const SOURCE_BUILT_FIXED_POINT_PROVIDER_KIND: &str = "full-source";
 pub(crate) const SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX: u64 = 4_096;
 const SOURCE_AUTHORITY_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-source-authority-v1";
-const PLAN_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-plan-v2";
+const PLAN_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-plan-v3";
 const BUILD_EFFECT_POLICY_VERSION: &str = "mantle-build-effects-v1";
-const REQUIRED_SOURCE_ROLE_COUNT: u32 = 7;
+const REQUIRED_SOURCE_ROLE_COUNT: u32 = 8;
 const EXPECTED_STAGE_COUNT: u32 = 6;
 const EXPECTED_RUN_COUNT: u32 = 2;
 const BLAKE3_HEX_LENGTH: usize = 64;
@@ -34,6 +34,7 @@ const REQUIRED_SOURCE_ROLES: [SourceAuthorityRole; REQUIRED_SOURCE_ROLE_COUNT as
     SourceAuthorityRole::StagexSourceBundle,
     SourceAuthorityRole::NativeSourceBundle,
     SourceAuthorityRole::RustSourceArchiveSet,
+    SourceAuthorityRole::ProviderRecipeProjection,
     SourceAuthorityRole::MantleSource,
     SourceAuthorityRole::VendorInputs,
 ];
@@ -46,6 +47,7 @@ pub(crate) enum SourceAuthorityRole {
     StagexSourceBundle,
     NativeSourceBundle,
     RustSourceArchiveSet,
+    ProviderRecipeProjection,
     MantleSource,
     VendorInputs,
     ImportedNativeProvider,
@@ -406,6 +408,7 @@ fn expected_content_kind(role: SourceAuthorityRole) -> SourceContentKind {
         | SourceAuthorityRole::StagexSourceBundle
         | SourceAuthorityRole::NativeSourceBundle => SourceContentKind::RegularFile,
         SourceAuthorityRole::RustSourceArchiveSet
+        | SourceAuthorityRole::ProviderRecipeProjection
         | SourceAuthorityRole::MantleSource
         | SourceAuthorityRole::VendorInputs
         | SourceAuthorityRole::ImportedNativeProvider
@@ -574,6 +577,7 @@ fn stagex_transition_stage() -> SourceBuiltFixedPointStagePlan {
             source_authority(SourceAuthorityRole::StagexLineage),
             source_authority(SourceAuthorityRole::StagexSourceBundle),
             source_authority(SourceAuthorityRole::NativeSourceBundle),
+            source_authority(SourceAuthorityRole::ProviderRecipeProjection),
             policy_authority(ProofPolicyRole::ProtectedExecution),
         ],
         ProofOutputRole::StagexTransition,
@@ -603,6 +607,7 @@ fn full_source_native_stage() -> SourceBuiltFixedPointStagePlan {
         vec![
             output_authority(ProofOutputRole::StagexProvider),
             source_authority(SourceAuthorityRole::NativeSourceBundle),
+            source_authority(SourceAuthorityRole::ProviderRecipeProjection),
             policy_authority(ProofPolicyRole::Closure),
             policy_authority(ProofPolicyRole::Hermeticity),
             policy_authority(ProofPolicyRole::ProtectedExecution),
@@ -620,6 +625,7 @@ fn full_source_rust_stage() -> SourceBuiltFixedPointStagePlan {
         vec![
             output_authority(ProofOutputRole::FullSourceNativeProvider),
             source_authority(SourceAuthorityRole::RustSourceArchiveSet),
+            source_authority(SourceAuthorityRole::ProviderRecipeProjection),
             policy_authority(ProofPolicyRole::Closure),
             policy_authority(ProofPolicyRole::Hermeticity),
             policy_authority(ProofPolicyRole::ProtectedExecution),
@@ -991,6 +997,12 @@ mod tests {
                     SourceAuthorityRole::RustSourceArchiveSet,
                     SourceContentKind::Directory,
                     'e',
+                ),
+                source_input(
+                    "provider-recipe-projection",
+                    SourceAuthorityRole::ProviderRecipeProjection,
+                    SourceContentKind::Directory,
+                    '8',
                 ),
                 source_input("mantle-source", SourceAuthorityRole::MantleSource, SourceContentKind::Directory, 'f'),
                 source_input("vendor-inputs", SourceAuthorityRole::VendorInputs, SourceContentKind::Directory, '7'),

@@ -1,5 +1,11 @@
 use std::ffi::OsString;
+use std::fs;
 use std::io::Read;
+use std::io::Write;
+#[cfg(unix)]
+use std::os::unix::ffi::OsStringExt;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use cap_fs_ext::DirExt;
@@ -60,6 +66,55 @@ pub(crate) fn hash_preserved_evidence_tree(
     path: &Path,
     limits: PreservedEvidenceTreeLimits,
 ) -> Result<PreservedEvidenceTreeIdentity, RunError> {
+    let (source_root, entries, total_file_bytes, entries_count_max) = prepare_tree_observation(path, limits)?;
+    let digest_blake3 = hash_entries(&source_root, &entries)?;
+    let identity = observed_identity(&entries, total_file_bytes, digest_blake3)?;
+    assert!(entries.len() <= entries_count_max);
+    assert!(total_file_bytes <= limits.total_file_bytes_max);
+    Ok(identity)
+}
+
+// r[impl bootstrap_inventory.source_built_mantle_checkpoint_reuse]
+/// Copy opaque proof evidence without following symlinks, then remeasure it.
+///
+/// The destination must not exist. The copied tree is removed on any error.
+pub(crate) fn copy_preserved_evidence_tree(
+    source: &Path,
+    destination: &Path,
+    limits: PreservedEvidenceTreeLimits,
+) -> Result<PreservedEvidenceTreeIdentity, RunError> {
+    if destination.exists() {
+        return Err(RunError::Internal(format!(
+            "preserved evidence copy destination exists: {}",
+            destination.display()
+        )));
+    }
+    let expected = hash_preserved_evidence_tree(source, limits)?;
+    let (source_root, entries, _total_file_bytes, entries_count_max) = prepare_tree_observation(source, limits)?;
+    fs::create_dir(destination).map_err(|error| {
+        RunError::Internal(format!("creating preserved evidence destination {}: {error}", destination.display()))
+    })?;
+    let copy_result = execute_preserved_copy(&source_root, destination, &entries);
+    if let Err(error) = copy_result {
+        return Err(copy_cleanup_error(error, remove_failed_copy(destination)));
+    }
+    let observed = hash_preserved_evidence_tree(destination, limits)?;
+    if observed != expected {
+        let mismatch = RunError::Internal(format!(
+            "preserved evidence copy identity mismatch: expected {}, observed {}",
+            expected.digest_blake3, observed.digest_blake3
+        ));
+        return Err(copy_cleanup_error(mismatch, remove_failed_copy(destination)));
+    }
+    assert!(entries.len() <= entries_count_max);
+    assert_eq!(expected, observed);
+    Ok(observed)
+}
+
+fn prepare_tree_observation(
+    path: &Path,
+    limits: PreservedEvidenceTreeLimits,
+) -> Result<(ReleaseCapabilityRoot, Vec<EntryObservation>, u64, usize), RunError> {
     validate_limits(limits)?;
     let source_root =
         ReleaseCapabilityRoot::open_ambient_nofollow(ReleaseRootKind::ReleaseTreeSource, path).map_err(|error| {
@@ -71,7 +126,15 @@ pub(crate) fn hash_preserved_evidence_tree(
     let mut total_file_bytes = 0_u64;
     observe_directory(source_root.dir(), "", limits, entries_count_max, &mut total_file_bytes, &mut entries)?;
     entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
-    let digest_blake3 = hash_entries(&source_root, &entries)?;
+    assert!(entries.len() <= entries_count_max);
+    Ok((source_root, entries, total_file_bytes, entries_count_max))
+}
+
+fn observed_identity(
+    entries: &[EntryObservation],
+    total_file_bytes: u64,
+    digest_blake3: String,
+) -> Result<PreservedEvidenceTreeIdentity, RunError> {
     let entry_count = u32::try_from(entries.len())
         .map_err(|_| RunError::Internal("preserved evidence entry count does not fit u32".to_string()))?;
     let accounted_file_bytes = if total_file_bytes == 0 {
@@ -79,13 +142,178 @@ pub(crate) fn hash_preserved_evidence_tree(
     } else {
         total_file_bytes
     };
-    assert!(entries.len() <= entries_count_max);
-    assert!(total_file_bytes <= limits.total_file_bytes_max);
+    assert_eq!(digest_blake3.len(), blake3::OUT_LEN.saturating_mul(2));
     Ok(PreservedEvidenceTreeIdentity {
         total_file_bytes: accounted_file_bytes,
         digest_blake3,
         entry_count,
     })
+}
+
+fn execute_preserved_copy(
+    source_root: &ReleaseCapabilityRoot,
+    destination_root: &Path,
+    entries: &[EntryObservation],
+) -> Result<(), RunError> {
+    let mut directories = Vec::new();
+    for entry in entries {
+        let destination = destination_root.join(&entry.relative_path);
+        match entry.kind {
+            EntryKind::Directory => {
+                fs::create_dir(&destination)
+                    .map_err(|error| copy_io_error("creating directory", &entry.relative_path, error))?;
+                directories.push((destination, entry.mode));
+            }
+            EntryKind::File => copy_preserved_file(source_root, destination_root, entry)?,
+            EntryKind::Symlink => copy_preserved_symlink(source_root, destination_root, entry)?,
+        }
+    }
+    for (path, mode) in directories.into_iter().rev() {
+        set_copied_mode(&path, mode)?;
+    }
+    assert_eq!(source_root.kind(), ReleaseRootKind::ReleaseTreeSource);
+    debug_assert!(destination_root.is_dir());
+    Ok(())
+}
+
+fn copy_preserved_file(
+    source_root: &ReleaseCapabilityRoot,
+    destination_root: &Path,
+    entry: &EntryObservation,
+) -> Result<(), RunError> {
+    let (parent, name) = open_parent_directory_nofollow(source_root.dir(), &entry.relative_path)?;
+    let metadata = parent
+        .symlink_metadata(&name)
+        .map_err(|error| evidence_io_error("revalidating copied file metadata", &entry.relative_path, error))?;
+    revalidate_entry(entry, &metadata)?;
+    let mut source = open_file_nofollow(&parent, &name)
+        .map_err(|error| evidence_io_error("opening copied file", &entry.relative_path, error))?;
+    let opened = source
+        .metadata()
+        .map_err(|error| evidence_io_error("reading copied file metadata", &entry.relative_path, error))?;
+    revalidate_entry(entry, &opened)?;
+    let destination = destination_root.join(&entry.relative_path);
+    let mut output = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&destination)
+        .map_err(|error| copy_io_error("creating file", &entry.relative_path, error))?;
+    copy_exact_file_bytes(&mut source, &mut output, entry)?;
+    set_copied_mode(&destination, entry.mode)
+}
+
+fn copy_exact_file_bytes(
+    source: &mut cap_std::fs::File,
+    destination: &mut fs::File,
+    entry: &EntryObservation,
+) -> Result<(), RunError> {
+    let mut remaining = entry.file_bytes;
+    let mut buffer = [0_u8; HASH_BUFFER_BYTES];
+    while remaining > 0 {
+        let read_max = usize::try_from(remaining.min(HASH_BUFFER_BYTES as u64))
+            .map_err(|_| RunError::Internal("preserved copy byte bound does not fit usize".to_string()))?;
+        let count = source
+            .read(&mut buffer[..read_max])
+            .map_err(|error| copy_io_error("reading file", &entry.relative_path, error))?;
+        if count == 0 {
+            return Err(RunError::Internal(format!("preserved evidence file shrank at {}", entry.relative_path)));
+        }
+        destination
+            .write_all(&buffer[..count])
+            .map_err(|error| copy_io_error("writing file", &entry.relative_path, error))?;
+        remaining = remaining
+            .checked_sub(
+                u64::try_from(count)
+                    .map_err(|_| RunError::Internal("preserved copy byte count does not fit u64".to_string()))?,
+            )
+            .ok_or_else(|| RunError::Internal("preserved copy byte count underflowed".to_string()))?;
+    }
+    let extra = source
+        .read(&mut buffer[..1])
+        .map_err(|error| copy_io_error("checking file growth", &entry.relative_path, error))?;
+    if extra != 0 {
+        return Err(RunError::Internal(format!("preserved evidence file grew at {}", entry.relative_path)));
+    }
+    destination
+        .sync_all()
+        .map_err(|error| copy_io_error("synchronizing file", &entry.relative_path, error))?;
+    assert_eq!(remaining, 0);
+    Ok(())
+}
+
+#[cfg(unix)]
+fn copy_preserved_symlink(
+    source_root: &ReleaseCapabilityRoot,
+    destination_root: &Path,
+    entry: &EntryObservation,
+) -> Result<(), RunError> {
+    let (parent, name) = open_parent_directory_nofollow(source_root.dir(), &entry.relative_path)?;
+    let metadata = parent
+        .symlink_metadata(&name)
+        .map_err(|error| evidence_io_error("revalidating copied symlink metadata", &entry.relative_path, error))?;
+    revalidate_entry(entry, &metadata)?;
+    let target = parent
+        .read_link_contents(&name)
+        .map_err(|error| evidence_io_error("reading copied symlink target", &entry.relative_path, error))?;
+    let target_bytes = target.into_os_string().as_encoded_bytes().to_vec();
+    if entry.symlink_target.as_deref() != Some(target_bytes.as_slice()) {
+        return Err(RunError::Internal(format!(
+            "preserved evidence symlink target changed at {}",
+            entry.relative_path
+        )));
+    }
+    let destination = destination_root.join(&entry.relative_path);
+    std::os::unix::fs::symlink(OsString::from_vec(target_bytes), &destination)
+        .map_err(|error| copy_io_error("creating symlink", &entry.relative_path, error))?;
+    debug_assert!(fs::symlink_metadata(destination).is_ok_and(|metadata| metadata.file_type().is_symlink()));
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn copy_preserved_symlink(
+    _source_root: &ReleaseCapabilityRoot,
+    _destination_root: &Path,
+    entry: &EntryObservation,
+) -> Result<(), RunError> {
+    Err(RunError::Internal(format!(
+        "preserved evidence symlink copy requires Unix at {}",
+        entry.relative_path
+    )))
+}
+
+#[cfg(unix)]
+fn set_copied_mode(path: &Path, mode: u32) -> Result<(), RunError> {
+    const PERMISSION_BITS_MASK: u32 = 0o7_777;
+    let permissions = fs::Permissions::from_mode(mode & PERMISSION_BITS_MASK);
+    fs::set_permissions(path, permissions)
+        .map_err(|error| RunError::Internal(format!("setting preserved evidence mode {}: {error}", path.display())))
+}
+
+#[cfg(not(unix))]
+fn set_copied_mode(_path: &Path, _mode: u32) -> Result<(), RunError> {
+    Ok(())
+}
+
+fn remove_failed_copy(destination: &Path) -> Result<(), RunError> {
+    match fs::remove_dir_all(destination) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(RunError::Internal(format!(
+            "removing failed preserved evidence copy {}: {error}",
+            destination.display()
+        ))),
+    }
+}
+
+fn copy_cleanup_error(primary: RunError, cleanup: Result<(), RunError>) -> RunError {
+    match cleanup {
+        Ok(()) => primary,
+        Err(cleanup_error) => RunError::Internal(format!("{primary}; cleanup failed: {cleanup_error}")),
+    }
+}
+
+fn copy_io_error(action: &str, relative_path: &str, error: std::io::Error) -> RunError {
+    RunError::Internal(format!("{action} for preserved evidence copy at {relative_path}: {error}"))
 }
 
 fn validate_limits(limits: PreservedEvidenceTreeLimits) -> Result<(), RunError> {
@@ -573,5 +801,49 @@ mod tests {
         assert!(admission_error.to_string().contains("symlink"));
         assert!(byte_bound_error.to_string().contains("total file bytes exceed"));
         assert_ne!(first.digest_blake3, changed.digest_blake3);
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_checkpoint_reuse]
+    #[test]
+    #[cfg(unix)]
+    fn checkpoint_copy_preserves_opaque_links_and_detaches_file_bytes() {
+        use std::os::unix::fs::symlink;
+
+        const OPAQUE_TARGET: &str = "../outside-proof";
+        const CHANGED_BYTES: &[u8] = b"changed-after-copy";
+
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        let destination = temp.path().join("destination");
+        write_file(&source.join("nested/artifact"), FILE_BYTES);
+        symlink(OPAQUE_TARGET, source.join("nested/opaque-link")).unwrap();
+        let total_bytes = u64::try_from(FILE_BYTES.len()).unwrap();
+        let tree_limits = limits(TEST_ENTRY_COUNT_MAX, total_bytes);
+
+        let copied = copy_preserved_evidence_tree(&source, &destination, tree_limits).unwrap();
+        std::fs::write(source.join("nested/artifact"), CHANGED_BYTES).unwrap();
+        let destination_bytes = std::fs::read(destination.join("nested/artifact")).unwrap();
+        let destination_target = std::fs::read_link(destination.join("nested/opaque-link")).unwrap();
+
+        assert_eq!(destination_bytes, FILE_BYTES);
+        assert_eq!(destination_target, Path::new(OPAQUE_TARGET));
+        assert_eq!(copied, hash_preserved_evidence_tree(&destination, tree_limits).unwrap());
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_checkpoint_reuse]
+    #[test]
+    fn checkpoint_copy_rejects_an_existing_destination() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        let destination = temp.path().join("destination");
+        write_file(&source.join("artifact"), FILE_BYTES);
+        write_file(&destination.join("sentinel"), b"keep");
+        let total_bytes = u64::try_from(FILE_BYTES.len()).unwrap();
+
+        let error =
+            copy_preserved_evidence_tree(&source, &destination, limits(TEST_ENTRY_COUNT_MAX, total_bytes)).unwrap_err();
+
+        assert!(error.to_string().contains("destination exists"));
+        assert_eq!(std::fs::read(destination.join("sentinel")).unwrap(), b"keep");
     }
 }

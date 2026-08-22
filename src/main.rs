@@ -175,6 +175,8 @@ mod semantic_graph;
 mod shell_cmd;
 #[allow(dead_code)]
 mod source_built_fixed_point;
+mod source_built_fixed_point_checkpoint;
+mod source_built_fixed_point_checkpoint_shell;
 mod source_built_fixed_point_dev_cache;
 mod source_built_fixed_point_receipt;
 mod source_built_fixed_point_shell;
@@ -940,6 +942,18 @@ enum Command {
         /// Maximum native source records recorded in the immutable plan.
         #[arg(long, default_value_t = SOURCE_BUILT_FIXED_POINT_SOURCE_RECORDS_MAX_DEFAULT, requires = "source_built_fixed_point")]
         proof_source_records_max: u32,
+
+        /// Receipt-validated promoted provider checkpoint store.
+        #[arg(
+            long,
+            requires = "source_built_fixed_point",
+            conflicts_with_all = ["dev_provider_cache", "dev_resume", "dev_fast_fail"]
+        )]
+        proof_checkpoint_store: Option<PathBuf>,
+
+        /// Import completed provider stages from one preserved promoted attempt.
+        #[arg(long, requires = "proof_checkpoint_store")]
+        proof_checkpoint_import_attempt: Option<PathBuf>,
 
         /// Opt-in dev-only provider-output cache and store snapshot directory.
         #[arg(long, requires = "source_built_fixed_point")]
@@ -8328,6 +8342,8 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             proof_disk_bytes_max,
             proof_exec_events_max,
             proof_source_records_max,
+            proof_checkpoint_store,
+            proof_checkpoint_import_attempt,
             dev_provider_cache,
             dev_resume,
             dev_fast_fail,
@@ -8368,6 +8384,8 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             proof_disk_bytes_max: *proof_disk_bytes_max,
             proof_exec_events_max: *proof_exec_events_max,
             proof_source_records_max: *proof_source_records_max,
+            proof_checkpoint_store: proof_checkpoint_store.as_deref(),
+            proof_checkpoint_import_attempt: proof_checkpoint_import_attempt.as_deref(),
             dev_provider_cache: dev_provider_cache.as_deref(),
             dev_resume: *dev_resume,
             dev_fast_fail: *dev_fast_fail,
@@ -8410,6 +8428,8 @@ struct SelfBuildCommandRequest<'a> {
     proof_disk_bytes_max: u64,
     proof_exec_events_max: u32,
     proof_source_records_max: u32,
+    proof_checkpoint_store: Option<&'a Path>,
+    proof_checkpoint_import_attempt: Option<&'a Path>,
     dev_provider_cache: Option<&'a Path>,
     dev_resume: bool,
     dev_fast_fail: bool,
@@ -8479,6 +8499,8 @@ fn run_source_built_fixed_point(request: &SelfBuildCommandRequest<'_>) -> Result
             disk_bytes_max: request.proof_disk_bytes_max,
             protected_exec_events_max: request.proof_exec_events_max,
             source_records_max: request.proof_source_records_max,
+            proof_checkpoint_store: request.proof_checkpoint_store,
+            proof_checkpoint_import_attempt: request.proof_checkpoint_import_attempt,
             dev_provider_cache: request.dev_provider_cache,
             dev_resume: request.dev_resume,
             dev_fast_fail: request.dev_fast_fail,
@@ -11204,6 +11226,51 @@ let Plan = {
             out: Some(_),
             ..
         }));
+    }
+
+    #[test]
+    fn self_build_cli_accepts_promoted_checkpoint_store_and_rejects_dev_state_mix() {
+        const DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let base = [
+            "mantle",
+            "self-build",
+            "--source-built-fixed-point",
+            "--source-profile",
+            "/tmp/source-profile.json",
+            "--expected-source-profile-blake3",
+            DIGEST,
+            "--expected-stagex-lineage-blake3",
+            DIGEST,
+            "--expected-native-provider-blake3",
+            DIGEST,
+            "--proof-bwrap",
+            "/tmp/bwrap",
+            "--proof-sandbox-shell",
+            "/tmp/busybox",
+            "--out",
+            "/tmp/source-built-proof",
+            "--proof-checkpoint-store",
+            "/tmp/proof-checkpoints",
+        ];
+        let accepted = parse_args_with_cli_test_stack(Vec::from(base)).expect("checkpoint CLI parser test");
+        let mut import_args = Vec::from(base);
+        import_args.extend(["--proof-checkpoint-import-attempt", "/tmp/prior-attempt"]);
+        let import = parse_args_with_cli_test_stack(import_args).expect("checkpoint import parser test");
+        let mut conflict_args = Vec::from(base);
+        conflict_args.extend(["--dev-provider-cache", "/tmp/dev-cache"]);
+        let conflict = parse_args_with_cli_test_stack(conflict_args);
+
+        assert!(matches!(accepted.command, Command::SelfBuild {
+            proof_checkpoint_store: Some(_),
+            proof_checkpoint_import_attempt: None,
+            dev_provider_cache: None,
+            ..
+        }));
+        assert!(matches!(import.command, Command::SelfBuild {
+            proof_checkpoint_import_attempt: Some(_),
+            ..
+        }));
+        assert!(conflict.is_err());
     }
 
     #[test]

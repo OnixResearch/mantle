@@ -121,11 +121,23 @@ const NON_CLAIMS: &[&str] = &[
     "The stage1 Mantle binary is an explicit fixed-point predecessor, not ambient or published-target path authority.",
 ];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum StageExecutionOrigin {
+    Executed,
+    RestoredCheckpoint,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct SourceBuiltStageEvidence {
     pub(crate) stage_id: String,
     pub(crate) output_role: ProofOutputRole,
     pub(crate) status: String,
+    pub(crate) execution_origin: StageExecutionOrigin,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) checkpoint_digest_blake3: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) original_execution_evidence_digest_blake3: Option<String>,
     pub(crate) orchestrator: String,
     pub(crate) executable_identity: String,
     pub(crate) transcript_path: String,
@@ -153,6 +165,8 @@ struct SourceBuiltReceiptExtension {
     protected_execution_policy_digest_blake3: String,
     effect_policy_digest_blake3: String,
     normalization_policy_digest_blake3: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider_checkpoint_digest_blake3: Option<String>,
     non_claims: Vec<String>,
 }
 
@@ -291,6 +305,10 @@ pub(crate) fn write_source_built_fixed_point_receipt(
         protected_execution_policy_digest_blake3: plan.policies.protected_execution_policy_digest_blake3.clone(),
         effect_policy_digest_blake3: plan.policies.effect_policy_digest_blake3.clone(),
         normalization_policy_digest_blake3: plan.policies.normalization_policy_digest_blake3.clone(),
+        provider_checkpoint_digest_blake3: providers
+            .provider_checkpoint
+            .as_ref()
+            .map(|checkpoint| checkpoint.admission.checkpoint_digest_blake3.clone()),
         non_claims: NON_CLAIMS.iter().map(|value| (*value).to_string()).collect(),
     };
     let receipt_path = proof_root.join(crate::source_built_fixed_point_shell::FINAL_RECEIPT_FILE);
@@ -443,6 +461,54 @@ fn observe_fixed_point_stage(
     })
 }
 
+struct StageExecutionBinding {
+    origin: StageExecutionOrigin,
+    checkpoint_digest_blake3: Option<String>,
+    execution_evidence_digest_blake3: Option<String>,
+}
+
+fn stage_execution_binding(
+    providers: &ConstructedProviders,
+    output_role: ProofOutputRole,
+) -> Result<StageExecutionBinding, RunError> {
+    let Some(checkpoint) = providers.provider_checkpoint.as_ref() else {
+        return Ok(executed_stage_binding());
+    };
+    if !is_provider_checkpoint_role(output_role) {
+        return Ok(executed_stage_binding());
+    }
+    let mut matches = checkpoint.manifest.stages.iter().filter(|stage| stage.output_role == output_role);
+    let record = matches
+        .next()
+        .ok_or_else(|| receipt_error(format!("provider checkpoint is missing stage role {output_role:?}")))?;
+    if matches.next().is_some() {
+        return Err(receipt_error(format!("provider checkpoint duplicates stage role {output_role:?}")));
+    }
+    Ok(StageExecutionBinding {
+        origin: StageExecutionOrigin::RestoredCheckpoint,
+        checkpoint_digest_blake3: Some(checkpoint.admission.checkpoint_digest_blake3.clone()),
+        execution_evidence_digest_blake3: Some(record.execution_evidence_digest_blake3.clone()),
+    })
+}
+
+fn executed_stage_binding() -> StageExecutionBinding {
+    StageExecutionBinding {
+        origin: StageExecutionOrigin::Executed,
+        checkpoint_digest_blake3: None,
+        execution_evidence_digest_blake3: None,
+    }
+}
+
+fn is_provider_checkpoint_role(role: ProofOutputRole) -> bool {
+    matches!(
+        role,
+        ProofOutputRole::StagexTransition
+            | ProofOutputRole::StagexProvider
+            | ProofOutputRole::FullSourceNativeProvider
+            | ProofOutputRole::FullSourceRustProvider
+    )
+}
+
 fn stage_evidence(
     proof_root: &Path,
     plan: &SourceBuiltFixedPointPlan,
@@ -472,11 +538,20 @@ fn stage_evidence(
     if hash_file(&closure_path)? != toolchain_closure_digest_blake3 {
         return Err(receipt_error("toolchain closure digest changed during receipt construction".to_string()));
     }
+    let transition_binding = stage_execution_binding(providers, ProofOutputRole::StagexTransition)?;
+    let stagex_binding = stage_execution_binding(providers, ProofOutputRole::StagexProvider)?;
+    let native_binding = stage_execution_binding(providers, ProofOutputRole::FullSourceNativeProvider)?;
+    let rust_binding = stage_execution_binding(providers, ProofOutputRole::FullSourceRustProvider)?;
+    let stage1_binding = stage_execution_binding(providers, ProofOutputRole::MantleStage1)?;
+    let stage2_binding = stage_execution_binding(providers, ProofOutputRole::MantleStage2)?;
     let evidence = vec![
         SourceBuiltStageEvidence {
             stage_id: "stagex-transition".to_string(),
             output_role: ProofOutputRole::StagexTransition,
             status: STAGE_STATUS_COMPLETE.to_string(),
+            execution_origin: transition_binding.origin,
+            checkpoint_digest_blake3: transition_binding.checkpoint_digest_blake3,
+            original_execution_evidence_digest_blake3: transition_binding.execution_evidence_digest_blake3,
             orchestrator: "host-mantle".to_string(),
             executable_identity: format!("blake3:{current_executable_digest}"),
             transcript_path: relative_path(proof_root, &transition_report)?,
@@ -492,6 +567,9 @@ fn stage_evidence(
             stage_id: "stagex-provider".to_string(),
             output_role: ProofOutputRole::StagexProvider,
             status: STAGE_STATUS_COMPLETE.to_string(),
+            execution_origin: stagex_binding.origin,
+            checkpoint_digest_blake3: stagex_binding.checkpoint_digest_blake3,
+            original_execution_evidence_digest_blake3: stagex_binding.execution_evidence_digest_blake3,
             orchestrator: "host-mantle".to_string(),
             executable_identity: format!("blake3:{current_executable_digest}"),
             transcript_path: relative_path(proof_root, &stagex_receipt)?,
@@ -507,6 +585,9 @@ fn stage_evidence(
             stage_id: "full-source-native-provider".to_string(),
             output_role: ProofOutputRole::FullSourceNativeProvider,
             status: STAGE_STATUS_COMPLETE.to_string(),
+            execution_origin: native_binding.origin,
+            checkpoint_digest_blake3: native_binding.checkpoint_digest_blake3,
+            original_execution_evidence_digest_blake3: native_binding.execution_evidence_digest_blake3,
             orchestrator: "host-mantle".to_string(),
             executable_identity: format!("blake3:{current_executable_digest}"),
             transcript_path: relative_path(proof_root, &providers.native_provider.transcript_path)?,
@@ -522,6 +603,9 @@ fn stage_evidence(
             stage_id: "full-source-rust-provider".to_string(),
             output_role: ProofOutputRole::FullSourceRustProvider,
             status: STAGE_STATUS_COMPLETE.to_string(),
+            execution_origin: rust_binding.origin,
+            checkpoint_digest_blake3: rust_binding.checkpoint_digest_blake3,
+            original_execution_evidence_digest_blake3: rust_binding.execution_evidence_digest_blake3,
             orchestrator: "host-mantle".to_string(),
             executable_identity: format!("blake3:{rustc_digest}"),
             transcript_path: RUST_PROVIDER_BUILD_RECEIPT.to_string(),
@@ -537,6 +621,9 @@ fn stage_evidence(
             stage_id: STAGE1_RUN_ID.to_string(),
             output_role: ProofOutputRole::MantleStage1,
             status: STAGE_STATUS_COMPLETE.to_string(),
+            execution_origin: stage1_binding.origin,
+            checkpoint_digest_blake3: stage1_binding.checkpoint_digest_blake3,
+            original_execution_evidence_digest_blake3: stage1_binding.execution_evidence_digest_blake3,
             orchestrator: "host-mantle".to_string(),
             executable_identity: format!("blake3:{rustc_digest}"),
             transcript_path: FIXED_POINT_STAGE1_RECEIPT.to_string(),
@@ -558,6 +645,9 @@ fn stage_evidence(
             stage_id: STAGE2_RUN_ID.to_string(),
             output_role: ProofOutputRole::MantleStage2,
             status: STAGE_STATUS_COMPLETE.to_string(),
+            execution_origin: stage2_binding.origin,
+            checkpoint_digest_blake3: stage2_binding.checkpoint_digest_blake3,
+            original_execution_evidence_digest_blake3: stage2_binding.execution_evidence_digest_blake3,
             orchestrator: "stage1-mantle".to_string(),
             executable_identity: format!("blake3:{}", fixed_point.stage1.binary_digest_blake3),
             transcript_path: FIXED_POINT_STAGE2_RECEIPT.to_string(),
@@ -608,12 +698,45 @@ fn validate_stage_evidence(evidence: &[SourceBuiltStageEvidence]) -> Result<(), 
         {
             return Err(receipt_error(format!("stage evidence {} is incomplete", stage.stage_id)));
         }
+        validate_stage_execution_origin(stage)?;
         for digest in &stage.audit_digests_blake3 {
             validate_digest("stage audit", digest)?;
         }
     }
     assert_eq!(ids.len(), STAGE_EVIDENCE_COUNT);
     debug_assert!(evidence.iter().all(|stage| stage.status == STAGE_STATUS_COMPLETE));
+    Ok(())
+}
+
+fn validate_stage_execution_origin(stage: &SourceBuiltStageEvidence) -> Result<(), RunError> {
+    match stage.execution_origin {
+        StageExecutionOrigin::Executed => {
+            if stage.checkpoint_digest_blake3.is_some() || stage.original_execution_evidence_digest_blake3.is_some() {
+                return Err(receipt_error(format!(
+                    "executed stage {} carries checkpoint-only evidence",
+                    stage.stage_id
+                )));
+            }
+        }
+        StageExecutionOrigin::RestoredCheckpoint => {
+            if !is_provider_checkpoint_role(stage.output_role) {
+                return Err(receipt_error(format!(
+                    "non-provider stage {} cannot be restored from the provider checkpoint",
+                    stage.stage_id
+                )));
+            }
+            let checkpoint = stage
+                .checkpoint_digest_blake3
+                .as_deref()
+                .ok_or_else(|| receipt_error(format!("restored stage {} has no checkpoint digest", stage.stage_id)))?;
+            let execution = stage
+                .original_execution_evidence_digest_blake3
+                .as_deref()
+                .ok_or_else(|| receipt_error(format!("restored stage {} has no execution evidence", stage.stage_id)))?;
+            validate_digest("restored checkpoint", checkpoint)?;
+            validate_digest("restored execution evidence", execution)?;
+        }
+    }
     Ok(())
 }
 
@@ -1252,6 +1375,9 @@ mod tests {
                 stage_id: format!("stage-{index}"),
                 output_role: ProofOutputRole::StagexTransition,
                 status: STAGE_STATUS_COMPLETE.to_string(),
+                execution_origin: StageExecutionOrigin::Executed,
+                checkpoint_digest_blake3: None,
+                original_execution_evidence_digest_blake3: None,
                 orchestrator: "host-mantle".to_string(),
                 executable_identity: format!("blake3:{DIGEST_A}"),
                 transcript_path: format!("stage-{index}.json"),
@@ -1273,6 +1399,49 @@ mod tests {
 
         assert!(fallback.to_string().contains("incomplete"));
         assert!(duplicate.to_string().contains("duplicate stage evidence id"));
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_checkpoint_reuse]
+    #[test]
+    fn restored_stage_origin_requires_provider_role_and_complete_checkpoint_link() {
+        let mut restored = test_stage_evidence(ProofOutputRole::StagexProvider);
+        restored.execution_origin = StageExecutionOrigin::RestoredCheckpoint;
+        restored.checkpoint_digest_blake3 = Some(DIGEST_A.to_string());
+        restored.original_execution_evidence_digest_blake3 = Some(DIGEST_B.to_string());
+        validate_stage_execution_origin(&restored).unwrap();
+
+        restored.checkpoint_digest_blake3 = None;
+        let missing = validate_stage_execution_origin(&restored).unwrap_err();
+        restored.checkpoint_digest_blake3 = Some(DIGEST_A.to_string());
+        restored.output_role = ProofOutputRole::MantleStage1;
+        let wrong_stage = validate_stage_execution_origin(&restored).unwrap_err();
+        restored.execution_origin = StageExecutionOrigin::Executed;
+        let false_execution = validate_stage_execution_origin(&restored).unwrap_err();
+
+        assert!(missing.to_string().contains("no checkpoint digest"));
+        assert!(wrong_stage.to_string().contains("non-provider stage"));
+        assert!(false_execution.to_string().contains("checkpoint-only evidence"));
+    }
+
+    fn test_stage_evidence(output_role: ProofOutputRole) -> SourceBuiltStageEvidence {
+        SourceBuiltStageEvidence {
+            stage_id: "checkpoint-stage".to_string(),
+            output_role,
+            status: STAGE_STATUS_COMPLETE.to_string(),
+            execution_origin: StageExecutionOrigin::Executed,
+            checkpoint_digest_blake3: None,
+            original_execution_evidence_digest_blake3: None,
+            orchestrator: "host-mantle".to_string(),
+            executable_identity: format!("blake3:{DIGEST_A}"),
+            transcript_path: "transcript.json".to_string(),
+            transcript_digest_blake3: DIGEST_A.to_string(),
+            audit_paths: vec!["audit.json".to_string()],
+            audit_digests_blake3: vec![DIGEST_B.to_string()],
+            output_path: "output".to_string(),
+            output_digest_blake3: DIGEST_B.to_string(),
+            authority_violations: Vec::new(),
+            fallback_events: Vec::new(),
+        }
     }
 
     // r[verify bootstrap_inventory.source_built_mantle_fixed_point]

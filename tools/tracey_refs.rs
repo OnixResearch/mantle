@@ -501,6 +501,20 @@
 // The evidence remains bounded by its explicit compiler/seed correctness,
 // independent rebuild, release reproducibility, deployment, and Cargo non-claims.
 
+// Promoted source-built provider checkpoint bridge.
+//
+// r[impl bootstrap_inventory.source_built_mantle_checkpoint_reuse]
+// Implemented by the pure stage-authority core in
+// `src/source_built_fixed_point_checkpoint.rs`, the bounded publication/restore
+// shell in `src/source_built_fixed_point_checkpoint_shell.rs`, and proof/receipt
+// integration in `src/{source_built_fixed_point_shell,source_built_fixed_point_receipt}.rs`.
+//
+// r[verify bootstrap_inventory.source_built_mantle_checkpoint_reuse]
+// Positive and adversarial tests cover stage-specific lookup, dev rejection,
+// payload mutation, partial candidates, atomic idempotent publication,
+// fresh-root restore, legacy-attempt recipe projection, and receipt origins.
+// Runtime adoption evidence remains owned by the active checkpoint change.
+
 // r[impl gcc40_bridge.configure_preprocess_confinement]
 // Implemented by the runtime authority, canonical-source, output, byte, class,
 // count, and audit guards in `bootstrap/gcc-4.0-native.ncl`.

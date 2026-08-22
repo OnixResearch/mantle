@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs;
 use std::io::Write as _;
+use std::os::unix::fs::MetadataExt as _;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::path::PathBuf;
@@ -20,6 +21,7 @@ use crate::full_source_rust_binding_shell::FullSourceRustHostToolMaterialization
 use crate::native_toolchain_closure::NativeToolchainClosureOptions;
 use crate::source_built_fixed_point::InitialOutputAuthorityState;
 use crate::source_built_fixed_point::ProofHermeticityMode;
+use crate::source_built_fixed_point::ProofOutputRole;
 use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
 use crate::source_built_fixed_point::SourceAuthorityInput;
 use crate::source_built_fixed_point::SourceAuthorityRole;
@@ -49,8 +51,20 @@ use crate::source_bundle::source_built_fixed_point_profile_records;
 use crate::stagex_provider::StagexProviderRequest;
 use crate::stagex_transition::StagexTransitionRequest;
 
+mod checkpoint_integration;
+
+use checkpoint_integration::import_provider_checkpoint_attempt;
+use checkpoint_integration::print_checkpoint_import_completion;
+use checkpoint_integration::publish_constructed_provider_checkpoint;
+use checkpoint_integration::restore_constructed_provider_checkpoint;
+#[cfg(test)]
+use checkpoint_integration::validate_imported_attempt_status;
+#[cfg(test)]
+use checkpoint_integration::validate_imported_provider_authority;
+
 const LOGICAL_STORE_PREFIX: &str = "/mantle/store";
 const PROFILE_SCHEMA: &str = "mantle-source-bundle-v1";
+const LEGACY_PROVIDER_CHECKPOINT_IMPORT_PLAN_SCHEMA: &str = "mantle-source-built-fixed-point-plan-v2";
 const BUILD_REPORT_SCHEMA: &str = "crunch-build-report-v1";
 const OFFLINE_PREFLIGHT_REPORT_FORMAT: &str = "mantle-source-offline-preflight-v1";
 const NATIVE_FAILURE_IDENTITY_COUNT_MAX: usize = 8;
@@ -144,9 +158,28 @@ const TARGET_TRIPLE: &str = "x86_64-unknown-linux-musl";
 const SOURCE_RECORD_COUNT_MIN: usize = 1;
 const DEV_CACHE_PROVIDERS_SUBDIR: &str = "providers";
 const STAGE_MARKERS_SUBDIR: &str = ".stage-markers";
+const PROVIDER_CHECKPOINT_TRANSCRIPT_FILE: &str = "provider-checkpoint.txt";
+const PROVIDER_CHECKPOINT_RESTORE_TRANSCRIPT_FILE: &str = "provider-checkpoint-restore.txt";
+const PROVIDER_CHECKPOINT_IMPORT_REPORT_FILE: &str = "provider-checkpoint-import.json";
+const CHECKPOINT_ORIGIN_EVIDENCE_DIR: &str = "provider-checkpoint-origin";
+const CHECKPOINT_STAGEX_TRANSITION_PATH: &str = "payload/stagex-transition-execution";
+const CHECKPOINT_STAGEX_PROVIDER_PREFIX: &str = "payload/native-store";
+const CHECKPOINT_NATIVE_PROVIDER_PREFIX: &str = "payload/native-store";
+const CHECKPOINT_RUST_PROVIDER_PATH: &str = "payload/rust-provider";
+const CHECKPOINT_NATIVE_ADMISSION_PATH: &str = "payload/evidence/native-admission.json";
+const CHECKPOINT_NATIVE_TRANSCRIPT_PATH: &str = "payload/evidence/native-provider.json";
+const CHECKPOINT_TOOLCHAIN_CLOSURE_PATH: &str = "payload/evidence/source-built-toolchain-closure.json";
+const RUST_PROVIDER_BUILD_RECEIPT_RELATIVE: &str = "share/mantle-rust-provider/receipts/build.json";
+const RUST_PROVIDER_BINDING_RECEIPT_RELATIVE: &str = "share/mantle-rust-provider/receipts/full-source-binding.json";
+const CHECKPOINT_EXECUTION_EVIDENCE_CONTEXT: &str = "mantle-source-built-provider-checkpoint-execution-evidence-v1";
+const PROVIDER_RECIPE_PROJECTION_CONTEXT: &str = "mantle-source-built-provider-recipe-projection-v1";
+const PROVIDER_RECIPE_PROJECTION_ROOT_COUNT: usize = 3;
+const PROVIDER_RECIPE_PROJECTION_ROOTS: [&str; PROVIDER_RECIPE_PROJECTION_ROOT_COUNT] =
+    ["bootstrap", "builders", "lib"];
 const FAST_FAIL_NOTICE: &str = "dev fast-fail: source profile unchanged from the last published fixed-point receipt; reporting the prior success without a fresh rebuild";
 const EXPECTED_SINGLE_OUTPUT_COUNT: usize = 1;
 const EXPECTED_STAGE_COUNT: usize = 6;
+const IMPORTED_PROVIDER_SOURCE_ROLE_COUNT: usize = 5;
 const BLAKE3_HEX_LENGTH: usize = 64;
 const MAX_JOBS_MIN: u32 = 1;
 const MAX_JOBS_MAX: u32 = 16;
@@ -175,6 +208,8 @@ pub(crate) struct SourceBuiltFixedPointOptions<'a> {
     pub(crate) disk_bytes_max: u64,
     pub(crate) protected_exec_events_max: u32,
     pub(crate) source_records_max: u32,
+    pub(crate) proof_checkpoint_store: Option<&'a Path>,
+    pub(crate) proof_checkpoint_import_attempt: Option<&'a Path>,
     pub(crate) dev_provider_cache: Option<&'a Path>,
     pub(crate) dev_resume: bool,
     pub(crate) dev_fast_fail: bool,
@@ -187,6 +222,8 @@ struct MaterializedSourceDigests {
     stagex_source_bundle: String,
     native_source_manifest: String,
     rust_source_archive_set: String,
+    provider_recipe_projection: String,
+    provider_recipe_projection_bytes: u64,
     mantle_source: String,
     vendor_inputs: String,
 }
@@ -223,6 +260,12 @@ struct AttemptStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     plan_digest_blake3: Option<String>,
     blocker: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ImportedAttemptStatus {
+    status: String,
+    plan_digest_blake3: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -285,6 +328,8 @@ pub(crate) struct ConstructedProviders {
     pub(crate) native_admission_report_path: PathBuf,
     pub(crate) rust_provider: crate::rust_source_provider::RustSourceProviderMaterialization,
     pub(crate) toolchain_closure_path: PathBuf,
+    pub(crate) provider_checkpoint:
+        Option<crate::source_built_fixed_point_checkpoint_shell::RestoredProviderCheckpoint>,
 }
 
 pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions<'_>) -> Result<(), RunError> {
@@ -307,6 +352,29 @@ pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions
         }
     };
     write_attempt_status(&prepared.staging_dir, Some(&prepared.plan.plan_digest_blake3), PROOF_STATUS_RUNNING, None)?;
+    if let Some(import_attempt) = options.proof_checkpoint_import_attempt {
+        if let Err(error) = import_provider_checkpoint_attempt(&options, &prepared, import_attempt) {
+            let blocker = error.to_string();
+            write_attempt_status(
+                &prepared.staging_dir,
+                Some(&prepared.plan.plan_digest_blake3),
+                PROOF_STATUS_FAILED,
+                Some(&blocker),
+            )?;
+            return Err(RunError::Build(format!(
+                "source-built provider checkpoint import failed closed: {blocker}; preserved_attempt={}",
+                prepared.staging_dir.display()
+            )));
+        }
+        write_attempt_status(
+            &prepared.staging_dir,
+            Some(&prepared.plan.plan_digest_blake3),
+            PROOF_STATUS_COMPLETE,
+            None,
+        )?;
+        print_checkpoint_import_completion(&options, &prepared)?;
+        return Ok(());
+    }
     if options.dev_fast_fail
         && matches!(dev_fast_fail_check(&options, &prepared)?, FastFailDecision::ReportPriorSuccess { .. })
     {
@@ -394,12 +462,61 @@ fn validate_options(options: &SourceBuiltFixedPointOptions<'_>) -> Result<(), Ru
     }
     validate_executable("sandbox shell", options.sandbox_shell)?;
     validate_static_executable("sandbox shell", options.sandbox_shell)?;
+    if let Some(checkpoint_store) = options.proof_checkpoint_store {
+        if !checkpoint_store.is_absolute() {
+            return Err(proof_error(format!(
+                "proof checkpoint store must be absolute: {}",
+                checkpoint_store.display()
+            )));
+        }
+        if options.dev_provider_cache.is_some() || options.dev_resume || options.dev_fast_fail {
+            return Err(proof_error(
+                "promoted proof checkpoints conflict with dev cache, resume, and fast-fail state".to_string(),
+            ));
+        }
+        validate_checkpoint_store_filesystem(options.output_dir, checkpoint_store)?;
+    }
+    if let Some(import_attempt) = options.proof_checkpoint_import_attempt {
+        if options.proof_checkpoint_store.is_none() {
+            return Err(proof_error("checkpoint import requires a checkpoint store".to_string()));
+        }
+        if !import_attempt.is_absolute() || !import_attempt.is_dir() {
+            return Err(proof_error(format!(
+                "checkpoint import attempt must be an absolute directory: {}",
+                import_attempt.display()
+            )));
+        }
+    }
     if !(MAX_JOBS_MIN..=MAX_JOBS_MAX).contains(&options.jobs) {
         return Err(proof_error(format!("jobs must be within {MAX_JOBS_MIN}..={MAX_JOBS_MAX}, got {}", options.jobs)));
     }
     assert!(options.elapsed_seconds_max > 0);
     assert!(options.disk_bytes_max > 0);
     validate_disk_preflight(options.output_dir, options.disk_bytes_max)
+}
+
+fn validate_checkpoint_store_filesystem(output_dir: &Path, checkpoint_store: &Path) -> Result<(), RunError> {
+    let output_parent = output_dir
+        .parent()
+        .ok_or_else(|| proof_error("proof output has no parent for checkpoint filesystem validation".to_string()))?;
+    let checkpoint_parent = checkpoint_store
+        .parent()
+        .ok_or_else(|| proof_error("proof checkpoint store has no parent for filesystem validation".to_string()))?;
+    let output_metadata = fs::metadata(output_parent).map_err(|error| {
+        proof_error(format!("reading proof output filesystem {}: {error}", output_parent.display()))
+    })?;
+    let checkpoint_metadata = fs::metadata(checkpoint_parent).map_err(|error| {
+        proof_error(format!("reading checkpoint filesystem {}: {error}", checkpoint_parent.display()))
+    })?;
+    if output_metadata.dev() != checkpoint_metadata.dev() {
+        return Err(proof_error(
+            "proof checkpoint store must share the proof output filesystem so disk accounting remains complete"
+                .to_string(),
+        ));
+    }
+    assert!(output_metadata.is_dir());
+    assert!(checkpoint_metadata.is_dir());
+    Ok(())
 }
 
 fn validate_disk_preflight(output_dir: &Path, disk_bytes_max: u64) -> Result<(), RunError> {
@@ -512,6 +629,28 @@ fn enforce_open_file_descriptor_limit(_required_limit: u64) -> Result<(), RunErr
     Err(proof_error("source-built fixed-point open-file descriptor enforcement requires Linux".to_string()))
 }
 
+fn hash_provider_recipe_projection(source_root: &Path) -> Result<(u64, String), RunError> {
+    let mut total_bytes = 0_u64;
+    let mut hasher = blake3::Hasher::new_derive_key(PROVIDER_RECIPE_PROJECTION_CONTEXT);
+    for relative in PROVIDER_RECIPE_PROJECTION_ROOTS {
+        let path = source_root.join(relative);
+        let (bytes, digest) = crate::release_tree_copy::hash_directory_tree(&path)
+            .map_err(|error| proof_error(format!("hashing provider recipe projection {relative}: {error}")))?;
+        total_bytes = total_bytes
+            .checked_add(bytes)
+            .ok_or_else(|| proof_error("provider recipe projection byte count overflowed".to_string()))?;
+        hasher.update(relative.as_bytes());
+        hasher.update(b"\0");
+        hasher.update(&bytes.to_le_bytes());
+        hasher.update(digest.as_bytes());
+        hasher.update(b"\n");
+    }
+    let digest = hasher.finalize().to_hex().to_string();
+    assert!(total_bytes > 0);
+    assert_eq!(digest.len(), BLAKE3_HEX_LENGTH);
+    Ok((total_bytes, digest))
+}
+
 fn validate_materialized_vendor_inputs(source_root: &Path) -> Result<(), RunError> {
     crate::self_build::require_checked_vendor_inputs(source_root)
         .map_err(|error| proof_error(format!("validating materialized vendored Cargo inputs: {error}")))
@@ -544,6 +683,7 @@ fn prepare_attempt(
     let source_root = inputs_dir.join(SOURCE_ROOT_DIR);
     materialize_source_record_payload(records.mantle_source, &source_root)?;
     let mantle_source_digest = hash_materialized_source(&source_root)?;
+    let (provider_recipe_projection_bytes, provider_recipe_projection) = hash_provider_recipe_projection(&source_root)?;
     let vendor_root = source_root.join(VENDOR_RELATIVE_PATH);
     materialize_source_record_payload(records.vendor_inputs, &vendor_root)?;
     validate_materialized_vendor_inputs(&source_root)?;
@@ -594,6 +734,8 @@ fn prepare_attempt(
         stagex_source_bundle: stagex_source_bundle_digest,
         native_source_manifest: native_source_manifest_digest,
         rust_source_archive_set: rust_source_archive_set_digest,
+        provider_recipe_projection,
+        provider_recipe_projection_bytes,
         mantle_source: mantle_source_digest,
         vendor_inputs: vendor_inputs_digest,
     };
@@ -772,6 +914,13 @@ fn prepare_plan(
             records.rust_source_archive_set,
             &source_digests.rust_source_archive_set,
         ),
+        SourceAuthorityInput {
+            id: "provider-recipe-projection".to_string(),
+            role: SourceAuthorityRole::ProviderRecipeProjection,
+            kind: SourceContentKind::Directory,
+            digest_blake3: source_digests.provider_recipe_projection.clone(),
+            size_bytes: source_digests.provider_recipe_projection_bytes,
+        },
         source_input_from_record(
             "mantle-source",
             SourceAuthorityRole::MantleSource,
@@ -830,12 +979,19 @@ fn prepare_plan(
 fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAttempt) -> Result<bool, RunError> {
     enforce_open_file_descriptor_limit(prepared.plan.resource_bounds.open_file_descriptors_max)?;
     validate_runtime_bounds(options, prepared)?;
-    let adopt = dev_cache_adoption(options, &prepared.plan)?;
+    let restored_checkpoint = restore_constructed_provider_checkpoint(options, prepared)?;
+    let adopt = if restored_checkpoint.is_none() {
+        dev_cache_adoption(options, &prepared.plan)?
+    } else {
+        false
+    };
     let is_dev = options.dev_provider_cache.is_some();
     if adopt {
         record_dev_cache_hit(prepared)?;
     }
-    let providers = if adopt {
+    let providers = if let Some(restored) = restored_checkpoint {
+        restored
+    } else if adopt {
         let adopted = adopt_cached_provider_subtrees(options, prepared, &prepared.plan)?;
         construct_full_source_providers(
             options,
@@ -970,6 +1126,10 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         )?
     };
     validate_runtime_bounds(options, prepared)?;
+    if options.proof_checkpoint_store.is_some() && providers.provider_checkpoint.is_none() {
+        publish_constructed_provider_checkpoint(options, prepared, &providers)?;
+        validate_runtime_bounds(options, prepared)?;
+    }
     run_cargo_free_fixed_point(options, prepared, &providers)?;
     validate_runtime_bounds(options, prepared)?;
     if is_dev {
@@ -1671,6 +1831,7 @@ fn construct_full_source_providers(
         native_admission_report_path,
         rust_provider,
         toolchain_closure_path,
+        provider_checkpoint: None,
     })
 }
 
@@ -2440,6 +2601,8 @@ mod tests {
             disk_bytes_max: 1,
             protected_exec_events_max: 1,
             source_records_max: 1,
+            proof_checkpoint_store: None,
+            proof_checkpoint_import_attempt: None,
             dev_provider_cache: None,
             dev_resume: false,
             dev_fast_fail: false,
@@ -2479,6 +2642,8 @@ mod tests {
             disk_bytes_max: 1,
             protected_exec_events_max: 1,
             source_records_max: 1,
+            proof_checkpoint_store: None,
+            proof_checkpoint_import_attempt: None,
             dev_provider_cache: None,
             dev_resume: false,
             dev_fast_fail: false,
@@ -3101,6 +3266,8 @@ mod tests {
             disk_bytes_max: 1,
             protected_exec_events_max: 1,
             source_records_max: 1,
+            proof_checkpoint_store: None,
+            proof_checkpoint_import_attempt: None,
             dev_provider_cache: cache,
             dev_resume: resume,
             dev_fast_fail: fast_fail,
@@ -3137,6 +3304,75 @@ mod tests {
         assert_eq!(absent, None);
     }
 
+    // r[verify bootstrap_inventory.source_built_mantle_checkpoint_reuse]
+    #[test]
+    fn imported_provider_authority_accepts_legacy_plan_only_with_matching_recipe_projection() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_root = temp.path().join(INPUTS_DIR).join(SOURCE_ROOT_DIR);
+        for root in PROVIDER_RECIPE_PROJECTION_ROOTS {
+            fs::create_dir_all(source_root.join(root)).unwrap();
+            fs::write(source_root.join(root).join("input"), root.as_bytes()).unwrap();
+        }
+        let (projection_bytes, projection_digest) = hash_provider_recipe_projection(&source_root).unwrap();
+        let mut current = test_plan();
+        let projection = current
+            .source_inputs
+            .iter_mut()
+            .find(|input| input.role == SourceAuthorityRole::ProviderRecipeProjection)
+            .unwrap();
+        projection.size_bytes = projection_bytes;
+        projection.digest_blake3 = projection_digest;
+        let mut legacy = current.clone();
+        legacy.schema = LEGACY_PROVIDER_CHECKPOINT_IMPORT_PLAN_SCHEMA.to_string();
+        legacy.source_inputs.retain(|input| input.role != SourceAuthorityRole::ProviderRecipeProjection);
+        for stage in legacy
+            .stages
+            .iter_mut()
+            .take(crate::source_built_fixed_point_checkpoint::PROVIDER_CHECKPOINT_STAGE_COUNT)
+        {
+            stage.inputs.retain(|input| {
+                !matches!(input, crate::source_built_fixed_point::StageAuthorityInput::Source {
+                    role: SourceAuthorityRole::ProviderRecipeProjection
+                })
+            });
+        }
+
+        validate_imported_provider_authority(&current, &legacy, temp.path()).unwrap();
+        legacy
+            .source_inputs
+            .iter_mut()
+            .find(|input| input.role == SourceAuthorityRole::RustSourceArchiveSet)
+            .unwrap()
+            .digest_blake3 = OTHER_DIGEST.to_string();
+        let mismatch = validate_imported_provider_authority(&current, &legacy, temp.path()).unwrap_err();
+
+        assert!(mismatch.to_string().contains("RustSourceArchiveSet"));
+    }
+
+    // r[verify bootstrap_inventory.source_built_mantle_checkpoint_reuse]
+    #[test]
+    fn checkpoint_import_rejects_running_attempt_status() {
+        let temp = tempfile::tempdir().unwrap();
+        let plan = test_plan();
+        fs::write(temp.path().join(PLAN_FILE), serde_json::to_vec_pretty(&plan).unwrap()).unwrap();
+        fs::write(
+            temp.path().join(ATTEMPT_STATUS_FILE),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "schema": PROOF_STATUS_SCHEMA,
+                "status": PROOF_STATUS_RUNNING,
+                "plan_digest_blake3": plan.plan_digest_blake3,
+                "blocker": null
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let error = validate_imported_attempt_status(temp.path(), &plan).unwrap_err();
+
+        assert!(error.to_string().contains("running proof attempt"));
+        assert!(!error.to_string().contains("unsupported status"));
+    }
+
     fn write_executable(path: &Path) -> PathBuf {
         fs::write(path, b"\x7fELFstatic-tool").unwrap();
         fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
@@ -3150,6 +3386,7 @@ mod tests {
             ("stagex-source", SourceAuthorityRole::StagexSourceBundle, SourceContentKind::RegularFile, 'c'),
             ("native", SourceAuthorityRole::NativeSourceBundle, SourceContentKind::RegularFile, 'd'),
             ("rust", SourceAuthorityRole::RustSourceArchiveSet, SourceContentKind::Directory, 'e'),
+            ("provider-recipes", SourceAuthorityRole::ProviderRecipeProjection, SourceContentKind::Directory, '8'),
             ("source", SourceAuthorityRole::MantleSource, SourceContentKind::Directory, 'f'),
             ("vendor", SourceAuthorityRole::VendorInputs, SourceContentKind::Directory, '7'),
         ]

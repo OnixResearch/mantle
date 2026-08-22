@@ -5897,6 +5897,8 @@
         "--offline-source-state-dir",
         "--out",
         "--proof-bwrap",
+        "--proof-checkpoint-import-attempt",
+        "--proof-checkpoint-store",
         "--proof-disk-bytes-max",
         "--proof-elapsed-seconds-max",
         "--proof-exec-events-max",

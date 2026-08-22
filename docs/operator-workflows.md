@@ -455,6 +455,46 @@ The output path and its two success aliases must be absent. A failed run keeps
 its private staging directory and `attempt-status.json`. A successful run
 publishes with a no-replace rename and updates both aliases atomically.
 
+Use a promoted checkpoint store to retain completed provider stages:
+
+```bash
+CRUNCH_NO_FUSE=1 mantle self-build \
+  --source-built-fixed-point \
+  --source-profile /media/handoff/source-built-fixed-point-sources.json \
+  --expected-source-profile-blake3 "$SOURCE_PROFILE_BLAKE3" \
+  --expected-stagex-lineage-blake3 "$STAGEX_LINEAGE_BLAKE3" \
+  --expected-native-provider-blake3 "$NATIVE_PROVIDER_BLAKE3" \
+  --proof-bwrap /absolute/path/to/bwrap \
+  --proof-sandbox-shell /absolute/path/to/static-busybox \
+  --proof-checkpoint-store /absolute/path/to/proof-checkpoints \
+  --out /absolute/fresh/path/source-built-proof
+```
+
+A cold run publishes the provider checkpoint before stage1. A later run restores
+only a promoted checkpoint whose stage sources, recipes, policies, resources,
+predecessor outputs, semantic outputs, execution evidence, and payloads match.
+The final receipt labels restored stages. It does not claim current execution.
+
+Import completed provider stages from a preserved, stopped attempt:
+
+```bash
+mantle self-build \
+  --source-built-fixed-point \
+  --source-profile /media/handoff/source-built-fixed-point-sources.json \
+  --expected-source-profile-blake3 "$SOURCE_PROFILE_BLAKE3" \
+  --expected-stagex-lineage-blake3 "$STAGEX_LINEAGE_BLAKE3" \
+  --expected-native-provider-blake3 "$NATIVE_PROVIDER_BLAKE3" \
+  --proof-bwrap /absolute/path/to/bwrap \
+  --proof-sandbox-shell /absolute/path/to/static-busybox \
+  --proof-checkpoint-store /absolute/path/to/proof-checkpoints \
+  --proof-checkpoint-import-attempt /absolute/path/to/preserved-attempt \
+  --out /absolute/fresh/path/checkpoint-import-evidence
+```
+
+The importer rejects a running attempt. It revalidates provider-stage source and
+recipe projections before publication. It does not publish a fixed-point receipt
+or update a success alias.
+
 For a prepared checkout that already has its explicit vendor directory, import,
 pin, and preflight the bundle directly:
 

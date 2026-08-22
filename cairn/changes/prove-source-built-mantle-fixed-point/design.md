@@ -6,9 +6,9 @@ The hydrated full-source-provider proof reaches matching Mantle binaries but ins
 
 ### Decision: construct providers inside the proof authority
 
-**Choice:** The promoted evidence run starts with empty transition, native-provider, Rust-provider, and Mantle output authorities. Its inputs contain authenticated source records and seed/lineage authority, never prebuilt provider directories. Development runs may use receipt-validated caches, but cached provider outputs cannot satisfy this proof. Profile refresh replaces the Mantle source and checked vendor records together. Proof preflight validates their lock, package, and file-checksum closure before StageX. ADR 0080 records this pairing.
+**Choice:** A cold promoted evidence run starts with empty transition, native-provider, Rust-provider, and Mantle output authorities. Its inputs contain authenticated source records and seed/lineage authority, never unbound provider directories. A later promoted attempt may restore one immutable provider checkpoint only after its four stage receipts, stage-specific sources, recipe projection, policies, resources, predecessor outputs, semantic outputs, execution evidence, and payload identities revalidate. Development cache entries remain ineligible. Profile refresh replaces the Mantle source and checked vendor records together. Proof preflight validates their lock, package, and file-checksum closure before StageX. ADR 0080 records this pairing.
 
-**Rationale:** Importing or revalidating a previously built provider would prove consumption, not the claimed source-to-Mantle lineage.
+**Rationale:** Raw provider import proves only consumption. A promoted checkpoint composes the original execution evidence and identifies every restored stage without claiming current execution.
 
 ### Decision: compose existing mechanisms under a new pure plan and Rust shell
 
@@ -56,7 +56,7 @@ The Tailscale DNS name is an operator routing label, not execution authority. Pr
 
 ### Decision: reconcile planned and observed execution
 
-**Choice:** The proof shell maps protected-exec and build execution records back to planned actions. It rejects unknown events, missing required events, digest drift, producer drift, count-bound violations, remote execution, and cache-only completion. The operator trust report is a view over these bound records, not a separate authority source. ADR 0070 records this boundary.
+**Choice:** The proof shell maps current or checkpoint-bound protected-exec and build records back to planned actions. It rejects unknown events, missing required evidence, digest drift, producer drift, count-bound violations, remote execution, and cache-only completion without a promoted checkpoint receipt. Restored stages retain their original execution-evidence digest and checkpoint identity. The operator trust report is a view over these bound records, not a separate authority source. ADR 0070 records this boundary.
 
 **Rationale:** Static review and runtime interception cover different failure modes. Their explicit reconciliation makes the useful action-audit shape visible without replacing seccomp evidence.
 
