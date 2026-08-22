@@ -1,0 +1,104 @@
+{
+  "change": "add-promoted-source-built-proof-checkpoints",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "dabbff4dca50f49251a8a778a4f9901606913bebe295dd731279e7ad2a9c8046",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "da1a3911e526d17f6b767ed1b59f736d22eeaf2796eedf61ee477765bf393acd",
+  "probe_evidence": null,
+  "receipt_hash": "edabb831b245624945841236ebb3d422888754f685301ca489ecbed3d0a03616",
+  "stage": "proposal",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "/tmp/mantle-canonical-cairn-check/.cairn/changes/add-promoted-source-built-proof-checkpoints/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 18,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    }
+  ],
+  "valid": true,
+  "verdict": "PASS"
+}
+{
+  "change": "add-promoted-source-built-proof-checkpoints",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "235f7240f54804643b978cad3af73b7840bf52879339397468effed4ad41749a",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "da1a3911e526d17f6b767ed1b59f736d22eeaf2796eedf61ee477765bf393acd",
+  "probe_evidence": null,
+  "receipt_hash": "f7dd8c8ed86cafada2671e3cae2226ecf4bfbd9e974e43246d5025701a65b60d",
+  "stage": "design",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "/tmp/mantle-canonical-cairn-check/.cairn/changes/add-promoted-source-built-proof-checkpoints/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 31,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "/tmp/mantle-canonical-cairn-check/.cairn/changes/add-promoted-source-built-proof-checkpoints/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 18,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "/tmp/mantle-canonical-cairn-check/.cairn/changes/add-promoted-source-built-proof-checkpoints/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 6,
+      "substantive_lines": 28,
+      "substantive_requirement_blocks": 1,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    }
+  ],
+  "valid": true,
+  "verdict": "PASS"
+}
