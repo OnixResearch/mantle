@@ -1,0 +1,70 @@
+{
+  "tasks": [
+    {
+      "id": 280,
+      "created_at": "2026-08-22T15:25:10.015545170-04:00",
+      "command": "/home/brittonr/mantle-runs/receipt-fix-v31/preserve-and-prune-v40-rust-scratch.sh",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31",
+      "group": "receipt-v31",
+      "label": "v40-preserve-prune-rust-scratch",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-08-22T15:25:10.015469619-04:00",
+          "start": "2026-08-22T15:25:10.242627648-04:00",
+          "end": "2026-08-22T15:26:26.753734214-04:00",
+          "result": "Success"
+        }
+      }
+    },
+    {
+      "id": 281,
+      "created_at": "2026-08-22T15:37:23.022213743-04:00",
+      "command": "/home/brittonr/mantle-runs/receipt-fix-v31/refresh-v41-checkpoint-source-profile.sh",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31",
+      "group": "receipt-v31",
+      "label": "v41-refresh-checkpoint-source-profile",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-08-22T15:37:23.022150243-04:00",
+          "start": "2026-08-22T15:37:23.257801192-04:00",
+          "end": "2026-08-22T15:43:47.893609330-04:00",
+          "result": "Success"
+        }
+      }
+    },
+    {
+      "id": 282,
+      "created_at": "2026-08-22T15:47:07.993894500-04:00",
+      "command": "/home/brittonr/mantle-runs/receipt-fix-v31/prune-v40-native-and-stage1-scratch.sh",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31",
+      "group": "receipt-v31",
+      "label": "v40-prune-derived-native-stage1-scratch",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-08-22T15:47:07.993871737-04:00",
+          "start": "2026-08-22T15:47:08.208704386-04:00",
+          "end": "2026-08-22T15:47:41.941632893-04:00",
+          "result": "Success"
+        }
+      }
+    },
+    {
+      "id": 283,
+      "created_at": "2026-08-22T15:48:58.209131758-04:00",
+      "command": "/home/brittonr/mantle-runs/receipt-fix-v31/import-v41-provider-checkpoint.sh",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31",
+      "group": "receipt-v31",
+      "label": "v41-import-provider-checkpoint",
+      "status": {
+        "Done": {
+          "enqueued_at": "2026-08-22T15:48:58.209110749-04:00",
+          "start": "2026-08-22T15:48:58.437091736-04:00",
+          "end": "2026-08-22T15:54:40.600410704-04:00",
+          "result": {
+            "Failed": 1
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+copying path '/nix/store/hhccdmpa2bhqbagn2zgmgrwjbcdinn55-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/1pzq6dhayzd6kgyhjwqr1bwq468z36vp0al101havv6d0pw1fa40.nar?hash=hhccdmpa2bhqbagn2zgmgrwjbcdinn55' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.80s
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-89263e91c19d52cc)
+
+running 18 tests
+test bootstrap_validate::tests::running_status_serializes_for_checkpoint_summary ... ok
+test source_built_fixed_point_receipt::tests::restored_stage_origin_requires_provider_role_and_complete_checkpoint_link ... ok
+test preserved_evidence_tree::tests::checkpoint_copy_rejects_an_existing_destination ... ok
+test remote_transfer::tests::bounded_checkpoint_reader_rejects_growth_beyond_metadata_snapshot ... ok
+test preserved_evidence_tree::tests::checkpoint_copy_preserves_opaque_links_and_detaches_file_bytes ... ok
+test source_built_fixed_point_shell::tests::checkpoint_import_rejects_running_attempt_status ... ok
+test source_built_fixed_point_checkpoint::tests::provider_lookup_ignores_later_mantle_source_but_tracks_provider_sources ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_rejects_changed_relevant_policy_and_forbidden_events ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_accepts_exact_stage_authority_and_payloads ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_rejects_wrong_semantic_provider_identity ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_rejects_dev_origin_and_changed_payload ... ok
+test remote_build::tests::stale_final_chunk_invalidates_checkpoint_before_acknowledgement_or_completion ... ok
+test tests::self_build_cli_accepts_promoted_checkpoint_store_and_rejects_dev_state_mix ... ok
+test source_built_fixed_point_checkpoint_shell::tests::promoted_checkpoint_rejects_modified_payload_and_partial_candidate ... ok
+test source_built_fixed_point_checkpoint_shell::tests::promoted_checkpoint_rejects_semantically_conflicting_candidates ... ok
+test remote_transfer::tests::authority_checkpoint_and_lock_symlinks_fail_closed ... ok
+test source_built_fixed_point_checkpoint_shell::tests::promoted_checkpoint_publishes_idempotently_and_restores_into_fresh_paths ... ok
+
+running 1 test
+test remote_transfer::tests::resume_child_process ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2423 filtered out; finished in 0.22s
+
+test remote_transfer::tests::resume_across_process_uses_durable_checkpoint_and_receiver_facts ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 2406 filtered out; finished in 0.25s
+

@@ -1,0 +1,8 @@
+Admitted full-source provider /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v37-binutils-middle-closure-20260821.source-built-fixed-point-staging-3859936/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain
+  output_digest_blake3: 63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9
+  source_closure_blake3: 7a97f836c8daa3dc5cbdf51a2d6ca59e7b995debac22fe5d08c091e667828778
+  metadata_digest_blake3: 50ac462f76ed2033a6d760a9271081351ccb9493e6d9cd796e7b6abdab02a826
+  report: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-provider-checkpoint-import-v41-a18d9819-20260822.source-built-fixed-point-staging-4125442/imported-native-provider-revalidation.json
+error: build failed
+source-built provider checkpoint import failed closed: error: build failed
+source-built fixed-point blocked: imported StageX provider receipt is missing: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v37-binutils-middle-closure-20260821.source-built-fixed-point-staging-3859936/native-store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider/provider-receipt.json; preserved_attempt=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-provider-checkpoint-import-v41-a18d9819-20260822.source-built-fixed-point-staging-4125442

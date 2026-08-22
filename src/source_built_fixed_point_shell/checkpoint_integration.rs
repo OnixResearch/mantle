@@ -220,7 +220,7 @@ fn imported_stagex_provider_report(
     if !stagex_path.is_dir() {
         return Err(proof_error(format!("imported StageX provider is missing: {}", stagex_path.display())));
     }
-    let receipt_path = stagex_path.join(STAGEX_PROVIDER_RECEIPT_FILE);
+    let receipt_path = stagex_path.join(crate::stagex_provider::PROVIDER_RECEIPT_RELATIVE_PATH);
     let validation_path = stagex_path.join(crate::stagex_provider::PROVIDER_VALIDATION_RELATIVE_PATH);
     let output_digest_blake3 = crate::release_tree_copy::hash_directory_tree(stagex_path)?.1;
     let validation_digest_blake3 = crate::protected_exec::blake3_file_hex(&validation_path)
@@ -511,7 +511,7 @@ fn restored_stagex_provider_report(
         schema: "mantle-stagex-provider-publication-v1",
         provider_kind: "stagex-intermediate-provider",
         output_path: stagex_provider_path.to_path_buf(),
-        receipt_path: stagex_provider_path.join(STAGEX_PROVIDER_RECEIPT_FILE),
+        receipt_path: stagex_provider_path.join(crate::stagex_provider::PROVIDER_RECEIPT_RELATIVE_PATH),
         normalized_provider_digest_blake3: record.semantic_output_digest_blake3.clone(),
         output_digest_blake3: record.output_digest_blake3.clone(),
         final_bundle_digest_blake3: record.output_digest_blake3.clone(),
@@ -786,4 +786,43 @@ fn write_checkpoint_publication_transcript(
         published.manifest_path.display(),
     );
     write_bytes_create_new(&transcript, text.as_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn imported_stagex_provider_report_uses_the_published_receipt_path() {
+        let temp = tempfile::tempdir().expect("temporary provider root");
+        let provider_root = temp.path().join("stagex-provider");
+        let receipt_path = provider_root.join(crate::stagex_provider::PROVIDER_RECEIPT_RELATIVE_PATH);
+        let validation_path = provider_root.join(crate::stagex_provider::PROVIDER_VALIDATION_RELATIVE_PATH);
+        fs::create_dir_all(receipt_path.parent().expect("receipt parent")).expect("provider evidence directory");
+        fs::write(&receipt_path, b"{}\n").expect("provider receipt");
+        fs::write(&validation_path, b"{}\n").expect("provider validation");
+
+        let report = imported_stagex_provider_report(&provider_root).expect("imported provider report");
+
+        assert_eq!(report.receipt_path, receipt_path);
+        assert!(report.receipt_path.is_file());
+        assert_ne!(report.receipt_path, provider_root.join("provider-receipt.json"));
+    }
+
+    #[test]
+    fn imported_stagex_provider_report_rejects_the_legacy_root_receipt_path() {
+        let temp = tempfile::tempdir().expect("temporary provider root");
+        let provider_root = temp.path().join("stagex-provider");
+        let validation_path = provider_root.join(crate::stagex_provider::PROVIDER_VALIDATION_RELATIVE_PATH);
+        fs::create_dir_all(validation_path.parent().expect("validation parent")).expect("provider evidence directory");
+        fs::write(provider_root.join("provider-receipt.json"), b"{}\n").expect("legacy root receipt");
+        fs::write(&validation_path, b"{}\n").expect("provider validation");
+
+        let error = imported_stagex_provider_report(&provider_root).expect_err("canonical receipt must be required");
+        let message = error.to_string();
+
+        assert!(message.contains("imported StageX provider receipt is missing"));
+        assert!(message.contains(crate::stagex_provider::PROVIDER_RECEIPT_RELATIVE_PATH));
+        assert!(!provider_root.join(crate::stagex_provider::PROVIDER_RECEIPT_RELATIVE_PATH).exists());
+    }
 }

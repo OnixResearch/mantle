@@ -76,7 +76,6 @@ const PROOF_STATUS_COMPLETE: &str = "complete";
 const STAGEX_TRANSITION_EXECUTION_DIR: &str = "stagex-transition-execution";
 const STAGEX_TRANSITION_HANDOFF_REPLAY_DIR: &str = "stagex-transition-handoff-replay";
 const STAGEX_PROVIDER_REPLAY_DIR: &str = "stagex-provider-replay";
-const STAGEX_PROVIDER_RECEIPT_FILE: &str = "provider-receipt.json";
 pub(crate) const STAGEX_TRANSITION_REPORT_FILE: &str = "transition-report.json";
 pub(crate) const STAGEX_TRANSITION_AUDIT_FILE: &str = "protected-exec-audit.json";
 const STAGEX_TRANSITION_HANDOFF_REPORT_FILE: &str = "stagex-transition-handoff.json";
@@ -1538,7 +1537,7 @@ fn synthesized_adopted_stagex_report(
         schema: "mantle-stagex-provider-publication-v1",
         provider_kind: "stagex-intermediate-provider",
         output_path: stagex_root.clone(),
-        receipt_path: stagex_root.join(STAGEX_PROVIDER_RECEIPT_FILE),
+        receipt_path: stagex_root.join(crate::stagex_provider::PROVIDER_RECEIPT_RELATIVE_PATH),
         normalized_provider_digest_blake3: STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST.to_string(),
         output_digest_blake3: STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST.to_string(),
         final_bundle_digest_blake3: STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST.to_string(),

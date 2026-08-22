@@ -1,0 +1,10 @@
+started_at=2026-08-22T15:48:58-04:00
+wrapper_pid=4125426
+source_commit=a18d9819
+profile_blake3=e8d005138dc923377545ffa057a48d8cf58e33fd607012efd83cf44f3670de3e
+orchestrator_blake3=82fec77e3ab5b4102a7f893759af75d186c31c69fc7a8b18e12a55f78422d61a
+import_root=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v37-binutils-middle-closure-20260821.source-built-fixed-point-staging-3859936
+checkpoint_store=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-proof-checkpoints
+output=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-provider-checkpoint-import-v41-a18d9819-20260822
+finished_at=2026-08-22T15:54:40-04:00
+exit_code=1
