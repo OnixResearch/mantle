@@ -180,6 +180,7 @@ fn imported_constructed_providers(
         stagex_transition_execution_dir: import_root.join(STAGEX_TRANSITION_EXECUTION_DIR),
         stagex_provider_report,
         native_provider,
+        native_action_trust: None,
         native_admission,
         native_admission_report_path: imported_admission_path,
         rust_provider: crate::rust_source_provider::RustSourceProviderMaterialization {
@@ -215,6 +216,7 @@ fn imported_native_observation(
         },
         transcript_path: transcript_path.to_path_buf(),
         transcript_digest_blake3,
+        action_trust: None,
     })
 }
 
@@ -320,6 +322,8 @@ struct RestoredProviderPaths {
     rust_provider: PathBuf,
     origin_native_admission: PathBuf,
     origin_native_transcript: PathBuf,
+    origin_native_action_plan: PathBuf,
+    origin_native_action_reconciliation: PathBuf,
     origin_toolchain_closure: PathBuf,
     toolchain_closure: PathBuf,
 }
@@ -337,6 +341,8 @@ impl RestoredProviderPaths {
             rust_provider: prepared.staging_dir.join(RUST_PROVIDER_DIR),
             origin_native_admission: origin.join("native-admission.json"),
             origin_native_transcript: origin.join("native-provider.json"),
+            origin_native_action_plan: origin.join("native-provider-action-plan.json"),
+            origin_native_action_reconciliation: origin.join("native-provider-action-reconciliation.json"),
             origin_toolchain_closure: origin.join(CHECKPOINT_ORIGIN_TOOLCHAIN_CLOSURE_FILE),
             toolchain_closure: prepared.staging_dir.join(TOOLCHAIN_CLOSURE_FILE),
         })
@@ -381,6 +387,16 @@ impl RestoredProviderPaths {
             checkpoint_restore(
                 crate::source_built_fixed_point_checkpoint::PAYLOAD_TOOLCHAIN_CLOSURE,
                 &self.origin_toolchain_closure,
+                CheckpointPayloadKind::RegularFile,
+            ),
+            checkpoint_restore(
+                crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_ACTION_PLAN,
+                &self.origin_native_action_plan,
+                CheckpointPayloadKind::RegularFile,
+            ),
+            checkpoint_restore(
+                crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_ACTION_RECONCILIATION,
+                &self.origin_native_action_reconciliation,
                 CheckpointPayloadKind::RegularFile,
             ),
         ]
@@ -442,6 +458,7 @@ fn validate_restored_provider_checkpoint(
         .map_err(|error| proof_error(format!("validating restored Rust provider: {error}")))?;
     let recipe_digest = crate::protected_exec::blake3_file_hex(&prepared.source_root.join(RUST_RECIPE_NCL))
         .map_err(|error| proof_error(format!("hashing restored Rust provider recipe: {error}")))?;
+    let native_action_trust = restored_native_action_trust(&paths)?;
     materialize_relocated_toolchain_closure(prepared, &paths, &restored)?;
     let native_provider = restored_native_provider_observation(
         prepared,
@@ -456,6 +473,7 @@ fn validate_restored_provider_checkpoint(
         stagex_transition_execution_dir: paths.stagex_transition,
         stagex_provider_report,
         native_provider,
+        native_action_trust: Some(native_action_trust),
         native_admission,
         native_admission_report_path,
         rust_provider: crate::rust_source_provider::RustSourceProviderMaterialization {
@@ -466,6 +484,37 @@ fn validate_restored_provider_checkpoint(
         },
         toolchain_closure_path: paths.toolchain_closure,
         provider_checkpoint: Some(restored),
+    })
+}
+
+fn restored_native_action_trust(paths: &RestoredProviderPaths) -> Result<NativeBuildActionTrustEvidence, RunError> {
+    let plan: crate::source_built_derivation_action_plan::EagerDerivationActionPlan = serde_json::from_slice(
+        &fs::read(&paths.origin_native_action_plan)
+            .map_err(|error| proof_error(format!("reading restored native action plan: {error}")))?,
+    )
+    .map_err(|error| proof_error(format!("parsing restored native action plan: {error}")))?;
+    crate::source_built_derivation_action_plan::validate_eager_derivation_action_plan(&plan)
+        .map_err(|error| proof_error(format!("validating restored native action plan: {error}")))?;
+    let reconciliation: crate::source_built_derivation_action_plan::EagerDerivationReconciliation =
+        serde_json::from_slice(
+            &fs::read(&paths.origin_native_action_reconciliation)
+                .map_err(|error| proof_error(format!("reading restored native action reconciliation: {error}")))?,
+        )
+        .map_err(|error| proof_error(format!("parsing restored native action reconciliation: {error}")))?;
+    crate::source_built_derivation_action_plan::require_complete_eager_derivation_reconciliation(&reconciliation)
+        .map_err(|error| proof_error(format!("validating restored native action reconciliation: {error}")))?;
+    if reconciliation.action_plan_digest_blake3 != plan.plan_digest_blake3
+        || reconciliation.planned_action_count != plan.action_count
+    {
+        return Err(proof_error("restored native action plan and reconciliation linkage mismatch".to_string()));
+    }
+    assert!(reconciliation.is_complete());
+    debug_assert_eq!(reconciliation.matched_action_count, plan.action_count);
+    Ok(NativeBuildActionTrustEvidence {
+        plan_path: paths.origin_native_action_plan.clone(),
+        reconciliation_path: paths.origin_native_action_reconciliation.clone(),
+        plan,
+        reconciliation,
     })
 }
 
@@ -561,6 +610,7 @@ fn restored_native_provider_observation(
         },
         transcript_path,
         transcript_digest_blake3,
+        action_trust: None,
     })
 }
 
@@ -637,6 +687,10 @@ fn provider_checkpoint_payload_sources(
     use crate::source_built_fixed_point_checkpoint::CheckpointPayloadKind;
     let stagex_basename = required_utf8_basename(&providers.stagex_provider_report.output_path, "StageX provider")?;
     let native_basename = required_utf8_basename(&providers.native_provider.output.path, "native provider")?;
+    let native_action_trust = providers
+        .native_action_trust
+        .as_ref()
+        .ok_or_else(|| proof_error("promoted checkpoint requires complete native action trust".to_string()))?;
     let stagex_relative = PathBuf::from(CHECKPOINT_STAGEX_PROVIDER_PREFIX).join(stagex_basename);
     let native_relative = PathBuf::from(CHECKPOINT_NATIVE_PROVIDER_PREFIX).join(native_basename);
     Ok([
@@ -680,6 +734,18 @@ fn provider_checkpoint_payload_sources(
             crate::source_built_fixed_point_checkpoint::PAYLOAD_TOOLCHAIN_CLOSURE,
             &providers.toolchain_closure_path,
             Path::new(CHECKPOINT_TOOLCHAIN_CLOSURE_PATH),
+            CheckpointPayloadKind::RegularFile,
+        ),
+        checkpoint_payload_source(
+            crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_ACTION_PLAN,
+            &native_action_trust.plan_path,
+            Path::new(CHECKPOINT_NATIVE_ACTION_PLAN_PATH),
+            CheckpointPayloadKind::RegularFile,
+        ),
+        checkpoint_payload_source(
+            crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_ACTION_RECONCILIATION,
+            &native_action_trust.reconciliation_path,
+            Path::new(CHECKPOINT_NATIVE_ACTION_RECONCILIATION_PATH),
             CheckpointPayloadKind::RegularFile,
         ),
     ])
@@ -768,6 +834,7 @@ fn provider_checkpoint_evidence_digests(
     providers: &ConstructedProviders,
 ) -> Result<ProviderCheckpointEvidenceDigests, RunError> {
     let transition = checkpoint_evidence_digest(&[
+        ("transition-plan", providers.stagex_transition_execution_dir.join(STAGEX_TRANSITION_PLAN_FILE)),
         ("transition-report", providers.stagex_transition_execution_dir.join(STAGEX_TRANSITION_REPORT_FILE)),
         ("transition-audit", providers.stagex_transition_execution_dir.join(STAGEX_TRANSITION_AUDIT_FILE)),
     ])?;
@@ -779,9 +846,15 @@ fn provider_checkpoint_evidence_digests(
         ("stagex-receipt", providers.stagex_provider_report.receipt_path.clone()),
         ("stagex-validation", stagex_validation),
     ])?;
+    let native_action_trust = providers
+        .native_action_trust
+        .as_ref()
+        .ok_or_else(|| proof_error("native checkpoint evidence lacks action trust".to_string()))?;
     let native_provider = checkpoint_evidence_digest(&[
         ("native-transcript", providers.native_provider.transcript_path.clone()),
         ("native-admission", providers.native_admission_report_path.clone()),
+        ("native-action-plan", native_action_trust.plan_path.clone()),
+        ("native-action-reconciliation", native_action_trust.reconciliation_path.clone()),
     ])?;
     let rust_provider = checkpoint_evidence_digest(&[
         ("rust-build-receipt", providers.rust_provider.output_path.join(RUST_PROVIDER_BUILD_RECEIPT_RELATIVE)),
@@ -888,6 +961,10 @@ mod tests {
             rust_provider: PathBuf::from("/proof/rust-provider"),
             origin_native_admission: PathBuf::from("/proof/origin/native-admission.json"),
             origin_native_transcript: PathBuf::from("/proof/origin/native-provider.json"),
+            origin_native_action_plan: PathBuf::from("/proof/origin/native-provider-action-plan.json"),
+            origin_native_action_reconciliation: PathBuf::from(
+                "/proof/origin/native-provider-action-reconciliation.json",
+            ),
             origin_toolchain_closure: PathBuf::from("/proof/origin/source-built-toolchain-closure.json"),
             toolchain_closure: PathBuf::from("/proof/source-built-toolchain-closure.json"),
         };
@@ -897,10 +974,24 @@ mod tests {
             .iter()
             .find(|request| request.payload_id == crate::source_built_fixed_point_checkpoint::PAYLOAD_TOOLCHAIN_CLOSURE)
             .expect("toolchain closure restore request");
+        let action_plan = requests
+            .iter()
+            .find(|request| {
+                request.payload_id == crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_ACTION_PLAN
+            })
+            .expect("native action-plan restore request");
+        let action_reconciliation = requests
+            .iter()
+            .find(|request| {
+                request.payload_id == crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_ACTION_RECONCILIATION
+            })
+            .expect("native action-reconciliation restore request");
 
         assert_eq!(closure.destination_path, paths.origin_toolchain_closure);
         assert_ne!(closure.destination_path, paths.toolchain_closure);
         assert_eq!(closure.kind, crate::source_built_fixed_point_checkpoint::CheckpointPayloadKind::RegularFile);
+        assert_eq!(action_plan.destination_path, paths.origin_native_action_plan);
+        assert_eq!(action_reconciliation.destination_path, paths.origin_native_action_reconciliation);
     }
 
     #[test]

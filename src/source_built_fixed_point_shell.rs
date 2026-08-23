@@ -77,6 +77,7 @@ const STAGEX_TRANSITION_EXECUTION_DIR: &str = "stagex-transition-execution";
 const STAGEX_TRANSITION_HANDOFF_REPLAY_DIR: &str = "stagex-transition-handoff-replay";
 const STAGEX_PROVIDER_REPLAY_DIR: &str = "stagex-provider-replay";
 pub(crate) const STAGEX_TRANSITION_REPORT_FILE: &str = "transition-report.json";
+pub(crate) const STAGEX_TRANSITION_PLAN_FILE: &str = "transition-plan.json";
 pub(crate) const STAGEX_TRANSITION_AUDIT_FILE: &str = "protected-exec-audit.json";
 const STAGEX_TRANSITION_HANDOFF_REPORT_FILE: &str = "stagex-transition-handoff.json";
 const STAGEX_TRANSITION_HANDOFF_REPORT_FORMAT: &str = "mantle-stagex-transition-handoff-v1";
@@ -113,6 +114,8 @@ const STAGEX_PROVIDER_LOGICAL_PATH: &str =
 const STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST: &str =
     "e1039a3c844d709f51586f7afa2aacdbbe92aa224f1e20a778ea80573603ada3";
 const NATIVE_PROVIDER_ID: &str = "full-source-native-provider";
+const NATIVE_ACTION_PLAN_FILE: &str = "native-provider-action-plan.json";
+const NATIVE_ACTION_RECONCILIATION_FILE: &str = "native-provider-action-reconciliation.json";
 const NATIVE_ADMISSION_REPORT_FILE: &str = "full-source-provider-admission.json";
 const NATIVE_SOURCE_MANIFEST_FILE: &str = "native-source-closure.json";
 const NATIVE_SOURCE_AUTHORITY_DIR: &str = "native-source-authority";
@@ -167,6 +170,9 @@ const CHECKPOINT_NATIVE_PROVIDER_PREFIX: &str = "payload/native-store";
 const CHECKPOINT_RUST_PROVIDER_PATH: &str = "payload/rust-provider";
 const CHECKPOINT_NATIVE_ADMISSION_PATH: &str = "payload/evidence/native-admission.json";
 const CHECKPOINT_NATIVE_TRANSCRIPT_PATH: &str = "payload/evidence/native-provider.json";
+const CHECKPOINT_NATIVE_ACTION_PLAN_PATH: &str = "payload/evidence/native-provider-action-plan.json";
+const CHECKPOINT_NATIVE_ACTION_RECONCILIATION_PATH: &str =
+    "payload/evidence/native-provider-action-reconciliation.json";
 const CHECKPOINT_TOOLCHAIN_CLOSURE_PATH: &str = "payload/evidence/source-built-toolchain-closure.json";
 const RUST_PROVIDER_BUILD_RECEIPT_RELATIVE: &str = "share/mantle-rust-provider/receipts/build.json";
 const RUST_PROVIDER_BINDING_RECEIPT_RELATIVE: &str = "share/mantle-rust-provider/receipts/full-source-binding.json";
@@ -272,8 +278,15 @@ struct BuildJsonReport {
     schema: String,
     hermeticity_mode: String,
     hermeticity_audit_events: Vec<serde_json::Value>,
+    #[serde(default)]
+    scheduler_priority_decisions: Vec<BuildJsonPriorityDecision>,
     outcomes: Vec<BuildJsonOutcome>,
     failed: Vec<BuildJsonFailure>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BuildJsonPriorityDecision {
+    selected_goal_key_blake3: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -309,6 +322,15 @@ pub(crate) struct BuildObservation {
     pub(crate) output: BuildJsonOutput,
     pub(crate) transcript_path: PathBuf,
     pub(crate) transcript_digest_blake3: String,
+    pub(crate) action_trust: Option<NativeBuildActionTrustEvidence>,
+}
+
+#[derive(Debug)]
+pub(crate) struct NativeBuildActionTrustEvidence {
+    pub(crate) plan_path: PathBuf,
+    pub(crate) reconciliation_path: PathBuf,
+    pub(crate) plan: crate::source_built_derivation_action_plan::EagerDerivationActionPlan,
+    pub(crate) reconciliation: crate::source_built_derivation_action_plan::EagerDerivationReconciliation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -323,6 +345,7 @@ pub(crate) struct ConstructedProviders {
     pub(crate) stagex_transition_execution_dir: PathBuf,
     pub(crate) stagex_provider_report: crate::stagex_provider::StagexProviderPublicationReport,
     pub(crate) native_provider: BuildObservation,
+    pub(crate) native_action_trust: Option<NativeBuildActionTrustEvidence>,
     pub(crate) native_admission: crate::full_source_provider::FullSourceProviderAdmissionReport,
     pub(crate) native_admission_report_path: PathBuf,
     pub(crate) rust_provider: crate::rust_source_provider::RustSourceProviderMaterialization,
@@ -1499,6 +1522,7 @@ fn adopt_cached_provider_subtrees(
         },
         transcript_path: tx,
         transcript_digest_blake3: tx_digest,
+        action_trust: None,
     })
 }
 
@@ -1678,7 +1702,11 @@ fn validate_stagex_transition_handoff_sources(execution_root: &Path) -> Result<(
             return Err(proof_error(format!("StageX transition handoff file is missing: {relative}")));
         }
     }
-    for relative in [STAGEX_TRANSITION_REPORT_FILE, STAGEX_TRANSITION_AUDIT_FILE] {
+    for relative in [
+        STAGEX_TRANSITION_PLAN_FILE,
+        STAGEX_TRANSITION_REPORT_FILE,
+        STAGEX_TRANSITION_AUDIT_FILE,
+    ] {
         if !execution_root.join(relative).is_file() {
             return Err(proof_error(format!("StageX transition evidence file is missing: {relative}")));
         }
@@ -1780,6 +1808,7 @@ fn construct_full_source_providers(
         )));
     }
     let host_tools = build_full_source_host_tools(options, prepared)?;
+    let native_action_trust = aggregate_native_build_action_trust(options, prepared, &native_provider, &host_tools)?;
     let host_tool_manifest_dir = prepared.staging_dir.join(HOST_TOOLS_EVIDENCE_DIR);
     let host_tool_manifest = crate::full_source_rust_binding_shell::materialize_full_source_rust_host_tools(
         FullSourceRustHostToolMaterializationRequest {
@@ -1826,12 +1855,62 @@ fn construct_full_source_providers(
         stagex_transition_execution_dir,
         stagex_provider_report,
         native_provider,
+        native_action_trust,
         native_admission,
         native_admission_report_path,
         rust_provider,
         toolchain_closure_path,
         provider_checkpoint: None,
     })
+}
+
+fn aggregate_native_build_action_trust(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    native_provider: &BuildObservation,
+    host_tools: &BTreeMap<String, BuildObservation>,
+) -> Result<Option<NativeBuildActionTrustEvidence>, RunError> {
+    let mut evidence = Vec::with_capacity(host_tools.len().saturating_add(1));
+    evidence.push(native_provider.action_trust.as_ref());
+    evidence.extend(host_tools.values().map(|observation| observation.action_trust.as_ref()));
+    if evidence.iter().any(|item| item.is_none()) {
+        if options.dev_provider_cache.is_some() {
+            return Ok(None);
+        }
+        return Err(proof_error(
+            "promoted native provider construction lacks an eager action plan or reconciliation".to_string(),
+        ));
+    }
+    let evidence = evidence.into_iter().flatten().collect::<Vec<_>>();
+    let plans = evidence.iter().map(|item| item.plan.clone()).collect::<Vec<_>>();
+    let plan =
+        crate::source_built_derivation_action_plan::compose_eager_derivation_action_plans(NATIVE_PROVIDER_ID, &plans)
+            .map_err(|error| proof_error(format!("composing native provider action plans: {error}")))?;
+    let observed = evidence
+        .iter()
+        .flat_map(|item| item.reconciliation.observed_event_ids_blake3.iter().cloned())
+        .collect::<Vec<_>>();
+    let reconciliation =
+        crate::source_built_derivation_action_plan::reconcile_eager_derivation_actions(&plan, &observed)
+            .map_err(|error| proof_error(format!("reconciling native provider action plan: {error}")))?;
+    let plan_path = prepared.staging_dir.join(NATIVE_ACTION_PLAN_FILE);
+    let reconciliation_path = prepared.staging_dir.join(NATIVE_ACTION_RECONCILIATION_FILE);
+    write_json_create_new(&plan_path, &plan)?;
+    write_json_create_new(&reconciliation_path, &reconciliation)?;
+    if options.dev_provider_cache.is_none() {
+        crate::source_built_derivation_action_plan::require_complete_eager_derivation_reconciliation(&reconciliation)
+            .map_err(|error| proof_error(format!("native provider action reconciliation: {error}")))?;
+    } else if !reconciliation.is_complete() {
+        return Ok(None);
+    }
+    assert!(reconciliation.is_complete());
+    debug_assert_eq!(plan.action_count, reconciliation.matched_action_count);
+    Ok(Some(NativeBuildActionTrustEvidence {
+        plan_path,
+        reconciliation_path,
+        plan,
+        reconciliation,
+    }))
 }
 
 fn build_full_source_host_tools(
@@ -1864,6 +1943,9 @@ fn run_native_build(
     relative_ncl: &str,
 ) -> Result<BuildObservation, RunError> {
     let ncl_path = prepared.source_root.join(relative_ncl);
+    let action_plan = plan_native_build_actions(options, prepared, label, &ncl_path)?;
+    let plan_path = prepared.transcripts_dir.join(format!("{label}.action-plan.json"));
+    write_json_create_new(&plan_path, &action_plan)?;
     let mut command = native_build_command(options, prepared, &ncl_path)?;
     let output = command.output().map_err(|error| proof_error(format!("launching native build {label}: {error}")))?;
     validate_runtime_bounds(options, prepared)?;
@@ -1873,6 +1955,25 @@ fn run_native_build(
     write_bytes_create_new(&stderr_path, &output.stderr)?;
     let allow_cached = options.dev_provider_cache.is_some();
     let report = parse_build_report(label, &output, allow_cached)?;
+    let observed_goal_ids = report
+        .scheduler_priority_decisions
+        .iter()
+        .map(|decision| decision.selected_goal_key_blake3.clone())
+        .collect::<Vec<_>>();
+    let reconciliation = crate::source_built_derivation_action_plan::reconcile_eager_derivation_actions(
+        &action_plan,
+        &observed_goal_ids,
+    )
+    .map_err(|error| proof_error(format!("reconciling native build {label}: {error}")))?;
+    let reconciliation_path = prepared.transcripts_dir.join(format!("{label}.action-reconciliation.json"));
+    write_json_create_new(&reconciliation_path, &reconciliation)?;
+    validate_native_build_reconciliation(label, &reconciliation)?;
+    let action_trust = NativeBuildActionTrustEvidence {
+        plan_path,
+        reconciliation_path,
+        plan: action_plan,
+        reconciliation,
+    };
     let build_output = require_single_build_output(label, report, allow_cached)?;
     let transcript_digest_blake3 = crate::protected_exec::blake3_file_hex(&stdout_path)
         .map_err(|error| proof_error(format!("hashing build transcript {}: {error}", stdout_path.display())))?;
@@ -1880,7 +1981,48 @@ fn run_native_build(
         output: build_output,
         transcript_path: stdout_path,
         transcript_digest_blake3,
+        action_trust: Some(action_trust),
     })
+}
+
+fn plan_native_build_actions(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    label: &str,
+    ncl_path: &Path,
+) -> Result<crate::source_built_derivation_action_plan::EagerDerivationActionPlan, RunError> {
+    let sandbox_shell_digest = crate::protected_exec::blake3_file_hex(options.sandbox_shell)
+        .map_err(|error| proof_error(format!("hashing proof sandbox shell: {error}")))?;
+    let import_paths = [
+        prepared.source_root.join("lib").into_os_string(),
+        prepared.source_root.join("bootstrap").into_os_string(),
+    ];
+    let stage_id = format!("full-source-native-provider:{label}");
+    crate::build_plan::capture_eager_derivation_action_plan(
+        ncl_path,
+        &import_paths,
+        LOGICAL_STORE_PREFIX,
+        &stage_id,
+        &sandbox_shell_digest,
+    )
+}
+
+fn validate_native_build_reconciliation(
+    label: &str,
+    reconciliation: &crate::source_built_derivation_action_plan::EagerDerivationReconciliation,
+) -> Result<(), RunError> {
+    if !reconciliation.unknown_event_ids_blake3.is_empty()
+        || !reconciliation.overbound_event_ids_blake3.is_empty()
+        || !reconciliation.local_only
+        || reconciliation.cache_only_completion_count != 0
+    {
+        return Err(proof_error(format!(
+            "native build {label} emitted unknown, overbound, remote, or cache-only action evidence"
+        )));
+    }
+    assert!(reconciliation.matched_event_count <= reconciliation.observed_event_count);
+    debug_assert!(reconciliation.blockers.iter().all(|blocker| blocker == "missing-derivation-actions"));
+    Ok(())
 }
 
 fn native_build_command(
@@ -2509,6 +2651,7 @@ mod tests {
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(path, b"runtime-output").unwrap();
         }
+        fs::write(execution_root.join(STAGEX_TRANSITION_PLAN_FILE), b"{}").unwrap();
         fs::write(execution_root.join(STAGEX_TRANSITION_REPORT_FILE), b"{}").unwrap();
         fs::write(execution_root.join(STAGEX_TRANSITION_AUDIT_FILE), b"[]").unwrap();
         assert!(execution_root.join(STAGEX_TRANSITION_REPORT_FILE).is_file());

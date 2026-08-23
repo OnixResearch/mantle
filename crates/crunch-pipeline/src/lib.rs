@@ -8,6 +8,7 @@
 mod derivation_file;
 mod evaluation_stream;
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -65,6 +66,24 @@ use tokio::sync::mpsc;
 const EVAL_MESSAGE_CHANNEL_CAPACITY: usize = 16;
 #[cfg(test)]
 const EVAL_POLICY_TEST_MAX_JOBS: u32 = 4;
+
+pub struct EagerDerivationEvaluationConfig<'a> {
+    pub file: &'a std::path::Path,
+    pub import_paths: &'a [OsString],
+    pub store_dir: &'a str,
+    pub max_jobs: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EagerDerivationRoot {
+    pub label: String,
+    pub drv_path: StorePath<String>,
+}
+
+pub struct EagerDerivationEvaluation {
+    pub roots: Vec<EagerDerivationRoot>,
+    pub entries: Vec<crunch_glue::PendingEntry>,
+}
 
 pub struct BuildConfig {
     pub file: PathBuf,
@@ -178,6 +197,75 @@ pub fn resolve_max_jobs(user: Option<u32>) -> u32 {
         Some(j) => j.clamp(1, MAX_JOBS_CAP),
         None => std::thread::available_parallelism().map(|n| (n.get() as u32).min(MAX_JOBS_CAP)).unwrap_or(1),
     }
+}
+
+pub async fn evaluate_derivations_eager(
+    config: EagerDerivationEvaluationConfig<'_>,
+) -> Result<EagerDerivationEvaluation, Error> {
+    if config.max_jobs == 0 || config.store_dir.is_empty() || !config.store_dir.starts_with('/') {
+        return Err(Error::Eval(
+            "eager derivation evaluation requires positive jobs and an absolute store prefix".to_string(),
+        ));
+    }
+    let session = crunch_eval::session::EvaluationSession::open_file(config.file, config.import_paths)
+        .map_err(|error| Error::Eval(error.to_string()))?;
+    let expected_root_count = session.root_labels().len();
+    let (tx, rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
+    let evaluation = stream_roots_into_worker(EvalStreamRequest {
+        max_jobs: config.max_jobs,
+        store_dir: config.store_dir,
+        root_force_policy: RootForceExecutionPolicy::Inline,
+        root_file: config.file,
+        import_paths: config.import_paths,
+        session: &session,
+        tx,
+        cancellation: EvaluationCancellation::new(),
+        stream_tx: None,
+        worker_control: EvalWorkerControl::default(),
+    });
+    let collection = collect_eager_evaluation_messages(rx, config.store_dir);
+    let (evaluation, collected) = tokio::join!(evaluation, collection);
+    let evaluation = evaluation?;
+    let mut collected = collected?;
+    if evaluation.root_drv_paths.len() != expected_root_count
+        || collected.roots.len() != expected_root_count
+        || collected.entries.is_empty()
+    {
+        return Err(Error::Eval(format!(
+            "eager derivation evaluation completed {} of {expected_root_count} roots and discovered {} actions",
+            evaluation.root_drv_paths.len(),
+            collected.entries.len()
+        )));
+    }
+    collected
+        .roots
+        .sort_by(|left, right| left.label.cmp(&right.label).then(left.drv_path.cmp(&right.drv_path)));
+    assert_eq!(collected.roots.len(), expected_root_count);
+    debug_assert!(!collected.entries.is_empty());
+    Ok(collected)
+}
+
+async fn collect_eager_evaluation_messages(
+    mut rx: mpsc::Receiver<EvalMessage>,
+    store_dir: &str,
+) -> Result<EagerDerivationEvaluation, Error> {
+    let mut roots = Vec::new();
+    let mut entries = BTreeMap::new();
+    while let Some(message) = rx.recv().await {
+        roots.push(EagerDerivationRoot {
+            label: message.label,
+            drv_path: message.drv_path,
+        });
+        for entry in message.new_entries {
+            let action_id = entry.0.to_absolute_path_with_prefix(store_dir);
+            if entries.insert(action_id.clone(), entry).is_some() {
+                return Err(Error::Convert(format!("eager derivation evaluation duplicated {action_id}")));
+            }
+        }
+    }
+    let entries = entries.into_values().collect::<Vec<_>>();
+    debug_assert!(entries.is_empty() || entries.len() >= roots.len());
+    Ok(EagerDerivationEvaluation { roots, entries })
 }
 
 pub fn parse_fod_mismatch_error(err: &str) -> Option<FodMismatch> {
@@ -942,6 +1030,7 @@ mod tests {
     const SINGLE_ROOT_COUNT: u32 = 1;
     const TWO_ROOT_COUNT: u32 = 2;
     const THREE_ROOT_COUNT: u32 = 3;
+    const EAGER_DERIVATION_ENTRY_COUNT: usize = 2;
     const ROOT_ALPHA_INDEX: usize = 0;
     const ROOT_BETA_INDEX: usize = 1;
     const ROOT_GAMMA_INDEX: usize = 2;
@@ -1164,6 +1253,78 @@ mod tests {
         assert!(file.is_file());
         assert!(file.starts_with(directory.path()));
         (directory, file)
+    }
+
+    fn eager_derivation_fixture(missing_child: bool) -> (tempfile::TempDir, PathBuf, Vec<OsString>) {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("root.ncl");
+        let child = directory.path().join("child.ncl");
+        let child_reference = if missing_child { "missing.ncl" } else { "child.ncl" };
+        let root_source = format!(
+            r#"let mantle = import "lib.ncl" in
+{{
+  name = "eager-root",
+  builder = "/bin/sh",
+  args = ["-c", "echo root > $out"],
+  inputs = [mantle.derivationFile "{child_reference}"],
+}} | mantle.Derivation
+"#
+        );
+        let child_source = r#"let mantle = import "lib.ncl" in
+{
+  name = "eager-child",
+  builder = "/bin/sh",
+  args = ["-c", "echo child > $out"],
+  inputs = [],
+} | mantle.Derivation
+"#;
+        std::fs::write(&root, root_source).unwrap();
+        std::fs::write(&child, child_source).unwrap();
+        let repository = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let import_paths = vec![repository.join("lib").into_os_string()];
+        assert!(root.is_file());
+        assert!(child.is_file());
+        (directory, root, import_paths)
+    }
+
+    #[tokio::test]
+    async fn eager_derivation_evaluation_resolves_all_actions_without_execution() {
+        let (_directory, root, import_paths) = eager_derivation_fixture(false);
+
+        let evaluated = evaluate_derivations_eager(EagerDerivationEvaluationConfig {
+            file: &root,
+            import_paths: &import_paths,
+            store_dir: MANAGED_TEST_STORE_PREFIX,
+            max_jobs: SINGLE_EVAL_JOB,
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(evaluated.roots.len(), usize::try_from(SINGLE_ROOT_COUNT).unwrap());
+        assert_eq!(evaluated.entries.len(), EAGER_DERIVATION_ENTRY_COUNT);
+        assert!(evaluated.entries.iter().any(|entry| entry.2.input_derivations.is_empty()));
+        assert!(evaluated.entries.iter().any(|entry| !entry.2.input_derivations.is_empty()));
+    }
+
+    #[tokio::test]
+    async fn eager_derivation_evaluation_rejects_missing_child_action() {
+        let (_directory, root, import_paths) = eager_derivation_fixture(true);
+
+        let error = match evaluate_derivations_eager(EagerDerivationEvaluationConfig {
+            file: &root,
+            import_paths: &import_paths,
+            store_dir: MANAGED_TEST_STORE_PREFIX,
+            max_jobs: SINGLE_EVAL_JOB,
+        })
+        .await
+        {
+            Ok(_) => panic!("missing derivation file must fail eager evaluation"),
+            Err(error) => error,
+        };
+
+        let message = error.to_string();
+        assert!(message.contains("completed 0 of 1 roots"), "{message}");
+        assert!(message.contains("discovered 0 actions"), "{message}");
     }
 
     #[cfg(target_os = "linux")]

@@ -714,6 +714,8 @@ fn checkpoint_error(message: impl Into<String>) -> RunError {
 mod tests {
     use super::*;
     use crate::source_built_fixed_point::ProofOutputRole;
+    use crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_ACTION_PLAN;
+    use crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_ACTION_RECONCILIATION;
     use crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_ADMISSION;
     use crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_PROVIDER;
     use crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_TRANSCRIPT;
@@ -843,6 +845,9 @@ mod tests {
             fs::write(source_root.join("evidence/native-admission.json"), b"native-admission").unwrap();
             fs::write(source_root.join("evidence/native-transcript.json"), b"native-transcript").unwrap();
             fs::write(source_root.join("evidence/toolchain.json"), b"toolchain").unwrap();
+            fs::write(source_root.join("evidence/native-action-plan.json"), b"native-action-plan").unwrap();
+            fs::write(source_root.join("evidence/native-action-reconciliation.json"), b"native-action-reconciliation")
+                .unwrap();
             fs::create_dir_all(restore_root.join("native-store")).unwrap();
             fs::create_dir_all(restore_root.join("evidence")).unwrap();
             Self {
@@ -935,6 +940,18 @@ mod tests {
                     "payload/evidence/toolchain.json",
                     CheckpointPayloadKind::RegularFile,
                 ),
+                source(
+                    PAYLOAD_NATIVE_ACTION_PLAN,
+                    &self.source_root.join("evidence/native-action-plan.json"),
+                    "payload/evidence/native-action-plan.json",
+                    CheckpointPayloadKind::RegularFile,
+                ),
+                source(
+                    PAYLOAD_NATIVE_ACTION_RECONCILIATION,
+                    &self.source_root.join("evidence/native-action-reconciliation.json"),
+                    "payload/evidence/native-action-reconciliation.json",
+                    CheckpointPayloadKind::RegularFile,
+                ),
             ]
         }
 
@@ -976,6 +993,16 @@ mod tests {
                 restore(
                     PAYLOAD_TOOLCHAIN_CLOSURE,
                     &self.restore_root.join("evidence/toolchain.json"),
+                    CheckpointPayloadKind::RegularFile,
+                ),
+                restore(
+                    PAYLOAD_NATIVE_ACTION_PLAN,
+                    &self.restore_root.join("evidence/native-action-plan.json"),
+                    CheckpointPayloadKind::RegularFile,
+                ),
+                restore(
+                    PAYLOAD_NATIVE_ACTION_RECONCILIATION,
+                    &self.restore_root.join("evidence/native-action-reconciliation.json"),
                     CheckpointPayloadKind::RegularFile,
                 ),
             ]

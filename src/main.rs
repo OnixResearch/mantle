@@ -173,6 +173,7 @@ mod self_build;
 #[allow(dead_code)]
 mod semantic_graph;
 mod shell_cmd;
+mod source_built_derivation_action_plan;
 #[allow(dead_code)]
 mod source_built_fixed_point;
 mod source_built_fixed_point_checkpoint;

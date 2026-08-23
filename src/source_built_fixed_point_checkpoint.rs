@@ -21,16 +21,17 @@ use crate::source_built_fixed_point::SourceBuiltFixedPointPlan;
 use crate::source_built_fixed_point::SourceBuiltFixedPointResourceBounds;
 use crate::source_built_fixed_point::StageAuthorityInput;
 
-pub(crate) const PROVIDER_CHECKPOINT_SCHEMA: &str = "mantle-source-built-provider-checkpoint-v1";
+pub(crate) const PROVIDER_CHECKPOINT_SCHEMA: &str = "mantle-source-built-provider-checkpoint-v2";
 pub(crate) const PROVIDER_CHECKPOINT_STAGE_COUNT: usize = 4;
-pub(crate) const PROVIDER_CHECKPOINT_PAYLOAD_COUNT: usize = 7;
+pub(crate) const PROVIDER_CHECKPOINT_PAYLOAD_COUNT: usize = 9;
 #[cfg(test)]
 const FIRST_PROVIDER_STAGE_INDEX: usize = 0;
 const STAGEX_PROVIDER_STAGE_INDEX: usize = 1;
 const NATIVE_PROVIDER_STAGE_INDEX: usize = 2;
-const PROVIDER_CHECKPOINT_LOOKUP_CONTEXT: &str = "mantle-source-built-provider-checkpoint-lookup-v1";
-const PROVIDER_CHECKPOINT_STAGE_CONTEXT: &str = "mantle-source-built-provider-checkpoint-stage-v1";
-const PROVIDER_CHECKPOINT_MANIFEST_CONTEXT: &str = "mantle-source-built-provider-checkpoint-manifest-v1";
+const PROVIDER_CHECKPOINT_LOOKUP_CONTEXT: &str = "mantle-source-built-provider-checkpoint-lookup-v2";
+const PROVIDER_CHECKPOINT_STAGE_CONTEXT: &str = "mantle-source-built-provider-checkpoint-stage-v2";
+const PROVIDER_CHECKPOINT_MANIFEST_CONTEXT: &str = "mantle-source-built-provider-checkpoint-manifest-v2";
+const PROVIDER_ACTION_TRUST_POLICY_ID: &str = "mantle-provider-action-trust-v1";
 const RESOURCE_BOUNDS_CONTEXT: &str = "mantle-source-built-provider-checkpoint-resource-bounds-v1";
 const BLAKE3_HEX_LENGTH: usize = 64;
 const TEXT_BYTES_MAX: usize = 4_096;
@@ -42,6 +43,8 @@ pub(crate) const PAYLOAD_RUST_PROVIDER: &str = "rust-provider";
 pub(crate) const PAYLOAD_NATIVE_ADMISSION: &str = "native-admission";
 pub(crate) const PAYLOAD_NATIVE_TRANSCRIPT: &str = "native-transcript";
 pub(crate) const PAYLOAD_TOOLCHAIN_CLOSURE: &str = "toolchain-closure";
+pub(crate) const PAYLOAD_NATIVE_ACTION_PLAN: &str = "native-action-plan";
+pub(crate) const PAYLOAD_NATIVE_ACTION_RECONCILIATION: &str = "native-action-reconciliation";
 const REQUIRED_PAYLOAD_IDS: [&str; PROVIDER_CHECKPOINT_PAYLOAD_COUNT] = [
     PAYLOAD_STAGEX_TRANSITION,
     PAYLOAD_STAGEX_PROVIDER,
@@ -50,6 +53,8 @@ const REQUIRED_PAYLOAD_IDS: [&str; PROVIDER_CHECKPOINT_PAYLOAD_COUNT] = [
     PAYLOAD_NATIVE_ADMISSION,
     PAYLOAD_NATIVE_TRANSCRIPT,
     PAYLOAD_TOOLCHAIN_CLOSURE,
+    PAYLOAD_NATIVE_ACTION_PLAN,
+    PAYLOAD_NATIVE_ACTION_RECONCILIATION,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -141,6 +146,7 @@ struct ResolvedAuthorityInput {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 struct ProviderCheckpointLookupMaterial {
     logical_store_prefix: String,
+    action_trust_policy_id: String,
     resource_bounds_digest_blake3: String,
     stages: Vec<ProviderCheckpointLookupStage>,
     sources: Vec<SourceAuthorityInput>,
@@ -250,6 +256,7 @@ pub(crate) fn provider_checkpoint_lookup_key(plan: &SourceBuiltFixedPointPlan) -
         .collect::<Result<BTreeMap<_, _>, CheckpointError>>()?;
     let material = ProviderCheckpointLookupMaterial {
         logical_store_prefix: plan.logical_store_prefix.clone(),
+        action_trust_policy_id: PROVIDER_ACTION_TRUST_POLICY_ID.to_string(),
         resource_bounds_digest_blake3: resource_bounds_digest(&plan.resource_bounds)?,
         stages,
         sources,
@@ -495,6 +502,12 @@ fn validate_payloads(payloads: &[CheckpointPayloadIdentity]) -> Result<(), Check
         validate_text("checkpoint payload id", &payload.payload_id)?;
         validate_text("checkpoint payload path", &payload.relative_path)?;
         validate_digest("checkpoint payload", &payload.digest_blake3)?;
+        if payload.kind != expected_payload_kind(&payload.payload_id)? {
+            return Err(checkpoint_error(format!(
+                "checkpoint payload {} has the wrong content kind",
+                payload.payload_id
+            )));
+        }
         if payload.total_file_bytes == 0 || payload.entry_count == 0 {
             return Err(checkpoint_error(format!("checkpoint payload {} has empty bounds", payload.payload_id)));
         }
@@ -506,6 +519,21 @@ fn validate_payloads(payloads: &[CheckpointPayloadIdentity]) -> Result<(), Check
         return Err(checkpoint_error("provider checkpoint payload roles are incomplete or unknown"));
     }
     Ok(())
+}
+
+fn expected_payload_kind(payload_id: &str) -> Result<CheckpointPayloadKind, CheckpointError> {
+    match payload_id {
+        PAYLOAD_STAGEX_TRANSITION => Ok(CheckpointPayloadKind::PreservedTree),
+        PAYLOAD_STAGEX_PROVIDER | PAYLOAD_NATIVE_PROVIDER | PAYLOAD_RUST_PROVIDER => {
+            Ok(CheckpointPayloadKind::Directory)
+        }
+        PAYLOAD_NATIVE_ADMISSION
+        | PAYLOAD_NATIVE_TRANSCRIPT
+        | PAYLOAD_TOOLCHAIN_CLOSURE
+        | PAYLOAD_NATIVE_ACTION_PLAN
+        | PAYLOAD_NATIVE_ACTION_RECONCILIATION => Ok(CheckpointPayloadKind::RegularFile),
+        _ => Err(checkpoint_error(format!("unknown checkpoint payload role {payload_id}"))),
+    }
 }
 
 fn require_provider_stage_prefix(plan: &SourceBuiltFixedPointPlan) -> Result<(), CheckpointError> {
@@ -782,6 +810,29 @@ mod tests {
     }
 
     #[test]
+    fn promoted_checkpoint_rejects_legacy_schema_without_action_payloads() {
+        let plan = test_plan(DIGEST_A, DIGEST_B);
+        let payloads = test_payloads();
+        let mut manifest = build_provider_checkpoint_manifest(
+            &plan,
+            ProofCheckpointOrigin::PromotedExecution,
+            test_observations(),
+            payloads.clone(),
+        )
+        .unwrap();
+        manifest.schema = "mantle-source-built-provider-checkpoint-v1".to_string();
+        manifest.payloads.retain(|payload| {
+            payload.payload_id != PAYLOAD_NATIVE_ACTION_PLAN
+                && payload.payload_id != PAYLOAD_NATIVE_ACTION_RECONCILIATION
+        });
+
+        let error = admit_promoted_provider_checkpoint(&plan, &manifest, &payloads, DIGEST_B).unwrap_err();
+
+        assert!(error.to_string().contains("schema mismatch"));
+        assert_ne!(manifest.schema, PROVIDER_CHECKPOINT_SCHEMA);
+    }
+
+    #[test]
     fn promoted_checkpoint_rejects_dev_origin_and_changed_payload() {
         let plan = test_plan(DIGEST_A, DIGEST_B);
         let payloads = test_payloads();
@@ -891,11 +942,7 @@ mod tests {
             .map(|(index, payload_id)| CheckpointPayloadIdentity {
                 payload_id: payload_id.to_string(),
                 relative_path: format!("payload/{index}"),
-                kind: if payload_id == PAYLOAD_STAGEX_TRANSITION {
-                    CheckpointPayloadKind::PreservedTree
-                } else {
-                    CheckpointPayloadKind::Directory
-                },
+                kind: expected_payload_kind(payload_id).unwrap(),
                 digest_blake3: match payload_id {
                     PAYLOAD_STAGEX_PROVIDER | PAYLOAD_NATIVE_PROVIDER => DIGEST_B.to_string(),
                     PAYLOAD_RUST_PROVIDER => DIGEST_C.to_string(),
