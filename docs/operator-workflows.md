@@ -475,6 +475,18 @@ only a promoted checkpoint whose stage sources, recipes, policies, resources,
 predecessor outputs, semantic outputs, execution evidence, and payloads match.
 The final receipt labels restored stages. It does not claim current execution.
 
+Inspect the verified receipt and its root action-trust status:
+
+```bash
+mantle --json bootstrap trust-report \
+  --proof-root /absolute/path/to/source-built-proof
+```
+
+The command revalidates the v2 receipt, proof-bundle digest, plan, and stage
+evidence before it prints a report. A receipt without bound root action-plan and
+reconciliation digests reports `fixed-point-only`. It lists explicit blockers
+and does not emit the broader root action-trust claim.
+
 Import completed provider stages from a preserved, stopped attempt:
 
 ```bash
@@ -985,6 +997,10 @@ cargo -Zscript scripts/summarize-real-release-determinism.rs \
 
 # Inspect bootstrap parity's checked self-build proof descriptor consumption
 mantle --json bootstrap parity-report
+
+# Revalidate a source-built proof and inspect its bounded trust result
+mantle --json bootstrap trust-report \
+  --proof-root /absolute/path/to/source-built-proof
 
 # Save and validate a bounded bootstrap parity snapshot receipt under target/
 ./scripts/check-bootstrap-parity-snapshot.sh

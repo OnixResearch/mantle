@@ -34,8 +34,8 @@ use crate::source_built_fixed_point_shell::ConstructedProviders;
 use crate::source_built_fixed_point_shell::STAGEX_TRANSITION_AUDIT_FILE;
 use crate::source_built_fixed_point_shell::STAGEX_TRANSITION_REPORT_FILE;
 
-const EXTENSION_FIELD: &str = "source_built_fixed_point";
-const EXTENSION_SCHEMA: &str = "mantle-source-built-fixed-point-receipt-extension-v1";
+pub(crate) const EXTENSION_FIELD: &str = "source_built_fixed_point";
+pub(crate) const EXTENSION_SCHEMA: &str = "mantle-source-built-fixed-point-receipt-extension-v1";
 const STAGE_EVIDENCE_FILE: &str = "source-built-stage-evidence.json";
 const FIXED_POINT_META_RELATIVE_PATH: &str = "cargo-free-fixed-point/meta.json";
 const FIXED_POINT_STAGE1_RECEIPT: &str = "cargo-free-fixed-point/stage1/receipt.json";
@@ -152,23 +152,27 @@ pub(crate) struct SourceBuiltStageEvidence {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct SourceBuiltReceiptExtension {
-    schema: String,
-    plan_digest_blake3: String,
-    source_authority_digest_blake3: String,
-    provider_kind: String,
-    native_provider_digest_blake3: String,
-    rust_provider_digest_blake3: String,
-    toolchain_closure_digest_blake3: String,
-    stage_evidence_path: String,
-    stage_evidence_digest_blake3: String,
-    final_proof_bundle_digest_blake3: String,
-    protected_execution_policy_digest_blake3: String,
-    effect_policy_digest_blake3: String,
-    normalization_policy_digest_blake3: String,
+pub(crate) struct SourceBuiltReceiptExtension {
+    pub(crate) schema: String,
+    pub(crate) plan_digest_blake3: String,
+    pub(crate) source_authority_digest_blake3: String,
+    pub(crate) provider_kind: String,
+    pub(crate) native_provider_digest_blake3: String,
+    pub(crate) rust_provider_digest_blake3: String,
+    pub(crate) toolchain_closure_digest_blake3: String,
+    pub(crate) stage_evidence_path: String,
+    pub(crate) stage_evidence_digest_blake3: String,
+    pub(crate) final_proof_bundle_digest_blake3: String,
+    pub(crate) protected_execution_policy_digest_blake3: String,
+    pub(crate) effect_policy_digest_blake3: String,
+    pub(crate) normalization_policy_digest_blake3: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    provider_checkpoint_digest_blake3: Option<String>,
-    non_claims: Vec<String>,
+    pub(crate) provider_checkpoint_digest_blake3: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) action_trust_plan_digest_blake3: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) action_trust_reconciliation_digest_blake3: Option<String>,
+    pub(crate) non_claims: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -310,6 +314,8 @@ pub(crate) fn write_source_built_fixed_point_receipt(
             .provider_checkpoint
             .as_ref()
             .map(|checkpoint| checkpoint.admission.checkpoint_digest_blake3.clone()),
+        action_trust_plan_digest_blake3: None,
+        action_trust_reconciliation_digest_blake3: None,
         non_claims: NON_CLAIMS.iter().map(|value| (*value).to_string()).collect(),
     };
     let receipt_path = proof_root.join(crate::source_built_fixed_point_shell::FINAL_RECEIPT_FILE);
@@ -346,6 +352,7 @@ pub(crate) fn verify_source_built_fixed_point_receipt(proof_root: &Path, receipt
     if extension.schema != EXTENSION_SCHEMA || extension.provider_kind != PROOF_PROVIDER_KIND {
         return Err(receipt_error("source-built receipt extension identity mismatch".to_string()));
     }
+    validate_optional_action_trust_links(proof_root, &extension)?;
     let stage_evidence_path = proof_root.join(&extension.stage_evidence_path);
     let observed_stage_evidence_digest = hash_file(&stage_evidence_path)?;
     if observed_stage_evidence_digest != extension.stage_evidence_digest_blake3 {
@@ -366,6 +373,34 @@ pub(crate) fn verify_source_built_fixed_point_receipt(proof_root: &Path, receipt
     assert_eq!(canonical.runs.len(), REQUIRED_RUN_COUNT);
     debug_assert_eq!(stage_evidence.len(), STAGE_EVIDENCE_COUNT);
     Ok(())
+}
+
+fn validate_optional_action_trust_links(
+    proof_root: &Path,
+    extension: &SourceBuiltReceiptExtension,
+) -> Result<(), RunError> {
+    match (
+        extension.action_trust_plan_digest_blake3.as_deref(),
+        extension.action_trust_reconciliation_digest_blake3.as_deref(),
+    ) {
+        (None, None) => Ok(()),
+        (Some(expected_plan), Some(expected_reconciliation)) => {
+            validate_digest("action-trust plan", expected_plan)?;
+            validate_digest("action-trust reconciliation", expected_reconciliation)?;
+            let observed_plan =
+                hash_file(proof_root.join(crate::source_built_trust_report::ROOT_ACTION_TRUST_PLAN_FILE).as_path())?;
+            let observed_reconciliation = hash_file(
+                proof_root.join(crate::source_built_trust_report::ROOT_ACTION_RECONCILIATION_FILE).as_path(),
+            )?;
+            if observed_plan != expected_plan || observed_reconciliation != expected_reconciliation {
+                return Err(receipt_error("action-trust receipt binding digest mismatch".to_string()));
+            }
+            assert_eq!(observed_plan, expected_plan);
+            assert_eq!(observed_reconciliation, expected_reconciliation);
+            Ok(())
+        }
+        _ => Err(receipt_error("source-built receipt must bind both action-trust files or neither file".to_string())),
+    }
 }
 
 fn observe_fixed_point(proof_root: &Path) -> Result<FixedPointObservation, RunError> {
@@ -1185,6 +1220,14 @@ fn proof_bundle_digest(proof_root: &Path) -> Result<ProofBundleObservation, RunE
     proof_bundle_digest_with_limit(proof_root, PROOF_ENTRY_COUNT_MAX)
 }
 
+#[cfg(test)]
+pub(crate) fn proof_bundle_digest_for_test(proof_root: &Path) -> Result<String, RunError> {
+    let observation = proof_bundle_digest(proof_root)?;
+    assert!(!observation.digest_blake3.is_empty());
+    assert!(observation.entry_count > 0);
+    Ok(observation.digest_blake3)
+}
+
 fn proof_bundle_digest_with_limit(
     proof_root: &Path,
     entries_count_max: usize,
@@ -1450,6 +1493,30 @@ mod tests {
     const RESTORED_DIRECTORY_MODE: u32 = 0o700;
 
     #[test]
+    fn optional_action_trust_links_require_both_exact_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let plan_path = temp.path().join(crate::source_built_trust_report::ROOT_ACTION_TRUST_PLAN_FILE);
+        let reconciliation_path = temp.path().join(crate::source_built_trust_report::ROOT_ACTION_RECONCILIATION_FILE);
+        fs::write(&plan_path, "plan").unwrap();
+        fs::write(&reconciliation_path, "reconciliation").unwrap();
+        let plan_digest = hash_file(&plan_path).unwrap();
+        let reconciliation_digest = hash_file(&reconciliation_path).unwrap();
+        let mut extension = v48_extension();
+
+        validate_optional_action_trust_links(temp.path(), &extension).unwrap();
+        extension.action_trust_plan_digest_blake3 = Some(plan_digest.clone());
+        let partial = validate_optional_action_trust_links(temp.path(), &extension).unwrap_err();
+        extension.action_trust_reconciliation_digest_blake3 = Some(reconciliation_digest);
+        validate_optional_action_trust_links(temp.path(), &extension).unwrap();
+        extension.action_trust_plan_digest_blake3 = Some(DIGEST_A.to_string());
+        let drift = validate_optional_action_trust_links(temp.path(), &extension).unwrap_err();
+
+        assert!(partial.to_string().contains("both action-trust files"));
+        assert!(drift.to_string().contains("binding digest mismatch"));
+        assert_ne!(plan_digest, DIGEST_A);
+    }
+
+    #[test]
     fn rebuild_source_count_tracks_the_plan_contract_and_rejects_drift() {
         let expected = usize::try_from(SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT).unwrap();
         let missing = expected.checked_sub(1).unwrap();
@@ -1532,6 +1599,18 @@ mod tests {
         assert!(accepted.blocking_reasons.is_empty());
         assert!(rejected.to_string().contains("source closure does not bind receipt source"));
         assert_eq!(accepted.source_blake3, plan.receipt_contract.source_blake3);
+    }
+
+    fn v48_extension() -> SourceBuiltReceiptExtension {
+        let value: serde_json::Value = serde_json::from_str(include_str!(
+            "../cairn/changes/prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/deterministic-build-proof.json"
+        ))
+        .unwrap();
+        let extension: SourceBuiltReceiptExtension =
+            serde_json::from_value(value.get(EXTENSION_FIELD).cloned().unwrap()).unwrap();
+        assert_eq!(extension.schema, EXTENSION_SCHEMA);
+        assert!(extension.action_trust_plan_digest_blake3.is_none());
+        extension
     }
 
     fn test_rebuild_evidence(

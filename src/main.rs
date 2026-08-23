@@ -180,6 +180,8 @@ mod source_built_fixed_point_checkpoint_shell;
 mod source_built_fixed_point_dev_cache;
 mod source_built_fixed_point_receipt;
 mod source_built_fixed_point_shell;
+mod source_built_trust_report;
+mod source_built_trust_report_shell;
 mod source_bundle;
 mod source_root_capability;
 mod source_root_provider;
@@ -1467,6 +1469,13 @@ enum BootstrapAction {
         /// Fail closed unless the requested parity axes are complete
         #[arg(long = "require")]
         require: Vec<bootstrap_parity::ParityAxis>,
+    },
+
+    /// Verify and render the bounded source-built proof trust result
+    TrustReport {
+        /// Source-built fixed-point proof root
+        #[arg(long, value_name = "PATH")]
+        proof_root: PathBuf,
     },
 
     /// Materialize or import a source-built Rust provider after validation
@@ -3635,6 +3644,7 @@ fn bootstrap_command_label(action: Option<&BootstrapAction>) -> &'static str {
     match action {
         Some(BootstrapAction::Capabilities) => "bootstrap.capabilities",
         Some(BootstrapAction::ParityReport { .. }) => "bootstrap.parity-report",
+        Some(BootstrapAction::TrustReport { .. }) => "bootstrap.trust-report",
         Some(BootstrapAction::RustSourceProvider { .. }) => "bootstrap.rust-source-provider",
         Some(BootstrapAction::FullSourceRustHostTools { .. }) => "bootstrap.full-source-rust-host-tools",
         Some(BootstrapAction::FullSourceProviderAdmit { .. }) => "bootstrap.full-source-provider-admit",
@@ -7095,6 +7105,9 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
         BootstrapAction::Capabilities => source_root_capability::cmd_source_root_capabilities(ctx.json),
         BootstrapAction::ParityReport { require } => {
             bootstrap_parity::cmd_bootstrap_parity_report(&current_dir_or_error()?, require, ctx.json)
+        }
+        BootstrapAction::TrustReport { proof_root } => {
+            source_built_trust_report_shell::cmd_bootstrap_trust_report(proof_root, ctx.json)
         }
         BootstrapAction::RustSourceProvider {
             recipe,

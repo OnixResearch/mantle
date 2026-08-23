@@ -1,6 +1,6 @@
 # Mantle command reference
 
-Catalog BLAKE3: `b2a3b648323b4a064b176e61acadf5e1aa76a7e65dbb93910abadf6a036b65ef`
+Catalog BLAKE3: `c7767e46f9d96b23370a6fd0c16e9813340cc452f1ce239a78c354806d8f401d`
 
 ## Daily commands
 
@@ -318,6 +318,15 @@ Materialize or import a source-built Rust provider after validation
 
 - Mutation: `none`
 - Network: `optional`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle bootstrap trust-report`
+
+Verify and render the bounded source-built proof trust result
+
+- Mutation: `none`
+- Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
 
@@ -704,6 +713,42 @@ Realize one separate validation root through the ordinary foreign build boundary
 Verify one complete catalog generation and every bound artifact
 
 - Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle mantlepkgs version`
+
+Resolve historical package versions before ordinary Mantlepkgs production
+
+- Mutation: `none`
+- Network: `optional`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle mantlepkgs version index`
+
+Observe one exact revision cohort and publish a compact per-system index
+
+- Mutation: `project-files`
+- Network: `optional`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle mantlepkgs version recheck`
+
+Recheck selected revisions and emit existing Mantlepkgs manifests
+
+- Mutation: `project-files`
+- Network: `optional`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle mantlepkgs version resolve`
+
+Replay a saved index and publish deterministic receipts and revision groups
+
+- Mutation: `project-files`
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`

@@ -667,6 +667,26 @@
     "supports_json": true
   },
   {
+    "path": "bootstrap trust-report",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--proof-root",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Verify and render the bounded source-built proof trust result",
+    "supports_json": true
+  },
+  {
     "path": "bootstrap validate",
     "aliases": [],
     "flags": [
@@ -702,6 +722,7 @@
       "--builder",
       "--builder-arg",
       "--builder-program",
+      "--evaluation-stream",
       "--fix",
       "--help",
       "--import-path",
@@ -1806,6 +1827,93 @@
       "-v"
     ],
     "help": "Verify one complete catalog generation and every bound artifact",
+    "supports_json": true
+  },
+  {
+    "path": "mantlepkgs version",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Resolve historical package versions before ordinary Mantlepkgs production",
+    "supports_json": true
+  },
+  {
+    "path": "mantlepkgs version index",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--cohort",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--nix-program",
+      "--output-root",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Observe one exact revision cohort and publish a compact per-system index",
+    "supports_json": true
+  },
+  {
+    "path": "mantlepkgs version recheck",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--nix-program",
+      "--output-root",
+      "--plan",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--template-manifest",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Recheck selected revisions and emit existing Mantlepkgs manifests",
+    "supports_json": true
+  },
+  {
+    "path": "mantlepkgs version resolve",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--index",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--output-root",
+      "--policy",
+      "--requests",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Replay a saved index and publish deterministic receipts and revision groups",
     "supports_json": true
   },
   {

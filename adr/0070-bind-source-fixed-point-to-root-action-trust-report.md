@@ -65,3 +65,5 @@ Rejected because it would create a second evidence authority. The report must de
 - Generated build scripts need producer-linked authority before execution.
 - Action and event collections require deterministic order and explicit limits.
 - The report improves review and diagnostics without proving compiler correctness, seed correctness, kernel isolation, or independent reproducibility.
+- The operator view revalidates the fixed-point receipt before rendering. If the receipt does not bind both action files, it reports `fixed-point-only` and explicit blockers.
+- The view cannot create missing authority. A later proof must bind the root action plan and reconciliation before it can emit the complete claim.
