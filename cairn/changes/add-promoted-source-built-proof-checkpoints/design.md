@@ -20,15 +20,17 @@ A later Mantle-only edit can therefore reuse an unchanged provider checkpoint. A
 
 ### Decision: Publish one provider-closure checkpoint before stage1
 
-The first implementation publishes after the full-source Rust provider and toolchain closure complete. The checkpoint contains four ordered stage records and seven required payload roles:
+The action-trust checkpoint revision publishes after the full-source Rust provider and toolchain closure complete. The checkpoint contains four ordered stage records and nine required payload roles:
 
 - StageX transition execution;
 - StageX provider;
 - native provider;
 - Rust provider;
 - native admission report;
-- native build transcript; and
-- toolchain closure.
+- native build transcript;
+- toolchain closure;
+- native eager action plan; and
+- native action reconciliation.
 
 Later work can add stage1 and stage2 checkpoints without changing the provider-checkpoint contract.
 
@@ -36,7 +38,7 @@ Later work can add stage1 and stage2 checkpoints without changing the provider-c
 
 The checkpoint lookup key discovers a candidate. It does not authorize reuse.
 
-The shell remeasures every payload through no-follow bounded observation. The core then validates schema, promoted origin, stage order, source and policy authority, predecessor outputs, semantic provider identities, resource bounds, execution evidence, and payload identities.
+The shell remeasures every payload through no-follow bounded observation. The core then validates schema, promoted origin, stage order, source and policy authority, predecessor outputs, semantic provider identities, resource bounds, execution evidence, action-trust policy, and payload identities. Schema v2 rejects the former seven-payload checkpoint.
 
 A missing candidate selects the cold path. A present but malformed, partial, conflicting, or mismatched candidate fails closed.
 

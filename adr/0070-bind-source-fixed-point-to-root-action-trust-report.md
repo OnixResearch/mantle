@@ -36,6 +36,8 @@ A path, store prefix, output directory, executable name, or generated-file locat
 
 The proof fails before construction when any action adapter or authority relation is incomplete. Remote execution and cache-only completion are forbidden for this proof.
 
+Produced toolchains create a planning dependency. Provider stages therefore emit complete stage-local plans before their own execution. Promoted checkpoints bind those plans. A restored attempt composes them into the root plan before any current build action. Post-execution synthesis remains forbidden.
+
 After execution, Mantle reconciles protected-exec and build execution records with the plan. It rejects unknown events, missing required events, digest drift, producer drift, count-bound violations, undeclared inputs, and locality drift.
 
 The v2 proof receipt binds the action plan digest and observed reconciliation digest. Bootstrap promotion independently recomputes these links. `mantle --json bootstrap trust-report --proof-root <path>` renders the bound result. The command is a view, not a new authority source.

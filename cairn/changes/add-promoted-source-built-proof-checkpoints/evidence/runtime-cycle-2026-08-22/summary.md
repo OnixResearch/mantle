@@ -48,7 +48,9 @@ Generic v2 classification then rejected the descriptor because its eight leaves 
 
 V48 restored the same checkpoint and completed both strict stages. Its binaries matched at BLAKE3 `2403feed4dba0959d1dbb1a202777827e82361492f19a7fc8c642f3b138f599c`. The final receipt verified with verdict `self-rebuild-match`, and all four provider stages retain `restored-checkpoint` origins.
 
-The proof establishes checkpoint composition through final receipt publication. It does not establish the separate root child-action trust report required by the broader Cairn task.
+The proof establishes the historical seven-payload checkpoint composition through final receipt publication. It does not establish the separate root child-action trust report required by the broader Cairn task.
+
+The later root action-trust boundary supersedes that checkpoint for future promotion. Checkpoint schema v2 requires native action-plan and reconciliation payloads and uses a new lookup-policy identity. This does not alter V48's historical receipt; it requires a new checkpoint before another promoted proof.
 
 ## Decision
 

@@ -46,7 +46,9 @@ The Tailscale DNS name is an operator routing label, not execution authority. Pr
 
 **Choice:** The pure proof core derives one root-scoped action trust plan from the selected proof root. Each reachable action names its broad stage, producer actions, fixed or produced executable authorities, input authorities, outputs, local-only execution rule, event-count bounds, and resource limits. An incomplete adapter or action list blocks execution.
 
-**Rationale:** A six-stage summary cannot expose an undeclared child tool or missing producer edge before a long proof starts. A complete pre-execution list provides a cheap failure point without weakening runtime enforcement.
+Provider construction emits complete stage-local plans before each provider stage. A promoted checkpoint binds those plans and their reconciliations. A later restored attempt composes them with stage1 and stage2 plans before any current build action. The final root plan cannot depend on an unbuilt output or retrofit authority from observations.
+
+**Rationale:** A six-stage summary cannot expose an undeclared child tool or missing producer edge before a long proof starts. A complete pre-execution list provides a cheap failure point without weakening runtime enforcement. Staged provider plans break the produced-rustc planning cycle while keeping every original action under prior authority.
 
 ### Decision: bind generated executables to producers, not paths
 
@@ -84,6 +86,7 @@ The Tailscale DNS name is an operator routing label, not execution authority. Pr
 - Leviathan cannot currently authenticate to GitHub, so the operator must transfer a fresh source tree and retain exact post-transfer parity evidence.
 - The Leviathan route name cannot grant proof authority. Host preflight must record the observed system, architecture, kernel, resource bounds, and explicit sandbox tools.
 - Native-provider and Rust-unit adapters can expose incomplete action descriptions. The proof must stop instead of emitting a partial report.
+- Native derivation planning now covers 88 unique actions and 568 bounded scheduler observations across the provider and host-tool roots. Rust provider and Rust-unit child process interception remains unfinished.
 - Generated build scripts require producer-linked authority and a digest observation before execution.
 - The complete action list and observations can be large, so schemas and event counts need explicit limits.
 - Stage1 may expose native-topology behavior not covered by prior one-shot proofs.

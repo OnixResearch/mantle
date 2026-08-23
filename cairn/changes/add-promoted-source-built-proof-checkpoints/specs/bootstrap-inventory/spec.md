@@ -8,8 +8,8 @@ r[bootstrap_inventory.source_built_mantle_checkpoint_reuse] Mantle MUST admit a 
 
 GIVEN a promoted proof completes StageX transition, StageX provider publication, native-provider construction, and Rust-provider construction
 WHEN Mantle validates those stages before stage1
-THEN it MUST publish one immutable provider checkpoint with all four ordered stage records and every required payload identity
-AND it MUST bind the checkpoint to promoted origin, stage authorities, semantic provider identities, execution evidence, resource bounds, and no-fallback status.
+THEN it MUST publish one immutable provider checkpoint with all four ordered stage records and every required payload identity, including the native action plan and reconciliation
+AND it MUST bind the checkpoint to promoted origin, stage authorities, semantic provider identities, execution evidence, action-trust policy, resource bounds, and no-fallback status.
 
 #### Scenario: exact checkpoint continues in a fresh root
 
@@ -30,7 +30,7 @@ AND stage1 MUST still bind the new Mantle source and vendor identities.
 
 #### Scenario: relevant authority change rejects reuse
 
-GIVEN a checkpoint differs from current StageX, native, Rust, policy, resource, predecessor-output, semantic-output, execution-evidence, or payload authority
+GIVEN a checkpoint differs from current StageX, native, Rust, policy, resource, predecessor-output, semantic-output, execution-evidence, action-trust, or payload authority
 WHEN Mantle evaluates that candidate
 THEN it MUST reject the checkpoint before restore or execution
 AND a present malformed, partial, conflicting, dev-origin, or mismatched candidate MUST fail closed rather than become a silent cache miss.

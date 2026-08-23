@@ -10,8 +10,8 @@ This cold-only rule makes every retry rebuild StageX, the native provider, and t
 
 - Add stage-specific checkpoint identities for the first four provider stages.
 - Publish a provider-closure checkpoint immediately after the Rust provider and toolchain closure complete.
-- Store complete provider outputs, StageX evidence, receipts, and transcripts under one immutable checkpoint manifest.
-- Admit only checkpoints produced by promoted execution with exact source, policy, predecessor-output, resource, payload, and execution-evidence bindings.
+- Store complete provider outputs, StageX evidence, native action plan and reconciliation, receipts, and transcripts under one immutable checkpoint manifest.
+- Admit only checkpoints produced by promoted execution with exact source, policy, predecessor-output, resource, payload, execution-evidence, and action-trust bindings.
 - Restore an admitted checkpoint into a fresh proof root and continue with Mantle stage1.
 - Record restored and executed stages separately in the final receipt.
 - Keep the cold path as the default when no checkpoint store is selected.
