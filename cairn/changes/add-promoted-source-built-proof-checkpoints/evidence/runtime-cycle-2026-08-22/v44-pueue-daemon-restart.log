@@ -1,0 +1,42 @@
+Aug 22 20:16:09 leviathan pueued[6824]: 20:16:09  INFO pueue::daemon::process_handler::kill: Killing all running tasks
+Aug 22 20:16:09 leviathan systemd[6809]: Stopping Pueue Daemon - CLI process scheduler and manager...
+Aug 22 20:16:09 leviathan pueued[6824]: 20:16:09  INFO pueue::daemon::process_handler::finish: Task 293 finished with result: Killed
+Aug 22 20:16:10 leviathan systemd[6809]: Stopped Pueue Daemon - CLI process scheduler and manager.
+Aug 22 20:16:10 leviathan systemd[6809]: pueued.service: Consumed 1h 14min 118ms CPU time over 1h 2min 24.523s wall clock time, 63.6G memory peak.
+Aug 22 20:16:27 leviathan systemd[2572412]: Started Pueue Daemon - CLI process scheduler and manager.
+Aug 22 20:16:27 leviathan pueued[2572424]: 20:16:27  INFO pueue::daemon::internal_state::state: Restoring state
+Aug 22 20:16:27 leviathan pueued[2572424]: 20:16:27  INFO pueue::daemon::internal_state::state: Pausing group validation to prevent unwanted execution of previous tasks
+Aug 22 20:16:27 leviathan pueued[2572424]: 20:16:27  INFO pueue::daemon::internal_state::state: Pausing group validation to prevent unwanted execution of previous tasks
+Aug 22 20:16:27 leviathan pueued[2572424]: 20:16:27  INFO pueue::daemon::network::socket::platform: Using unix socket at: "/run/user/1555/pueue_brittonr.socket"
+Aug 22 20:16:38 leviathan pueued[2572424]: 20:16:38  INFO pueue::daemon::process_handler::kill: Killing all running tasks
+Aug 22 20:16:38 leviathan systemd[2572412]: Stopping Pueue Daemon - CLI process scheduler and manager...
+Aug 22 20:16:38 leviathan systemd[2572412]: Stopped Pueue Daemon - CLI process scheduler and manager.
+Aug 22 20:16:56 leviathan systemd[2572464]: Started Pueue Daemon - CLI process scheduler and manager.
+Aug 22 20:16:56 leviathan pueued[2572476]: 20:16:56  INFO pueue::daemon::internal_state::state: Restoring state
+Aug 22 20:16:56 leviathan pueued[2572476]: 20:16:56  INFO pueue::daemon::internal_state::state: Pausing group validation to prevent unwanted execution of previous tasks
+Aug 22 20:16:56 leviathan pueued[2572476]: 20:16:56  INFO pueue::daemon::internal_state::state: Pausing group validation to prevent unwanted execution of previous tasks
+Aug 22 20:16:56 leviathan pueued[2572476]: 20:16:56  INFO pueue::daemon::network::socket::platform: Using unix socket at: "/run/user/1555/pueue_brittonr.socket"
+Aug 22 20:17:06 leviathan pueued[2572476]: 20:17:06  INFO pueue::daemon::process_handler::kill: Killing all running tasks
+Aug 22 20:17:06 leviathan systemd[2572464]: Stopping Pueue Daemon - CLI process scheduler and manager...
+Aug 22 20:17:06 leviathan systemd[2572464]: Stopped Pueue Daemon - CLI process scheduler and manager.
+Aug 22 20:17:15 leviathan systemd[2572515]: Started Pueue Daemon - CLI process scheduler and manager.
+Aug 22 20:17:15 leviathan pueued[2572527]: 20:17:15  INFO pueue::daemon::internal_state::state: Restoring state
+Aug 22 20:17:15 leviathan pueued[2572527]: 20:17:15  INFO pueue::daemon::internal_state::state: Pausing group validation to prevent unwanted execution of previous tasks
+Aug 22 20:17:15 leviathan pueued[2572527]: 20:17:15  INFO pueue::daemon::internal_state::state: Pausing group validation to prevent unwanted execution of previous tasks
+Aug 22 20:17:15 leviathan pueued[2572527]: 20:17:15  INFO pueue::daemon::network::socket::platform: Using unix socket at: "/run/user/1555/pueue_brittonr.socket"
+Aug 22 20:17:25 leviathan pueued[2572527]: 20:17:25  INFO pueue::daemon::process_handler::kill: Killing all running tasks
+Aug 22 20:17:25 leviathan systemd[2572515]: Stopping Pueue Daemon - CLI process scheduler and manager...
+Aug 22 20:17:25 leviathan systemd[2572515]: Stopped Pueue Daemon - CLI process scheduler and manager.
+Aug 22 20:17:50 leviathan systemd[2572562]: Started Pueue Daemon - CLI process scheduler and manager.
+Aug 22 20:17:50 leviathan pueued[2572576]: 20:17:50  INFO pueue::daemon::internal_state::state: Restoring state
+Aug 22 20:17:50 leviathan pueued[2572576]: 20:17:50  INFO pueue::daemon::internal_state::state: Pausing group validation to prevent unwanted execution of previous tasks
+Aug 22 20:17:50 leviathan pueued[2572576]: 20:17:50  INFO pueue::daemon::internal_state::state: Pausing group validation to prevent unwanted execution of previous tasks
+Aug 22 20:17:50 leviathan pueued[2572576]: 20:17:50  INFO pueue::daemon::network::socket::platform: Using unix socket at: "/run/user/1555/pueue_brittonr.socket"
+Aug 22 20:18:01 leviathan pueued[2572576]: 20:18:01  INFO pueue::daemon::process_handler::kill: Killing all running tasks
+Aug 22 20:18:01 leviathan systemd[2572562]: Stopping Pueue Daemon - CLI process scheduler and manager...
+Aug 22 20:18:01 leviathan systemd[2572562]: Stopped Pueue Daemon - CLI process scheduler and manager.
+Aug 22 20:18:23 leviathan systemd[2572610]: Started Pueue Daemon - CLI process scheduler and manager.
+Aug 22 20:18:23 leviathan pueued[2572622]: 20:18:23  INFO pueue::daemon::internal_state::state: Restoring state
+Aug 22 20:18:23 leviathan pueued[2572622]: 20:18:23  INFO pueue::daemon::internal_state::state: Pausing group validation to prevent unwanted execution of previous tasks
+Aug 22 20:18:23 leviathan pueued[2572622]: 20:18:23  INFO pueue::daemon::internal_state::state: Pausing group validation to prevent unwanted execution of previous tasks
+Aug 22 20:18:23 leviathan pueued[2572622]: 20:18:23  INFO pueue::daemon::network::socket::platform: Using unix socket at: "/run/user/1555/pueue_brittonr.socket"

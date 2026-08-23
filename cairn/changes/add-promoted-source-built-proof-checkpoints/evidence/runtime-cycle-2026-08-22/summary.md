@@ -36,18 +36,24 @@ Both strict Cargo-free stages succeeded. Their Mantle binaries matched at BLAKE3
 
 Final receipt construction then failed closed. The plan named `stagex-provider-publication`, but evidence used `stagex-provider`. The same stale alias pattern affected `stage1` and `stage2`. Receipt stage IDs now come from the same canonical constants as the plan.
 
+The V44 profile verified at BLAKE3 `3042005943ca8d1343da2231c3126bbbcb9ea232f27e509833e04dcf6bc40728`. Task `293` restored the checkpoint, but the remote pueue user service restarted before stage1 finished. No proof process survived. The attempt retained `status: running` without a validator blocker, so this was an external interruption.
+
+V46 used a detached `nohup` and `setsid` wrapper. It restored the same checkpoint and completed both strict Cargo-free stages. Their binaries matched at BLAKE3 `542e51fd615fb2916b923ff5a243434e562baeea4adcbd2726d2d846b03cdc87`.
+
+V46 then failed closed during receipt construction. The plan carried all eight required source roles, but the receipt layer retained an obsolete private count of six.
+
 ## Decision
 
-Keep the producer-owned StageX receipt layout. Repair checkpoint reconstruction rather than copying or inventing a second receipt. Keep the original closure as immutable evidence, but use a validated path-rebound closure for current stage execution. Use the immutable plan's six stage identifiers in final evidence.
+Keep the producer-owned StageX receipt layout. Repair checkpoint reconstruction rather than copying or inventing a second receipt. Keep the original closure as immutable evidence, but use a validated path-rebound closure for current stage execution. Use the immutable plan's six stage identifiers in final evidence. Use the fixed-point core's source-role count in the receipt layer.
 
 ## Owner
 
-The promoted checkpoint integration shell owns report reconstruction. The StageX provider owns its receipt layout and exported relative-path constant. The fixed-point plan owns canonical stage identifiers.
+The promoted checkpoint integration shell owns report reconstruction. The StageX provider owns its receipt layout and exported relative-path constant. The fixed-point plan owns canonical stage identifiers and source-role completeness.
 
 ## Next action
 
-Build and transfer the receipt stage-ID repair, refresh the Mantle source record, and rerun the checkpoint-backed proof. The existing checkpoint remains valid because no provider authority changed.
+Build and transfer the shared source-count repair. Refresh the Mantle source record, then rerun the existing checkpoint. The checkpoint remains valid because no provider authority changed.
 
 ## Non-claims
 
-Task `290` proves checkpoint restore, stage1 continuation, stage2 completion, strict admission, and fixed-point equality. The final v2 receipt is not proven yet.
+Tasks `290` and V46 prove checkpoint restore, stage continuation, strict admission, and fixed-point equality. The final v2 receipt is not proven yet.

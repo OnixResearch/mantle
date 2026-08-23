@@ -1,0 +1,10 @@
+finished_at=2026-08-22T20:20:29-04:00
+classification=external-pueue-daemon-shutdown
+task_id=293
+previous_partial_cleanup=true
+removed_bytes=7708605277
+free_bytes_after=707844513792
+retained_v42_v43_v44_status_plans=true
+retained_checkpoint_restore_evidence=true
+retained_v43_fixed_point_outputs=true
+retained_promoted_provider_checkpoint=true

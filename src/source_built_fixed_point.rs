@@ -23,7 +23,7 @@ pub(crate) const MANTLE_STAGE2_STAGE_ID: &str = "mantle-stage2";
 const SOURCE_AUTHORITY_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-source-authority-v1";
 const PLAN_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-plan-v3";
 const BUILD_EFFECT_POLICY_VERSION: &str = "mantle-build-effects-v1";
-const REQUIRED_SOURCE_ROLE_COUNT: u32 = 8;
+pub(crate) const SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT: u32 = 8;
 const EXPECTED_STAGE_COUNT: u32 = 6;
 const EXPECTED_RUN_COUNT: u32 = 2;
 const BLAKE3_HEX_LENGTH: usize = 64;
@@ -34,7 +34,7 @@ const EXEC_EVENT_COUNT_MAX: u32 = 262_144;
 const SOURCE_RECORD_COUNT_MAX: u32 = 65_536;
 const MANTLE_STAGE2_INDEX: usize = 5;
 
-const REQUIRED_SOURCE_ROLES: [SourceAuthorityRole; REQUIRED_SOURCE_ROLE_COUNT as usize] = [
+const REQUIRED_SOURCE_ROLES: [SourceAuthorityRole; SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT as usize] = [
     SourceAuthorityRole::StagexSeed,
     SourceAuthorityRole::StagexLineage,
     SourceAuthorityRole::StagexSourceBundle,
@@ -344,10 +344,12 @@ fn validate_source_inputs(inputs: &[SourceAuthorityInput]) -> Result<(), SourceB
             "source authority input count exceeds u32".to_string(),
         )
     })?;
-    if input_count != REQUIRED_SOURCE_ROLE_COUNT {
+    if input_count != SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT {
         return Err(plan_error(
             SourceBuiltFixedPointPlanErrorKind::InvalidSourceAuthority,
-            format!("source authority must contain exactly {REQUIRED_SOURCE_ROLE_COUNT} inputs, got {input_count}"),
+            format!(
+                "source authority must contain exactly {SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT} inputs, got {input_count}"
+            ),
         ));
     }
     let mut roles = BTreeMap::new();
@@ -381,8 +383,8 @@ fn validate_source_inputs(inputs: &[SourceAuthorityInput]) -> Result<(), SourceB
             ));
         }
     }
-    debug_assert_eq!(roles.len(), REQUIRED_SOURCE_ROLE_COUNT as usize);
-    debug_assert_eq!(ids.len(), REQUIRED_SOURCE_ROLE_COUNT as usize);
+    debug_assert_eq!(roles.len(), SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT as usize);
+    debug_assert_eq!(ids.len(), SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT as usize);
     Ok(())
 }
 

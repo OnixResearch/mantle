@@ -1,0 +1,16 @@
+{
+  "checkpoint_digest_blake3": "3894008488d95be470c97ebe6994eda40af98564dd0d69ffd05ae801693ba6b3",
+  "member_count": 17,
+  "non_claim": "closure relocation changes only absolute provider roots and does not repeat provider execution",
+  "origin_closure": {
+    "digest_blake3": "664899b4aca522ffc0aa5ea8a6091e8392d2a8edbe45c2004869516c65840d78",
+    "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v44-final-receipt-20260822.source-built-fixed-point-staging-10615/provider-checkpoint-origin/source-built-toolchain-closure.json",
+    "policy_digest_blake3": "691f3669917ecfe0371179fc371729bb3172dd31ee9e9ae8de4dfccab137f346"
+  },
+  "relocated_closure": {
+    "digest_blake3": "639701dc88de5ac593b4fe7c4b986ee3ffe77b35025cec59c3a87e53c10d5234",
+    "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v44-final-receipt-20260822.source-built-fixed-point-staging-10615/source-built-toolchain-closure.json",
+    "policy_digest_blake3": "e2b13ca18b44be85bbfbccf26c57a3a49f7e526d0efab3463430abd1e5f9f238"
+  },
+  "schema": "mantle-source-built-checkpoint-closure-relocation-v1"
+}

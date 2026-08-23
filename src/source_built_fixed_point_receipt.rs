@@ -28,6 +28,7 @@ use serde::Serialize;
 
 use crate::errors::RunError;
 use crate::source_built_fixed_point::ProofOutputRole;
+use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPlan;
 use crate::source_built_fixed_point_shell::ConstructedProviders;
 use crate::source_built_fixed_point_shell::STAGEX_TRANSITION_AUDIT_FILE;
@@ -88,7 +89,6 @@ const NON_DURABLE_PROOF_DIRECTORIES: &[&str] = &[
     "tmp",
 ];
 const STAGE_EVIDENCE_COUNT: usize = 6;
-const REQUIRED_SOURCE_COUNT: usize = 6;
 const REQUIRED_RUN_COUNT: usize = 2;
 const REQUIRED_PERTURBATIONS: &[&str] = &[
     "HOME",
@@ -808,9 +808,7 @@ fn rebuild_authority(
     let arguments_blake3 = rebuild_arguments_digest_blake3(arguments.clone())
         .map_err(|error| receipt_error(format!("digesting rebuild arguments: {error}")))?;
     let source_inputs = plan.source_inputs.iter().map(rebuild_source_identity).collect::<Vec<_>>();
-    if source_inputs.len() != REQUIRED_SOURCE_COUNT {
-        return Err(receipt_error("rebuild descriptor source input count is incomplete".to_string()));
-    }
+    validate_rebuild_source_input_count(source_inputs.len())?;
     let target = RebuildContentIdentity {
         name: MANTLE_OUTPUT_NAME.to_string(),
         role: RebuildInputRole::PublishedTarget,
@@ -1044,6 +1042,17 @@ fn rebuild_source_identity(input: &crate::source_built_fixed_point::SourceAuthor
     }
 }
 
+fn validate_rebuild_source_input_count(source_input_count: usize) -> Result<(), RunError> {
+    let source_input_count = u32::try_from(source_input_count)
+        .map_err(|_| receipt_error("rebuild descriptor source input count exceeds u32".to_string()))?;
+    if source_input_count != SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT {
+        return Err(receipt_error(format!(
+            "rebuild descriptor source input count does not match the plan contract: expected {SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT}, got {source_input_count}"
+        )));
+    }
+    Ok(())
+}
+
 fn approved_read_identities(
     plan: &SourceBuiltFixedPointPlan,
     descriptor: &ContentBoundRebuildDescriptor,
@@ -1065,7 +1074,7 @@ fn approved_read_identities(
     ]);
     reads.sort();
     reads.dedup();
-    assert!(reads.len() > REQUIRED_SOURCE_COUNT);
+    assert!(reads.len() > plan.source_inputs.len());
     debug_assert!(reads.windows(2).all(|pair| pair[0] < pair[1]));
     reads
 }
@@ -1399,6 +1408,22 @@ mod tests {
     const NO_ACCESS_DIRECTORY_MODE: u32 = 0o000;
     #[cfg(unix)]
     const RESTORED_DIRECTORY_MODE: u32 = 0o700;
+
+    #[test]
+    fn rebuild_source_count_tracks_the_plan_contract_and_rejects_drift() {
+        let expected = usize::try_from(SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT).unwrap();
+        let missing = expected.checked_sub(1).unwrap();
+        let extra = expected.checked_add(1).unwrap();
+
+        validate_rebuild_source_input_count(expected).unwrap();
+        let missing_error = validate_rebuild_source_input_count(missing).unwrap_err();
+        let extra_error = validate_rebuild_source_input_count(extra).unwrap_err();
+
+        assert!(missing_error.to_string().contains(&format!("expected {expected}, got {missing}")));
+        assert!(extra_error.to_string().contains(&format!("expected {expected}, got {extra}")));
+        assert_ne!(missing, expected);
+        assert_ne!(extra, expected);
+    }
 
     #[test]
     fn stage_evidence_ids_match_the_plan_and_reject_stale_aliases() {
