@@ -1,0 +1,5 @@
+$ nickel typecheck config/operator-surfaces.ncl
+$ mantle __operator-contract --mode check
+operator command contract: PASS (commands=177)
+$ git diff --check
+PASS
