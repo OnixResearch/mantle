@@ -910,6 +910,30 @@ impl std::fmt::Debug for RustUnitSharedCacheSelection {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RustChildActionExecutionPhase {
+    CompileUnit,
+    RunBuildScript,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RustChildActionExecutionScope {
+    pub(crate) action_id: String,
+    pub(crate) audit_event_start: usize,
+}
+
+pub(crate) trait RustChildActionExecutionPort: std::fmt::Debug + Send + Sync {
+    fn begin_action(
+        &self,
+        unit_id: &str,
+        phase: RustChildActionExecutionPhase,
+    ) -> Result<RustChildActionExecutionScope, RunError>;
+
+    fn end_action(&self, scope: RustChildActionExecutionScope) -> Result<(), RunError>;
+
+    fn promote_build_script(&self, unit_id: &str, executable: &Path) -> Result<(), RunError>;
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct RustUnitExecutionOptions {
     pub(crate) rustc: PathBuf,
@@ -1604,9 +1628,22 @@ enum NativeFeatureEntry {
 
 pub(crate) fn capture_rust_plan(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
     if options.no_cargo_oracle {
-        return capture_rust_plan_without_cargo(options);
+        return capture_rust_plan_without_cargo(options, None);
     }
     capture_rust_plan_with_oracle(options, &ProcessCargoOracle)
+}
+
+pub(crate) fn capture_rust_plan_with_bound_rustc_identity(
+    options: &RustPlanOptions,
+    rustc_identity: String,
+) -> Result<RustPlanReceipt, RunError> {
+    if !options.no_cargo_oracle {
+        return Err(RunError::Build("receipt-bound rustc identity requires --no-cargo-oracle".to_string()));
+    }
+    if rustc_identity.trim().is_empty() {
+        return Err(RunError::Build("receipt-bound rustc identity is empty".to_string()));
+    }
+    capture_rust_plan_without_cargo(options, Some(rustc_identity))
 }
 
 fn rust_plan_cargo_mode(no_cargo_oracle: bool, blockers: Vec<String>) -> RustPlanCargoModeSummary {
@@ -1895,13 +1932,18 @@ fn cargo_free_planning_blockers(layers: &NativePlanningLayers) -> Vec<String> {
     blockers
 }
 
-fn capture_rust_plan_without_cargo(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
+fn capture_rust_plan_without_cargo(
+    options: &RustPlanOptions,
+    rustc_identity: Option<String>,
+) -> Result<RustPlanReceipt, RunError> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     validate_options(options)?;
 
-    let rustc_version_verbose =
-        run_checked_text(ProcessCargoOracle.run_tool_version(&options.rustc, &["-vV"]), "rustc -vV")?;
+    let rustc_version_verbose = match rustc_identity {
+        Some(identity) => identity,
+        None => run_checked_text(ProcessCargoOracle.run_tool_version(&options.rustc, &["-vV"]), "rustc -vV")?,
+    };
     let lockfile_facts = parse_lockfile_facts(&options.root)?;
     let lock_packages = lock_packages_from_facts(&lockfile_facts);
     let native_path_packages = native_path_cargo_packages(&options.root, options)?;
@@ -12400,6 +12442,7 @@ fn topology_unit_failed_blocker(
 struct TopologyUnitExecutionInputs<'a> {
     graph: &'a UnitDerivationGraphSummary,
     options: &'a RustUnitExecutionOptions,
+    action_port: Option<&'a dyn RustChildActionExecutionPort>,
     unit: &'a RustUnitDerivationSummary,
     state: &'a mut RustUnitTopologyExecutionState,
 }
@@ -12433,7 +12476,7 @@ fn execute_host_dependency_topology_unit(
     {
         return Ok(Some(blocker));
     }
-    let receipt = execute_rust_unit(&executable, inputs.options)?;
+    let receipt = execute_rust_unit_with_action_port(&executable, inputs.options, inputs.action_port)?;
     let blocker = topology_unit_failed_blocker(
         &receipt,
         "host-dependency-unit-failed",
@@ -12460,7 +12503,8 @@ fn record_host_topology_outputs(
     debug_assert!(is_supported_host_unit(inputs.unit));
     debug_assert!(!inputs.unit.unit_id.is_empty());
     if inputs.unit.target_kind == "custom-build" {
-        match run_build_script_metadata(executable, inputs.options, &output_path)? {
+        match run_build_script_metadata_with_action_port(executable, inputs.options, &output_path, inputs.action_port)?
+        {
             Ok(metadata_run) => {
                 inputs
                     .state
@@ -12507,7 +12551,7 @@ fn execute_host_topology_unit(
         Ok(unit) => unit,
         Err(blocker) => return Ok(Some(blocker)),
     };
-    let receipt = execute_rust_unit(&executable, inputs.options)?;
+    let receipt = execute_rust_unit_with_action_port(&executable, inputs.options, inputs.action_port)?;
     let blocker = topology_unit_failed_blocker(
         &receipt,
         "host-unit-failed",
@@ -12552,7 +12596,7 @@ fn execute_target_topology_unit(
     {
         return Ok(Some(blocker));
     }
-    let receipt = execute_rust_unit(&executable, inputs.options)?;
+    let receipt = execute_rust_unit_with_action_port(&executable, inputs.options, inputs.action_port)?;
     let blocker = topology_unit_failed_blocker(
         &receipt,
         "target-unit-failed",
@@ -12576,6 +12620,26 @@ pub(crate) fn execute_rust_unit_topology(
     native_host_graph: &NativeHostUnitGraphPlanningSummary,
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
+) -> Result<RustUnitTopologyExecutionReceipt, RunError> {
+    execute_rust_unit_topology_inner(native_registry_sources, native_host_graph, graph, options, None)
+}
+
+pub(crate) fn execute_rust_unit_topology_with_action_port(
+    native_registry_sources: &NativeRegistrySourcePlanningSummary,
+    native_host_graph: &NativeHostUnitGraphPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+    action_port: &dyn RustChildActionExecutionPort,
+) -> Result<RustUnitTopologyExecutionReceipt, RunError> {
+    execute_rust_unit_topology_inner(native_registry_sources, native_host_graph, graph, options, Some(action_port))
+}
+
+fn execute_rust_unit_topology_inner(
+    native_registry_sources: &NativeRegistrySourcePlanningSummary,
+    native_host_graph: &NativeHostUnitGraphPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+    options: &RustUnitExecutionOptions,
+    action_port: Option<&dyn RustChildActionExecutionPort>,
 ) -> Result<RustUnitTopologyExecutionReceipt, RunError> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
@@ -12611,6 +12675,7 @@ pub(crate) fn execute_rust_unit_topology(
         let inputs = TopologyUnitExecutionInputs {
             graph,
             options,
+            action_port,
             unit,
             state: &mut state,
         };
@@ -15089,6 +15154,15 @@ fn run_build_script_metadata(
     options: &RustUnitExecutionOptions,
     executable: &Path,
 ) -> Result<Result<BuildScriptMetadataRunReceipt, RustUnitExecutionBlocker>, RunError> {
+    run_build_script_metadata_with_action_port(unit, options, executable, None)
+}
+
+fn run_build_script_metadata_with_action_port(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    executable: &Path,
+    action_port: Option<&dyn RustChildActionExecutionPort>,
+) -> Result<Result<BuildScriptMetadataRunReceipt, RustUnitExecutionBlocker>, RunError> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if !executable.is_file() {
@@ -15121,9 +15195,18 @@ fn run_build_script_metadata(
     if let Some(root) = &package_root {
         command.current_dir(root);
     }
-    let output = command
-        .output()
-        .map_err(|err| RunError::Internal(format!("running build-script unit {}: {err}", unit.unit_id)))?;
+    let scope = if let Some(port) = action_port {
+        port.promote_build_script(&unit.unit_id, &executable_path)?;
+        Some(port.begin_action(&unit.unit_id, RustChildActionExecutionPhase::RunBuildScript)?)
+    } else {
+        None
+    };
+    let output = command.output();
+    if let (Some(port), Some(scope)) = (action_port, scope) {
+        port.end_action(scope)?;
+    }
+    let output =
+        output.map_err(|err| RunError::Internal(format!("running build-script unit {}: {err}", unit.unit_id)))?;
     if !output.status.success() {
         let diagnostic = redacted_diagnostic(&output.stderr);
         return Ok(Err(build_script_run_failure_blocker(unit, &diagnostic, selected_c_compiler.as_ref())));
@@ -17150,6 +17233,28 @@ fn execute_rust_unit(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
+    execute_rust_unit_with_action_port(unit, options, None)
+}
+
+fn execute_rust_unit_with_action_port(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+    action_port: Option<&dyn RustChildActionExecutionPort>,
+) -> Result<RustUnitExecutionReceipt, RunError> {
+    let scope = action_port
+        .map(|port| port.begin_action(&unit.unit_id, RustChildActionExecutionPhase::CompileUnit))
+        .transpose()?;
+    let result = execute_rust_unit_inner(unit, options);
+    if let (Some(port), Some(scope)) = (action_port, scope) {
+        port.end_action(scope)?;
+    }
+    result
+}
+
+fn execute_rust_unit_inner(
+    unit: &RustUnitDerivationSummary,
+    options: &RustUnitExecutionOptions,
+) -> Result<RustUnitExecutionReceipt, RunError> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!RUST_UNIT_EXECUTION_RECEIPT_FILE.is_empty());
     let mut inputs = match prepare_rust_unit_execution_inputs(unit, options)? {
@@ -19131,6 +19236,39 @@ mod tests {
             ),
         );
         rustc
+    }
+
+    #[derive(Debug, Default)]
+    struct RecordingRustActionPort {
+        events: std::sync::Mutex<Vec<String>>,
+        deny_begin: bool,
+    }
+
+    impl RustChildActionExecutionPort for RecordingRustActionPort {
+        fn begin_action(
+            &self,
+            unit_id: &str,
+            phase: RustChildActionExecutionPhase,
+        ) -> Result<RustChildActionExecutionScope, RunError> {
+            if self.deny_begin {
+                return Err(RunError::Build("test Rust action denied before execution".to_string()));
+            }
+            self.events.lock().unwrap().push(format!("begin:{unit_id}:{phase:?}"));
+            Ok(RustChildActionExecutionScope {
+                action_id: unit_id.to_string(),
+                audit_event_start: 0,
+            })
+        }
+
+        fn end_action(&self, scope: RustChildActionExecutionScope) -> Result<(), RunError> {
+            self.events.lock().unwrap().push(format!("end:{}", scope.action_id));
+            Ok(())
+        }
+
+        fn promote_build_script(&self, unit_id: &str, _executable: &Path) -> Result<(), RunError> {
+            self.events.lock().unwrap().push(format!("promote:{unit_id}"));
+            Ok(())
+        }
     }
 
     fn write_counting_fake_rustc(dir: &Path, counter: &Path) -> PathBuf {
@@ -26891,6 +27029,60 @@ checksum = "0123456789abcdef"
                 report.disposition == crunch_rust_cache::CACHE_DISPOSITION_HIT && !report.compiler_executed
             })
         }));
+    }
+
+    #[test]
+    fn rust_action_port_wraps_compiler_execution_and_denies_before_launch() {
+        let dir = TempDir::new().unwrap();
+        let rustc = write_fake_rustc(dir.path());
+        let graph = policy_test_graph(dir.path());
+        let options = RustUnitExecutionOptions {
+            rustc,
+            output_root: dir.path().join("action-port-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
+        };
+        let recording = RecordingRustActionPort::default();
+        let receipt = execute_rust_unit_with_action_port(&graph.derivations[0], &options, Some(&recording)).unwrap();
+        let events = recording.events.lock().unwrap().clone();
+        let denying = RecordingRustActionPort {
+            events: std::sync::Mutex::new(Vec::new()),
+            deny_begin: true,
+        };
+        let error = execute_rust_unit_with_action_port(&graph.derivations[0], &options, Some(&denying)).unwrap_err();
+
+        assert_eq!(receipt.execution_status, "success");
+        assert_eq!(events.len(), 2);
+        assert!(events[0].starts_with("begin:"));
+        assert!(events[1].starts_with("end:"));
+        assert!(error.to_string().contains("denied before execution"));
+        assert!(denying.events.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn rust_action_port_promotes_build_script_before_execution() {
+        let dir = TempDir::new().unwrap();
+        let executable = dir.path().join("build-script");
+        write_executable(&executable, "#!/bin/sh\nprintf 'cargo:rustc-cfg=action_port_test\\n'\n");
+        let unit = test_rust_derivation(0, "action-port-build", "custom-build", HOST_EXECUTION_KIND, Vec::new());
+        let options = RustUnitExecutionOptions {
+            rustc: dir.path().join("unused-rustc"),
+            output_root: dir.path().join("build-script-out"),
+            compiler_policy: RustCompilerPolicySelection::default(),
+            local_cache: None,
+        };
+        let recording = RecordingRustActionPort::default();
+
+        let receipt = run_build_script_metadata_with_action_port(&unit, &options, &executable, Some(&recording))
+            .unwrap()
+            .unwrap();
+        let events = recording.events.lock().unwrap().clone();
+
+        assert_eq!(events.len(), 3);
+        assert!(events[0].starts_with("promote:"));
+        assert!(events[1].starts_with("begin:"));
+        assert!(events[2].starts_with("end:"));
+        assert_eq!(receipt.stdout_digest_blake3.len(), BLAKE3_HEX_CHARS);
     }
 
     #[test]

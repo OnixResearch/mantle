@@ -182,6 +182,8 @@ mod source_built_fixed_point_dev_cache;
 mod source_built_fixed_point_receipt;
 mod source_built_fixed_point_shell;
 mod source_built_rust_action_plan;
+#[cfg(target_os = "linux")]
+mod source_built_rust_action_shell;
 mod source_built_trust_report;
 mod source_built_trust_report_shell;
 mod source_bundle;
@@ -1064,6 +1066,14 @@ enum Command {
         /// Normalize source/execution/provider paths for release replay proofs
         #[arg(long = "deterministic-release-paths", hide = true)]
         deterministic_release_paths: bool,
+
+        /// Pre-execution fixed authority for Rust child actions
+        #[arg(long, hide = true, requires = "rust_child_action_evidence_dir")]
+        rust_child_action_authority: Option<PathBuf>,
+
+        /// Output directory for Rust child-action plan, audit, and reconciliation evidence
+        #[arg(long, hide = true, requires = "rust_child_action_authority")]
+        rust_child_action_evidence_dir: Option<PathBuf>,
 
         /// Execute the first supported lib/bin unit from the captured explicit derivation graph
         #[arg(long, conflicts_with_all = ["execute_first_dependency_chain", "execute_target_topology", "execute_host_artifact_topology", "execute_topology", "execute_dev_dependency_test_topology", "execute_workspace_dependency_topology", "execute_patch_source_topology"])]
@@ -7546,6 +7556,7 @@ struct RustPlanCaptureRequest<'a> {
     c_compiler_route_json: Option<&'a str>,
     deterministic_release_paths: bool,
     execution_output_root: Option<&'a Path>,
+    rust_child_action_authority: Option<&'a Path>,
 }
 
 struct CapturedRustPlan {
@@ -7589,12 +7600,60 @@ fn capture_rust_plan_command(request: RustPlanCaptureRequest<'_>) -> Result<Capt
         deterministic_release_paths: request.deterministic_release_paths,
         path_remaps,
     };
-    let receipt = rust_plan::capture_rust_plan(&options)?;
+    let receipt = match request.rust_child_action_authority {
+        Some(authority_path) => rust_plan::capture_rust_plan_with_bound_rustc_identity(
+            &options,
+            bound_rustc_identity(authority_path, request.rustc)?,
+        )?,
+        None => rust_plan::capture_rust_plan(&options)?,
+    };
     Ok(CapturedRustPlan {
         receipt,
         compiler_policy,
         c_compiler_route,
     })
+}
+
+fn bound_rustc_identity(authority_path: &Path, requested_rustc: &Path) -> Result<String, RunError> {
+    let bytes = fs::read(authority_path).map_err(|error| {
+        RunError::Build(format!("read Rust child-action authority {}: {error}", authority_path.display()))
+    })?;
+    let authority =
+        serde_json::from_slice::<source_built_rust_action_plan::RustChildActionAuthority>(&bytes).map_err(|error| {
+            RunError::Build(format!("parse Rust child-action authority {}: {error}", authority_path.display()))
+        })?;
+    source_built_rust_action_plan::validate_rust_child_action_authority(&authority)
+        .map_err(|error| RunError::Build(format!("invalid Rust child-action authority: {error}")))?;
+    let rustc = authority
+        .fixed_executables
+        .iter()
+        .filter(|fixed| fixed.kind == source_built_rust_action_plan::RustFixedExecutableKind::Rustc)
+        .collect::<Vec<_>>();
+    let [rustc] = rustc.as_slice() else {
+        return Err(RunError::Build(format!(
+            "Rust child-action authority must contain one rustc, found {}",
+            rustc.len()
+        )));
+    };
+    let requested = fs::canonicalize(requested_rustc)
+        .map_err(|error| RunError::Build(format!("resolve requested rustc {}: {error}", requested_rustc.display())))?;
+    if requested != Path::new(&rustc.path) {
+        return Err(RunError::Build(format!(
+            "Rust child-action authority rustc path does not match requested rustc: {}",
+            requested.display()
+        )));
+    }
+    let observed = protected_exec::blake3_file_hex(&requested)
+        .map_err(|error| RunError::Build(format!("hash requested rustc {}: {error}", requested.display())))?;
+    if observed != rustc.digest_blake3 {
+        return Err(RunError::Build(format!(
+            "Rust child-action authority rustc digest mismatch: expected {}, got {observed}",
+            rustc.digest_blake3
+        )));
+    }
+    assert!(!rustc.producer_action_id.is_empty());
+    assert_eq!(observed.len(), blake3::OUT_LEN * 2);
+    Ok(format!("source-built-rustc\nblake3: {observed}\nproducer: {}", rustc.producer_action_id))
 }
 
 fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
@@ -7615,6 +7674,8 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         no_cargo_oracle,
         source_built_c_compiler_route_json,
         deterministic_release_paths,
+        rust_child_action_authority,
+        rust_child_action_evidence_dir,
         execute_first_supported_unit,
         execute_first_dependency_chain,
         execute_target_topology,
@@ -7647,6 +7708,11 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         patch_source_topology: *execute_patch_source_topology,
     });
     validate_rust_local_cache_mode(*local_rust_cache, execution_mode)?;
+    validate_rust_child_action_cli(
+        execution_mode,
+        rust_child_action_authority.as_deref(),
+        rust_child_action_evidence_dir.as_deref(),
+    )?;
     let root = root.clone().unwrap_or(current_dir_or_error()?);
     let captured = capture_rust_plan_command(RustPlanCaptureRequest {
         root,
@@ -7664,6 +7730,7 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         c_compiler_route_json: source_built_c_compiler_route_json.as_deref(),
         deterministic_release_paths: *deterministic_release_paths,
         execution_output_root: execution_output_root.as_deref(),
+        rust_child_action_authority: rust_child_action_authority.as_deref(),
     })?;
     rust_plan::set_receipt_bound_c_compiler_route_override(captured.c_compiler_route)?;
     let local_cache =
@@ -7683,6 +7750,8 @@ fn run_rust_plan_command(ctx: &RunContext, command: &Command) -> Result<(), RunE
         output_root: execution_output_root.as_deref(),
         mode: execution_mode,
         local_cache,
+        child_action_authority: rust_child_action_authority.as_deref(),
+        child_action_evidence_dir: rust_child_action_evidence_dir.as_deref(),
         json: ctx.json,
     })
 }
@@ -7734,6 +7803,22 @@ fn validate_rust_local_cache_mode(
     let execution_enabled = !matches!(execution_mode, RustPlanExecutionMode::PrintOnly);
     if cache_enabled && !execution_enabled {
         return Err(RunError::Internal("--local-rust-cache requires a Rust unit execution mode".to_string()));
+    }
+    Ok(())
+}
+
+fn validate_rust_child_action_cli(
+    execution_mode: RustPlanExecutionMode,
+    authority: Option<&Path>,
+    evidence_dir: Option<&Path>,
+) -> Result<(), RunError> {
+    if authority.is_some() != evidence_dir.is_some() {
+        return Err(RunError::Build(
+            "Rust child-action authority and evidence directory must be supplied together".to_string(),
+        ));
+    }
+    if authority.is_some() && !matches!(execution_mode, RustPlanExecutionMode::Topology) {
+        return Err(RunError::Build("Rust child-action authority requires --execute-topology".to_string()));
     }
     Ok(())
 }
@@ -8032,6 +8117,8 @@ struct RustPlanExecutionRequest<'a> {
     output_root: Option<&'a Path>,
     mode: RustPlanExecutionMode,
     local_cache: Option<rust_plan::RustUnitLocalCacheSelection>,
+    child_action_authority: Option<&'a Path>,
+    child_action_evidence_dir: Option<&'a Path>,
     json: bool,
 }
 
@@ -8122,6 +8209,58 @@ fn execute_host_artifact_topology_rust_plan(request: RustPlanExecutionRequest<'_
 
 fn execute_topology_rust_plan(request: RustPlanExecutionRequest<'_>) -> Result<(), RunError> {
     let options = rust_plan_execution_options(&request, "--execute-topology")?;
+    #[cfg(target_os = "linux")]
+    let action_runtime = match (request.child_action_authority, request.child_action_evidence_dir) {
+        (Some(authority), Some(evidence_dir)) => {
+            Some(source_built_rust_action_shell::SourceBuiltRustActionRuntime::start(
+                authority,
+                &request.receipt.unit_derivation_graph,
+                evidence_dir,
+            )?)
+        }
+        (None, None) => None,
+        _ => {
+            return Err(RunError::Build(
+                "Rust child-action authority and evidence directory must be supplied together".to_string(),
+            ));
+        }
+    };
+    #[cfg(not(target_os = "linux"))]
+    if request.child_action_authority.is_some() || request.child_action_evidence_dir.is_some() {
+        return Err(RunError::Build(
+            "Rust child-action enforcement requires Linux seccomp user notification".to_string(),
+        ));
+    }
+    #[cfg(target_os = "linux")]
+    let topology_execution = match &action_runtime {
+        Some(runtime) => {
+            let execution = rust_plan::execute_rust_unit_topology_with_action_port(
+                &request.receipt.native_registry_source_planning,
+                &request.receipt.native_host_unit_graph_planning,
+                &request.receipt.unit_derivation_graph,
+                &options,
+                runtime,
+            );
+            let reconciliation = runtime.finish();
+            match (execution, reconciliation) {
+                (Ok(execution), Ok(_reconciliation)) => execution,
+                (Err(execution_error), Ok(_reconciliation)) => return Err(execution_error),
+                (Ok(_execution), Err(reconciliation_error)) => return Err(reconciliation_error),
+                (Err(execution_error), Err(reconciliation_error)) => {
+                    return Err(RunError::Build(format!(
+                        "Rust topology execution failed: {execution_error}; reconciliation also failed: {reconciliation_error}"
+                    )));
+                }
+            }
+        }
+        None => rust_plan::execute_rust_unit_topology(
+            &request.receipt.native_registry_source_planning,
+            &request.receipt.native_host_unit_graph_planning,
+            &request.receipt.unit_derivation_graph,
+            &options,
+        )?,
+    };
+    #[cfg(not(target_os = "linux"))]
     let topology_execution = rust_plan::execute_rust_unit_topology(
         &request.receipt.native_registry_source_planning,
         &request.receipt.native_host_unit_graph_planning,
@@ -8553,6 +8692,7 @@ fn run_cargo_free_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<()
         targets: request.targets,
         toolchain_closure: request.toolchain_closure,
         rust_source_provider: request.rust_source_provider,
+        rust_action_resources: None,
         hermeticity_mode: select_hermeticity_mode(request.hermeticity)?,
         json: request.ctx.json,
     };
@@ -9237,6 +9377,70 @@ fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), Ru
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rust_child_action_cli_requires_paired_topology_authority() {
+        let path = Path::new("/tmp/action-authority");
+        let missing_pair =
+            validate_rust_child_action_cli(RustPlanExecutionMode::Topology, Some(path), None).unwrap_err();
+        let wrong_mode =
+            validate_rust_child_action_cli(RustPlanExecutionMode::PrintOnly, Some(path), Some(path)).unwrap_err();
+
+        validate_rust_child_action_cli(RustPlanExecutionMode::Topology, Some(path), Some(path)).unwrap();
+        validate_rust_child_action_cli(RustPlanExecutionMode::PrintOnly, None, None).unwrap();
+        assert!(missing_pair.to_string().contains("supplied together"));
+        assert!(wrong_mode.to_string().contains("requires --execute-topology"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bound_rustc_identity_uses_authorized_bytes_without_execution() {
+        use std::os::unix::fs::PermissionsExt;
+        const TEST_JOBS_MAX: u32 = 1;
+        const TEST_FD_MAX: u32 = 64;
+        const TEST_STORAGE_BYTES_MAX: u64 = 1_048_576;
+        const TEST_EXEC_EVENTS_MAX: u32 = 64;
+        let dir = tempfile::tempdir().unwrap();
+        let rustc = dir.path().join("rustc");
+        let other = dir.path().join("other");
+        fs::write(&rustc, b"#!/bin/sh\nexit 0\n").unwrap();
+        fs::write(&other, b"#!/bin/sh\nexit 1\n").unwrap();
+        for path in [&rustc, &other] {
+            let mut permissions = fs::metadata(path).unwrap().permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(path, permissions).unwrap();
+        }
+        let rustc = fs::canonicalize(rustc).unwrap();
+        let other = fs::canonicalize(other).unwrap();
+        let digest = protected_exec::blake3_file_hex(&rustc).unwrap();
+        let authority = source_built_rust_action_plan::rust_child_action_authority(
+            "mantle-stage1".to_string(),
+            source_built_rust_action_plan::RustActionResourceLimits {
+                parallel_jobs_max: TEST_JOBS_MAX,
+                open_file_descriptors_max: TEST_FD_MAX,
+                storage_bytes_max: TEST_STORAGE_BYTES_MAX,
+                exec_events_per_action_max: TEST_EXEC_EVENTS_MAX,
+            },
+            vec![source_built_rust_action_plan::RustFixedExecutableAuthority {
+                authority_id: "test-rustc".to_string(),
+                producer_action_id: "test-provider".to_string(),
+                output_identity_blake3: digest.clone(),
+                path: rustc.display().to_string(),
+                digest_blake3: digest.clone(),
+                kind: source_built_rust_action_plan::RustFixedExecutableKind::Rustc,
+            }],
+        )
+        .unwrap();
+        let authority_path = dir.path().join("authority.json");
+        fs::write(&authority_path, serde_json::to_vec_pretty(&authority).unwrap()).unwrap();
+
+        let identity = bound_rustc_identity(&authority_path, &rustc).unwrap();
+        let mismatch = bound_rustc_identity(&authority_path, &other).unwrap_err();
+
+        assert!(identity.contains(&digest));
+        assert!(identity.contains("test-provider"));
+        assert!(mismatch.to_string().contains("does not match requested rustc"));
+    }
 
     #[test]
     fn failure_observability_records_bounded_rejections_when_log_shell_is_unavailable() {

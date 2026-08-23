@@ -15,13 +15,18 @@ use serde::Serialize;
 pub(crate) const RUST_CHILD_ACTION_PLAN_SCHEMA: &str = "mantle-source-built-rust-child-action-plan-v1";
 pub(crate) const RUST_CHILD_ACTION_RECONCILIATION_SCHEMA: &str =
     "mantle-source-built-rust-child-action-reconciliation-v1";
+pub(crate) const RUST_CHILD_ACTION_AUTHORITY_SCHEMA: &str = "mantle-source-built-rust-child-action-authority-v1";
+pub(crate) const RUST_CHILD_ACTION_AUDIT_SCHEMA: &str = "mantle-source-built-rust-child-action-audit-v1";
 const PLAN_DIGEST_CONTEXT: &str = "mantle-source-built-rust-child-action-plan-v1";
 const RECONCILIATION_DIGEST_CONTEXT: &str = "mantle-source-built-rust-child-action-reconciliation-v1";
+const AUTHORITY_DIGEST_CONTEXT: &str = "mantle-source-built-rust-child-action-authority-v1";
+const AUDIT_DIGEST_CONTEXT: &str = "mantle-source-built-rust-child-action-audit-v1";
 const UNIT_OUTPUT_IDENTITY_CONTEXT: &str = "mantle-source-built-rust-unit-output-v1";
 const ACTION_ID_CONTEXT: &str = "mantle-source-built-rust-action-id-v1";
 const BLAKE3_HEX_LENGTH: usize = 64;
 const RUST_UNIT_COUNT_MAX: u32 = 16_384;
 const RUST_ACTION_COUNT_MAX: u32 = RUST_UNIT_COUNT_MAX * 2;
+const RUST_EXEC_EVENT_COUNT_MAX: u32 = 131_072;
 const FIXED_EXECUTABLE_COUNT_MAX: u32 = 256;
 const TEXT_BYTES_MAX: usize = 4_096;
 const ACTION_EVENT_COUNT_MIN: u32 = 1;
@@ -40,6 +45,15 @@ pub(crate) struct RustActionResourceLimits {
     pub(crate) open_file_descriptors_max: u32,
     pub(crate) storage_bytes_max: u64,
     pub(crate) exec_events_per_action_max: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RustChildActionAuthority {
+    pub(crate) schema: String,
+    pub(crate) stage_id: String,
+    pub(crate) resources: RustActionResourceLimits,
+    pub(crate) fixed_executables: Vec<RustFixedExecutableAuthority>,
+    pub(crate) authority_digest_blake3: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -128,7 +142,7 @@ pub(crate) enum RustChildExecutableAuthority {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct RustChildExecObservation {
     pub(crate) action_id: String,
     pub(crate) executable: RustObservedExecutableAuthority,
@@ -137,7 +151,8 @@ pub(crate) struct RustChildExecObservation {
     pub(crate) policy_decision: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
 pub(crate) enum RustObservedExecutableAuthority {
     Fixed {
         authority_id: String,
@@ -146,6 +161,18 @@ pub(crate) enum RustObservedExecutableAuthority {
         producer_action_id: String,
         output_identity_blake3: String,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RustChildActionAudit {
+    pub(crate) schema: String,
+    pub(crate) action_plan_digest_blake3: String,
+    pub(crate) raw_event_count: u32,
+    pub(crate) assigned_event_count: u32,
+    pub(crate) raw_events: Vec<crate::protected_exec::ProtectedSeccompAuditEvent>,
+    pub(crate) observations: Vec<RustChildExecObservation>,
+    pub(crate) promotions: Vec<crate::protected_exec::OutputPromotionRecord>,
+    pub(crate) audit_digest_blake3: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -196,6 +223,59 @@ impl fmt::Display for RustChildActionPlanError {
 }
 
 impl std::error::Error for RustChildActionPlanError {}
+
+pub(crate) fn rust_child_action_authority(
+    stage_id: String,
+    resources: RustActionResourceLimits,
+    mut fixed_executables: Vec<RustFixedExecutableAuthority>,
+) -> Result<RustChildActionAuthority, RustChildActionPlanError> {
+    validate_text("stage_id", &stage_id)?;
+    validate_resources(&resources)?;
+    let fixed = normalized_fixed_executables(fixed_executables.clone())?;
+    sole_rustc_authority(&fixed)?;
+    fixed_executables = fixed.into_values().collect();
+    let mut authority = RustChildActionAuthority {
+        schema: RUST_CHILD_ACTION_AUTHORITY_SCHEMA.to_string(),
+        stage_id,
+        resources,
+        fixed_executables,
+        authority_digest_blake3: String::new(),
+    };
+    authority.authority_digest_blake3 = authority_digest(&authority)?;
+    validate_rust_child_action_authority(&authority)?;
+    assert!(!authority.fixed_executables.is_empty());
+    assert_eq!(authority.authority_digest_blake3.len(), BLAKE3_HEX_LENGTH);
+    Ok(authority)
+}
+
+pub(crate) fn validate_rust_child_action_authority(
+    authority: &RustChildActionAuthority,
+) -> Result<(), RustChildActionPlanError> {
+    if authority.schema != RUST_CHILD_ACTION_AUTHORITY_SCHEMA {
+        return Err(plan_error(
+            RustChildActionPlanErrorKind::InvalidInput,
+            "unsupported Rust child action authority schema",
+        ));
+    }
+    validate_text("stage_id", &authority.stage_id)?;
+    validate_resources(&authority.resources)?;
+    validate_digest("authority", &authority.authority_digest_blake3)?;
+    let fixed = normalized_fixed_executables(authority.fixed_executables.clone())?;
+    sole_rustc_authority(&fixed)?;
+    if fixed.len() != authority.fixed_executables.len() {
+        return Err(plan_error(
+            RustChildActionPlanErrorKind::InvalidInput,
+            "Rust child action authority executable count changed",
+        ));
+    }
+    if authority_digest(authority)? != authority.authority_digest_blake3 {
+        return Err(plan_error(
+            RustChildActionPlanErrorKind::InvalidInput,
+            "Rust child action authority digest mismatch",
+        ));
+    }
+    Ok(())
+}
 
 pub(crate) fn plan_rust_child_actions(
     input: RustChildActionPlanInput,
@@ -539,6 +619,26 @@ fn run_action_id(unit_id: &str) -> String {
     format!("rust-unit:{}:run-build-script", digest_text("mantle-source-built-rust-unit-id-v1", unit_id))
 }
 
+pub(crate) fn rust_child_action_for_unit<'a>(
+    plan: &'a RustChildActionPlan,
+    unit_id: &str,
+    phase: RustChildActionPhase,
+) -> Result<&'a RustChildAction, RustChildActionPlanError> {
+    validate_text("unit_id", unit_id)?;
+    let action_id = match phase {
+        RustChildActionPhase::CompileUnit => compile_action_id(unit_id),
+        RustChildActionPhase::RunBuildScript => run_action_id(unit_id),
+    };
+    let matches = plan.actions.iter().filter(|action| action.action_id == action_id).collect::<Vec<_>>();
+    match matches.as_slice() {
+        [action] => Ok(*action),
+        _ => Err(plan_error(
+            RustChildActionPlanErrorKind::IncompleteGraph,
+            &format!("Rust action plan has {} matches for unit phase", matches.len()),
+        )),
+    }
+}
+
 pub(crate) fn validate_rust_child_action_plan(plan: &RustChildActionPlan) -> Result<(), RustChildActionPlanError> {
     if plan.schema != RUST_CHILD_ACTION_PLAN_SCHEMA || plan.adapter != "native-rust-unit-graph-v1" {
         return Err(plan_error(
@@ -667,12 +767,69 @@ pub(crate) fn protected_exec_inputs(
     Ok((producer_action_ids, executables))
 }
 
-pub(crate) fn reconcile_rust_child_actions(
+pub(crate) fn rust_child_action_audit(
+    plan: &RustChildActionPlan,
+    raw_events: Vec<crate::protected_exec::ProtectedSeccompAuditEvent>,
+    observations: Vec<RustChildExecObservation>,
+    promotions: Vec<crate::protected_exec::OutputPromotionRecord>,
+    assigned_event_count: usize,
+) -> Result<RustChildActionAudit, RustChildActionPlanError> {
+    validate_rust_child_action_plan(plan)?;
+    let raw_event_count = bounded_count("Rust child raw event", raw_events.len(), RUST_EXEC_EVENT_COUNT_MAX)?;
+    let assigned_event_count =
+        bounded_count("Rust child assigned event", assigned_event_count, RUST_EXEC_EVENT_COUNT_MAX)?;
+    if raw_event_count != assigned_event_count || observations.len() != raw_events.len() {
+        return Err(plan_error(
+            RustChildActionPlanErrorKind::InvalidInput,
+            "Rust child action audit event counts are not closed",
+        ));
+    }
+    let mut audit = RustChildActionAudit {
+        schema: RUST_CHILD_ACTION_AUDIT_SCHEMA.to_string(),
+        action_plan_digest_blake3: plan.plan_digest_blake3.clone(),
+        raw_event_count,
+        assigned_event_count,
+        raw_events,
+        observations,
+        promotions,
+        audit_digest_blake3: String::new(),
+    };
+    audit.audit_digest_blake3 = audit_digest(&audit)?;
+    validate_rust_child_action_audit(plan, &audit)?;
+    assert_eq!(audit.raw_event_count, audit.assigned_event_count);
+    assert_eq!(audit.audit_digest_blake3.len(), BLAKE3_HEX_LENGTH);
+    Ok(audit)
+}
+
+pub(crate) fn validate_rust_child_action_audit(
+    plan: &RustChildActionPlan,
+    audit: &RustChildActionAudit,
+) -> Result<(), RustChildActionPlanError> {
+    validate_rust_child_action_plan(plan)?;
+    if audit.schema != RUST_CHILD_ACTION_AUDIT_SCHEMA
+        || audit.action_plan_digest_blake3 != plan.plan_digest_blake3
+        || usize::try_from(audit.raw_event_count).ok() != Some(audit.raw_events.len())
+        || audit.raw_event_count != audit.assigned_event_count
+        || audit.observations.len() != audit.raw_events.len()
+    {
+        return Err(plan_error(
+            RustChildActionPlanErrorKind::InvalidInput,
+            "Rust child action audit identity or count drift",
+        ));
+    }
+    validate_digest("audit", &audit.audit_digest_blake3)?;
+    if audit_digest(audit)? != audit.audit_digest_blake3 {
+        return Err(plan_error(RustChildActionPlanErrorKind::InvalidInput, "Rust child action audit digest mismatch"));
+    }
+    Ok(())
+}
+
+pub(crate) fn rust_child_action_reconciliation(
     plan: &RustChildActionPlan,
     observations: &[RustChildExecObservation],
 ) -> Result<RustChildActionReconciliation, RustChildActionPlanError> {
     validate_rust_child_action_plan(plan)?;
-    let observed_event_count = bounded_count("Rust child observation", observations.len(), RUST_ACTION_COUNT_MAX)?;
+    let observed_event_count = bounded_count("Rust child observation", observations.len(), RUST_EXEC_EVENT_COUNT_MAX)?;
     let actions = plan.actions.iter().map(|action| (action.action_id.as_str(), action)).collect::<BTreeMap<_, _>>();
     let fixed = plan
         .fixed_executables
@@ -685,6 +842,42 @@ pub(crate) fn reconcile_rust_child_actions(
     }
     let mut reconciliation = finish_reconciliation(plan, observed_event_count, state)?;
     reconciliation.reconciliation_digest_blake3 = reconciliation_digest(&reconciliation)?;
+    validate_rust_child_action_reconciliation(plan, &reconciliation)?;
+    Ok(reconciliation)
+}
+
+pub(crate) fn validate_rust_child_action_reconciliation(
+    plan: &RustChildActionPlan,
+    reconciliation: &RustChildActionReconciliation,
+) -> Result<(), RustChildActionPlanError> {
+    validate_rust_child_action_plan(plan)?;
+    if reconciliation.schema != RUST_CHILD_ACTION_RECONCILIATION_SCHEMA
+        || reconciliation.action_plan_digest_blake3 != plan.plan_digest_blake3
+        || reconciliation.planned_action_count != plan.action_count
+    {
+        return Err(plan_error(
+            RustChildActionPlanErrorKind::InvalidInput,
+            "Rust child action reconciliation identity drift",
+        ));
+    }
+    validate_digest("reconciliation", &reconciliation.reconciliation_digest_blake3)?;
+    if reconciliation.matched_action_count > reconciliation.planned_action_count
+        || reconciliation.matched_event_count > reconciliation.observed_event_count
+        || reconciliation_digest(reconciliation)? != reconciliation.reconciliation_digest_blake3
+    {
+        return Err(plan_error(
+            RustChildActionPlanErrorKind::InvalidInput,
+            "Rust child action reconciliation count or digest drift",
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn reconcile_rust_child_actions(
+    plan: &RustChildActionPlan,
+    observations: &[RustChildExecObservation],
+) -> Result<RustChildActionReconciliation, RustChildActionPlanError> {
+    let reconciliation = rust_child_action_reconciliation(plan, observations)?;
     if !reconciliation.is_complete() {
         return Err(plan_error(
             RustChildActionPlanErrorKind::IncompleteReconciliation,
@@ -867,6 +1060,23 @@ fn plan_digest(plan: &RustChildActionPlan) -> Result<String, RustChildActionPlan
     let bytes = serde_json::to_vec(&canonical)
         .map_err(|error| plan_error(RustChildActionPlanErrorKind::Serialization, &error.to_string()))?;
     Ok(digest_bytes(PLAN_DIGEST_CONTEXT, &bytes))
+}
+
+fn authority_digest(authority: &RustChildActionAuthority) -> Result<String, RustChildActionPlanError> {
+    let mut canonical = authority.clone();
+    canonical.fixed_executables.sort_by(|left, right| left.authority_id.cmp(&right.authority_id));
+    canonical.authority_digest_blake3.clear();
+    let bytes = serde_json::to_vec(&canonical)
+        .map_err(|error| plan_error(RustChildActionPlanErrorKind::Serialization, &error.to_string()))?;
+    Ok(digest_bytes(AUTHORITY_DIGEST_CONTEXT, &bytes))
+}
+
+fn audit_digest(audit: &RustChildActionAudit) -> Result<String, RustChildActionPlanError> {
+    let mut canonical = audit.clone();
+    canonical.audit_digest_blake3.clear();
+    let bytes = serde_json::to_vec(&canonical)
+        .map_err(|error| plan_error(RustChildActionPlanErrorKind::Serialization, &error.to_string()))?;
+    Ok(digest_bytes(AUDIT_DIGEST_CONTEXT, &bytes))
 }
 
 fn reconciliation_digest(reconciliation: &RustChildActionReconciliation) -> Result<String, RustChildActionPlanError> {
@@ -1066,13 +1276,26 @@ pub(crate) fn fixed_executable_authorities_from_toolchain_closure(
             "Rust action authority rejects toolchain seed exceptions",
         ));
     }
-    let mut authorities = Vec::new();
+    let mut authorities_by_path = BTreeMap::<String, RustFixedExecutableAuthority>::new();
     for member in &manifest.members {
         let Some(kind) = fixed_executable_kind(member.role) else {
             continue;
         };
-        authorities.push(fixed_executable_authority(member, kind)?);
+        let authority = fixed_executable_authority(member, kind)?;
+        if let Some(existing) = authorities_by_path.get(&authority.path) {
+            if existing.digest_blake3 != authority.digest_blake3 {
+                return Err(plan_error(
+                    RustChildActionPlanErrorKind::InvalidInput,
+                    &format!("toolchain executable path has conflicting bytes: {}", authority.path),
+                ));
+            }
+            if fixed_kind_priority(&existing.kind) >= fixed_kind_priority(&authority.kind) {
+                continue;
+            }
+        }
+        authorities_by_path.insert(authority.path.clone(), authority);
     }
+    let mut authorities = authorities_by_path.into_values().collect::<Vec<_>>();
     authorities.sort_by(|left, right| left.authority_id.cmp(&right.authority_id));
     if authorities.is_empty() {
         return Err(plan_error(
@@ -1081,6 +1304,18 @@ pub(crate) fn fixed_executable_authorities_from_toolchain_closure(
         ));
     }
     Ok(authorities)
+}
+
+fn fixed_kind_priority(kind: &RustFixedExecutableKind) -> u8 {
+    match kind {
+        RustFixedExecutableKind::Rustc => 7,
+        RustFixedExecutableKind::CompilerPolicyAdapter => 6,
+        RustFixedExecutableKind::CCompiler | RustFixedExecutableKind::CxxCompiler => 5,
+        RustFixedExecutableKind::Linker => 4,
+        RustFixedExecutableKind::PkgConfig => 3,
+        RustFixedExecutableKind::Shell => 2,
+        RustFixedExecutableKind::NativeHelper => 1,
+    }
 }
 
 fn fixed_executable_kind(role: crate::source_toolchain_closure::ToolchainRole) -> Option<RustFixedExecutableKind> {
@@ -1222,6 +1457,21 @@ mod tests {
             },
             resolved_path: path.to_string(),
             digest_blake3: digest.to_string(),
+            policy_decision: "allowed".to_string(),
+        }
+    }
+
+    fn raw_event(path: &str, digest: &str) -> crate::protected_exec::ProtectedSeccompAuditEvent {
+        crate::protected_exec::ProtectedSeccompAuditEvent {
+            pid: 1,
+            syscall: "execve".to_string(),
+            executable_path: path.into(),
+            tracee_path: path.into(),
+            resolved_host_path: path.into(),
+            digest_hex: digest.to_string(),
+            reason: "test action allowed".to_string(),
+            phase: "protected".to_string(),
+            inventory_entry_id: Some("test-entry".to_string()),
             policy_decision: "allowed".to_string(),
         }
     }
@@ -1393,6 +1643,22 @@ mod tests {
     }
 
     #[test]
+    fn rust_child_authority_is_deterministic_and_rejects_digest_drift() {
+        let first =
+            rust_child_action_authority("mantle-stage1".to_string(), resources(), input().fixed_executables).unwrap();
+        let repeated =
+            rust_child_action_authority("mantle-stage1".to_string(), resources(), input().fixed_executables).unwrap();
+        let mut changed = first.clone();
+        changed.fixed_executables[0].digest_blake3 = DIGEST_D.to_string();
+
+        let error = validate_rust_child_action_authority(&changed).unwrap_err();
+
+        assert_eq!(first.authority_digest_blake3, repeated.authority_digest_blake3);
+        assert_eq!(error.kind, RustChildActionPlanErrorKind::InvalidInput);
+        assert!(error.message.contains("output identity differs") || error.message.contains("digest mismatch"));
+    }
+
+    #[test]
     fn rust_child_plan_binds_fixed_and_produced_executable_authority() {
         let plan = plan_rust_child_actions(input()).unwrap();
         let repeated = plan_rust_child_actions(input()).unwrap();
@@ -1466,6 +1732,30 @@ mod tests {
     }
 
     #[test]
+    fn rust_child_audit_binds_raw_and_normalized_events_and_rejects_tamper() {
+        let plan = plan_rust_child_actions(input()).unwrap();
+        let action = &plan.actions[0];
+        let observations = vec![fixed_observation(action, "rustc", "/provider/bin/rustc", DIGEST_A)];
+        let audit = rust_child_action_audit(
+            &plan,
+            vec![raw_event("/provider/bin/rustc", DIGEST_A)],
+            observations,
+            Vec::new(),
+            1,
+        )
+        .unwrap();
+        let mut changed = audit.clone();
+        changed.raw_events[0].reason = "changed".to_string();
+
+        let error = validate_rust_child_action_audit(&plan, &changed).unwrap_err();
+
+        assert_eq!(audit.raw_event_count, audit.assigned_event_count);
+        assert_eq!(audit.audit_digest_blake3.len(), BLAKE3_HEX_LENGTH);
+        assert_eq!(error.kind, RustChildActionPlanErrorKind::InvalidInput);
+        assert!(error.message.contains("audit digest mismatch"));
+    }
+
+    #[test]
     fn rust_child_reconciliation_rejects_denied_unknown_and_missing_events() {
         let plan = plan_rust_child_actions(input()).unwrap();
         let action = &plan.actions[0];
@@ -1474,8 +1764,13 @@ mod tests {
         let mut unknown = fixed_observation(action, "linker", "/provider/bin/ld", DIGEST_B);
         unknown.action_id = "unknown-action".to_string();
 
-        let error = reconcile_rust_child_actions(&plan, &[denied, unknown]).unwrap_err();
+        let observations = [denied, unknown];
+        let report = rust_child_action_reconciliation(&plan, &observations).unwrap();
+        let error = reconcile_rust_child_actions(&plan, &observations).unwrap_err();
 
+        assert!(!report.is_complete());
+        assert_eq!(report.denied_event_ids_blake3.len(), 1);
+        assert_eq!(report.unknown_event_ids_blake3.len(), 1);
         assert_eq!(error.kind, RustChildActionPlanErrorKind::IncompleteReconciliation);
         assert!(error.message.contains("denied Rust child events"));
         assert!(error.message.contains("unknown Rust child events"));

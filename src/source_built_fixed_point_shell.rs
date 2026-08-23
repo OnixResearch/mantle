@@ -2147,6 +2147,15 @@ fn run_cargo_free_fixed_point(
 ) -> Result<(), RunError> {
     let target = TARGET_TRIPLE.to_string();
     let fixed_point_dir = prepared.staging_dir.join(FIXED_POINT_DIR);
+    let open_file_descriptors_max =
+        u32::try_from(crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX)
+            .map_err(|_| proof_error("Rust action open-file limit exceeds u32".to_string()))?;
+    let rust_action_resources = crate::source_built_rust_action_plan::RustActionResourceLimits {
+        parallel_jobs_max: options.jobs,
+        open_file_descriptors_max,
+        storage_bytes_max: options.disk_bytes_max,
+        exec_events_per_action_max: options.protected_exec_events_max,
+    };
     crate::cargo_free_self_build::cmd_cargo_free_fixed_point_self_build(CargoFreeSelfBuildOptions {
         root: &prepared.source_root,
         out_dir: &fixed_point_dir,
@@ -2154,6 +2163,7 @@ fn run_cargo_free_fixed_point(
         targets: &[target],
         toolchain_closure: Some(&providers.toolchain_closure_path),
         rust_source_provider: Some(&providers.rust_provider.output_path),
+        rust_action_resources: Some(rust_action_resources),
         hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
         json: options.json,
     })?;
@@ -2176,8 +2186,86 @@ fn run_cargo_free_fixed_point(
     if stage1_digest.is_none_or(|digest| digest.len() != BLAKE3_HEX_LENGTH) {
         return Err(proof_error("fixed-point binary digest has invalid length".to_string()));
     }
+    validate_fixed_point_rust_action_evidence(&fixed_point_dir, &meta, "stage1")?;
+    validate_fixed_point_rust_action_evidence(&fixed_point_dir, &meta, "stage2")?;
     debug_assert_eq!(providers.native_admission.output_digest_blake3, options.expected_native_provider_blake3);
     Ok(())
+}
+
+fn validate_fixed_point_rust_action_evidence(
+    fixed_point_dir: &Path,
+    meta: &serde_json::Value,
+    stage: &str,
+) -> Result<(), RunError> {
+    let authority_path = fixed_point_action_artifact_path(fixed_point_dir, meta, stage, "rust_child_action_authority")?;
+    let plan_path = fixed_point_action_artifact_path(fixed_point_dir, meta, stage, "rust_child_action_plan")?;
+    let audit_path = fixed_point_action_artifact_path(fixed_point_dir, meta, stage, "rust_child_action_audit")?;
+    let reconciliation_path =
+        fixed_point_action_artifact_path(fixed_point_dir, meta, stage, "rust_child_action_reconciliation")?;
+    let authority = serde_json::from_slice::<crate::source_built_rust_action_plan::RustChildActionAuthority>(
+        &fs::read(&authority_path).map_err(|error| {
+            proof_error(format!("reading Rust action authority {}: {error}", authority_path.display()))
+        })?,
+    )
+    .map_err(|error| proof_error(format!("parsing Rust action authority {}: {error}", authority_path.display())))?;
+    crate::source_built_rust_action_plan::validate_rust_child_action_authority(&authority)
+        .map_err(|error| proof_error(format!("invalid Rust action authority for {stage}: {error}")))?;
+    let plan = serde_json::from_slice::<crate::source_built_rust_action_plan::RustChildActionPlan>(
+        &fs::read(&plan_path)
+            .map_err(|error| proof_error(format!("reading Rust action plan {}: {error}", plan_path.display())))?,
+    )
+    .map_err(|error| proof_error(format!("parsing Rust action plan {}: {error}", plan_path.display())))?;
+    crate::source_built_rust_action_plan::validate_rust_child_action_plan(&plan)
+        .map_err(|error| proof_error(format!("invalid Rust action plan for {stage}: {error}")))?;
+    let reconciliation = serde_json::from_slice::<crate::source_built_rust_action_plan::RustChildActionReconciliation>(
+        &fs::read(&reconciliation_path).map_err(|error| {
+            proof_error(format!("reading Rust action reconciliation {}: {error}", reconciliation_path.display()))
+        })?,
+    )
+    .map_err(|error| {
+        proof_error(format!("parsing Rust action reconciliation {}: {error}", reconciliation_path.display()))
+    })?;
+    crate::source_built_rust_action_plan::validate_rust_child_action_reconciliation(&plan, &reconciliation)
+        .map_err(|error| proof_error(format!("invalid Rust action reconciliation for {stage}: {error}")))?;
+    if !reconciliation.is_complete() {
+        return Err(proof_error(format!("Rust action reconciliation for {stage} is incomplete")));
+    }
+    let audit = serde_json::from_slice::<crate::source_built_rust_action_plan::RustChildActionAudit>(
+        &fs::read(&audit_path)
+            .map_err(|error| proof_error(format!("reading Rust action audit {}: {error}", audit_path.display())))?,
+    )
+    .map_err(|error| proof_error(format!("parsing Rust action audit {}: {error}", audit_path.display())))?;
+    crate::source_built_rust_action_plan::validate_rust_child_action_audit(&plan, &audit)
+        .map_err(|error| proof_error(format!("invalid Rust action audit for {stage}: {error}")))?;
+    assert!(authority_path.is_file());
+    assert!(reconciliation.is_complete());
+    Ok(())
+}
+
+fn fixed_point_action_artifact_path(
+    fixed_point_dir: &Path,
+    meta: &serde_json::Value,
+    stage: &str,
+    field: &str,
+) -> Result<PathBuf, RunError> {
+    let pointer = format!("/{stage}/{field}");
+    let relative = meta
+        .pointer(&pointer)
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| proof_error(format!("fixed-point summary is missing {pointer}")))?;
+    let relative = Path::new(relative);
+    if relative.is_absolute()
+        || relative.components().any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err(proof_error(format!("fixed-point Rust action path is not bundle-relative: {relative:?}")));
+    }
+    let path = fixed_point_dir.join(relative);
+    if !path.is_file() {
+        return Err(proof_error(format!("fixed-point Rust action artifact is missing: {}", path.display())));
+    }
+    assert!(path.starts_with(fixed_point_dir));
+    assert!(path.is_file());
+    Ok(path)
 }
 
 fn publish_attempt(prepared: &PreparedAttempt) -> Result<(), RunError> {

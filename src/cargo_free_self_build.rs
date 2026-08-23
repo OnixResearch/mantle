@@ -4,6 +4,7 @@ use std::env;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fs;
+use std::fs::OpenOptions;
 use std::io::Read;
 use std::io::Write;
 use std::path::Component;
@@ -28,6 +29,15 @@ const NON_CLAIMS_FILE: &str = "non-claims.txt";
 const SMOKE_STDOUT_FILE: &str = "smoke-stdout.txt";
 const SMOKE_STDERR_FILE: &str = "smoke-stderr.txt";
 const EXECUTION_DIR: &str = "execution";
+const RUST_CHILD_ACTION_EVIDENCE_DIR: &str = "rust-child-actions";
+const RUST_CHILD_ACTION_AUTHORITY_FILE: &str = "authority.json";
+const RUST_CHILD_ACTION_PLAN_FILE: &str = "plan.json";
+const RUST_CHILD_ACTION_AUDIT_FILE: &str = "audit.json";
+const RUST_CHILD_ACTION_RECONCILIATION_FILE: &str = "reconciliation.json";
+const RUST_CHILD_ACTION_AUTHORITY_FLAG: &str = "--rust-child-action-authority";
+const RUST_CHILD_ACTION_EVIDENCE_DIR_FLAG: &str = "--rust-child-action-evidence-dir";
+const RUST_CHILD_ACTION_ALIAS_PRODUCER_CONTEXT: &[u8] = b"mantle-rust-child-action-alias-producer-v1\0";
+const RUST_CHILD_ACTION_FIXED_AUTHORITY_CONTEXT: &[u8] = b"mantle-rust-child-action-fixed-authority-v1\0";
 const BUNDLE_ROOT_RELATIVE_PATH: &str = ".";
 const CARGO_SHIM_FILE: &str = "cargo-forbidden";
 const CARGO_SHIM_DIR: &str = "cargo-guard-bin";
@@ -122,6 +132,7 @@ pub(crate) struct CargoFreeSelfBuildOptions<'a> {
     pub(crate) targets: &'a [String],
     pub(crate) toolchain_closure: Option<&'a Path>,
     pub(crate) rust_source_provider: Option<&'a Path>,
+    pub(crate) rust_action_resources: Option<crate::source_built_rust_action_plan::RustActionResourceLimits>,
     pub(crate) hermeticity_mode: crunch_pipeline::HermeticityMode,
     pub(crate) json: bool,
 }
@@ -138,6 +149,8 @@ struct LoadedRustSourceProvider {
     status: RustSourceProviderBindingStatus,
     rustc: Option<PathBuf>,
     source_built_shell: Option<BoundRustExecutionShell>,
+    source_built_host_tools: Vec<crate::full_source_rust_binding::FullSourceRustHostToolBinding>,
+    source_built_native_artifacts: Vec<crate::full_source_rust_binding::FullSourceNativeArtifactBinding>,
     toolchain_closure_status: Option<crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus>,
 }
 
@@ -147,6 +160,13 @@ struct BoundRustExecutionShell {
     content_digest_blake3: String,
     source_id: String,
     construction_receipt_digest_blake3: String,
+}
+
+#[derive(Clone, Debug)]
+struct BoundRustExecutionAuthority {
+    shell: Option<BoundRustExecutionShell>,
+    host_tools: Vec<crate::full_source_rust_binding::FullSourceRustHostToolBinding>,
+    native_artifacts: Vec<crate::full_source_rust_binding::FullSourceNativeArtifactBinding>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -226,6 +246,8 @@ struct RustPlanChildRequest<'a> {
     path_env: &'a OsStr,
     c_compiler_route: Option<&'a crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
     policy_digest_blake3: Option<&'a str>,
+    rust_action_authority_path: Option<&'a Path>,
+    rust_action_evidence_dir: Option<&'a Path>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -304,6 +326,8 @@ struct BuildPaths {
     guard_path_dir: PathBuf,
     binary_path: PathBuf,
     meta_path: PathBuf,
+    rust_action_evidence_dir: PathBuf,
+    rust_action_authority_path: PathBuf,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -467,6 +491,10 @@ struct FixedPointStageSummary {
     smoke_status_code: Option<i32>,
     source_built_toolchain_closure_policy_digest_blake3: Option<String>,
     selected_c_compiler: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+    rust_child_action_authority: Option<PathBuf>,
+    rust_child_action_plan: Option<PathBuf>,
+    rust_child_action_audit: Option<PathBuf>,
+    rust_child_action_reconciliation: Option<PathBuf>,
     blocker: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     blocker_diagnostic: Option<BlockedTopologyDiagnostic>,
@@ -1335,6 +1363,17 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
         &loaded_toolchain_closure,
         &loaded_rust_provider,
     )?;
+    let rust_action_enabled = prepare_rust_child_action_authority(
+        "mantle-self-build",
+        options.rust_action_resources.as_ref(),
+        &execution_toolchain.rustc,
+        &loaded_toolchain_closure,
+        loaded_rust_provider.source_built_shell.as_ref(),
+        &loaded_rust_provider.source_built_host_tools,
+        &loaded_rust_provider.source_built_native_artifacts,
+        &paths.guard_path_dir,
+        &paths.rust_action_authority_path,
+    )?;
 
     let mut child = run_rust_plan_child(RustPlanChildRequest {
         paths: &paths,
@@ -1343,6 +1382,8 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
         path_env: &execution_toolchain.path_env,
         c_compiler_route: execution_toolchain.c_compiler_route.as_ref(),
         policy_digest_blake3: initial_toolchain_status.policy_digest_blake3.as_deref(),
+        rust_action_authority_path: rust_action_enabled.then_some(paths.rust_action_authority_path.as_path()),
+        rust_action_evidence_dir: rust_action_enabled.then_some(paths.rust_action_evidence_dir.as_path()),
     })?;
     let produced = if child.blocker.is_none() {
         materialize_or_block(&paths, &mut child)?
@@ -1410,8 +1451,12 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     let stage1 = execute_fixed_point_stage(
         &plan.stages[FIXED_POINT_STAGE1_INDEX],
         &host_mantle,
+        &compatibility.summary.stage_rustc,
         &loaded_toolchain_closure,
-        execution_shell,
+        loaded_rust_provider.source_built_shell.as_ref(),
+        &loaded_rust_provider.source_built_host_tools,
+        &loaded_rust_provider.source_built_native_artifacts,
+        options.rust_action_resources.as_ref(),
         stage_policy_digest,
     )?;
     if !stage1.success {
@@ -1424,8 +1469,12 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     let stage2 = execute_fixed_point_stage(
         &plan.stages[FIXED_POINT_STAGE2_INDEX],
         stage1_binary,
+        &compatibility.summary.stage_rustc,
         &loaded_toolchain_closure,
-        execution_shell,
+        loaded_rust_provider.source_built_shell.as_ref(),
+        &loaded_rust_provider.source_built_host_tools,
+        &loaded_rust_provider.source_built_native_artifacts,
+        options.rust_action_resources.as_ref(),
         stage_policy_digest,
     )?;
     if !stage2.success {
@@ -1440,6 +1489,8 @@ fn prepare_paths(root: &Path, out_dir: &Path) -> Result<BuildPaths, RunError> {
     let out_dir = absolutize(&root, out_dir);
     ensure_outside_root(&out_dir, &root)?;
     let execution_dir = out_dir.join(EXECUTION_DIR);
+    let rust_action_evidence_dir = out_dir.join(RUST_CHILD_ACTION_EVIDENCE_DIR);
+    let rust_action_authority_path = rust_action_evidence_dir.join(RUST_CHILD_ACTION_AUTHORITY_FILE);
     debug_assert!(root.is_absolute());
     debug_assert_eq!(execution_dir.parent(), Some(out_dir.as_path()));
     Ok(BuildPaths {
@@ -1455,6 +1506,8 @@ fn prepare_paths(root: &Path, out_dir: &Path) -> Result<BuildPaths, RunError> {
         meta_path: out_dir.join(META_FILE),
         out_dir,
         execution_dir,
+        rust_action_evidence_dir,
+        rust_action_authority_path,
     })
 }
 
@@ -1755,6 +1808,7 @@ fn prepare_output_dir(paths: &BuildPaths) -> Result<(), RunError> {
         .map_err(|err| internal(format!("create output dir {}: {err}", paths.out_dir.display())))?;
     remove_owned_path(&paths.execution_dir)?;
     remove_owned_path(&paths.guard_path_dir)?;
+    remove_owned_path(&paths.rust_action_evidence_dir)?;
     let owned_files = vec![
         paths.receipt_path.clone(),
         paths.stderr_path.clone(),
@@ -1833,6 +1887,21 @@ fn run_rust_plan_child(request: RustPlanChildRequest<'_>) -> Result<ChildRun, Ru
             .arg("--source-built-c-compiler-route-json")
             .arg(&route_json)
             .env(crate::source_toolchain_closure::SOURCE_BUILT_C_COMPILER_ROUTE_ENV, route_json);
+    }
+    match (request.rust_action_authority_path, request.rust_action_evidence_dir) {
+        (Some(authority_path), Some(evidence_dir)) => {
+            command
+                .arg(RUST_CHILD_ACTION_AUTHORITY_FLAG)
+                .arg(authority_path)
+                .arg(RUST_CHILD_ACTION_EVIDENCE_DIR_FLAG)
+                .arg(evidence_dir);
+        }
+        (None, None) => {}
+        _ => {
+            return Err(internal(
+                "Rust child-action authority path and evidence directory must be supplied together".to_string(),
+            ));
+        }
     }
     if let Some(policy_digest_blake3) = request.policy_digest_blake3 {
         command.env(crate::rust_plan::RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV, policy_digest_blake3);
@@ -2096,15 +2165,34 @@ fn push_optional_summary_part(parts: &mut Vec<String>, label: &str, value: Optio
 fn execute_fixed_point_stage(
     stage: &FixedPointStagePlan,
     mantle_bin: &Path,
+    rustc: &Path,
     toolchain_closure: &LoadedToolchainClosure,
-    execution_shell: &Path,
+    bound_shell: Option<&BoundRustExecutionShell>,
+    source_built_host_tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
+    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
+    rust_action_resources: Option<&crate::source_built_rust_action_plan::RustActionResourceLimits>,
     policy_digest_blake3: Option<&str>,
 ) -> Result<FixedPointStageRun, RunError> {
     debug_assert!(matches!(stage.name, STAGE1_DIR | STAGE2_DIR));
     debug_assert_eq!(stage.command.path_guard_dir, stage.guard_path_dir);
+    let execution_shell = bound_shell.map_or_else(|| Path::new("/bin/sh"), |shell| shell.execution_path.as_path());
     debug_assert!(execution_shell.is_absolute());
     prepare_fixed_point_stage(stage)?;
     let path_env = execution_path_env_with_shell(&stage.guard_path_dir, toolchain_closure, execution_shell)?;
+    write_bound_rust_host_tool_aliases(&stage.guard_path_dir, source_built_host_tools, execution_shell)?;
+    let rust_action_evidence_dir = stage.stage_dir.join(RUST_CHILD_ACTION_EVIDENCE_DIR);
+    let rust_action_authority_path = rust_action_evidence_dir.join(RUST_CHILD_ACTION_AUTHORITY_FILE);
+    let rust_action_enabled = prepare_rust_child_action_authority(
+        fixed_point_rust_action_stage_id(stage.name)?,
+        rust_action_resources,
+        rustc,
+        toolchain_closure,
+        bound_shell,
+        source_built_host_tools,
+        source_built_native_artifacts,
+        &stage.guard_path_dir,
+        &rust_action_authority_path,
+    )?;
     let c_compiler_route = fixed_point_c_compiler_route(toolchain_closure)?;
     let route_json = c_compiler_route
         .as_ref()
@@ -2123,6 +2211,13 @@ fn execute_fixed_point_stage(
             .arg("--source-built-c-compiler-route-json")
             .arg(route_json)
             .env(crate::source_toolchain_closure::SOURCE_BUILT_C_COMPILER_ROUTE_ENV, route_json);
+    }
+    if rust_action_enabled {
+        command
+            .arg(RUST_CHILD_ACTION_AUTHORITY_FLAG)
+            .arg(&rust_action_authority_path)
+            .arg(RUST_CHILD_ACTION_EVIDENCE_DIR_FLAG)
+            .arg(&rust_action_evidence_dir);
     }
     if let Some(policy_digest_blake3) = policy_digest_blake3 {
         command.env(crate::rust_plan::RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV, policy_digest_blake3);
@@ -2547,9 +2642,26 @@ fn stage_summary(stage: &FixedPointStageRun, bundle_dir: &Path) -> FixedPointSta
             .source_built_toolchain_closure_policy_digest_blake3
             .clone(),
         selected_c_compiler: stage.selected_c_compiler.clone(),
+        rust_child_action_authority: existing_stage_action_artifact(
+            stage,
+            bundle_dir,
+            RUST_CHILD_ACTION_AUTHORITY_FILE,
+        ),
+        rust_child_action_plan: existing_stage_action_artifact(stage, bundle_dir, RUST_CHILD_ACTION_PLAN_FILE),
+        rust_child_action_audit: existing_stage_action_artifact(stage, bundle_dir, RUST_CHILD_ACTION_AUDIT_FILE),
+        rust_child_action_reconciliation: existing_stage_action_artifact(
+            stage,
+            bundle_dir,
+            RUST_CHILD_ACTION_RECONCILIATION_FILE,
+        ),
         blocker: stage.blocker.clone(),
         blocker_diagnostic: stage.blocker_diagnostic.clone(),
     }
+}
+
+fn existing_stage_action_artifact(stage: &FixedPointStageRun, bundle_dir: &Path, file_name: &str) -> Option<PathBuf> {
+    let path = stage.dir.join(RUST_CHILD_ACTION_EVIDENCE_DIR).join(file_name);
+    path.is_file().then(|| bundle_local_path(bundle_dir, &path))
 }
 
 fn bundle_local_path(bundle_dir: &Path, path: &Path) -> PathBuf {
@@ -2847,9 +2959,15 @@ fn prepare_execution_toolchain(
             debug_assert!(!bound_shell.source_id.is_empty());
             debug_assert_eq!(bound_shell.construction_receipt_digest_blake3.len(), blake3::OUT_LEN * 2);
         }
+        let path_env = execution_path_env_with_shell(guard_path_dir, toolchain_closure, execution_shell)?;
+        write_bound_rust_host_tool_aliases(
+            guard_path_dir,
+            &rust_source_provider.source_built_host_tools,
+            execution_shell,
+        )?;
         ExecutionToolchain {
             rustc,
-            path_env: execution_path_env_with_shell(guard_path_dir, toolchain_closure, execution_shell)?,
+            path_env,
             status,
             c_compiler_route,
         }
@@ -2864,6 +2982,262 @@ fn prepare_execution_toolchain(
     debug_assert!(!execution_toolchain.rustc.as_os_str().is_empty());
     debug_assert!(!execution_toolchain.path_env.is_empty());
     Ok(execution_toolchain)
+}
+
+fn fixed_point_rust_action_stage_id(stage_name: &str) -> Result<&'static str, RunError> {
+    match stage_name {
+        STAGE1_DIR => Ok(crate::source_built_fixed_point::MANTLE_STAGE1_STAGE_ID),
+        STAGE2_DIR => Ok(crate::source_built_fixed_point::MANTLE_STAGE2_STAGE_ID),
+        other => Err(internal(format!("unknown fixed-point Rust action stage: {other}"))),
+    }
+}
+
+fn prepare_rust_child_action_authority(
+    stage_id: &str,
+    resources: Option<&crate::source_built_rust_action_plan::RustActionResourceLimits>,
+    selected_rustc: &Path,
+    toolchain_closure: &LoadedToolchainClosure,
+    bound_shell: Option<&BoundRustExecutionShell>,
+    source_built_host_tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
+    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
+    guard_path_dir: &Path,
+    authority_path: &Path,
+) -> Result<bool, RunError> {
+    let Some(resources) = resources else {
+        return Ok(false);
+    };
+    let manifest = toolchain_closure.manifest.as_ref().ok_or_else(|| {
+        RunError::Build("Rust child-action authority requires an explicit toolchain closure manifest".to_string())
+    })?;
+    let bound_shell = bound_shell.ok_or_else(|| {
+        RunError::Build("Rust child-action authority requires a source-built BusyBox shell binding".to_string())
+    })?;
+    let fixed_executables = rust_child_action_fixed_executables(
+        selected_rustc,
+        manifest,
+        bound_shell,
+        source_built_host_tools,
+        source_built_native_artifacts,
+        guard_path_dir,
+        toolchain_closure.status.policy_digest_blake3.as_deref(),
+    )?;
+    let authority = crate::source_built_rust_action_plan::rust_child_action_authority(
+        stage_id.to_string(),
+        resources.clone(),
+        fixed_executables,
+    )
+    .map_err(rust_action_error)?;
+    write_new_rust_action_authority(authority_path, &authority)?;
+    assert!(authority_path.is_file());
+    assert!(!authority.fixed_executables.is_empty());
+    Ok(true)
+}
+
+fn rust_child_action_fixed_executables(
+    selected_rustc: &Path,
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+    bound_shell: &BoundRustExecutionShell,
+    source_built_host_tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
+    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
+    guard_path_dir: &Path,
+    policy_digest_blake3: Option<&str>,
+) -> Result<Vec<crate::source_built_rust_action_plan::RustFixedExecutableAuthority>, RunError> {
+    use crate::source_built_rust_action_plan::RustFixedExecutableKind;
+    let selected_rustc = canonical_action_executable(selected_rustc)?;
+    let policy_digest_blake3 = policy_digest_blake3.ok_or_else(|| {
+        RunError::Build("Rust child-action authority requires a toolchain closure policy digest".to_string())
+    })?;
+    let alias_producer = rust_action_alias_producer(policy_digest_blake3, bound_shell);
+    let closure_authorities =
+        crate::source_built_rust_action_plan::fixed_executable_authorities_from_toolchain_closure(manifest)
+            .map_err(rust_action_error)?;
+    let mut by_path = BTreeMap::new();
+    for authority in closure_authorities {
+        let path = canonical_action_executable(Path::new(&authority.path))?;
+        let kind = if path == selected_rustc {
+            RustFixedExecutableKind::Rustc
+        } else if authority.kind == RustFixedExecutableKind::Rustc {
+            RustFixedExecutableKind::NativeHelper
+        } else {
+            authority.kind
+        };
+        let measured = measured_rust_fixed_authority(&path, kind, &authority.producer_action_id)?;
+        insert_rust_fixed_authority(&mut by_path, measured)?;
+    }
+    for artifact in source_built_native_artifacts {
+        let Some(kind) = rust_fixed_kind_for_native_artifact(artifact.role) else {
+            continue;
+        };
+        let path = canonical_action_executable(Path::new(&artifact.path))?;
+        let producer = format!("full-source-native-provider:{policy_digest_blake3}:{:?}", artifact.role);
+        let authority = measured_rust_fixed_authority(&path, kind, &producer)?;
+        insert_rust_fixed_authority(&mut by_path, authority)?;
+    }
+    for tool in source_built_host_tools {
+        let path = canonical_action_executable(Path::new(&tool.path))?;
+        let kind = if tool.role == crate::full_source_rust_binding::FullSourceRustHostToolRole::Busybox {
+            RustFixedExecutableKind::Shell
+        } else {
+            RustFixedExecutableKind::NativeHelper
+        };
+        let producer = format!("rust-host-tool:{}:{}", tool.source_id, tool.construction_receipt_digest_blake3);
+        let authority = measured_rust_fixed_authority(&path, kind, &producer)?;
+        insert_rust_fixed_authority(&mut by_path, authority)?;
+    }
+    let toolchain_aliases = toolchain_path_aliases(manifest)?;
+    let host_tool_aliases = bound_rust_host_tool_aliases(source_built_host_tools)?;
+    for alias in toolchain_aliases.keys().chain(host_tool_aliases.keys()) {
+        let path = canonical_action_executable(&guard_path_dir.join(alias))?;
+        let authority = measured_rust_fixed_authority(&path, RustFixedExecutableKind::NativeHelper, &alias_producer)?;
+        insert_rust_fixed_authority(&mut by_path, authority)?;
+    }
+    let shell_path = canonical_action_executable(&bound_shell.execution_path)?;
+    let shell = measured_rust_fixed_authority(&shell_path, RustFixedExecutableKind::Shell, &alias_producer)?;
+    insert_rust_fixed_authority(&mut by_path, shell)?;
+    if !by_path.contains_key(&selected_rustc) {
+        let rustc_producer = format!("{alias_producer}:selected-rustc");
+        let rustc = measured_rust_fixed_authority(&selected_rustc, RustFixedExecutableKind::Rustc, &rustc_producer)?;
+        insert_rust_fixed_authority(&mut by_path, rustc)?;
+    }
+    let authorities = by_path.into_values().collect::<Vec<_>>();
+    let rustc_count = authorities.iter().filter(|authority| authority.kind == RustFixedExecutableKind::Rustc).count();
+    if rustc_count != 1 {
+        return Err(RunError::Build(format!(
+            "Rust child-action authority requires one selected rustc, found {rustc_count}"
+        )));
+    }
+    assert!(!authorities.is_empty());
+    assert!(authorities.iter().all(|authority| Path::new(&authority.path).is_absolute()));
+    Ok(authorities)
+}
+
+fn rust_action_alias_producer(policy_digest_blake3: &str, shell: &BoundRustExecutionShell) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(RUST_CHILD_ACTION_ALIAS_PRODUCER_CONTEXT);
+    hasher.update(policy_digest_blake3.as_bytes());
+    hasher.update(shell.content_digest_blake3.as_bytes());
+    hasher.update(shell.source_id.as_bytes());
+    hasher.update(shell.construction_receipt_digest_blake3.as_bytes());
+    let digest = hasher.finalize().to_hex();
+    assert_eq!(digest.len(), blake3::OUT_LEN * 2);
+    assert!(!shell.source_id.is_empty());
+    format!("receipt-bound-aliases:{digest}")
+}
+
+fn rust_fixed_kind_for_native_artifact(
+    role: crate::full_source_rust_binding::FullSourceNativeArtifactRole,
+) -> Option<crate::source_built_rust_action_plan::RustFixedExecutableKind> {
+    use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
+    use crate::source_built_rust_action_plan::RustFixedExecutableKind;
+    match role {
+        FullSourceNativeArtifactRole::CCompiler | FullSourceNativeArtifactRole::Preprocessor => {
+            Some(RustFixedExecutableKind::CCompiler)
+        }
+        FullSourceNativeArtifactRole::CxxCompiler => Some(RustFixedExecutableKind::CxxCompiler),
+        FullSourceNativeArtifactRole::Linker => Some(RustFixedExecutableKind::Linker),
+        FullSourceNativeArtifactRole::CompilerInternal
+        | FullSourceNativeArtifactRole::Assembler
+        | FullSourceNativeArtifactRole::ArchiveTool
+        | FullSourceNativeArtifactRole::Ranlib
+        | FullSourceNativeArtifactRole::SymbolTool
+        | FullSourceNativeArtifactRole::ObjectCopy
+        | FullSourceNativeArtifactRole::ObjectDump
+        | FullSourceNativeArtifactRole::ObjectFormat => Some(RustFixedExecutableKind::NativeHelper),
+        FullSourceNativeArtifactRole::CrtObject
+        | FullSourceNativeArtifactRole::Libc
+        | FullSourceNativeArtifactRole::Libgcc
+        | FullSourceNativeArtifactRole::Libstdcxx
+        | FullSourceNativeArtifactRole::DynamicLinker => None,
+    }
+}
+
+fn measured_rust_fixed_authority(
+    path: &Path,
+    kind: crate::source_built_rust_action_plan::RustFixedExecutableKind,
+    producer_action_id: &str,
+) -> Result<crate::source_built_rust_action_plan::RustFixedExecutableAuthority, RunError> {
+    let digest_blake3 = crate::protected_exec::blake3_file_hex(path)
+        .map_err(|error| RunError::Build(format!("hash Rust child-action executable {}: {error}", path.display())))?;
+    let path = path_to_string(path)?;
+    let material = serde_json::to_vec(&(&path, &digest_blake3, &kind, producer_action_id))
+        .map_err(|error| internal(format!("encode Rust fixed executable authority: {error}")))?;
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(RUST_CHILD_ACTION_FIXED_AUTHORITY_CONTEXT);
+    hasher.update(&material);
+    let authority_id = format!("fixed:{}", hasher.finalize().to_hex());
+    assert_eq!(digest_blake3.len(), blake3::OUT_LEN * 2);
+    assert!(!producer_action_id.is_empty());
+    Ok(crate::source_built_rust_action_plan::RustFixedExecutableAuthority {
+        authority_id,
+        producer_action_id: producer_action_id.to_string(),
+        output_identity_blake3: digest_blake3.clone(),
+        path,
+        digest_blake3,
+        kind,
+    })
+}
+
+fn insert_rust_fixed_authority(
+    by_path: &mut BTreeMap<PathBuf, crate::source_built_rust_action_plan::RustFixedExecutableAuthority>,
+    authority: crate::source_built_rust_action_plan::RustFixedExecutableAuthority,
+) -> Result<(), RunError> {
+    use crate::source_built_rust_action_plan::RustFixedExecutableKind;
+    let path = PathBuf::from(&authority.path);
+    if let Some(existing) = by_path.get(&path) {
+        if existing.digest_blake3 != authority.digest_blake3 {
+            return Err(RunError::Build(format!(
+                "Rust child-action executable path has conflicting bytes: {}",
+                path.display()
+            )));
+        }
+        if existing.kind == RustFixedExecutableKind::Rustc || authority.kind != RustFixedExecutableKind::Rustc {
+            return Ok(());
+        }
+    }
+    by_path.insert(path, authority);
+    assert!(!by_path.is_empty());
+    assert!(by_path.keys().all(|path| path.is_absolute()));
+    Ok(())
+}
+
+fn canonical_action_executable(path: &Path) -> Result<PathBuf, RunError> {
+    let path = fs::canonicalize(path).map_err(|error| {
+        RunError::Build(format!("resolve Rust child-action executable {}: {error}", path.display()))
+    })?;
+    require_executable(&path)?;
+    assert!(path.is_absolute());
+    assert!(path.is_file());
+    Ok(path)
+}
+
+fn write_new_rust_action_authority(
+    path: &Path,
+    authority: &crate::source_built_rust_action_plan::RustChildActionAuthority,
+) -> Result<(), RunError> {
+    let bytes = serde_json::to_vec_pretty(authority)
+        .map_err(|error| internal(format!("encode Rust child-action authority: {error}")))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| internal(format!("Rust child-action authority path has no parent: {}", path.display())))?;
+    fs::create_dir_all(parent).map_err(|error| {
+        internal(format!("create Rust child-action authority directory {}: {error}", parent.display()))
+    })?;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|error| internal(format!("create Rust child-action authority {}: {error}", path.display())))?;
+    file.write_all(&bytes)
+        .map_err(|error| internal(format!("write Rust child-action authority {}: {error}", path.display())))?;
+    file.sync_all()
+        .map_err(|error| internal(format!("sync Rust child-action authority {}: {error}", path.display())))?;
+    assert!(!bytes.is_empty());
+    assert!(path.is_file());
+    Ok(())
+}
+
+fn rust_action_error(error: crate::source_built_rust_action_plan::RustChildActionPlanError) -> RunError {
+    RunError::Build(format!("Rust child-action authority blocked: {error}"))
 }
 
 fn prepare_rustc_for_compatibility(
@@ -3109,6 +3483,43 @@ fn execution_path_env_with_shell(
     };
     write_toolchain_path_aliases_with_shell(cargo_path_dir, manifest, execution_shell)?;
     env::join_paths([cargo_path_dir]).map_err(|err| internal(format!("construct receipt-bound PATH: {err}")))
+}
+
+fn write_bound_rust_host_tool_aliases(
+    guard_path_dir: &Path,
+    tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
+    execution_shell: &Path,
+) -> Result<(), RunError> {
+    for (alias, target) in bound_rust_host_tool_aliases(tools)? {
+        let path = guard_path_dir.join(alias);
+        remove_owned_path(&path)?;
+        write_toolchain_alias(&target, &path, execution_shell)?;
+    }
+    Ok(())
+}
+
+fn bound_rust_host_tool_aliases(
+    tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
+) -> Result<BTreeMap<String, PathBuf>, RunError> {
+    use crate::full_source_rust_binding::FullSourceRustHostToolRole;
+    let mut aliases = BTreeMap::new();
+    for tool in tools {
+        let target = canonical_action_executable(Path::new(&tool.path))?;
+        add_toolchain_alias(&mut aliases, path_file_name(&target)?, &target)?;
+        let role_aliases = match tool.role {
+            FullSourceRustHostToolRole::Make => vec!["make"],
+            FullSourceRustHostToolRole::Cmake => vec!["cmake"],
+            FullSourceRustHostToolRole::Python => vec!["python", "python3"],
+            FullSourceRustHostToolRole::Perl => vec!["perl"],
+            FullSourceRustHostToolRole::Busybox => vec!["busybox"],
+        };
+        for alias in role_aliases {
+            add_toolchain_alias(&mut aliases, alias.to_string(), &target)?;
+        }
+    }
+    assert!(tools.is_empty() || !aliases.is_empty());
+    assert!(aliases.keys().all(|alias| !alias.is_empty()));
+    Ok(aliases)
 }
 
 fn write_toolchain_path_aliases(
@@ -3554,6 +3965,8 @@ fn load_rust_source_provider(provider_dir: Option<&Path>) -> Result<LoadedRustSo
             status: absent_rust_source_provider_binding(),
             rustc: None,
             source_built_shell: None,
+            source_built_host_tools: Vec::new(),
+            source_built_native_artifacts: Vec::new(),
             toolchain_closure_status: None,
         });
     };
@@ -3576,19 +3989,25 @@ fn load_rust_source_provider(provider_dir: Option<&Path>) -> Result<LoadedRustSo
         validation.metadata_path.clone(),
         &validation.validation,
     );
-    let source_built_shell = load_bound_rust_execution_shell(&provider_dir)?;
+    let execution_authority = load_bound_rust_execution_authority(&provider_dir)?;
     Ok(LoadedRustSourceProvider {
         status: validated_rust_source_provider_binding(&provider_dir, &validation, &rustc_path),
         rustc: Some(rustc_path),
-        source_built_shell,
+        source_built_shell: execution_authority.shell,
+        source_built_host_tools: execution_authority.host_tools,
+        source_built_native_artifacts: execution_authority.native_artifacts,
         toolchain_closure_status: Some(toolchain_closure_status),
     })
 }
 
-fn load_bound_rust_execution_shell(provider_dir: &Path) -> Result<Option<BoundRustExecutionShell>, RunError> {
+fn load_bound_rust_execution_authority(provider_dir: &Path) -> Result<BoundRustExecutionAuthority, RunError> {
     let binding_path = provider_dir.join(crate::full_source_rust_binding_shell::FULL_SOURCE_RUST_BINDING_RELATIVE_PATH);
     if !binding_path.is_file() {
-        return Ok(None);
+        return Ok(BoundRustExecutionAuthority {
+            shell: None,
+            host_tools: Vec::new(),
+            native_artifacts: Vec::new(),
+        });
     }
     let bytes = fs::read(&binding_path)
         .map_err(|err| RunError::Build(format!("read full-source Rust binding {}: {err}", binding_path.display())))?;
@@ -3598,6 +4017,12 @@ fn load_bound_rust_execution_shell(provider_dir: &Path) -> Result<Option<BoundRu
                 RunError::Build(format!("parse full-source Rust binding {}: {err}", binding_path.display()))
             })?;
     validate_bound_rust_execution_shell_policy(&binding)?;
+    for tool in &binding.host_tools {
+        validate_bound_rust_host_tool(tool)?;
+    }
+    for artifact in &binding.native_artifacts {
+        validate_bound_native_artifact(artifact)?;
+    }
     let candidates = binding
         .host_tools
         .iter()
@@ -3609,7 +4034,17 @@ fn load_bound_rust_execution_shell(provider_dir: &Path) -> Result<Option<BoundRu
             candidates.len()
         )));
     };
-    bound_rust_execution_shell(busybox).map(Some)
+    let shell = bound_rust_execution_shell(busybox)?;
+    let host_tools = binding.host_tools;
+    let native_artifacts = binding.native_artifacts;
+    assert!(!host_tools.is_empty());
+    assert!(!native_artifacts.is_empty());
+    assert!(host_tools.iter().all(|tool| Path::new(&tool.path).is_absolute()));
+    Ok(BoundRustExecutionAuthority {
+        shell: Some(shell),
+        host_tools,
+        native_artifacts,
+    })
 }
 
 fn validate_bound_rust_execution_shell_policy(
@@ -3631,16 +4066,7 @@ fn bound_rust_execution_shell(
     if !busybox_path.is_absolute() {
         return Err(RunError::Build(format!("full-source BusyBox path is not absolute: {}", busybox_path.display())));
     }
-    require_executable(busybox_path)?;
-    let observed_busybox = crate::protected_exec::blake3_file_hex(busybox_path)
-        .map_err(|err| RunError::Build(format!("hash full-source BusyBox {}: {err}", busybox_path.display())))?;
-    if observed_busybox != busybox.content_digest_blake3 {
-        return Err(RunError::Build(format!(
-            "full-source BusyBox digest mismatch: expected {}, got {observed_busybox}",
-            busybox.content_digest_blake3
-        )));
-    }
-    validate_bound_host_tool_receipt(busybox)?;
+    validate_bound_rust_host_tool(busybox)?;
     let shell_path = busybox_path
         .parent()
         .ok_or_else(|| RunError::Build("full-source BusyBox path has no parent".to_string()))?
@@ -3664,6 +4090,69 @@ fn bound_rust_execution_shell(
         source_id: busybox.source_id.clone(),
         construction_receipt_digest_blake3: busybox.construction_receipt_digest_blake3.clone(),
     })
+}
+
+fn validate_bound_native_artifact(
+    artifact: &crate::full_source_rust_binding::FullSourceNativeArtifactBinding,
+) -> Result<(), RunError> {
+    let path = Path::new(&artifact.path);
+    if !path.is_absolute() || !path.is_file() {
+        return Err(RunError::Build(format!("full-source native artifact is unavailable: {}", path.display())));
+    }
+    if full_source_native_artifact_is_executable(artifact.role) {
+        require_executable(path)?;
+    }
+    let observed = crate::protected_exec::blake3_file_hex(path)
+        .map_err(|error| RunError::Build(format!("hash full-source native artifact {}: {error}", path.display())))?;
+    if observed != artifact.content_digest_blake3 {
+        return Err(RunError::Build(format!(
+            "full-source native artifact digest mismatch: expected {}, got {observed}",
+            artifact.content_digest_blake3
+        )));
+    }
+    assert_eq!(observed.len(), blake3::OUT_LEN * 2);
+    assert!(path.is_file());
+    Ok(())
+}
+
+fn full_source_native_artifact_is_executable(
+    role: crate::full_source_rust_binding::FullSourceNativeArtifactRole,
+) -> bool {
+    use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
+    matches!(
+        role,
+        FullSourceNativeArtifactRole::CCompiler
+            | FullSourceNativeArtifactRole::CxxCompiler
+            | FullSourceNativeArtifactRole::Preprocessor
+            | FullSourceNativeArtifactRole::CompilerInternal
+            | FullSourceNativeArtifactRole::Assembler
+            | FullSourceNativeArtifactRole::Linker
+            | FullSourceNativeArtifactRole::ArchiveTool
+            | FullSourceNativeArtifactRole::Ranlib
+            | FullSourceNativeArtifactRole::SymbolTool
+            | FullSourceNativeArtifactRole::ObjectCopy
+            | FullSourceNativeArtifactRole::ObjectDump
+            | FullSourceNativeArtifactRole::ObjectFormat
+    )
+}
+
+fn validate_bound_rust_host_tool(
+    tool: &crate::full_source_rust_binding::FullSourceRustHostToolBinding,
+) -> Result<(), RunError> {
+    let tool_path = Path::new(&tool.path);
+    if !tool_path.is_absolute() {
+        return Err(RunError::Build(format!("full-source host-tool path is not absolute: {}", tool_path.display())));
+    }
+    require_executable(tool_path)?;
+    let observed = crate::protected_exec::blake3_file_hex(tool_path)
+        .map_err(|err| RunError::Build(format!("hash full-source host tool {}: {err}", tool_path.display())))?;
+    if observed != tool.content_digest_blake3 {
+        return Err(RunError::Build(format!(
+            "full-source host-tool digest mismatch: expected {}, got {observed}",
+            tool.content_digest_blake3
+        )));
+    }
+    validate_bound_host_tool_receipt(tool)
 }
 
 fn validate_bound_host_tool_receipt(
@@ -3832,6 +4321,8 @@ fn internal(message: String) -> RunError {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::*;
 
     const FIXED_POINT_TEST_DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -4615,8 +5106,57 @@ mod tests {
         assert_eq!(bound.execution_path, shell);
         assert_eq!(bound.content_digest_blake3, busybox_digest);
         assert_eq!(bound.construction_receipt_digest_blake3, receipt_digest);
-        assert!(tool_error.message().contains("BusyBox digest mismatch"));
+        assert!(tool_error.message().contains("host-tool digest mismatch"));
         assert!(receipt_error.message().contains("construction receipt digest mismatch"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rust_action_fixed_authority_includes_receipt_bound_aliases_and_host_tools() {
+        use crate::source_built_rust_action_plan::RustFixedExecutableKind;
+        let dir = tempfile::tempdir().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let guard = dir.path().join("guard");
+        let host_bin = dir.path().join("host-tools");
+        let busybox = host_bin.join("busybox");
+        let shell = host_bin.join("sh");
+        let receipt = dir.path().join("busybox-receipt.json");
+        fs::create_dir_all(&guard).unwrap();
+        fs::create_dir_all(&host_bin).unwrap();
+        write_fake_executable(&busybox, "#!/bin/sh\nexit 0\n");
+        std::os::unix::fs::symlink(&busybox, &shell).unwrap();
+        fs::write(&receipt, b"{\"status\":\"built\"}\n").unwrap();
+        let binding = crate::full_source_rust_binding::FullSourceRustHostToolBinding {
+            role: crate::full_source_rust_binding::FullSourceRustHostToolRole::Busybox,
+            path: busybox.display().to_string(),
+            content_digest_blake3: crate::protected_exec::blake3_file_hex(&busybox).unwrap(),
+            source_id: "busybox-source".to_string(),
+            construction_receipt_path: receipt.display().to_string(),
+            construction_receipt_digest_blake3: crate::protected_exec::blake3_file_hex(&receipt).unwrap(),
+        };
+        let bound_shell = bound_rust_execution_shell(&binding).unwrap();
+        write_toolchain_path_aliases_with_shell(&guard, &manifest, &bound_shell.execution_path).unwrap();
+        write_bound_rust_host_tool_aliases(&guard, std::slice::from_ref(&binding), &bound_shell.execution_path)
+            .unwrap();
+
+        let authorities = rust_child_action_fixed_executables(
+            &tools.rustc,
+            &manifest,
+            &bound_shell,
+            &[binding],
+            &[],
+            &guard,
+            Some(FIXED_POINT_TEST_DIGEST_A),
+        )
+        .unwrap();
+        let paths = authorities.iter().map(|authority| authority.path.as_str()).collect::<BTreeSet<_>>();
+
+        assert_eq!(authorities.iter().filter(|authority| authority.kind == RustFixedExecutableKind::Rustc).count(), 1);
+        assert_eq!(paths.len(), authorities.len());
+        assert!(paths.contains(path_to_string(&fs::canonicalize(&busybox).unwrap()).unwrap().as_str()));
+        assert!(paths.contains(path_to_string(&fs::canonicalize(guard.join("busybox")).unwrap()).unwrap().as_str()));
+        assert!(authorities.iter().all(|authority| authority.output_identity_blake3 == authority.digest_blake3));
     }
 
     #[test]
@@ -4627,12 +5167,16 @@ mod tests {
             status: absent_rust_source_provider_binding(),
             rustc: None,
             source_built_shell: None,
+            source_built_host_tools: Vec::new(),
+            source_built_native_artifacts: Vec::new(),
             toolchain_closure_status: None,
         };
         let validated = LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: Some(provider_rustc.clone()),
             source_built_shell: None,
+            source_built_host_tools: Vec::new(),
+            source_built_native_artifacts: Vec::new(),
             toolchain_closure_status: None,
         };
 
@@ -4650,6 +5194,8 @@ mod tests {
             status: absent_rust_source_provider_binding(),
             rustc: Some(PathBuf::from("/provider/bin/rustc")),
             source_built_shell: None,
+            source_built_host_tools: Vec::new(),
+            source_built_native_artifacts: Vec::new(),
             toolchain_closure_status: Some(provider_status.clone()),
         };
 
@@ -4667,6 +5213,8 @@ mod tests {
             status: absent_rust_source_provider_binding(),
             rustc: None,
             source_built_shell: None,
+            source_built_host_tools: Vec::new(),
+            source_built_native_artifacts: Vec::new(),
             toolchain_closure_status: None,
         };
 
@@ -4955,6 +5503,8 @@ mod tests {
             status: absent_rust_source_provider_binding(),
             rustc: Some(PathBuf::from("/provider/bin/rustc")),
             source_built_shell: None,
+            source_built_host_tools: Vec::new(),
+            source_built_native_artifacts: Vec::new(),
             toolchain_closure_status: Some(provider_status),
         };
 

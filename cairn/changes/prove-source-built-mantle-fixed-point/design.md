@@ -56,6 +56,8 @@ Provider construction emits complete stage-local plans before each provider stag
 
 Rust unit actions use the unit graph for producer edges. Compile actions use fixed toolchain authority. Build-script executions use the compile action and declared output identity. Receipt-bound aliases use the BusyBox shell identity from the full-source Rust binding, not ambient `/bin/sh`.
 
+The stage shell writes fixed authority before native planning. The planner reads rustc identity from those bound bytes without an unplanned `rustc -vV`. It writes the unit plan before filter installation. The execution port then scopes compiler and build-script events, promotes generated build scripts, and writes a raw audit plus typed reconciliation before it reports success or failure.
+
 **Rationale:** Path classification can mislabel copied, stale, or attacker-selected files as generated output. The producer relationship and observed content identity preserve the existing Mantle trust model.
 
 ### Decision: reconcile planned and observed execution

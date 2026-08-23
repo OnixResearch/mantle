@@ -38,6 +38,8 @@ The proof fails before construction when any action adapter or authority relatio
 
 Produced toolchains create a planning dependency. Provider stages therefore emit complete stage-local plans before their own execution. Promoted checkpoints bind those plans. A restored attempt composes them into the root plan before any current build action. Post-execution synthesis remains forbidden.
 
+For stage1 and stage2, the fixed-authority file exists before native Rust planning. Planning reads the bound rustc identity without executing rustc. The worker writes its unit action plan before seccomp installation. Compile scopes include rustc and nested fixed tools. Build-script scopes use the compile action and declared output identity to promote measured executable bytes before launch.
+
 After execution, Mantle reconciles protected-exec and build execution records with the plan. It rejects unknown events, missing required events, digest drift, producer drift, count-bound violations, undeclared inputs, and locality drift.
 
 The v2 proof receipt binds the action plan digest and observed reconciliation digest. Bootstrap promotion independently recomputes these links. `mantle --json bootstrap trust-report --proof-root <path>` renders the bound result. The command is a view, not a new authority source.
