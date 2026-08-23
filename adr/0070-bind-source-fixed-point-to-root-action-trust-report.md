@@ -65,6 +65,8 @@ Rejected because it would create a second evidence authority. The report must de
 - Native-provider and Rust-unit planners need complete action adapters.
 - Missing adapters block the proof instead of producing a partial success report.
 - Generated build scripts need producer-linked authority before execution.
+- Rust unit plans distinguish fixed toolchain executables from producer-linked build-script executables.
+- Receipt-bound tool aliases and compatibility probes must use the source-built BusyBox shell bound by the Rust-provider receipt. Ambient `/bin/sh` cannot authorize them.
 - Action and event collections require deterministic order and explicit limits.
 - The report improves review and diagnostics without proving compiler correctness, seed correctness, kernel isolation, or independent reproducibility.
 - The operator view revalidates the fixed-point receipt before rendering. If the receipt does not bind both action files, it reports `fixed-point-only` and explicit blockers.

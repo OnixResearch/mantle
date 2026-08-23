@@ -925,10 +925,13 @@ mod linux {
         use super::*;
         use crate::protected_exec::DigestSpec;
         use crate::protected_exec::ExecutableSeedEntry;
+        use crate::protected_exec::PlannedExecutable;
         use crate::protected_exec::Stage0Inventory;
 
         const CHILD_MODE_VAR: &str = "CRUNCH_TEST_SECCOMP_CHILD_MODE";
         const LISTENER_ISOLATION_CHILD_MODE: &str = "listener-isolation";
+        const RUST_ACTION_ALLOW_CHILD_MODE: &str = "rust-action-allow";
+        const RUST_ACTION_DENY_CHILD_MODE: &str = "rust-action-deny";
         const FRESH_LISTENER_WORKER_COUNT: usize = 2;
         const _: () = assert!(FRESH_LISTENER_WORKER_COUNT > 1);
         const AUDIT_FLUSH_WAIT_MS: u64 = 50;
@@ -946,6 +949,17 @@ mod linux {
                 source_entries: Vec::new(),
             };
             ProtectedExecPolicy::from_inventory(inventory).unwrap()
+        }
+
+        fn current_exe_action_policy(digest_hex: String) -> ProtectedExecPolicy {
+            let current_exe = std::env::current_exe().unwrap();
+            ProtectedExecPolicy::from_action_plan(&["rust-provider-final".to_string()], &[PlannedExecutable {
+                authorization_id: "rustc".to_string(),
+                source_stage_id: "rust-provider-final".to_string(),
+                path: current_exe,
+                digest_hex,
+            }])
+            .unwrap()
         }
 
         fn seed_entry(id: &str, role: &str, path: &Path, digest_hex: String, required: bool) -> ExecutableSeedEntry {
@@ -1106,6 +1120,38 @@ mod linux {
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
+        }
+
+        #[test]
+        fn rust_action_policy_supervises_allowed_and_denied_child_exec() {
+            match std::env::var(CHILD_MODE_VAR).ok().as_deref() {
+                Some(RUST_ACTION_ALLOW_CHILD_MODE) => {
+                    run_rust_action_child(true);
+                    return;
+                }
+                Some(RUST_ACTION_DENY_CHILD_MODE) => {
+                    run_rust_action_child(false);
+                    return;
+                }
+                _ => {}
+            }
+            for mode in [RUST_ACTION_ALLOW_CHILD_MODE, RUST_ACTION_DENY_CHILD_MODE] {
+                let output = Command::new(std::env::current_exe().unwrap())
+                    .arg("--exact")
+                    .arg(
+                        "protected_exec_seccomp::linux::tests::rust_action_policy_supervises_allowed_and_denied_child_exec",
+                    )
+                    .arg("--nocapture")
+                    .env(CHILD_MODE_VAR, mode)
+                    .output()
+                    .unwrap();
+                assert!(
+                    output.status.success(),
+                    "mode={mode}\nstdout={}\nstderr={}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
         }
 
         #[test]
@@ -1396,6 +1442,29 @@ mod linux {
             assert_eq!(events.len(), 1);
             assert_eq!(events[0].policy_decision, "denied");
             assert!(events[0].reason.contains("digest mismatch"));
+        }
+
+        fn run_rust_action_child(allow: bool) {
+            let current_exe = std::env::current_exe().unwrap();
+            let actual_digest = blake3_file_hex(&current_exe).unwrap();
+            let planned_digest = if allow { actual_digest.clone() } else { "0".repeat(64) };
+            let supervisor = install_current_thread_exec_supervisor(current_exe_action_policy(planned_digest)).unwrap();
+            let result = Command::new(&current_exe).arg("--help").status();
+            std::thread::sleep(std::time::Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+            let events = supervisor.audit_events();
+
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].digest_hex, actual_digest);
+            if allow {
+                assert!(result.unwrap().success());
+                assert_eq!(events[0].policy_decision, "allowed");
+                assert_eq!(events[0].inventory_entry_id.as_deref(), Some("planned:rust-provider-final:rustc"));
+            } else {
+                assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::PermissionDenied);
+                assert_eq!(events[0].policy_decision, "denied");
+                assert!(events[0].inventory_entry_id.is_none());
+                assert!(events[0].reason.contains("digest mismatch"));
+            }
         }
 
         fn run_denied_host_bwrap_child() {

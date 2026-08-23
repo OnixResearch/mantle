@@ -137,7 +137,16 @@ struct LoadedToolchainClosure {
 struct LoadedRustSourceProvider {
     status: RustSourceProviderBindingStatus,
     rustc: Option<PathBuf>,
+    source_built_shell: Option<BoundRustExecutionShell>,
     toolchain_closure_status: Option<crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus>,
+}
+
+#[derive(Clone, Debug)]
+struct BoundRustExecutionShell {
+    execution_path: PathBuf,
+    content_digest_blake3: String,
+    source_id: String,
+    construction_receipt_digest_blake3: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -1371,7 +1380,13 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     let loaded_toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
     let requested_rustc = selected_cargo_free_rustc(&loaded_rust_provider, options.rustc);
     let compatibility_rustc = prepare_rustc_for_compatibility(requested_rustc, &loaded_toolchain_closure)?;
-    let compatibility = prepare_rustc_compatibility(&bundle_dir, &compatibility_rustc, &loaded_toolchain_closure)?;
+    let execution_shell = selected_execution_shell(&loaded_rust_provider);
+    let compatibility = prepare_rustc_compatibility_with_shell(
+        &bundle_dir,
+        &compatibility_rustc,
+        &loaded_toolchain_closure,
+        execution_shell,
+    )?;
     let plan = plan_fixed_point_paths(&root, &bundle_dir, &compatibility.summary.stage_rustc, options.targets)?;
     let toolchain_status = enforce_fixed_point_toolchain(
         &compatibility.summary.stage_rustc,
@@ -1396,6 +1411,7 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
         &plan.stages[FIXED_POINT_STAGE1_INDEX],
         &host_mantle,
         &loaded_toolchain_closure,
+        execution_shell,
         stage_policy_digest,
     )?;
     if !stage1.success {
@@ -1409,6 +1425,7 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
         &plan.stages[FIXED_POINT_STAGE2_INDEX],
         stage1_binary,
         &loaded_toolchain_closure,
+        execution_shell,
         stage_policy_digest,
     )?;
     if !stage2.success {
@@ -1590,13 +1607,23 @@ fn prepare_rustc_compatibility(
     requested: &Path,
     toolchain_closure: &LoadedToolchainClosure,
 ) -> Result<RustcCompatibility, RunError> {
+    prepare_rustc_compatibility_with_shell(bundle_dir, requested, toolchain_closure, Path::new("/bin/sh"))
+}
+
+fn prepare_rustc_compatibility_with_shell(
+    bundle_dir: &Path,
+    requested: &Path,
+    toolchain_closure: &LoadedToolchainClosure,
+    execution_shell: &Path,
+) -> Result<RustcCompatibility, RunError> {
     let requested_rustc = resolve_executable(requested, "rustc")?;
     let toolchain_dir = bundle_dir.join(TOOLCHAIN_DIR);
     debug_assert_eq!(toolchain_dir.parent(), Some(bundle_dir));
     debug_assert_ne!(toolchain_dir, requested_rustc);
     fs::create_dir_all(&toolchain_dir)
         .map_err(|err| internal(format!("create toolchain dir {}: {err}", toolchain_dir.display())))?;
-    let probe_path_env = prepare_rustc_compatibility_path_env(&toolchain_dir, toolchain_closure)?;
+    let probe_path_env =
+        prepare_rustc_compatibility_path_env_with_shell(&toolchain_dir, toolchain_closure, execution_shell)?;
     if rustc_accepts_link_self_contained_no(&requested_rustc, &toolchain_dir, probe_path_env.as_deref())? {
         let summary = RustcCompatibilitySummary {
             requested_rustc: requested_rustc.clone(),
@@ -1628,9 +1655,10 @@ fn prepare_rustc_compatibility(
     Ok(RustcCompatibility { summary })
 }
 
-fn prepare_rustc_compatibility_path_env(
+fn prepare_rustc_compatibility_path_env_with_shell(
     toolchain_dir: &Path,
     toolchain_closure: &LoadedToolchainClosure,
+    execution_shell: &Path,
 ) -> Result<Option<OsString>, RunError> {
     let Some(manifest) = &toolchain_closure.manifest else {
         return Ok(None);
@@ -1639,7 +1667,7 @@ fn prepare_rustc_compatibility_path_env(
     remove_owned_path(&path_dir)?;
     fs::create_dir_all(&path_dir)
         .map_err(|err| internal(format!("create receipt-bound rustc probe PATH dir {}: {err}", path_dir.display())))?;
-    write_toolchain_path_aliases(&path_dir, manifest)?;
+    write_toolchain_path_aliases_with_shell(&path_dir, manifest, execution_shell)?;
     let path_env = env::join_paths([path_dir])
         .map_err(|err| internal(format!("construct receipt-bound rustc probe PATH: {err}")))?;
     Ok(Some(path_env))
@@ -2069,12 +2097,14 @@ fn execute_fixed_point_stage(
     stage: &FixedPointStagePlan,
     mantle_bin: &Path,
     toolchain_closure: &LoadedToolchainClosure,
+    execution_shell: &Path,
     policy_digest_blake3: Option<&str>,
 ) -> Result<FixedPointStageRun, RunError> {
     debug_assert!(matches!(stage.name, STAGE1_DIR | STAGE2_DIR));
     debug_assert_eq!(stage.command.path_guard_dir, stage.guard_path_dir);
+    debug_assert!(execution_shell.is_absolute());
     prepare_fixed_point_stage(stage)?;
-    let path_env = execution_path_env(&stage.guard_path_dir, toolchain_closure)?;
+    let path_env = execution_path_env_with_shell(&stage.guard_path_dir, toolchain_closure, execution_shell)?;
     let c_compiler_route = fixed_point_c_compiler_route(toolchain_closure)?;
     let route_json = c_compiler_route
         .as_ref()
@@ -2810,9 +2840,16 @@ fn prepare_execution_toolchain(
         reject_undeclared_external_rustc_wrapper(&rustc, manifest)?;
         let status = enforce_receipt_bound_toolchain(&rustc, toolchain_closure, manifest)?;
         let c_compiler_route = Some(receipt_bound_c_compiler_route(manifest)?);
+        let execution_shell = selected_execution_shell(rust_source_provider);
+        if let Some(bound_shell) = &rust_source_provider.source_built_shell {
+            debug_assert_eq!(execution_shell, bound_shell.execution_path);
+            debug_assert_eq!(bound_shell.content_digest_blake3.len(), blake3::OUT_LEN * 2);
+            debug_assert!(!bound_shell.source_id.is_empty());
+            debug_assert_eq!(bound_shell.construction_receipt_digest_blake3.len(), blake3::OUT_LEN * 2);
+        }
         ExecutionToolchain {
             rustc,
-            path_env: execution_path_env(guard_path_dir, toolchain_closure)?,
+            path_env: execution_path_env_with_shell(guard_path_dir, toolchain_closure, execution_shell)?,
             status,
             c_compiler_route,
         }
@@ -3059,10 +3096,18 @@ fn declared_file_members(
 }
 
 fn execution_path_env(cargo_path_dir: &Path, toolchain_closure: &LoadedToolchainClosure) -> Result<OsString, RunError> {
+    execution_path_env_with_shell(cargo_path_dir, toolchain_closure, Path::new("/bin/sh"))
+}
+
+fn execution_path_env_with_shell(
+    cargo_path_dir: &Path,
+    toolchain_closure: &LoadedToolchainClosure,
+    execution_shell: &Path,
+) -> Result<OsString, RunError> {
     let Some(manifest) = &toolchain_closure.manifest else {
         return guarded_path(cargo_path_dir);
     };
-    write_toolchain_path_aliases(cargo_path_dir, manifest)?;
+    write_toolchain_path_aliases_with_shell(cargo_path_dir, manifest, execution_shell)?;
     env::join_paths([cargo_path_dir]).map_err(|err| internal(format!("construct receipt-bound PATH: {err}")))
 }
 
@@ -3070,6 +3115,20 @@ fn write_toolchain_path_aliases(
     guard_path_dir: &Path,
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
 ) -> Result<(), RunError> {
+    write_toolchain_path_aliases_with_shell(guard_path_dir, manifest, Path::new("/bin/sh"))
+}
+
+fn write_toolchain_path_aliases_with_shell(
+    guard_path_dir: &Path,
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+    execution_shell: &Path,
+) -> Result<(), RunError> {
+    if !execution_shell.is_absolute() {
+        return Err(RunError::Build(format!(
+            "receipt-bound toolchain shell is not absolute: {}",
+            execution_shell.display()
+        )));
+    }
     let aliases = toolchain_path_aliases(manifest)?;
     let c_compiler = c_compiler_alias_target(manifest)?;
     let c_compiler_runtime = c_compiler_alias_runtime_inputs(manifest)?;
@@ -3080,10 +3139,10 @@ fn write_toolchain_path_aliases(
         }
         remove_owned_path(&link)?;
         if c_compiler.as_ref().is_some_and(|compiler| compiler == &target) {
-            write_c_compiler_toolchain_alias(&target, &c_compiler_runtime, &link)?;
+            write_c_compiler_toolchain_alias(&target, &c_compiler_runtime, &link, execution_shell)?;
             continue;
         }
-        write_toolchain_alias(&target, &link)?;
+        write_toolchain_alias(&target, &link, execution_shell)?;
     }
     Ok(())
 }
@@ -3262,8 +3321,8 @@ fn path_to_string(path: &Path) -> Result<String, RunError> {
 }
 
 #[cfg(unix)]
-fn write_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
-    write_text(link, &format!("#!/bin/sh\nexec {} \"$@\"\n", shell_quote(target)))?;
+fn write_toolchain_alias(target: &Path, link: &Path, execution_shell: &Path) -> Result<(), RunError> {
+    write_text(link, &format!("#!{}\nexec {} \"$@\"\n", execution_shell.display(), shell_quote(target)))?;
     set_executable(link)
 }
 
@@ -3272,6 +3331,7 @@ fn write_c_compiler_toolchain_alias(
     target: &Path,
     runtime_inputs: &CcCompilerAliasRuntimeInputs,
     link: &Path,
+    execution_shell: &Path,
 ) -> Result<(), RunError> {
     debug_assert_ne!(target, link);
     debug_assert!(link.parent().is_some());
@@ -3290,7 +3350,8 @@ fn write_c_compiler_toolchain_alias(
         "target crt1.o",
     )?;
     let script = format!(
-        "#!/bin/sh\nruntime_dir={}\nmapped_args_set=false\nstatic_pie_normalized=false\nresponse_index=0\nrewrite_response_file() {{\n  response_source=$1\n  response_index=$((response_index + 1))\n  response_target=\"$runtime_dir/response-$response_index.rsp\"\n  : > \"$response_target\" || exit 1\n  while IFS= read -r response_arg || [ -n \"$response_arg\" ]; do\n    case \"$response_arg\" in\n      {crt1}|*/{crt1}|{rcrt1}|*/{rcrt1}) response_arg=\"$runtime_dir/{crt1}\" ;;\n      {static_pie}) response_arg=\"{static}\"; static_pie_normalized=true ;;\n    esac\n    printf '%s\\n' \"$response_arg\" >> \"$response_target\" || exit 1\n  done < \"$response_source\" || exit 1\n  mapped_arg=\"@$response_target\"\n}}\nfor arg in \"$@\"; do\n  case \"$arg\" in\n    @*) response_source=${{arg#@}}; if [ -r \"$response_source\" ]; then rewrite_response_file \"$response_source\"; else mapped_arg=\"$arg\"; fi ;;\n    {crt1}|*/{crt1}|{rcrt1}|*/{rcrt1}) mapped_arg=\"$runtime_dir/{crt1}\" ;;\n    {static_pie}) mapped_arg=\"{static}\"; static_pie_normalized=true ;;\n    *) mapped_arg=\"$arg\" ;;\n  esac\n  if [ \"$mapped_args_set\" = false ]; then\n    set -- \"$mapped_arg\"\n    mapped_args_set=true\n  else\n    set -- \"$@\" \"$mapped_arg\"\n  fi\ndone\nif [ \"$static_pie_normalized\" = true ]; then\n  set -- \"$@\" {non_pie}\nfi\nexec {} -L\"$runtime_dir\" \"$@\"\n",
+        "#!{}\nruntime_dir={}\nmapped_args_set=false\nstatic_pie_normalized=false\nresponse_index=0\nrewrite_response_file() {{\n  response_source=$1\n  response_index=$((response_index + 1))\n  response_target=\"$runtime_dir/response-$response_index.rsp\"\n  : > \"$response_target\" || exit 1\n  while IFS= read -r response_arg || [ -n \"$response_arg\" ]; do\n    case \"$response_arg\" in\n      {crt1}|*/{crt1}|{rcrt1}|*/{rcrt1}) response_arg=\"$runtime_dir/{crt1}\" ;;\n      {static_pie}) response_arg=\"{static}\"; static_pie_normalized=true ;;\n    esac\n    printf '%s\\n' \"$response_arg\" >> \"$response_target\" || exit 1\n  done < \"$response_source\" || exit 1\n  mapped_arg=\"@$response_target\"\n}}\nfor arg in \"$@\"; do\n  case \"$arg\" in\n    @*) response_source=${{arg#@}}; if [ -r \"$response_source\" ]; then rewrite_response_file \"$response_source\"; else mapped_arg=\"$arg\"; fi ;;\n    {crt1}|*/{crt1}|{rcrt1}|*/{rcrt1}) mapped_arg=\"$runtime_dir/{crt1}\" ;;\n    {static_pie}) mapped_arg=\"{static}\"; static_pie_normalized=true ;;\n    *) mapped_arg=\"$arg\" ;;\n  esac\n  if [ \"$mapped_args_set\" = false ]; then\n    set -- \"$mapped_arg\"\n    mapped_args_set=true\n  else\n    set -- \"$@\" \"$mapped_arg\"\n  fi\ndone\nif [ \"$static_pie_normalized\" = true ]; then\n  set -- \"$@\" {non_pie}\nfi\nexec {} -L\"$runtime_dir\" \"$@\"\n",
+        execution_shell.display(),
         shell_quote(&runtime_dir),
         shell_quote(target),
         crt1 = TOOLCHAIN_ALIAS_CRT1_OBJECT,
@@ -3314,7 +3375,7 @@ fn copy_alias_runtime_file(source: &Path, destination: &Path, label: &str) -> Re
 }
 
 #[cfg(not(unix))]
-fn write_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
+fn write_toolchain_alias(target: &Path, link: &Path, _execution_shell: &Path) -> Result<(), RunError> {
     fs::copy(target, link)
         .map_err(|err| internal(format!("copy {} -> {}: {err}", target.display(), link.display())))?;
     set_executable(link)
@@ -3325,8 +3386,9 @@ fn write_c_compiler_toolchain_alias(
     target: &Path,
     _runtime_inputs: &CcCompilerAliasRuntimeInputs,
     link: &Path,
+    execution_shell: &Path,
 ) -> Result<(), RunError> {
-    write_toolchain_alias(target, link)
+    write_toolchain_alias(target, link, execution_shell)
 }
 
 fn guarded_path(cargo_path_dir: &Path) -> Result<OsString, RunError> {
@@ -3477,6 +3539,13 @@ fn selected_cargo_free_rustc<'a>(loaded_provider: &'a LoadedRustSourceProvider, 
     loaded_provider.rustc.as_deref().unwrap_or(fallback_rustc)
 }
 
+fn selected_execution_shell(provider: &LoadedRustSourceProvider) -> &Path {
+    provider
+        .source_built_shell
+        .as_ref()
+        .map_or_else(|| Path::new("/bin/sh"), |shell| shell.execution_path.as_path())
+}
+
 fn load_rust_source_provider(provider_dir: Option<&Path>) -> Result<LoadedRustSourceProvider, RunError> {
     debug_assert_eq!(RUST_SOURCE_PROVIDER_REQUIRED_ROLE_COUNT, 1);
     debug_assert_ne!(RUST_SOURCE_PROVIDER_STATUS_ABSENT, RUST_SOURCE_PROVIDER_STATUS_VALIDATED);
@@ -3484,6 +3553,7 @@ fn load_rust_source_provider(provider_dir: Option<&Path>) -> Result<LoadedRustSo
         return Ok(LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: None,
+            source_built_shell: None,
             toolchain_closure_status: None,
         });
     };
@@ -3506,11 +3576,116 @@ fn load_rust_source_provider(provider_dir: Option<&Path>) -> Result<LoadedRustSo
         validation.metadata_path.clone(),
         &validation.validation,
     );
+    let source_built_shell = load_bound_rust_execution_shell(&provider_dir)?;
     Ok(LoadedRustSourceProvider {
         status: validated_rust_source_provider_binding(&provider_dir, &validation, &rustc_path),
         rustc: Some(rustc_path),
+        source_built_shell,
         toolchain_closure_status: Some(toolchain_closure_status),
     })
+}
+
+fn load_bound_rust_execution_shell(provider_dir: &Path) -> Result<Option<BoundRustExecutionShell>, RunError> {
+    let binding_path = provider_dir.join(crate::full_source_rust_binding_shell::FULL_SOURCE_RUST_BINDING_RELATIVE_PATH);
+    if !binding_path.is_file() {
+        return Ok(None);
+    }
+    let bytes = fs::read(&binding_path)
+        .map_err(|err| RunError::Build(format!("read full-source Rust binding {}: {err}", binding_path.display())))?;
+    let binding =
+        serde_json::from_slice::<crate::full_source_rust_binding::FullSourceRustProviderBindingReceipt>(&bytes)
+            .map_err(|err| {
+                RunError::Build(format!("parse full-source Rust binding {}: {err}", binding_path.display()))
+            })?;
+    validate_bound_rust_execution_shell_policy(&binding)?;
+    let candidates = binding
+        .host_tools
+        .iter()
+        .filter(|tool| tool.role == crate::full_source_rust_binding::FullSourceRustHostToolRole::Busybox)
+        .collect::<Vec<_>>();
+    let [busybox] = candidates.as_slice() else {
+        return Err(RunError::Build(format!(
+            "full-source Rust binding must contain one BusyBox host tool, found {}",
+            candidates.len()
+        )));
+    };
+    bound_rust_execution_shell(busybox).map(Some)
+}
+
+fn validate_bound_rust_execution_shell_policy(
+    binding: &crate::full_source_rust_binding::FullSourceRustProviderBindingReceipt,
+) -> Result<(), RunError> {
+    if binding.ambient_tool_discovery || !binding.fallback_events.is_empty() || !binding.seed_exceptions.is_empty() {
+        return Err(RunError::Build(
+            "full-source Rust binding cannot authorize a shell with ambient discovery, fallback, or seed exceptions"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn bound_rust_execution_shell(
+    busybox: &crate::full_source_rust_binding::FullSourceRustHostToolBinding,
+) -> Result<BoundRustExecutionShell, RunError> {
+    let busybox_path = Path::new(&busybox.path);
+    if !busybox_path.is_absolute() {
+        return Err(RunError::Build(format!("full-source BusyBox path is not absolute: {}", busybox_path.display())));
+    }
+    require_executable(busybox_path)?;
+    let observed_busybox = crate::protected_exec::blake3_file_hex(busybox_path)
+        .map_err(|err| RunError::Build(format!("hash full-source BusyBox {}: {err}", busybox_path.display())))?;
+    if observed_busybox != busybox.content_digest_blake3 {
+        return Err(RunError::Build(format!(
+            "full-source BusyBox digest mismatch: expected {}, got {observed_busybox}",
+            busybox.content_digest_blake3
+        )));
+    }
+    validate_bound_host_tool_receipt(busybox)?;
+    let shell_path = busybox_path
+        .parent()
+        .ok_or_else(|| RunError::Build("full-source BusyBox path has no parent".to_string()))?
+        .join("sh");
+    require_executable(&shell_path)?;
+    let resolved_shell = fs::canonicalize(&shell_path)
+        .map_err(|err| RunError::Build(format!("resolve full-source shell {}: {err}", shell_path.display())))?;
+    if resolved_shell
+        != fs::canonicalize(busybox_path)
+            .map_err(|err| RunError::Build(format!("resolve full-source BusyBox {}: {err}", busybox_path.display())))?
+    {
+        return Err(RunError::Build(format!(
+            "full-source shell {} does not resolve to bound BusyBox {}",
+            shell_path.display(),
+            busybox_path.display()
+        )));
+    }
+    Ok(BoundRustExecutionShell {
+        execution_path: shell_path,
+        content_digest_blake3: busybox.content_digest_blake3.clone(),
+        source_id: busybox.source_id.clone(),
+        construction_receipt_digest_blake3: busybox.construction_receipt_digest_blake3.clone(),
+    })
+}
+
+fn validate_bound_host_tool_receipt(
+    tool: &crate::full_source_rust_binding::FullSourceRustHostToolBinding,
+) -> Result<(), RunError> {
+    let receipt_path = Path::new(&tool.construction_receipt_path);
+    if !receipt_path.is_absolute() || !receipt_path.is_file() {
+        return Err(RunError::Build(format!(
+            "full-source host-tool construction receipt is unavailable: {}",
+            receipt_path.display()
+        )));
+    }
+    let observed = crate::protected_exec::blake3_file_hex(receipt_path).map_err(|err| {
+        RunError::Build(format!("hash host-tool construction receipt {}: {err}", receipt_path.display()))
+    })?;
+    if observed != tool.construction_receipt_digest_blake3 {
+        return Err(RunError::Build(format!(
+            "full-source host-tool construction receipt digest mismatch: expected {}, got {observed}",
+            tool.construction_receipt_digest_blake3
+        )));
+    }
+    Ok(())
 }
 
 fn absent_rust_source_provider_binding() -> RustSourceProviderBindingStatus {
@@ -4406,6 +4581,44 @@ mod tests {
         assert_eq!(status.policy_digest_blake3, loaded.status.policy_digest_blake3);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn bound_rust_execution_shell_requires_exact_busybox_and_receipt_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = dir.path().join("bin");
+        let busybox = bin.join("busybox");
+        let shell = bin.join("sh");
+        let receipt = dir.path().join("busybox-receipt.json");
+        fs::create_dir_all(&bin).unwrap();
+        write_fake_executable(&busybox, "#!/bin/sh\nexit 0\n");
+        std::os::unix::fs::symlink(&busybox, &shell).unwrap();
+        fs::write(&receipt, b"{\"status\":\"built\"}\n").unwrap();
+        let busybox_digest = crate::protected_exec::blake3_file_hex(&busybox).unwrap();
+        let receipt_digest = crate::protected_exec::blake3_file_hex(&receipt).unwrap();
+        let binding = crate::full_source_rust_binding::FullSourceRustHostToolBinding {
+            role: crate::full_source_rust_binding::FullSourceRustHostToolRole::Busybox,
+            path: busybox.display().to_string(),
+            content_digest_blake3: busybox_digest.clone(),
+            source_id: "busybox-source".to_string(),
+            construction_receipt_path: receipt.display().to_string(),
+            construction_receipt_digest_blake3: receipt_digest.clone(),
+        };
+
+        let bound = bound_rust_execution_shell(&binding).unwrap();
+        let mut wrong_tool = binding.clone();
+        wrong_tool.content_digest_blake3 = FIXED_POINT_TEST_DIGEST_A.to_string();
+        let tool_error = bound_rust_execution_shell(&wrong_tool).unwrap_err();
+        let mut wrong_receipt = binding;
+        wrong_receipt.construction_receipt_digest_blake3 = FIXED_POINT_TEST_DIGEST_B.to_string();
+        let receipt_error = bound_rust_execution_shell(&wrong_receipt).unwrap_err();
+
+        assert_eq!(bound.execution_path, shell);
+        assert_eq!(bound.content_digest_blake3, busybox_digest);
+        assert_eq!(bound.construction_receipt_digest_blake3, receipt_digest);
+        assert!(tool_error.message().contains("BusyBox digest mismatch"));
+        assert!(receipt_error.message().contains("construction receipt digest mismatch"));
+    }
+
     #[test]
     fn rust_source_provider_selection_prefers_validated_provider_and_keeps_fallback() {
         let fallback = PathBuf::from("/fallback/rustc");
@@ -4413,11 +4626,13 @@ mod tests {
         let absent = LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: None,
+            source_built_shell: None,
             toolchain_closure_status: None,
         };
         let validated = LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: Some(provider_rustc.clone()),
+            source_built_shell: None,
             toolchain_closure_status: None,
         };
 
@@ -4434,6 +4649,7 @@ mod tests {
         let provider = LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: Some(PathBuf::from("/provider/bin/rustc")),
+            source_built_shell: None,
             toolchain_closure_status: Some(provider_status.clone()),
         };
 
@@ -4450,6 +4666,7 @@ mod tests {
         let provider = LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: None,
+            source_built_shell: None,
             toolchain_closure_status: None,
         };
 
@@ -4737,6 +4954,7 @@ mod tests {
         let provider = LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: Some(PathBuf::from("/provider/bin/rustc")),
+            source_built_shell: None,
             toolchain_closure_status: Some(provider_status),
         };
 
@@ -4965,8 +5183,8 @@ mod tests {
 
         let err = enforce_receipt_bound_toolchain(&tools.rustc, &closure, &manifest).unwrap_err();
 
-        assert!(err.message().contains("host-tool-leakage"));
-        assert!(err.message().contains("Sysroot"));
+        assert!(err.message().contains("host-tool-leakage"), "unexpected error: {}", err.message());
+        assert!(err.message().contains("Sysroot"), "unexpected error: {}", err.message());
         assert!(err.message().contains(path_to_string(&leaked_sysroot).unwrap().as_str()));
     }
 
@@ -5010,8 +5228,8 @@ mod tests {
 
         let err = enforce_receipt_bound_toolchain(&tools.rustc, &closure, &manifest).unwrap_err();
 
-        assert!(err.message().contains("host-tool-leakage"));
-        assert!(err.message().contains("PkgConfig"));
+        assert!(err.message().contains("host-tool-leakage"), "unexpected error: {}", err.message());
+        assert!(err.message().contains("PkgConfig"), "unexpected error: {}", err.message());
         assert!(err.message().contains("digest mismatch"));
     }
 
@@ -5053,6 +5271,28 @@ mod tests {
         assert_eq!(aliases.get(ARCHIVER_ALIAS), Some(&tools.archiver));
         assert_eq!(aliases.get(RANLIB_ALIAS), Some(&tools.ranlib));
         assert!(!aliases.contains_key("cargo"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_path_aliases_bind_the_selected_source_built_shell() {
+        let dir = tempfile::tempdir().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let guard_dir = dir.path().join("guard-bin");
+        let shell = dir.path().join("host-tools/bin/sh");
+        fs::create_dir_all(&guard_dir).unwrap();
+        fs::create_dir_all(shell.parent().unwrap()).unwrap();
+        write_fake_executable(&shell, "#!/bin/sh\nexit 0\n");
+
+        write_toolchain_path_aliases_with_shell(&guard_dir, &manifest, &shell).unwrap();
+        let linker_alias = fs::read_to_string(guard_dir.join(LINKER_ALIAS)).unwrap();
+        let c_alias = fs::read_to_string(guard_dir.join(C_COMPILER_ALIAS)).unwrap();
+
+        assert!(linker_alias.starts_with(&format!("#!{}\n", shell.display())));
+        assert!(c_alias.starts_with(&format!("#!{}\n", shell.display())));
+        assert!(!linker_alias.starts_with("#!/bin/sh\n"));
+        assert!(!c_alias.starts_with("#!/bin/sh\n"));
     }
 
     #[cfg(unix)]

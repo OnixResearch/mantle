@@ -181,6 +181,7 @@ mod source_built_fixed_point_checkpoint_shell;
 mod source_built_fixed_point_dev_cache;
 mod source_built_fixed_point_receipt;
 mod source_built_fixed_point_shell;
+mod source_built_rust_action_plan;
 mod source_built_trust_report;
 mod source_built_trust_report_shell;
 mod source_bundle;

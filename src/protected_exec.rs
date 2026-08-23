@@ -360,6 +360,28 @@ impl ProtectedExecPolicy {
         Self::from_stagex_plan(seed_path, seed_digest_blake3, promotion_stage_ids, &[])
     }
 
+    pub fn from_action_plan(
+        producer_action_ids: &[String],
+        planned_executables: &[PlannedExecutable],
+    ) -> Result<Self, ProtectedExecError> {
+        if planned_executables.is_empty() {
+            return Err(ProtectedExecError::EmptyField {
+                entry_id: "protected-action-plan".to_string(),
+                field: "planned_executables",
+            });
+        }
+        let allowed_producer_ids = validate_promotion_source_ids(producer_action_ids)?;
+        let executable_entries = planned_executables
+            .iter()
+            .map(|planned| planned_executable_entry(planned, &allowed_producer_ids))
+            .collect::<Result<Vec<_>, _>>()?;
+        let inventory = Stage0Inventory {
+            executable_entries,
+            source_entries: Vec::new(),
+        };
+        Self::from_inventory_with_required_roles(inventory, &[], Some(allowed_producer_ids), true)
+    }
+
     pub fn from_stagex_plan(
         seed_path: PathBuf,
         seed_digest_blake3: String,
@@ -737,7 +759,9 @@ fn validate_required_roles(
     required_roles: &[&'static str],
 ) -> Result<(), ProtectedExecError> {
     assert!(!entries.is_empty(), "inventory must include executable entries");
-    assert!(!required_roles.is_empty(), "required executable roles must not be empty");
+    if required_roles.is_empty() {
+        return Ok(());
+    }
     let roles: BTreeSet<&str> =
         entries.iter().filter(|entry| entry.required).map(|entry| entry.role.as_str()).collect();
     for role in required_roles {
@@ -1712,12 +1736,12 @@ fn planned_executable_entry(
         },
         version_evidence: Some(planned_version_evidence(&planned.path, &planned.digest_hex)),
         provenance_category: PROVENANCE_OPERATOR_SOURCE_BUILD.to_string(),
-        provenance: format!("planned output of StageX stage {}", planned.source_stage_id),
+        provenance: format!("planned output of protected producer {}", planned.source_stage_id),
         allowed_reason: format!(
-            "execute only after the StageX plan produces the exact digest for stage {}",
+            "execute only after the protected action plan binds the exact digest for producer {}",
             planned.source_stage_id
         ),
-        owner: "mantle-stagex-lineage".to_string(),
+        owner: "mantle-protected-action".to_string(),
         required: false,
     };
     validate_executable_entry(&entry)?;
@@ -2647,6 +2671,49 @@ mod tests {
         assert!(decision.allowed);
         assert_eq!(decision.entry_id.as_deref(), Some("stagex:seed:hex0"));
         assert!(matches!(undeclared, Err(ProtectedExecError::UndeclaredExecutable { .. })));
+    }
+
+    #[test]
+    fn protected_action_plan_authorizes_exact_producer_bound_bytes() {
+        let rustc_path = PathBuf::from("/provider/bin/rustc");
+        let producer_ids = vec!["rust-provider-final".to_string()];
+        let planned = vec![PlannedExecutable {
+            authorization_id: "rustc".to_string(),
+            source_stage_id: "rust-provider-final".to_string(),
+            path: rustc_path.clone(),
+            digest_hex: DIGEST_A.to_string(),
+        }];
+        let policy = ProtectedExecPolicy::from_action_plan(&producer_ids, &planned).unwrap();
+
+        let allowed = policy.decide_exec(&ExecRequest {
+            path: rustc_path.clone(),
+            digest_hex: DIGEST_A.to_string(),
+        });
+        let changed = policy.decide_exec(&ExecRequest {
+            path: rustc_path,
+            digest_hex: DIGEST_B.to_string(),
+        });
+
+        assert!(allowed.unwrap().allowed);
+        assert!(matches!(changed, Err(ProtectedExecError::DigestMismatch { .. })));
+    }
+
+    #[test]
+    fn protected_action_plan_rejects_empty_or_unbound_executables() {
+        let producer_ids = vec!["rust-provider-final".to_string()];
+        let empty = ProtectedExecPolicy::from_action_plan(&producer_ids, &[]).unwrap_err();
+        let unbound = ProtectedExecPolicy::from_action_plan(&producer_ids, &[PlannedExecutable {
+            authorization_id: "rustc".to_string(),
+            source_stage_id: "unknown-producer".to_string(),
+            path: PathBuf::from("/provider/bin/rustc"),
+            digest_hex: DIGEST_A.to_string(),
+        }])
+        .unwrap_err();
+
+        assert!(matches!(empty, ProtectedExecError::EmptyField { .. }));
+        assert_eq!(unbound, ProtectedExecError::UndeclaredPromotionSource {
+            source_entry_id: "unknown-producer".to_string(),
+        });
     }
 
     #[test]

@@ -54,6 +54,8 @@ Provider construction emits complete stage-local plans before each provider stag
 
 **Choice:** A fixed executable carries a reviewed BLAKE3 identity. A generated executable carries its producer action and output identity, then receives an observed BLAKE3 before execution. A store path, output prefix, executable name, or generated-directory location cannot grant authority by itself.
 
+Rust unit actions use the unit graph for producer edges. Compile actions use fixed toolchain authority. Build-script executions use the compile action and declared output identity. Receipt-bound aliases use the BusyBox shell identity from the full-source Rust binding, not ambient `/bin/sh`.
+
 **Rationale:** Path classification can mislabel copied, stale, or attacker-selected files as generated output. The producer relationship and observed content identity preserve the existing Mantle trust model.
 
 ### Decision: reconcile planned and observed execution
