@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "6a135f984229f78e281ddf01a1acf7255d5d42dc666801a37b3612db92478088",
+  "blocker": "error: build failed\nsource-built fixed-point receipt blocked: source-built deterministic receipt classification failed: MissingGenuineRebuildEvidence: rebuild descriptor source closure does not bind receipt source"
+}

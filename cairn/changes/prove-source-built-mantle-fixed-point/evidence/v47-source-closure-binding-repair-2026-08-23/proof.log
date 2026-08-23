@@ -1,0 +1,31 @@
+mantle-runtime-fingerprint {"schema":"mantle-runtime-fingerprint-v1","mantle_version":"0.1.0","command":"self-build","logical_store_prefix":"/mantle/store","physical_store_dir":"/nix/store","state_dir":"/home/brittonr/.local/state/crunch","json_mode":false,"verbosity_source":"verbose-flag","diagnostic_scope":"selected-runtime-context-only","hermeticity_mode":"strict","substitution_mode":"disabled","substituter_count":0,"signing_key_selected":false,"trusted_public_key_count":0,"trust_unsigned":false}
+Generated signing key: crunch-leviathan-1 (/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559/native-state/signing-key)
+[2m2026-08-23T03:59:33.984831Z[0m [32m INFO[0m [2mcrunch_store::handle[0m[2m:[0m blob service opened [3mpath[0m[2m=[0m/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559/native-state/blobs
+[2m2026-08-23T03:59:33.985209Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "FileBackend { lock_supported: true, file: File { fd: 13, path: \"/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559/native-state/directories.redb\", read: true, write: true } }"
+[2m2026-08-23T03:59:34.001988Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 13, path: \"/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559/native-state/directories.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+[2m2026-08-23T03:59:34.012358Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "FileBackend { lock_supported: true, file: File { fd: 14, path: \"/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559/native-state/pathinfo.redb\", read: true, write: true } }"
+[2m2026-08-23T03:59:34.017794Z[0m [33m WARN[0m [2mredb::db[0m[2m:[0m Database "FileBackend { lock_supported: true, file: File { fd: 14, path: \"/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559/native-state/pathinfo.redb\", read: true, write: true } }" not shutdown cleanly. Repairing
+[2m2026-08-23T03:59:34.027766Z[0m [32m INFO[0m [2mcrunch_store::handle[0m[2m:[0m PathInfo database opened [3mpath[0m[2m=[0m/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559/native-state/pathinfo.redb
+[2m2026-08-23T03:59:35.389695Z[0m [32m INFO[0m [2mcrunch_store::handle[0m[2m:[0m blob service opened [3mpath[0m[2m=[0m/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559/native-state/blobs
+[2m2026-08-23T03:59:35.389937Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "FileBackend { lock_supported: true, file: File { fd: 13, path: \"/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559/native-state/directories.redb\", read: true, write: true } }"
+[2m2026-08-23T03:59:35.390247Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Found valid allocator state, full repair not needed
+[2m2026-08-23T03:59:35.402920Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Opening database "FileBackend { lock_supported: true, file: File { fd: 14, path: \"/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559/native-state/pathinfo.redb\", read: true, write: true } }"
+[2m2026-08-23T03:59:35.403009Z[0m [32m INFO[0m [2mredb::db[0m[2m:[0m Found valid allocator state, full repair not needed
+[2m2026-08-23T03:59:35.406610Z[0m [32m INFO[0m [2mcrunch_store::handle[0m[2m:[0m PathInfo database opened [3mpath[0m[2m=[0m/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559/native-state/pathinfo.redb
+Admitted full-source provider /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain
+  output_digest_blake3: 63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9
+  source_closure_blake3: 7a97f836c8daa3dc5cbdf51a2d6ca59e7b995debac22fe5d08c091e667828778
+  metadata_digest_blake3: 50ac462f76ed2033a6d760a9271081351ccb9493e6d9cd796e7b6abdab02a826
+  report: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559/full-source-provider-admission.json
+Materialized source-built native toolchain closure /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559/source-built-toolchain-closure.json
+  members: 17
+  policy_digest_blake3: e392450d4715b484458e7973e294d7ea8fa9705f45f5fb9c7784f6306b63eda7
+Cargo-free fixed-point: success
+bundle: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559/cargo-free-fixed-point
+stage1_binary_blake3: 8e06c4798391cdea850e5efdd090db3300e23babdefb0a094366e354fd0a8e8c
+stage2_binary_blake3: 8e06c4798391cdea850e5efdd090db3300e23babdefb0a094366e354fd0a8e8c
+hermeticity_mode: strict
+strict_proof_admission: true
+error: build failed
+source-built fixed-point proof failed closed: error: build failed
+source-built fixed-point receipt blocked: source-built deterministic receipt classification failed: MissingGenuineRebuildEvidence: rebuild descriptor source closure does not bind receipt source; preserved_attempt=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v47-final-receipt-20260822.source-built-fixed-point-staging-3811559

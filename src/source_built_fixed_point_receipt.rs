@@ -56,6 +56,7 @@ const PROOF_PROVIDER_KIND: &str = "full-source";
 const HERMETICITY_MODE: &str = "strict";
 const PHYSICAL_STORE_ISOLATION: &str = "clean-namespace-per-run";
 const PROOF_TARGET_IDENTITY: &str = "mantle-source-built-fixed-point";
+const SOURCE_AUTHORITY_CLOSURE_NAME: &str = "source-authority-closure";
 const MANTLE_OUTPUT_NAME: &str = "mantle";
 const STAGE1_RUN_ID: &str = "stage1";
 const STAGE2_RUN_ID: &str = "stage2";
@@ -807,8 +808,7 @@ fn rebuild_authority(
     ];
     let arguments_blake3 = rebuild_arguments_digest_blake3(arguments.clone())
         .map_err(|error| receipt_error(format!("digesting rebuild arguments: {error}")))?;
-    let source_inputs = plan.source_inputs.iter().map(rebuild_source_identity).collect::<Vec<_>>();
-    validate_rebuild_source_input_count(source_inputs.len())?;
+    let source_inputs = rebuild_source_identities(&plan.source_inputs, &plan.receipt_contract.source_blake3)?;
     let target = RebuildContentIdentity {
         name: MANTLE_OUTPUT_NAME.to_string(),
         role: RebuildInputRole::PublishedTarget,
@@ -942,7 +942,7 @@ fn deterministic_receipt(
         hermeticity_mode: HERMETICITY_MODE.to_string(),
         workflow_version: PROOF_WORKFLOW.to_string(),
         selected_provider_kind: PROOF_PROVIDER_KIND.to_string(),
-        source_blake3: plan.source_authority_digest_blake3.clone(),
+        source_blake3: plan.receipt_contract.source_blake3.clone(),
         vendor_blake3: plan.receipt_contract.vendor_blake3.clone(),
         toolchain_provider_identity,
         toolchain_stage_roots: vec![
@@ -1042,6 +1042,35 @@ fn rebuild_source_identity(input: &crate::source_built_fixed_point::SourceAuthor
     }
 }
 
+fn rebuild_source_identities(
+    plan_source_inputs: &[crate::source_built_fixed_point::SourceAuthorityInput],
+    source_authority_digest_blake3: &str,
+) -> Result<Vec<RebuildContentIdentity>, RunError> {
+    validate_rebuild_source_input_count(plan_source_inputs.len())?;
+    let source_authority_size_bytes = plan_source_inputs.iter().try_fold(0u64, |total, input| {
+        total
+            .checked_add(input.size_bytes)
+            .ok_or_else(|| receipt_error("rebuild descriptor source authority size exceeds u64".to_string()))
+    })?;
+    let source_identity_count = plan_source_inputs
+        .len()
+        .checked_add(1)
+        .ok_or_else(|| receipt_error("rebuild descriptor source identity count exceeds usize".to_string()))?;
+    let mut source_inputs = Vec::with_capacity(source_identity_count);
+    source_inputs.extend(plan_source_inputs.iter().map(rebuild_source_identity));
+    source_inputs.push(RebuildContentIdentity {
+        name: SOURCE_AUTHORITY_CLOSURE_NAME.to_string(),
+        role: RebuildInputRole::Source,
+        kind: RebuildContentKind::Directory,
+        digest_blake3: source_authority_digest_blake3.to_string(),
+        size_bytes: source_authority_size_bytes,
+    });
+    validate_rebuild_source_closure_binding(source_authority_digest_blake3, &source_inputs)?;
+    assert_eq!(source_inputs.len(), source_identity_count);
+    debug_assert!(source_inputs.len() > plan_source_inputs.len());
+    Ok(source_inputs)
+}
+
 fn validate_rebuild_source_input_count(source_input_count: usize) -> Result<(), RunError> {
     let source_input_count = u32::try_from(source_input_count)
         .map_err(|_| receipt_error("rebuild descriptor source input count exceeds u32".to_string()))?;
@@ -1049,6 +1078,16 @@ fn validate_rebuild_source_input_count(source_input_count: usize) -> Result<(), 
         return Err(receipt_error(format!(
             "rebuild descriptor source input count does not match the plan contract: expected {SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT}, got {source_input_count}"
         )));
+    }
+    Ok(())
+}
+
+fn validate_rebuild_source_closure_binding(
+    receipt_source_blake3: &str,
+    source_inputs: &[RebuildContentIdentity],
+) -> Result<(), RunError> {
+    if !source_inputs.iter().any(|source| source.digest_blake3 == receipt_source_blake3) {
+        return Err(receipt_error("rebuild descriptor source closure does not bind receipt source".to_string()));
     }
     Ok(())
 }
@@ -1064,6 +1103,7 @@ fn approved_read_identities(
         .map(|input| format!("source:{:?}:{}:{}", input.role, input.id, input.digest_blake3))
         .collect::<Vec<_>>();
     reads.extend([
+        format!("source-authority:{}", plan.receipt_contract.source_blake3),
         format!("recipe:{}", plan.plan_digest_blake3),
         format!("provider:{}", descriptor.provider.digest_blake3),
         format!("rust-provider:{rust_provider_digest_blake3}"),
@@ -1423,6 +1463,172 @@ mod tests {
         assert!(extra_error.to_string().contains(&format!("expected {expected}, got {extra}")));
         assert_ne!(missing, expected);
         assert_ne!(extra, expected);
+    }
+
+    #[test]
+    fn rebuild_source_closure_binds_the_aggregate_authority_and_rejects_missing_root() {
+        let expected = usize::try_from(SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT).unwrap();
+        let plan_source_inputs = (0..expected)
+            .map(|index| crate::source_built_fixed_point::SourceAuthorityInput {
+                id: format!("source-{index}"),
+                role: crate::source_built_fixed_point::SourceAuthorityRole::MantleSource,
+                kind: crate::source_built_fixed_point::SourceContentKind::Directory,
+                digest_blake3: DIGEST_A.to_string(),
+                size_bytes: 1,
+            })
+            .collect::<Vec<_>>();
+
+        let source_inputs = rebuild_source_identities(&plan_source_inputs, DIGEST_B).unwrap();
+        validate_rebuild_source_closure_binding(DIGEST_B, &source_inputs).unwrap();
+        let leaves_only = source_inputs
+            .iter()
+            .filter(|source| source.name != SOURCE_AUTHORITY_CLOSURE_NAME)
+            .cloned()
+            .collect::<Vec<_>>();
+        let missing_root = validate_rebuild_source_closure_binding(DIGEST_B, &leaves_only).unwrap_err();
+
+        assert_eq!(source_inputs.len(), expected.checked_add(1).unwrap());
+        assert!(
+            source_inputs
+                .iter()
+                .any(|source| { source.name == SOURCE_AUTHORITY_CLOSURE_NAME && source.digest_blake3 == DIGEST_B })
+        );
+        assert!(missing_root.to_string().contains("does not bind receipt source"));
+        assert_eq!(leaves_only.len(), expected);
+    }
+
+    #[test]
+    fn deterministic_receipt_accepts_aggregate_source_closure_and_rejects_leaf_only_descriptor() {
+        let plan: SourceBuiltFixedPointPlan = serde_json::from_str(include_str!(
+            "../cairn/changes/prove-source-built-mantle-fixed-point/evidence/v47-source-closure-binding-repair-2026-08-23/source-built-fixed-point-plan.json"
+        ))
+        .unwrap();
+        let fixed_point = FixedPointObservation {
+            stage1: FixedPointStageObservation {
+                binary_path: PathBuf::from("stage1-mantle"),
+                binary_digest_blake3: DIGEST_A.to_string(),
+                receipt_digest_blake3: DIGEST_B.to_string(),
+                stderr_digest_blake3: DIGEST_A.to_string(),
+            },
+            stage2: FixedPointStageObservation {
+                binary_path: PathBuf::from("stage2-mantle"),
+                binary_digest_blake3: DIGEST_A.to_string(),
+                receipt_digest_blake3: DIGEST_B.to_string(),
+                stderr_digest_blake3: DIGEST_A.to_string(),
+            },
+            closure_policy_digest_blake3: plan.policies.closure_policy_digest_blake3.clone(),
+        };
+        let aggregate = test_rebuild_evidence(&plan, true);
+        let leaf_only = test_rebuild_evidence(&plan, false);
+
+        let accepted =
+            deterministic_receipt(&plan, &fixed_point, DIGEST_B, aggregate.0, aggregate.1, aggregate.2, aggregate.3)
+                .unwrap();
+        let rejected =
+            deterministic_receipt(&plan, &fixed_point, DIGEST_B, leaf_only.0, leaf_only.1, leaf_only.2, leaf_only.3)
+                .unwrap_err();
+
+        assert_eq!(accepted.verdict, DeterministicBuildProofVerdict::SelfRebuildMatch);
+        assert!(accepted.blocking_reasons.is_empty());
+        assert!(rejected.to_string().contains("source closure does not bind receipt source"));
+        assert_eq!(accepted.source_blake3, plan.receipt_contract.source_blake3);
+    }
+
+    fn test_rebuild_evidence(
+        plan: &SourceBuiltFixedPointPlan,
+        include_aggregate_source: bool,
+    ) -> (ContentBoundRebuildDescriptor, String, RebuildAuthorityPlan, String) {
+        let arguments = vec![
+            "workflow:source-built-fixed-point".to_string(),
+            format!("plan-blake3:{}", plan.plan_digest_blake3),
+            format!("source-authority-blake3:{}", plan.source_authority_digest_blake3),
+            format!("closure-policy-blake3:{}", plan.policies.closure_policy_digest_blake3),
+        ];
+        let arguments_blake3 = rebuild_arguments_digest_blake3(arguments.clone()).unwrap();
+        let mut source_inputs =
+            rebuild_source_identities(&plan.source_inputs, &plan.receipt_contract.source_blake3).unwrap();
+        if !include_aggregate_source {
+            source_inputs.retain(|source| source.name != SOURCE_AUTHORITY_CLOSURE_NAME);
+        }
+        let descriptor = ContentBoundRebuildDescriptor {
+            schema: REBUILD_DESCRIPTOR_SCHEMA.to_string(),
+            target_artifacts: vec![RebuildContentIdentity {
+                name: MANTLE_OUTPUT_NAME.to_string(),
+                role: RebuildInputRole::PublishedTarget,
+                kind: RebuildContentKind::RegularFile,
+                digest_blake3: DIGEST_A.to_string(),
+                size_bytes: 1,
+            }],
+            recipe: RebuildContentIdentity {
+                name: PLAN_FILE.to_string(),
+                role: RebuildInputRole::Recipe,
+                kind: RebuildContentKind::RegularFile,
+                digest_blake3: plan.plan_digest_blake3.clone(),
+                size_bytes: 1,
+            },
+            executable: test_rebuild_identity("source-built-rustc", RebuildInputRole::Executable),
+            tools: vec![test_rebuild_identity(
+                "stage1-mantle-orchestrator",
+                RebuildInputRole::Tool,
+            )],
+            ordered_arguments: arguments,
+            arguments_blake3,
+            source_inputs,
+            provider: test_rebuild_identity(
+                "source-built-native-and-rust-provider-closure",
+                RebuildInputRole::Provider,
+            ),
+            policies: RebuildPolicyIdentities {
+                sandbox_policy_blake3: plan.policies.protected_execution_policy_digest_blake3.clone(),
+                effect_policy_blake3: plan.policies.effect_policy_digest_blake3.clone(),
+                normalization_policy_blake3: plan.policies.normalization_policy_digest_blake3.clone(),
+            },
+            run_roots: vec![
+                RebuildRunRootIdentity {
+                    run_id: STAGE1_RUN_ID.to_string(),
+                    output_root_identity: STAGE1_OUTPUT_ROOT.to_string(),
+                    store_root_identity: STAGE1_STORE_ROOT.to_string(),
+                },
+                RebuildRunRootIdentity {
+                    run_id: STAGE2_RUN_ID.to_string(),
+                    output_root_identity: STAGE2_OUTPUT_ROOT.to_string(),
+                    store_root_identity: STAGE2_STORE_ROOT.to_string(),
+                },
+            ],
+        };
+        let descriptor_digest = content_bound_rebuild_descriptor_digest_blake3(descriptor.clone()).unwrap();
+        let (authority_plan, authority_plan_digest) = test_rebuild_authority(plan, &descriptor, &descriptor_digest);
+        (descriptor, descriptor_digest, authority_plan, authority_plan_digest)
+    }
+
+    fn test_rebuild_authority(
+        plan: &SourceBuiltFixedPointPlan,
+        descriptor: &ContentBoundRebuildDescriptor,
+        descriptor_digest: &str,
+    ) -> (RebuildAuthorityPlan, String) {
+        let approved_read_identities = approved_read_identities(plan, descriptor, DIGEST_B);
+        let approved_read_paths_blake3 = digest_string_set(APPROVED_READ_DIGEST_DOMAIN, &approved_read_identities);
+        let authority_plan = RebuildAuthorityPlan {
+            schema: REBUILD_AUTHORITY_SCHEMA.to_string(),
+            descriptor_blake3: descriptor_digest.to_string(),
+            approved_read_identities,
+            approved_read_paths_blake3,
+            fresh_write_root_identities: vec![STAGE1_OUTPUT_ROOT.to_string(), STAGE2_OUTPUT_ROOT.to_string()],
+            target_authority_excluded: true,
+            blockers: Vec::new(),
+        };
+        let authority_plan_digest = rebuild_authority_plan_digest_blake3(authority_plan.clone()).unwrap();
+        (authority_plan, authority_plan_digest)
+    }
+
+    fn test_rebuild_identity(name: &str, role: RebuildInputRole) -> RebuildContentIdentity {
+        RebuildContentIdentity {
+            name: name.to_string(),
+            role,
+            kind: RebuildContentKind::RegularFile,
+            digest_blake3: DIGEST_B.to_string(),
+            size_bytes: 1,
+        }
     }
 
     #[test]

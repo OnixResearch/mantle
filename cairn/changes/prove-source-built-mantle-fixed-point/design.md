@@ -62,9 +62,9 @@ The Tailscale DNS name is an operator routing label, not execution authority. Pr
 
 ### Decision: use the v2 content-bound proof contract
 
-**Choice:** Emit a `mantle-deterministic-proof-receipt-v2` receipt containing the canonical source/rebuild descriptor, authority plan, provider/closure identities, stage plans, action-trust plan, observed execution reconciliation, run roots, approved read identities, effect-policy results, stage output digests, and proof bundle digest.
+**Choice:** Emit a `mantle-deterministic-proof-receipt-v2` receipt containing the canonical source/rebuild descriptor, authority plan, provider/closure identities, stage plans, action-trust plan, observed execution reconciliation, run roots, approved read identities, effect-policy results, stage output digests, and proof bundle digest. The rebuild source closure contains one aggregate source-authority root plus every validated source-role leaf. The root digest equals the receipt source digest.
 
-**Rationale:** The current parity verifier intentionally rejects the historical v1 receipt. The new action-trust identities must also be content-bound rather than inferred from producer status.
+**Rationale:** The current parity verifier intentionally rejects the historical v1 receipt. The new action-trust identities must also be content-bound rather than inferred from producer status. The aggregate root binds the complete source authority while the leaves keep each source role reviewable. ADR 0083 records this boundary.
 
 ### Decision: separate durable evidence from working scratch
 

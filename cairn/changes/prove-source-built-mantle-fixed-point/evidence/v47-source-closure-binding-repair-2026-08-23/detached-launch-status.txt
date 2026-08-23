@@ -1,0 +1,10 @@
+launched_at=2026-08-22T23:49:12-04:00
+launcher=ssh-nohup-setsid
+setsid_pid=3811536
+wrapper_pid=3811536
+proc_start_ticks=1667295
+command=/bin/sh /home/brittonr/mantle-runs/receipt-fix-v31/run-proof-v47-final-receipt.sh
+script=/home/brittonr/mantle-runs/receipt-fix-v31/run-proof-v47-final-receipt.sh
+launcher_log=/home/brittonr/mantle-runs/receipt-fix-v31/v47-detached-launcher.log
+detached_from_pueue=true
+detached_from_ssh_stdio=true

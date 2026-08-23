@@ -89,3 +89,4 @@ compatibility surface, crate name, or historical decision.
 | [0080](0080-refresh-source-and-vendor-inputs-as-one-authority-pair.md) | Refresh source and vendor inputs as one authority pair | Accepted |
 | [0081](0081-expose-remapped-rust-manifests-through-the-compiler-working-directory.md) | Expose remapped Rust manifests through the compiler working directory | Accepted |
 | [0082](0082-compose-promoted-source-proofs-from-stage-checkpoints.md) | Compose promoted source proofs from stage checkpoints | Accepted |
+| [0083](0083-bind-receipt-source-through-an-aggregate-closure-root.md) | Bind receipt source through an aggregate closure root | Accepted |

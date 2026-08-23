@@ -42,18 +42,22 @@ V46 used a detached `nohup` and `setsid` wrapper. It restored the same checkpoin
 
 V46 then failed closed during receipt construction. The plan carried all eight required source roles, but the receipt layer retained an obsolete private count of six.
 
+V47 consumed the shared count and completed both strict Cargo-free stages. Their binaries matched at BLAKE3 `8e06c4798391cdea850e5efdd090db3300e23babdefb0a094366e354fd0a8e8c`.
+
+Generic v2 classification then rejected the descriptor because its eight leaves did not include the aggregate receipt source digest. Receipt construction now adds one aggregate source-authority root while retaining every leaf.
+
 ## Decision
 
-Keep the producer-owned StageX receipt layout. Repair checkpoint reconstruction rather than copying or inventing a second receipt. Keep the original closure as immutable evidence, but use a validated path-rebound closure for current stage execution. Use the immutable plan's six stage identifiers in final evidence. Use the fixed-point core's source-role count in the receipt layer.
+Keep the producer-owned StageX receipt layout. Repair checkpoint reconstruction rather than copying or inventing a second receipt. Keep the original closure as immutable evidence, but use a validated path-rebound closure for current stage execution. Use the immutable plan's six stage identifiers in final evidence. Use the fixed-point core's source-role count in the receipt layer. Bind the aggregate receipt source through a descriptor root without removing source leaves.
 
 ## Owner
 
-The promoted checkpoint integration shell owns report reconstruction. The StageX provider owns its receipt layout and exported relative-path constant. The fixed-point plan owns canonical stage identifiers and source-role completeness.
+The promoted checkpoint integration shell owns report reconstruction. The StageX provider owns its receipt layout and exported relative-path constant. The fixed-point plan owns canonical stage identifiers and source-role completeness. The receipt layer owns the aggregate source-closure root.
 
 ## Next action
 
-Build and transfer the shared source-count repair. Refresh the Mantle source record, then rerun the existing checkpoint. The checkpoint remains valid because no provider authority changed.
+Build and transfer the aggregate source-root repair. Refresh the Mantle source record, then rerun the existing checkpoint. The checkpoint remains valid because no provider authority changed.
 
 ## Non-claims
 
-Tasks `290` and V46 prove checkpoint restore, stage continuation, strict admission, and fixed-point equality. The final v2 receipt is not proven yet.
+Tasks `290`, V46, and V47 prove checkpoint restore, stage continuation, strict admission, and fixed-point equality. The final v2 receipt is not proven yet.
