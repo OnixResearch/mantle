@@ -1,0 +1,12 @@
+finished_at=2026-08-23T02:34:38-04:00
+removed_bytes=40103202027
+removed_directories=6
+removed_duplicate_native_source_closure=true
+free_bytes_after=742740008960
+retained_v37_reference_native_source_closure=true
+retained_v47_fixed_point_meta=true
+retained_v47_stage_receipts=true
+retained_v47_stage_binaries=true
+retained_v47_plan_stage_evidence_and_attempt_status=true
+retained_checkpoint_restore_evidence=true
+retained_promoted_provider_checkpoint=true

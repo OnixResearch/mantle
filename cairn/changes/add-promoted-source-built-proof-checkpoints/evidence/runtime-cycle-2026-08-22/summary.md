@@ -46,6 +46,10 @@ V47 consumed the shared count and completed both strict Cargo-free stages. Their
 
 Generic v2 classification then rejected the descriptor because its eight leaves did not include the aggregate receipt source digest. Receipt construction now adds one aggregate source-authority root while retaining every leaf.
 
+V48 restored the same checkpoint and completed both strict stages. Its binaries matched at BLAKE3 `2403feed4dba0959d1dbb1a202777827e82361492f19a7fc8c642f3b138f599c`. The final receipt verified with verdict `self-rebuild-match`, and all four provider stages retain `restored-checkpoint` origins.
+
+The proof establishes checkpoint composition through final receipt publication. It does not establish the separate root child-action trust report required by the broader Cairn task.
+
 ## Decision
 
 Keep the producer-owned StageX receipt layout. Repair checkpoint reconstruction rather than copying or inventing a second receipt. Keep the original closure as immutable evidence, but use a validated path-rebound closure for current stage execution. Use the immutable plan's six stage identifiers in final evidence. Use the fixed-point core's source-role count in the receipt layer. Bind the aggregate receipt source through a descriptor root without removing source leaves.
@@ -56,8 +60,8 @@ The promoted checkpoint integration shell owns report reconstruction. The StageX
 
 ## Next action
 
-Build and transfer the aggregate source-root repair. Refresh the Mantle source record, then rerun the existing checkpoint. The checkpoint remains valid because no provider authority changed.
+Keep V48 as the successful checkpoint-composition evidence. Implement root child-action planning and the derived trust-report view as a separate bounded authority layer.
 
 ## Non-claims
 
-Tasks `290`, V46, and V47 prove checkpoint restore, stage continuation, strict admission, and fixed-point equality. The final v2 receipt is not proven yet.
+V48 proves checkpoint restore, stage continuation, strict admission, fixed-point equality, and final v2 receipt publication. It does not prove complete child-action reconciliation or broader bootstrap parity.

@@ -1,0 +1,16 @@
+===aliases===
+latest-source-built-fixed-point -> source-built-fixed-point-v48-final-receipt-20260823
+latest -> source-built-fixed-point-v48-final-receipt-20260823
+===output-status===
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "complete",
+  "plan_digest_blake3": "fc61749204d950065ae1c0c40a9272a64040a7a4365e4e60d7bb25ea6fb5e464",
+  "blocker": null
+}===receipt-fields===
+  "receipt_blake3": "698e0eea069c7ba2fbe7531d3dea214a841d63e33d85a508545fad21cf71193e",
+  "verdict": "self-rebuild-match",
+    "final_proof_bundle_digest_blake3": "c97ff46ff25df813bd893dec84fd7f01244d0eabc241e53ae9ae5388a61011c2",
+    "provider_checkpoint_digest_blake3": "3894008488d95be470c97ebe6994eda40af98564dd0d69ffd05ae801693ba6b3",
+===bundle===
+c97ff46ff25df813bd893dec84fd7f01244d0eabc241e53ae9ae5388a61011c2  .

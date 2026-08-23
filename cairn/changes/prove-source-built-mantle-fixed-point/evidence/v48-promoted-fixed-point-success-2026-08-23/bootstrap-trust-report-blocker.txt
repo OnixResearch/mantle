@@ -1,0 +1,10 @@
+exit_code=2
+--- stdout ---
+--- stderr ---
+error: unexpected argument '--proof-root' found
+
+  tip: a similar argument exists: '--source-root'
+
+Usage: mantle bootstrap --source-root <SOURCE_ROOT> <PACKAGES>...
+
+For more information, try '--help'.

@@ -1,0 +1,4 @@
+This proof claims only a bounded Mantle stage1/stage2 fixed point through native Rust topology execution.
+This proof does not claim Mantle bootstrap or release reproducibility.
+This proof does not claim full Cargo compatibility, tests, doctests, examples, or general resolver parity.
+This proof still depends on recorded non-Rust host linker/tool environment unless a separate toolchain closure manifest is supplied.

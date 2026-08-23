@@ -1,0 +1,337 @@
+{
+  "ambient_host_perturbations": [
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "LOGNAME",
+    "PATH",
+    "TMPDIR",
+    "TZ",
+    "USER",
+    "cwd",
+    "env-noise",
+    "umask"
+  ],
+  "blocking_reasons": [],
+  "declared_effects": [
+    "read-store",
+    "write-output",
+    "environment"
+  ],
+  "derivation_identity": "source-built-plan:fc61749204d950065ae1c0c40a9272a64040a7a4365e4e60d7bb25ea6fb5e464",
+  "effect_policy_version": "mantle-build-effects-v1",
+  "hermeticity_mode": "strict",
+  "logical_store_prefix": "/mantle/store",
+  "normalized_execution_envelope": [
+    "normalization:host-user-metadata=mantle-proof",
+    "normalization:locale=C",
+    "normalization:modeled-randomness=none",
+    "normalization:order-sensitive-output-processing=canonical-sort",
+    "normalization:temp-roots=proof-local",
+    "normalization:time",
+    "normalization:timezone=UTC",
+    "normalization:umask=0022"
+  ],
+  "observed_effects": [
+    "read-store",
+    "write-output",
+    "environment"
+  ],
+  "physical_store_isolation": "clean-namespace-per-run",
+  "proof_unit": {
+    "output_identities": [
+      "mantle:2403feed4dba0959d1dbb1a202777827e82361492f19a7fc8c642f3b138f599c"
+    ],
+    "target_artifact_identity": "mantle-source-built-fixed-point"
+  },
+  "rebuild_authority_plan": {
+    "approved_read_identities": [
+      "policy:effect:d8a346b2a5cf2fea6210455dbe82d9c89484de6a14c3eda31f2075bdff2aa0f8",
+      "policy:normalization:63e4d8514b36a981e06ed7797674b201a4b9651fb55f79f28457283d3162b00a",
+      "policy:sandbox:e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+      "provider:fb1f4e9d04c6bb114efe839f81ed06bdc7f2f2e1bf7bc511e604b5f36ab0617a",
+      "recipe:fc61749204d950065ae1c0c40a9272a64040a7a4365e4e60d7bb25ea6fb5e464",
+      "rust-provider:d88f60b1bd5291b5fc42ebd0247ccb9288d52ca7531046e489bfe73706f24cd6",
+      "source-authority:b068abe4da3007dd1544af982d2a74a8c9eb386fc9f02ece90a04e6d175649ab",
+      "source:MantleSource:mantle-source:db3551bf0a599917c09263270583658edf90c0f290c607684c53915049ea8fc1",
+      "source:NativeSourceBundle:native-source-bundle:7d21cca3ad8f7d28b7c886f0624ce2bb1871fbe095e54a115fb3ce6dd1a32e78",
+      "source:ProviderRecipeProjection:provider-recipe-projection:eb252c59e0a2ba2989b5b10e46bfeb7a2399aee267dc01aadc96766f374114b4",
+      "source:RustSourceArchiveSet:rust-source-archive-set:fb2700489d1468205a18b4db70aa05f81e7447ed4e48f7e16d4e726727793d63",
+      "source:StagexLineage:stagex-lineage:e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+      "source:StagexSeed:stagex-seed:cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80",
+      "source:StagexSourceBundle:stagex-source-bundle:205a3c7e405d832133b7dbb5617c75c3f4e0efadbe283fd4ef1d9209a6ff1c98",
+      "source:VendorInputs:vendor-inputs:666a7f2433ef9f896409e79a23dfafd619ca7204c9fabcd739f2cebb086c5379",
+      "stage1-orchestrator:2403feed4dba0959d1dbb1a202777827e82361492f19a7fc8c642f3b138f599c"
+    ],
+    "approved_read_paths_blake3": "047dd03d645ed38921662f548af91418d3375bad234abe841bd2d66694eef841",
+    "blockers": [],
+    "descriptor_blake3": "4e5a3aa217ffc8cd51ec0a6da819bba18cf467a78677c4c1975c17e4e5550c38",
+    "fresh_write_root_identities": [
+      "proof-output:stage1",
+      "proof-output:stage2"
+    ],
+    "schema": "mantle-rebuild-authority-plan-v1",
+    "target_authority_excluded": true
+  },
+  "rebuild_authority_plan_blake3": "d1f4966f1e46ff126bf0939f0c5748afd8198900318ab11bf9d4139c90452dd9",
+  "rebuild_descriptor": {
+    "arguments_blake3": "86d4a19e01cf11be8c76fddf82511e6500cf9fa760aff8ec3cdd9b2681ab2b4e",
+    "executable": {
+      "digest_blake3": "fc8954789b9c63e3fa820aefeb882158d4abec75acf339d8b62fe005f5104b61",
+      "kind": "regular-file",
+      "name": "source-built-rustc",
+      "role": "executable",
+      "size_bytes": 851
+    },
+    "ordered_arguments": [
+      "workflow:source-built-fixed-point",
+      "plan-blake3:fc61749204d950065ae1c0c40a9272a64040a7a4365e4e60d7bb25ea6fb5e464",
+      "source-authority-blake3:b068abe4da3007dd1544af982d2a74a8c9eb386fc9f02ece90a04e6d175649ab",
+      "closure-policy-blake3:78b6826b834f4aafd42cccfdc55e95b27df08be5698505d531a7e82b0a3f22b0"
+    ],
+    "policies": {
+      "effect_policy_blake3": "d8a346b2a5cf2fea6210455dbe82d9c89484de6a14c3eda31f2075bdff2aa0f8",
+      "normalization_policy_blake3": "63e4d8514b36a981e06ed7797674b201a4b9651fb55f79f28457283d3162b00a",
+      "sandbox_policy_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d"
+    },
+    "provider": {
+      "digest_blake3": "fb1f4e9d04c6bb114efe839f81ed06bdc7f2f2e1bf7bc511e604b5f36ab0617a",
+      "kind": "directory",
+      "name": "source-built-native-and-rust-provider-closure",
+      "role": "provider",
+      "size_bytes": 5524
+    },
+    "recipe": {
+      "digest_blake3": "fc61749204d950065ae1c0c40a9272a64040a7a4365e4e60d7bb25ea6fb5e464",
+      "kind": "regular-file",
+      "name": "source-built-fixed-point-plan.json",
+      "role": "recipe",
+      "size_bytes": 1
+    },
+    "run_roots": [
+      {
+        "output_root_identity": "proof-output:stage1",
+        "run_id": "stage1",
+        "store_root_identity": "proof-store:stage1-clean-namespace"
+      },
+      {
+        "output_root_identity": "proof-output:stage2",
+        "run_id": "stage2",
+        "store_root_identity": "proof-store:stage2-clean-namespace"
+      }
+    ],
+    "schema": "mantle-content-bound-rebuild-descriptor-v1",
+    "source_inputs": [
+      {
+        "digest_blake3": "db3551bf0a599917c09263270583658edf90c0f290c607684c53915049ea8fc1",
+        "kind": "directory",
+        "name": "MantleSource:mantle-source",
+        "role": "source",
+        "size_bytes": 28999382
+      },
+      {
+        "digest_blake3": "7d21cca3ad8f7d28b7c886f0624ce2bb1871fbe095e54a115fb3ce6dd1a32e78",
+        "kind": "regular-file",
+        "name": "NativeSourceBundle:native-source-bundle",
+        "role": "source",
+        "size_bytes": 544909751
+      },
+      {
+        "digest_blake3": "eb252c59e0a2ba2989b5b10e46bfeb7a2399aee267dc01aadc96766f374114b4",
+        "kind": "directory",
+        "name": "ProviderRecipeProjection:provider-recipe-projection",
+        "role": "source",
+        "size_bytes": 2203700
+      },
+      {
+        "digest_blake3": "fb2700489d1468205a18b4db70aa05f81e7447ed4e48f7e16d4e726727793d63",
+        "kind": "directory",
+        "name": "RustSourceArchiveSet:rust-source-archive-set",
+        "role": "source",
+        "size_bytes": 3163689057
+      },
+      {
+        "digest_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+        "kind": "regular-file",
+        "name": "StagexLineage:stagex-lineage",
+        "role": "source",
+        "size_bytes": 170686
+      },
+      {
+        "digest_blake3": "cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80",
+        "kind": "regular-file",
+        "name": "StagexSeed:stagex-seed",
+        "role": "source",
+        "size_bytes": 229
+      },
+      {
+        "digest_blake3": "205a3c7e405d832133b7dbb5617c75c3f4e0efadbe283fd4ef1d9209a6ff1c98",
+        "kind": "regular-file",
+        "name": "StagexSourceBundle:stagex-source-bundle",
+        "role": "source",
+        "size_bytes": 87616094
+      },
+      {
+        "digest_blake3": "666a7f2433ef9f896409e79a23dfafd619ca7204c9fabcd739f2cebb086c5379",
+        "kind": "directory",
+        "name": "VendorInputs:vendor-inputs",
+        "role": "source",
+        "size_bytes": 836349025
+      },
+      {
+        "digest_blake3": "b068abe4da3007dd1544af982d2a74a8c9eb386fc9f02ece90a04e6d175649ab",
+        "kind": "directory",
+        "name": "source-authority-closure",
+        "role": "source",
+        "size_bytes": 4663937924
+      }
+    ],
+    "target_artifacts": [
+      {
+        "digest_blake3": "2403feed4dba0959d1dbb1a202777827e82361492f19a7fc8c642f3b138f599c",
+        "kind": "regular-file",
+        "name": "mantle",
+        "role": "published-target",
+        "size_bytes": 1145159056
+      }
+    ],
+    "tools": [
+      {
+        "digest_blake3": "2403feed4dba0959d1dbb1a202777827e82361492f19a7fc8c642f3b138f599c",
+        "kind": "regular-file",
+        "name": "stage1-mantle-orchestrator",
+        "role": "tool",
+        "size_bytes": 1145159056
+      }
+    ]
+  },
+  "rebuild_descriptor_blake3": "4e5a3aa217ffc8cd51ec0a6da819bba18cf467a78677c4c1975c17e4e5550c38",
+  "receipt_blake3": "698e0eea069c7ba2fbe7531d3dea214a841d63e33d85a508545fad21cf71193e",
+  "runs": [
+    {
+      "authority_violations": [],
+      "hermeticity_audit_events": [],
+      "observed_effects": [
+        "read-store",
+        "write-output",
+        "environment"
+      ],
+      "observed_read_identities": [
+        "policy:effect:d8a346b2a5cf2fea6210455dbe82d9c89484de6a14c3eda31f2075bdff2aa0f8",
+        "policy:normalization:63e4d8514b36a981e06ed7797674b201a4b9651fb55f79f28457283d3162b00a",
+        "policy:sandbox:e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+        "provider:fb1f4e9d04c6bb114efe839f81ed06bdc7f2f2e1bf7bc511e604b5f36ab0617a",
+        "recipe:fc61749204d950065ae1c0c40a9272a64040a7a4365e4e60d7bb25ea6fb5e464",
+        "rust-provider:d88f60b1bd5291b5fc42ebd0247ccb9288d52ca7531046e489bfe73706f24cd6",
+        "source-authority:b068abe4da3007dd1544af982d2a74a8c9eb386fc9f02ece90a04e6d175649ab",
+        "source:MantleSource:mantle-source:db3551bf0a599917c09263270583658edf90c0f290c607684c53915049ea8fc1",
+        "source:NativeSourceBundle:native-source-bundle:7d21cca3ad8f7d28b7c886f0624ce2bb1871fbe095e54a115fb3ce6dd1a32e78",
+        "source:ProviderRecipeProjection:provider-recipe-projection:eb252c59e0a2ba2989b5b10e46bfeb7a2399aee267dc01aadc96766f374114b4",
+        "source:RustSourceArchiveSet:rust-source-archive-set:fb2700489d1468205a18b4db70aa05f81e7447ed4e48f7e16d4e726727793d63",
+        "source:StagexLineage:stagex-lineage:e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+        "source:StagexSeed:stagex-seed:cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80",
+        "source:StagexSourceBundle:stagex-source-bundle:205a3c7e405d832133b7dbb5617c75c3f4e0efadbe283fd4ef1d9209a6ff1c98",
+        "source:VendorInputs:vendor-inputs:666a7f2433ef9f896409e79a23dfafd619ca7204c9fabcd739f2cebb086c5379",
+        "stage1-orchestrator:2403feed4dba0959d1dbb1a202777827e82361492f19a7fc8c642f3b138f599c"
+      ],
+      "output_digests": [
+        {
+          "digest_blake3": "2403feed4dba0959d1dbb1a202777827e82361492f19a7fc8c642f3b138f599c",
+          "name": "mantle"
+        }
+      ],
+      "output_root_identity": "proof-output:stage1",
+      "output_store_paths": [
+        "proof://cargo-free-fixed-point/stage1/mantle"
+      ],
+      "perturbation_case": "normalized-host-control-a",
+      "rebuild_authority_plan_blake3": "d1f4966f1e46ff126bf0939f0c5748afd8198900318ab11bf9d4139c90452dd9",
+      "rebuild_descriptor_blake3": "4e5a3aa217ffc8cd51ec0a6da819bba18cf467a78677c4c1975c17e4e5550c38",
+      "run_id": "stage1",
+      "sandbox_profile_identity": "mantle-proof-sandbox-v1:source-built-stage1",
+      "substituted_dependency_identities": []
+    },
+    {
+      "authority_violations": [],
+      "hermeticity_audit_events": [],
+      "observed_effects": [
+        "read-store",
+        "write-output",
+        "environment"
+      ],
+      "observed_read_identities": [
+        "policy:effect:d8a346b2a5cf2fea6210455dbe82d9c89484de6a14c3eda31f2075bdff2aa0f8",
+        "policy:normalization:63e4d8514b36a981e06ed7797674b201a4b9651fb55f79f28457283d3162b00a",
+        "policy:sandbox:e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+        "provider:fb1f4e9d04c6bb114efe839f81ed06bdc7f2f2e1bf7bc511e604b5f36ab0617a",
+        "recipe:fc61749204d950065ae1c0c40a9272a64040a7a4365e4e60d7bb25ea6fb5e464",
+        "rust-provider:d88f60b1bd5291b5fc42ebd0247ccb9288d52ca7531046e489bfe73706f24cd6",
+        "source-authority:b068abe4da3007dd1544af982d2a74a8c9eb386fc9f02ece90a04e6d175649ab",
+        "source:MantleSource:mantle-source:db3551bf0a599917c09263270583658edf90c0f290c607684c53915049ea8fc1",
+        "source:NativeSourceBundle:native-source-bundle:7d21cca3ad8f7d28b7c886f0624ce2bb1871fbe095e54a115fb3ce6dd1a32e78",
+        "source:ProviderRecipeProjection:provider-recipe-projection:eb252c59e0a2ba2989b5b10e46bfeb7a2399aee267dc01aadc96766f374114b4",
+        "source:RustSourceArchiveSet:rust-source-archive-set:fb2700489d1468205a18b4db70aa05f81e7447ed4e48f7e16d4e726727793d63",
+        "source:StagexLineage:stagex-lineage:e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+        "source:StagexSeed:stagex-seed:cf21608d883b8bdcc1fa6438703630f2fa496cf74d483ce351f876c0656ecf80",
+        "source:StagexSourceBundle:stagex-source-bundle:205a3c7e405d832133b7dbb5617c75c3f4e0efadbe283fd4ef1d9209a6ff1c98",
+        "source:VendorInputs:vendor-inputs:666a7f2433ef9f896409e79a23dfafd619ca7204c9fabcd739f2cebb086c5379",
+        "stage1-orchestrator:2403feed4dba0959d1dbb1a202777827e82361492f19a7fc8c642f3b138f599c"
+      ],
+      "output_digests": [
+        {
+          "digest_blake3": "2403feed4dba0959d1dbb1a202777827e82361492f19a7fc8c642f3b138f599c",
+          "name": "mantle"
+        }
+      ],
+      "output_root_identity": "proof-output:stage2",
+      "output_store_paths": [
+        "proof://cargo-free-fixed-point/stage2/mantle"
+      ],
+      "perturbation_case": "normalized-host-control-b",
+      "rebuild_authority_plan_blake3": "d1f4966f1e46ff126bf0939f0c5748afd8198900318ab11bf9d4139c90452dd9",
+      "rebuild_descriptor_blake3": "4e5a3aa217ffc8cd51ec0a6da819bba18cf467a78677c4c1975c17e4e5550c38",
+      "run_id": "stage2",
+      "sandbox_profile_identity": "mantle-proof-sandbox-v1:source-built-stage2",
+      "substituted_dependency_identities": []
+    }
+  ],
+  "sandbox_profile_identities": [
+    "mantle-proof-sandbox-v1:source-built-stage1",
+    "mantle-proof-sandbox-v1:source-built-stage2"
+  ],
+  "schema": "mantle-deterministic-proof-receipt-v2",
+  "selected_provider_kind": "full-source",
+  "source_blake3": "b068abe4da3007dd1544af982d2a74a8c9eb386fc9f02ece90a04e6d175649ab",
+  "source_built_fixed_point": {
+    "effect_policy_digest_blake3": "d8a346b2a5cf2fea6210455dbe82d9c89484de6a14c3eda31f2075bdff2aa0f8",
+    "final_proof_bundle_digest_blake3": "c97ff46ff25df813bd893dec84fd7f01244d0eabc241e53ae9ae5388a61011c2",
+    "native_provider_digest_blake3": "63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9",
+    "non_claims": [
+      "This proof does not prove compiler correctness or seed correctness.",
+      "This proof does not prove kernel isolation or complete Cargo compatibility.",
+      "This proof does not prove independent rebuild agreement or bit-for-bit release reproducibility.",
+      "This proof does not prove deployment success or release eligibility.",
+      "The stage1 Mantle binary is an explicit fixed-point predecessor, not ambient or published-target path authority."
+    ],
+    "normalization_policy_digest_blake3": "63e4d8514b36a981e06ed7797674b201a4b9651fb55f79f28457283d3162b00a",
+    "plan_digest_blake3": "fc61749204d950065ae1c0c40a9272a64040a7a4365e4e60d7bb25ea6fb5e464",
+    "protected_execution_policy_digest_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+    "provider_checkpoint_digest_blake3": "3894008488d95be470c97ebe6994eda40af98564dd0d69ffd05ae801693ba6b3",
+    "provider_kind": "full-source",
+    "rust_provider_digest_blake3": "d88f60b1bd5291b5fc42ebd0247ccb9288d52ca7531046e489bfe73706f24cd6",
+    "schema": "mantle-source-built-fixed-point-receipt-extension-v1",
+    "source_authority_digest_blake3": "b068abe4da3007dd1544af982d2a74a8c9eb386fc9f02ece90a04e6d175649ab",
+    "stage_evidence_digest_blake3": "34f45daedfa9b9e57662a720a968f0fc7be3be05785756e645cd572092940eff",
+    "stage_evidence_path": "source-built-stage-evidence.json",
+    "toolchain_closure_digest_blake3": "f98d1480859a582864fdd7c7e23c443dfb57760e2c540fbd1d636a2ea8051912"
+  },
+  "toolchain_provider_identity": "provider-kind=full-source;identity-blake3=fb1f4e9d04c6bb114efe839f81ed06bdc7f2f2e1bf7bc511e604b5f36ab0617a;closure-policy-blake3=78b6826b834f4aafd42cccfdc55e95b27df08be5698505d531a7e82b0a3f22b0",
+  "toolchain_stage_roots": [
+    "closure-policy:78b6826b834f4aafd42cccfdc55e95b27df08be5698505d531a7e82b0a3f22b0",
+    "native-provider:63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9",
+    "stagex-provider:e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d"
+  ],
+  "vendor_blake3": "666a7f2433ef9f896409e79a23dfafd619ca7204c9fabcd739f2cebb086c5379",
+  "verdict": "self-rebuild-match",
+  "workflow_version": "mantle-deterministic-proof-receipt-v2"
+}

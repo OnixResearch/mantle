@@ -1,0 +1,13 @@
+{
+  "schema": "mantle-self-build-provider-kind-linkage-v1",
+  "proof_identity": {
+    "selected_provider_kind": "full-source"
+  },
+  "proof_linkage": {
+    "selected_provider_kind": "full-source"
+  },
+  "prerequisites": {
+    "selected_provider_kind": "full-source"
+  },
+  "source_built_plan_digest_blake3": "fc61749204d950065ae1c0c40a9272a64040a7a4365e4e60d7bb25ea6fb5e464"
+}
