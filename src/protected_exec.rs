@@ -164,12 +164,16 @@ impl fmt::Display for SeedClosureRisk {
 }
 
 type ExecutableVariantsByPath = BTreeMap<PathBuf, BTreeMap<String, ExecutableSeedEntry>>;
+const PLANNED_PRODUCED_ROOT_COUNT_MAX: usize = 256;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectedExecPolicy {
     executables_by_path: ExecutableVariantsByPath,
     sources_by_url: BTreeMap<String, SourceSeedEntry>,
     allowed_promotion_source_ids: Option<BTreeSet<String>>,
+    produced_roots_by_action: BTreeMap<String, Vec<PlannedProducedExecutableRoot>>,
+    produced_promotion_counts: BTreeMap<(String, PathBuf), u32>,
+    active_producer_action_id: Option<String>,
     inventory_digest_blake3: String,
 }
 
@@ -179,6 +183,21 @@ pub struct PlannedExecutable {
     pub source_stage_id: String,
     pub path: PathBuf,
     pub digest_hex: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PlannedProducedExecutableRoot {
+    pub producer_action_id: String,
+    pub output_identity_blake3: String,
+    pub root: PathBuf,
+    pub promotion_count_max: u32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProtectedExecClassification {
+    pub decision: ExecDecision,
+    pub promotion: Option<OutputPromotionRecord>,
+    pub output_identity_blake3: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -269,6 +288,28 @@ pub enum ProtectedExecError {
     DuplicatePromotionSource {
         source_entry_id: String,
     },
+    InvalidProducedOutputRoot {
+        producer_action_id: String,
+        path: PathBuf,
+        reason: String,
+    },
+    ProducedOutputRootOverlap {
+        first: PathBuf,
+        second: PathBuf,
+    },
+    ProducerActionAlreadyActive {
+        active: String,
+        requested: String,
+    },
+    ProducerActionNotActive {
+        expected: String,
+        actual: Option<String>,
+    },
+    ProducedPromotionLimitExceeded {
+        producer_action_id: String,
+        root: PathBuf,
+        limit: u32,
+    },
     InventoryCollectionLimitExceeded {
         collection: &'static str,
         limit: u32,
@@ -336,6 +377,25 @@ impl fmt::Display for ProtectedExecError {
             Self::DuplicatePromotionSource { source_entry_id } => {
                 write!(f, "duplicate protected promotion source: {source_entry_id}")
             }
+            Self::InvalidProducedOutputRoot {
+                producer_action_id,
+                path,
+                reason,
+            } => write!(f, "producer action {producer_action_id} has invalid output root {}: {reason}", path.display()),
+            Self::ProducedOutputRootOverlap { first, second } => {
+                write!(f, "planned produced executable roots overlap: {} and {}", first.display(), second.display())
+            }
+            Self::ProducerActionAlreadyActive { active, requested } => {
+                write!(f, "producer action {active} is active; cannot start {requested}")
+            }
+            Self::ProducerActionNotActive { expected, actual } => {
+                write!(f, "producer action {expected} is not active; current action is {actual:?}")
+            }
+            Self::ProducedPromotionLimitExceeded {
+                producer_action_id,
+                root,
+                limit,
+            } => write!(f, "producer action {producer_action_id} exceeded {limit} promotions under {}", root.display()),
             Self::InventoryCollectionLimitExceeded { collection, limit } => {
                 write!(f, "protected exec {collection} exceeds limit {limit}")
             }
@@ -495,6 +555,9 @@ impl ProtectedExecPolicy {
             executables_by_path,
             sources_by_url,
             allowed_promotion_source_ids,
+            produced_roots_by_action: BTreeMap::new(),
+            produced_promotion_counts: BTreeMap::new(),
+            active_producer_action_id: None,
             inventory_digest_blake3,
         })
     }
@@ -529,6 +592,182 @@ impl ProtectedExecPolicy {
             entry_id: Some(entry.id.clone()),
             reason: entry.allowed_reason.clone(),
         })
+    }
+
+    pub fn register_planned_produced_roots(
+        &mut self,
+        roots: &[PlannedProducedExecutableRoot],
+    ) -> Result<(), ProtectedExecError> {
+        if self.active_producer_action_id.is_some() {
+            return Err(ProtectedExecError::ProducerActionAlreadyActive {
+                active: self.active_producer_action_id.clone().unwrap_or_default(),
+                requested: "register-produced-roots".to_string(),
+            });
+        }
+        let existing = self.produced_roots_by_action.values().flatten().cloned().collect::<Vec<_>>();
+        if existing.len().saturating_add(roots.len()) > PLANNED_PRODUCED_ROOT_COUNT_MAX {
+            return Err(ProtectedExecError::InventoryCollectionLimitExceeded {
+                collection: "planned produced roots",
+                limit: u32::try_from(PLANNED_PRODUCED_ROOT_COUNT_MAX).unwrap_or(u32::MAX),
+            });
+        }
+        let mut combined = existing;
+        for root in roots {
+            self.validate_produced_root(root, &combined)?;
+            combined.push(root.clone());
+        }
+        for root in roots {
+            self.produced_roots_by_action.entry(root.producer_action_id.clone()).or_default().push(root.clone());
+        }
+        for action_roots in self.produced_roots_by_action.values_mut() {
+            action_roots.sort_by(|left, right| left.root.cmp(&right.root));
+        }
+        assert!(self.produced_roots_by_action.values().flatten().count() <= PLANNED_PRODUCED_ROOT_COUNT_MAX);
+        assert!(self.active_producer_action_id.is_none());
+        Ok(())
+    }
+
+    pub fn begin_producer_action(&mut self, producer_action_id: &str) -> Result<(), ProtectedExecError> {
+        if self
+            .allowed_promotion_source_ids
+            .as_ref()
+            .is_none_or(|allowed| !allowed.contains(producer_action_id))
+        {
+            return Err(ProtectedExecError::UndeclaredPromotionSource {
+                source_entry_id: producer_action_id.to_string(),
+            });
+        }
+        if let Some(active) = &self.active_producer_action_id {
+            return Err(ProtectedExecError::ProducerActionAlreadyActive {
+                active: active.clone(),
+                requested: producer_action_id.to_string(),
+            });
+        }
+        self.active_producer_action_id = Some(producer_action_id.to_string());
+        assert_eq!(self.active_producer_action_id.as_deref(), Some(producer_action_id));
+        assert!(!producer_action_id.is_empty());
+        Ok(())
+    }
+
+    pub fn end_producer_action(&mut self, producer_action_id: &str) -> Result<(), ProtectedExecError> {
+        if self.active_producer_action_id.as_deref() != Some(producer_action_id) {
+            return Err(ProtectedExecError::ProducerActionNotActive {
+                expected: producer_action_id.to_string(),
+                actual: self.active_producer_action_id.clone(),
+            });
+        }
+        self.active_producer_action_id = None;
+        assert!(self.active_producer_action_id.is_none());
+        assert!(!producer_action_id.is_empty());
+        Ok(())
+    }
+
+    pub fn decide_exec_or_promote(
+        &mut self,
+        request: &ExecRequest,
+    ) -> Result<ProtectedExecClassification, ProtectedExecError> {
+        match self.decide_exec(request) {
+            Ok(decision) => {
+                return Ok(ProtectedExecClassification {
+                    decision,
+                    promotion: None,
+                    output_identity_blake3: None,
+                });
+            }
+            Err(ProtectedExecError::UndeclaredExecutable { .. }) => {}
+            Err(error) => return Err(error),
+        }
+        let producer_action_id =
+            self.active_producer_action_id.clone().ok_or_else(|| ProtectedExecError::UndeclaredExecutable {
+                path: request.path.clone(),
+            })?;
+        let roots = self.produced_roots_by_action.get(&producer_action_id).cloned().unwrap_or_default();
+        let matches = roots
+            .into_iter()
+            .filter(|root| request.path != root.root && request.path.starts_with(&root.root))
+            .collect::<Vec<_>>();
+        let [root] = matches.as_slice() else {
+            return Err(ProtectedExecError::UndeclaredExecutable {
+                path: request.path.clone(),
+            });
+        };
+        let key = (producer_action_id.clone(), root.root.clone());
+        let count = self.produced_promotion_counts.get(&key).copied().unwrap_or(0);
+        if count >= root.promotion_count_max {
+            return Err(ProtectedExecError::ProducedPromotionLimitExceeded {
+                producer_action_id,
+                root: root.root.clone(),
+                limit: root.promotion_count_max,
+            });
+        }
+        let relative =
+            request.path.strip_prefix(&root.root).map_err(|_| ProtectedExecError::InvalidProducedOutputRoot {
+                producer_action_id: producer_action_id.clone(),
+                path: request.path.clone(),
+                reason: "executable is outside the selected produced root".to_string(),
+            })?;
+        let promotion = self.promote_verified_output(
+            &producer_action_id,
+            &[
+                format!("output-identity: {}", root.output_identity_blake3),
+                format!("relative-executable: {}", relative.display()),
+            ],
+            &[PromotedExecutable {
+                path: request.path.clone(),
+                digest_hex: request.digest_hex.clone(),
+            }],
+        )?;
+        let next_count = count.checked_add(1).ok_or_else(|| ProtectedExecError::ProducedPromotionLimitExceeded {
+            producer_action_id: producer_action_id.clone(),
+            root: root.root.clone(),
+            limit: root.promotion_count_max,
+        })?;
+        self.produced_promotion_counts.insert(key, next_count);
+        let decision = self.decide_exec(request)?;
+        assert!(decision.allowed);
+        assert_eq!(next_count, count + 1);
+        Ok(ProtectedExecClassification {
+            decision,
+            promotion: Some(promotion),
+            output_identity_blake3: Some(root.output_identity_blake3.clone()),
+        })
+    }
+
+    fn validate_produced_root(
+        &self,
+        root: &PlannedProducedExecutableRoot,
+        existing: &[PlannedProducedExecutableRoot],
+    ) -> Result<(), ProtectedExecError> {
+        let producer_allowed = self
+            .allowed_promotion_source_ids
+            .as_ref()
+            .is_some_and(|allowed| allowed.contains(&root.producer_action_id));
+        let path_valid = root.root.is_absolute()
+            && root
+                .root
+                .components()
+                .all(|component| matches!(component, std::path::Component::RootDir | std::path::Component::Normal(_)));
+        if !producer_allowed
+            || !path_valid
+            || root.promotion_count_max == 0
+            || !is_valid_hex_digest(&root.output_identity_blake3, BLAKE3_HEX_LEN)
+        {
+            return Err(ProtectedExecError::InvalidProducedOutputRoot {
+                producer_action_id: root.producer_action_id.clone(),
+                path: root.root.clone(),
+                reason: "producer, path, output identity, or promotion bound is invalid".to_string(),
+            });
+        }
+        if let Some(overlap) = existing
+            .iter()
+            .find(|candidate| root.root.starts_with(&candidate.root) || candidate.root.starts_with(&root.root))
+        {
+            return Err(ProtectedExecError::ProducedOutputRootOverlap {
+                first: overlap.root.clone(),
+                second: root.root.clone(),
+            });
+        }
+        Ok(())
     }
 
     pub fn source_fetch_plan(&self, url: &str) -> Result<ProtectedSourceFetchPlan, ProtectedExecError> {
@@ -600,7 +839,12 @@ impl ProtectedExecPolicy {
             })?;
         for exe in executables {
             assert!(exe.path.is_absolute(), "promoted executable path must be absolute");
-            assert!(!exe.digest_hex.is_empty(), "promoted executable digest must be present");
+            if !is_valid_hex_digest(&exe.digest_hex, BLAKE3_HEX_LEN) {
+                return Err(ProtectedExecError::InvalidBlake3Digest {
+                    entry_id: source_entry_id.to_string(),
+                    digest_hex: exe.digest_hex.clone(),
+                });
+            }
             if self.executables_by_path.contains_key(&exe.path) {
                 return Err(ProtectedExecError::PromotionDuplicatePath {
                     path: exe.path.clone(),
@@ -3011,6 +3255,98 @@ mod tests {
         let decision = policy.decide_exec(&make_request).unwrap();
         assert!(decision.allowed);
         assert!(decision.entry_id.unwrap().contains("promoted:src-gnu-make"));
+    }
+
+    #[test]
+    fn produced_root_pins_first_exec_only_for_active_producer() {
+        const PROMOTION_COUNT_MAX: u32 = 2;
+        let producer = "rust-provider-stage";
+        let planned = [PlannedExecutable {
+            authorization_id: "shell".to_string(),
+            source_stage_id: producer.to_string(),
+            path: PathBuf::from("/provider/bin/sh"),
+            digest_hex: DIGEST_A.to_string(),
+        }];
+        let mut policy = ProtectedExecPolicy::from_action_plan(&[producer.to_string()], &planned).unwrap();
+        policy
+            .register_planned_produced_roots(&[PlannedProducedExecutableRoot {
+                producer_action_id: producer.to_string(),
+                output_identity_blake3: DIGEST_C.to_string(),
+                root: PathBuf::from("/build/rust-stage"),
+                promotion_count_max: PROMOTION_COUNT_MAX,
+            }])
+            .unwrap();
+        let request = ExecRequest {
+            path: PathBuf::from("/build/rust-stage/bin/rustc"),
+            digest_hex: DIGEST_B.to_string(),
+        };
+
+        let inactive = policy.decide_exec_or_promote(&request).unwrap_err();
+        policy.begin_producer_action(producer).unwrap();
+        let first = policy.decide_exec_or_promote(&request).unwrap();
+        let repeated = policy.decide_exec_or_promote(&request).unwrap();
+        let changed = policy
+            .decide_exec_or_promote(&ExecRequest {
+                path: request.path.clone(),
+                digest_hex: DIGEST_C.to_string(),
+            })
+            .unwrap_err();
+        policy.end_producer_action(producer).unwrap();
+
+        assert!(matches!(inactive, ProtectedExecError::UndeclaredExecutable { .. }));
+        assert!(first.decision.allowed);
+        assert!(first.promotion.is_some());
+        assert_eq!(first.output_identity_blake3.as_deref(), Some(DIGEST_C));
+        assert!(repeated.decision.allowed);
+        assert!(repeated.promotion.is_none());
+        assert!(matches!(changed, ProtectedExecError::DigestMismatch { .. }));
+    }
+
+    #[test]
+    fn produced_roots_reject_overlap_wrong_scope_and_promotion_overflow() {
+        const PROMOTION_COUNT_MAX: u32 = 1;
+        let producer = "rust-provider-stage";
+        let planned = [PlannedExecutable {
+            authorization_id: "shell".to_string(),
+            source_stage_id: producer.to_string(),
+            path: PathBuf::from("/provider/bin/sh"),
+            digest_hex: DIGEST_A.to_string(),
+        }];
+        let mut policy = ProtectedExecPolicy::from_action_plan(&[producer.to_string()], &planned).unwrap();
+        let root = PlannedProducedExecutableRoot {
+            producer_action_id: producer.to_string(),
+            output_identity_blake3: DIGEST_C.to_string(),
+            root: PathBuf::from("/build/rust-stage"),
+            promotion_count_max: PROMOTION_COUNT_MAX,
+        };
+        policy.register_planned_produced_roots(std::slice::from_ref(&root)).unwrap();
+        let overlap = policy
+            .register_planned_produced_roots(&[PlannedProducedExecutableRoot {
+                root: root.root.join("nested"),
+                ..root.clone()
+            }])
+            .unwrap_err();
+        policy.begin_producer_action(producer).unwrap();
+        let active = policy.begin_producer_action(producer).unwrap_err();
+        policy
+            .decide_exec_or_promote(&ExecRequest {
+                path: root.root.join("first"),
+                digest_hex: DIGEST_A.to_string(),
+            })
+            .unwrap();
+        let overflow = policy
+            .decide_exec_or_promote(&ExecRequest {
+                path: root.root.join("second"),
+                digest_hex: DIGEST_B.to_string(),
+            })
+            .unwrap_err();
+        policy.end_producer_action(producer).unwrap();
+        let inactive = policy.end_producer_action(producer).unwrap_err();
+
+        assert!(matches!(overlap, ProtectedExecError::ProducedOutputRootOverlap { .. }));
+        assert!(matches!(active, ProtectedExecError::ProducerActionAlreadyActive { .. }));
+        assert!(matches!(overflow, ProtectedExecError::ProducedPromotionLimitExceeded { .. }));
+        assert!(matches!(inactive, ProtectedExecError::ProducerActionNotActive { .. }));
     }
 
     #[test]

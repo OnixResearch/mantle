@@ -151,6 +151,7 @@ struct LoadedRustSourceProvider {
     source_built_shell: Option<BoundRustExecutionShell>,
     source_built_host_tools: Vec<crate::full_source_rust_binding::FullSourceRustHostToolBinding>,
     source_built_native_artifacts: Vec<crate::full_source_rust_binding::FullSourceNativeArtifactBinding>,
+    source_built_action_trust: Option<crate::source_built_rust_provider_action::RustProviderActionEvidence>,
     toolchain_closure_status: Option<crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus>,
 }
 
@@ -1371,6 +1372,7 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
         loaded_rust_provider.source_built_shell.as_ref(),
         &loaded_rust_provider.source_built_host_tools,
         &loaded_rust_provider.source_built_native_artifacts,
+        loaded_rust_provider.source_built_action_trust.as_ref(),
         &paths.guard_path_dir,
         &paths.rust_action_authority_path,
     )?;
@@ -1456,6 +1458,7 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
         loaded_rust_provider.source_built_shell.as_ref(),
         &loaded_rust_provider.source_built_host_tools,
         &loaded_rust_provider.source_built_native_artifacts,
+        loaded_rust_provider.source_built_action_trust.as_ref(),
         options.rust_action_resources.as_ref(),
         stage_policy_digest,
     )?;
@@ -1474,6 +1477,7 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
         loaded_rust_provider.source_built_shell.as_ref(),
         &loaded_rust_provider.source_built_host_tools,
         &loaded_rust_provider.source_built_native_artifacts,
+        loaded_rust_provider.source_built_action_trust.as_ref(),
         options.rust_action_resources.as_ref(),
         stage_policy_digest,
     )?;
@@ -2170,6 +2174,7 @@ fn execute_fixed_point_stage(
     bound_shell: Option<&BoundRustExecutionShell>,
     source_built_host_tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
     source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
+    source_built_action_trust: Option<&crate::source_built_rust_provider_action::RustProviderActionEvidence>,
     rust_action_resources: Option<&crate::source_built_rust_action_plan::RustActionResourceLimits>,
     policy_digest_blake3: Option<&str>,
 ) -> Result<FixedPointStageRun, RunError> {
@@ -2190,6 +2195,7 @@ fn execute_fixed_point_stage(
         bound_shell,
         source_built_host_tools,
         source_built_native_artifacts,
+        source_built_action_trust,
         &stage.guard_path_dir,
         &rust_action_authority_path,
     )?;
@@ -3000,6 +3006,7 @@ fn prepare_rust_child_action_authority(
     bound_shell: Option<&BoundRustExecutionShell>,
     source_built_host_tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
     source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
+    source_built_action_trust: Option<&crate::source_built_rust_provider_action::RustProviderActionEvidence>,
     guard_path_dir: &Path,
     authority_path: &Path,
 ) -> Result<bool, RunError> {
@@ -3012,12 +3019,16 @@ fn prepare_rust_child_action_authority(
     let bound_shell = bound_shell.ok_or_else(|| {
         RunError::Build("Rust child-action authority requires a source-built BusyBox shell binding".to_string())
     })?;
+    let source_built_action_trust = source_built_action_trust.ok_or_else(|| {
+        RunError::Build("Rust child-action authority requires Rust-provider action reconciliation".to_string())
+    })?;
     let fixed_executables = rust_child_action_fixed_executables(
         selected_rustc,
         manifest,
         bound_shell,
         source_built_host_tools,
         source_built_native_artifacts,
+        source_built_action_trust,
         guard_path_dir,
         toolchain_closure.status.policy_digest_blake3.as_deref(),
     )?;
@@ -3039,6 +3050,7 @@ fn rust_child_action_fixed_executables(
     bound_shell: &BoundRustExecutionShell,
     source_built_host_tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
     source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
+    source_built_action_trust: &crate::source_built_rust_provider_action::RustProviderActionEvidence,
     guard_path_dir: &Path,
     policy_digest_blake3: Option<&str>,
 ) -> Result<Vec<crate::source_built_rust_action_plan::RustFixedExecutableAuthority>, RunError> {
@@ -3047,21 +3059,30 @@ fn rust_child_action_fixed_executables(
     let policy_digest_blake3 = policy_digest_blake3.ok_or_else(|| {
         RunError::Build("Rust child-action authority requires a toolchain closure policy digest".to_string())
     })?;
-    let alias_producer = rust_action_alias_producer(policy_digest_blake3, bound_shell);
+    let alias_producer = rust_action_alias_producer(policy_digest_blake3, bound_shell, source_built_action_trust);
     let closure_authorities =
         crate::source_built_rust_action_plan::fixed_executable_authorities_from_toolchain_closure(manifest)
             .map_err(rust_action_error)?;
     let mut by_path = BTreeMap::new();
     for authority in closure_authorities {
         let path = canonical_action_executable(Path::new(&authority.path))?;
+        let is_rustc_authority = authority.kind == RustFixedExecutableKind::Rustc;
         let kind = if path == selected_rustc {
             RustFixedExecutableKind::Rustc
-        } else if authority.kind == RustFixedExecutableKind::Rustc {
+        } else if is_rustc_authority {
             RustFixedExecutableKind::NativeHelper
         } else {
-            authority.kind
+            authority.kind.clone()
         };
-        let measured = measured_rust_fixed_authority(&path, kind, &authority.producer_action_id)?;
+        let producer_action_id = if is_rustc_authority {
+            format!(
+                "rust-provider-action:{}:{}",
+                source_built_action_trust.plan_digest_blake3, source_built_action_trust.reconciliation_digest_blake3
+            )
+        } else {
+            authority.producer_action_id
+        };
+        let measured = measured_rust_fixed_authority(&path, kind, &producer_action_id)?;
         insert_rust_fixed_authority(&mut by_path, measured)?;
     }
     for artifact in source_built_native_artifacts {
@@ -3111,13 +3132,19 @@ fn rust_child_action_fixed_executables(
     Ok(authorities)
 }
 
-fn rust_action_alias_producer(policy_digest_blake3: &str, shell: &BoundRustExecutionShell) -> String {
+fn rust_action_alias_producer(
+    policy_digest_blake3: &str,
+    shell: &BoundRustExecutionShell,
+    action_trust: &crate::source_built_rust_provider_action::RustProviderActionEvidence,
+) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(RUST_CHILD_ACTION_ALIAS_PRODUCER_CONTEXT);
     hasher.update(policy_digest_blake3.as_bytes());
     hasher.update(shell.content_digest_blake3.as_bytes());
     hasher.update(shell.source_id.as_bytes());
     hasher.update(shell.construction_receipt_digest_blake3.as_bytes());
+    hasher.update(action_trust.plan_digest_blake3.as_bytes());
+    hasher.update(action_trust.reconciliation_digest_blake3.as_bytes());
     let digest = hasher.finalize().to_hex();
     assert_eq!(digest.len(), blake3::OUT_LEN * 2);
     assert!(!shell.source_id.is_empty());
@@ -3967,6 +3994,7 @@ fn load_rust_source_provider(provider_dir: Option<&Path>) -> Result<LoadedRustSo
             source_built_shell: None,
             source_built_host_tools: Vec::new(),
             source_built_native_artifacts: Vec::new(),
+            source_built_action_trust: None,
             toolchain_closure_status: None,
         });
     };
@@ -3990,12 +4018,19 @@ fn load_rust_source_provider(provider_dir: Option<&Path>) -> Result<LoadedRustSo
         &validation.validation,
     );
     let execution_authority = load_bound_rust_execution_authority(&provider_dir)?;
+    let action_trust_dir = provider_dir.join(crate::rust_source_provider::RUST_PROVIDER_ACTION_EVIDENCE_RELATIVE_PATH);
+    let source_built_action_trust = action_trust_dir
+        .is_dir()
+        .then(|| crate::source_built_rust_provider_action::validate_rust_provider_action_evidence(&action_trust_dir))
+        .transpose()
+        .map_err(|error| RunError::Build(format!("source-built Rust provider action evidence blocked: {error}")))?;
     Ok(LoadedRustSourceProvider {
         status: validated_rust_source_provider_binding(&provider_dir, &validation, &rustc_path),
         rustc: Some(rustc_path),
         source_built_shell: execution_authority.shell,
         source_built_host_tools: execution_authority.host_tools,
         source_built_native_artifacts: execution_authority.native_artifacts,
+        source_built_action_trust,
         toolchain_closure_status: Some(toolchain_closure_status),
     })
 }
@@ -5139,6 +5174,18 @@ mod tests {
         write_toolchain_path_aliases_with_shell(&guard, &manifest, &bound_shell.execution_path).unwrap();
         write_bound_rust_host_tool_aliases(&guard, std::slice::from_ref(&binding), &bound_shell.execution_path)
             .unwrap();
+        let action_trust = crate::source_built_rust_provider_action::RustProviderActionEvidence {
+            plan_path: dir.path().join("rust-provider-action-plan.json"),
+            plan_digest_blake3: FIXED_POINT_TEST_DIGEST_A.to_string(),
+            audit_path: dir.path().join("rust-provider-action-audit.json"),
+            audit_digest_blake3: FIXED_POINT_TEST_DIGEST_A.to_string(),
+            reconciliation_path: dir.path().join("rust-provider-action-reconciliation.json"),
+            reconciliation_digest_blake3: FIXED_POINT_TEST_DIGEST_B.to_string(),
+            planned_action_count: 1,
+            matched_action_count: 1,
+            observed_event_count: 1,
+            matched_event_count: 1,
+        };
 
         let authorities = rust_child_action_fixed_executables(
             &tools.rustc,
@@ -5146,6 +5193,7 @@ mod tests {
             &bound_shell,
             &[binding],
             &[],
+            &action_trust,
             &guard,
             Some(FIXED_POINT_TEST_DIGEST_A),
         )
@@ -5169,6 +5217,7 @@ mod tests {
             source_built_shell: None,
             source_built_host_tools: Vec::new(),
             source_built_native_artifacts: Vec::new(),
+            source_built_action_trust: None,
             toolchain_closure_status: None,
         };
         let validated = LoadedRustSourceProvider {
@@ -5177,6 +5226,7 @@ mod tests {
             source_built_shell: None,
             source_built_host_tools: Vec::new(),
             source_built_native_artifacts: Vec::new(),
+            source_built_action_trust: None,
             toolchain_closure_status: None,
         };
 
@@ -5196,6 +5246,7 @@ mod tests {
             source_built_shell: None,
             source_built_host_tools: Vec::new(),
             source_built_native_artifacts: Vec::new(),
+            source_built_action_trust: None,
             toolchain_closure_status: Some(provider_status.clone()),
         };
 
@@ -5215,6 +5266,7 @@ mod tests {
             source_built_shell: None,
             source_built_host_tools: Vec::new(),
             source_built_native_artifacts: Vec::new(),
+            source_built_action_trust: None,
             toolchain_closure_status: None,
         };
 
@@ -5505,6 +5557,7 @@ mod tests {
             source_built_shell: None,
             source_built_host_tools: Vec::new(),
             source_built_native_artifacts: Vec::new(),
+            source_built_action_trust: None,
             toolchain_closure_status: Some(provider_status),
         };
 

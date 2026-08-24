@@ -1,0 +1,357 @@
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 54.37s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 2 tests
+test protected_exec::tests::produced_root_pins_first_exec_only_for_active_producer ... ok
+test protected_exec::tests::produced_roots_reject_overlap_wrong_scope_and_promotion_overflow ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2483 filtered out; finished in 0.00s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.27s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/debug/deps/mantle-43ba880e6e0688c3)
+
+running 1 test
+test protected_exec_seccomp::linux::tests::seccomp_supervisor_pins_producer_scoped_output_before_first_exec ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 180 filtered out; finished in 0.09s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 2 tests
+test source_built_rust_provider_action::tests::rust_provider_action_core_rejects_overlapping_roots_and_denied_events ... ok
+test source_built_rust_provider_action::tests::rust_provider_action_runtime_pins_outputs_and_emits_complete_evidence ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2483 filtered out; finished in 1.14s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 57 tests
+test rust_source_provider::tests::chained_rustc_stage1_provider_candidate_rejects_tampered_artifact ... ok
+test rust_source_provider::tests::checked_in_source_recipe_selects_command_materializer_without_prebuilt_route ... ok
+test rust_source_provider::tests::directory_validator_accepts_complete_fake_provider ... ok
+test rust_source_provider::tests::directory_validator_rejects_artifact_digest_mismatch ... ok
+test rust_source_provider::tests::directory_validator_rejects_nix_rustc_wrapper_even_with_matching_digest ... ok
+test rust_source_provider::tests::downstream_native_consumers_do_not_branch_on_rust_bootstrap_internals ... ok
+test rust_source_provider::tests::final_chained_rustc_stage1_provider_candidate_rejects_tampered_artifact ... ok
+test rust_source_provider::tests::first_stage_cargo_all_static_patch_rejects_missing_makefile_line ... ok
+test rust_source_provider::tests::first_stage_patch_operation_dispatch_rejects_unsupported_operation ... ok
+test rust_source_provider::tests::first_stage_proc_macro_rustc_install_rejects_missing_runtime_loader ... ok
+test rust_source_provider::tests::first_stage_proc_macro_rustc_install_rejects_missing_shared_libgcc_runtime ... ok
+test rust_source_provider::tests::first_stage_proc_macro_rustc_install_writes_relocatable_loader_wrapper ... ok
+test rust_source_provider::tests::first_stage_proc_macro_rustc_wrapper_skips_duplicate_sysroot ... ok
+test rust_source_provider::tests::first_stage_provider_candidate_rejects_tampered_artifact ... ok
+test rust_source_provider::tests::first_stage_script_fails_when_sources_removed_after_materialization ... mantle rust source first stage: mrustc-to-rust-1.90.0
+missing verified source 'mrustc-0.12.0' from file:///tmp/.tmpceDswg/test-source-archives/mrustc-0.12.0.tar.gz with sha256 9ffdd0a8ffaf1cabd10ccbfcd7fc9341268bb443a572587b7b1133361da1ad5c
+ok
+test rust_source_provider::tests::first_stage_wrapper_normalization_makes_mrustc_rustc_env_clear_safe ... ok
+test rust_source_provider::tests::first_stage_wrapper_normalization_rejects_missing_rustc_binary ... ok
+test rust_source_provider::tests::full_source_archive_acquisition_reads_only_the_verified_local_path ... ok
+test rust_source_provider::tests::full_source_archive_acquisition_rejects_a_missing_local_source ... ok
+test rust_source_provider::tests::full_source_first_stage_script_omits_compatibility_fallbacks ... ok
+test rust_source_provider::tests::full_source_generated_tool_bindings_exclude_ambient_discovery ... ok
+test rust_source_provider::tests::full_source_llvm_config_binds_only_receipt_bound_linux_headers ... ok
+test rust_source_provider::tests::full_source_stage_identity_binds_native_closure_and_host_tools ... ok
+test rust_source_provider::tests::full_source_tool_bindings_reject_missing_perl_without_ambient_fallback ... ok
+test rust_source_provider::tests::generated_script_command_uses_selected_interpreter_without_ambient_fallback ... ok
+test rust_source_provider::tests::generated_script_launch_retry_is_bounded_and_etxtbsy_only ... ok
+test rust_source_provider::tests::import_provider_copies_validated_provider ... ok
+test rust_source_provider::tests::import_provider_rejects_existing_output_without_overwrite ... ok
+test rust_source_provider::tests::import_provider_rejects_malformed_receipt_without_output ... ok
+test rust_source_provider::tests::import_provider_rejects_prebuilt_metadata_without_output ... ok
+test rust_source_provider::tests::materializer_generates_xpy_adapters_when_rust_sources_lack_stage_scripts ... ok
+test rust_source_provider::tests::materializer_invalid_explicit_source_root_child ... ok
+test rust_source_provider::tests::materializer_rejects_chained_rustc_stage1_source_digest_mismatch_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_existing_output_before_scratch_work ... ok
+test rust_source_provider::tests::materializer_rejects_final_chained_rustc_stage1_source_digest_mismatch_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_first_stage_source_digest_mismatch_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_invalid_explicit_source_root_env_in_subprocess ... ok
+test rust_source_provider::tests::materializer_rejects_missing_route_plan_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_rust_source_without_stage_script_or_xpy_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_rustc_final_source_digest_mismatch_without_output ... ok
+test rust_source_provider::tests::materializer_rejects_rustc_stage1_source_digest_mismatch_without_output ... ok
+test rust_source_provider::tests::materializer_uses_explicit_route_plan_when_default_plan_is_absent ... ok
+test rust_source_provider::tests::materializer_writes_final_provider_output_from_validated_candidate ... ok
+test rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan ... ok
+test rust_source_provider::tests::musl_target_tool_candidates_include_source_root_aliases_only ... ok
+test rust_source_provider::tests::rust_bootstrap_patch_operation_dispatch_rejects_unsupported_operation ... ok
+test rust_source_provider::tests::rustc_final_provider_candidate_rejects_tampered_artifact ... ok
+test rust_source_provider::tests::rustc_stage1_provider_candidate_rejects_tampered_artifact ... ok
+test rust_source_provider::tests::rustc_stage_dynamic_tool_wrapping_copies_shared_libgcc_runtime ... ok
+test rust_source_provider::tests::rustc_stage_dynamic_tool_wrapping_rejects_missing_shared_libgcc_runtime ... ok
+test rust_source_provider::tests::smoke_evidence_persists_summary_output_and_metadata ... ok
+test rust_source_provider::tests::smoke_evidence_rejects_tampered_smoke_output ... ok
+test rust_source_provider::tests::smoke_process_retry_is_bounded_and_text_file_busy_only ... ok
+test rust_source_provider::tests::smoke_provider_rejects_invalid_metadata_before_launch ... ok
+test rust_source_provider::tests::smoke_provider_runs_synthetic_rustc_after_validation ... ok
+test rust_source_provider::tests::smoke_rustc_args_do_not_duplicate_provider_wrapper_sysroot ... ok
+test rust_source_provider::tests::stage_construction_evidence_rejects_missing_source_file ... ok
+
+test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 2428 filtered out; finished in 28.36s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 6 tests
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_accepts_exact_stage_authority_and_payloads ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_rejects_changed_relevant_policy_and_forbidden_events ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_rejects_dev_origin_and_changed_payload ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_rejects_legacy_schema_without_action_payloads ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_rejects_wrong_semantic_provider_identity ... ok
+test source_built_fixed_point_checkpoint::tests::provider_lookup_ignores_later_mantle_source_but_tracks_provider_sources ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 2479 filtered out; finished in 0.02s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 3 tests
+test source_built_fixed_point_checkpoint_shell::tests::promoted_checkpoint_publishes_idempotently_and_restores_into_fresh_paths ... ok
+test source_built_fixed_point_checkpoint_shell::tests::promoted_checkpoint_rejects_modified_payload_and_partial_candidate ... ok
+test source_built_fixed_point_checkpoint_shell::tests::promoted_checkpoint_rejects_semantically_conflicting_candidates ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 2482 filtered out; finished in 0.06s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 4 tests
+test source_built_fixed_point_shell::checkpoint_integration::tests::imported_stagex_provider_report_rejects_the_legacy_root_receipt_path ... ok
+test source_built_fixed_point_shell::checkpoint_integration::tests::imported_stagex_provider_report_uses_the_published_receipt_path ... ok
+test source_built_fixed_point_shell::checkpoint_integration::tests::restored_paths_keep_the_checkpoint_closure_as_origin_evidence ... ok
+test source_built_fixed_point_shell::checkpoint_integration::tests::restored_rust_binding_relocates_provider_host_and_native_authority ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 2481 filtered out; finished in 0.01s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 2 tests
+test source_built_root_action_trust::tests::fixed_point_action_path_rejects_traversal ... ok
+test source_built_root_action_trust::tests::root_documents_sum_complete_adapters_and_reject_partial_coverage ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2483 filtered out; finished in 0.00s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 12 tests
+test source_built_fixed_point_receipt::tests::bundle_digest_excludes_only_self_referential_receipt_files ... ok
+test source_built_fixed_point_receipt::tests::bundle_digest_skips_declared_unreadable_scratch_but_rejects_unknown_unreadable_content ... ok
+test source_built_fixed_point_receipt::tests::deterministic_receipt_accepts_aggregate_source_closure_and_rejects_leaf_only_descriptor ... ok
+test source_built_fixed_point_receipt::tests::optional_action_trust_links_require_both_exact_files ... ok
+test source_built_fixed_point_receipt::tests::preserved_proof_bundle_fixture_fits_receipt_entry_policy ... ignored, requires a preserved source-built proof bundle
+test source_built_fixed_point_receipt::tests::preserved_stagex_transition_tree_fixture_hashes_under_receipt_policy ... ignored, requires a preserved source-built StageX transition tree
+test source_built_fixed_point_receipt::tests::provider_identity_digest_binds_each_declared_role ... ok
+test source_built_fixed_point_receipt::tests::rebuild_source_closure_binds_the_aggregate_authority_and_rejects_missing_root ... ok
+test source_built_fixed_point_receipt::tests::rebuild_source_count_tracks_the_plan_contract_and_rejects_drift ... ok
+test source_built_fixed_point_receipt::tests::restored_stage_origin_requires_provider_role_and_complete_checkpoint_link ... ok
+test source_built_fixed_point_receipt::tests::stage_evidence_ids_match_the_plan_and_reject_stale_aliases ... ok
+test source_built_fixed_point_receipt::tests::stage_evidence_rejects_fallbacks_and_duplicate_ids ... ok
+
+test result: ok. 10 passed; 0 failed; 2 ignored; 0 measured; 2473 filtered out; finished in 0.01s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 4 tests
+test source_built_trust_report::tests::action_reconciliation_rejects_unknown_remote_and_missing_events ... ok
+test source_built_trust_report::tests::complete_action_reconciliation_emits_bounded_complete_claim ... ok
+test source_built_trust_report::tests::fixed_point_rejects_fallback_or_stage_count_drift ... ok
+test source_built_trust_report::tests::fixed_point_without_action_links_reports_bounded_gap ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 2481 filtered out; finished in 0.00s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 6 tests
+test source_built_trust_report_shell::tests::action_documents_bind_plan_and_complete_local_observations ... ok
+test source_built_trust_report_shell::tests::action_documents_reject_cache_only_and_plan_digest_drift ... ok
+test source_built_trust_report_shell::tests::action_file_hash_rejects_symlink ... ok
+test source_built_trust_report_shell::tests::bounded_sum_rejects_count_overflow ... ok
+test source_built_trust_report_shell::tests::trust_report_rejects_tampered_stage_evidence ... ok
+test source_built_trust_report_shell::tests::verified_v48_fixture_reports_fixed_point_without_action_trust ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 2479 filtered out; finished in 0.01s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 55.96s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 2 tests
+test source_built_rust_provider_action::tests::rust_provider_action_core_rejects_overlapping_roots_and_denied_events ... ok
+test source_built_rust_provider_action::tests::rust_provider_action_runtime_pins_outputs_and_emits_complete_evidence ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2483 filtered out; finished in 1.14s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 1 test
+test cargo_free_self_build::tests::rust_action_fixed_authority_includes_receipt_bound_aliases_and_host_tools ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2484 filtered out; finished in 0.09s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 6 tests
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_accepts_exact_stage_authority_and_payloads ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_rejects_changed_relevant_policy_and_forbidden_events ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_rejects_dev_origin_and_changed_payload ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_rejects_legacy_schema_without_action_payloads ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_rejects_wrong_semantic_provider_identity ... ok
+test source_built_fixed_point_checkpoint::tests::provider_lookup_ignores_later_mantle_source_but_tracks_provider_sources ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 2479 filtered out; finished in 0.02s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 3 tests
+test source_built_fixed_point_checkpoint_shell::tests::promoted_checkpoint_publishes_idempotently_and_restores_into_fresh_paths ... ok
+test source_built_fixed_point_checkpoint_shell::tests::promoted_checkpoint_rejects_modified_payload_and_partial_candidate ... ok
+test source_built_fixed_point_checkpoint_shell::tests::promoted_checkpoint_rejects_semantically_conflicting_candidates ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 2482 filtered out; finished in 0.05s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 4 tests
+test source_built_fixed_point_shell::checkpoint_integration::tests::imported_stagex_provider_report_rejects_the_legacy_root_receipt_path ... ok
+test source_built_fixed_point_shell::checkpoint_integration::tests::imported_stagex_provider_report_uses_the_published_receipt_path ... ok
+test source_built_fixed_point_shell::checkpoint_integration::tests::restored_paths_keep_the_checkpoint_closure_as_origin_evidence ... ok
+test source_built_fixed_point_shell::checkpoint_integration::tests::restored_rust_binding_relocates_provider_host_and_native_authority ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 2481 filtered out; finished in 0.00s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.25s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 2 tests
+test source_built_root_action_trust::tests::fixed_point_action_path_rejects_traversal ... ok
+test source_built_root_action_trust::tests::root_documents_sum_complete_adapters_and_reject_partial_coverage ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2483 filtered out; finished in 0.00s
+
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 1 test
+test source_built_fixed_point_receipt::tests::optional_action_trust_links_require_both_exact_files ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2484 filtered out; finished in 0.00s
+

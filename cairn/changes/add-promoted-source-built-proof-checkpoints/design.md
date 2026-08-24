@@ -20,7 +20,7 @@ A later Mantle-only edit can therefore reuse an unchanged provider checkpoint. A
 
 ### Decision: Publish one provider-closure checkpoint before stage1
 
-The action-trust checkpoint revision publishes after the full-source Rust provider and toolchain closure complete. The checkpoint contains four ordered stage records and nine required payload roles:
+The action-trust checkpoint revision publishes after the full-source Rust provider and toolchain closure complete. The checkpoint contains four ordered stage records and seventeen required payload roles:
 
 - StageX transition execution;
 - StageX provider;
@@ -29,8 +29,12 @@ The action-trust checkpoint revision publishes after the full-source Rust provid
 - native admission report;
 - native build transcript;
 - toolchain closure;
-- native eager action plan; and
-- native action reconciliation.
+- native eager action plan;
+- native action reconciliation;
+- source-built Make, CMake, Python, Perl, and BusyBox trees;
+- source-built Linux headers;
+- Rust host-tool construction evidence; and
+- complete Rust-provider action-plan, audit, stage-plan, and reconciliation evidence.
 
 Later work can add stage1 and stage2 checkpoints without changing the provider-checkpoint contract.
 
@@ -40,7 +44,7 @@ The checkpoint lookup key discovers a candidate. It does not authorize reuse.
 
 The shell remeasures every payload through no-follow bounded observation. The core then validates schema, promoted origin, stage order, source and policy authority, predecessor outputs, semantic provider identities, resource bounds, execution evidence, action-trust policy, and payload identities. Schema v2 rejects the former seven-payload checkpoint.
 
-A missing candidate selects the cold path. A present but malformed, partial, conflicting, or mismatched candidate fails closed.
+The 17-payload revision uses a new action-trust lookup-policy identity, so a nine-payload draft cannot shadow the cold path. A missing candidate selects the cold path. A present but malformed, partial, conflicting, or mismatched candidate fails closed.
 
 ### Decision: Restore into a fresh proof root
 
@@ -48,7 +52,7 @@ The shell copies the admitted payload into a new staging directory. It preserves
 
 The shell rehashes restored payloads before it continues. It never executes from the checkpoint directory.
 
-The closure payload contains absolute paths from its origin attempt. Mantle keeps those exact bytes under checkpoint-origin evidence. It derives a current closure from the restored providers, then requires identical member authority and provider-relative paths. Only the two fresh absolute provider roots may change. A relocation report binds both closure identities.
+The closure and Rust-binding payloads contain absolute paths from their origin attempt. Mantle keeps those exact bytes under checkpoint-origin evidence. It derives a current closure and current Rust binding from restored providers and host tools, then requires identical member roles, content identities, and provider-relative paths. Only fresh provider, host-tool, receipt, and attestation roots may change. Separate relocation reports bind the origin and current identities.
 
 ### Decision: Compose prior stage evidence without claiming current execution
 

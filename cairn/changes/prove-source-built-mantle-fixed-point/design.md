@@ -56,7 +56,11 @@ Provider construction emits complete stage-local plans before each provider stag
 
 Rust unit actions use the unit graph for producer edges. Compile actions use fixed toolchain authority. Build-script executions use the compile action and declared output identity. Receipt-bound aliases use the BusyBox shell identity from the full-source Rust binding, not ambient `/bin/sh`.
 
-The stage shell writes fixed authority before native planning. The planner reads rustc identity from those bound bytes without an unplanned `rustc -vV`. It writes the unit plan before filter installation. The execution port then scopes compiler and build-script events, promotes generated build scripts, and writes a raw audit plus typed reconciliation before it reports success or failure.
+The Rust-provider shell writes a plan before each mrustc or rustc stage. Its fixed authority covers admitted native executables and source-built host tools. Its output-tree authorities are producer- and identity-bound. The seccomp supervisor hashes and pins a generated executable before first launch only while that producer action is active.
+
+The stage1/stage2 shell writes fixed authority before native planning. The planner reads rustc identity from those bound bytes without an unplanned `rustc -vV`. It writes the unit plan before filter installation. The execution port then scopes compiler and build-script events, promotes generated build scripts, and writes a raw audit plus typed reconciliation before it reports success or failure.
+
+After both fixed-point stages, Mantle validates and composes five adapters: StageX, native derivations, Rust-provider stages, stage1 Rust units, and stage2 Rust units. The root plan and reconciliation files are written before the final receipt, which binds their file digests.
 
 **Rationale:** Path classification can mislabel copied, stale, or attacker-selected files as generated output. The producer relationship and observed content identity preserve the existing Mantle trust model.
 

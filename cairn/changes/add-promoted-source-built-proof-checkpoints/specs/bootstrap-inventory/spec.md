@@ -8,7 +8,7 @@ r[bootstrap_inventory.source_built_mantle_checkpoint_reuse] Mantle MUST admit a 
 
 GIVEN a promoted proof completes StageX transition, StageX provider publication, native-provider construction, and Rust-provider construction
 WHEN Mantle validates those stages before stage1
-THEN it MUST publish one immutable provider checkpoint with all four ordered stage records and every required payload identity, including the native action plan and reconciliation
+THEN it MUST publish one immutable provider checkpoint with all four ordered stage records and every required payload identity, including native and Rust-provider action evidence plus source-built Rust host-tool bytes and receipts
 AND it MUST bind the checkpoint to promoted origin, stage authorities, semantic provider identities, execution evidence, action-trust policy, resource bounds, and no-fallback status.
 
 #### Scenario: exact checkpoint continues in a fresh root
@@ -17,7 +17,7 @@ GIVEN a complete promoted provider checkpoint exists
 AND its relevant source, policy, predecessor-output, resource, semantic-output, execution-evidence, and payload identities match the current proof
 WHEN a new proof selects the checkpoint store
 THEN Mantle MUST restore the payload into a fresh staging directory
-AND it MUST remeasure the restored content before continuing at Mantle stage1
+AND it MUST remeasure the restored content, preserve origin binding bytes, and validate the provider-relative relocation of current closure, Rust, native, host-tool, receipt, and attestation paths before continuing at Mantle stage1
 AND the final receipt MUST label the first four stages as restored with the checkpoint digest.
 
 #### Scenario: unrelated later source does not invalidate provider authority

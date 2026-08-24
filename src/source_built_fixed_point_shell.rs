@@ -174,6 +174,10 @@ const CHECKPOINT_NATIVE_ACTION_PLAN_PATH: &str = "payload/evidence/native-provid
 const CHECKPOINT_NATIVE_ACTION_RECONCILIATION_PATH: &str =
     "payload/evidence/native-provider-action-reconciliation.json";
 const CHECKPOINT_TOOLCHAIN_CLOSURE_PATH: &str = "payload/evidence/source-built-toolchain-closure.json";
+const CHECKPOINT_RUST_HOST_TOOL_PREFIX: &str = "payload/rust-host-tools";
+const CHECKPOINT_RUST_HOST_EVIDENCE_PATH: &str = "payload/evidence/rust-host-tools";
+const CHECKPOINT_RUST_ACTION_TRUST_PATH: &str = "payload/evidence/rust-provider-action-trust";
+const RUST_PROVIDER_RUSTC_RELATIVE: &str = "bin/rustc";
 const RUST_PROVIDER_BUILD_RECEIPT_RELATIVE: &str = "share/mantle-rust-provider/receipts/build.json";
 const RUST_PROVIDER_BINDING_RECEIPT_RELATIVE: &str = "share/mantle-rust-provider/receipts/full-source-binding.json";
 const CHECKPOINT_EXECUTION_EVIDENCE_CONTEXT: &str = "mantle-source-built-provider-checkpoint-execution-evidence-v1";
@@ -349,6 +353,8 @@ pub(crate) struct ConstructedProviders {
     pub(crate) native_admission: crate::full_source_provider::FullSourceProviderAdmissionReport,
     pub(crate) native_admission_report_path: PathBuf,
     pub(crate) rust_provider: crate::rust_source_provider::RustSourceProviderMaterialization,
+    pub(crate) rust_host_tools: BTreeMap<String, BuildObservation>,
+    pub(crate) rust_host_tool_evidence_dir: PathBuf,
     pub(crate) toolchain_closure_path: PathBuf,
     pub(crate) provider_checkpoint:
         Option<crate::source_built_fixed_point_checkpoint_shell::RestoredProviderCheckpoint>,
@@ -1162,6 +1168,16 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         write_dev_adopted_marker(prepared)?;
         Ok(true)
     } else {
+        let root_action_trust = crate::source_built_root_action_trust::write_root_action_trust(
+            &prepared.staging_dir,
+            &prepared.staging_dir.join(FIXED_POINT_DIR),
+            &prepared.plan,
+            &providers,
+        )?;
+        debug_assert!(root_action_trust.plan_path.is_file());
+        debug_assert_eq!(root_action_trust.plan_file_digest_blake3.len(), BLAKE3_HEX_LENGTH);
+        debug_assert!(root_action_trust.reconciliation_path.is_file());
+        debug_assert_eq!(root_action_trust.reconciliation_file_digest_blake3.len(), BLAKE3_HEX_LENGTH);
         crate::source_built_fixed_point_receipt::write_source_built_fixed_point_receipt(
             &prepared.staging_dir,
             &prepared.plan,
@@ -1831,6 +1847,15 @@ fn construct_full_source_providers(
     .map_err(|error| proof_error(format!("constructing full-source Rust host-tool evidence: {error}")))?;
     let rust_provider_root = prepared.staging_dir.join(RUST_PROVIDER_DIR);
     let rust_scratch = prepared.staging_dir.join(RUST_PROVIDER_SCRATCH_DIR);
+    let rust_provider_open_file_descriptors_max =
+        u32::try_from(crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX)
+            .map_err(|_| proof_error("Rust provider action open-file limit exceeds u32".to_string()))?;
+    let rust_provider_action_limits = crate::source_built_rust_provider_action::RustProviderActionLimits {
+        parallel_jobs_max: crate::rust_source_provider::RUST_BOOTSTRAP_JOB_COUNT,
+        open_file_descriptors_max: rust_provider_open_file_descriptors_max,
+        storage_bytes_max: options.disk_bytes_max,
+        exec_events_per_stage_max: options.protected_exec_events_max,
+    };
     fs::create_dir(&rust_scratch)
         .map_err(|error| proof_error(format!("creating Rust provider scratch {}: {error}", rust_scratch.display())))?;
     let rust_provider = crate::rust_source_provider::materialize_full_source_bound_rust_provider_with_route_plan(
@@ -1839,11 +1864,17 @@ fn construct_full_source_providers(
         &native_admission_report_path,
         &host_tool_manifest,
         &prepared.rust_source_archive_dir,
+        Some(rust_provider_action_limits),
         &rust_provider_root,
         &rust_scratch,
         options.verbose,
     )
     .map_err(|error| proof_error(format!("constructing full-source Rust provider: {error}")))?;
+    if rust_provider.action_trust.is_none() {
+        return Err(proof_error(
+            "promoted full-source Rust provider lacks action plan, audit, and reconciliation".to_string(),
+        ));
+    }
     let toolchain_closure_path = prepared.staging_dir.join(TOOLCHAIN_CLOSURE_FILE);
     crate::native_toolchain_closure::cmd_materialize_native_toolchain_closure(NativeToolchainClosureOptions {
         rust_source_provider: &rust_provider.output_path,
@@ -1859,6 +1890,8 @@ fn construct_full_source_providers(
         native_admission,
         native_admission_report_path,
         rust_provider,
+        rust_host_tools: host_tools,
+        rust_host_tool_evidence_dir: host_tool_manifest_dir,
         toolchain_closure_path,
         provider_checkpoint: None,
     })

@@ -176,9 +176,9 @@ const KAEM_SMOKE_MARKER: &[u8] = b"kaem-smoke-success\n";
 const EXPECTED_AUDIT_EVENT_COUNT: usize = 3;
 const EXPECTED_PROMOTION_COUNT: usize = 2;
 const SOURCE_STATE_DOMAIN: &[u8] = b"mantle-stagex-transition-source-state-v1\0";
-const REPORT_FILE_NAME: &str = "transition-report.json";
-const PLAN_FILE_NAME: &str = "transition-plan.json";
-const AUDIT_FILE_NAME: &str = "protected-exec-audit.json";
+pub(crate) const REPORT_FILE_NAME: &str = "transition-report.json";
+pub(crate) const PLAN_FILE_NAME: &str = "transition-plan.json";
+pub(crate) const AUDIT_FILE_NAME: &str = "protected-exec-audit.json";
 const FAILURE_AUDIT_FILE_NAME: &str = "protected-exec-audit-failure.json";
 
 #[derive(Debug, Clone)]

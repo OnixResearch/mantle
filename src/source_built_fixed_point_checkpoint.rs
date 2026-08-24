@@ -23,15 +23,15 @@ use crate::source_built_fixed_point::StageAuthorityInput;
 
 pub(crate) const PROVIDER_CHECKPOINT_SCHEMA: &str = "mantle-source-built-provider-checkpoint-v2";
 pub(crate) const PROVIDER_CHECKPOINT_STAGE_COUNT: usize = 4;
-pub(crate) const PROVIDER_CHECKPOINT_PAYLOAD_COUNT: usize = 9;
+pub(crate) const PROVIDER_CHECKPOINT_PAYLOAD_COUNT: usize = 17;
 #[cfg(test)]
 const FIRST_PROVIDER_STAGE_INDEX: usize = 0;
 const STAGEX_PROVIDER_STAGE_INDEX: usize = 1;
 const NATIVE_PROVIDER_STAGE_INDEX: usize = 2;
-const PROVIDER_CHECKPOINT_LOOKUP_CONTEXT: &str = "mantle-source-built-provider-checkpoint-lookup-v2";
+const PROVIDER_CHECKPOINT_LOOKUP_CONTEXT: &str = "mantle-source-built-provider-checkpoint-lookup-v3";
 const PROVIDER_CHECKPOINT_STAGE_CONTEXT: &str = "mantle-source-built-provider-checkpoint-stage-v2";
 const PROVIDER_CHECKPOINT_MANIFEST_CONTEXT: &str = "mantle-source-built-provider-checkpoint-manifest-v2";
-const PROVIDER_ACTION_TRUST_POLICY_ID: &str = "mantle-provider-action-trust-v1";
+const PROVIDER_ACTION_TRUST_POLICY_ID: &str = "mantle-provider-action-trust-v2";
 const RESOURCE_BOUNDS_CONTEXT: &str = "mantle-source-built-provider-checkpoint-resource-bounds-v1";
 const BLAKE3_HEX_LENGTH: usize = 64;
 const TEXT_BYTES_MAX: usize = 4_096;
@@ -45,6 +45,14 @@ pub(crate) const PAYLOAD_NATIVE_TRANSCRIPT: &str = "native-transcript";
 pub(crate) const PAYLOAD_TOOLCHAIN_CLOSURE: &str = "toolchain-closure";
 pub(crate) const PAYLOAD_NATIVE_ACTION_PLAN: &str = "native-action-plan";
 pub(crate) const PAYLOAD_NATIVE_ACTION_RECONCILIATION: &str = "native-action-reconciliation";
+pub(crate) const PAYLOAD_RUST_HOST_MAKE: &str = "rust-host-make";
+pub(crate) const PAYLOAD_RUST_HOST_CMAKE: &str = "rust-host-cmake";
+pub(crate) const PAYLOAD_RUST_HOST_PYTHON: &str = "rust-host-python";
+pub(crate) const PAYLOAD_RUST_HOST_PERL: &str = "rust-host-perl";
+pub(crate) const PAYLOAD_RUST_HOST_BUSYBOX: &str = "rust-host-busybox";
+pub(crate) const PAYLOAD_RUST_HOST_LINUX_HEADERS: &str = "rust-host-linux-headers";
+pub(crate) const PAYLOAD_RUST_HOST_EVIDENCE: &str = "rust-host-evidence";
+pub(crate) const PAYLOAD_RUST_ACTION_TRUST: &str = "rust-action-trust";
 const REQUIRED_PAYLOAD_IDS: [&str; PROVIDER_CHECKPOINT_PAYLOAD_COUNT] = [
     PAYLOAD_STAGEX_TRANSITION,
     PAYLOAD_STAGEX_PROVIDER,
@@ -55,6 +63,14 @@ const REQUIRED_PAYLOAD_IDS: [&str; PROVIDER_CHECKPOINT_PAYLOAD_COUNT] = [
     PAYLOAD_TOOLCHAIN_CLOSURE,
     PAYLOAD_NATIVE_ACTION_PLAN,
     PAYLOAD_NATIVE_ACTION_RECONCILIATION,
+    PAYLOAD_RUST_HOST_MAKE,
+    PAYLOAD_RUST_HOST_CMAKE,
+    PAYLOAD_RUST_HOST_PYTHON,
+    PAYLOAD_RUST_HOST_PERL,
+    PAYLOAD_RUST_HOST_BUSYBOX,
+    PAYLOAD_RUST_HOST_LINUX_HEADERS,
+    PAYLOAD_RUST_HOST_EVIDENCE,
+    PAYLOAD_RUST_ACTION_TRUST,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -524,14 +540,21 @@ fn validate_payloads(payloads: &[CheckpointPayloadIdentity]) -> Result<(), Check
 fn expected_payload_kind(payload_id: &str) -> Result<CheckpointPayloadKind, CheckpointError> {
     match payload_id {
         PAYLOAD_STAGEX_TRANSITION => Ok(CheckpointPayloadKind::PreservedTree),
-        PAYLOAD_STAGEX_PROVIDER | PAYLOAD_NATIVE_PROVIDER | PAYLOAD_RUST_PROVIDER => {
-            Ok(CheckpointPayloadKind::Directory)
-        }
+        PAYLOAD_STAGEX_PROVIDER
+        | PAYLOAD_NATIVE_PROVIDER
+        | PAYLOAD_RUST_PROVIDER
+        | PAYLOAD_RUST_HOST_MAKE
+        | PAYLOAD_RUST_HOST_CMAKE
+        | PAYLOAD_RUST_HOST_PYTHON
+        | PAYLOAD_RUST_HOST_PERL
+        | PAYLOAD_RUST_HOST_BUSYBOX
+        | PAYLOAD_RUST_HOST_LINUX_HEADERS => Ok(CheckpointPayloadKind::Directory),
         PAYLOAD_NATIVE_ADMISSION
         | PAYLOAD_NATIVE_TRANSCRIPT
         | PAYLOAD_TOOLCHAIN_CLOSURE
         | PAYLOAD_NATIVE_ACTION_PLAN
         | PAYLOAD_NATIVE_ACTION_RECONCILIATION => Ok(CheckpointPayloadKind::RegularFile),
+        PAYLOAD_RUST_HOST_EVIDENCE | PAYLOAD_RUST_ACTION_TRUST => Ok(CheckpointPayloadKind::PreservedTree),
         _ => Err(checkpoint_error(format!("unknown checkpoint payload role {payload_id}"))),
     }
 }

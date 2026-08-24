@@ -296,6 +296,8 @@ pub(crate) fn write_source_built_fixed_point_receipt(
         authority_plan,
         authority_plan_digest,
     )?;
+    let (action_trust_plan_digest_blake3, action_trust_reconciliation_digest_blake3) =
+        observed_action_trust_links(proof_root)?;
     let extension = SourceBuiltReceiptExtension {
         schema: EXTENSION_SCHEMA.to_string(),
         plan_digest_blake3: plan.plan_digest_blake3.clone(),
@@ -314,8 +316,8 @@ pub(crate) fn write_source_built_fixed_point_receipt(
             .provider_checkpoint
             .as_ref()
             .map(|checkpoint| checkpoint.admission.checkpoint_digest_blake3.clone()),
-        action_trust_plan_digest_blake3: None,
-        action_trust_reconciliation_digest_blake3: None,
+        action_trust_plan_digest_blake3,
+        action_trust_reconciliation_digest_blake3,
         non_claims: NON_CLAIMS.iter().map(|value| (*value).to_string()).collect(),
     };
     let receipt_path = proof_root.join(crate::source_built_fixed_point_shell::FINAL_RECEIPT_FILE);
@@ -373,6 +375,18 @@ pub(crate) fn verify_source_built_fixed_point_receipt(proof_root: &Path, receipt
     assert_eq!(canonical.runs.len(), REQUIRED_RUN_COUNT);
     debug_assert_eq!(stage_evidence.len(), STAGE_EVIDENCE_COUNT);
     Ok(())
+}
+
+fn observed_action_trust_links(proof_root: &Path) -> Result<(Option<String>, Option<String>), RunError> {
+    let plan_path = proof_root.join(crate::source_built_trust_report::ROOT_ACTION_TRUST_PLAN_FILE);
+    let reconciliation_path = proof_root.join(crate::source_built_trust_report::ROOT_ACTION_RECONCILIATION_FILE);
+    match (plan_path.is_file(), reconciliation_path.is_file()) {
+        (false, false) => Ok((None, None)),
+        (true, true) => Ok((Some(hash_file(&plan_path)?), Some(hash_file(&reconciliation_path)?))),
+        _ => Err(receipt_error(
+            "source-built proof root must contain both action-trust files or neither file".to_string(),
+        )),
+    }
 }
 
 fn validate_optional_action_trust_links(
@@ -1502,6 +1516,7 @@ mod tests {
         let plan_digest = hash_file(&plan_path).unwrap();
         let reconciliation_digest = hash_file(&reconciliation_path).unwrap();
         let mut extension = v48_extension();
+        let observed = observed_action_trust_links(temp.path()).unwrap();
 
         validate_optional_action_trust_links(temp.path(), &extension).unwrap();
         extension.action_trust_plan_digest_blake3 = Some(plan_digest.clone());
@@ -1511,6 +1526,8 @@ mod tests {
         extension.action_trust_plan_digest_blake3 = Some(DIGEST_A.to_string());
         let drift = validate_optional_action_trust_links(temp.path(), &extension).unwrap_err();
 
+        assert_eq!(observed.0.as_deref(), Some(plan_digest.as_str()));
+        assert!(observed.1.is_some());
         assert!(partial.to_string().contains("both action-trust files"));
         assert!(drift.to_string().contains("binding digest mismatch"));
         assert_ne!(plan_digest, DIGEST_A);

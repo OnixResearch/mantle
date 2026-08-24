@@ -40,6 +40,8 @@ Produced toolchains create a planning dependency. Provider stages therefore emit
 
 For stage1 and stage2, the fixed-authority file exists before native Rust planning. Planning reads the bound rustc identity without executing rustc. The worker writes its unit action plan before seccomp installation. Compile scopes include rustc and nested fixed tools. Build-script scopes use the compile action and declared output identity to promote measured executable bytes before launch.
 
+Full-source Rust-provider stages use stage-local plans. Each plan names its authenticated script inputs, predecessor action, fixed host/native executables, bounded output-tree authorities, resources, and event limit. An output path alone grants nothing. While the declared producer action is active, the seccomp supervisor can bind the first execution under that exact output tree to the planned output identity and observed BLAKE3. It pins those bytes before it permits the kernel launch. Later byte drift fails closed.
+
 After execution, Mantle reconciles protected-exec and build execution records with the plan. It rejects unknown events, missing required events, digest drift, producer drift, count-bound violations, undeclared inputs, and locality drift.
 
 The v2 proof receipt binds the action plan digest and observed reconciliation digest. Bootstrap promotion independently recomputes these links. `mantle --json bootstrap trust-report --proof-root <path>` renders the bound result. The command is a view, not a new authority source.

@@ -719,6 +719,14 @@ mod tests {
     use crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_ADMISSION;
     use crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_PROVIDER;
     use crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_TRANSCRIPT;
+    use crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_ACTION_TRUST;
+    use crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_BUSYBOX;
+    use crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_CMAKE;
+    use crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_EVIDENCE;
+    use crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_LINUX_HEADERS;
+    use crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_MAKE;
+    use crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_PERL;
+    use crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_PYTHON;
     use crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_PROVIDER;
     use crate::source_built_fixed_point_checkpoint::PAYLOAD_STAGEX_PROVIDER;
     use crate::source_built_fixed_point_checkpoint::PAYLOAD_STAGEX_TRANSITION;
@@ -848,6 +856,15 @@ mod tests {
             fs::write(source_root.join("evidence/native-action-plan.json"), b"native-action-plan").unwrap();
             fs::write(source_root.join("evidence/native-action-reconciliation.json"), b"native-action-reconciliation")
                 .unwrap();
+            for name in ["make", "cmake", "python", "perl", "busybox", "linux-headers"] {
+                let root = source_root.join("rust-host-tools").join(name);
+                fs::create_dir_all(&root).unwrap();
+                fs::write(root.join("payload"), name.as_bytes()).unwrap();
+            }
+            fs::create_dir_all(source_root.join("evidence/rust-host-tools")).unwrap();
+            fs::write(source_root.join("evidence/rust-host-tools/manifest.json"), b"host-evidence").unwrap();
+            fs::create_dir_all(source_root.join("evidence/rust-action-trust")).unwrap();
+            fs::write(source_root.join("evidence/rust-action-trust/plan.json"), b"rust-action").unwrap();
             fs::create_dir_all(restore_root.join("native-store")).unwrap();
             fs::create_dir_all(restore_root.join("evidence")).unwrap();
             Self {
@@ -952,6 +969,54 @@ mod tests {
                     "payload/evidence/native-action-reconciliation.json",
                     CheckpointPayloadKind::RegularFile,
                 ),
+                source(
+                    PAYLOAD_RUST_HOST_MAKE,
+                    &self.source_root.join("rust-host-tools/make"),
+                    "payload/rust-host-tools/make",
+                    CheckpointPayloadKind::Directory,
+                ),
+                source(
+                    PAYLOAD_RUST_HOST_CMAKE,
+                    &self.source_root.join("rust-host-tools/cmake"),
+                    "payload/rust-host-tools/cmake",
+                    CheckpointPayloadKind::Directory,
+                ),
+                source(
+                    PAYLOAD_RUST_HOST_PYTHON,
+                    &self.source_root.join("rust-host-tools/python"),
+                    "payload/rust-host-tools/python",
+                    CheckpointPayloadKind::Directory,
+                ),
+                source(
+                    PAYLOAD_RUST_HOST_PERL,
+                    &self.source_root.join("rust-host-tools/perl"),
+                    "payload/rust-host-tools/perl",
+                    CheckpointPayloadKind::Directory,
+                ),
+                source(
+                    PAYLOAD_RUST_HOST_BUSYBOX,
+                    &self.source_root.join("rust-host-tools/busybox"),
+                    "payload/rust-host-tools/busybox",
+                    CheckpointPayloadKind::Directory,
+                ),
+                source(
+                    PAYLOAD_RUST_HOST_LINUX_HEADERS,
+                    &self.source_root.join("rust-host-tools/linux-headers"),
+                    "payload/rust-host-tools/linux-headers",
+                    CheckpointPayloadKind::Directory,
+                ),
+                source(
+                    PAYLOAD_RUST_HOST_EVIDENCE,
+                    &self.source_root.join("evidence/rust-host-tools"),
+                    "payload/evidence/rust-host-tools",
+                    CheckpointPayloadKind::PreservedTree,
+                ),
+                source(
+                    PAYLOAD_RUST_ACTION_TRUST,
+                    &self.source_root.join("evidence/rust-action-trust"),
+                    "payload/evidence/rust-action-trust",
+                    CheckpointPayloadKind::PreservedTree,
+                ),
             ]
         }
 
@@ -1004,6 +1069,46 @@ mod tests {
                     PAYLOAD_NATIVE_ACTION_RECONCILIATION,
                     &self.restore_root.join("evidence/native-action-reconciliation.json"),
                     CheckpointPayloadKind::RegularFile,
+                ),
+                restore(
+                    PAYLOAD_RUST_HOST_MAKE,
+                    &self.restore_root.join("rust-host-tools/make"),
+                    CheckpointPayloadKind::Directory,
+                ),
+                restore(
+                    PAYLOAD_RUST_HOST_CMAKE,
+                    &self.restore_root.join("rust-host-tools/cmake"),
+                    CheckpointPayloadKind::Directory,
+                ),
+                restore(
+                    PAYLOAD_RUST_HOST_PYTHON,
+                    &self.restore_root.join("rust-host-tools/python"),
+                    CheckpointPayloadKind::Directory,
+                ),
+                restore(
+                    PAYLOAD_RUST_HOST_PERL,
+                    &self.restore_root.join("rust-host-tools/perl"),
+                    CheckpointPayloadKind::Directory,
+                ),
+                restore(
+                    PAYLOAD_RUST_HOST_BUSYBOX,
+                    &self.restore_root.join("rust-host-tools/busybox"),
+                    CheckpointPayloadKind::Directory,
+                ),
+                restore(
+                    PAYLOAD_RUST_HOST_LINUX_HEADERS,
+                    &self.restore_root.join("rust-host-tools/linux-headers"),
+                    CheckpointPayloadKind::Directory,
+                ),
+                restore(
+                    PAYLOAD_RUST_HOST_EVIDENCE,
+                    &self.restore_root.join("evidence/rust-host-tools"),
+                    CheckpointPayloadKind::PreservedTree,
+                ),
+                restore(
+                    PAYLOAD_RUST_ACTION_TRUST,
+                    &self.restore_root.join("evidence/rust-action-trust"),
+                    CheckpointPayloadKind::PreservedTree,
                 ),
             ]
         }

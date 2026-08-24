@@ -181,9 +181,11 @@ mod source_built_fixed_point_checkpoint_shell;
 mod source_built_fixed_point_dev_cache;
 mod source_built_fixed_point_receipt;
 mod source_built_fixed_point_shell;
+mod source_built_root_action_trust;
 mod source_built_rust_action_plan;
 #[cfg(target_os = "linux")]
 mod source_built_rust_action_shell;
+mod source_built_rust_provider_action;
 mod source_built_trust_report;
 mod source_built_trust_report_shell;
 mod source_bundle;
@@ -7365,6 +7367,7 @@ fn materialize_requested_rust_source_provider(
             admission_report_path,
             host_tool_manifest_path,
             rust_source_archive_dir,
+            None,
             request.output_dir,
             scratch_dir,
             request.verbose,

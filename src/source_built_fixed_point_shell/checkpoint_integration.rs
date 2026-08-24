@@ -3,6 +3,9 @@ use super::*;
 const CHECKPOINT_ORIGIN_TOOLCHAIN_CLOSURE_FILE: &str = "source-built-toolchain-closure.json";
 const CHECKPOINT_CLOSURE_RELOCATION_REPORT_FILE: &str = "provider-checkpoint-closure-relocation.json";
 const CHECKPOINT_CLOSURE_RELOCATION_REPORT_SCHEMA: &str = "mantle-source-built-checkpoint-closure-relocation-v1";
+const CHECKPOINT_RUST_BINDING_RELOCATION_REPORT_FILE: &str = "provider-checkpoint-rust-binding-relocation.json";
+const CHECKPOINT_RUST_BINDING_RELOCATION_REPORT_SCHEMA: &str =
+    "mantle-source-built-checkpoint-rust-binding-relocation-v1";
 
 pub(super) fn import_provider_checkpoint_attempt(
     options: &SourceBuiltFixedPointOptions<'_>,
@@ -188,7 +191,10 @@ fn imported_constructed_providers(
             recipe_digest_blake3,
             metadata_path: rust_validation.metadata_path,
             metadata_digest_blake3: rust_validation.metadata_digest_blake3,
+            action_trust: None,
         },
+        rust_host_tools: BTreeMap::new(),
+        rust_host_tool_evidence_dir: import_root.join(HOST_TOOLS_EVIDENCE_DIR),
         toolchain_closure_path: import_root.join(TOOLCHAIN_CLOSURE_FILE),
         provider_checkpoint: None,
     })
@@ -320,6 +326,10 @@ struct RestoredProviderPaths {
     stagex_provider: PathBuf,
     native_provider: PathBuf,
     rust_provider: PathBuf,
+    rust_host_tools: BTreeMap<String, PathBuf>,
+    rust_host_evidence: PathBuf,
+    rust_action_trust: PathBuf,
+    origin_rust_binding: PathBuf,
     origin_native_admission: PathBuf,
     origin_native_transcript: PathBuf,
     origin_native_action_plan: PathBuf,
@@ -334,11 +344,20 @@ impl RestoredProviderPaths {
         fs::create_dir(&origin).map_err(|error| {
             proof_error(format!("creating checkpoint origin evidence {}: {error}", origin.display()))
         })?;
+        let rust_host_tools_root = prepared.staging_dir.join("rust-host-tools");
+        let rust_host_tools = ["make", "cmake", "python", "perl", "busybox", "linux-headers"]
+            .into_iter()
+            .map(|name| (name.to_string(), rust_host_tools_root.join(name)))
+            .collect();
         Ok(Self {
             stagex_transition: prepared.staging_dir.join(STAGEX_TRANSITION_EXECUTION_DIR),
             stagex_provider: prepared.native_store_dir.join(stagex_basename),
             native_provider: prepared.native_store_dir.join(native_basename),
             rust_provider: prepared.staging_dir.join(RUST_PROVIDER_DIR),
+            rust_host_tools,
+            rust_host_evidence: prepared.staging_dir.join(HOST_TOOLS_EVIDENCE_DIR),
+            rust_action_trust: origin.join("rust-provider-action-trust"),
+            origin_rust_binding: origin.join("full-source-rust-binding.json"),
             origin_native_admission: origin.join("native-admission.json"),
             origin_native_transcript: origin.join("native-provider.json"),
             origin_native_action_plan: origin.join("native-provider-action-plan.json"),
@@ -346,6 +365,13 @@ impl RestoredProviderPaths {
             origin_toolchain_closure: origin.join(CHECKPOINT_ORIGIN_TOOLCHAIN_CLOSURE_FILE),
             toolchain_closure: prepared.staging_dir.join(TOOLCHAIN_CLOSURE_FILE),
         })
+    }
+
+    fn rust_host_tool(&self, name: &str) -> &Path {
+        self.rust_host_tools
+            .get(name)
+            .map(PathBuf::as_path)
+            .expect("restored Rust host-tool paths are constructed from a fixed inventory")
     }
 
     fn requests(
@@ -398,6 +424,46 @@ impl RestoredProviderPaths {
                 crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_ACTION_RECONCILIATION,
                 &self.origin_native_action_reconciliation,
                 CheckpointPayloadKind::RegularFile,
+            ),
+            checkpoint_restore(
+                crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_MAKE,
+                self.rust_host_tool("make"),
+                CheckpointPayloadKind::Directory,
+            ),
+            checkpoint_restore(
+                crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_CMAKE,
+                self.rust_host_tool("cmake"),
+                CheckpointPayloadKind::Directory,
+            ),
+            checkpoint_restore(
+                crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_PYTHON,
+                self.rust_host_tool("python"),
+                CheckpointPayloadKind::Directory,
+            ),
+            checkpoint_restore(
+                crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_PERL,
+                self.rust_host_tool("perl"),
+                CheckpointPayloadKind::Directory,
+            ),
+            checkpoint_restore(
+                crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_BUSYBOX,
+                self.rust_host_tool("busybox"),
+                CheckpointPayloadKind::Directory,
+            ),
+            checkpoint_restore(
+                crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_LINUX_HEADERS,
+                self.rust_host_tool("linux-headers"),
+                CheckpointPayloadKind::Directory,
+            ),
+            checkpoint_restore(
+                crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_EVIDENCE,
+                &self.rust_host_evidence,
+                CheckpointPayloadKind::PreservedTree,
+            ),
+            checkpoint_restore(
+                crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_ACTION_TRUST,
+                &self.rust_action_trust,
+                CheckpointPayloadKind::PreservedTree,
             ),
         ]
     }
@@ -454,6 +520,19 @@ fn validate_restored_provider_checkpoint(
         &native_admission_report_path,
         false,
     )?;
+    relocate_restored_rust_binding(&paths)?;
+    let origin_rust_action_trust = restored_rust_provider_action_trust(&paths)?;
+    let rust_action_trust = crate::source_built_rust_provider_action::validate_rust_provider_action_evidence(
+        &paths.rust_provider.join(crate::rust_source_provider::RUST_PROVIDER_ACTION_EVIDENCE_RELATIVE_PATH),
+    )
+    .map_err(|error| proof_error(format!("validating embedded restored Rust action evidence: {error}")))?;
+    if origin_rust_action_trust.plan_digest_blake3 != rust_action_trust.plan_digest_blake3
+        || origin_rust_action_trust.reconciliation_digest_blake3 != rust_action_trust.reconciliation_digest_blake3
+    {
+        return Err(proof_error(
+            "restored Rust action evidence differs between origin payload and embedded provider".to_string(),
+        ));
+    }
     let rust_validation = crate::rust_source_provider::validate_materialized_rust_source_provider(&paths.rust_provider)
         .map_err(|error| proof_error(format!("validating restored Rust provider: {error}")))?;
     let recipe_digest = crate::protected_exec::blake3_file_hex(&prepared.source_root.join(RUST_RECIPE_NCL))
@@ -481,10 +560,217 @@ fn validate_restored_provider_checkpoint(
             recipe_digest_blake3: recipe_digest,
             metadata_path: rust_validation.metadata_path,
             metadata_digest_blake3: rust_validation.metadata_digest_blake3,
+            action_trust: Some(rust_action_trust),
         },
+        rust_host_tools: BTreeMap::new(),
+        rust_host_tool_evidence_dir: paths.rust_host_evidence,
         toolchain_closure_path: paths.toolchain_closure,
         provider_checkpoint: Some(restored),
     })
+}
+
+fn restored_rust_provider_action_trust(
+    paths: &RestoredProviderPaths,
+) -> Result<crate::source_built_rust_provider_action::RustProviderActionEvidence, RunError> {
+    crate::source_built_rust_provider_action::validate_rust_provider_action_evidence(&paths.rust_action_trust)
+        .map_err(|error| proof_error(format!("validating restored Rust provider action evidence: {error}")))
+}
+
+fn relocate_restored_rust_binding(paths: &RestoredProviderPaths) -> Result<(), RunError> {
+    let binding_path = paths.rust_provider.join(RUST_PROVIDER_BINDING_RECEIPT_RELATIVE);
+    let origin_bytes = fs::read(&binding_path)
+        .map_err(|error| proof_error(format!("reading restored Rust binding {}: {error}", binding_path.display())))?;
+    write_bytes_create_new(&paths.origin_rust_binding, &origin_bytes)?;
+    let mut binding =
+        serde_json::from_slice::<crate::full_source_rust_binding::FullSourceRustProviderBindingReceipt>(&origin_bytes)
+            .map_err(|error| {
+                proof_error(format!("parsing restored Rust binding {}: {error}", binding_path.display()))
+            })?;
+    let origin_rust_root = origin_rust_provider_root(&binding)?;
+    for artifact in &mut binding.rust_artifacts {
+        artifact.path = relocate_bound_path(&origin_rust_root, &paths.rust_provider, &artifact.path, "Rust artifact")?;
+    }
+    for receipt in &mut binding.rust_build_receipts {
+        receipt.path = relocate_bound_path(&origin_rust_root, &paths.rust_provider, &receipt.path, "Rust receipt")?;
+    }
+    for artifact in &mut binding.native_artifacts {
+        let relative = required_native_artifact_relative_path(artifact.role, &artifact.path)?;
+        let relocated = paths.native_provider.join(relative);
+        require_relocated_binding_path(&relocated, "native artifact")?;
+        artifact.path = path_to_utf8(&relocated, "native artifact")?;
+    }
+    for tool in &mut binding.host_tools {
+        let name = rust_host_tool_name(tool.role);
+        let relative =
+            crate::full_source_rust_binding_shell::full_source_rust_host_tool_executable_relative_path(tool.role)
+                .ok_or_else(|| {
+                    proof_error(format!("restored Rust binding has unsupported host-tool role {:?}", tool.role))
+                })?;
+        let executable = paths.rust_host_tool(name).join(relative);
+        require_relocated_binding_path(&executable, "host tool")?;
+        let executable_path = path_to_utf8(&executable, "host tool")?;
+        let (receipt_path, receipt_digest_blake3) =
+            relocate_host_tool_receipt(&paths.rust_host_evidence, &tool.construction_receipt_path, &executable_path)?;
+        tool.path = executable_path;
+        tool.construction_receipt_path = receipt_path;
+        tool.construction_receipt_digest_blake3 = receipt_digest_blake3;
+    }
+    for input in &mut binding.host_support_inputs {
+        if input.id != "linux-headers" {
+            return Err(proof_error(format!("restored Rust binding has unsupported host support input {}", input.id)));
+        }
+        let headers = paths.rust_host_tool("linux-headers");
+        require_relocated_binding_path(headers, "Linux headers")?;
+        input.path = path_to_utf8(headers, "Linux headers")?;
+        input.attestation_path =
+            relocate_evidence_file(&paths.rust_host_evidence, &input.attestation_path, "Linux headers attestation")?;
+    }
+    let relocated_bytes = crate::full_source_rust_binding::canonical_full_source_rust_binding_bytes(&binding)
+        .map_err(|error| proof_error(format!("serializing relocated Rust binding: {error}")))?;
+    fs::write(&binding_path, &relocated_bytes)
+        .map_err(|error| proof_error(format!("writing relocated Rust binding {}: {error}", binding_path.display())))?;
+    let report = serde_json::json!({
+        "schema": CHECKPOINT_RUST_BINDING_RELOCATION_REPORT_SCHEMA,
+        "origin_binding": {
+            "path": paths.origin_rust_binding,
+            "digest_blake3": blake3::hash(&origin_bytes).to_hex().to_string(),
+        },
+        "relocated_binding": {
+            "path": binding_path,
+            "digest_blake3": blake3::hash(&relocated_bytes).to_hex().to_string(),
+        },
+        "host_tool_count": binding.host_tools.len(),
+        "native_artifact_count": binding.native_artifacts.len(),
+        "rust_artifact_count": binding.rust_artifacts.len(),
+        "non_claim": "binding relocation changes only checkpoint-origin absolute authority paths and does not repeat provider execution",
+    });
+    write_json_create_new(
+        &paths
+            .rust_provider
+            .parent()
+            .unwrap_or(Path::new("."))
+            .join(CHECKPOINT_RUST_BINDING_RELOCATION_REPORT_FILE),
+        &report,
+    )
+}
+
+fn origin_rust_provider_root(
+    binding: &crate::full_source_rust_binding::FullSourceRustProviderBindingReceipt,
+) -> Result<PathBuf, RunError> {
+    let rustc = binding
+        .rust_artifacts
+        .iter()
+        .find(|artifact| artifact.role == crate::source_toolchain_closure::RustProviderRole::Rustc)
+        .ok_or_else(|| proof_error("restored Rust binding lacks rustc artifact authority".to_string()))?;
+    let rustc_path = Path::new(&rustc.path);
+    if !rustc_path.ends_with(RUST_PROVIDER_RUSTC_RELATIVE) {
+        return Err(proof_error(format!(
+            "restored Rust binding rustc path has unexpected shape: {}",
+            rustc_path.display()
+        )));
+    }
+    rustc_path
+        .parent()
+        .and_then(Path::parent)
+        .map(Path::to_path_buf)
+        .ok_or_else(|| proof_error("restored Rust binding rustc path has no provider root".to_string()))
+}
+
+fn required_native_artifact_relative_path(
+    role: crate::full_source_rust_binding::FullSourceNativeArtifactRole,
+    origin_path: &str,
+) -> Result<&'static str, RunError> {
+    let matches = crate::full_source_rust_binding::required_full_source_native_artifacts()
+        .iter()
+        .filter(|(relative, candidate_role)| *candidate_role == role && Path::new(origin_path).ends_with(relative))
+        .map(|(relative, _role)| *relative)
+        .collect::<Vec<_>>();
+    match matches.as_slice() {
+        [relative] => Ok(*relative),
+        _ => Err(proof_error(format!(
+            "restored native artifact path has {} matching authorities: {origin_path}",
+            matches.len()
+        ))),
+    }
+}
+
+fn relocate_bound_path(
+    origin_root: &Path,
+    current_root: &Path,
+    origin_path: &str,
+    label: &str,
+) -> Result<String, RunError> {
+    let relative = Path::new(origin_path)
+        .strip_prefix(origin_root)
+        .map_err(|_| proof_error(format!("{label} is outside the origin provider root: {origin_path}")))?;
+    if relative.components().any(|component| !matches!(component, std::path::Component::Normal(_))) {
+        return Err(proof_error(format!("{label} relative path is unsafe: {}", relative.display())));
+    }
+    let relocated = current_root.join(relative);
+    require_relocated_binding_path(&relocated, label)?;
+    path_to_utf8(&relocated, label)
+}
+
+fn relocate_host_tool_receipt(
+    evidence_root: &Path,
+    origin_path: &str,
+    executable_path: &str,
+) -> Result<(String, String), RunError> {
+    let receipt_path =
+        PathBuf::from(relocate_evidence_file(evidence_root, origin_path, "host-tool construction receipt")?);
+    let bytes = fs::read(&receipt_path)
+        .map_err(|error| proof_error(format!("reading host-tool receipt {}: {error}", receipt_path.display())))?;
+    let mut receipt =
+        serde_json::from_slice::<crate::full_source_rust_binding::FullSourceRustHostToolConstructionReceipt>(&bytes)
+            .map_err(|error| proof_error(format!("parsing host-tool receipt {}: {error}", receipt_path.display())))?;
+    receipt.executable_path = executable_path.to_string();
+    receipt.artifact_attestation_path =
+        relocate_evidence_file(evidence_root, &receipt.artifact_attestation_path, "host-tool artifact attestation")?;
+    let mut relocated = serde_json::to_vec_pretty(&receipt)
+        .map_err(|error| proof_error(format!("serializing relocated host-tool receipt: {error}")))?;
+    relocated.push(b'\n');
+    fs::write(&receipt_path, &relocated)
+        .map_err(|error| proof_error(format!("writing host-tool receipt {}: {error}", receipt_path.display())))?;
+    let digest = blake3::hash(&relocated).to_hex().to_string();
+    assert_eq!(digest.len(), BLAKE3_HEX_LENGTH);
+    assert!(receipt_path.is_file());
+    Ok((path_to_utf8(&receipt_path, "host-tool construction receipt")?, digest))
+}
+
+fn relocate_evidence_file(evidence_root: &Path, origin_path: &str, label: &str) -> Result<String, RunError> {
+    let name = Path::new(origin_path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| proof_error(format!("{label} has no UTF-8 basename: {origin_path}")))?;
+    let relocated = evidence_root.join(name);
+    if !relocated.is_file() {
+        return Err(proof_error(format!("relocated {label} is missing: {}", relocated.display())));
+    }
+    path_to_utf8(&relocated, label)
+}
+
+fn require_relocated_binding_path(path: &Path, label: &str) -> Result<(), RunError> {
+    if !path.exists() {
+        return Err(proof_error(format!("relocated {label} is missing: {}", path.display())));
+    }
+    Ok(())
+}
+
+fn path_to_utf8(path: &Path, label: &str) -> Result<String, RunError> {
+    path.to_str()
+        .map(str::to_string)
+        .ok_or_else(|| proof_error(format!("relocated {label} path is not UTF-8: {}", path.display())))
+}
+
+fn rust_host_tool_name(role: crate::full_source_rust_binding::FullSourceRustHostToolRole) -> &'static str {
+    use crate::full_source_rust_binding::FullSourceRustHostToolRole;
+    match role {
+        FullSourceRustHostToolRole::Make => "make",
+        FullSourceRustHostToolRole::Cmake => "cmake",
+        FullSourceRustHostToolRole::Python => "python",
+        FullSourceRustHostToolRole::Perl => "perl",
+        FullSourceRustHostToolRole::Busybox => "busybox",
+    }
 }
 
 fn restored_native_action_trust(paths: &RestoredProviderPaths) -> Result<NativeBuildActionTrustEvidence, RunError> {
@@ -691,6 +977,19 @@ fn provider_checkpoint_payload_sources(
         .native_action_trust
         .as_ref()
         .ok_or_else(|| proof_error("promoted checkpoint requires complete native action trust".to_string()))?;
+    let rust_action_trust =
+        providers.rust_provider.action_trust.as_ref().ok_or_else(|| {
+            proof_error("promoted checkpoint requires complete Rust provider action trust".to_string())
+        })?;
+    let rust_action_dir = rust_action_trust
+        .plan_path
+        .parent()
+        .ok_or_else(|| proof_error("Rust provider action plan has no parent directory".to_string()))?;
+    if rust_action_trust.audit_path.parent() != Some(rust_action_dir)
+        || rust_action_trust.reconciliation_path.parent() != Some(rust_action_dir)
+    {
+        return Err(proof_error("Rust provider action evidence does not share one directory".to_string()));
+    }
     let stagex_relative = PathBuf::from(CHECKPOINT_STAGEX_PROVIDER_PREFIX).join(stagex_basename);
     let native_relative = PathBuf::from(CHECKPOINT_NATIVE_PROVIDER_PREFIX).join(native_basename);
     Ok([
@@ -748,7 +1047,73 @@ fn provider_checkpoint_payload_sources(
             Path::new(CHECKPOINT_NATIVE_ACTION_RECONCILIATION_PATH),
             CheckpointPayloadKind::RegularFile,
         ),
+        rust_host_tool_payload(
+            providers,
+            "make",
+            crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_MAKE,
+            CheckpointPayloadKind::Directory,
+        )?,
+        rust_host_tool_payload(
+            providers,
+            "cmake",
+            crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_CMAKE,
+            CheckpointPayloadKind::Directory,
+        )?,
+        rust_host_tool_payload(
+            providers,
+            "python",
+            crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_PYTHON,
+            CheckpointPayloadKind::Directory,
+        )?,
+        rust_host_tool_payload(
+            providers,
+            "perl",
+            crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_PERL,
+            CheckpointPayloadKind::Directory,
+        )?,
+        rust_host_tool_payload(
+            providers,
+            "busybox",
+            crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_BUSYBOX,
+            CheckpointPayloadKind::Directory,
+        )?,
+        rust_host_tool_payload(
+            providers,
+            "linux-headers",
+            crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_LINUX_HEADERS,
+            CheckpointPayloadKind::Directory,
+        )?,
+        checkpoint_payload_source(
+            crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_HOST_EVIDENCE,
+            &providers.rust_host_tool_evidence_dir,
+            Path::new(CHECKPOINT_RUST_HOST_EVIDENCE_PATH),
+            CheckpointPayloadKind::PreservedTree,
+        ),
+        checkpoint_payload_source(
+            crate::source_built_fixed_point_checkpoint::PAYLOAD_RUST_ACTION_TRUST,
+            rust_action_dir,
+            Path::new(CHECKPOINT_RUST_ACTION_TRUST_PATH),
+            CheckpointPayloadKind::PreservedTree,
+        ),
     ])
+}
+
+fn rust_host_tool_payload(
+    providers: &ConstructedProviders,
+    name: &str,
+    payload_id: &str,
+    kind: crate::source_built_fixed_point_checkpoint::CheckpointPayloadKind,
+) -> Result<crate::source_built_fixed_point_checkpoint_shell::CheckpointPayloadSource, RunError> {
+    let observation = providers
+        .rust_host_tools
+        .get(name)
+        .ok_or_else(|| proof_error(format!("promoted checkpoint is missing Rust host tool {name}")))?;
+    Ok(checkpoint_payload_source(
+        payload_id,
+        &observation.output.path,
+        &Path::new(CHECKPOINT_RUST_HOST_TOOL_PREFIX).join(name),
+        kind,
+    ))
 }
 
 fn checkpoint_payload_source(
@@ -856,6 +1221,11 @@ fn provider_checkpoint_evidence_digests(
         ("native-action-plan", native_action_trust.plan_path.clone()),
         ("native-action-reconciliation", native_action_trust.reconciliation_path.clone()),
     ])?;
+    let rust_action_trust = providers
+        .rust_provider
+        .action_trust
+        .as_ref()
+        .ok_or_else(|| proof_error("Rust provider checkpoint evidence lacks action trust".to_string()))?;
     let rust_provider = checkpoint_evidence_digest(&[
         ("rust-build-receipt", providers.rust_provider.output_path.join(RUST_PROVIDER_BUILD_RECEIPT_RELATIVE)),
         (
@@ -863,6 +1233,9 @@ fn provider_checkpoint_evidence_digests(
             providers.rust_provider.output_path.join(RUST_PROVIDER_BINDING_RECEIPT_RELATIVE),
         ),
         ("rust-metadata", providers.rust_provider.metadata_path.clone()),
+        ("rust-action-plan", rust_action_trust.plan_path.clone()),
+        ("rust-action-audit", rust_action_trust.audit_path.clone()),
+        ("rust-action-reconciliation", rust_action_trust.reconciliation_path.clone()),
     ])?;
     Ok(ProviderCheckpointEvidenceDigests {
         transition,
@@ -935,6 +1308,8 @@ fn write_checkpoint_publication_transcript(
 mod tests {
     use super::*;
 
+    const DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
     #[test]
     fn imported_stagex_provider_report_uses_the_published_receipt_path() {
         let temp = tempfile::tempdir().expect("temporary provider root");
@@ -959,6 +1334,13 @@ mod tests {
             stagex_provider: PathBuf::from("/proof/native-store/stagex"),
             native_provider: PathBuf::from("/proof/native-store/native"),
             rust_provider: PathBuf::from("/proof/rust-provider"),
+            rust_host_tools: ["make", "cmake", "python", "perl", "busybox", "linux-headers"]
+                .into_iter()
+                .map(|name| (name.to_string(), PathBuf::from(format!("/proof/rust-host-tools/{name}"))))
+                .collect(),
+            rust_host_evidence: PathBuf::from("/proof/rust-host-evidence"),
+            rust_action_trust: PathBuf::from("/proof/origin/rust-provider-action-trust"),
+            origin_rust_binding: PathBuf::from("/proof/origin/full-source-rust-binding.json"),
             origin_native_admission: PathBuf::from("/proof/origin/native-admission.json"),
             origin_native_transcript: PathBuf::from("/proof/origin/native-provider.json"),
             origin_native_action_plan: PathBuf::from("/proof/origin/native-provider-action-plan.json"),
@@ -992,6 +1374,193 @@ mod tests {
         assert_eq!(closure.kind, crate::source_built_fixed_point_checkpoint::CheckpointPayloadKind::RegularFile);
         assert_eq!(action_plan.destination_path, paths.origin_native_action_plan);
         assert_eq!(action_reconciliation.destination_path, paths.origin_native_action_reconciliation);
+    }
+
+    #[test]
+    fn restored_rust_binding_relocates_provider_host_and_native_authority() {
+        use crate::full_source_rust_binding::FullSourceNativeArtifactBinding;
+        use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
+        use crate::full_source_rust_binding::FullSourceNativeProviderAdmissionIdentity;
+        use crate::full_source_rust_binding::FullSourceRustArtifactBinding;
+        use crate::full_source_rust_binding::FullSourceRustHostSupportInputBinding;
+        use crate::full_source_rust_binding::FullSourceRustHostToolBinding;
+        use crate::full_source_rust_binding::FullSourceRustHostToolConstructionReceipt;
+        use crate::full_source_rust_binding::FullSourceRustHostToolRole;
+        use crate::full_source_rust_binding::FullSourceRustProviderBindingReceipt;
+        use crate::full_source_rust_binding::FullSourceRustReceiptBinding;
+        use crate::source_toolchain_closure::RustProviderRole;
+        use crate::source_toolchain_closure::ToolchainBuildReceiptKind;
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let rust_provider = root.join("rust-provider");
+        let native_provider = root.join("native-provider");
+        let host_root = root.join("rust-host-tools/busybox");
+        let headers_root = root.join("rust-host-tools/linux-headers");
+        let host_evidence = root.join("rust-host-evidence");
+        let rust_action = root.join("origin/rust-action");
+        let origin_dir = root.join("origin");
+        for path in [
+            rust_provider.join("bin"),
+            rust_provider.join("share/mantle-rust-provider/receipts"),
+            native_provider.join("bin"),
+            host_root.join("bin"),
+            headers_root.clone(),
+            host_evidence.clone(),
+            rust_action.clone(),
+            origin_dir.clone(),
+        ] {
+            fs::create_dir_all(path).unwrap();
+        }
+        fs::write(rust_provider.join(RUST_PROVIDER_RUSTC_RELATIVE), b"rustc").unwrap();
+        fs::write(rust_provider.join(RUST_PROVIDER_BUILD_RECEIPT_RELATIVE), b"{}\n").unwrap();
+        let native_relative = "bin/x86_64-linux-musl-gcc";
+        fs::write(native_provider.join(native_relative), b"gcc").unwrap();
+        let busybox_relative =
+            crate::full_source_rust_binding_shell::full_source_rust_host_tool_executable_relative_path(
+                FullSourceRustHostToolRole::Busybox,
+            )
+            .unwrap();
+        fs::create_dir_all(host_root.join(busybox_relative).parent().unwrap()).unwrap();
+        fs::write(host_root.join(busybox_relative), b"busybox").unwrap();
+        let attestation_path = host_evidence.join("busybox-attestation.json");
+        fs::write(&attestation_path, b"attestation").unwrap();
+        let construction_path = host_evidence.join("busybox-construction.json");
+        let construction = FullSourceRustHostToolConstructionReceipt {
+            schema: crate::full_source_rust_binding::FULL_SOURCE_RUST_HOST_TOOL_RECEIPT_SCHEMA.to_string(),
+            receipt_id: "busybox-construction".to_string(),
+            role: FullSourceRustHostToolRole::Busybox,
+            source_policy: "authenticated-offline-only".to_string(),
+            source_id: "busybox-source".to_string(),
+            source_url: "https://example.invalid/busybox".to_string(),
+            source_sha256_hex: DIGEST_A.to_string(),
+            native_provider_output_digest_blake3: DIGEST_A.to_string(),
+            executable_path: "/origin/host/busybox/bin/busybox".to_string(),
+            executable_digest_blake3: DIGEST_A.to_string(),
+            artifact_attestation_path: "/origin/evidence/busybox-attestation.json".to_string(),
+            artifact_attestation_digest_blake3: DIGEST_A.to_string(),
+            artifact_attestation_file_digest_blake3: DIGEST_A.to_string(),
+            positive_checks: vec!["smoke".to_string()],
+            rejection_checks: vec!["negative".to_string()],
+            dependency_digests_blake3: BTreeMap::new(),
+            ambient_tool_discovery: false,
+            fallback_events: Vec::new(),
+            environmental_assumptions: Vec::new(),
+        };
+        let mut construction_bytes = serde_json::to_vec_pretty(&construction).unwrap();
+        construction_bytes.push(b'\n');
+        fs::write(&construction_path, &construction_bytes).unwrap();
+        let headers_attestation = host_evidence.join("linux-headers-attestation.json");
+        fs::write(&headers_attestation, b"headers-attestation").unwrap();
+        let binding = FullSourceRustProviderBindingReceipt {
+            schema: crate::full_source_rust_binding::FULL_SOURCE_RUST_BINDING_SCHEMA.to_string(),
+            receipt_id: "binding".to_string(),
+            rust_provider_id: "rust-provider".to_string(),
+            host_triple: "x86_64-unknown-linux-musl".to_string(),
+            target_triple: "x86_64-unknown-linux-musl".to_string(),
+            source_policy: "authenticated-offline-only".to_string(),
+            ambient_tool_discovery: false,
+            rust_provider_policy_digest_blake3: DIGEST_A.to_string(),
+            host_tool_manifest_digest_blake3: DIGEST_A.to_string(),
+            host_tools: vec![FullSourceRustHostToolBinding {
+                role: FullSourceRustHostToolRole::Busybox,
+                path: "/origin/host/busybox/bin/busybox".to_string(),
+                content_digest_blake3: DIGEST_A.to_string(),
+                source_id: "busybox-source".to_string(),
+                construction_receipt_path: "/origin/evidence/busybox-construction.json".to_string(),
+                construction_receipt_digest_blake3: blake3::hash(&construction_bytes).to_hex().to_string(),
+            }],
+            host_support_inputs: vec![FullSourceRustHostSupportInputBinding {
+                id: "linux-headers".to_string(),
+                path: "/origin/host/linux-headers".to_string(),
+                content_digest_blake3: DIGEST_A.to_string(),
+                source_id: "linux-6.6".to_string(),
+                attestation_path: "/origin/evidence/linux-headers-attestation.json".to_string(),
+                attestation_digest_blake3: DIGEST_A.to_string(),
+            }],
+            native_provider: FullSourceNativeProviderAdmissionIdentity {
+                schema: "mantle-full-source-provider-admission-v2".to_string(),
+                status: "admitted".to_string(),
+                provider_id: "full-source-v1".to_string(),
+                provider_target: "x86_64-linux-musl".to_string(),
+                compiler_target: "x86_64-unknown-linux-musl".to_string(),
+                admission_report_digest_blake3: DIGEST_A.to_string(),
+                metadata_digest_blake3: DIGEST_A.to_string(),
+                output_digest_blake3: DIGEST_A.to_string(),
+                expected_output_digest_blake3: DIGEST_A.to_string(),
+                source_closure_manifest_blake3: DIGEST_A.to_string(),
+                expected_source_closure_manifest_blake3: DIGEST_A.to_string(),
+                source_closure_record_count: 1,
+            },
+            native_artifacts: vec![FullSourceNativeArtifactBinding {
+                role: FullSourceNativeArtifactRole::CCompiler,
+                path: format!("/origin/native/{native_relative}"),
+                content_digest_blake3: DIGEST_A.to_string(),
+            }],
+            rust_source_ids: vec!["rust-source".to_string()],
+            rust_build_receipts: vec![FullSourceRustReceiptBinding {
+                id: "build".to_string(),
+                kind: ToolchainBuildReceiptKind::MantleRustTopology,
+                name: "build".to_string(),
+                path: format!("/origin/rust/{RUST_PROVIDER_BUILD_RECEIPT_RELATIVE}"),
+                digest_blake3: DIGEST_A.to_string(),
+            }],
+            rust_artifacts: vec![FullSourceRustArtifactBinding {
+                role: RustProviderRole::Rustc,
+                name: "rustc".to_string(),
+                path: format!("/origin/rust/{RUST_PROVIDER_RUSTC_RELATIVE}"),
+                content_digest_blake3: DIGEST_A.to_string(),
+                source_id: "rust-source".to_string(),
+                build_receipt_id: "build".to_string(),
+            }],
+            fallback_events: Vec::new(),
+            seed_exceptions: Vec::new(),
+        };
+        let binding_path = rust_provider.join(RUST_PROVIDER_BINDING_RECEIPT_RELATIVE);
+        fs::write(
+            &binding_path,
+            crate::full_source_rust_binding::canonical_full_source_rust_binding_bytes(&binding).unwrap(),
+        )
+        .unwrap();
+        let paths = RestoredProviderPaths {
+            stagex_transition: root.join("stagex-transition"),
+            stagex_provider: root.join("stagex-provider"),
+            native_provider: native_provider.clone(),
+            rust_provider: rust_provider.clone(),
+            rust_host_tools: [
+                ("busybox".to_string(), host_root),
+                ("linux-headers".to_string(), headers_root),
+            ]
+            .into_iter()
+            .collect(),
+            rust_host_evidence: host_evidence,
+            rust_action_trust: rust_action,
+            origin_rust_binding: origin_dir.join("binding.json"),
+            origin_native_admission: origin_dir.join("native-admission.json"),
+            origin_native_transcript: origin_dir.join("native-provider.json"),
+            origin_native_action_plan: origin_dir.join("native-plan.json"),
+            origin_native_action_reconciliation: origin_dir.join("native-reconciliation.json"),
+            origin_toolchain_closure: origin_dir.join("closure.json"),
+            toolchain_closure: root.join("closure.json"),
+        };
+
+        relocate_restored_rust_binding(&paths).unwrap();
+        let relocated: FullSourceRustProviderBindingReceipt =
+            serde_json::from_slice(&fs::read(&binding_path).unwrap()).unwrap();
+
+        assert!(paths.origin_rust_binding.is_file());
+        assert_eq!(
+            relocated.rust_artifacts[0].path,
+            rust_provider.join(RUST_PROVIDER_RUSTC_RELATIVE).display().to_string()
+        );
+        assert_eq!(relocated.native_artifacts[0].path, native_provider.join(native_relative).display().to_string());
+        assert_eq!(
+            relocated.host_tools[0].path,
+            paths.rust_host_tool("busybox").join(busybox_relative).display().to_string()
+        );
+        assert_ne!(
+            relocated.host_tools[0].construction_receipt_digest_blake3,
+            binding.host_tools[0].construction_receipt_digest_blake3
+        );
     }
 
     #[test]

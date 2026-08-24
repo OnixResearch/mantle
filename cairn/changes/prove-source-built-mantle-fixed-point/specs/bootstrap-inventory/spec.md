@@ -20,12 +20,13 @@ THEN it MUST restore and remeasure those provider payloads before stage1
 AND the final receipt MUST distinguish restored stages from current execution
 AND a dev, partial, stale, modified, conflicting, or mismatched checkpoint MUST fail closed.
 
-#### Scenario: root action trust is complete before execution
+#### Scenario: staged root action trust closes before each execution stage
 
 GIVEN the proof inputs, policies, and six-stage authority plan are valid
-WHEN Mantle admits the proof for execution
-THEN it MUST emit a deterministic root-scoped action trust plan that enumerates every reachable action, broad stage, producer edge, fixed or produced executable authority, input authority, output, local-only execution rule, event-count bound, and resource limit
-AND a generated path without a producer action and output identity, an incomplete action adapter, an unknown input authority, remote execution, or cache-only completion without promoted stage receipts MUST fail before construction.
+WHEN Mantle reaches an executable stage
+THEN it MUST emit that stage's deterministic action plan before the stage executes, including every reachable action, producer edge, fixed or produced executable authority, input authority, output-tree identity, local-only rule, event-count bound, and resource limit
+AND a generated path without an active producer action, output identity, and pre-launch BLAKE3 binding, an incomplete action adapter, an unknown input authority, remote execution, or cache-only completion without promoted stage receipts MUST fail before that stage
+AND final root composition MUST contain only the previously emitted stage plans and reconciliations; it MUST NOT invent actions after execution.
 
 #### Scenario: stage1 uses the constructed closure
 

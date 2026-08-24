@@ -61,7 +61,7 @@ const GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS: u32 = 16;
 const GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS: u64 = 20;
 const SHELL_COMMAND_NOT_EXECUTABLE_EXIT_CODE: i32 = 126;
 const TEXT_FILE_BUSY_MESSAGE: &str = "Text file busy";
-const RUST_BOOTSTRAP_JOB_COUNT: u32 = 4;
+pub(crate) const RUST_BOOTSTRAP_JOB_COUNT: u32 = 4;
 #[cfg(test)]
 #[cfg(unix)]
 const UNIX_EXIT_STATUS_SHIFT_BITS: u32 = 8;
@@ -74,6 +74,8 @@ const ELF_MAGIC: [u8; ELF_MAGIC_LEN] = [0x7f, b'E', b'L', b'F'];
 const ELF_MAGIC_LEN: usize = 4;
 const BLAKE3_DIGEST_HEX_LEN: usize = 64;
 const RUST_SOURCE_PROVIDER_PLAN_FILE: &str = "rust-source-plan.ncl";
+const RUST_PROVIDER_ACTION_EVIDENCE_DIR: &str = "rust-provider-action-trust";
+pub(crate) const RUST_PROVIDER_ACTION_EVIDENCE_RELATIVE_PATH: &str = "share/mantle-rust-provider/action-trust";
 const FIRST_STAGE_PLAN_SCHEMA: &str = "mantle-rust-source-provider-first-stage-plan-v1";
 const FIRST_STAGE_PLAN_FILE: &str = "mrustc-first-stage-plan.json";
 const FIRST_STAGE_SOURCES_MANIFEST_SCHEMA: &str = "mantle-rust-source-provider-first-stage-sources-v1";
@@ -474,6 +476,7 @@ pub(crate) struct RustSourceProviderMaterialization {
     pub(crate) recipe_digest_blake3: String,
     pub(crate) metadata_path: PathBuf,
     pub(crate) metadata_digest_blake3: String,
+    pub(crate) action_trust: Option<crate::source_built_rust_provider_action::RustProviderActionEvidence>,
 }
 
 #[derive(Debug, Clone)]
@@ -932,7 +935,17 @@ pub(crate) fn materialize_rust_source_provider(
     scratch_dir: &Path,
     verbose: bool,
 ) -> Result<RustSourceProviderMaterialization, RustSourceProviderError> {
-    materialize_rust_source_provider_internal(recipe_path, None, None, None, None, output_dir, scratch_dir, verbose)
+    materialize_rust_source_provider_internal(
+        recipe_path,
+        None,
+        None,
+        None,
+        None,
+        None,
+        output_dir,
+        scratch_dir,
+        verbose,
+    )
 }
 
 pub(crate) fn materialize_rust_source_provider_with_route_plan(
@@ -948,6 +961,7 @@ pub(crate) fn materialize_rust_source_provider_with_route_plan(
         None,
         None,
         None,
+        None,
         output_dir,
         scratch_dir,
         verbose,
@@ -960,6 +974,7 @@ pub(crate) fn materialize_full_source_bound_rust_provider_with_route_plan(
     admission_report_path: &Path,
     host_tool_manifest_path: &Path,
     rust_source_archive_dir: &Path,
+    action_limits: Option<crate::source_built_rust_provider_action::RustProviderActionLimits>,
     output_dir: &Path,
     scratch_dir: &Path,
     verbose: bool,
@@ -970,6 +985,7 @@ pub(crate) fn materialize_full_source_bound_rust_provider_with_route_plan(
         Some(admission_report_path),
         Some(host_tool_manifest_path),
         Some(rust_source_archive_dir),
+        action_limits,
         output_dir,
         scratch_dir,
         verbose,
@@ -982,6 +998,7 @@ fn materialize_rust_source_provider_internal(
     admission_report_path: Option<&Path>,
     host_tool_manifest_path: Option<&Path>,
     rust_source_archive_dir: Option<&Path>,
+    action_limits: Option<crate::source_built_rust_provider_action::RustProviderActionLimits>,
     output_dir: &Path,
     scratch_dir: &Path,
     verbose: bool,
@@ -1017,23 +1034,48 @@ fn materialize_rust_source_provider_internal(
     write_first_stage_boundary(&boundary)?;
     let first_stage_sources = acquire_first_stage_sources(&boundary, verbose)?;
     write_first_stage_sources_manifest(&boundary, &first_stage_sources)?;
-    let first_stage_build = run_first_stage_build(&boundary, verbose)?;
-    write_first_stage_build_manifest(&boundary, &first_stage_build)?;
-    let first_stage_candidate =
-        assemble_first_stage_provider_candidate(&boundary, &route, &first_stage_sources, &first_stage_build)?;
-    let first_stage_candidate_smoke = smoke_first_stage_provider_candidate(&boundary, &first_stage_candidate)?;
-    write_first_stage_provider_candidate_manifest(&boundary, &first_stage_candidate)?;
+    let mut action_runtime = start_rust_provider_action_runtime(&plan, &route, action_limits)?;
+    let first_scope = begin_rust_provider_action_stage(action_runtime.as_mut(), first_stage_action_input(&boundary))?;
+    let first_result = (|| {
+        let first_stage_build = run_first_stage_build(&boundary, verbose)?;
+        write_first_stage_build_manifest(&boundary, &first_stage_build)?;
+        let first_stage_candidate =
+            assemble_first_stage_provider_candidate(&boundary, &route, &first_stage_sources, &first_stage_build)?;
+        let first_stage_candidate_smoke = smoke_first_stage_provider_candidate(&boundary, &first_stage_candidate)?;
+        write_first_stage_provider_candidate_manifest(&boundary, &first_stage_candidate)?;
+        Ok((first_stage_candidate, first_stage_candidate_smoke))
+    })();
+    let (first_stage_candidate, first_stage_candidate_smoke) =
+        finish_rust_provider_action_stage(action_runtime.as_mut(), first_scope, first_result)?;
     let first_stage_bootstrap_candidate = bootstrap_candidate_from_first_stage(&first_stage_candidate);
-    let rustc_stage1_runs =
-        run_rustc_stage1_provider_candidate_chain(&plan, &route, &first_stage_bootstrap_candidate, verbose)?;
+    let rustc_stage1_runs = run_rustc_stage1_provider_candidate_chain(
+        &plan,
+        &route,
+        &first_stage_bootstrap_candidate,
+        action_runtime.as_mut(),
+        verbose,
+    )?;
     let rustc_final_bootstrap_candidate = bootstrap_candidate_from_rustc_stage1(
         &rustc_stage1_runs
             .last()
             .ok_or_else(|| RustSourceProviderError::Validate("rustc stage1 chain produced no candidates".to_string()))?
             .candidate,
     );
-    let rustc_final_run = run_rustc_final_provider_candidate(&plan, &route, &rustc_final_bootstrap_candidate, verbose)?;
+    let rustc_final_run = run_rustc_final_provider_candidate(
+        &plan,
+        &route,
+        &rustc_final_bootstrap_candidate,
+        action_runtime.as_mut(),
+        verbose,
+    )?;
     persist_stage_construction_evidence(&boundary, &first_stage_candidate, &rustc_stage1_runs, &rustc_final_run)?;
+    let action_trust = action_runtime
+        .take()
+        .map(crate::source_built_rust_provider_action::RustProviderActionRuntime::finish)
+        .transpose()?;
+    if let Some(evidence) = &action_trust {
+        embed_rust_provider_action_evidence(&rustc_final_run.candidate.candidate_dir, evidence)?;
+    }
     let binding_publication = admission_report_path
         .map(|report_path| {
             let host_tools = host_tool_manifest_path.ok_or_else(|| {
@@ -1048,8 +1090,15 @@ fn materialize_rust_source_provider_internal(
             )
         })
         .transpose()?;
-    let materialized = promote_rustc_final_provider_candidate(&plan, &rustc_final_run)?;
+    let mut materialized = promote_rustc_final_provider_candidate(&plan, &rustc_final_run)?;
     verify_optional_full_source_binding(&materialized.output_path, binding_publication.as_ref())?;
+    materialized.action_trust = action_trust
+        .map(|_evidence| {
+            crate::source_built_rust_provider_action::validate_rust_provider_action_evidence(
+                &materialized.output_path.join(RUST_PROVIDER_ACTION_EVIDENCE_RELATIVE_PATH),
+            )
+        })
+        .transpose()?;
     if let Err(err) =
         write_rustc_final_provider_candidate_manifest(&rustc_final_run.boundary, &rustc_final_run.candidate, true)
     {
@@ -1067,6 +1116,154 @@ fn materialize_rust_source_provider_internal(
         });
     }
     Ok(materialized)
+}
+
+fn start_rust_provider_action_runtime(
+    plan: &RustSourceProviderMaterializationPlan,
+    route: &LoadedRustSourceProviderRoute,
+    action_limits: Option<crate::source_built_rust_provider_action::RustProviderActionLimits>,
+) -> Result<Option<crate::source_built_rust_provider_action::RustProviderActionRuntime>, RustSourceProviderError> {
+    match (&plan.full_source_context, action_limits) {
+        (Some(context), Some(limits)) => crate::source_built_rust_provider_action::RustProviderActionRuntime::start(
+            context,
+            &route.plan,
+            &route.plan_digest_blake3,
+            &plan.scratch_dir.join(RUST_PROVIDER_ACTION_EVIDENCE_DIR),
+            limits,
+        )
+        .map(Some),
+        (Some(_), None) | (None, None) => Ok(None),
+        (None, Some(_limits)) => Err(RustSourceProviderError::Validate(
+            "Rust provider action limits require full-source execution authority".to_string(),
+        )),
+    }
+}
+
+fn first_stage_action_input(
+    boundary: &RustSourceProviderFirstStageBoundary,
+) -> crate::source_built_rust_provider_action::RustProviderStageActionInput {
+    crate::source_built_rust_provider_action::RustProviderStageActionInput {
+        stage_id: boundary.stage_id.clone(),
+        stage_kind: boundary.stage_kind,
+        predecessor_stage_id: None,
+        plan_path: boundary.plan_path.clone(),
+        script_path: boundary.script_path.clone(),
+        sources_manifest_path: boundary.sources_manifest_path.clone(),
+        bootstrap_metadata_path: None,
+        output_roots: vec![
+            boundary.source_dir.clone(),
+            boundary.build_dir.clone(),
+            boundary.provider_candidate_dir.clone(),
+            boundary.provider_candidate_smoke_work_dir.clone(),
+        ],
+    }
+}
+
+fn rustc_stage1_action_input(
+    boundary: &RustSourceProviderRustcStage1Boundary,
+) -> crate::source_built_rust_provider_action::RustProviderStageActionInput {
+    crate::source_built_rust_provider_action::RustProviderStageActionInput {
+        stage_id: boundary.stage_id.clone(),
+        stage_kind: boundary.stage_kind,
+        predecessor_stage_id: Some(boundary.bootstrap_stage_id.clone()),
+        plan_path: boundary.plan_path.clone(),
+        script_path: boundary.script_path.clone(),
+        sources_manifest_path: boundary.sources_manifest_path.clone(),
+        bootstrap_metadata_path: Some(
+            boundary.bootstrap_provider_candidate_dir.join(RUST_SOURCE_PROVIDER_METADATA_PATH),
+        ),
+        output_roots: vec![
+            boundary.source_dir.clone(),
+            boundary.build_dir.clone(),
+            boundary.stage_output_dir.clone(),
+            boundary.provider_candidate_dir.clone(),
+            boundary.provider_candidate_smoke_work_dir.clone(),
+        ],
+    }
+}
+
+fn rustc_final_action_input(
+    boundary: &RustSourceProviderRustcFinalBoundary,
+) -> crate::source_built_rust_provider_action::RustProviderStageActionInput {
+    crate::source_built_rust_provider_action::RustProviderStageActionInput {
+        stage_id: boundary.stage_id.clone(),
+        stage_kind: boundary.stage_kind,
+        predecessor_stage_id: Some(boundary.bootstrap_stage_id.clone()),
+        plan_path: boundary.plan_path.clone(),
+        script_path: boundary.script_path.clone(),
+        sources_manifest_path: boundary.sources_manifest_path.clone(),
+        bootstrap_metadata_path: Some(
+            boundary.bootstrap_provider_candidate_dir.join(RUST_SOURCE_PROVIDER_METADATA_PATH),
+        ),
+        output_roots: vec![
+            boundary.source_dir.clone(),
+            boundary.build_dir.clone(),
+            boundary.stage_output_dir.clone(),
+            boundary.provider_candidate_dir.clone(),
+            boundary.provider_candidate_smoke_work_dir.clone(),
+        ],
+    }
+}
+
+fn begin_rust_provider_action_stage(
+    runtime: Option<&mut crate::source_built_rust_provider_action::RustProviderActionRuntime>,
+    input: crate::source_built_rust_provider_action::RustProviderStageActionInput,
+) -> Result<Option<crate::source_built_rust_provider_action::RustProviderStageScope>, RustSourceProviderError> {
+    runtime.map(|runtime| runtime.begin_stage(input)).transpose()
+}
+
+fn finish_rust_provider_action_stage<T>(
+    runtime: Option<&mut crate::source_built_rust_provider_action::RustProviderActionRuntime>,
+    scope: Option<crate::source_built_rust_provider_action::RustProviderStageScope>,
+    result: Result<T, RustSourceProviderError>,
+) -> Result<T, RustSourceProviderError> {
+    let reconciliation = match (runtime, scope) {
+        (Some(runtime), Some(scope)) => runtime.end_stage(scope, result.is_ok()),
+        (None, None) => Ok(()),
+        _ => Err(RustSourceProviderError::Build("Rust provider action runtime and scope presence differ".to_string())),
+    };
+    match (result, reconciliation) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Err(error), Ok(())) => Err(error),
+        (Ok(_value), Err(error)) => Err(error),
+        (Err(error), Err(reconciliation_error)) => Err(RustSourceProviderError::Build(format!(
+            "{error}; Rust provider action reconciliation also failed: {reconciliation_error}"
+        ))),
+    }
+}
+
+fn embed_rust_provider_action_evidence(
+    candidate_dir: &Path,
+    evidence: &crate::source_built_rust_provider_action::RustProviderActionEvidence,
+) -> Result<(), RustSourceProviderError> {
+    let source = evidence
+        .plan_path
+        .parent()
+        .filter(|parent| evidence.audit_path.parent() == Some(*parent))
+        .filter(|parent| evidence.reconciliation_path.parent() == Some(*parent))
+        .ok_or_else(|| {
+            RustSourceProviderError::Validate(
+                "Rust provider action evidence paths do not share one directory".to_string(),
+            )
+        })?;
+    let destination = candidate_dir.join(RUST_PROVIDER_ACTION_EVIDENCE_RELATIVE_PATH);
+    if destination.exists() {
+        return Err(RustSourceProviderError::Copy(format!(
+            "Rust provider action evidence destination already exists: {}",
+            destination.display()
+        )));
+    }
+    fs::create_dir_all(&destination)
+        .map_err(|error| RustSourceProviderError::Copy(format!("create {}: {error}", destination.display())))?;
+    copy_provider_prefix(source, &destination)?;
+    crate::source_built_rust_provider_action::validate_rust_provider_action_evidence(&destination)?;
+    assert!(destination.join(crate::source_built_rust_provider_action::RUST_PROVIDER_ACTION_PLAN_FILE).is_file());
+    assert!(
+        destination
+            .join(crate::source_built_rust_provider_action::RUST_PROVIDER_ACTION_RECONCILIATION_FILE)
+            .is_file()
+    );
+    Ok(())
 }
 
 struct RustStageConstructionEvidenceSource<'a> {
@@ -1284,6 +1481,7 @@ fn promote_rustc_final_provider_candidate(
         recipe_digest_blake3: materialization.recipe_digest_blake3.clone(),
         metadata_path: output_validation.metadata_path,
         metadata_digest_blake3: output_validation.metadata_digest_blake3,
+        action_trust: None,
     })
 }
 
@@ -1856,6 +2054,7 @@ fn run_rustc_stage1_provider_candidate_chain(
     materialization: &RustSourceProviderMaterializationPlan,
     route: &LoadedRustSourceProviderRoute,
     bootstrap_candidate: &RustSourceProviderBootstrapProviderCandidate,
+    mut action_runtime: Option<&mut crate::source_built_rust_provider_action::RustProviderActionRuntime>,
     verbose: bool,
 ) -> Result<Vec<RustSourceProviderRustcStage1ProviderCandidateRun>, RustSourceProviderError> {
     debug_assert!(!bootstrap_candidate.stage_id.is_empty());
@@ -1866,8 +2065,14 @@ fn run_rustc_stage1_provider_candidate_chain(
         if !has_next_rustc_stage1_stage(&route.plan, &current_bootstrap) {
             break;
         }
-        let run =
-            run_rustc_stage1_provider_candidate(materialization, route, &current_bootstrap, scratch_layout, verbose)?;
+        let run = run_rustc_stage1_provider_candidate(
+            materialization,
+            route,
+            &current_bootstrap,
+            scratch_layout,
+            action_runtime.as_deref_mut(),
+            verbose,
+        )?;
         current_bootstrap = bootstrap_candidate_from_rustc_stage1(&run.candidate);
         scratch_layout = RustcStage1ScratchLayout::Scoped;
         runs.push(run);
@@ -1892,22 +2097,27 @@ fn run_rustc_stage1_provider_candidate(
     route: &LoadedRustSourceProviderRoute,
     bootstrap_candidate: &RustSourceProviderBootstrapProviderCandidate,
     scratch_layout: RustcStage1ScratchLayout,
+    mut action_runtime: Option<&mut crate::source_built_rust_provider_action::RustProviderActionRuntime>,
     verbose: bool,
 ) -> Result<RustSourceProviderRustcStage1ProviderCandidateRun, RustSourceProviderError> {
     let boundary = prepare_rustc_stage1_boundary(materialization, route, bootstrap_candidate, scratch_layout)?;
     write_rustc_stage1_boundary(&boundary)?;
     let sources = acquire_rustc_stage1_sources(&boundary, verbose)?;
     write_rustc_stage1_sources_manifest(&boundary, &sources)?;
-    let build = run_rustc_stage1_build(&boundary, verbose)?;
-    write_rustc_stage1_build_manifest(&boundary, &build)?;
-    let candidate = assemble_rustc_stage1_provider_candidate(&boundary, route, &sources, &build)?;
-    let smoke = smoke_rustc_stage1_provider_candidate(&boundary, &candidate)?;
-    write_rustc_stage1_provider_candidate_manifest(&boundary, &candidate)?;
-    Ok(RustSourceProviderRustcStage1ProviderCandidateRun {
-        boundary,
-        candidate,
-        smoke,
-    })
+    let scope = begin_rust_provider_action_stage(action_runtime.as_deref_mut(), rustc_stage1_action_input(&boundary))?;
+    let result = (|| {
+        let build = run_rustc_stage1_build(&boundary, verbose)?;
+        write_rustc_stage1_build_manifest(&boundary, &build)?;
+        let candidate = assemble_rustc_stage1_provider_candidate(&boundary, route, &sources, &build)?;
+        let smoke = smoke_rustc_stage1_provider_candidate(&boundary, &candidate)?;
+        write_rustc_stage1_provider_candidate_manifest(&boundary, &candidate)?;
+        Ok(RustSourceProviderRustcStage1ProviderCandidateRun {
+            boundary,
+            candidate,
+            smoke,
+        })
+    })();
+    finish_rust_provider_action_stage(action_runtime, scope, result)
 }
 
 fn prepare_rustc_final_boundary(
@@ -1985,22 +2195,27 @@ fn run_rustc_final_provider_candidate(
     materialization: &RustSourceProviderMaterializationPlan,
     route: &LoadedRustSourceProviderRoute,
     bootstrap_candidate: &RustSourceProviderBootstrapProviderCandidate,
+    mut action_runtime: Option<&mut crate::source_built_rust_provider_action::RustProviderActionRuntime>,
     verbose: bool,
 ) -> Result<RustSourceProviderRustcFinalProviderCandidateRun, RustSourceProviderError> {
     let boundary = prepare_rustc_final_boundary(materialization, route, bootstrap_candidate)?;
     write_rustc_final_boundary(&boundary)?;
     let sources = acquire_rustc_final_sources(&boundary, verbose)?;
     write_rustc_final_sources_manifest(&boundary, &sources)?;
-    let build = run_rustc_final_build(&boundary, verbose)?;
-    write_rustc_final_build_manifest(&boundary, &build)?;
-    let candidate = assemble_rustc_final_provider_candidate(&boundary, route, &sources, &build)?;
-    let smoke = smoke_rustc_final_provider_candidate(&boundary, &candidate)?;
-    write_rustc_final_provider_candidate_manifest(&boundary, &candidate, false)?;
-    Ok(RustSourceProviderRustcFinalProviderCandidateRun {
-        boundary,
-        candidate,
-        smoke,
-    })
+    let scope = begin_rust_provider_action_stage(action_runtime.as_deref_mut(), rustc_final_action_input(&boundary))?;
+    let result = (|| {
+        let build = run_rustc_final_build(&boundary, verbose)?;
+        write_rustc_final_build_manifest(&boundary, &build)?;
+        let candidate = assemble_rustc_final_provider_candidate(&boundary, route, &sources, &build)?;
+        let smoke = smoke_rustc_final_provider_candidate(&boundary, &candidate)?;
+        write_rustc_final_provider_candidate_manifest(&boundary, &candidate, false)?;
+        Ok(RustSourceProviderRustcFinalProviderCandidateRun {
+            boundary,
+            candidate,
+            smoke,
+        })
+    })();
+    finish_rust_provider_action_stage(action_runtime, scope, result)
 }
 
 fn validate_rustc_stage1_outputs(stage: &RustSourceProviderBootstrapStage) -> Result<(), RustSourceProviderError> {

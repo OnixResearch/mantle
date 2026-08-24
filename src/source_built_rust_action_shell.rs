@@ -233,6 +233,9 @@ impl RustChildActionExecutionPort for SourceBuiltRustActionRuntime {
                 action.action_id
             )));
         }
+        self.supervisor
+            .begin_producer_action(&action.action_id)
+            .map_err(|error| RunError::Build(format!("begin Rust producer action {}: {error}", action.action_id)))?;
         state.active_action_id = Some(action.action_id.clone());
         assert_eq!(current_event_count, state.assigned_event_count);
         assert!(state.active_action_id.is_some());
@@ -261,6 +264,9 @@ impl RustChildActionExecutionPort for SourceBuiltRustActionRuntime {
             return Err(RunError::Build(format!("Rust child action scope drifted: {}", scope.action_id)));
         }
         let observations = self.observe_action_events(action, &raw_events[scope.audit_event_start..], &state);
+        self.supervisor
+            .end_producer_action(&scope.action_id)
+            .map_err(|error| RunError::Build(format!("end Rust producer action {}: {error}", scope.action_id)))?;
         state.observations.extend(observations);
         state.assigned_event_count = raw_events.len();
         state.active_action_id = None;
