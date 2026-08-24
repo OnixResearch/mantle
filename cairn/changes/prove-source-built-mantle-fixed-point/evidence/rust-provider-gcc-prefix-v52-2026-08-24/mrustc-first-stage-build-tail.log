@@ -1,0 +1,27 @@
+using receipt-bound full-source Rust host tools with ambient discovery disabled
+mantle rust source first stage: mrustc-to-rust-1.90.0
+scrubbing inherited Cargo/build-script environment
+verified sources manifest: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v52-action-helper-retry-20260824.source-built-fixed-point-staging-1878158/rust-provider-scratch/mrustc-first-stage-sources.json
+build dir: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v52-action-helper-retry-20260824.source-built-fixed-point-staging-1878158/rust-provider-scratch/build
+output dir: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v52-action-helper-retry-20260824.source-built-fixed-point-staging-1878158/rust-provider
+writing minicargo workspace boundary
+normalizing minicargo build-script OUT_DIR for static musl compiler host
+normalizing minicargo rustc worker threads for static musl compiler host
+disabling LLVM shared-tool and execinfo backtraces for source-root musl host
+[CXX] -o .obj/main.o
+[CXX] -o .obj/span.o
+[CXX] -o .obj/rc_string.o
+g++.real: fatal error: cannot execute '/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v52-action-helper-retry-20260824.source-built-fixed-point-staging-1878158/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/../libexec/gcc/x86_64-unknown-linux-musl/10.5.0/cc1plus': execv: Permission denied
+compilation terminated.
+make: *** [Makefile:184: .obj/main.o] Error 1
+make: *** Waiting for unfinished jobs....
+g++.real: fatal error: cannot execute '/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v52-action-helper-retry-20260824.source-built-fixed-point-staging-1878158/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/../libexec/gcc/x86_64-unknown-linux-musl/10.5.0/cc1plus': execv: Permission denied
+compilation terminated.
+make: *** [Makefile:185: .obj/span.o] Error 1
+[CXX] -o .obj/debug.o
+g++.real: fatal error: cannot execute '/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v52-action-helper-retry-20260824.source-built-fixed-point-staging-1878158/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/../libexec/gcc/x86_64-unknown-linux-musl/10.5.0/cc1plus': execv: Permission denied
+compilation terminated.
+make: *** [Makefile:186: .obj/rc_string.o] Error 1
+g++.real: fatal error: cannot execute '/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v52-action-helper-retry-20260824.source-built-fixed-point-staging-1878158/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/../libexec/gcc/x86_64-unknown-linux-musl/10.5.0/cc1plus': execv: Permission denied
+compilation terminated.
+make: *** [Makefile:186: .obj/debug.o] Error 1

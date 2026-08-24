@@ -1,0 +1,3 @@
+gcc_exec_prefix=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v52-action-helper-retry-20260824.source-built-fixed-point-staging-1878158/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/libexec/gcc/
+path_prefix=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v52-action-helper-retry-20260824.source-built-fixed-point-staging-1878158/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin
+object_bytes=1216

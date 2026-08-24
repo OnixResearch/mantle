@@ -233,6 +233,7 @@ const FIRST_STAGE_COPY_PROGRAM: &str = "cp";
 const FIRST_STAGE_PKG_CONFIG_PROGRAM: &str = "pkg-config";
 const FIRST_STAGE_CMAKE_PROGRAM: &str = "cmake";
 const FULL_SOURCE_PERL_LIBRARY_RELATIVE_PATH: &str = "lib/5.10.1";
+const FULL_SOURCE_GCC_EXEC_PREFIX_RELATIVE_PATH: &str = "libexec/gcc";
 const FIRST_STAGE_CC_PROGRAM: &str = "cc";
 const FIRST_STAGE_CXX_PROGRAM: &str = "c++";
 const FIRST_STAGE_MUSL_TRIPLE: &str = "x86_64-unknown-linux-musl";
@@ -6490,6 +6491,7 @@ fn push_full_source_tool_bindings(
     let native_gxx = native_bin.join("x86_64-linux-musl-g++");
     let native_ar = native_bin.join("x86_64-linux-musl-ar");
     let native_ranlib = native_bin.join("x86_64-linux-musl-ranlib");
+    let gcc_exec_prefix = context.native_provider_dir.join(FULL_SOURCE_GCC_EXEC_PREFIX_RELATIVE_PATH);
     let controlled_path = [
         busybox_dir,
         make_dir,
@@ -6523,6 +6525,7 @@ fn push_full_source_tool_bindings(
         shell_quote(&context.native_provider_dir.display().to_string())
     ));
     script.push_str(&format!("SOURCE_ROOT={}\n", shell_quote(&context.native_provider_dir.display().to_string())));
+    script.push_str(&format!("GCC_EXEC_PREFIX={}\n", shell_quote(&format!("{}/", gcc_exec_prefix.display()))));
     script.push_str(&format!("PATH={}\n", shell_quote(&controlled_path)));
     script
         .push_str("SHELL=\"$SHELL_PROGRAM\"\nCONFIG_SHELL=\"$SHELL_PROGRAM\"\nGNUMAKEFLAGS=\"SHELL=$SHELL_PROGRAM\"\n");
@@ -6540,7 +6543,7 @@ fn push_full_source_tool_bindings(
         "MANTLE_LINUX_HEADERS_CFLAGS={}\n",
         shell_quote(&format!("-I{}", linux_headers_include.display()))
     ));
-    script.push_str("export PATH PYTHONHOME PERL5LIB LIBRARY_PATH MAKE_PROGRAM CMAKE_PROGRAM MANTLE_PYTHON_PROGRAM PERL_PROGRAM COPY_PROGRAM SHELL_PROGRAM SHELL CONFIG_SHELL GNUMAKEFLAGS CC_PROGRAM CXX_PROGRAM TARGET_CC_PROGRAM TARGET_CXX_PROGRAM TARGET_AR_PROGRAM TARGET_RANLIB_PROGRAM MANTLE_TARGET_CC MANTLE_TARGET_TOOLCHAIN_ROOT SOURCE_ROOT MANTLE_ZLIB_HEADER MANTLE_ZLIB_ARCHIVE ZLIB_CFLAGS ZLIB_LIBS MANTLE_LINUX_HEADERS_ROOT MANTLE_LINUX_HEADERS_CFLAGS\n");
+    script.push_str("export PATH PYTHONHOME PERL5LIB LIBRARY_PATH MAKE_PROGRAM CMAKE_PROGRAM MANTLE_PYTHON_PROGRAM PERL_PROGRAM COPY_PROGRAM SHELL_PROGRAM SHELL CONFIG_SHELL GNUMAKEFLAGS CC_PROGRAM CXX_PROGRAM TARGET_CC_PROGRAM TARGET_CXX_PROGRAM TARGET_AR_PROGRAM TARGET_RANLIB_PROGRAM MANTLE_TARGET_CC MANTLE_TARGET_TOOLCHAIN_ROOT SOURCE_ROOT GCC_EXEC_PREFIX MANTLE_ZLIB_HEADER MANTLE_ZLIB_ARCHIVE ZLIB_CFLAGS ZLIB_LIBS MANTLE_LINUX_HEADERS_ROOT MANTLE_LINUX_HEADERS_CFLAGS\n");
     script
         .push_str("printf '%s\\n' 'using receipt-bound full-source Rust host tools with ambient discovery disabled'\n");
     Ok(())
@@ -9133,6 +9136,7 @@ mod tests {
         assert!(script.contains("ambient discovery disabled"));
         assert!(script.contains("MANTLE_ZLIB_ARCHIVE='/lib/libz.a'"));
         assert!(script.contains("MANTLE_LINUX_HEADERS_ROOT='/receipt-bound/linux-headers'"));
+        assert!(script.contains("GCC_EXEC_PREFIX='/native-provider/libexec/gcc/'"));
         assert!(script.contains("export CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\""));
         assert!(script.contains("target_toolchain_root=\"$MANTLE_TARGET_TOOLCHAIN_ROOT\""));
         assert!(script.contains("authenticated-mrustc-0.12.0"));
