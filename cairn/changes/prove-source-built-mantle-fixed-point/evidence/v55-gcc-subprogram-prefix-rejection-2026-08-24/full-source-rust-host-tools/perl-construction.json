@@ -1,0 +1,37 @@
+{
+  "schema": "mantle-full-source-rust-host-tool-construction-v1",
+  "receipt_id": "full-source-rust-host-perl-construction",
+  "role": "perl",
+  "source_policy": "authenticated-offline-only",
+  "source_id": "perl-5.10.1",
+  "source_url": "https://www.cpan.org/src/5.0/perl-5.10.1.tar.gz",
+  "source_sha256_hex": "cb7f26ea4b2b28d6644354d87a269d01cac1b635287dae64e88eeafa24b44f35",
+  "native_provider_output_digest_blake3": "63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9",
+  "executable_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v55-gcc-prefix-retry2-20260824.source-built-fixed-point-staging-3497795/native-store/a7fsq451mhx7kpa86ify8jac13g94xj4-perl-5.10.1-full-source-gcc10-v5/bin/perl",
+  "executable_digest_blake3": "b80529ad47e175480a77a6411a741d3d2af01cad0dd3a1a6d30de99560160147",
+  "artifact_attestation_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v55-gcc-prefix-retry2-20260824.source-built-fixed-point-staging-3497795/full-source-rust-host-tools/perl-attestation.json",
+  "artifact_attestation_digest_blake3": "6fce3bb303f427e6f9ad5799c123da03ff2f704710cdde23188b5bec6e1f6704",
+  "artifact_attestation_file_digest_blake3": "6fce3bb303f427e6f9ad5799c123da03ff2f704710cdde23188b5bec6e1f6704",
+  "positive_checks": [
+    "version",
+    "openssl-configure-core-modules",
+    "openssl-generator-re",
+    "openssl-param-decoder-scalar-capture",
+    "copied-tree-execution"
+  ],
+  "rejection_checks": [
+    "malformed-perl-rejected"
+  ],
+  "dependency_digests_blake3": {
+    "busybox": "da5b5b1ca280f8a545eb750c27894766311c1b10b326da5ce10e6e1ee8c7f4c8",
+    "linux-headers": "0fdac41832c7b489a3896fb70d7395110c7542a18bbf511432c78fe3757e3778",
+    "linux-headers-attestation": "19532049399ea16e4067340fc41cbb15c8008ec22ef463eadc6ef3362c2375bb",
+    "make": "11e99bd96b27689e78797520566b915d3b519f4550197ebb6678a67bed215866",
+    "native-provider": "63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9"
+  },
+  "ambient_tool_discovery": false,
+  "fallback_events": [],
+  "environmental_assumptions": [
+    "sandbox-orchestration:declared-bwrap-and-builder-shell-outside-installed-host-tool-claim"
+  ]
+}

@@ -1,0 +1,14 @@
+captured_at=2026-08-24T17:41:43-04:00
+provider=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v55-gcc-prefix-retry2-20260824.source-built-fixed-point-staging-3497795/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain
+current_gcc_exec_prefix=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v55-gcc-prefix-retry2-20260824.source-built-fixed-point-staging-3497795/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/libexec/gcc/
+current_print_prog_name=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v55-gcc-prefix-retry2-20260824.source-built-fixed-point-staging-3497795/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/libexec/gcc/../../libexec/gcc/x86_64-unknown-linux-musl/10.5.0/cc1plus
+reviewed_subprogram_prefix=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v55-gcc-prefix-retry2-20260824.source-built-fixed-point-staging-3497795/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/
+b_prefix_print_prog_name=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v55-gcc-prefix-retry2-20260824.source-built-fixed-point-staging-3497795/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/cc1plus
+b_prefix_object=/home/brittonr/mantle-runs/receipt-fix-v31/v55-gcc-prefix-diagnostic/b-prefix.o
+b_prefix_object_size=1208
+b_prefix_object_blake3=8f1cc0d11ddd16ccc760c98a6ebf3b5a2cd3136c87daaa909a6a66865194c17a
+b_prefix_compile_status=0
+ambient_gcc_exec_prefix_forwarded=false
+ambient_compiler_path_forwarded=false
+parent_component_guard=unchanged
+helper_then_runtime_print_prog_name=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v55-gcc-prefix-retry2-20260824.source-built-fixed-point-staging-3497795/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/cc1plus

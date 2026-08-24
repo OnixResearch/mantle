@@ -18,6 +18,8 @@ The V50 gap is closed: `x86_64-linux-musl-g++` and `g++.real` were allowed with 
 
 Do not weaken the global parent-component rejection. The bounded repair sets `GCC_EXEC_PREFIX` to the normalized receipt-bound provider path ending in `libexec/gcc/`. A preserved-provider diagnostic proved this prefix reaches `cc1plus`; with the same provider `bin` directory in `PATH`, `g++.real` produced a 1,216-byte object. Rust topology child commands derive the same prefix from the validated receipt-bound C-compiler route after environment clearing. Ambient `GCC_EXEC_PREFIX` remains excluded.
 
+V55 later proved that this environment-prefix repair was incomplete under protected execution: GCC emitted `libexec/gcc/../../libexec/gcc/.../cc1plus`. The accepted successor design uses the receipt-derived `-B<exact-helper-dir>/` driver option. See `../v55-gcc-subprogram-prefix-rejection-2026-08-24/summary.md`.
+
 ## Validation
 
 Pueue task `10141` wrote `focused-tests.log`. It passed 57 Rust-provider tests, the positive and negative GCC-prefix tests, six child-environment tests, two Rust-provider action tests, and the fixed-authority test. Pueue task `10142` wrote `focused-clippy.log` with `-D warnings` and the documented baseline allowances. `git diff --check` passed in the same task.

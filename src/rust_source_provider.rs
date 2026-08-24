@@ -233,7 +233,9 @@ const FIRST_STAGE_COPY_PROGRAM: &str = "cp";
 const FIRST_STAGE_PKG_CONFIG_PROGRAM: &str = "pkg-config";
 const FIRST_STAGE_CMAKE_PROGRAM: &str = "cmake";
 const FULL_SOURCE_PERL_LIBRARY_RELATIVE_PATH: &str = "lib/5.10.1";
-const FULL_SOURCE_GCC_EXEC_PREFIX_RELATIVE_PATH: &str = "libexec/gcc";
+const FULL_SOURCE_GCC_SUBPROGRAM_PREFIX_RELATIVE_PATH: &str = "libexec/gcc/x86_64-unknown-linux-musl/10.5.0";
+const GCC_EXEC_PREFIX_ENV: &str = "GCC_EXEC_PREFIX";
+const COMPILER_PATH_ENV: &str = "COMPILER_PATH";
 const FIRST_STAGE_CC_PROGRAM: &str = "cc";
 const FIRST_STAGE_CXX_PROGRAM: &str = "c++";
 const FIRST_STAGE_MUSL_TRIPLE: &str = "x86_64-unknown-linux-musl";
@@ -397,6 +399,8 @@ const FIRST_STAGE_ENV_SCRUB_VARS: &[&str] = &[
     "CARGO_PRIMARY_PACKAGE",
     "CARGO_TARGET_DIR",
     "DEBUG",
+    GCC_EXEC_PREFIX_ENV,
+    COMPILER_PATH_ENV,
     "HOST",
     "MANTLE_RUST_CACHE_POLICY",
     "MANTLE_RUSTC_MANIFEST",
@@ -2711,8 +2715,8 @@ fn push_rustc_source_llvm_config(script: &mut String, full_source_context: Optio
     script.push_str("download-ci-llvm = false\n");
     script.push_str("ninja = false\n");
     if full_source_context.is_some() {
-        script.push_str("cflags = \"$MANTLE_LINUX_HEADERS_CFLAGS\"\n");
-        script.push_str("cxxflags = \"$MANTLE_LINUX_HEADERS_CFLAGS\"\n");
+        script.push_str("cflags = \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MANTLE_LINUX_HEADERS_CFLAGS\"\n");
+        script.push_str("cxxflags = \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MANTLE_LINUX_HEADERS_CFLAGS\"\n");
     }
     script.push_str(RUSTC_SOURCE_LLVM_BUILD_CONFIG);
     assert!(script.contains("download-ci-llvm = false"));
@@ -3044,9 +3048,10 @@ fn push_rustc_source_build_tool_discovery(
     debug_assert!(!script.contains('\0'));
     if let Some(context) = full_source_context {
         push_full_source_tool_bindings(script, context)?;
-        script.push_str("export CFLAGS=\"$MANTLE_LINUX_HEADERS_CFLAGS\"\n");
+        script.push_str("export CFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MANTLE_LINUX_HEADERS_CFLAGS\"\n");
         script.push_str("export CPPFLAGS=\"$MANTLE_LINUX_HEADERS_CFLAGS\"\n");
-        script.push_str("export CXXFLAGS=\"$MANTLE_LINUX_HEADERS_CFLAGS\"\n");
+        script.push_str("export CXXFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MANTLE_LINUX_HEADERS_CFLAGS\"\n");
+        script.push_str("export LDFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\"\n");
         push_rustc_source_explicit_target_compiler(script);
     } else {
         push_rustc_source_make_and_cmake_discovery(script);
@@ -3435,6 +3440,9 @@ fn push_rustc_source_target_cc_wrapper(script: &mut String) {
     script.push_str(&format!(
         "    printf '%s\\n' 'if [ \"$link_command\" = true ] && [ \"$shared_link\" = true ]; then set -- \"$@\" -Wl,-Bstatic -lunwind -lgcc -Wl,-Bdynamic; elif [ \"$link_command\" = true ] && {{ [ \"$dynamic_rustc_link\" = true ] || [ \"$dynamic_executable_link\" = true ]; }}; then set -- \"$@\" -no-pie -Wl,-Bdynamic \"-Wl,-dynamic-linker,$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\" -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; elif [ \"$link_command\" = true ] && [ \"$static_support_link\" = true ]; then set -- \"$@\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n"
     ));
+    script.push_str(
+        "    printf '%s\\n' 'if [ -n \"${MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG:-}\" ]; then set -- \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" \"$@\"; fi' >> \"$target_alias_dir/cc\"\n",
+    );
     script.push_str(&format!(
         "    printf '%s\\n' 'exec \"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
     ));
@@ -6491,7 +6499,8 @@ fn push_full_source_tool_bindings(
     let native_gxx = native_bin.join("x86_64-linux-musl-g++");
     let native_ar = native_bin.join("x86_64-linux-musl-ar");
     let native_ranlib = native_bin.join("x86_64-linux-musl-ranlib");
-    let gcc_exec_prefix = context.native_provider_dir.join(FULL_SOURCE_GCC_EXEC_PREFIX_RELATIVE_PATH);
+    let gcc_subprogram_prefix = context.native_provider_dir.join(FULL_SOURCE_GCC_SUBPROGRAM_PREFIX_RELATIVE_PATH);
+    let gcc_subprogram_prefix_flag = format!("-B{}/", gcc_subprogram_prefix.display());
     let controlled_path = [
         busybox_dir,
         make_dir,
@@ -6525,7 +6534,8 @@ fn push_full_source_tool_bindings(
         shell_quote(&context.native_provider_dir.display().to_string())
     ));
     script.push_str(&format!("SOURCE_ROOT={}\n", shell_quote(&context.native_provider_dir.display().to_string())));
-    script.push_str(&format!("GCC_EXEC_PREFIX={}\n", shell_quote(&format!("{}/", gcc_exec_prefix.display()))));
+    script.push_str(&format!("MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG={}\n", shell_quote(&gcc_subprogram_prefix_flag)));
+    script.push_str(&format!("unset {GCC_EXEC_PREFIX_ENV} {COMPILER_PATH_ENV}\n"));
     script.push_str(&format!("PATH={}\n", shell_quote(&controlled_path)));
     script
         .push_str("SHELL=\"$SHELL_PROGRAM\"\nCONFIG_SHELL=\"$SHELL_PROGRAM\"\nGNUMAKEFLAGS=\"SHELL=$SHELL_PROGRAM\"\n");
@@ -6543,7 +6553,7 @@ fn push_full_source_tool_bindings(
         "MANTLE_LINUX_HEADERS_CFLAGS={}\n",
         shell_quote(&format!("-I{}", linux_headers_include.display()))
     ));
-    script.push_str("export PATH PYTHONHOME PERL5LIB LIBRARY_PATH MAKE_PROGRAM CMAKE_PROGRAM MANTLE_PYTHON_PROGRAM PERL_PROGRAM COPY_PROGRAM SHELL_PROGRAM SHELL CONFIG_SHELL GNUMAKEFLAGS CC_PROGRAM CXX_PROGRAM TARGET_CC_PROGRAM TARGET_CXX_PROGRAM TARGET_AR_PROGRAM TARGET_RANLIB_PROGRAM MANTLE_TARGET_CC MANTLE_TARGET_TOOLCHAIN_ROOT SOURCE_ROOT GCC_EXEC_PREFIX MANTLE_ZLIB_HEADER MANTLE_ZLIB_ARCHIVE ZLIB_CFLAGS ZLIB_LIBS MANTLE_LINUX_HEADERS_ROOT MANTLE_LINUX_HEADERS_CFLAGS\n");
+    script.push_str("export PATH PYTHONHOME PERL5LIB LIBRARY_PATH MAKE_PROGRAM CMAKE_PROGRAM MANTLE_PYTHON_PROGRAM PERL_PROGRAM COPY_PROGRAM SHELL_PROGRAM SHELL CONFIG_SHELL GNUMAKEFLAGS CC_PROGRAM CXX_PROGRAM TARGET_CC_PROGRAM TARGET_CXX_PROGRAM TARGET_AR_PROGRAM TARGET_RANLIB_PROGRAM MANTLE_TARGET_CC MANTLE_TARGET_TOOLCHAIN_ROOT SOURCE_ROOT MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG MANTLE_ZLIB_HEADER MANTLE_ZLIB_ARCHIVE ZLIB_CFLAGS ZLIB_LIBS MANTLE_LINUX_HEADERS_ROOT MANTLE_LINUX_HEADERS_CFLAGS\n");
     script
         .push_str("printf '%s\\n' 'using receipt-bound full-source Rust host tools with ambient discovery disabled'\n");
     Ok(())
@@ -7315,9 +7325,15 @@ fn push_first_stage_target_cc_wrapper(script: &mut String, full_source_bound: bo
     script.push_str(&format!(
         "printf '%s\\n' 'if [ \"$link_command\" = true ] && [ \"$dynamic_rustc_link\" = true ]; then set -- \"$@\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_OBJECT}\" -no-pie -Wl,-Bdynamic \"-Wl,-dynamic-linker,$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\" {FIRST_STAGE_TARGET_MUSL_PTHREAD_TLS_WRAP_FLAGS} -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; elif [ \"$link_command\" = true ] && [ \"$static_support_link\" = true ]; then set -- \"$@\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_OBJECT}\" -static {FIRST_STAGE_TARGET_MUSL_PTHREAD_TLS_WRAP_FLAGS} -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n"
     ));
-    script.push_str(&format!(
-        "printf '%s\\n' 'exec \"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
-    ));
+    if full_source_bound {
+        script.push_str(&format!(
+            "printf '%s\\n' 'exec \"$target_cc_path\" \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
+        ));
+    } else {
+        script.push_str(&format!(
+            "printf '%s\\n' 'exec \"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
+        ));
+    }
     script.push_str("chmod +x \"$target_alias_dir/cc\"\n");
 }
 
@@ -7407,10 +7423,16 @@ fn push_first_stage_musl_host_llvm_runtime(script: &mut String, full_source_boun
     }
     script.push_str("CC=\"$CC_PROGRAM\"\n");
     script.push_str("CXX=\"$CXX_PROGRAM\"\n");
-    script.push_str("CFLAGS=\"$ZLIB_CFLAGS\"\n");
+    if full_source_bound {
+        script.push_str("CFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $ZLIB_CFLAGS\"\n");
+        script.push_str("CXXFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MRUSTC_CXXFLAGS $ZLIB_CFLAGS\"\n");
+        script.push_str("LDFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $ZLIB_LIBS\"\n");
+    } else {
+        script.push_str("CFLAGS=\"$ZLIB_CFLAGS\"\n");
+        script.push_str("CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS\"\n");
+        script.push_str("LDFLAGS=\"$ZLIB_LIBS\"\n");
+    }
     script.push_str("CPPFLAGS=\"$ZLIB_CFLAGS\"\n");
-    script.push_str("CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS\"\n");
-    script.push_str("LDFLAGS=\"$ZLIB_LIBS\"\n");
     script.push_str("LIBS=\"$ZLIB_LIBS\"\n");
     script.push_str("if [ -n \"${LLVM_LINKER_FLAGS:-}\" ]; then LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind $LLVM_LINKER_FLAGS\"; else LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind\"; fi\n");
     script.push_str("export CC_PROGRAM CXX_PROGRAM CC CXX CFLAGS CPPFLAGS CXXFLAGS LDFLAGS LIBS AR RANLIB CMAKE_C_COMPILER CMAKE_CXX_COMPILER CMAKE_AR CMAKE_RANLIB CMAKE_C_COMPILER_AR CMAKE_CXX_COMPILER_AR CMAKE_C_COMPILER_RANLIB CMAKE_CXX_COMPILER_RANLIB LLVM_STATIC_STDCPP LLVM_LINKER_FLAGS\n");
@@ -7509,15 +7531,20 @@ fn push_first_stage_build_pipeline(
     script.push_str("export CC=\"$CC_PROGRAM\"\n");
     script.push_str("export CXX=\"$CXX_PROGRAM\"\n");
     if full_source_bound {
-        script.push_str("export CFLAGS=\"$ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\"\n");
+        script.push_str(
+            "export CFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\"\n",
+        );
         script.push_str("export CPPFLAGS=\"$ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\"\n");
-        script.push_str("export CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\"\n");
+        script.push_str(
+            "export CXXFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MRUSTC_CXXFLAGS $ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\"\n",
+        );
+        script.push_str("export LDFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $ZLIB_LIBS\"\n");
     } else {
         script.push_str("export CFLAGS=\"$ZLIB_CFLAGS\"\n");
         script.push_str("export CPPFLAGS=\"$ZLIB_CFLAGS\"\n");
         script.push_str("export CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS\"\n");
+        script.push_str("export LDFLAGS=\"$ZLIB_LIBS\"\n");
     }
-    script.push_str("export LDFLAGS=\"$ZLIB_LIBS\"\n");
     script.push_str("export LIBS=\"$ZLIB_LIBS\"\n");
     push_first_stage_patch_plan_operations(
         script,
@@ -9075,7 +9102,11 @@ mod tests {
         assert!(script.contains("MANTLE_ZLIB_ARCHIVE='/lib/libz.a'"));
         assert!(script.contains("MANTLE_LINUX_HEADERS_ROOT='/receipt-bound/linux-headers'"));
         assert!(script.contains("MANTLE_LINUX_HEADERS_CFLAGS='-I/receipt-bound/linux-headers/include'"));
-        assert!(script.contains("export CFLAGS=\"$MANTLE_LINUX_HEADERS_CFLAGS\""));
+        assert!(script.contains(
+            "MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG='-B/native-provider/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/'"
+        ));
+        assert!(script.contains("export CFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MANTLE_LINUX_HEADERS_CFLAGS\""));
+        assert!(script.contains("unset GCC_EXEC_PREFIX COMPILER_PATH"));
         assert!(script.contains("MANTLE_TARGET_CC='/native-provider/bin/x86_64-linux-musl-gcc'"));
         assert!(!script.contains("ZLIB_CFLAGS=\nZLIB_LIBS=\n"));
         assert!(!script.contains("command -v"));
@@ -9091,10 +9122,16 @@ mod tests {
         push_rustc_source_llvm_config(&mut full_source_config, Some(&context));
         push_rustc_source_llvm_config(&mut compatibility_config, None);
 
-        assert!(full_source_config.contains("cflags = \"$MANTLE_LINUX_HEADERS_CFLAGS\""));
-        assert!(full_source_config.contains("cxxflags = \"$MANTLE_LINUX_HEADERS_CFLAGS\""));
+        assert!(
+            full_source_config.contains("cflags = \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MANTLE_LINUX_HEADERS_CFLAGS\"")
+        );
+        assert!(
+            full_source_config
+                .contains("cxxflags = \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MANTLE_LINUX_HEADERS_CFLAGS\"")
+        );
         assert!(!full_source_config.contains("/usr/include"));
         assert!(!compatibility_config.contains("MANTLE_LINUX_HEADERS_CFLAGS"));
+        assert!(!compatibility_config.contains("MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG"));
     }
 
     #[test]
@@ -9136,8 +9173,16 @@ mod tests {
         assert!(script.contains("ambient discovery disabled"));
         assert!(script.contains("MANTLE_ZLIB_ARCHIVE='/lib/libz.a'"));
         assert!(script.contains("MANTLE_LINUX_HEADERS_ROOT='/receipt-bound/linux-headers'"));
-        assert!(script.contains("GCC_EXEC_PREFIX='/native-provider/libexec/gcc/'"));
-        assert!(script.contains("export CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\""));
+        assert!(script.contains(
+            "MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG='-B/native-provider/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/'"
+        ));
+        assert!(script.contains("unset GCC_EXEC_PREFIX COMPILER_PATH"));
+        assert!(script.contains(
+            "export CXXFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MRUSTC_CXXFLAGS $ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\""
+        ));
+        assert!(script.contains("export LDFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $ZLIB_LIBS\""));
+        assert!(script.contains("exec \"$target_cc_path\" \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
+        assert!(!script.contains("GCC_EXEC_PREFIX='/native-provider"));
         assert!(script.contains("target_toolchain_root=\"$MANTLE_TARGET_TOOLCHAIN_ROOT\""));
         assert!(script.contains("authenticated-mrustc-0.12.0"));
         assert!(script.contains("authenticated Rust source rewrite mrustc-ivar-bounds"));
@@ -9934,6 +9979,9 @@ mod tests {
         assert!(rustc_stage1_script.contains("crt-static = false"));
         assert!(rustc_stage1_script.contains("__atomic_compare_exchange_16"));
         assert!(rustc_stage1_script.contains("linker = \"$MANTLE_TARGET_CC\""));
+        assert!(rustc_stage1_script.contains(
+            "if [ -n \"${MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG:-}\" ]; then set -- \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" \"$@\"; fi"
+        ));
         let script = fs::read_to_string(scratch.join(FIRST_STAGE_SCRIPT_FILE)).unwrap();
         assert!(script.contains("missing verified source"));
         assert!(script.contains("verified sources manifest"));
@@ -10484,6 +10532,9 @@ mod tests {
         assert!(generated_stage1_script.contains("[target.$MANTLE_TARGET_TRIPLE]"));
         assert!(generated_stage1_script.contains("cc = \"$MANTLE_TARGET_CC\""));
         assert!(generated_stage1_script.contains("linker = \"$MANTLE_TARGET_CC\""));
+        assert!(generated_stage1_script.contains(
+            "if [ -n \"${MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG:-}\" ]; then set -- \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" \"$@\"; fi"
+        ));
         assert!(generated_stage1_script.contains(FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE));
         assert!(generated_stage1_script.contains("musl-root = \"$MANTLE_TARGET_MUSL_ROOT\""));
         let rustc_source_root_preference_index = generated_stage1_script

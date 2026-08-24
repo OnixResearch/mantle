@@ -1,0 +1,33 @@
+{
+  "schema": "mantle-full-source-rust-host-tool-construction-v1",
+  "receipt_id": "full-source-rust-host-busybox-construction",
+  "role": "busybox",
+  "source_policy": "authenticated-offline-only",
+  "source_id": "busybox-1.37.0",
+  "source_url": "https://busybox.net/downloads/busybox-1.37.0.tar.bz2",
+  "source_sha256_hex": "3311dff32e746499f4df0d5df04d7eb396382d7e108bb9250e7b519b837043a4",
+  "native_provider_output_digest_blake3": "63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9",
+  "executable_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v55-gcc-prefix-retry2-20260824.source-built-fixed-point-staging-3497795/native-store/cc3hv2x3a5ywff41b7dx4l24aisplmkb-busybox-1.37.0-full-source-gcc10-v1/bin/busybox",
+  "executable_digest_blake3": "da5b5b1ca280f8a545eb750c27894766311c1b10b326da5ce10e6e1ee8c7f4c8",
+  "artifact_attestation_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v55-gcc-prefix-retry2-20260824.source-built-fixed-point-staging-3497795/full-source-rust-host-tools/busybox-attestation.json",
+  "artifact_attestation_digest_blake3": "2966057bc0ba8db0721626b2c1df52a33e4a18c604aa92c494e0819371c70b58",
+  "artifact_attestation_file_digest_blake3": "2966057bc0ba8db0721626b2c1df52a33e4a18c604aa92c494e0819371c70b58",
+  "positive_checks": [
+    "static-shell-core-utilities",
+    "copied-tree-execution"
+  ],
+  "rejection_checks": [
+    "malformed-grep-pattern-rejected"
+  ],
+  "dependency_digests_blake3": {
+    "linux-headers": "0fdac41832c7b489a3896fb70d7395110c7542a18bbf511432c78fe3757e3778",
+    "linux-headers-attestation": "19532049399ea16e4067340fc41cbb15c8008ec22ef463eadc6ef3362c2375bb",
+    "make": "11e99bd96b27689e78797520566b915d3b519f4550197ebb6678a67bed215866",
+    "native-provider": "63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9"
+  },
+  "ambient_tool_discovery": false,
+  "fallback_events": [],
+  "environmental_assumptions": [
+    "sandbox-orchestration:declared-bwrap-and-builder-shell-outside-installed-host-tool-claim"
+  ]
+}

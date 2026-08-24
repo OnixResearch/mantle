@@ -1,0 +1,2187 @@
+{
+  "schema": "mantle-eager-derivation-action-plan-v1",
+  "stage_id": "full-source-native-provider:full-source-native-provider",
+  "adapter": "native-derivation-graph-v1",
+  "store_dir": "/mantle/store",
+  "sandbox_shell_digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276",
+  "action_count": 76,
+  "local_only": true,
+  "cache_only_completion_allowed": false,
+  "actions": [
+    {
+      "action_id": "/mantle/store/07c4bnqvgbgz8rmnzsg5whi2spcgc42m-bison-3.4.1-src.drv",
+      "action_id_blake3": "4e0518657a06fb56bebd20f90e03b35e028fba31ef6ff78e607964f58d159680",
+      "observed_goal_key_blake3": "cf9a0e0050fc370092192e7a67f15d46fa583b3d117dbaf0171f13f8af1cd6db",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/axwv96j1icri7z87a3s9kzgmqi7psrmn-bison-3.4.1-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "a0bb1c77094b53861a81e82b9e2250566f21c0b13edf795d5124b9758805b7de",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/0y44xl4hkdliy8ybwpp9y74zah8ay8fv-gcc-generator-base-v4.drv",
+      "action_id_blake3": "c8b2b68f91b9d46d97f3eb07e198025fbcbf679b55642535972b0cb22d051b90",
+      "observed_goal_key_blake3": "bc5363af41e056d7c6b1ef740c4f780e184e95fac48891740cc3fd7414ff09eb",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/d7hgc6vjwpxi1jn32jfhgpd85phz6gvw-gcc-4.0.4-musl-pass4-v7.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/rngz2aa297x4y8agacg4fh34gfnwap6g-automake-1.15.1-config-sub-src.drv",
+        "/mantle/store/z6cvzy4a7k7lys7i1vx5lj7czs4qny0m-musl-1.1.24-gcc-pass4-v2.drv"
+      ],
+      "input_source_ids": [
+        "/mantle/store/ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition"
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/0y44xl4hkdliy8ybwpp9y74zah8ay8fv-gcc-generator-base-v4.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "4473db7a607e3e24abf029bf918cae4f0abf34245ee0e392ee15af94e2e883ac",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/1cl0574m2bkhzpg4brl2739qx7bqxf5a-musl-1.2.5-gcc10-v1.drv",
+      "action_id_blake3": "2e1e493996a035fe6d729142ee88ff8513f2ccc8a8a9401552c39ad43ec1f389",
+      "observed_goal_key_blake3": "fc783618259111ddf4570f75c73e4bf2ffe288b8a70c7d3626a93e57693b90ea",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/ggixfr12ziphilb6rg5qwnih33rcxcj0-musl-1.2.5-src.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nwk672lw9s40k7yrvm12hcqs78y677f0-gcc-10.5.0-musl-gcc47-v2.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/9229ybqv8249h60nx6nzxy6ywc6y1ybw-musl-1.2.5-gcc10-v1",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "436a1df612a3aaa7d45dd5f2e2a4d8613661694b9b4ca923a4ff10ba105b230b",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/1vrvkbdlays6qshgqsndq33w6h2sbjv6-gawk-3.0.4-src.drv",
+      "action_id_blake3": "8edfa6d5061c24c3d491e4de58fb4fb5fdd3badec41cce222503fb72722cc61f",
+      "observed_goal_key_blake3": "9f3b297324f96b4d585cc2a77bcc303556f978dbebd772b987d127f5b67752c0",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/w1sd2bhayywmx8my2iar8l6y5jydk9cy-gawk-3.0.4-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "51e260ef898c639ed35930679ed5fbe475b26cad515fe521314e051bebfbe761",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+      "action_id_blake3": "dcf5665b6435c2f1489b6bc7b2991ef8acd8461e2a8245109287048281a44554",
+      "observed_goal_key_blake3": "648cdf6056dcde21ac860361eef324cd3c07dc8acc34d7c310180bd4e8f7a24a",
+      "producer_action_ids": [
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/7yhy54mmp98ml9l2jwhnq33vqzlwsvmz-binutils-2.30-src.drv",
+        "/mantle/store/d7hgc6vjwpxi1jn32jfhgpd85phz6gvw-gcc-4.0.4-musl-pass4-v7.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/rngz2aa297x4y8agacg4fh34gfnwap6g-automake-1.15.1-config-sub-src.drv",
+        "/mantle/store/z6cvzy4a7k7lys7i1vx5lj7czs4qny0m-musl-1.1.24-gcc-pass4-v2.drv"
+      ],
+      "input_source_ids": [
+        "/mantle/store/ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition",
+        "/mantle/store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider"
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "c9c0db4b7aa4febbb8461d2298d1aece5a38d7f784321d8f20b7376b9d088a8f",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/3hifmlwnglw4dgklnp4nwcq1pj2dmrlm-gcc-10.5.0-regenerated-source-v1.drv",
+      "action_id_blake3": "a32850291eaf74d52cbbb5cc7118bdcdf8d616b1637db55ecbb054c9b68af2a3",
+      "observed_goal_key_blake3": "73f0a96ff20b1b8bc27c5fcad91657cdcc45a127f8eb5eaaf21349b204dc8d92",
+      "producer_action_ids": [
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/bj3d4sdrv6m4dh0ik46phhm775w1yhki-autoconf-2.69-gcc-v1.drv",
+        "/mantle/store/k94xd6v05wj134rikl004l2hxbxhaxba-gcc-10.5.0-src.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/ram0dn9yvy0gm2wkn09mwrxj7rpssfgc-flex-2.6.4-gcc-v1.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/zw858713wxyq9d8p3wfp8fx0rqp8w4zi-bison-3.4.1-gcc-v2.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/68y5ssknvpkqyjdc4h5ca20rfyll5hgz-gcc-10.5.0-regenerated-source-v1",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "ea2c22f7328214af3943d1fe74565b89224995cf71b802195158477f644ebf2b",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+      "action_id_blake3": "1e1bcb7a3c1a803f8466a162e6a54b9e73347e94bbd9359af8f40bbf6310075e",
+      "observed_goal_key_blake3": "70ef593e7aba9e352f9b8fac157bad21fc230658164c82aa4f0c76c5bc0e9bdd",
+      "producer_action_ids": [],
+      "input_source_ids": [
+        "/mantle/store/ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition"
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/kbnm0hf9r3qkjvxd9gm8j4jl4gsfvfgx-stage0-posix",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "36233cba5095d1a553add0da8aa1aabca20bf6e106f6f943ee5c537444c452b2",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/537473ly8zml047lncxcwadm0z7pn21r-gcc-4.7.4-musl-gcc40-v1.drv",
+      "action_id_blake3": "5e60f5dbbc3657317a7c0693c63bbd8e63553864d1d4b5a9a4da6bd2a2386a22",
+      "observed_goal_key_blake3": "45f08f01a78bb8430c34e5a56070f74b1912e5d9f652b3544810ee6190c44de5",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/8dd60gh7p30vlskn8b6akw8sw02m40rm-autoconf-2.64-gcc-v1.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/c3b6c90zsrcx4amlqp4w5gd5x5i2g72r-gcc-4.0.4-musl-cxx-v8.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n2dsg7hk9525wadw7bmxq6i3g6wbprps-gcc-4.7.4-src.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/nv281qp0xciwm506fxbjwd267xhvzhb4-mpfr-4.1.0-gcc40-v1.drv",
+        "/mantle/store/ram0dn9yvy0gm2wkn09mwrxj7rpssfgc-flex-2.6.4-gcc-v1.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/rngz2aa297x4y8agacg4fh34gfnwap6g-automake-1.15.1-config-sub-src.drv",
+        "/mantle/store/v6301gnhmp0dcjkpi25y2f96mqkdldnp-gmp-6.2.1-gcc40-v1.drv",
+        "/mantle/store/wdp8p1qsmcjs03rx77ijqsaklmbcvsly-mpc-1.2.1-gcc40-v1.drv",
+        "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv",
+        "/mantle/store/zw858713wxyq9d8p3wfp8fx0rqp8w4zi-bison-3.4.1-gcc-v2.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/arryik5hlz7qds1xfjx81g1d64vmjy2l-gcc-4.7.4-musl-gcc40-v1",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "0db1b75b7477b5ff14eb45996163e5c58b68fcb2d5ce5d490a00b6aa77deb35e",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/56s79xp93gsg2b9z35kqbldyiyrijz8a-autoconf-2.57-gcc-v1.drv",
+      "action_id_blake3": "7aeadf0fbee6519a614fcbef4d9c55d96863f485896fcc01f835b49efc721639",
+      "observed_goal_key_blake3": "7f6a5d9a3374ece3f3a83b84a480df592ab88504bded05b67857fdda34e0d557",
+      "producer_action_ids": [
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/5cqci3dp5qs3vnrf81wi6cfb4rxn071q-autoconf-2.57-src.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/bi1rhahrgj2aqn460g0nbfmzg6j1ajxg-autoconf-2.55-gcc-v2.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/56s79xp93gsg2b9z35kqbldyiyrijz8a-autoconf-2.57-gcc-v1.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "3d7278f45046ce0457e9f705c1c11620d40983a7df04c94902ba60fcdb41bde8",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/5cqci3dp5qs3vnrf81wi6cfb4rxn071q-autoconf-2.57-src.drv",
+      "action_id_blake3": "be5dfa78ddebcab0b527de033732190e55e9b494e2ec05770d1824f3aa125c68",
+      "observed_goal_key_blake3": "c9279d4f0fbb6d5e3bcef28711d068ac1409b28220abe2a53d843e37f7bbf8d3",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/fjy33yrrspi2wi9q3xqfpjx5k73wsl6k-autoconf-2.57-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "65f6a4ff8124c22b82bc261dbd756a93793df83b881d1b33d1ef6bcc14162bf5",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/5xd2g7j7nnfad714mcif4zg4m5wqcslg-flex-2.6.4-src.drv",
+      "action_id_blake3": "ffeb2af009da08b9447357aad9bea9dd20ea70c07fce3ec15bf971acdc49e030",
+      "observed_goal_key_blake3": "107e4cdbe7be2c7e9850d333c9f030e61f4cc02fdab71bb80bba2f014c9e4796",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/9fnkc3495bbgcs5kqkrsnv5pyn1v1qlq-flex-2.6.4-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "ddc39ebeb00dc59221bf8479a52ccf71e59736f92e64cf39dca80a46a525c141",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/61bzb8kharzdhwnhjvq6yzcb2ry6hd5c-binutils-2.41-regeneration-ready-source-v1.drv",
+      "action_id_blake3": "099c61802c986b8924f8018a80095c8a220b2b299c7ec32a9b7ed051dded4092",
+      "observed_goal_key_blake3": "f6a9bfe79776aa499559af16fbaba43e6a7e237c1d65673afe86ff7913a3c48c",
+      "producer_action_ids": [
+        "/mantle/store/8gsq7fx5bqfif5azrfmp7506kvi4igdf-binutils-2.41-src.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/bj3d4sdrv6m4dh0ik46phhm775w1yhki-autoconf-2.69-gcc-v1.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/n0rapyd2qgivraiy0sfwy9rlnx9lflm4-binutils-2.41-regeneration-ready-source-v1",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "897e9200f5250247de9554ee62b9a0a3a21408839174bc208269ed876d9a85ee",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/6467xlb0z5hhrmrk59azp2wr9l4v2yf3-gmp-6.2.1-src.drv",
+      "action_id_blake3": "29bb3df78b6f5b0f3f5f727dc52bc82069b0e57d1d164ca7f746b253f3832a27",
+      "observed_goal_key_blake3": "d2aa7b4a4aff1f4bcb542ae664e8bd7a84f2ada92bf660999fddfe19754345e9",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/8nbdfjzns03f85khn5284crzpgw49rlr-gmp-6.2.1-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "de59aafb818eb0b818a7dffd930fde57a10d3b338af20700488101059c425b46",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/64q2cyakia4cp4xf4mvzd75d2axqv4gd-gcc-4.0.4-musl-pass5-v2.drv",
+      "action_id_blake3": "8feaaf2d04fd1aa0a2500dec4f62e52b0158aa9ac398134a6dfe460895097bfe",
+      "observed_goal_key_blake3": "016bd209d12476c6c3b84b2071899d1f7ceaf6481ef8c47280cd186fff71322b",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/a8zrc74dq9wvcniq3j8j71x5dk8fa9gw-gcc-4.0.4-native-src.drv",
+        "/mantle/store/d7hgc6vjwpxi1jn32jfhgpd85phz6gvw-gcc-4.0.4-musl-pass4-v7.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/rngz2aa297x4y8agacg4fh34gfnwap6g-automake-1.15.1-config-sub-src.drv",
+        "/mantle/store/z6cvzy4a7k7lys7i1vx5lj7czs4qny0m-musl-1.1.24-gcc-pass4-v2.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/64q2cyakia4cp4xf4mvzd75d2axqv4gd-gcc-4.0.4-musl-pass5-v2.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "d255d2b8c66af549aa6920a74cf905f38c9e28d12311ffe818e6a0bba5c0a663",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/6hksrzc5nh6hdidqdm7ny9cn82maq2bv-autoconf-2.53-src.drv",
+      "action_id_blake3": "5e80ed9158e6f308e84d762bbe3bbf69935b05ae2978e361f903a3658a691edf",
+      "observed_goal_key_blake3": "c26e1aa68f6ba95c1d94ea34de68cc5ea5da209226948976591d92d95a149e46",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/5ifpwsgl6a34kwpg70z4zwy0nhvhsf8q-autoconf-2.53-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "3a9c1e0bd1e39775ba1e2efdc1972caf1d148be6f7df31d040a21756ee00c6d6",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/77lkh48l39r0nfg3mdrhs3ajgfv7zazw-autoconf-2.69-src.drv",
+      "action_id_blake3": "5ba8e928e2298b394c688e8ca4aa9e7cbe1bea56057d74911e55f24da993d5e5",
+      "observed_goal_key_blake3": "570be8af91896ec4094b0ab01c723250ed7d5ebcfe69921b410fe781c7064972",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/gfxdy71lpxnhw3yfb6aibvf00p5zc471-autoconf-2.69-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "43aeb489d8937635b161cd9f9d05f7b46899cba7a0823fbf5679ecbfde3dbdf5",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/78wf9kwc5rmmp8049ag7qrxy9nz3n5v7-autoconf-2.59-gcc-v2.drv",
+      "action_id_blake3": "8dabb15b03d1ced5a2a6c02794c203314b8c9eae454df10ff987e728251ae422",
+      "observed_goal_key_blake3": "c3210b8ba7001dfa5da29115218404078baac4ec5398c97cf0ce7f8474d5e52d",
+      "producer_action_ids": [
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/56s79xp93gsg2b9z35kqbldyiyrijz8a-autoconf-2.57-gcc-v1.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/vvf03cpxai8ilsnlvxm9570j6f1j0ka2-autoconf-2.59-src.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/78wf9kwc5rmmp8049ag7qrxy9nz3n5v7-autoconf-2.59-gcc-v2.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "c5fa52ce17e5424fc37b7648c6835719360bc6f7ff6c7b9248996e1f842e3d03",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/7yhy54mmp98ml9l2jwhnq33vqzlwsvmz-binutils-2.30-src.drv",
+      "action_id_blake3": "1eee2e9f58ad29b2acd004631fd86832ea8d7527e3e1ea076472b0dc192fcbf1",
+      "observed_goal_key_blake3": "da67c9d15e32b679c4e7f22b91ccf2c9c2987227b862124eac5720f43503495f",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/wm2grsj9krws25h81j5c2g986jcmnca2-binutils-2.30-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "cdbcf095ba7ebc4df883f4d1752d802ad44d1fd294555ae621b098861b18129d",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/8dd60gh7p30vlskn8b6akw8sw02m40rm-autoconf-2.64-gcc-v1.drv",
+      "action_id_blake3": "70cc010f1c43cbfd1f8bc1589515b7785f5227f5371858610aad1d3702e8cf28",
+      "observed_goal_key_blake3": "3c9f3717d0b33da5be76233eb968f00c2ef1dcc9fc8ba6d27b388bd225214719",
+      "producer_action_ids": [
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/j1mkh2ak6h18ma4yp7033kl5ppjky7x1-autoconf-2.61-gcc-v1.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/xzixvqfhn12wpjxfh2yjdnj8m7838phx-autoconf-2.64-src.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/8dd60gh7p30vlskn8b6akw8sw02m40rm-autoconf-2.64-gcc-v1.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "825f98f3afc1e06d7057db54a46081e156c91e49922b520f576d8bf31b464b75",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/8gsq7fx5bqfif5azrfmp7506kvi4igdf-binutils-2.41-src.drv",
+      "action_id_blake3": "d53390f26ac485ed96b56a6d3c2561843fbe1f143ebc22ece03f8f173b12edec",
+      "observed_goal_key_blake3": "2a5d0f84ca1cf652a1ec6dc6827f3db6bca7d489d90f89e1d584aa7970817454",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/gq5qmkbpv711gf96c2wyh5ap2y0i3bc6-binutils-2.41-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "0fbc8ebecb64d089f57eb42d7d2b7aaf22a0259440b285f4c3f060387b8220cb",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/8i81n3pak54lmz9w7ag4js29rnbhwy5b-autoconf-2.55-src.drv",
+      "action_id_blake3": "d450949d699743aae2c81a8768c0663523535c10e2a70bbaf2376b34a1f7c44a",
+      "observed_goal_key_blake3": "50d748edf3877946efbdeb0029e6510a4b63383f09e7bb6fae7b4602ded19f25",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/6w1grd68nwcm158b1059b5c3dhx9v0la-autoconf-2.55-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "e30aecbb0215691f98a1b775a0857c3c89bf07d6e48c02fc2e0038aa90479c91",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+      "action_id_blake3": "2c1c65e83861f0be9e2b355809f2f4b25c36ddca3e249986b86f43021aa65e9c",
+      "observed_goal_key_blake3": "6a15b1ca9a1ff5d6ecf61c57f50c9f4ea9214ad07444906bd283c487d42d4cf1",
+      "producer_action_ids": [
+        "/mantle/store/0y44xl4hkdliy8ybwpp9y74zah8ay8fv-gcc-generator-base-v4.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/wrzw13lj2d9hg9hl89w5lmq3hi80bi1s-m4-1.4.7-src.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "77679da855e5e5656fb09c49c47f17a84dcfb051bfe03131fbb430bb9549caf5",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/9dk5dm55gijv20l5jax7n6bmhv707mmg-bison-2.3-src.drv",
+      "action_id_blake3": "f281afd7b2149d2bde8b934205f92bcae8a23bc385427c8f14ad033477919362",
+      "observed_goal_key_blake3": "76aec0cb49b984daf0f801a6cf6deda251e25725d2867b148eb1d0d2da80e5f6",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/3vv43z3sndd75d5839nj4y1lhwv7sg8h-bison-2.3-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "982e8ea286347e12b1354fe7b10a330a47a25635d83e6d286801c0bb966f950a",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/9hbbkdylm0djkdk3wzqriiqqaqnn4n66-grep-2.4-src.drv",
+      "action_id_blake3": "7dd7deb2e0aca75e58d048595e83c8b7ff90914c67c3eebb93283afc32dea391",
+      "observed_goal_key_blake3": "7821e29f2b090e8e396bbc966536e8429e1f95433d40c80cd45b2e2ebe95fcb4",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/xh0782ngpykdkrv1i6bcm5xl4acg4y01-grep-2.4-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "017c82fdd4f26be3bf1ecc879b923bdc8bbce6a5495a51bf9390834c15262877",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/9shyg439d7lmi9f3j94l1w3w02qdbp0i-gcc-4.0.4-native-gas-v45.drv",
+      "action_id_blake3": "45eebe8ebc25e8c276804edde217a0ae093996f8907f1b3a8445b4aa396ffbc5",
+      "observed_goal_key_blake3": "a13632cfd85119d8c41883dc07100ed1eb1def1c4d77dfc3354491986fa434d2",
+      "producer_action_ids": [
+        "/mantle/store/a8zrc74dq9wvcniq3j8j71x5dk8fa9gw-gcc-4.0.4-native-src.drv",
+        "/mantle/store/rngz2aa297x4y8agacg4fh34gfnwap6g-automake-1.15.1-config-sub-src.drv"
+      ],
+      "input_source_ids": [
+        "/mantle/store/ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition",
+        "/mantle/store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider"
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/9shyg439d7lmi9f3j94l1w3w02qdbp0i-gcc-4.0.4-native-gas-v45.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "8181cbd5a953d73ebedf0d0aef52e5361a60d6c3c9624edd305f86c3afbdbf40",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/a4rlrzc0fww05savbafw4b0pcmd94h11-autoconf-2.52-gcc-v6.drv",
+      "action_id_blake3": "6d924904e2ae3fb820ce251ee321e81e373034e7c670744e1657b527466deb50",
+      "observed_goal_key_blake3": "359301f39c417c1012430066068f6dfeec38b88caf86673f8a923a801846746f",
+      "producer_action_ids": [
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/wacl1z7wwsm4h428sphvc8mv4prq9y8q-autoconf-2.52-src.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/a4rlrzc0fww05savbafw4b0pcmd94h11-autoconf-2.52-gcc-v6.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "6f819dd4a20be3d47e728e743d90eb0a600fed20689fcf61f0683ae15c92e969",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/a8zrc74dq9wvcniq3j8j71x5dk8fa9gw-gcc-4.0.4-native-src.drv",
+      "action_id_blake3": "dbe5fe5e2e77f0c9f944beb770a076f297fb11df63f6f6c53c0d9c92e6df8563",
+      "observed_goal_key_blake3": "8cb18acee162164a83513d36b852bb8f6b4c0369b34be5585266ac39708bc8dd",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/02r39qxz56ycr9ajnvdd1ivlw7al5r8c-gcc-4.0.4-native-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "e14e0160f91b11ffdb768c58446a18b895d38243b3b083c122d49d601c76bdcb",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/analzncz0b74a8nmnzhjlvl6ahw91jm3-bison-2.3-gcc-v9.drv",
+      "action_id_blake3": "344cbd63b557d31336767aa3371fadbc91ce9947daa404902aa06ba1ad453556",
+      "observed_goal_key_blake3": "7fc31ceec8d60c9506fb6beca7c18207058659229863ef76e50adfc3f81551b7",
+      "producer_action_ids": [
+        "/mantle/store/0y44xl4hkdliy8ybwpp9y74zah8ay8fv-gcc-generator-base-v4.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/9dk5dm55gijv20l5jax7n6bmhv707mmg-bison-2.3-src.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/analzncz0b74a8nmnzhjlvl6ahw91jm3-bison-2.3-gcc-v9.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "e4ac8ebf4e7f7ec7eac0ebed15ceadf472ec0b11cf8bb5d1b1d0922120c807f9",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/b5pqdjk06mafy6z1b36abny8wk08xd37-autoconf-2.54-src.drv",
+      "action_id_blake3": "6fd788dffe76bff0f75e5d825ba549ea291d83d2220d366f6d83b88759b01ed0",
+      "observed_goal_key_blake3": "573b99a568f526e464e35ca67aba260f7e3f97720d2a134762f8fc00ffbe7d9e",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/mh0h27jkvwpkdalibrpfyg92h3ax3a9g-autoconf-2.54-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "d523200acd6e8ffec4bea21d053a160cb31c21a79b80a68c04c6e19d34f3164a",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/bi1rhahrgj2aqn460g0nbfmzg6j1ajxg-autoconf-2.55-gcc-v2.drv",
+      "action_id_blake3": "3d659d500a88f8080287d378c739464cd080ba00dfb63709feb70d910df3c3d3",
+      "observed_goal_key_blake3": "133e6f51b12632552eb160b38ff09c30e692f98f74a6fb4bbe504de27ac5a4c4",
+      "producer_action_ids": [
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/8i81n3pak54lmz9w7ag4js29rnbhwy5b-autoconf-2.55-src.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/v007561zcqlah9zljflkfxs908a4i6as-autoconf-2.54-gcc-v1.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/bi1rhahrgj2aqn460g0nbfmzg6j1ajxg-autoconf-2.55-gcc-v2.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "0349b288aae102a81e900176e01edcffb5f7022dcb5414df4c9f0c4eadf70e94",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/big6li5xfhfmwc0ci1wpp8ccb4rqh00m-autoconf-2.13-src.drv",
+      "action_id_blake3": "6db4a41891fe7ac8b7bb749a890641f80746ecf8a81afd9a622d88ab904bf120",
+      "observed_goal_key_blake3": "43c18ec738f8787bc64138ccf2be33ec529ccc7b9e50fb681ef9c3de4b1436a8",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/pvqk3bj06p3rss45p2qq2gj7v0g972si-autoconf-2.13-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "b1b8e9ad09347e56a47b5aca2408b796db85e14eccd7c2d0ade4dfc5a9b263c9",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/bj3d4sdrv6m4dh0ik46phhm775w1yhki-autoconf-2.69-gcc-v1.drv",
+      "action_id_blake3": "7f9fb27e73b908aae1da22dbf499540cf91be195532c462d0bf4c41216cde4a5",
+      "observed_goal_key_blake3": "f16e807192a568ac5446072ca465ac88945ac69502321a980f205fc41a6ee218",
+      "producer_action_ids": [
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/77lkh48l39r0nfg3mdrhs3ajgfv7zazw-autoconf-2.69-src.drv",
+        "/mantle/store/8dd60gh7p30vlskn8b6akw8sw02m40rm-autoconf-2.64-gcc-v1.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/bj3d4sdrv6m4dh0ik46phhm775w1yhki-autoconf-2.69-gcc-v1.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "c3ff0abccc3f49f8b891fb3bd5855eab83ad8b89a6e8b728592b8e0c8438898e",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/c3b6c90zsrcx4amlqp4w5gd5x5i2g72r-gcc-4.0.4-musl-cxx-v8.drv",
+      "action_id_blake3": "bd057b5338b12ced274d079eb71c79ef3ceae4b1705f894a1bb9796cd03bfe50",
+      "observed_goal_key_blake3": "0fcdc85e203b0449bf9f24fd87061e1ff34ac482c4ce0c1bbeec637651035568",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/78wf9kwc5rmmp8049ag7qrxy9nz3n5v7-autoconf-2.59-gcc-v2.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/a8zrc74dq9wvcniq3j8j71x5dk8fa9gw-gcc-4.0.4-native-src.drv",
+        "/mantle/store/gjx25bkzrndc6brmdd623b2y4dgffzbg-gcc-4.0.4-musl-pass6-v1.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/qwjjrppb6sdfgjb6j4kcv9zamcp79pcy-autoconf-2.13-gcc-v1.drv",
+        "/mantle/store/ram0dn9yvy0gm2wkn09mwrxj7rpssfgc-flex-2.6.4-gcc-v1.drv",
+        "/mantle/store/rngz2aa297x4y8agacg4fh34gfnwap6g-automake-1.15.1-config-sub-src.drv",
+        "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv",
+        "/mantle/store/zw858713wxyq9d8p3wfp8fx0rqp8w4zi-bison-3.4.1-gcc-v2.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/c3b6c90zsrcx4amlqp4w5gd5x5i2g72r-gcc-4.0.4-musl-cxx-v8.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "e2c169c89dd023a5027ac65daa0b3d837753afd72f9e2fbf608de16955da0d57",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/d7hgc6vjwpxi1jn32jfhgpd85phz6gvw-gcc-4.0.4-musl-pass4-v7.drv",
+      "action_id_blake3": "6cfc8cf81ca7d9b0c4af218845fbc9bbfbe89cd338bdced78f3b47e050a777af",
+      "observed_goal_key_blake3": "d7dfbd5ac722c55a80ac50a8c314e5d3b2b99ae9c8342984acf66fb763abdf5b",
+      "producer_action_ids": [
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/a8zrc74dq9wvcniq3j8j71x5dk8fa9gw-gcc-4.0.4-native-src.drv",
+        "/mantle/store/l0m8807z4i1cvr0grnr8pxy430hz8ynf-gcc-4.0.4-musl-pass3-v23.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/rngz2aa297x4y8agacg4fh34gfnwap6g-automake-1.15.1-config-sub-src.drv",
+        "/mantle/store/z6cvzy4a7k7lys7i1vx5lj7czs4qny0m-musl-1.1.24-gcc-pass4-v2.drv"
+      ],
+      "input_source_ids": [
+        "/mantle/store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider"
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/d7hgc6vjwpxi1jn32jfhgpd85phz6gvw-gcc-4.0.4-musl-pass4-v7.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "9ef512e9b769f2e8ad1924465c8977b9240bfb1488dc083c035387de467f026c",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/f8b4qgg35apfibxi97917sszi7sfnpv7-musl-1.1.24-src.drv",
+      "action_id_blake3": "52aa725c29e8e26d931af9dee6596b63ead0add62f103128156440b76b455429",
+      "observed_goal_key_blake3": "4dd0eea2d76aba2feef42ea2bdd7497ee2fadce3eea1d1964fb4c0aa3dbd23d0",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/if27l03lw2l4dh06ba3ah3vjggvznl83-musl-1.1.24-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "297ba6ac81341a5d16760aef5fe8f1fe02743c4d266f5adc360d79432c944d1c",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/ggixfr12ziphilb6rg5qwnih33rcxcj0-musl-1.2.5-src.drv",
+      "action_id_blake3": "900b11acabfb3945a5cf00692c563b701a8cde6fd9fd0f130c4757961e26847e",
+      "observed_goal_key_blake3": "fb2b10ba3d265ce0dd59c4239aeb6942f2c3f6c89be63ab298e8edb5006305cb",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/93j9512p8rsw8nbl32gj72drmfrsrrs4-musl-1.2.5-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "effbdf83e05f263bb3790bee7aabb06843e08d0a051219487476d39171bab412",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/gh9b4xjhywx3m8vxrpwsgii9wly5b4sx-flex-2.5.11-gcc-v6.drv",
+      "action_id_blake3": "3f46970a35747ab6b52f94aa0e7b0135791c846a6b12481557c40357b7fa9676",
+      "observed_goal_key_blake3": "37da20baf9557e52ba325eca962dc94acbf51beaa017dd6129e911dc57afc854",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/gjx25bkzrndc6brmdd623b2y4dgffzbg-gcc-4.0.4-musl-pass6-v1.drv",
+        "/mantle/store/r1gwg1p9vf4jgnpjwpg3x08kg0iwpk63-flex-2.5.36-gcc-v4.drv",
+        "/mantle/store/y40ndjzs0n3nj0lhzhay8q5inkzsgmrn-heirloom-devtools-070527-gcc-v6.drv",
+        "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv",
+        "/mantle/store/zrqdm1y1wsbrlf9ixpzgz8b5n9vrz7ws-flex-2.5.11-src.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/gh9b4xjhywx3m8vxrpwsgii9wly5b4sx-flex-2.5.11-gcc-v6.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "bd3856d4fffddec33833d15a0355bf473d9b7ea35065cee52c0378b6b3f24d68",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/gjx25bkzrndc6brmdd623b2y4dgffzbg-gcc-4.0.4-musl-pass6-v1.drv",
+      "action_id_blake3": "53b267b926393e2a551be4e10baecad0a4e9bbc30c2a3543fcdacc36e0711fcd",
+      "observed_goal_key_blake3": "5ab3f154607fedea894d245c795ab1d5b15eed222ce177240ca44963ae43cd81",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/64q2cyakia4cp4xf4mvzd75d2axqv4gd-gcc-4.0.4-musl-pass5-v2.drv",
+        "/mantle/store/a8zrc74dq9wvcniq3j8j71x5dk8fa9gw-gcc-4.0.4-native-src.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/rngz2aa297x4y8agacg4fh34gfnwap6g-automake-1.15.1-config-sub-src.drv",
+        "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/gjx25bkzrndc6brmdd623b2y4dgffzbg-gcc-4.0.4-musl-pass6-v1.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "bdeb05fb8f46298e113d1e3bd861202920f07682f04f31d92aa5f9f0028e53f9",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/gv03k8jb6lcm2hbsgm6w57yqzh2i1xpa-perl-5.6.2-src.drv",
+      "action_id_blake3": "baa1735905154cd9789f21cbb072194bc63c8886663514ea965c141001983896",
+      "observed_goal_key_blake3": "34d89af276e3fe79e8f82ca72222feb56ffe40c35dee1e4565410d2021c317b0",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/vv796y5x82k3damdpnyxb4ksvp6s7kcy-perl-5.6.2-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "c6bf8bd65da709dce3c2fa2d7fdd35d74b0cb11c38f81cc7bd44cecc6c7df5e9",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/hfvrinfni6mhzdlgij2vr4f0kqpx8fmc-heirloom-devtools-070527-src.drv",
+      "action_id_blake3": "3fb18b3d56e75ead6b15cd333c0fcd90eb484bddb236643366e28222d6d53ca7",
+      "observed_goal_key_blake3": "bfaf321b0c57b6491c5dca14296fa6fbaa4f8dcc351fc54765cc87e06e9c013e",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/f7zzc3bc12c0jq8iiwgyqm646sqf6c68-heirloom-devtools-070527-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "b5956d3d53bd6dd70f7613850ce576225f9c396a63ca049916b5cf1c89544228",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/hi2sc4ssphzixs0npcnzgjk75a0xsxvm-binutils-2.41-gcc10-v1.drv",
+      "action_id_blake3": "7e13138c47db9d0cbbb8f8cfc085c55494017926f19c74a282de5da066ced35d",
+      "observed_goal_key_blake3": "1ae24acc3caee7226a12231d214a568a99295c35095db62d1620ae49ad508e18",
+      "producer_action_ids": [
+        "/mantle/store/1cl0574m2bkhzpg4brl2739qx7bqxf5a-musl-1.2.5-gcc10-v1.drv",
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/61bzb8kharzdhwnhjvq6yzcb2ry6hd5c-binutils-2.41-regeneration-ready-source-v1.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/iik2h9rfvbcd15i6k4fwc4z9vljjbr61-gcc-10.5.0-musl-final-v1.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/ram0dn9yvy0gm2wkn09mwrxj7rpssfgc-flex-2.6.4-gcc-v1.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/zw858713wxyq9d8p3wfp8fx0rqp8w4zi-bison-3.4.1-gcc-v2.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/hj8bb4v3r6a891jy17r144a5103cx6ml-binutils-2.41-gcc10-v1",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "4355bf2fd0ec84d46201d0ff51d40daa56441e047ac7548c32f7d57c090b63ba",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/iik2h9rfvbcd15i6k4fwc4z9vljjbr61-gcc-10.5.0-musl-final-v1.drv",
+      "action_id_blake3": "4bf2a9db7b1c8a58fc26d20a316c9b2171c65c3167926a2d6f0c856433bd1c23",
+      "observed_goal_key_blake3": "bb256db8d7ea6c485d1b3dc8b292a103e45fdca69b0968832d92c38c7f5ca09e",
+      "producer_action_ids": [
+        "/mantle/store/1cl0574m2bkhzpg4brl2739qx7bqxf5a-musl-1.2.5-gcc10-v1.drv",
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/3hifmlwnglw4dgklnp4nwcq1pj2dmrlm-gcc-10.5.0-regenerated-source-v1.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nv281qp0xciwm506fxbjwd267xhvzhb4-mpfr-4.1.0-gcc40-v1.drv",
+        "/mantle/store/nwk672lw9s40k7yrvm12hcqs78y677f0-gcc-10.5.0-musl-gcc47-v2.drv",
+        "/mantle/store/ram0dn9yvy0gm2wkn09mwrxj7rpssfgc-flex-2.6.4-gcc-v1.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/v6301gnhmp0dcjkpi25y2f96mqkdldnp-gmp-6.2.1-gcc40-v1.drv",
+        "/mantle/store/wdp8p1qsmcjs03rx77ijqsaklmbcvsly-mpc-1.2.1-gcc40-v1.drv",
+        "/mantle/store/zw858713wxyq9d8p3wfp8fx0rqp8w4zi-bison-3.4.1-gcc-v2.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/s7g75y3h6n3l2z76rbigzni3jc4614hf-gcc-10.5.0-musl-final-v1",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "8d3c7626f3020075947847fff0fd94ec447b9cba8a817a69772f9cab54411019",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/ijbcz2q6mwsvjq3gd9ipz33ssdbflz9n-mpfr-4.1.0-src.drv",
+      "action_id_blake3": "bd37c4e0ad1ea51a94c4e421809ec56c64437f2d33dff8d9ddce807aecb716ff",
+      "observed_goal_key_blake3": "5bb2704b98ad9e9be228f78af37040662ff4df23d7a103eda226c421006d6493",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/znvw5fhyss3b55qdyr8c449np3cvinxj-mpfr-4.1.0-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "c1fdd3fa4706e8e6bf2420c5848cd76fcc81dc347acd40fe14190346ff64242e",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/j1mkh2ak6h18ma4yp7033kl5ppjky7x1-autoconf-2.61-gcc-v1.drv",
+      "action_id_blake3": "0a1a076c0b547f903ea783ac5988cbf5fcbfbdc4581ca66cc0fce7ff3e240f57",
+      "observed_goal_key_blake3": "181936117990854af0e002ea646ee8ba475f46971b8ca9deb041ba3e3e68caa9",
+      "producer_action_ids": [
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/78wf9kwc5rmmp8049ag7qrxy9nz3n5v7-autoconf-2.59-gcc-v2.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/lyvwl5fwcamqffky3kmrhb5m16pkiwwp-autoconf-2.61-src.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/j1mkh2ak6h18ma4yp7033kl5ppjky7x1-autoconf-2.61-gcc-v1.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "89cee67b542ce0d1883abeb4fc05022187cfd06ffb08959c99f989d0d24556d1",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+      "action_id_blake3": "461c1b276ec57145e9d1997162eea45cecce659ef3fc4e21987b6e49901e726e",
+      "observed_goal_key_blake3": "79efcf13bf17787b94800f2bb766d9685cfa730e0d69134d52163c51ed8ea554",
+      "producer_action_ids": [
+        "/mantle/store/0y44xl4hkdliy8ybwpp9y74zah8ay8fv-gcc-generator-base-v4.drv",
+        "/mantle/store/1vrvkbdlays6qshgqsndq33w6h2sbjv6-gawk-3.0.4-src.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "3b139965fb6c5a7b10f405dd4958cc2b612baa65184b21e5744ee160b3510e06",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/k1li54xnx3snl92l62kyin3flmjdsw2y-musl-1.1.24-gcc-pass3-v5.drv",
+      "action_id_blake3": "42e0c9a7ce56a1c0119d0157744356173ca412f7ec173768b4773d36d4cdabb0",
+      "observed_goal_key_blake3": "75c7c1fc46a82143ef831e407729fc27bb088c3656732c53fd917dcaa2b1d7ed",
+      "producer_action_ids": [
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/9shyg439d7lmi9f3j94l1w3w02qdbp0i-gcc-4.0.4-native-gas-v45.drv",
+        "/mantle/store/f8b4qgg35apfibxi97917sszi7sfnpv7-musl-1.1.24-src.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv"
+      ],
+      "input_source_ids": [
+        "/mantle/store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider"
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/k1li54xnx3snl92l62kyin3flmjdsw2y-musl-1.1.24-gcc-pass3-v5.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "b6ad1e61a3a5de5745a7e6e3c7a4a1656e890f2938685e670c26b2ca6772baa6",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/k94xd6v05wj134rikl004l2hxbxhaxba-gcc-10.5.0-src.drv",
+      "action_id_blake3": "864badff647441d9e0c1b648fe16a4b14acdec711f2ad1733ab272244d57e88d",
+      "observed_goal_key_blake3": "162badf48d6137a9d9c8f5f7d526391a69973f456a26a94b6931aa698ab5b025",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/bfarpgmh205mbkp6q9iczas3lwqn5vd6-gcc-10.5.0-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "efda6bc1a6f7068eb08c311fb8e118ac00c74f6cae0ba8970b16bc4497aae93a",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/l0m8807z4i1cvr0grnr8pxy430hz8ynf-gcc-4.0.4-musl-pass3-v23.drv",
+      "action_id_blake3": "40ded592e3b67a56b76870c475847a1c29f5176599527dade1eadee333279083",
+      "observed_goal_key_blake3": "9cdd3bac9c0d63b1d14b82081b8278b0a99b4e939a324e5a516e6c7aa99ee3b7",
+      "producer_action_ids": [
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/9shyg439d7lmi9f3j94l1w3w02qdbp0i-gcc-4.0.4-native-gas-v45.drv",
+        "/mantle/store/a8zrc74dq9wvcniq3j8j71x5dk8fa9gw-gcc-4.0.4-native-src.drv",
+        "/mantle/store/k1li54xnx3snl92l62kyin3flmjdsw2y-musl-1.1.24-gcc-pass3-v5.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/rngz2aa297x4y8agacg4fh34gfnwap6g-automake-1.15.1-config-sub-src.drv"
+      ],
+      "input_source_ids": [
+        "/mantle/store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider"
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/l0m8807z4i1cvr0grnr8pxy430hz8ynf-gcc-4.0.4-musl-pass3-v23.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "f8a6091ebdc36058373a296a7bbe80020364564c6e960738a2defecdb9dd916f",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/lyvwl5fwcamqffky3kmrhb5m16pkiwwp-autoconf-2.61-src.drv",
+      "action_id_blake3": "f77cf3f33ff3389c58cbacaebeadbbdbf72305c1ba09137ba1c654ec56b4495b",
+      "observed_goal_key_blake3": "d50644eeb0080aa0d53b0944e14ad92efa46863f1b92e75c2c5e1f65d871015f",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/qiv6zz6by52r9grfynsam50nm5sisihx-autoconf-2.61-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "6b8cb240e4eab180a050288f5101ca5d61d52a29f1d08ee222a8db18bf163e43",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/n2dsg7hk9525wadw7bmxq6i3g6wbprps-gcc-4.7.4-src.drv",
+      "action_id_blake3": "45468cfe93c6b2ce603680a847c8df09637fd2806adbfc4d100582b41653a16c",
+      "observed_goal_key_blake3": "e372fdbbb3d3a8740c9d2e30c666da71b5138571c9b9e7239a896cdec4258a8e",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/5n6v2inyd0j4a74hxb0y1q42f005yg3c-gcc-4.7.4-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "820d5d095dfd9968353933d9d4c3946581c4275ec85c4b18722bc8225a1a3c90",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/n3w6nd794s761y1ljp1nx3fkn4ij0fab-mpc-1.2.1-src.drv",
+      "action_id_blake3": "a9a170f291b432739d5ad75eebab8cdf22ac73cd3dbd20ea3a449cd4569b9af1",
+      "observed_goal_key_blake3": "c011d12ab1e0186f556381e5a1d185f4b2a3746b9c1f65807b30f980b599b7d0",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/fxmib2f1gm0ij6fngcfq3fqrx70d0a2r-mpc-1.2.1-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "f28d1d84dbe303a5d9d89cf3541f62ff15b299417f2783484493361c71f8e007",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+      "action_id_blake3": "13895413e2d4663c4688163d3cc6fa49fbca2bf9298f7d12b87fbd99e353dd71",
+      "observed_goal_key_blake3": "1ad8bf2ae57d0e312b3d8543d98d01e41fd964e3de1f5ebe4c51fd041c4a2f34",
+      "producer_action_ids": [],
+      "input_source_ids": [
+        "/mantle/store/ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition"
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/28qhw0bhh9ly7gcnnikv10l1y8cd4k6d-make-3.82-tcc",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "169eda571f2c7df777a393ced3632b3e6c809f27c69d104012222cd072c728d8",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+      "action_id_blake3": "33f3574635f5dfada3d6ed93e47bc9752a089ff9d5906fdf37c4ebc9a401a67b",
+      "observed_goal_key_blake3": "e593ee9014c638ea86d830fd499ae18ba49762a41cc9f4d7684cd25ee6088981",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/analzncz0b74a8nmnzhjlvl6ahw91jm3-bison-2.3-gcc-v9.drv",
+        "/mantle/store/gjx25bkzrndc6brmdd623b2y4dgffzbg-gcc-4.0.4-musl-pass6-v1.drv",
+        "/mantle/store/gv03k8jb6lcm2hbsgm6w57yqzh2i1xpa-perl-5.6.2-src.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "4c2152226a754dd5967fb8cddf8ee7bffa499b3e29ac578878458d8a5925a7cf",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/nv281qp0xciwm506fxbjwd267xhvzhb4-mpfr-4.1.0-gcc40-v1.drv",
+      "action_id_blake3": "5f395ba4c1cd0f7a2557708fc201aa3f3d2db4e99fb98f9402acd377659d74ca",
+      "observed_goal_key_blake3": "d1306017ce1b1757a17e29b1dcba098b4555bbaa10a507d06f929fe486b72826",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/c3b6c90zsrcx4amlqp4w5gd5x5i2g72r-gcc-4.0.4-musl-cxx-v8.drv",
+        "/mantle/store/ijbcz2q6mwsvjq3gd9ipz33ssdbflz9n-mpfr-4.1.0-src.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/v6301gnhmp0dcjkpi25y2f96mqkdldnp-gmp-6.2.1-gcc40-v1.drv",
+        "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/nv281qp0xciwm506fxbjwd267xhvzhb4-mpfr-4.1.0-gcc40-v1.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "9e28f8f759fd86553531a422e1cec1f215a8a462cfa8cfae94dd1dfec990d15c",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/nwk672lw9s40k7yrvm12hcqs78y677f0-gcc-10.5.0-musl-gcc47-v2.drv",
+      "action_id_blake3": "bf4187f15358d73b90f515764195ff8434c95906798c576d378040155fd27e35",
+      "observed_goal_key_blake3": "e0bb2e422c7847c9cf1e38966800c723315c8ef28ed3dbbc8a0494fd8782e35c",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/3hifmlwnglw4dgklnp4nwcq1pj2dmrlm-gcc-10.5.0-regenerated-source-v1.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/537473ly8zml047lncxcwadm0z7pn21r-gcc-4.7.4-musl-gcc40-v1.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nv281qp0xciwm506fxbjwd267xhvzhb4-mpfr-4.1.0-gcc40-v1.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/v6301gnhmp0dcjkpi25y2f96mqkdldnp-gmp-6.2.1-gcc40-v1.drv",
+        "/mantle/store/wdp8p1qsmcjs03rx77ijqsaklmbcvsly-mpc-1.2.1-gcc40-v1.drv",
+        "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/6gmvaxayp4gvzws44bqqn9zdnb2qabm6-gcc-10.5.0-musl-gcc47-v2",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "83bb0edfa929e9a997cbd6574ee852a9749c492112b47b57203bb1e75cce1b33",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/pd5n7pdc1673a2pjnhr607sgd0jgx15y-flex-2.5.36-src.drv",
+      "action_id_blake3": "dfd444fd2f8858379d353d2b33e947de7d6813cd6e40d2f4cad00388c8a8f32f",
+      "observed_goal_key_blake3": "17bfe7ad9fa8f28480708c982d7ec44b31558eb3db0a6f749ef804d51ec15e14",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/82m0sw9gn35kz64klxszazcf4zfxppha-flex-2.5.36-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "ab223f318d0db7718fcd158be3048853295c9c88c7ecea1f182b70e8be410f84",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/qwjjrppb6sdfgjb6j4kcv9zamcp79pcy-autoconf-2.13-gcc-v1.drv",
+      "action_id_blake3": "6cdff94568a47093a9645a30d587d624be86f9dc18479768d0144859f0636e08",
+      "observed_goal_key_blake3": "3bf223987c908f3e09dbd59c09e29d0865e87536d75a7ec513300f6f19baea9a",
+      "producer_action_ids": [
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/big6li5xfhfmwc0ci1wpp8ccb4rqh00m-autoconf-2.13-src.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/qwjjrppb6sdfgjb6j4kcv9zamcp79pcy-autoconf-2.13-gcc-v1.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "a2f2a90957ba51a3c30718a8e92531d69bdd2fee765f55ef9685324e0e98e53d",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/r1gwg1p9vf4jgnpjwpg3x08kg0iwpk63-flex-2.5.36-gcc-v4.drv",
+      "action_id_blake3": "0b40cbe5c6fc486597774352eebc96fca03ef9a3907259f2c78572c75c16d491",
+      "observed_goal_key_blake3": "11450a45900713a3ba3031569f387b07d9acab7a5293aacae04c085738912bfe",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/gjx25bkzrndc6brmdd623b2y4dgffzbg-gcc-4.0.4-musl-pass6-v1.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/pd5n7pdc1673a2pjnhr607sgd0jgx15y-flex-2.5.36-src.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/r1gwg1p9vf4jgnpjwpg3x08kg0iwpk63-flex-2.5.36-gcc-v4.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "ca72a5c01f24e724d6e99d4e88c96bd2404c60a104a25e379627e2697c5cfff2",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/ram0dn9yvy0gm2wkn09mwrxj7rpssfgc-flex-2.6.4-gcc-v1.drv",
+      "action_id_blake3": "c1bb6a7b3a939fac716ee3da19a1d03b7bfde51ee2c02e1a7ac22082b10770c8",
+      "observed_goal_key_blake3": "221ade3000337098f2b873fae8af8ded02166711f24ddb770fbe552a6055cf4f",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/5xd2g7j7nnfad714mcif4zg4m5wqcslg-flex-2.6.4-src.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/analzncz0b74a8nmnzhjlvl6ahw91jm3-bison-2.3-gcc-v9.drv",
+        "/mantle/store/gh9b4xjhywx3m8vxrpwsgii9wly5b4sx-flex-2.5.11-gcc-v6.drv",
+        "/mantle/store/gjx25bkzrndc6brmdd623b2y4dgffzbg-gcc-4.0.4-musl-pass6-v1.drv",
+        "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/ram0dn9yvy0gm2wkn09mwrxj7rpssfgc-flex-2.6.4-gcc-v1.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "1b890812f3e2532c68c02a1a4ab8852295808073327491b84f8952cb4cc75f7e",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+      "action_id_blake3": "aa8215a253c995a0b64d2f1f724214b4037eb969b6d79969e4966f3896870de4",
+      "observed_goal_key_blake3": "ab0e6ce750d5dbd9cea132420e3d6715c354212b8a5c9d0dc7f0ef7dcc2e1aae",
+      "producer_action_ids": [
+        "/mantle/store/0y44xl4hkdliy8ybwpp9y74zah8ay8fv-gcc-generator-base-v4.drv",
+        "/mantle/store/9hbbkdylm0djkdk3wzqriiqqaqnn4n66-grep-2.4-src.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "3191d3cd1b6e5a5033589c501986cc58414356bcd844ef05b357c36db59cefc6",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/rg6ncqq81sr7cfwf1vxfqgvjhh7sx07n-bison-3.4.1-stage1-gcc-v1.drv",
+      "action_id_blake3": "866328871554d7ada594cb84e598c9efa091857b96b9dd91c094da9314277d6a",
+      "observed_goal_key_blake3": "b674c0d5dea45873bbe5fcd000021fd7b057cf2c787f4f58093d8d927da5750f",
+      "producer_action_ids": [
+        "/mantle/store/07c4bnqvgbgz8rmnzsg5whi2spcgc42m-bison-3.4.1-src.drv",
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/gjx25bkzrndc6brmdd623b2y4dgffzbg-gcc-4.0.4-musl-pass6-v1.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/rg6ncqq81sr7cfwf1vxfqgvjhh7sx07n-bison-3.4.1-stage1-gcc-v1.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "625d5e2bbc82d7fb4ef1c5e722f81fdd8d11cf57f97d0100e6965cf8827954d1",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/rngz2aa297x4y8agacg4fh34gfnwap6g-automake-1.15.1-config-sub-src.drv",
+      "action_id_blake3": "70a6392ec9a196661993c972a38cf18252cf0efb7bef060425eec8598cc0a1ba",
+      "observed_goal_key_blake3": "165b8663dd67aa9413811e7f34fd5b25bfe7e52a429f67aedddd9b4394afee01",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/0flyvq4d2d11lpp0njni5ln6fa2cwn4r-automake-1.15.1-config-sub-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "58c6bdeae36c433fa59651b9f4b14f7e7dc7defb4fc65b7c68935f83ad202ba0",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/s50vpd1bm89gnf1dysm72anflhqk2g4d-autoconf-2.53-gcc-v7.drv",
+      "action_id_blake3": "f19b32df3aae563090b0c09424dd4b76ab692db012473b96d740d3b0476bc999",
+      "observed_goal_key_blake3": "8932920ea7a414d0ed0a5a6bde94fd7a7804dad0452fcafb9a2dcab6ef5fb162",
+      "producer_action_ids": [
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/6hksrzc5nh6hdidqdm7ny9cn82maq2bv-autoconf-2.53-src.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/a4rlrzc0fww05savbafw4b0pcmd94h11-autoconf-2.52-gcc-v6.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/s50vpd1bm89gnf1dysm72anflhqk2g4d-autoconf-2.53-gcc-v7.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "0ee23a3c4f53aa43b6737b10d8e65fdd9662d0ea0ad9551cd90375c4268a8e9d",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/v007561zcqlah9zljflkfxs908a4i6as-autoconf-2.54-gcc-v1.drv",
+      "action_id_blake3": "e978147c055636dd609d46f97eb3e6a74fbe491a797950fa01d828d2cbb2d884",
+      "observed_goal_key_blake3": "b6dee9bfc8f71ce77734d73fda60292f762e5dbdda29a646649250ce361b4fe4",
+      "producer_action_ids": [
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/b5pqdjk06mafy6z1b36abny8wk08xd37-autoconf-2.54-src.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/s50vpd1bm89gnf1dysm72anflhqk2g4d-autoconf-2.53-gcc-v7.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/v007561zcqlah9zljflkfxs908a4i6as-autoconf-2.54-gcc-v1.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "fbbc2c542cabd711c6e4903a0afe0b60d413edef126825ff579851b779abb39d",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/v6301gnhmp0dcjkpi25y2f96mqkdldnp-gmp-6.2.1-gcc40-v1.drv",
+      "action_id_blake3": "df7e3eba790662ac12d554cf63ea887f793d0ec4b62d57d115f2e81e2a1a788d",
+      "observed_goal_key_blake3": "5226b557d81e5d9d717f90b59bf1212e32abd7aaaca4e1990de36ad0673fd3e1",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/6467xlb0z5hhrmrk59azp2wr9l4v2yf3-gmp-6.2.1-src.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/c3b6c90zsrcx4amlqp4w5gd5x5i2g72r-gcc-4.0.4-musl-cxx-v8.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/v6301gnhmp0dcjkpi25y2f96mqkdldnp-gmp-6.2.1-gcc40-v1.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "39afcd5c546afd1d97fc67a120ab05c26a2d76cae665578da17af8f3b1414156",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/v9i3qphj9psb2kicqbm05x25ph9cfymk-full-source-seed-toolchain.drv",
+      "action_id_blake3": "a5e02bb379ef3a0adff8188fdd8fb74d4a2797cb5194f1167901f93bf3f34369",
+      "observed_goal_key_blake3": "1a8fe34e716f1dc0b1f2193c1ed8a38a600c92d17758e0c8628f54bfc91b1141",
+      "producer_action_ids": [
+        "/mantle/store/1cl0574m2bkhzpg4brl2739qx7bqxf5a-musl-1.2.5-gcc10-v1.drv",
+        "/mantle/store/hi2sc4ssphzixs0npcnzgjk75a0xsxvm-binutils-2.41-gcc10-v1.drv",
+        "/mantle/store/iik2h9rfvbcd15i6k4fwc4z9vljjbr61-gcc-10.5.0-musl-final-v1.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "6bc0559855ea2dea27d7b5752abac620ed26e879360aef3a2cd8fbb7b38fde94",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/vvf03cpxai8ilsnlvxm9570j6f1j0ka2-autoconf-2.59-src.drv",
+      "action_id_blake3": "d11ab5491d57f6ee2a054aac6489b405c00da2223179844f46767b2851abcf60",
+      "observed_goal_key_blake3": "bfe7484eebe6f35adcace2839a798b05e7a05e2dd68116493468be78a808474e",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/mjpf0ajr1mpaf89higwk84vsig6ph5gk-autoconf-2.59-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "0ebd05b6dbb2663f375f741902dfb4dbb5caba485a68fd92b8277bda8f237d8a",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/wacl1z7wwsm4h428sphvc8mv4prq9y8q-autoconf-2.52-src.drv",
+      "action_id_blake3": "c55df1160133a17e3296ff964bfa4597b14c219df98e666e810b292e7474b406",
+      "observed_goal_key_blake3": "9a2cf43b3ba275b357561d6d403c19cf44e769dd3454bba05cbc4b9aea4183b2",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/mngzl5qbz1dwqd5zg5p0r7v2079si1aa-autoconf-2.52-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "1b9be5d6e8ede7fbc012cee3a63be5e46c8e7bdfb0998fd0781a41be9d670af6",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/wdp8p1qsmcjs03rx77ijqsaklmbcvsly-mpc-1.2.1-gcc40-v1.drv",
+      "action_id_blake3": "18d3622ce33af74daf3f383c91a5e54b85893368a3e18d28b77b08f566cba81a",
+      "observed_goal_key_blake3": "5a7ddf2c445c463e71bb72a1b7ea7ef6cb85b76cf143b3311f89a116a14f88db",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/c3b6c90zsrcx4amlqp4w5gd5x5i2g72r-gcc-4.0.4-musl-cxx-v8.drv",
+        "/mantle/store/n3w6nd794s761y1ljp1nx3fkn4ij0fab-mpc-1.2.1-src.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nv281qp0xciwm506fxbjwd267xhvzhb4-mpfr-4.1.0-gcc40-v1.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/v6301gnhmp0dcjkpi25y2f96mqkdldnp-gmp-6.2.1-gcc40-v1.drv",
+        "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/wdp8p1qsmcjs03rx77ijqsaklmbcvsly-mpc-1.2.1-gcc40-v1.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "da968bca70f28dc6f509175c776c4dd8dc052d697205c888bb7c90433c6fe486",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/wrzw13lj2d9hg9hl89w5lmq3hi80bi1s-m4-1.4.7-src.drv",
+      "action_id_blake3": "e0976ee2577326eb3bf1ae2195ac52eaf8a9a7647b59ae2293309027d94cae8d",
+      "observed_goal_key_blake3": "183481876a20436d81427028f30d1a2c573af245b2495ffc16119fd32667e4ea",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/4q745l0k4756ishnlrvvx16rxa4vri2i-m4-1.4.7-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "24262a0a8135d815c0508717cd5c80e60cc5cf9453785d49a3bdff1804760518",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/xzixvqfhn12wpjxfh2yjdnj8m7838phx-autoconf-2.64-src.drv",
+      "action_id_blake3": "c4974a8eb55ba2e546e1b5754348023c7b147a55f680dadb96cfcf3f81a1994b",
+      "observed_goal_key_blake3": "94e21aa0ffa506c9d83e6294dae0dd111c16479448a6f6e002749cb0ce222feb",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/l1d8mlrg0510nwmgk46x3i1lbqdmmg6f-autoconf-2.64-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "11874f1916dcc9c2e0be6c139b185f8ba8f072d706cebdcd05032c72bc9ee712",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/y40ndjzs0n3nj0lhzhay8q5inkzsgmrn-heirloom-devtools-070527-gcc-v6.drv",
+      "action_id_blake3": "0a12f82c4173c200ca36b5390d9a0b40a9a15e93f3f14541fc718c64aae28b85",
+      "observed_goal_key_blake3": "065df595c1a398af9b903e354a99f542f133c16ebe49c5355ba9666c0635724b",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/gjx25bkzrndc6brmdd623b2y4dgffzbg-gcc-4.0.4-musl-pass6-v1.drv",
+        "/mantle/store/hfvrinfni6mhzdlgij2vr4f0kqpx8fmc-heirloom-devtools-070527-src.drv",
+        "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/y40ndjzs0n3nj0lhzhay8q5inkzsgmrn-heirloom-devtools-070527-gcc-v6.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "b0ae44936ee17e5e5ade237a2cef46fb349f6d0d2cda7bc9d2a0554fcdcf93be",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv",
+      "action_id_blake3": "59170000d3684a6e9f32e91f233ef89eca4a5d08b8ee88a1e822bd1fa2d899da",
+      "observed_goal_key_blake3": "2399bb9aac2e06b8910dcb606efa97503676a1b10e4fcc08b3e279f99aee204e",
+      "producer_action_ids": [
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/64q2cyakia4cp4xf4mvzd75d2axqv4gd-gcc-4.0.4-musl-pass5-v2.drv",
+        "/mantle/store/f8b4qgg35apfibxi97917sszi7sfnpv7-musl-1.1.24-src.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "473bd9344d49b6c2e3dab5ad64f9a0362e1cfe4936964425f1278a4db8c5f378",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/z6cvzy4a7k7lys7i1vx5lj7czs4qny0m-musl-1.1.24-gcc-pass4-v2.drv",
+      "action_id_blake3": "359111bc4a5fa14790b34f844463274be838fbffb0278d879fd29347660926e5",
+      "observed_goal_key_blake3": "176e42f2c99f5e538139cba9b82b7654881d4bde2c18d2af6e491acb4ab98b25",
+      "producer_action_ids": [
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/f8b4qgg35apfibxi97917sszi7sfnpv7-musl-1.1.24-src.drv",
+        "/mantle/store/l0m8807z4i1cvr0grnr8pxy430hz8ynf-gcc-4.0.4-musl-pass3-v23.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv"
+      ],
+      "input_source_ids": [
+        "/mantle/store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider"
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/z6cvzy4a7k7lys7i1vx5lj7czs4qny0m-musl-1.1.24-gcc-pass4-v2.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "3c308fbaf75e9836bc1b963b04326ac2bbc05dda697515371702fbbc8a6d4581",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/zrqdm1y1wsbrlf9ixpzgz8b5n9vrz7ws-flex-2.5.11-src.drv",
+      "action_id_blake3": "ffd6196aa8bdd539f6971dcf7cacbb387903e1d179e0e8098a8eb1b543d15421",
+      "observed_goal_key_blake3": "f19a21f6e267a580d76e3f72e077dbb2f54f11e67b761b89fd587c869c712c09",
+      "producer_action_ids": [],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "/mantle/store/j00gk4j3ajga1y0q8j2kkf0bgjm4v04k-flex-2.5.11-src",
+          "content_addressed": false
+        }
+      ],
+      "executable": {
+        "kind": "builtin",
+        "identity": "builtin:fetchurl"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "eb1d21c255bdb495f90db656f7b61eafbf55ce520357b0f1cfed35a672f27b73",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    },
+    {
+      "action_id": "/mantle/store/zw858713wxyq9d8p3wfp8fx0rqp8w4zi-bison-3.4.1-gcc-v2.drv",
+      "action_id_blake3": "b83f2ad6c0d4348fee3e6078490fb2ca5b1879920c81c21e226952bb51f5097e",
+      "observed_goal_key_blake3": "0ca3d019dc324ecf79f4abe533e6418b46ed4c8884defa832c95bc86c4d8e8b2",
+      "producer_action_ids": [
+        "/mantle/store/07c4bnqvgbgz8rmnzsg5whi2spcgc42m-bison-3.4.1-src.drv",
+        "/mantle/store/1zahq0s6xy7ggaka40h95jmfx9nlkwdz-binutils-2.30-gcc-pass4-v17.drv",
+        "/mantle/store/4in73y9mzdywg2jajj6lh3g0nvcxzwwr-stage0-posix.drv",
+        "/mantle/store/8rhx9kp0aayc3n0iinpaicd1grag4iqs-m4-1.4.7-gcc-v5.drv",
+        "/mantle/store/gjx25bkzrndc6brmdd623b2y4dgffzbg-gcc-4.0.4-musl-pass6-v1.drv",
+        "/mantle/store/jlfb50xqj3sfgmk8598bwggrgcb3vdaj-gawk-3.0.4-gcc-v4.drv",
+        "/mantle/store/n9jvvhg99avm3sq1hvsjgkfdz9q5jfhy-make-3.82-tcc.drv",
+        "/mantle/store/nnp4spmamc21g6h9zkrvzfzrhr4kq027-perl-5.6.2-configured-gcc-v16.drv",
+        "/mantle/store/ram0dn9yvy0gm2wkn09mwrxj7rpssfgc-flex-2.6.4-gcc-v1.drv",
+        "/mantle/store/rdhnwb22zlvn1jwfdh242rfknfzs4rfh-grep-2.4-gcc-v10.drv",
+        "/mantle/store/rg6ncqq81sr7cfwf1vxfqgvjhh7sx07n-bison-3.4.1-stage1-gcc-v1.drv",
+        "/mantle/store/yzj7llvq2hp8ql5gxbvs6s8jss6m88kp-musl-1.1.24-gcc-pass5-v1.drv"
+      ],
+      "input_source_ids": [],
+      "outputs": [
+        {
+          "name": "out",
+          "identity": "content-addressed:/mantle/store/zw858713wxyq9d8p3wfp8fx0rqp8w4zi-bison-3.4.1-gcc-v2.drv:out",
+          "content_addressed": true
+        }
+      ],
+      "executable": {
+        "kind": "fixed-sandbox-shell",
+        "logical_path": "/bin/sh",
+        "digest_blake3": "0a3a322dff76c3a8defcb97485e02b3256ade6589868483f00a25d9933599276"
+      },
+      "system": "x86_64-linux",
+      "input_envelope_digest_blake3": "793e4e28b66490826deb04d3d698a3c0c79e646c45d76bcfdca524920dc35d9e",
+      "local_only": true,
+      "event_count_min": 1,
+      "event_count_max": 1
+    }
+  ],
+  "blockers": [],
+  "plan_digest_blake3": "5a17ce6d5b5e2776f6a664e265d75f7029f080d5434fd55963d12b04c485f813"
+}

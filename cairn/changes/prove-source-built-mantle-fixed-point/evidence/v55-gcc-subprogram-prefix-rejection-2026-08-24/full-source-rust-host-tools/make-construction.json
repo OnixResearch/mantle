@@ -1,0 +1,31 @@
+{
+  "schema": "mantle-full-source-rust-host-tool-construction-v1",
+  "receipt_id": "full-source-rust-host-make-construction",
+  "role": "make",
+  "source_policy": "authenticated-offline-only",
+  "source_id": "gnu-make-4.4.1",
+  "source_url": "https://mirrors.kernel.org/gnu/make/make-4.4.1.tar.gz",
+  "source_sha256_hex": "dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3",
+  "native_provider_output_digest_blake3": "63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9",
+  "executable_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v55-gcc-prefix-retry2-20260824.source-built-fixed-point-staging-3497795/native-store/pka7fl1gzm5hmw295h0462cz46jg7nvc-make-4.4.1-full-source-gcc10-v1/bin/make",
+  "executable_digest_blake3": "11e99bd96b27689e78797520566b915d3b519f4550197ebb6678a67bed215866",
+  "artifact_attestation_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v55-gcc-prefix-retry2-20260824.source-built-fixed-point-staging-3497795/full-source-rust-host-tools/make-attestation.json",
+  "artifact_attestation_digest_blake3": "60ed511a195fb17fcb6171de9d52b2cc0a6e653bd42eb460efe21a7abd6d56cd",
+  "artifact_attestation_file_digest_blake3": "60ed511a195fb17fcb6171de9d52b2cc0a6e653bd42eb460efe21a7abd6d56cd",
+  "positive_checks": [
+    "version",
+    "recipe-execution",
+    "copied-tree-version"
+  ],
+  "rejection_checks": [
+    "malformed-makefile-rejected"
+  ],
+  "dependency_digests_blake3": {
+    "native-provider": "63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9"
+  },
+  "ambient_tool_discovery": false,
+  "fallback_events": [],
+  "environmental_assumptions": [
+    "sandbox-orchestration:declared-bwrap-and-builder-shell-outside-installed-host-tool-claim"
+  ]
+}

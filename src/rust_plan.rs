@@ -82,7 +82,7 @@ const SNIX_BUILD_SANDBOX_SHELL_ENV: &str = "SNIX_BUILD_SANDBOX_SHELL";
 const RUSTC_BOOTSTRAP_ENV: &str = "RUSTC_BOOTSTRAP";
 const GCC_COMPILER_FAMILY: &str = "gcc";
 const GCC_EXEC_PREFIX_ENV: &str = "GCC_EXEC_PREFIX";
-const GCC_EXEC_PREFIX_RELATIVE_PATH: &str = "libexec/gcc";
+const GCC_SUBPROGRAM_PREFIX_RELATIVE_PATH: &str = "libexec/gcc/x86_64-unknown-linux-musl/10.5.0";
 const RUST_TOPOLOGY_COMPILE_ENV_ALLOWLIST: &[&str] = &[SNIX_BUILD_SANDBOX_SHELL_ENV, RUSTC_BOOTSTRAP_ENV];
 const BUILD_SCRIPT_OUT_DIR_ENV: &str = "OUT_DIR";
 const BUILD_SCRIPT_OUT_DIR_NAME: &str = "out-dir";
@@ -202,8 +202,16 @@ const PROVIDER_BIN_DIR_NAME: &str = "bin";
 const CFLAGS_ENV: &str = "CFLAGS";
 const CXXFLAGS_ENV: &str = "CXXFLAGS";
 const CPPFLAGS_ENV: &str = "CPPFLAGS";
+const LDFLAGS_ENV: &str = "LDFLAGS";
 const TARGET_CFLAGS_ENV: &str = "TARGET_CFLAGS";
 const TARGET_CXXFLAGS_ENV: &str = "TARGET_CXXFLAGS";
+const GCC_SUBPROGRAM_PREFIX_ENV_KEYS: &[&str] = &[
+    CFLAGS_ENV,
+    CXXFLAGS_ENV,
+    LDFLAGS_ENV,
+    TARGET_CFLAGS_ENV,
+    TARGET_CXXFLAGS_ENV,
+];
 const C_PREFIX_MAP_ENV_KEYS: &[&str] = &[
     CFLAGS_ENV,
     CXXFLAGS_ENV,
@@ -15025,9 +15033,9 @@ fn inherited_rust_topology_compile_env() -> BTreeMap<String, OsString> {
     allowed_rust_topology_compile_env(&candidates)
 }
 
-fn receipt_bound_gcc_exec_prefix(
+fn receipt_bound_gcc_subprogram_prefix_flag(
     selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
-) -> Result<Option<OsString>, RunError> {
+) -> Result<Option<String>, RunError> {
     let Some(route) = selected_c_compiler else {
         return Ok(None);
     };
@@ -15052,18 +15060,40 @@ fn receipt_bound_gcc_exec_prefix(
     let provider_root = bin_dir.parent().ok_or_else(|| {
         RunError::Build(format!("receipt-bound GCC bin path has no provider root: {}", bin_dir.display()))
     })?;
-    let prefix = provider_root.join(GCC_EXEC_PREFIX_RELATIVE_PATH);
-    let value = OsString::from(format!("{}/", prefix.display()));
-    assert!(!value.is_empty());
+    let prefix = provider_root.join(GCC_SUBPROGRAM_PREFIX_RELATIVE_PATH);
+    let flag = format!("-B{}/", prefix.display());
+    assert!(flag.starts_with("-B/"));
     assert!(prefix.is_absolute());
-    Ok(Some(value))
+    Ok(Some(flag))
 }
 
-fn apply_rust_topology_child_env(
-    command: &mut Command,
-    explicit_env: &BTreeMap<String, String>,
+fn append_receipt_bound_gcc_subprogram_env(
+    env: &mut BTreeMap<String, String>,
     selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
 ) -> Result<(), RunError> {
+    let Some(flag) = receipt_bound_gcc_subprogram_prefix_flag(selected_c_compiler)? else {
+        return Ok(());
+    };
+    for key in GCC_SUBPROGRAM_PREFIX_ENV_KEYS {
+        append_env_flags(AppendEnvFlagsInputs { env, key, flags: &flag });
+    }
+    assert!(GCC_SUBPROGRAM_PREFIX_ENV_KEYS.len() <= env.len());
+    assert!(env.values().any(|value| value.contains(&flag)));
+    Ok(())
+}
+
+fn append_receipt_bound_gcc_subprogram_rustc_arg(
+    command: &mut Command,
+    selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+) -> Result<(), RunError> {
+    let Some(flag) = receipt_bound_gcc_subprogram_prefix_flag(selected_c_compiler)? else {
+        return Ok(());
+    };
+    command.arg(RUSTC_CODEGEN_OPTION_FLAG).arg(format!("link-arg={flag}"));
+    Ok(())
+}
+
+fn apply_rust_topology_child_env(command: &mut Command, explicit_env: &BTreeMap<String, String>) {
     command.env_clear();
     for (key, value) in rust_topology_child_env(
         explicit_env,
@@ -15072,10 +15102,6 @@ fn apply_rust_topology_child_env(
     ) {
         command.env(key, value);
     }
-    if let Some(gcc_exec_prefix) = receipt_bound_gcc_exec_prefix(selected_c_compiler)? {
-        command.env(GCC_EXEC_PREFIX_ENV, gcc_exec_prefix);
-    }
-    Ok(())
 }
 
 fn build_script_package_root(unit: &RustUnitDerivationSummary) -> Option<PathBuf> {
@@ -15234,9 +15260,10 @@ fn run_build_script_metadata_with_action_port(
     let executable_path = executable.canonicalize().unwrap_or_else(|_| executable.to_path_buf());
     let package_root = build_script_package_root(unit);
     let mut command = Command::new(&executable_path);
-    let child_env =
+    let mut child_env =
         build_script_child_env(unit, options, &out_dir, package_root.as_deref(), selected_c_compiler.as_ref());
-    apply_rust_topology_child_env(&mut command, &child_env, selected_c_compiler.as_ref())?;
+    append_receipt_bound_gcc_subprogram_env(&mut child_env, selected_c_compiler.as_ref())?;
+    apply_rust_topology_child_env(&mut command, &child_env);
     if let Some(root) = &package_root {
         command.current_dir(root);
     }
@@ -16378,7 +16405,8 @@ fn execute_rust_compiler_command(
     command.arg("--out-dir").arg(unit_output_dir);
     let selected_c_compiler = source_built_c_compiler_route_from_env()
         .map_err(|blocker| RunError::Build(format!("{}: {}", blocker.class, blocker.message)))?;
-    apply_rust_topology_child_env(&mut command, &unit.derivation.env, selected_c_compiler.as_ref())?;
+    append_receipt_bound_gcc_subprogram_rustc_arg(&mut command, selected_c_compiler.as_ref())?;
+    apply_rust_topology_child_env(&mut command, &unit.derivation.env);
     if let Some(policy) = compiler_policy {
         for (key, value) in &policy.environment {
             command.env(key, value);
@@ -21933,20 +21961,59 @@ rust-version = "1.80"
     }
 
     #[test]
-    fn receipt_bound_gcc_exec_prefix_is_derived_from_the_validated_compiler_route() {
+    fn receipt_bound_gcc_subprogram_prefix_is_derived_from_the_validated_compiler_route() {
         let route = test_c_compiler_route();
         let mut non_gcc = route.clone();
         non_gcc.compiler_family = "clang".to_string();
         let mut relative = route.clone();
         relative.execution_path = "provider/bin/x86_64-linux-musl-gcc".to_string();
 
-        let prefix = receipt_bound_gcc_exec_prefix(Some(&route)).unwrap();
-        let absent = receipt_bound_gcc_exec_prefix(Some(&non_gcc)).unwrap();
-        let rejected = receipt_bound_gcc_exec_prefix(Some(&relative)).unwrap_err();
+        let prefix = receipt_bound_gcc_subprogram_prefix_flag(Some(&route)).unwrap();
+        let absent = receipt_bound_gcc_subprogram_prefix_flag(Some(&non_gcc)).unwrap();
+        let rejected = receipt_bound_gcc_subprogram_prefix_flag(Some(&relative)).unwrap_err();
 
-        assert_eq!(prefix, Some(OsString::from("/provider/libexec/gcc/")));
+        assert_eq!(prefix, Some("-B/provider/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/".to_string()));
         assert!(absent.is_none());
         assert!(rejected.to_string().contains("not absolute and normalized"));
+    }
+
+    #[test]
+    fn receipt_bound_gcc_subprogram_prefix_is_added_to_c_and_linker_flags() {
+        let route = test_c_compiler_route();
+        let mut env = BTreeMap::from([(CFLAGS_ENV.to_string(), "-O2".to_string())]);
+        let mut non_gcc = route.clone();
+        non_gcc.compiler_family = "clang".to_string();
+        let mut non_gcc_env = BTreeMap::new();
+
+        append_receipt_bound_gcc_subprogram_env(&mut env, Some(&route)).unwrap();
+        append_receipt_bound_gcc_subprogram_env(&mut non_gcc_env, Some(&non_gcc)).unwrap();
+
+        let flag = "-B/provider/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/";
+        assert_eq!(env.get(CFLAGS_ENV).unwrap(), &format!("-O2 {flag}"));
+        for key in [CXXFLAGS_ENV, LDFLAGS_ENV, TARGET_CFLAGS_ENV, TARGET_CXXFLAGS_ENV] {
+            assert_eq!(env.get(key).map(String::as_str), Some(flag));
+        }
+        assert!(non_gcc_env.is_empty());
+    }
+
+    #[test]
+    fn receipt_bound_gcc_subprogram_prefix_is_added_to_rustc_linker_arguments_only_for_gcc() {
+        let route = test_c_compiler_route();
+        let mut non_gcc = route.clone();
+        non_gcc.compiler_family = "clang".to_string();
+        let mut gcc_command = Command::new("/receipt-bound/rustc");
+        let mut non_gcc_command = Command::new("/receipt-bound/rustc");
+
+        append_receipt_bound_gcc_subprogram_rustc_arg(&mut gcc_command, Some(&route)).unwrap();
+        append_receipt_bound_gcc_subprogram_rustc_arg(&mut non_gcc_command, Some(&non_gcc)).unwrap();
+
+        let gcc_args =
+            gcc_command.get_args().map(|argument| argument.to_string_lossy().into_owned()).collect::<Vec<_>>();
+        assert_eq!(gcc_args, vec![
+            RUSTC_CODEGEN_OPTION_FLAG.to_string(),
+            "link-arg=-B/provider/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/".to_string()
+        ]);
+        assert_eq!(non_gcc_command.get_args().count(), 0usize);
     }
 
     #[test]
@@ -22207,6 +22274,7 @@ rust-version = "1.80"
             (SNIX_BUILD_SANDBOX_SHELL_ENV.to_string(), OsString::from("/busybox")),
             (RUSTC_BOOTSTRAP_ENV.to_string(), OsString::from("1")),
             (GCC_EXEC_PREFIX_ENV.to_string(), OsString::from("/ambient/libexec/gcc/")),
+            ("COMPILER_PATH".to_string(), OsString::from("/ambient/libexec/gcc")),
             ("LD_PRELOAD".to_string(), OsString::from("/tmp/inject.so")),
             ("SECRET_TOKEN".to_string(), OsString::from("do-not-forward")),
         ]);
@@ -22216,6 +22284,7 @@ rust-version = "1.80"
         assert_eq!(env.get(SNIX_BUILD_SANDBOX_SHELL_ENV), Some(&OsString::from("/busybox")));
         assert_eq!(env.get(RUSTC_BOOTSTRAP_ENV), Some(&OsString::from("1")));
         assert!(!env.contains_key(GCC_EXEC_PREFIX_ENV));
+        assert!(!env.contains_key("COMPILER_PATH"));
         assert!(!env.contains_key("LD_PRELOAD"));
         assert!(!env.contains_key("SECRET_TOKEN"));
         assert_eq!(env.len(), 2usize);

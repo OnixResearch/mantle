@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "b360927c7a4cc5333928811d8f6a305e8ac01736f1753141247835cfdd41982b",
+  "blocker": "error: build failed\nsource-built fixed-point blocked: native build full-source-native-provider failed with status Some(1): full-source-seed-toolchain:build:builder:dependency binutils-2.41-gcc10-v1.drv failed"
+}
