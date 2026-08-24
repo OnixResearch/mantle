@@ -1,0 +1,23 @@
+using receipt-bound full-source Rust host tools with ambient discovery disabled
+mantle rust source first stage: mrustc-to-rust-1.90.0
+scrubbing inherited Cargo/build-script environment
+verified sources manifest: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v50-action-trust-cold-20260823.source-built-fixed-point-staging-581691/rust-provider-scratch/mrustc-first-stage-sources.json
+build dir: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v50-action-trust-cold-20260823.source-built-fixed-point-staging-581691/rust-provider-scratch/build
+output dir: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v50-action-trust-cold-20260823.source-built-fixed-point-staging-581691/rust-provider
+writing minicargo workspace boundary
+normalizing minicargo build-script OUT_DIR for static musl compiler host
+normalizing minicargo rustc worker threads for static musl compiler host
+disabling LLVM shared-tool and execinfo backtraces for source-root musl host
+[CXX] -o .obj/main.o
+[CXX] -o .obj/span.o
+[CXX] -o .obj/rc_string.o
+/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v50-action-trust-cold-20260823.source-built-fixed-point-staging-581691/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-g++: exec: line 30: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v50-action-trust-cold-20260823.source-built-fixed-point-staging-581691/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/g++.real: Permission denied
+make: *** [Makefile:184: .obj/main.o] Error 126
+make: *** Waiting for unfinished jobs....
+/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v50-action-trust-cold-20260823.source-built-fixed-point-staging-581691/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-g++: exec: line 30: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v50-action-trust-cold-20260823.source-built-fixed-point-staging-581691/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/g++.real: Permission denied
+make: *** [Makefile:184: .obj/span.o] Error 126
+/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v50-action-trust-cold-20260823.source-built-fixed-point-staging-581691/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-g++: exec: line 30: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v50-action-trust-cold-20260823.source-built-fixed-point-staging-581691/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/g++.real: Permission denied
+make: *** [Makefile:184: .obj/rc_string.o] Error 126
+[CXX] -o .obj/debug.o
+/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v50-action-trust-cold-20260823.source-built-fixed-point-staging-581691/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-g++: exec: line 30: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v50-action-trust-cold-20260823.source-built-fixed-point-staging-581691/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/g++.real: Permission denied
+make: *** [Makefile:186: .obj/debug.o] Error 126

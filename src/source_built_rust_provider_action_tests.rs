@@ -32,6 +32,7 @@ fn rust_provider_action_runtime_pins_outputs_and_emits_complete_evidence() {
     assert!(dir.path().join("evidence").join(RUST_PROVIDER_ACTION_PLAN_FILE).is_file());
     assert!(dir.path().join("evidence").join(RUST_PROVIDER_ACTION_AUDIT_FILE).is_file());
     assert!(dir.path().join("evidence").join(RUST_PROVIDER_ACTION_RECONCILIATION_FILE).is_file());
+    assert!(dir.path().join("evidence/stages/stage-a-audit.json").is_file());
 }
 
 fn run_child() {
@@ -58,12 +59,15 @@ fn run_child() {
             output_roots: vec![output_root.clone()],
         })
         .unwrap();
+    let native_backend = root.join("native/bin/g++.real");
+    let native_status = Command::new(&native_backend).status().unwrap();
     let generated = write_text(&output_root.join("generated-rustc"), "#!/bin/sh\nexit 0\n", true);
     let status = Command::new(&generated).status().unwrap();
-    runtime.end_stage(scope, status.success()).unwrap();
+    runtime.end_stage(scope, native_status.success() && status.success()).unwrap();
     let evidence = runtime.finish().unwrap();
     let revalidated = validate_rust_provider_action_evidence(&root.join("evidence")).unwrap();
 
+    assert!(native_status.success());
     assert!(status.success());
     assert!(evidence.plan_path.is_file());
     assert!(evidence.audit_path.is_file());
@@ -92,9 +96,12 @@ fn rust_provider_action_core_rejects_overlapping_roots_and_denied_events() {
         inventory_entry_id: None,
         policy_decision: "denied".to_string(),
     };
+    let audit = stage_audit(TEST_DIGEST, std::slice::from_ref(&event), &[]).unwrap();
     let reconciliation = stage_reconciliation(TEST_DIGEST, true, &[event], &[], TEST_EVENT_MAX).unwrap();
 
     assert!(overlap.to_string().contains("output roots overlap"));
+    assert_eq!(audit.raw_event_count, 1);
+    assert_eq!(audit.raw_events[0].policy_decision, "denied");
     assert_eq!(reconciliation.denied_event_count, 1);
     assert!(reconciliation.blockers.iter().any(|blocker| blocker == "denied-stage-exec-events"));
 }

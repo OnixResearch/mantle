@@ -35,12 +35,14 @@ const AUTHORITY_FILE: &str = "rust-provider-action-authority.json";
 const STAGE_EVIDENCE_DIR: &str = "stages";
 const AUTHORITY_SCHEMA: &str = "mantle-source-built-rust-provider-action-authority-v1";
 const STAGE_PLAN_SCHEMA: &str = "mantle-source-built-rust-provider-stage-action-plan-v1";
+const STAGE_AUDIT_SCHEMA: &str = "mantle-source-built-rust-provider-stage-action-audit-v1";
 const STAGE_RECONCILIATION_SCHEMA: &str = "mantle-source-built-rust-provider-stage-action-reconciliation-v1";
 const AGGREGATE_PLAN_SCHEMA: &str = "mantle-source-built-rust-provider-action-plan-v1";
 const AGGREGATE_AUDIT_SCHEMA: &str = "mantle-source-built-rust-provider-action-audit-v1";
 const AGGREGATE_RECONCILIATION_SCHEMA: &str = "mantle-source-built-rust-provider-action-reconciliation-v1";
 const AUTHORITY_DIGEST_CONTEXT: &[u8] = b"mantle-source-built-rust-provider-action-authority-v1\0";
 const STAGE_PLAN_DIGEST_CONTEXT: &[u8] = b"mantle-source-built-rust-provider-stage-action-plan-v1\0";
+const STAGE_AUDIT_DIGEST_CONTEXT: &[u8] = b"mantle-source-built-rust-provider-stage-action-audit-v1\0";
 const STAGE_RECONCILIATION_DIGEST_CONTEXT: &[u8] =
     b"mantle-source-built-rust-provider-stage-action-reconciliation-v1\0";
 const AGGREGATE_PLAN_DIGEST_CONTEXT: &[u8] = b"mantle-source-built-rust-provider-action-plan-v1\0";
@@ -80,6 +82,7 @@ pub(crate) struct RustProviderStageScope {
     plan_digest_blake3: String,
     event_start: usize,
     promotion_start: usize,
+    audit_path: PathBuf,
     reconciliation_path: PathBuf,
 }
 
@@ -136,6 +139,17 @@ struct RustProviderStageActionPlan {
     local_only: bool,
     cache_only_completion_allowed: bool,
     plan_digest_blake3: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct RustProviderStageActionAudit {
+    schema: String,
+    action_plan_digest_blake3: String,
+    raw_event_count: u32,
+    promotion_count: u32,
+    raw_events: Vec<ProtectedSeccompAuditEvent>,
+    promotions: Vec<OutputPromotionRecord>,
+    audit_digest_blake3: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -282,6 +296,7 @@ impl RustProviderActionRuntime {
             provider_error(format!("creating Rust provider stage evidence {}: {error}", stage_dir.display()))
         })?;
         let plan_path = stage_dir.join(format!("{stage_file}-plan.json"));
+        let audit_path = stage_dir.join(format!("{stage_file}-audit.json"));
         let reconciliation_path = stage_dir.join(format!("{stage_file}-reconciliation.json"));
         write_json_create_new(&plan_path, &plan)?;
         let roots = plan
@@ -309,6 +324,7 @@ impl RustProviderActionRuntime {
             plan_digest_blake3: plan.plan_digest_blake3,
             event_start,
             promotion_start,
+            audit_path,
             reconciliation_path,
         })
     }
@@ -328,6 +344,7 @@ impl RustProviderActionRuntime {
         }
         let stage_events = &events[scope.event_start..];
         let stage_promotions = &promotions[scope.promotion_start..];
+        let audit = stage_audit(&scope.plan_digest_blake3, stage_events, stage_promotions)?;
         let reconciliation = stage_reconciliation(
             &scope.plan_digest_blake3,
             execution_succeeded,
@@ -335,6 +352,7 @@ impl RustProviderActionRuntime {
             stage_promotions,
             self.authority.limits.exec_events_per_stage_max,
         )?;
+        write_json_create_new(&scope.audit_path, &audit)?;
         write_json_create_new(&scope.reconciliation_path, &reconciliation)?;
         self.completed.insert(scope.stage_id.clone(), CompletedStage {
             plan_digest_blake3: scope.plan_digest_blake3,
@@ -607,20 +625,34 @@ fn validate_stage_evidence(
             return Err(provider_error(format!("Rust provider stage plan is invalid: {}", path.display())));
         }
         let prefix = name.trim_end_matches("-plan.json");
+        let audit_path = stage_dir.join(format!("{prefix}-audit.json"));
         let reconciliation_path = stage_dir.join(format!("{prefix}-reconciliation.json"));
+        let audit: RustProviderStageActionAudit = read_json(&audit_path)?;
         let reconciliation: RustProviderStageActionReconciliation = read_json(&reconciliation_path)?;
+        let expected_audit = digest_serialized(STAGE_AUDIT_DIGEST_CONTEXT, &RustProviderStageActionAudit {
+            audit_digest_blake3: String::new(),
+            ..audit.clone()
+        })?;
         let expected_reconciliation =
             digest_serialized(STAGE_RECONCILIATION_DIGEST_CONTEXT, &RustProviderStageActionReconciliation {
                 reconciliation_digest_blake3: String::new(),
                 ..reconciliation.clone()
             })?;
-        if reconciliation.schema != STAGE_RECONCILIATION_SCHEMA
+        let audit_valid = audit.schema == STAGE_AUDIT_SCHEMA
+            && audit.action_plan_digest_blake3 == plan.plan_digest_blake3
+            && audit.audit_digest_blake3 == expected_audit
+            && usize::try_from(audit.raw_event_count).ok() == Some(audit.raw_events.len())
+            && usize::try_from(audit.promotion_count).ok() == Some(audit.promotions.len())
+            && audit.raw_event_count == reconciliation.observed_event_count
+            && audit.promotion_count == reconciliation.promotion_count;
+        if !audit_valid
+            || reconciliation.schema != STAGE_RECONCILIATION_SCHEMA
             || reconciliation.action_plan_digest_blake3 != plan.plan_digest_blake3
             || reconciliation.reconciliation_digest_blake3 != expected_reconciliation
             || !reconciliation.blockers.is_empty()
         {
             return Err(provider_error(format!(
-                "Rust provider stage reconciliation is invalid: {}",
+                "Rust provider stage audit or reconciliation is invalid: {}",
                 reconciliation_path.display()
             )));
         }
@@ -782,6 +814,26 @@ fn normalized_output_roots(
         });
     }
     Ok(canonical)
+}
+
+fn stage_audit(
+    plan_digest_blake3: &str,
+    events: &[ProtectedSeccompAuditEvent],
+    promotions: &[OutputPromotionRecord],
+) -> Result<RustProviderStageActionAudit, RustSourceProviderError> {
+    let mut audit = RustProviderStageActionAudit {
+        schema: STAGE_AUDIT_SCHEMA.to_string(),
+        action_plan_digest_blake3: plan_digest_blake3.to_string(),
+        raw_event_count: bounded_count("Rust provider stage audit event", events.len())?,
+        promotion_count: bounded_count("Rust provider stage audit promotion", promotions.len())?,
+        raw_events: events.to_vec(),
+        promotions: promotions.to_vec(),
+        audit_digest_blake3: String::new(),
+    };
+    audit.audit_digest_blake3 = digest_serialized(STAGE_AUDIT_DIGEST_CONTEXT, &audit)?;
+    assert_eq!(usize::try_from(audit.raw_event_count).ok(), Some(audit.raw_events.len()));
+    assert_eq!(usize::try_from(audit.promotion_count).ok(), Some(audit.promotions.len()));
+    Ok(audit)
 }
 
 fn stage_reconciliation(

@@ -18,7 +18,7 @@ The hydrated full-source-provider proof reaches matching Mantle binaries but ins
 
 ### Decision: run the first promoted proof on Leviathan
 
-**Choice:** The first promoted V2 evidence run executes the complete six-stage proof on Leviathan (`leviathan.cymric-daggertooth.ts.net`). Host Mantle orchestration, StageX transition and publication, native and Rust provider construction, stage1, and stage2 all execute on that host. The operator transfers the exact source tree and authenticated profile before the attempt. Leviathan's pueue daemon launches and retains the run. Mantle `--builder`, Nix remote-action dispatch, and split-host stage execution are forbidden for this run.
+**Choice:** The first promoted V2 evidence run executes the complete six-stage proof on Leviathan (`leviathan.cymric-daggertooth.ts.net`). Host Mantle orchestration, StageX transition and publication, native and Rust provider construction, stage1, and stage2 all execute on that host. The operator transfers the exact source tree and authenticated profile before the attempt. A detached `setsid` wrapper retains the run across SSH and pueue daemon loss. A pueue watcher validates the wrapper PID and `/proc` start ticks. Mantle `--builder`, Nix remote-action dispatch, and split-host stage execution are forbidden for this run.
 
 The Tailscale DNS name is an operator routing label, not execution authority. Proof authority continues to come from authenticated source and policy identities, explicit executable paths, bounded host observations, the action trust plan, and planned-versus-observed reconciliation. SSH, rsync, and pueue remain outside the proof action graph as pre-launch transfer and control mechanisms.
 
@@ -56,7 +56,7 @@ Provider construction emits complete stage-local plans before each provider stag
 
 Rust unit actions use the unit graph for producer edges. Compile actions use fixed toolchain authority. Build-script executions use the compile action and declared output identity. Receipt-bound aliases use the BusyBox shell identity from the full-source Rust binding, not ambient `/bin/sh`.
 
-The Rust-provider shell writes a plan before each mrustc or rustc stage. Its fixed authority covers admitted native executables and source-built host tools. Its output-tree authorities are producer- and identity-bound. The seccomp supervisor hashes and pins a generated executable before first launch only while that producer action is active.
+The Rust-provider shell writes a plan before each mrustc or rustc stage. Its fixed authority covers admitted native executables, their explicit GCC driver backends and generic binutils paths, and source-built host tools. Its output-tree authorities are producer- and identity-bound. The seccomp supervisor hashes and pins a generated executable before first launch only while that producer action is active. Each stage writes its raw audit before reconciliation, including when execution fails.
 
 The stage1/stage2 shell writes fixed authority before native planning. The planner reads rustc identity from those bound bytes without an unplanned `rustc -vV`. It writes the unit plan before filter installation. The execution port then scopes compiler and build-script events, promotes generated build scripts, and writes a raw audit plus typed reconciliation before it reports success or failure.
 

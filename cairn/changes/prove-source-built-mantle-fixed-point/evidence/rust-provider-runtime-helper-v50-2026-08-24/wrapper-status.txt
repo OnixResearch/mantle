@@ -1,0 +1,12 @@
+started_at=2026-08-23T22:02:02-04:00
+wrapper_pid=581412
+source_commit=22f49b20
+source_transfer_parity=exact
+profile_blake3=ee20e6450587660551b7149b04b822cc7aa100c620950792ff4c15d9104e2768
+orchestrator_blake3=7b6110a9515b057a490904e1346968383153d74b6295094f57f4a35fab3cc126
+checkpoint_mode=cold-miss-required
+output=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-fixed-point-v50-action-trust-cold-20260823
+proof_disk_bytes_max=700000000000
+proof_jobs=16
+finished_at=2026-08-24T02:42:07-04:00
+exit_code=1
