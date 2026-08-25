@@ -7506,6 +7506,22 @@ fn push_generated_scratch_temp_environment(script: &mut String) {
     assert!(script.contains("export TMPDIR=\"$TEMP_ROOT\""));
 }
 
+fn push_first_stage_mrustc_make_command(script: &mut String, full_source_bound: bool) {
+    let original_len = script.len();
+    debug_assert!(!script.contains('\0'));
+    if full_source_bound {
+        script.push_str(&format!(
+            "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} CC=\"$CC\" CXX=\"$CXX\" CXXFLAGS=\"$CXXFLAGS\" LDFLAGS=\"$LDFLAGS\" LINKFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" LIBS=\"$LIBS\"\n"
+        ));
+    } else {
+        script.push_str(&format!(
+            "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} CC=\"$CC\" CXX=\"$CXX\" CXXFLAGS=\"$CXXFLAGS\" LDFLAGS=\"$LDFLAGS\" LIBS=\"$LIBS\"\n"
+        ));
+    }
+    assert!(script.len() > original_len);
+    assert_eq!(script[original_len..].contains("LINKFLAGS_EXTRA"), full_source_bound);
+}
+
 fn push_first_stage_build_pipeline(
     script: &mut String,
     patch_plan: &RustBootstrapPatchPlan,
@@ -7552,9 +7568,7 @@ fn push_first_stage_build_pipeline(
         RustBootstrapPatchPhase::BeforeFirstStageMainMake,
         full_source_bound,
     )?;
-    script.push_str(&format!(
-        "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} CC=\"$CC\" CXX=\"$CXX\" CXXFLAGS=\"$CXXFLAGS\" LDFLAGS=\"$LDFLAGS\" LIBS=\"$LIBS\"\n"
-    ));
+    push_first_stage_mrustc_make_command(script, full_source_bound);
     script.push_str(&format!(
         "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}\n"
     ));
@@ -9132,6 +9146,26 @@ mod tests {
         assert!(!full_source_config.contains("/usr/include"));
         assert!(!compatibility_config.contains("MANTLE_LINUX_HEADERS_CFLAGS"));
         assert!(!compatibility_config.contains("MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG"));
+    }
+
+    #[test]
+    fn full_source_mrustc_link_uses_receipt_bound_gcc_subprogram_prefix() {
+        let mut script = String::new();
+
+        push_first_stage_mrustc_make_command(&mut script, true);
+
+        assert!(script.contains("LINKFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
+        assert!(script.contains("LDFLAGS=\"$LDFLAGS\""));
+    }
+
+    #[test]
+    fn compatibility_mrustc_link_does_not_invent_full_source_gcc_prefix() {
+        let mut script = String::new();
+
+        push_first_stage_mrustc_make_command(&mut script, false);
+
+        assert!(!script.contains("LINKFLAGS_EXTRA"));
+        assert!(!script.contains("MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG"));
     }
 
     #[test]
