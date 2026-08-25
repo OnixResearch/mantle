@@ -3058,7 +3058,7 @@ fn push_rustc_source_build_tool_discovery(
         push_rustc_source_target_compiler_discovery(script);
     }
     push_rustc_source_target_tool_prefix(script);
-    push_rustc_source_target_runtime_config(script);
+    push_rustc_source_target_runtime_config(script, full_source_context.is_some());
     Ok(())
 }
 
@@ -3215,7 +3215,7 @@ fn push_rustc_source_target_tool_prefix(script: &mut String) {
     push_rustc_source_target_toolchain_root_validation(script);
 }
 
-fn push_rustc_source_target_runtime_config(script: &mut String) {
+fn push_rustc_source_target_runtime_config(script: &mut String, full_source_bound: bool) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     script.push_str("  target_wrapper_root=${target_tool_dir%/*}\n");
@@ -3258,7 +3258,7 @@ fn push_rustc_source_target_runtime_config(script: &mut String) {
     script.push_str("/lib/crt1.o\" ] && [ -f \"$");
     script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
     script.push_str("/lib/rcrt1.o\" ]; then\n");
-    push_rustc_source_target_linker_wrapper(script);
+    push_rustc_source_target_linker_wrapper(script, full_source_bound);
     script.push_str("    PATH=\"$target_alias_dir:$target_tool_dir:$PATH\"\n");
     script.push_str("    export ");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
@@ -3301,12 +3301,12 @@ fn push_rustc_source_target_libgcc_shared_copy(script: &mut String) {
     script.push_str("    done\n");
 }
 
-fn push_rustc_source_target_linker_wrapper(script: &mut String) {
+fn push_rustc_source_target_linker_wrapper(script: &mut String, full_source_bound: bool) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     push_rustc_source_target_linker_runtime(script);
     push_rustc_source_target_cc_wrapper(script);
-    push_rustc_source_target_companion_wrappers(script);
+    push_rustc_source_target_companion_wrappers(script, full_source_bound);
 }
 
 fn push_rustc_source_target_linker_runtime(script: &mut String) {
@@ -3449,7 +3449,7 @@ fn push_rustc_source_target_cc_wrapper(script: &mut String) {
     script.push_str("    chmod +x \"$target_alias_dir/cc\"\n");
 }
 
-fn push_rustc_source_target_companion_wrappers(script: &mut String) {
+fn push_rustc_source_target_companion_wrappers(script: &mut String, full_source_bound: bool) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     script.push_str("    printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/c++\"\n");
@@ -3463,7 +3463,7 @@ fn push_rustc_source_target_companion_wrappers(script: &mut String) {
     );
     script.push_str("    chmod +x \"$target_alias_dir/c++\"\n");
     script.push_str("    for target_tool in ar ranlib; do case \"$target_tool\" in ar) target_program=\"$target_ar_path\" ;; ranlib) target_program=\"$target_ranlib_path\" ;; esac; printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/$target_tool\"; printf '%s\\n' \"exec \\\"$target_program\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/$target_tool\"; chmod +x \"$target_alias_dir/$target_tool\"; done\n");
-    push_first_stage_target_musl_libatomic_shim(script);
+    push_first_stage_target_musl_libatomic_shim(script, full_source_bound);
     script.push_str("    ");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
     script.push_str("=\"$target_alias_dir/cc\"\n");
@@ -6810,7 +6810,7 @@ fn push_first_stage_minicargo_workspace_boundary(script: &mut String) {
     ));
 }
 
-fn push_first_stage_target_musl_lfs_compat(script: &mut String) {
+fn push_first_stage_target_musl_lfs_compat(script: &mut String, full_source_bound: bool) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     push_first_stage_target_musl_lfs_compat_preamble(script);
@@ -6820,7 +6820,7 @@ fn push_first_stage_target_musl_lfs_compat(script: &mut String) {
         FIRST_STAGE_TARGET_MUSL_TLS_KEY_CAPACITY
     ));
     script.push_str(FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_BODY_TEXT);
-    push_first_stage_target_musl_lfs_compat_compile(script);
+    push_first_stage_target_musl_lfs_compat_compile(script, full_source_bound);
 }
 
 fn push_first_stage_target_musl_lfs_compat_preamble(script: &mut String) {
@@ -7044,21 +7044,37 @@ int stat64(const char *pathname, struct stat *buf) {
 }
 "#;
 
-fn push_first_stage_target_musl_lfs_compat_compile(script: &mut String) {
+fn push_first_stage_target_cc_compile_command(script: &mut String, full_source_bound: bool, arguments: &str) {
+    let original_len = script.len();
+    assert!(!arguments.is_empty());
+    assert!(!arguments.contains('\n'));
+    if full_source_bound {
+        script.push_str("\"$target_cc_path\" \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" ");
+    } else {
+        script.push_str("\"$target_cc_path\" ");
+    }
+    script.push_str(arguments);
+    script.push('\n');
+    assert!(script.len() > original_len);
+    assert_eq!(script[original_len..].contains("MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG"), full_source_bound);
+}
+
+fn push_first_stage_target_musl_lfs_compat_compile(script: &mut String, full_source_bound: bool) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     script.push_str("MANTLE_MUSL_LFS_COMPAT_C\n");
-    script.push_str(&format!(
-        "\"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -fPIC -c \"$target_lfs_compat_source\" -o \"$target_lfs_compat_object\"\n"
-    ));
+    let arguments = format!(
+        "-D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -fPIC -c \"$target_lfs_compat_source\" -o \"$target_lfs_compat_object\""
+    );
+    push_first_stage_target_cc_compile_command(script, full_source_bound, &arguments);
 }
 
-fn push_first_stage_target_musl_libatomic_shim(script: &mut String) {
+fn push_first_stage_target_musl_libatomic_shim(script: &mut String, full_source_bound: bool) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     push_first_stage_target_musl_libatomic_preamble(script);
     script.push_str(FIRST_STAGE_TARGET_MUSL_LIBATOMIC_SOURCE_TEXT);
-    push_first_stage_target_musl_libatomic_compile(script);
+    push_first_stage_target_musl_libatomic_compile(script, full_source_bound);
 }
 
 fn push_first_stage_target_musl_libatomic_preamble(script: &mut String) {
@@ -7131,13 +7147,14 @@ _Bool __atomic_compare_exchange_16(
 }
 "#;
 
-fn push_first_stage_target_musl_libatomic_compile(script: &mut String) {
+fn push_first_stage_target_musl_libatomic_compile(script: &mut String, full_source_bound: bool) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     script.push_str("MANTLE_MUSL_LIBATOMIC_C\n");
-    script.push_str(&format!(
-        "\"$target_cc_path\" -fPIC {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -c \"$target_libatomic_source\" -o \"$target_libatomic_object\"\n"
-    ));
+    let arguments = format!(
+        "-fPIC {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -c \"$target_libatomic_source\" -o \"$target_libatomic_object\""
+    );
+    push_first_stage_target_cc_compile_command(script, full_source_bound, &arguments);
     script.push_str(&format!(
         "rm -f \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE}\"; \"$target_alias_dir/ar\" rcs \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE}\" \"$target_libatomic_object\"\n"
     ));
@@ -7160,7 +7177,7 @@ fn push_first_stage_target_linker_wrapper(script: &mut String, full_source_bound
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     push_first_stage_target_linker_discovery(script, full_source_bound);
-    push_first_stage_target_linker_runtime(script);
+    push_first_stage_target_linker_runtime(script, full_source_bound);
     push_first_stage_target_cc_wrapper(script, full_source_bound);
     push_first_stage_target_companion_wrappers(script, full_source_bound);
 }
@@ -7225,7 +7242,7 @@ fn push_first_stage_target_linker_discovery(script: &mut String, full_source_bou
     ));
 }
 
-fn push_first_stage_target_linker_runtime(script: &mut String) {
+fn push_first_stage_target_linker_runtime(script: &mut String, full_source_bound: bool) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     script.push_str(&format!("export {FIRST_STAGE_TARGET_NIX_CC_WRAPPER_HOST_ROLE_VAR}=1\n"));
@@ -7257,7 +7274,7 @@ fn push_first_stage_target_linker_runtime(script: &mut String) {
     ));
     script.push_str("$COPY_PROGRAM \"$target_gcc_crt_dir/libgcc.a\" \"$target_runtime_dir/libgcc_s.a\"\n");
     push_first_stage_target_libgcc_shared_copy(script);
-    push_first_stage_target_musl_lfs_compat(script);
+    push_first_stage_target_musl_lfs_compat(script, full_source_bound);
 }
 
 fn push_first_stage_target_cc_wrapper(script: &mut String, full_source_bound: bool) {
@@ -7382,7 +7399,7 @@ fn push_first_stage_musl_host_llvm_runtime(script: &mut String, full_source_boun
     script.push_str(&format!(
         "if [ ! -x \"$target_alias_dir/cc\" ] || [ ! -x \"$target_alias_dir/c++\" ] || [ ! -x \"$target_alias_dir/ar\" ] || [ ! -x \"$target_alias_dir/ranlib\" ]; then printf '%s\\n' 'source-root musl LLVM host wrapper tools are incomplete' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
     ));
-    push_first_stage_target_musl_libatomic_shim(script);
+    push_first_stage_target_musl_libatomic_shim(script, full_source_bound);
     script.push_str("MINICARGO_FLAGS=\"${MINICARGO_FLAGS:-} --target $RUSTC_HOST_TRIPLE\"\n");
     script.push_str("export MINICARGO_FLAGS\n");
     script.push_str(&format!(
@@ -9205,6 +9222,26 @@ mod tests {
     }
 
     #[test]
+    fn full_source_runtime_shim_compile_uses_receipt_bound_gcc_prefix() {
+        let mut script = String::new();
+
+        push_first_stage_target_cc_compile_command(&mut script, true, "-c input.c -o output.o");
+
+        assert!(script.starts_with("\"$target_cc_path\" \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
+        assert!(script.ends_with("-c input.c -o output.o\n"));
+    }
+
+    #[test]
+    fn compatibility_runtime_shim_compile_does_not_invent_full_source_gcc_prefix() {
+        let mut script = String::new();
+
+        push_first_stage_target_cc_compile_command(&mut script, false, "-c input.c -o output.o");
+
+        assert!(script.starts_with("\"$target_cc_path\" -c input.c"));
+        assert!(!script.contains("MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG"));
+    }
+
+    #[test]
     fn full_source_tool_bindings_reject_missing_perl_without_ambient_fallback() {
         let mut context = full_source_execution_context_fixture();
         context.host_tools.manifest.tools.retain(|tool| tool.role != FullSourceRustHostToolRole::Perl);
@@ -9253,6 +9290,7 @@ mod tests {
         assert!(script.contains("export LDFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $ZLIB_LIBS\""));
         assert!(script.contains("CXXFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
         assert!(script.contains("LINKFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
+        assert!(script.contains("\"$target_cc_path\" \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" -fPIC"));
         assert!(script.contains("exec \"$target_cc_path\" \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
         assert!(!script.contains("GCC_EXEC_PREFIX='/native-provider"));
         assert!(script.contains("target_toolchain_root=\"$MANTLE_TARGET_TOOLCHAIN_ROOT\""));

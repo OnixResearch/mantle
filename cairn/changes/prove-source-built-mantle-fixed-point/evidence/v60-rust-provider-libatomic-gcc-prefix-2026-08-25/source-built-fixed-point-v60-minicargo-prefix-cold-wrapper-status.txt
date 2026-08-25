@@ -1,0 +1,12 @@
+started_at=2026-08-25T06:11:29-04:00
+wrapper_pid=2664527
+source_commit=47999e54
+source_transfer_parity=exact
+profile_blake3=9ac96e5fab5b09fd5a8dfe17ac624ece76b517b2ec5e18a2074156515b9e811f
+orchestrator_blake3=15f66f9845d9453322a825dede7e3422b2daf62e0030f404502f7744f813dc39
+checkpoint_mode=cold-miss-required
+output=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-fixed-point-v60-minicargo-prefix-cold-20260825
+proof_disk_bytes_max=700000000000
+proof_jobs=16
+finished_at=2026-08-25T10:54:20-04:00
+exit_code=1

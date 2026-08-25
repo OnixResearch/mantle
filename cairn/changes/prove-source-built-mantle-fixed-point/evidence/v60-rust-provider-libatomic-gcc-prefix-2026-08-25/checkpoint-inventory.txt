@@ -1,0 +1,2 @@
+manifest_count=1
+/home/brittonr/mantle-runs/receipt-fix-v31/source-built-proof-checkpoints/promoted-provider-checkpoints/c2a4995c0435b2d385de630f2c8770b4bbb4c85c525b9e38d0cfed965c417848/3894008488d95be470c97ebe6994eda40af98564dd0d69ffd05ae801693ba6b3/manifest.json

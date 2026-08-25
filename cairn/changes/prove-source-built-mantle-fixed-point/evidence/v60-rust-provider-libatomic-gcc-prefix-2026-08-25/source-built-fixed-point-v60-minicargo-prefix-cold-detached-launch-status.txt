@@ -1,0 +1,11 @@
+launched_at=2026-08-25T06:11:30-04:00
+launcher=ssh-nohup-setsid
+setsid_pid=2664527
+wrapper_pid=2664527
+proc_start_ticks=21241066
+command=/bin/sh /tmp/run-proof-v60-minicargo-prefix-cold.sh
+script=/tmp/run-proof-v60-minicargo-prefix-cold.sh
+launcher_log=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-fixed-point-v60-minicargo-prefix-cold-detached-launcher.log
+staging_pattern=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v60-minicargo-prefix-cold-20260825.source-built-fixed-point-staging-*
+detached_from_pueue=true
+detached_from_ssh_stdio=true
