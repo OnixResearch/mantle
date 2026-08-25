@@ -1,0 +1,44 @@
+{
+  "schema": "mantle-source-built-rust-provider-stage-action-plan-v1",
+  "route_plan_digest_blake3": "58c6ea33a72121463d8e1e71310f60562f63528385b6cd2b86d98e8d37b2281c",
+  "authority_digest_blake3": "639bf427b1a3d0121ef97a5a70ff12e818af5b79ed38af6abe075cf42a6c0f06",
+  "stage_id": "mrustc-to-rust-1.90.0",
+  "stage_kind": "mrustc-seed",
+  "producer_action_ids": [],
+  "input_digests_blake3": {
+    "stage-plan": "7f423639599d0054eb5d8357a5a13b9edd6196ce5b50819a1ab9c8161783a3a1",
+    "stage-script": "130538ce9655767e647f5099af0116309dd83eb468675fab1c181f3d25867a7d",
+    "stage-sources": "75132603e9eb512711c135134d3f27dc7646351776861430ee403df6c36b863d"
+  },
+  "output_roots": [
+    {
+      "root": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v63-native-prefix-resume-20260825.source-built-fixed-point-staging-2893566/rust-provider-scratch/build",
+      "output_identity_blake3": "7f207f64875588110204b6d0fef8048444b18a2029c889fa61500144707c34ce",
+      "promotion_count_max": 262144
+    },
+    {
+      "root": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v63-native-prefix-resume-20260825.source-built-fixed-point-staging-2893566/rust-provider-scratch/mrustc-first-stage-provider-candidate",
+      "output_identity_blake3": "ea400305d43000f076be88482358bfd9cd472bed97406fd30f714dc066d8c485",
+      "promotion_count_max": 262144
+    },
+    {
+      "root": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v63-native-prefix-resume-20260825.source-built-fixed-point-staging-2893566/rust-provider-scratch/mrustc-first-stage-provider-candidate-smoke/work",
+      "output_identity_blake3": "45f1d69a2edda0710b22c5a339805f0765fdc727ab4fe25a11ce51de8589a5bd",
+      "promotion_count_max": 262144
+    },
+    {
+      "root": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v63-native-prefix-resume-20260825.source-built-fixed-point-staging-2893566/rust-provider-scratch/sources",
+      "output_identity_blake3": "82f687480a8f38fb182a5c9ad6949f9cefdca8acb033daec53c7027a7a3b9dfc",
+      "promotion_count_max": 262144
+    }
+  ],
+  "limits": {
+    "parallel_jobs_max": 4,
+    "open_file_descriptors_max": 4096,
+    "storage_bytes_max": 700000000000,
+    "exec_events_per_stage_max": 262144
+  },
+  "local_only": true,
+  "cache_only_completion_allowed": false,
+  "plan_digest_blake3": "77f573e1f73d53f9ada7164d8c72ca1685baeedf4a9d0c4f616a9a7454452ee2"
+}

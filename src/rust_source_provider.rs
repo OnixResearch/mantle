@@ -7290,6 +7290,9 @@ fn push_first_stage_target_cc_wrapper(script: &mut String, full_source_bound: bo
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     if full_source_bound {
+        script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$target_alias_dir/sh\"\n");
+        script.push_str("printf '%s\\n' \"exec \\\"$SHELL_PROGRAM\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/sh\"\n");
+        script.push_str("chmod +x \"$target_alias_dir/sh\"\n");
         script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$target_alias_dir/cc\"\n");
     } else {
         script.push_str("printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/cc\"\n");
@@ -8013,16 +8016,19 @@ fn push_first_stage_llvm_rule_normalizer(script: &mut String) {
         "  tmp=$file.mantle-absolute-exec".to_string(),
         "  : > \"$tmp\"".to_string(),
         "  while IFS= read -r line || [ -n \"$line\" ]; do".to_string(),
-        "    for needle in ../../../../bin/llvm-min-tblgen ../../../bin/llvm-min-tblgen; do".to_string(),
-        "      case \"$line\" in".to_string(),
+        "    for tool_name in llvm-min-tblgen llvm-tblgen; do".to_string(),
+        "      for relative_prefix in ../../../../bin ../../../bin; do".to_string(),
+        "        needle=$relative_prefix/$tool_name".to_string(),
+        "        case \"$line\" in".to_string(),
         "        *\"$needle\"*)".to_string(),
         "          prefix=${line%%${needle}*}".to_string(),
         "          suffix=${line#*${needle}}".to_string(),
-        "          line=${prefix}${build_root}/bin/llvm-min-tblgen${suffix}".to_string(),
+        "          line=${prefix}${build_root}/bin/${tool_name}${suffix}".to_string(),
         "          replacements=$((replacements + 1))".to_string(),
         "          if [ \"$replacements\" -gt \"$replacements_max\" ]; then echo 'LLVM rule replacement count exceeds bound' >&2; exit 3; fi".to_string(),
         "          ;;".to_string(),
-        "      esac".to_string(),
+        "        esac".to_string(),
+        "      done".to_string(),
         "    done".to_string(),
         "    printf '%s\\n' \"$line\" >> \"$tmp\"".to_string(),
         "  done < \"$file\"".to_string(),
@@ -9472,6 +9478,7 @@ mod tests {
         assert!(full_source_script.contains("MRUSTC_SHELL=\"$SHELL_PROGRAM\""));
         assert!(full_source_script.contains("MANTLE_LLVM_RULE_NORMALIZER"));
         assert!(full_source_script.contains("llvm-min-tblgen"));
+        assert!(full_source_script.contains("llvm-tblgen"));
         assert!(full_source_script.contains("::execl(mantle_shell"));
         assert!(!full_source_script.contains("SHELL=/bin/sh"));
     }
@@ -9517,6 +9524,7 @@ mod tests {
         assert!(script.contains("receipt-make-bin"));
         assert!(script.contains("SHELL=$SHELL_PROGRAM"));
         assert!(script.contains("MRUSTC_SHELL=\"$SHELL_PROGRAM\""));
+        assert!(script.contains("$target_alias_dir/sh"));
         assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE));
         assert!(script.contains("::waitpid(child_pid"));
         assert!(script.contains("\"$(pwd)/bin/minicargo\" --vendor-dir"));
