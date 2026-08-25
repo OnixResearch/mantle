@@ -288,6 +288,10 @@ const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_ORIGINAL_LINE: &str =
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE: &str = "\t$Vcd $(RUSTCSRC)build && cmake $(addprefix -D , $(LLVM_CMAKE_OPTS)) ../$(LLVM_DIR) && $(MANTLE_LLVM_RULE_NORMALIZER) $(abspath $(RUSTCSRC)build)";
 const FIRST_STAGE_MRUSTC_CODEGEN_C_SOURCE: &str = "src/trans/codegen_c.cpp";
 const FIRST_STAGE_MRUSTC_SYSTEM_ORIGINAL_LINE: &str = "                int ec = system(cmd_ss.str().c_str());";
+const FIRST_STAGE_MRUSTC_PROC_MACRO_SOURCE: &str = "src/expand/proc_macro.cpp";
+const FIRST_STAGE_MRUSTC_PROC_MACRO_ARGV_ORIGINAL_LINE: &str = "    char*   argv[3] = { const_cast<char*>(executable), const_cast<char*>(proc_macro_desc.name.c_str()), nullptr };";
+const FIRST_STAGE_MRUSTC_PROC_MACRO_SPAWN_ORIGINAL_LINE: &str =
+    "    int rv = posix_spawn(&this->handles.child_pid, executable, &file_actions, nullptr, argv, environ);";
 const FIRST_STAGE_LLVM_RULE_FILES_MAX: u32 = 4_096;
 const FIRST_STAGE_LLVM_RULE_REPLACEMENTS_MAX: u32 = 4_096;
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE: &str =
@@ -7293,6 +7297,9 @@ fn push_first_stage_target_cc_wrapper(script: &mut String, full_source_bound: bo
         script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$target_alias_dir/sh\"\n");
         script.push_str("printf '%s\\n' \"exec \\\"$SHELL_PROGRAM\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/sh\"\n");
         script.push_str("chmod +x \"$target_alias_dir/sh\"\n");
+        script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$target_alias_dir/emcc\"\n");
+        script.push_str("printf '%s\\n' 'exit 127' >> \"$target_alias_dir/emcc\"\n");
+        script.push_str("chmod +x \"$target_alias_dir/emcc\"\n");
         script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$target_alias_dir/cc\"\n");
     } else {
         script.push_str("printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/cc\"\n");
@@ -7912,6 +7919,7 @@ fn push_first_stage_minicargo_protected_execution_paths(script: &mut String, ful
     script.push_str("$COPY_PROGRAM \"$minicargo_exec_tmp\" \"$minicargo_makefile\"\n");
     script.push_str("rm -f \"$minicargo_exec_tmp\"\n");
     push_first_stage_mrustc_bound_shell_patch(script);
+    push_first_stage_mrustc_proc_macro_absolute_patch(script);
     push_first_stage_llvm_rule_normalizer(script);
     script.push_str("RECEIPT_MAKE_PROGRAM=\"$MAKE_PROGRAM\"\n");
     script.push_str("receipt_make_dir=\"$BUILD_DIR/receipt-make-bin\"\n");
@@ -7994,6 +8002,56 @@ fn push_first_stage_mrustc_bound_shell_patch(script: &mut String) {
     ));
     script.push_str("$COPY_PROGRAM \"$mrustc_codegen_tmp\" \"$mrustc_codegen_source\"\n");
     script.push_str("rm -f \"$mrustc_codegen_tmp\"\n");
+}
+
+fn push_first_stage_mrustc_proc_macro_absolute_patch(script: &mut String) {
+    debug_assert!(!script.contains('\0'));
+    let argv_replacement = [
+        "    char resolved_executable[PATH_MAX];",
+        "    const char* spawn_executable = executable;",
+        "    if(executable[0] != '/')",
+        "    {",
+        "        if(realpath(executable, resolved_executable) == nullptr)",
+        "        {",
+        "            BUG(sp, \"Unable to resolve proc-macro executable `\" << executable << \"`, \" << strerror(errno));",
+        "        }",
+        "        spawn_executable = resolved_executable;",
+        "    }",
+        "    char*   argv[3] = { const_cast<char*>(spawn_executable), const_cast<char*>(proc_macro_desc.name.c_str()), nullptr };",
+    ];
+    script.push_str(&format!("mrustc_proc_macro_source={FIRST_STAGE_MRUSTC_PROC_MACRO_SOURCE}\n"));
+    script.push_str("mrustc_proc_macro_tmp=\"$BUILD_DIR/proc-macro-absolute.cpp\"\n");
+    script.push_str("mrustc_proc_macro_argv_matches=0\n");
+    script.push_str("mrustc_proc_macro_spawn_matches=0\n");
+    script.push_str(": > \"$mrustc_proc_macro_tmp\"\n");
+    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str("  if [ \"$line\" = '#include <unordered_set>' ]; then\n");
+    for line in ["#include <unordered_set>", "#include <limits.h>", "#include <stdlib.h>"] {
+        script.push_str(&format!("    printf '%s\\n' {} >> \"$mrustc_proc_macro_tmp\"\n", shell_quote(line)));
+    }
+    script.push_str(&format!(
+        "  elif [ \"$line\" = {} ]; then\n",
+        shell_quote(FIRST_STAGE_MRUSTC_PROC_MACRO_ARGV_ORIGINAL_LINE)
+    ));
+    for line in argv_replacement {
+        script.push_str(&format!("    printf '%s\\n' {} >> \"$mrustc_proc_macro_tmp\"\n", shell_quote(line)));
+    }
+    script.push_str("    mrustc_proc_macro_argv_matches=$((mrustc_proc_macro_argv_matches + 1))\n");
+    script.push_str(&format!(
+        "  elif [ \"$line\" = {} ]; then\n",
+        shell_quote(FIRST_STAGE_MRUSTC_PROC_MACRO_SPAWN_ORIGINAL_LINE)
+    ));
+    script.push_str(
+        "    printf '%s\\n' '    int rv = posix_spawn(&this->handles.child_pid, spawn_executable, &file_actions, nullptr, argv, environ);' >> \"$mrustc_proc_macro_tmp\"\n",
+    );
+    script.push_str("    mrustc_proc_macro_spawn_matches=$((mrustc_proc_macro_spawn_matches + 1))\n");
+    script.push_str("  else\n    printf '%s\\n' \"$line\" >> \"$mrustc_proc_macro_tmp\"\n  fi\n");
+    script.push_str("done < \"$mrustc_proc_macro_source\"\n");
+    script.push_str(&format!(
+        "if [ \"$mrustc_proc_macro_argv_matches\" -ne 1 ] || [ \"$mrustc_proc_macro_spawn_matches\" -ne 1 ]; then printf '%s\\n' 'mrustc proc-macro source lacks one expected spawn boundary' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("$COPY_PROGRAM \"$mrustc_proc_macro_tmp\" \"$mrustc_proc_macro_source\"\n");
+    script.push_str("rm -f \"$mrustc_proc_macro_tmp\"\n");
 }
 
 fn push_first_stage_llvm_rule_normalizer(script: &mut String) {
@@ -9480,6 +9538,8 @@ mod tests {
         assert!(full_source_script.contains("llvm-min-tblgen"));
         assert!(full_source_script.contains("llvm-tblgen"));
         assert!(full_source_script.contains("::execl(mantle_shell"));
+        assert!(full_source_script.contains("spawn_executable"));
+        assert!(full_source_script.contains("realpath(executable"));
         assert!(!full_source_script.contains("SHELL=/bin/sh"));
     }
 
@@ -9525,6 +9585,7 @@ mod tests {
         assert!(script.contains("SHELL=$SHELL_PROGRAM"));
         assert!(script.contains("MRUSTC_SHELL=\"$SHELL_PROGRAM\""));
         assert!(script.contains("$target_alias_dir/sh"));
+        assert!(script.contains("$target_alias_dir/emcc"));
         assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE));
         assert!(script.contains("::waitpid(child_pid"));
         assert!(script.contains("\"$(pwd)/bin/minicargo\" --vendor-dir"));
