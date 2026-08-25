@@ -3162,6 +3162,25 @@ mod tests {
     }
 
     #[test]
+    fn runtime_bounds_reject_elapsed_timeout_before_disk_probe() {
+        const ELAPSED_SECONDS_OVER_BOUND: u64 = 2;
+        let temp = tempfile::tempdir().unwrap();
+        let executable = write_executable(&temp.path().join("bwrap"));
+        let source_profile = temp.path().join("profile.json");
+        let output = temp.path().join("proof");
+        let options = options_fixture(&source_profile, &output, &executable, None, false, false);
+        let mut prepared = prepared_fixture(&temp, temp.path().join("proof.staging"));
+        prepared.started_at = Instant::now().checked_sub(Duration::from_secs(ELAPSED_SECONDS_OVER_BOUND)).unwrap();
+
+        let error = validate_runtime_bounds(&options, &prepared).unwrap_err();
+        let message = error.to_string();
+
+        assert!(message.contains("source-built fixed-point blocked"));
+        assert!(message.contains("proof elapsed time"));
+        assert!(message.contains("exceeds configured bound"));
+    }
+
+    #[test]
     fn preparation_failure_status_preserves_blocker_without_inventing_plan_identity() {
         let temp = tempfile::tempdir().unwrap();
         write_attempt_status(temp.path(), None, PROOF_STATUS_FAILED, Some("materialization failed")).unwrap();

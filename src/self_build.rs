@@ -3525,6 +3525,7 @@ mod tests {
         std::fs::create_dir_all(dir.join("config").join("action-result-policy").join("generated")).unwrap();
         std::fs::create_dir_all(dir.join("crates").join("crate-a")).unwrap();
         std::fs::create_dir_all(dir.join("lib")).unwrap();
+        std::fs::create_dir_all(dir.join("mantlepkgs")).unwrap();
         std::fs::create_dir_all(dir.join("src")).unwrap();
         std::fs::create_dir_all(dir.join("tools")).unwrap();
         std::fs::create_dir_all(dir.join("vendor").join("patched")).unwrap();
@@ -3960,6 +3961,7 @@ mod tests {
                 .is_file()
         );
         assert!(stage.path().join(TEST_ROOT_TOOL_RELATIVE_PATH).is_file());
+        assert!(stage.path().join("mantlepkgs").is_dir());
         assert!(stage.path().join("vendor").join("patched").join("README").is_file());
         assert!(stage.path().join("vendor-deps").join("dep-a").join("Cargo.toml").is_file());
         assert!(stage.path().join(".cargo").join("vendor-config.toml").is_file());
