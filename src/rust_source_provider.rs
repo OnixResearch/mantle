@@ -7522,6 +7522,23 @@ fn push_first_stage_mrustc_make_command(script: &mut String, full_source_bound: 
     assert_eq!(script[original_len..].contains("LINKFLAGS_EXTRA"), full_source_bound);
 }
 
+fn push_first_stage_minicargo_make_command(script: &mut String, full_source_bound: bool) {
+    let original_len = script.len();
+    debug_assert!(!script.contains('\0'));
+    if full_source_bound {
+        script.push_str(&format!(
+            "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} CXXFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" LINKFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" {FIRST_STAGE_MINICARGO_BINARY}\n"
+        ));
+    } else {
+        script.push_str(&format!(
+            "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}\n"
+        ));
+    }
+    assert!(script.len() > original_len);
+    assert_eq!(script[original_len..].contains("CXXFLAGS_EXTRA"), full_source_bound);
+    assert_eq!(script[original_len..].contains("LINKFLAGS_EXTRA"), full_source_bound);
+}
+
 fn push_first_stage_build_pipeline(
     script: &mut String,
     patch_plan: &RustBootstrapPatchPlan,
@@ -7569,9 +7586,7 @@ fn push_first_stage_build_pipeline(
         full_source_bound,
     )?;
     push_first_stage_mrustc_make_command(script, full_source_bound);
-    script.push_str(&format!(
-        "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}\n"
-    ));
+    push_first_stage_minicargo_make_command(script, full_source_bound);
     push_first_stage_patch_plan_operations(
         script,
         patch_plan,
@@ -9169,6 +9184,27 @@ mod tests {
     }
 
     #[test]
+    fn full_source_minicargo_compile_and_link_use_receipt_bound_gcc_prefix() {
+        let mut script = String::new();
+
+        push_first_stage_minicargo_make_command(&mut script, true);
+
+        assert!(script.contains("CXXFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
+        assert!(script.contains("LINKFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
+    }
+
+    #[test]
+    fn compatibility_minicargo_does_not_invent_full_source_gcc_prefix() {
+        let mut script = String::new();
+
+        push_first_stage_minicargo_make_command(&mut script, false);
+
+        assert!(!script.contains("CXXFLAGS_EXTRA"));
+        assert!(!script.contains("LINKFLAGS_EXTRA"));
+        assert!(!script.contains("MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG"));
+    }
+
+    #[test]
     fn full_source_tool_bindings_reject_missing_perl_without_ambient_fallback() {
         let mut context = full_source_execution_context_fixture();
         context.host_tools.manifest.tools.retain(|tool| tool.role != FullSourceRustHostToolRole::Perl);
@@ -9215,6 +9251,8 @@ mod tests {
             "export CXXFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MRUSTC_CXXFLAGS $ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\""
         ));
         assert!(script.contains("export LDFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $ZLIB_LIBS\""));
+        assert!(script.contains("CXXFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
+        assert!(script.contains("LINKFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
         assert!(script.contains("exec \"$target_cc_path\" \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
         assert!(!script.contains("GCC_EXEC_PREFIX='/native-provider"));
         assert!(script.contains("target_toolchain_root=\"$MANTLE_TARGET_TOOLCHAIN_ROOT\""));

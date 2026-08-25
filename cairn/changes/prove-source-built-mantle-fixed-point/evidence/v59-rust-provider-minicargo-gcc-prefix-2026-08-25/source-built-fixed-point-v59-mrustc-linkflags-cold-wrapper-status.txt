@@ -1,0 +1,12 @@
+started_at=2026-08-25T01:06:19-04:00
+wrapper_pid=1950611
+source_commit=979c78dc
+source_transfer_parity=exact
+profile_blake3=f30a9f8ba37f5ca7a5400f2a2c606b78397e41f9a7cbbb7ad72c2efe93a01c07
+orchestrator_blake3=0c4de27b5ad2fa776638f5c0c54fd72d48ecd7997766ac57f63bb3d7664759f7
+checkpoint_mode=cold-miss-required
+output=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-fixed-point-v59-mrustc-linkflags-cold-20260825
+proof_disk_bytes_max=700000000000
+proof_jobs=16
+finished_at=2026-08-25T05:48:01-04:00
+exit_code=1
