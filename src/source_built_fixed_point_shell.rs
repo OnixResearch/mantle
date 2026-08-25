@@ -57,6 +57,7 @@ use checkpoint_integration::import_provider_checkpoint_attempt;
 use checkpoint_integration::print_checkpoint_import_completion;
 use checkpoint_integration::publish_constructed_provider_checkpoint;
 use checkpoint_integration::restore_constructed_provider_checkpoint;
+use checkpoint_integration::restore_native_provider_prefix_attempt;
 #[cfg(test)]
 use checkpoint_integration::validate_imported_attempt_status;
 #[cfg(test)]
@@ -219,6 +220,7 @@ pub(crate) struct SourceBuiltFixedPointOptions<'a> {
     pub(crate) source_records_max: u32,
     pub(crate) proof_checkpoint_store: Option<&'a Path>,
     pub(crate) proof_checkpoint_import_attempt: Option<&'a Path>,
+    pub(crate) proof_native_checkpoint_attempt: Option<&'a Path>,
     pub(crate) dev_provider_cache: Option<&'a Path>,
     pub(crate) dev_resume: bool,
     pub(crate) dev_fast_fail: bool,
@@ -342,6 +344,19 @@ struct StagexTransitionHandoffReport {
     format: &'static str,
     copied_directories: Vec<&'static str>,
     non_claim: &'static str,
+}
+
+#[derive(Debug)]
+pub(crate) struct NativeProviderPrefix {
+    pub(crate) stagex_transition_execution_dir: PathBuf,
+    pub(crate) stagex_provider_report: crate::stagex_provider::StagexProviderPublicationReport,
+    pub(crate) native_provider: BuildObservation,
+    pub(crate) native_action_trust: Option<NativeBuildActionTrustEvidence>,
+    pub(crate) native_admission: crate::full_source_provider::FullSourceProviderAdmissionReport,
+    pub(crate) native_admission_report_path: PathBuf,
+    pub(crate) rust_host_tools: BTreeMap<String, BuildObservation>,
+    pub(crate) rust_host_tool_evidence_dir: PathBuf,
+    pub(crate) rust_host_tool_manifest_path: PathBuf,
 }
 
 #[derive(Debug)]
@@ -512,6 +527,20 @@ fn validate_options(options: &SourceBuiltFixedPointOptions<'_>) -> Result<(), Ru
             return Err(proof_error(format!(
                 "checkpoint import attempt must be an absolute directory: {}",
                 import_attempt.display()
+            )));
+        }
+    }
+    if let Some(native_attempt) = options.proof_native_checkpoint_attempt {
+        if options.proof_checkpoint_store.is_none() {
+            return Err(proof_error("native checkpoint reuse requires a checkpoint store".to_string()));
+        }
+        if options.proof_checkpoint_import_attempt.is_some() {
+            return Err(proof_error("native checkpoint reuse conflicts with full checkpoint import".to_string()));
+        }
+        if !native_attempt.is_absolute() || !native_attempt.is_dir() {
+            return Err(proof_error(format!(
+                "native checkpoint attempt must be an absolute directory: {}",
+                native_attempt.display()
             )));
         }
     }
@@ -1008,7 +1037,15 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
     enforce_open_file_descriptor_limit(prepared.plan.resource_bounds.open_file_descriptors_max)?;
     validate_runtime_bounds(options, prepared)?;
     let restored_checkpoint = restore_constructed_provider_checkpoint(options, prepared)?;
-    let adopt = if restored_checkpoint.is_none() {
+    let restored_native_prefix = if restored_checkpoint.is_none() {
+        options
+            .proof_native_checkpoint_attempt
+            .map(|attempt| restore_native_provider_prefix_attempt(options, prepared, attempt))
+            .transpose()?
+    } else {
+        None
+    };
+    let adopt = if restored_checkpoint.is_none() && restored_native_prefix.is_none() {
         dev_cache_adoption(options, &prepared.plan)?
     } else {
         false
@@ -1019,6 +1056,8 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
     }
     let providers = if let Some(restored) = restored_checkpoint {
         restored
+    } else if let Some(native_prefix) = restored_native_prefix {
+        construct_rust_provider_from_native_prefix(options, prepared, native_prefix)?
     } else if adopt {
         let adopted = adopt_cached_provider_subtrees(options, prepared, &prepared.plan)?;
         construct_full_source_providers(
@@ -1804,6 +1843,23 @@ fn construct_full_source_providers(
     stagex_provider_report: crate::stagex_provider::StagexProviderPublicationReport,
     adopted_native: Option<BuildObservation>,
 ) -> Result<ConstructedProviders, RunError> {
+    let native_prefix = construct_native_provider_prefix(
+        options,
+        prepared,
+        stagex_transition_execution_dir,
+        stagex_provider_report,
+        adopted_native,
+    )?;
+    construct_rust_provider_from_native_prefix(options, prepared, native_prefix)
+}
+
+fn construct_native_provider_prefix(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    stagex_transition_execution_dir: PathBuf,
+    stagex_provider_report: crate::stagex_provider::StagexProviderPublicationReport,
+    adopted_native: Option<BuildObservation>,
+) -> Result<NativeProviderPrefix, RunError> {
     let native_provider = match adopted_native {
         Some(observation) => observation,
         None => run_native_build(options, prepared, NATIVE_PROVIDER_ID, NATIVE_PROVIDER_NCL)?,
@@ -1845,6 +1901,35 @@ fn construct_full_source_providers(
         },
     )
     .map_err(|error| proof_error(format!("constructing full-source Rust host-tool evidence: {error}")))?;
+    Ok(NativeProviderPrefix {
+        stagex_transition_execution_dir,
+        stagex_provider_report,
+        native_provider,
+        native_action_trust,
+        native_admission,
+        native_admission_report_path,
+        rust_host_tools: host_tools,
+        rust_host_tool_evidence_dir: host_tool_manifest_dir,
+        rust_host_tool_manifest_path: host_tool_manifest,
+    })
+}
+
+fn construct_rust_provider_from_native_prefix(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    prefix: NativeProviderPrefix,
+) -> Result<ConstructedProviders, RunError> {
+    let NativeProviderPrefix {
+        stagex_transition_execution_dir,
+        stagex_provider_report,
+        native_provider,
+        native_action_trust,
+        native_admission,
+        native_admission_report_path,
+        rust_host_tools: host_tools,
+        rust_host_tool_evidence_dir: host_tool_manifest_dir,
+        rust_host_tool_manifest_path: host_tool_manifest,
+    } = prefix;
     let rust_provider_root = prepared.staging_dir.join(RUST_PROVIDER_DIR);
     let rust_scratch = prepared.staging_dir.join(RUST_PROVIDER_SCRATCH_DIR);
     let rust_provider_open_file_descriptors_max =
@@ -2866,6 +2951,7 @@ mod tests {
             source_records_max: 1,
             proof_checkpoint_store: None,
             proof_checkpoint_import_attempt: None,
+            proof_native_checkpoint_attempt: None,
             dev_provider_cache: None,
             dev_resume: false,
             dev_fast_fail: false,
@@ -2878,9 +2964,16 @@ mod tests {
         malformed.output_dir = &absent;
         malformed.expected_native_provider_blake3 = "bad";
         let digest = validate_options(&malformed).unwrap_err();
+        let native_attempt = temp.path().join("native-attempt");
+        fs::create_dir(&native_attempt).unwrap();
+        let mut unbound_native_reuse = options.clone();
+        unbound_native_reuse.output_dir = &absent;
+        unbound_native_reuse.proof_native_checkpoint_attempt = Some(&native_attempt);
+        let native_reuse = validate_options(&unbound_native_reuse).unwrap_err();
 
         assert!(existing.to_string().contains("must be absent"));
         assert!(digest.to_string().contains("expected native provider BLAKE3"));
+        assert!(native_reuse.to_string().contains("requires a checkpoint store"));
     }
 
     #[test]
@@ -2907,6 +3000,7 @@ mod tests {
             source_records_max: 1,
             proof_checkpoint_store: None,
             proof_checkpoint_import_attempt: None,
+            proof_native_checkpoint_attempt: None,
             dev_provider_cache: None,
             dev_resume: false,
             dev_fast_fail: false,
@@ -3550,6 +3644,7 @@ mod tests {
             source_records_max: 1,
             proof_checkpoint_store: None,
             proof_checkpoint_import_attempt: None,
+            proof_native_checkpoint_attempt: None,
             dev_provider_cache: cache,
             dev_resume: resume,
             dev_fast_fail: fast_fail,

@@ -20,6 +20,27 @@ pub(super) fn import_provider_checkpoint_attempt(
     write_checkpoint_import_report(prepared, import_root, &imported_plan)
 }
 
+pub(super) fn restore_native_provider_prefix_attempt(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    import_root: &Path,
+) -> Result<NativeProviderPrefix, RunError> {
+    let imported_plan = read_imported_attempt_plan(import_root)?;
+    validate_imported_attempt_status(import_root, &imported_plan)?;
+    validate_imported_provider_authority(&prepared.plan, &imported_plan, import_root)?;
+    let prefix = imported_native_provider_prefix(options, prepared, import_root)?;
+    let report = serde_json::json!({
+        "schema": "mantle-source-built-native-prefix-reuse-v1",
+        "status": "complete",
+        "current_plan_digest_blake3": prepared.plan.plan_digest_blake3,
+        "imported_plan_digest_blake3": imported_plan.plan_digest_blake3,
+        "imported_attempt": import_root,
+        "non_claim": "native-prefix reuse validates StageX, native, host-tool, and action evidence; it does not claim Rust-provider completion",
+    });
+    write_json_create_new(&prepared.staging_dir.join("native-prefix-reuse.json"), &report)?;
+    Ok(prefix)
+}
+
 fn read_imported_attempt_plan(import_root: &Path) -> Result<SourceBuiltFixedPointPlan, RunError> {
     let path = import_root.join(PLAN_FILE);
     let bytes = fs::read(&path)
@@ -143,6 +164,113 @@ fn plan_source_input(
         return Err(proof_error(format!("plan duplicates source authority {role:?}")));
     }
     Ok(input)
+}
+
+fn imported_native_provider_prefix(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    import_root: &Path,
+) -> Result<NativeProviderPrefix, RunError> {
+    let imported_admission_path = import_root.join(NATIVE_ADMISSION_REPORT_FILE);
+    let imported_admission: crate::full_source_provider::FullSourceProviderAdmissionReport =
+        serde_json::from_slice(&fs::read(&imported_admission_path).map_err(|error| {
+            proof_error(format!("reading imported native admission {}: {error}", imported_admission_path.display()))
+        })?)
+        .map_err(|error| proof_error(format!("parsing imported native admission: {error}")))?;
+    let native_basename = required_utf8_basename(&imported_admission.provider_path, "imported native provider")?;
+    let native_path = import_root.join(NATIVE_STORE_DIR).join(native_basename);
+    let native_source_manifest = import_root.join(NATIVE_SOURCE_MANIFEST_FILE);
+    let revalidation_path = prepared.staging_dir.join("imported-native-provider-revalidation.json");
+    let native_admission = crate::full_source_provider::cmd_admit_full_source_provider(
+        &native_path,
+        options.expected_native_provider_blake3,
+        &native_source_manifest,
+        &crate::source_bundle::read_source_bundle(&native_source_manifest)?.manifest_blake3,
+        &revalidation_path,
+        false,
+    )?;
+    let native_transcript = import_root.join(TRANSCRIPTS_DIR).join(format!("{NATIVE_PROVIDER_ID}.json"));
+    let native_provider = imported_native_observation(&native_path, &native_transcript, &imported_admission_path)?;
+    let stagex_path = import_root.join(NATIVE_STORE_DIR).join(STAGEX_PROVIDER_STORE_BASENAME);
+    let stagex_provider_report = imported_stagex_provider_report(&stagex_path)?;
+    let rust_host_tools = imported_host_tool_observations(import_root)?;
+    let rust_host_tool_evidence_dir = import_root.join(HOST_TOOLS_EVIDENCE_DIR);
+    let host_tool_manifest_path = rust_host_tool_evidence_dir
+        .join(crate::full_source_rust_binding_shell::FULL_SOURCE_RUST_HOST_TOOL_MANIFEST_FILE);
+    let _host_tool_observation = crate::full_source_rust_binding_shell::observe_full_source_rust_host_tools(
+        &host_tool_manifest_path,
+        &native_admission.output_digest_blake3,
+    )
+    .map_err(|error| proof_error(format!("validating imported Rust host-tool evidence: {error}")))?;
+    let native_action_trust = imported_native_action_trust(import_root)?;
+    Ok(NativeProviderPrefix {
+        stagex_transition_execution_dir: import_root.join(STAGEX_TRANSITION_EXECUTION_DIR),
+        stagex_provider_report,
+        native_provider,
+        native_action_trust: Some(native_action_trust),
+        native_admission,
+        native_admission_report_path: revalidation_path,
+        rust_host_tools,
+        rust_host_tool_evidence_dir,
+        rust_host_tool_manifest_path: host_tool_manifest_path,
+    })
+}
+
+fn imported_host_tool_observations(import_root: &Path) -> Result<BTreeMap<String, BuildObservation>, RunError> {
+    let mut observations = BTreeMap::new();
+    for label in ["make", "linux-headers", "busybox", "cmake", "python", "perl"] {
+        let transcript_path = import_root.join(TRANSCRIPTS_DIR).join(format!("{label}.json"));
+        let bytes = fs::read(&transcript_path)
+            .map_err(|error| proof_error(format!("reading imported host-tool transcript {label}: {error}")))?;
+        let report: BuildJsonReport = serde_json::from_slice(&bytes)
+            .map_err(|error| proof_error(format!("parsing imported host-tool transcript {label}: {error}")))?;
+        let output = require_single_build_output(label, report, false)?;
+        if !output.path.is_dir() || !output.artifact_attestation.path.is_file() {
+            return Err(proof_error(format!("imported host-tool evidence is incomplete for {label}")));
+        }
+        let transcript_digest_blake3 = crate::protected_exec::blake3_file_hex(&transcript_path)
+            .map_err(|error| proof_error(format!("hashing imported host-tool transcript {label}: {error}")))?;
+        let observation = BuildObservation {
+            output,
+            transcript_path,
+            transcript_digest_blake3,
+            action_trust: None,
+        };
+        if observations.insert(label.to_string(), observation).is_some() {
+            return Err(proof_error(format!("duplicate imported host-tool label {label}")));
+        }
+    }
+    assert_eq!(observations.len(), 6);
+    Ok(observations)
+}
+
+fn imported_native_action_trust(import_root: &Path) -> Result<NativeBuildActionTrustEvidence, RunError> {
+    let plan_path = import_root.join(NATIVE_ACTION_PLAN_FILE);
+    let reconciliation_path = import_root.join(NATIVE_ACTION_RECONCILIATION_FILE);
+    let plan: crate::source_built_derivation_action_plan::EagerDerivationActionPlan =
+        serde_json::from_slice(&fs::read(&plan_path).map_err(|error| {
+            proof_error(format!("reading imported native action plan {}: {error}", plan_path.display()))
+        })?)
+        .map_err(|error| proof_error(format!("parsing imported native action plan: {error}")))?;
+    let reconciliation: crate::source_built_derivation_action_plan::EagerDerivationReconciliation =
+        serde_json::from_slice(&fs::read(&reconciliation_path).map_err(|error| {
+            proof_error(format!(
+                "reading imported native action reconciliation {}: {error}",
+                reconciliation_path.display()
+            ))
+        })?)
+        .map_err(|error| proof_error(format!("parsing imported native action reconciliation: {error}")))?;
+    validate_native_build_reconciliation("imported-native-prefix", &reconciliation)?;
+    if plan.plan_digest_blake3 != reconciliation.action_plan_digest_blake3 {
+        return Err(proof_error("imported native action reconciliation does not bind its plan".to_string()));
+    }
+    assert!(reconciliation.is_complete());
+    Ok(NativeBuildActionTrustEvidence {
+        plan_path,
+        reconciliation_path,
+        plan,
+        reconciliation,
+    })
 }
 
 fn imported_constructed_providers(

@@ -20,7 +20,7 @@ const DIGEST_HEX_CHAR_COUNT: usize = 64;
 const PATCH_PLAN_MAX_SOURCE_IDENTITIES: usize = 16;
 const PATCH_PLAN_MAX_OPERATIONS: usize = 64;
 const PATCH_PLAN_BASE_RECEIPT_ARGUMENTS: usize = 10;
-const FIRST_STAGE_MUSL_REPAIR_OPERATION_COUNT: usize = 6;
+const FIRST_STAGE_MUSL_REPAIR_OPERATION_COUNT: usize = 7;
 const RUST_BOOTSTRAP_REPAIR_OPERATION_COUNT: usize = 5;
 const OPERATION_LABEL_SEPARATOR: &str = ":";
 
@@ -87,6 +87,7 @@ pub(crate) enum RustBootstrapPatchPhase {
 pub(crate) enum RustBootstrapPatchOperationKind {
     MinicargoBuildOutDir,
     MinicargoRustcThreads,
+    MinicargoProtectedExecutionPaths,
     MinicargoLlvmStaticArchiveTargets,
     SourceRootMuslLlvmRuntime,
     RustExplicitSysroot,
@@ -359,6 +360,14 @@ fn derive_first_stage_musl_repair_operations(operations: &mut Vec<RustBootstrapP
         Some("tools/minicargo/build.cpp rustc argument construction"),
     ));
     operations.push(patch_operation!(
+        "first-stage-minicargo-protected-execution-paths",
+        RustBootstrapPatchOperationKind::MinicargoProtectedExecutionPaths,
+        RustBootstrapPatchPhase::BeforeFirstStageMainMake,
+        "route minicargo and Make recipe execution through absolute receipt-bound paths",
+        Some(&format!("mrustc-{SUPPORTED_MRUSTC_VERSION}")),
+        Some("minicargo.mk MINICARGO variable and generated Make runner"),
+    ));
+    operations.push(patch_operation!(
         "first-stage-llvm-static-archives",
         RustBootstrapPatchOperationKind::MinicargoLlvmStaticArchiveTargets,
         RustBootstrapPatchPhase::BeforeFirstStageMainMake,
@@ -575,7 +584,7 @@ mod tests {
     const DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const DIGEST_C: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
     const DIGEST_D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
-    const EXPECTED_FIRST_STAGE_MUSL_OPERATION_COUNT: u32 = 9;
+    const EXPECTED_FIRST_STAGE_MUSL_OPERATION_COUNT: u32 = 10;
     const EXPECTED_GNU_OPERATION_COUNT: u32 = 3;
 
     #[test]
@@ -590,6 +599,7 @@ mod tests {
         assert_eq!(plan.output_digest_blake3, plan_again.output_digest_blake3);
         assert_eq!(plan.operations[0].kind, RustBootstrapPatchOperationKind::MinicargoBuildOutDir);
         assert_eq!(plan.operations[0].phase, RustBootstrapPatchPhase::BeforeFirstStageMainMake);
+        assert!(plan.contains_operation(RustBootstrapPatchOperationKind::MinicargoProtectedExecutionPaths));
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::RunRustcHostRuntime));
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::ProviderContractAssertion));
         assert!(!plan.contains_operation(RustBootstrapPatchOperationKind::RustBootstrapRustcPrivateToolRlibLookup));

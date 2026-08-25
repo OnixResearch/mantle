@@ -963,6 +963,14 @@ enum Command {
         #[arg(long, requires = "proof_checkpoint_store")]
         proof_checkpoint_import_attempt: Option<PathBuf>,
 
+        /// Reuse a receipt-validated StageX and native prefix from one stopped attempt.
+        #[arg(
+            long,
+            requires = "proof_checkpoint_store",
+            conflicts_with = "proof_checkpoint_import_attempt"
+        )]
+        proof_native_checkpoint_attempt: Option<PathBuf>,
+
         /// Opt-in dev-only provider-output cache and store snapshot directory.
         #[arg(long, requires = "source_built_fixed_point")]
         dev_provider_cache: Option<PathBuf>,
@@ -8501,6 +8509,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             proof_source_records_max,
             proof_checkpoint_store,
             proof_checkpoint_import_attempt,
+            proof_native_checkpoint_attempt,
             dev_provider_cache,
             dev_resume,
             dev_fast_fail,
@@ -8543,6 +8552,7 @@ fn run_self_build_from_command(ctx: &RunContext, command: &Command) -> Result<()
             proof_source_records_max: *proof_source_records_max,
             proof_checkpoint_store: proof_checkpoint_store.as_deref(),
             proof_checkpoint_import_attempt: proof_checkpoint_import_attempt.as_deref(),
+            proof_native_checkpoint_attempt: proof_native_checkpoint_attempt.as_deref(),
             dev_provider_cache: dev_provider_cache.as_deref(),
             dev_resume: *dev_resume,
             dev_fast_fail: *dev_fast_fail,
@@ -8587,6 +8597,7 @@ struct SelfBuildCommandRequest<'a> {
     proof_source_records_max: u32,
     proof_checkpoint_store: Option<&'a Path>,
     proof_checkpoint_import_attempt: Option<&'a Path>,
+    proof_native_checkpoint_attempt: Option<&'a Path>,
     dev_provider_cache: Option<&'a Path>,
     dev_resume: bool,
     dev_fast_fail: bool,
@@ -8658,6 +8669,7 @@ fn run_source_built_fixed_point(request: &SelfBuildCommandRequest<'_>) -> Result
             source_records_max: request.proof_source_records_max,
             proof_checkpoint_store: request.proof_checkpoint_store,
             proof_checkpoint_import_attempt: request.proof_checkpoint_import_attempt,
+            proof_native_checkpoint_attempt: request.proof_native_checkpoint_attempt,
             dev_provider_cache: request.dev_provider_cache,
             dev_resume: request.dev_resume,
             dev_fast_fail: request.dev_fast_fail,
@@ -11478,6 +11490,17 @@ let Plan = {
         let mut import_args = Vec::from(base);
         import_args.extend(["--proof-checkpoint-import-attempt", "/tmp/prior-attempt"]);
         let import = parse_args_with_cli_test_stack(import_args).expect("checkpoint import parser test");
+        let mut native_args = Vec::from(base);
+        native_args.extend(["--proof-native-checkpoint-attempt", "/tmp/native-attempt"]);
+        let native = parse_args_with_cli_test_stack(native_args).expect("native checkpoint parser test");
+        let mut mixed_import_args = Vec::from(base);
+        mixed_import_args.extend([
+            "--proof-checkpoint-import-attempt",
+            "/tmp/prior-attempt",
+            "--proof-native-checkpoint-attempt",
+            "/tmp/native-attempt",
+        ]);
+        let mixed_import = parse_args_with_cli_test_stack(mixed_import_args);
         let mut conflict_args = Vec::from(base);
         conflict_args.extend(["--dev-provider-cache", "/tmp/dev-cache"]);
         let conflict = parse_args_with_cli_test_stack(conflict_args);
@@ -11485,6 +11508,7 @@ let Plan = {
         assert!(matches!(accepted.command, Command::SelfBuild {
             proof_checkpoint_store: Some(_),
             proof_checkpoint_import_attempt: None,
+            proof_native_checkpoint_attempt: None,
             dev_provider_cache: None,
             ..
         }));
@@ -11492,6 +11516,11 @@ let Plan = {
             proof_checkpoint_import_attempt: Some(_),
             ..
         }));
+        assert!(matches!(native.command, Command::SelfBuild {
+            proof_native_checkpoint_attempt: Some(_),
+            ..
+        }));
+        assert!(mixed_import.is_err());
         assert!(conflict.is_err());
     }
 

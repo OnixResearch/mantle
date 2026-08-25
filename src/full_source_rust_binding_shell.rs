@@ -913,7 +913,7 @@ fn parse_admission_report(
     })
 }
 
-fn observe_full_source_rust_host_tools(
+pub(crate) fn observe_full_source_rust_host_tools(
     manifest_path: &Path,
     native_provider_output_digest_blake3: &str,
 ) -> Result<FullSourceRustHostToolObservation, RustSourceProviderError> {

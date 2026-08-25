@@ -281,6 +281,8 @@ const FIRST_STAGE_MINICARGO_RUSTC_THREADS_MARKER_LINE: &str =
     "        // Mantle: keep static musl first-stage rustc single-threaded.";
 const FIRST_STAGE_MINICARGO_RUSTC_THREADS_FLAG_LINE: &str = "        args.push_back(\"-Z\");";
 const FIRST_STAGE_MINICARGO_RUSTC_THREADS_VALUE_LINE: &str = "        args.push_back(\"threads=1\");";
+const FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_ORIGINAL_LINE: &str = "MINICARGO ?= bin/minicargo$(EXESUF)";
+const FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE: &str = "MINICARGO ?= $(CURDIR)/bin/minicargo$(EXESUF)";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE: &str =
     "LLVM_CMAKE_OPTS += LLVM_ENABLE_ZLIB=OFF LLVM_ENABLE_TERMINFO=OFF LLVM_ENABLE_LIBEDIT=OFF WITH_POLLY=OFF";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE: &str = "LLVM_CMAKE_OPTS += LLVM_ENABLE_ZLIB=OFF LLVM_ENABLE_ZSTD=OFF LLVM_ENABLE_TERMINFO=OFF LLVM_ENABLE_LIBEDIT=OFF WITH_POLLY=OFF LLVM_ENABLE_BACKTRACES=OFF CMAKE_DISABLE_FIND_PACKAGE_Backtrace=ON CMAKE_DISABLE_FIND_PACKAGE_zstd=ON LLVM_TOOL_LTO_BUILD=OFF LLVM_BUILD_TOOLS=OFF";
@@ -7778,6 +7780,9 @@ fn push_first_stage_patch_plan_operation(
         RustBootstrapPatchOperationKind::MinicargoRustcThreads => {
             push_first_stage_minicargo_rustc_threads_patch(script)
         }
+        RustBootstrapPatchOperationKind::MinicargoProtectedExecutionPaths => {
+            push_first_stage_minicargo_protected_execution_paths(script, full_source_bound)
+        }
         RustBootstrapPatchOperationKind::MinicargoLlvmStaticArchiveTargets => {
             push_first_stage_minicargo_llvm_backtrace_patch(script)
         }
@@ -7860,6 +7865,56 @@ fn first_stage_minicargo_makefile_llvm_config_build_patched_line() -> String {
     format!(
         "{FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_BUILD_PATCHED_PREFIX} {FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_STATIC_ARCHIVE_TARGETS}"
     )
+}
+
+fn push_first_stage_minicargo_protected_execution_paths(script: &mut String, full_source_bound: bool) {
+    let original_len = script.len();
+    debug_assert!(!script.contains('\0'));
+    if !full_source_bound {
+        return;
+    }
+    script.push_str("printf '%s\\n' 'binding minicargo and Make recipes to protected absolute executables'\n");
+    script.push_str("minicargo_makefile=minicargo.mk\n");
+    script.push_str("minicargo_exec_tmp=\"$BUILD_DIR/minicargo-protected-exec.mk\"\n");
+    script.push_str(&format!(
+        "minicargo_exec_original={}\n",
+        shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_ORIGINAL_LINE)
+    ));
+    script.push_str(&format!(
+        "minicargo_exec_patched={}\n",
+        shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE)
+    ));
+    script.push_str("minicargo_exec_replaced=false\n");
+    script.push_str("minicargo_exec_seen=false\n");
+    script.push_str(": > \"$minicargo_exec_tmp\"\n");
+    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str("  if [ \"$line\" = \"$minicargo_exec_original\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$minicargo_exec_patched\" >> \"$minicargo_exec_tmp\"\n");
+    script.push_str("    minicargo_exec_replaced=true\n");
+    script.push_str("  else\n");
+    script.push_str("    if [ \"$line\" = \"$minicargo_exec_patched\" ]; then minicargo_exec_seen=true; fi\n");
+    script.push_str("    printf '%s\\n' \"$line\" >> \"$minicargo_exec_tmp\"\n");
+    script.push_str("  fi\n");
+    script.push_str("done < \"$minicargo_makefile\"\n");
+    script.push_str(&format!(
+        "if [ \"$minicargo_exec_replaced\" = false ] && [ \"$minicargo_exec_seen\" = false ]; then printf '%s\\n' 'minicargo Makefile lacks the expected protected executable variable' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("$COPY_PROGRAM \"$minicargo_exec_tmp\" \"$minicargo_makefile\"\n");
+    script.push_str("rm -f \"$minicargo_exec_tmp\"\n");
+    script.push_str("RECEIPT_MAKE_PROGRAM=\"$MAKE_PROGRAM\"\n");
+    script.push_str("receipt_make_dir=\"$BUILD_DIR/receipt-make-bin\"\n");
+    script.push_str("mkdir -p \"$receipt_make_dir\"\n");
+    script.push_str("MAKE_PROGRAM=\"$receipt_make_dir/make\"\n");
+    script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$MAKE_PROGRAM\"\n");
+    script.push_str(
+        "printf '%s\\n' \"exec \\\"$RECEIPT_MAKE_PROGRAM\\\" \\\"SHELL=$SHELL_PROGRAM\\\" \\\"\\$@\\\"\" >> \"$MAKE_PROGRAM\"\n",
+    );
+    script.push_str("chmod +x \"$MAKE_PROGRAM\"\n");
+    script.push_str("PATH=\"$receipt_make_dir:$PATH\"\n");
+    script.push_str("export PATH MAKE_PROGRAM RECEIPT_MAKE_PROGRAM\n");
+    assert!(script.len() > original_len);
+    assert!(script[original_len..].contains(FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE));
+    assert!(script[original_len..].contains("SHELL=$SHELL_PROGRAM"));
 }
 
 fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String) {
@@ -8332,7 +8387,7 @@ fn push_first_stage_run_rustc_target(script: &mut String, full_source_bound: boo
     script.push_str("$COPY_PROGRAM output/cargo \"$target_bin_dir/cargo\"\n");
     script.push_str("chmod +x \"$target_bin_dir/rustc\" \"$target_bin_dir/cargo\"\n");
     script.push_str(
-        "STD_ENV_ARCH=\"$target_std_env_arch\" MRUSTC_PATH=\"$(pwd)/$target_bin_dir/rustc\" bin/minicargo --vendor-dir \"rustc-${RUSTC_VERSION}-src/vendor\" --script-overrides \"script-overrides/stable-${RUSTC_VERSION}-linux/\" --output-dir \"$target_libdir\" $target_minicargo_flags \"$target_sysroot_source\"\n",
+        "STD_ENV_ARCH=\"$target_std_env_arch\" MRUSTC_PATH=\"$(pwd)/$target_bin_dir/rustc\" \"$(pwd)/bin/minicargo\" --vendor-dir \"rustc-${RUSTC_VERSION}-src/vendor\" --script-overrides \"script-overrides/stable-${RUSTC_VERSION}-linux/\" --output-dir \"$target_libdir\" $target_minicargo_flags \"$target_sysroot_source\"\n",
     );
     script.push_str(&format!(
         "if [ ! -f \"$target_libstd\" ]; then printf '%s\\n' 'target rustlib build did not produce libstd.rlib' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
@@ -9254,6 +9309,21 @@ mod tests {
     }
 
     #[test]
+    fn protected_execution_paths_are_full_source_only() {
+        let mut compatibility_script = String::new();
+        let mut full_source_script = String::new();
+
+        push_first_stage_minicargo_protected_execution_paths(&mut compatibility_script, false);
+        push_first_stage_minicargo_protected_execution_paths(&mut full_source_script, true);
+
+        assert!(compatibility_script.is_empty());
+        assert!(full_source_script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE));
+        assert!(full_source_script.contains("receipt-make-bin"));
+        assert!(full_source_script.contains("SHELL=$SHELL_PROGRAM"));
+        assert!(!full_source_script.contains("SHELL=/bin/sh"));
+    }
+
+    #[test]
     fn full_source_first_stage_script_omits_compatibility_fallbacks() {
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
@@ -9290,6 +9360,13 @@ mod tests {
         assert!(script.contains("export LDFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $ZLIB_LIBS\""));
         assert!(script.contains("CXXFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
         assert!(script.contains("LINKFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE));
+        assert!(script.contains("receipt-make-bin"));
+        assert!(script.contains("SHELL=$SHELL_PROGRAM"));
+        assert!(script.contains("\"$(pwd)/bin/minicargo\" --vendor-dir"));
+        assert!(!script.contains(
+            "STD_ENV_ARCH=\"$target_std_env_arch\" MRUSTC_PATH=\"$(pwd)/$target_bin_dir/rustc\" bin/minicargo"
+        ));
         assert!(script.contains("\"$target_cc_path\" \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" -fPIC"));
         assert!(script.contains("exec \"$target_cc_path\" \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
         assert!(!script.contains("GCC_EXEC_PREFIX='/native-provider"));
