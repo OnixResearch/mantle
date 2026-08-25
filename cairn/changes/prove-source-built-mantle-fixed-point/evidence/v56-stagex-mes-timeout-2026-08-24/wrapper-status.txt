@@ -1,0 +1,12 @@
+started_at=2026-08-24T18:26:55-04:00
+wrapper_pid=372889
+source_commit=8d0bbcb2
+source_transfer_parity=exact
+profile_blake3=5424edceda8a4cc29f205b331a0be21fbc03e9bca116a72d87d6898eef94b10a
+orchestrator_blake3=af046b015bd41111d6b37b725f6fa61c15e349a5aaed784372cc801fa8669e8c
+checkpoint_mode=cold-miss-required
+output=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-fixed-point-v56-gcc-b-prefix-cold-20260824
+proof_disk_bytes_max=700000000000
+proof_jobs=16
+finished_at=2026-08-24T19:18:54-04:00
+exit_code=1

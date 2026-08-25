@@ -1,0 +1,10 @@
+launched_at=2026-08-24T18:26:56-04:00
+launcher=ssh-nohup-setsid
+setsid_pid=372889
+wrapper_pid=372889
+proc_start_ticks=17013730
+command=/bin/sh /tmp/run-proof-v56-gcc-b-prefix-cold.sh
+script=/tmp/run-proof-v56-gcc-b-prefix-cold.sh
+launcher_log=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-fixed-point-v56-gcc-b-prefix-cold-detached-launcher.log
+detached_from_pueue=true
+detached_from_ssh_stdio=true

@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "b347fb725f7c5f93460c9d0c301d32d8197051bbca26225acb66bb9239d1c175",
+  "blocker": "error: build failed\nsource-built fixed-point blocked: StageX transition failed: StageX protected execution failed: building Mes-linked TinyCC: Mes process /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v56-gcc-b-prefix-cold-20260824.source-built-fixed-point-staging-373169/stagex-transition-execution/mes-stage/mes-0.27.1/bin/mes-m2 exceeded 600000 ms"
+}
