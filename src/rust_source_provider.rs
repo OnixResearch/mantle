@@ -283,6 +283,13 @@ const FIRST_STAGE_MINICARGO_RUSTC_THREADS_FLAG_LINE: &str = "        args.push_b
 const FIRST_STAGE_MINICARGO_RUSTC_THREADS_VALUE_LINE: &str = "        args.push_back(\"threads=1\");";
 const FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_ORIGINAL_LINE: &str = "MINICARGO ?= bin/minicargo$(EXESUF)";
 const FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE: &str = "MINICARGO ?= $(CURDIR)/bin/minicargo$(EXESUF)";
+const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_ORIGINAL_LINE: &str =
+    "\t$Vcd $(RUSTCSRC)build && cmake $(addprefix -D , $(LLVM_CMAKE_OPTS)) ../$(LLVM_DIR)";
+const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE: &str = "\t$Vcd $(RUSTCSRC)build && cmake $(addprefix -D , $(LLVM_CMAKE_OPTS)) ../$(LLVM_DIR) && $(MANTLE_LLVM_RULE_NORMALIZER) $(abspath $(RUSTCSRC)build)";
+const FIRST_STAGE_MRUSTC_CODEGEN_C_SOURCE: &str = "src/trans/codegen_c.cpp";
+const FIRST_STAGE_MRUSTC_SYSTEM_ORIGINAL_LINE: &str = "                int ec = system(cmd_ss.str().c_str());";
+const FIRST_STAGE_LLVM_RULE_FILES_MAX: u32 = 4_096;
+const FIRST_STAGE_LLVM_RULE_REPLACEMENTS_MAX: u32 = 4_096;
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE: &str =
     "LLVM_CMAKE_OPTS += LLVM_ENABLE_ZLIB=OFF LLVM_ENABLE_TERMINFO=OFF LLVM_ENABLE_LIBEDIT=OFF WITH_POLLY=OFF";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE: &str = "LLVM_CMAKE_OPTS += LLVM_ENABLE_ZLIB=OFF LLVM_ENABLE_ZSTD=OFF LLVM_ENABLE_TERMINFO=OFF LLVM_ENABLE_LIBEDIT=OFF WITH_POLLY=OFF LLVM_ENABLE_BACKTRACES=OFF CMAKE_DISABLE_FIND_PACKAGE_Backtrace=ON CMAKE_DISABLE_FIND_PACKAGE_zstd=ON LLVM_TOOL_LTO_BUILD=OFF LLVM_BUILD_TOOLS=OFF";
@@ -7784,7 +7791,7 @@ fn push_first_stage_patch_plan_operation(
             push_first_stage_minicargo_protected_execution_paths(script, full_source_bound)
         }
         RustBootstrapPatchOperationKind::MinicargoLlvmStaticArchiveTargets => {
-            push_first_stage_minicargo_llvm_backtrace_patch(script)
+            push_first_stage_minicargo_llvm_backtrace_patch(script, full_source_bound)
         }
         RustBootstrapPatchOperationKind::SourceRootMuslLlvmRuntime => {
             push_first_stage_musl_host_llvm_runtime(script, full_source_bound)
@@ -7901,6 +7908,8 @@ fn push_first_stage_minicargo_protected_execution_paths(script: &mut String, ful
     ));
     script.push_str("$COPY_PROGRAM \"$minicargo_exec_tmp\" \"$minicargo_makefile\"\n");
     script.push_str("rm -f \"$minicargo_exec_tmp\"\n");
+    push_first_stage_mrustc_bound_shell_patch(script);
+    push_first_stage_llvm_rule_normalizer(script);
     script.push_str("RECEIPT_MAKE_PROGRAM=\"$MAKE_PROGRAM\"\n");
     script.push_str("receipt_make_dir=\"$BUILD_DIR/receipt-make-bin\"\n");
     script.push_str("mkdir -p \"$receipt_make_dir\"\n");
@@ -7910,14 +7919,125 @@ fn push_first_stage_minicargo_protected_execution_paths(script: &mut String, ful
         "printf '%s\\n' \"exec \\\"$RECEIPT_MAKE_PROGRAM\\\" \\\"SHELL=$SHELL_PROGRAM\\\" \\\"\\$@\\\"\" >> \"$MAKE_PROGRAM\"\n",
     );
     script.push_str("chmod +x \"$MAKE_PROGRAM\"\n");
+    script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$receipt_make_dir/sh\"\n");
+    script.push_str("printf '%s\\n' \"exec \\\"$SHELL_PROGRAM\\\" \\\"\\$@\\\"\" >> \"$receipt_make_dir/sh\"\n");
+    script.push_str("chmod +x \"$receipt_make_dir/sh\"\n");
     script.push_str("PATH=\"$receipt_make_dir:$PATH\"\n");
-    script.push_str("export PATH MAKE_PROGRAM RECEIPT_MAKE_PROGRAM\n");
+    script.push_str("MRUSTC_SHELL=\"$SHELL_PROGRAM\"\n");
+    script.push_str("export PATH MAKE_PROGRAM RECEIPT_MAKE_PROGRAM MRUSTC_SHELL MANTLE_LLVM_RULE_NORMALIZER\n");
     assert!(script.len() > original_len);
     assert!(script[original_len..].contains(FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE));
     assert!(script[original_len..].contains("SHELL=$SHELL_PROGRAM"));
 }
 
-fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String) {
+fn push_first_stage_mrustc_bound_shell_patch(script: &mut String) {
+    debug_assert!(!script.contains('\0'));
+    let replacement = [
+        "                // Mantle: execute compiler commands through the receipt-bound shell.",
+        "                int ec = 0;",
+        "                const char* mantle_shell = getenv(\"MRUSTC_SHELL\");",
+        "                if(mantle_shell != nullptr && mantle_shell[0] != '\\0')",
+        "                {",
+        "                    pid_t child_pid = ::fork();",
+        "                    if(child_pid == -1)",
+        "                    {",
+        "                        ec = -1;",
+        "                    }",
+        "                    else if(child_pid == 0)",
+        "                    {",
+        "                        ::execl(mantle_shell, mantle_shell, \"-c\", cmd_ss.str().c_str(), static_cast<char*>(nullptr));",
+        "                        ::_exit(127);",
+        "                    }",
+        "                    else",
+        "                    {",
+        "                        int child_status = 0;",
+        "                        pid_t wait_result;",
+        "                        do",
+        "                        {",
+        "                            wait_result = ::waitpid(child_pid, &child_status, 0);",
+        "                        } while(wait_result == -1 && errno == EINTR);",
+        "                        ec = wait_result == -1 ? -1 : child_status;",
+        "                    }",
+        "                }",
+        "                else",
+        "                {",
+        "                    ec = system(cmd_ss.str().c_str());",
+        "                }",
+    ];
+    script.push_str(&format!("mrustc_codegen_source={FIRST_STAGE_MRUSTC_CODEGEN_C_SOURCE}\n"));
+    script.push_str("mrustc_codegen_tmp=\"$BUILD_DIR/codegen-c-bound-shell.cpp\"\n");
+    script.push_str("mrustc_system_matches=0\n");
+    script.push_str(": > \"$mrustc_codegen_tmp\"\n");
+    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str(&format!("  if [ \"$line\" = {} ]; then\n", shell_quote(FIRST_STAGE_MRUSTC_SYSTEM_ORIGINAL_LINE)));
+    for line in replacement {
+        script.push_str(&format!("    printf '%s\\n' {} >> \"$mrustc_codegen_tmp\"\n", shell_quote(line)));
+    }
+    script.push_str("    mrustc_system_matches=$((mrustc_system_matches + 1))\n");
+    script.push_str("  elif [ \"$line\" = '#include <cmath>' ]; then\n");
+    for line in [
+        "#include <cmath>",
+        "#include <cerrno>",
+        "#include <cstdlib>",
+        "#include <sys/wait.h>",
+        "#include <unistd.h>",
+    ] {
+        script.push_str(&format!("    printf '%s\\n' {} >> \"$mrustc_codegen_tmp\"\n", shell_quote(line)));
+    }
+    script.push_str("  else\n    printf '%s\\n' \"$line\" >> \"$mrustc_codegen_tmp\"\n  fi\n");
+    script.push_str("done < \"$mrustc_codegen_source\"\n");
+    script.push_str(&format!(
+        "if [ \"$mrustc_system_matches\" -ne 1 ]; then printf '%s\\n' 'mrustc codegen C source lacks one expected system call' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("$COPY_PROGRAM \"$mrustc_codegen_tmp\" \"$mrustc_codegen_source\"\n");
+    script.push_str("rm -f \"$mrustc_codegen_tmp\"\n");
+}
+
+fn push_first_stage_llvm_rule_normalizer(script: &mut String) {
+    debug_assert!(!script.contains('\0'));
+    script.push_str("MANTLE_LLVM_RULE_NORMALIZER=\"$BUILD_DIR/normalize-llvm-rules\"\n");
+    script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$MANTLE_LLVM_RULE_NORMALIZER\"\n");
+    let normalizer_lines = vec![
+        "set -eu".to_string(),
+        "build_root=$1".to_string(),
+        "busybox_dir=${SHELL_PROGRAM%/sh}".to_string(),
+        "file_list=$build_root/.mantle-build-makefiles".to_string(),
+        "files_seen=0".to_string(),
+        "replacements=0".to_string(),
+        format!("files_max={FIRST_STAGE_LLVM_RULE_FILES_MAX}"),
+        format!("replacements_max={FIRST_STAGE_LLVM_RULE_REPLACEMENTS_MAX}"),
+        "\"$busybox_dir/find\" \"$build_root\" -name build.make -type f > \"$file_list\"".to_string(),
+        "while IFS= read -r file || [ -n \"$file\" ]; do".to_string(),
+        "  files_seen=$((files_seen + 1))".to_string(),
+        "  if [ \"$files_seen\" -gt \"$files_max\" ]; then echo 'LLVM Makefile count exceeds bound' >&2; exit 3; fi".to_string(),
+        "  tmp=$file.mantle-absolute-exec".to_string(),
+        "  : > \"$tmp\"".to_string(),
+        "  while IFS= read -r line || [ -n \"$line\" ]; do".to_string(),
+        "    for needle in ../../../../bin/llvm-min-tblgen ../../../bin/llvm-min-tblgen; do".to_string(),
+        "      case \"$line\" in".to_string(),
+        "        *\"$needle\"*)".to_string(),
+        "          prefix=${line%%${needle}*}".to_string(),
+        "          suffix=${line#*${needle}}".to_string(),
+        "          line=${prefix}${build_root}/bin/llvm-min-tblgen${suffix}".to_string(),
+        "          replacements=$((replacements + 1))".to_string(),
+        "          if [ \"$replacements\" -gt \"$replacements_max\" ]; then echo 'LLVM rule replacement count exceeds bound' >&2; exit 3; fi".to_string(),
+        "          ;;".to_string(),
+        "      esac".to_string(),
+        "    done".to_string(),
+        "    printf '%s\\n' \"$line\" >> \"$tmp\"".to_string(),
+        "  done < \"$file\"".to_string(),
+        "  \"$busybox_dir/mv\" \"$tmp\" \"$file\"".to_string(),
+        "done < \"$file_list\"".to_string(),
+        "\"$busybox_dir/rm\" -f \"$file_list\"".to_string(),
+        "if [ \"$replacements\" -eq 0 ]; then echo 'LLVM generated rules contain no bounded tblgen paths' >&2; exit 3; fi".to_string(),
+    ];
+    for line in normalizer_lines {
+        script.push_str(&format!("printf '%s\\n' {} >> \"$MANTLE_LLVM_RULE_NORMALIZER\"\n", shell_quote(&line)));
+    }
+    script.push_str("chmod +x \"$MANTLE_LLVM_RULE_NORMALIZER\"\n");
+}
+
+fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String, full_source_bound: bool) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     script.push_str(&format!("if [ \"$RUSTC_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
@@ -7931,6 +8051,10 @@ fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String) {
     script.push_str("minicargo_llvm_options_seen_patched=false\n");
     script.push_str("minicargo_llvm_config_replaced=false\n");
     script.push_str("minicargo_llvm_config_seen_patched=false\n");
+    if full_source_bound {
+        script.push_str("minicargo_cmake_command_replaced=false\n");
+        script.push_str("minicargo_cmake_command_seen_patched=false\n");
+    }
     script.push_str(&format!(
         "minicargo_llvm_options_original={}\n",
         shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE)
@@ -7945,6 +8069,16 @@ fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String) {
     ));
     let minicargo_llvm_config_patched = first_stage_minicargo_makefile_llvm_config_build_patched_line();
     script.push_str(&format!("minicargo_llvm_config_patched={}\n", shell_quote(&minicargo_llvm_config_patched)));
+    if full_source_bound {
+        script.push_str(&format!(
+            "minicargo_cmake_command_original={}\n",
+            shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_ORIGINAL_LINE)
+        ));
+        script.push_str(&format!(
+            "minicargo_cmake_command_patched={}\n",
+            shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE)
+        ));
+    }
     script.push_str("while IFS= read -r line; do\n");
     script.push_str("  if [ \"$line\" = \"$minicargo_llvm_options_original\" ]; then\n");
     script.push_str("    printf '%s\\n' \"$minicargo_llvm_options_patched\" >> \"$minicargo_llvm_tmp\"\n");
@@ -7952,11 +8086,21 @@ fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String) {
     script.push_str("  elif [ \"$line\" = \"$minicargo_llvm_config_original\" ]; then\n");
     script.push_str("    printf '%s\\n' \"$minicargo_llvm_config_patched\" >> \"$minicargo_llvm_tmp\"\n");
     script.push_str("    minicargo_llvm_config_replaced=true\n");
+    if full_source_bound {
+        script.push_str("  elif [ \"$line\" = \"$minicargo_cmake_command_original\" ]; then\n");
+        script.push_str("    printf '%s\\n' \"$minicargo_cmake_command_patched\" >> \"$minicargo_llvm_tmp\"\n");
+        script.push_str("    minicargo_cmake_command_replaced=true\n");
+    }
     script.push_str("  else\n");
     script.push_str("    if [ \"$line\" = \"$minicargo_llvm_options_patched\" ]; then minicargo_llvm_options_seen_patched=true; fi\n");
     script.push_str(
         "    if [ \"$line\" = \"$minicargo_llvm_config_patched\" ]; then minicargo_llvm_config_seen_patched=true; fi\n",
     );
+    if full_source_bound {
+        script.push_str(
+            "    if [ \"$line\" = \"$minicargo_cmake_command_patched\" ]; then minicargo_cmake_command_seen_patched=true; fi\n",
+        );
+    }
     script.push_str("    printf '%s\\n' \"$line\" >> \"$minicargo_llvm_tmp\"\n");
     script.push_str("  fi\n");
     script.push_str("done < \"$minicargo_makefile\"\n");
@@ -7966,6 +8110,11 @@ fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String) {
     script.push_str(&format!(
         "if [ \"$minicargo_llvm_config_replaced\" = false ] && [ \"$minicargo_llvm_config_seen_patched\" = false ]; then printf '%s\\n' 'minicargo Makefile lacks expected llvm-config build line for musl normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
     ));
+    if full_source_bound {
+        script.push_str(&format!(
+            "if [ \"$minicargo_cmake_command_replaced\" = false ] && [ \"$minicargo_cmake_command_seen_patched\" = false ]; then printf '%s\\n' 'minicargo Makefile lacks expected LLVM configure command for protected rule normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+        ));
+    }
     script.push_str("$COPY_PROGRAM \"$minicargo_llvm_tmp\" \"$minicargo_makefile\"\n");
     script.push_str("rm -f \"$minicargo_llvm_tmp\"\n");
     script.push_str("fi\n");
@@ -9320,6 +9469,10 @@ mod tests {
         assert!(full_source_script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE));
         assert!(full_source_script.contains("receipt-make-bin"));
         assert!(full_source_script.contains("SHELL=$SHELL_PROGRAM"));
+        assert!(full_source_script.contains("MRUSTC_SHELL=\"$SHELL_PROGRAM\""));
+        assert!(full_source_script.contains("MANTLE_LLVM_RULE_NORMALIZER"));
+        assert!(full_source_script.contains("llvm-min-tblgen"));
+        assert!(full_source_script.contains("::execl(mantle_shell"));
         assert!(!full_source_script.contains("SHELL=/bin/sh"));
     }
 
@@ -9363,6 +9516,9 @@ mod tests {
         assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE));
         assert!(script.contains("receipt-make-bin"));
         assert!(script.contains("SHELL=$SHELL_PROGRAM"));
+        assert!(script.contains("MRUSTC_SHELL=\"$SHELL_PROGRAM\""));
+        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE));
+        assert!(script.contains("::waitpid(child_pid"));
         assert!(script.contains("\"$(pwd)/bin/minicargo\" --vendor-dir"));
         assert!(!script.contains(
             "STD_ENV_ARCH=\"$target_std_env_arch\" MRUSTC_PATH=\"$(pwd)/$target_bin_dir/rustc\" bin/minicargo"
