@@ -7673,6 +7673,7 @@ fn push_first_stage_build_pipeline(
         RustBootstrapPatchPhase::AfterFirstStageTranslatedCargo,
         full_source_bound,
     )?;
+    push_first_stage_run_rustc_stage_tool_absolute_patch(script, full_source_bound);
     push_first_stage_patch_plan_operations(
         script,
         patch_plan,
@@ -7685,7 +7686,6 @@ fn push_first_stage_build_pipeline(
         RustBootstrapPatchPhase::FirstStageRunRustcTarget,
         full_source_bound,
     )?;
-    push_first_stage_run_rustc_stage_tool_absolute_patch(script, full_source_bound);
     Ok(())
 }
 
@@ -9839,6 +9839,10 @@ mod tests {
         assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE));
         assert!(script.contains(FIRST_STAGE_RUN_RUSTC_MINICARGO_PROTECTED_LINE));
         assert!(script.contains("run_rustc Makefile lacks the expected protected minicargo executable"));
+        let stage_tool_binding_position =
+            script.find("binding run_rustc stage tools to protected absolute executables").unwrap();
+        let run_rustc_build_position = script.find("if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM").unwrap();
+        assert!(stage_tool_binding_position < run_rustc_build_position);
         assert!(script.contains("::waitpid(child_pid"));
         assert!(script.contains("\"$(pwd)/bin/minicargo\" --vendor-dir"));
         assert!(!script.contains(
