@@ -20,7 +20,7 @@ const DIGEST_HEX_CHAR_COUNT: usize = 64;
 const PATCH_PLAN_MAX_SOURCE_IDENTITIES: usize = 16;
 const PATCH_PLAN_MAX_OPERATIONS: usize = 64;
 const PATCH_PLAN_BASE_RECEIPT_ARGUMENTS: usize = 10;
-const FIRST_STAGE_MUSL_REPAIR_OPERATION_COUNT: usize = 7;
+const FIRST_STAGE_MUSL_REPAIR_OPERATION_COUNT: usize = 8;
 const RUST_BOOTSTRAP_REPAIR_OPERATION_COUNT: usize = 5;
 const OPERATION_LABEL_SEPARATOR: &str = ":";
 
@@ -90,6 +90,7 @@ pub(crate) enum RustBootstrapPatchOperationKind {
     MinicargoProtectedExecutionPaths,
     MinicargoLlvmStaticArchiveTargets,
     SourceRootMuslLlvmRuntime,
+    OpenSslNoAsm,
     RustExplicitSysroot,
     RustcDriverRlib,
     RunRustcHostRuntime,
@@ -384,6 +385,14 @@ fn derive_first_stage_musl_repair_operations(operations: &mut Vec<RustBootstrapP
         Some("source-root musl target toolchain"),
     ));
     operations.push(patch_operation!(
+        "first-stage-openssl-no-asm",
+        RustBootstrapPatchOperationKind::OpenSslNoAsm,
+        RustBootstrapPatchPhase::AfterFirstStageRustSourceExtract,
+        "disable OpenSSL assembly generators that require an ambient shell",
+        Some(&format!("rust-{SUPPORTED_FIRST_STAGE_RUST_VERSION}")),
+        Some("vendored openssl-src configure arguments"),
+    ));
+    operations.push(patch_operation!(
         "first-stage-rust-explicit-sysroot",
         RustBootstrapPatchOperationKind::RustExplicitSysroot,
         RustBootstrapPatchPhase::AfterFirstStageRustSourceExtract,
@@ -584,7 +593,7 @@ mod tests {
     const DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const DIGEST_C: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
     const DIGEST_D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
-    const EXPECTED_FIRST_STAGE_MUSL_OPERATION_COUNT: u32 = 10;
+    const EXPECTED_FIRST_STAGE_MUSL_OPERATION_COUNT: u32 = 11;
     const EXPECTED_GNU_OPERATION_COUNT: u32 = 3;
 
     #[test]
@@ -600,6 +609,7 @@ mod tests {
         assert_eq!(plan.operations[0].kind, RustBootstrapPatchOperationKind::MinicargoBuildOutDir);
         assert_eq!(plan.operations[0].phase, RustBootstrapPatchPhase::BeforeFirstStageMainMake);
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::MinicargoProtectedExecutionPaths));
+        assert!(plan.contains_operation(RustBootstrapPatchOperationKind::OpenSslNoAsm));
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::RunRustcHostRuntime));
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::ProviderContractAssertion));
         assert!(!plan.contains_operation(RustBootstrapPatchOperationKind::RustBootstrapRustcPrivateToolRlibLookup));

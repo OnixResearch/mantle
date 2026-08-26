@@ -7818,6 +7818,9 @@ fn push_first_stage_patch_plan_operation(
         RustBootstrapPatchOperationKind::SourceRootMuslLlvmRuntime => {
             push_first_stage_musl_host_llvm_runtime(script, full_source_bound)
         }
+        RustBootstrapPatchOperationKind::OpenSslNoAsm => {
+            push_first_stage_openssl_no_asm_patch(script, full_source_bound)
+        }
         RustBootstrapPatchOperationKind::RustExplicitSysroot => push_first_stage_rustc_explicit_sysroot_patch(script),
         RustBootstrapPatchOperationKind::RustcDriverRlib => push_first_stage_musl_rustc_driver_rlib_patch(script),
         RustBootstrapPatchOperationKind::RunRustcHostRuntime => {
@@ -8253,6 +8256,37 @@ fn push_first_stage_minicargo_rustc_threads_patch(script: &mut String) {
     script.push_str("$COPY_PROGRAM \"$minicargo_threads_tmp\" \"$minicargo_threads_source\"\n");
     script.push_str("rm -f \"$minicargo_threads_tmp\"\n");
     script.push_str("fi\n");
+}
+
+fn push_first_stage_openssl_no_asm_patch(script: &mut String, full_source_bound: bool) {
+    debug_assert!(!script.contains('\0'));
+    if !full_source_bound {
+        return;
+    }
+    script.push_str("printf '%s\\n' 'disabling OpenSSL assembly generators for protected source bootstrap'\n");
+    script.push_str("set -- rustc-${RUSTC_VERSION}-src/vendor/openssl-src-300.*/src/lib.rs\n");
+    script.push_str(&format!(
+        "if [ \"$#\" -ne 1 ] || [ ! -f \"$1\" ]; then printf '%s\\n' 'vendored OpenSSL source configuration is not unique' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("openssl_src_config=$1\n");
+    script.push_str("openssl_src_tmp=\"$BUILD_DIR/openssl-src-no-asm.rs\"\n");
+    script.push_str("openssl_no_asm_matches=0\n");
+    script.push_str(": > \"$openssl_src_tmp\"\n");
+    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str(
+        "  if [ \"$line\" = '        // On Android it looks like not passing no-stdio may cause a build' ]; then\n",
+    );
+    script.push_str("    printf '%s\\n' '        // Mantle: avoid Perl assembly pipes that require ambient /bin/sh.' >> \"$openssl_src_tmp\"\n");
+    script.push_str("    printf '%s\\n' '        configure.arg(\"no-asm\");' >> \"$openssl_src_tmp\"\n");
+    script.push_str("    openssl_no_asm_matches=$((openssl_no_asm_matches + 1))\n");
+    script.push_str("  fi\n");
+    script.push_str("  printf '%s\\n' \"$line\" >> \"$openssl_src_tmp\"\n");
+    script.push_str("done < \"$openssl_src_config\"\n");
+    script.push_str(&format!(
+        "if [ \"$openssl_no_asm_matches\" -ne 1 ]; then printf '%s\\n' 'vendored OpenSSL configuration lacks one expected insertion point' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("$COPY_PROGRAM \"$openssl_src_tmp\" \"$openssl_src_config\"\n");
+    script.push_str("rm -f \"$openssl_src_tmp\"\n");
 }
 
 fn push_first_stage_rustc_explicit_sysroot_patch(script: &mut String) {
@@ -9602,6 +9636,8 @@ mod tests {
         assert!(script.contains("$target_alias_dir/pkgconf"));
         assert!(script.contains("$target_alias_dir/perl"));
         assert!(script.contains("$target_alias_dir/make"));
+        assert!(script.contains("disabling OpenSSL assembly generators for protected source bootstrap"));
+        assert!(script.contains("configure.arg(\"no-asm\");"));
         assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE));
         assert!(script.contains("::waitpid(child_pid"));
         assert!(script.contains("\"$(pwd)/bin/minicargo\" --vendor-dir"));
