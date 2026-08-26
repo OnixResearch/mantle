@@ -1,0 +1,58 @@
+gcc.real: warning: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v69-native-prefix-resume-20260826.source-built-fixed-point-staging-2777399/rust-provider-scratch/build/target-linker-runtime/musl-lfs-compat.o: linker input file unused because linking not done
+gcc.real: warning: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v69-native-prefix-resume-20260826.source-built-fixed-point-staging-2777399/rust-provider-scratch/build/target-linker-runtime/musl-lfs-compat.o: linker input file unused because linking not done
+gcc.real: warning: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v69-native-prefix-resume-20260826.source-built-fixed-point-staging-2777399/rust-provider-scratch/build/target-linker-runtime/musl-lfs-compat.o: linker input file unused because linking not done
+Completed lazy_static v1.5.0
+ (17.3% 3r,69w,253b,68c/393t): fiat-crypto v0.3.0, itertools v0.14.0, jiff v0.2.15
+--- [32mBUILDING lazycell v1.3.0[0m (17.3% 4r,69w,252b,68c/393t)
+> /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v69-native-prefix-resume-20260826.source-built-fixed-point-staging-2777399/rust-provider-scratch/sources/mrustc-0.12.0/bin/mrustc rustc-1.90.0-src/vendor/lazycell-1.3.0/src/lib.rs -o output/cargo-build/liblazycell-1_3_0.rlib -C emit-depfile=output/cargo-build/liblazycell-1_3_0.rlib.d --cfg debug_assertions -O -L output -L output/cargo-build -L output/cargo-build/host --crate-name lazycell --crate-type rlib --crate-tag 1_3_0 --target x86_64-unknown-linux-musl > output/cargo-build/liblazycell-1_3_0.rlib_dbg.txt
+ (17.3% 4r,69w,252b,68c/393t): fiat-crypto v0.3.0, itertools v0.14.0, jiff v0.2.15, lazycell v1.3.0
+Completed fiat-crypto v0.3.0
+ (17.6% 3r,69w,252b,69c/393t): itertools v0.14.0, jiff v0.2.15, lazycell v1.3.0
+--- [32mBUILDING libc v0.2.174 (build)[0m (17.6% 4r,68w,252b,69c/393t)
+> /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v69-native-prefix-resume-20260826.source-built-fixed-point-staging-2777399/rust-provider-scratch/sources/mrustc-0.12.0/bin/mrustc rustc-1.90.0-src/vendor/libc-0.2.174/build.rs -o output/cargo-build/host/build_libc-0_2_174_H20_run -C emit-depfile=output/cargo-build/host/build_libc-0_2_174_H20_run.d --cfg debug_assertions -O -L output -L output/cargo-build/host --cfg feature="std" --crate-name build --crate-type bin --edition 2021 > output/cargo-build/host/build_libc-0_2_174_H20_run_dbg.txt
+ (17.6% 4r,68w,252b,69c/393t): itertools v0.14.0, jiff v0.2.15, lazycell v1.3.0, libc v0.2.174 (build)
+Completed itertools v0.14.0
+ (17.8% 3r,68w,252b,70c/393t): jiff v0.2.15, lazycell v1.3.0, libc v0.2.174 (build)
+--- [32mBUILDING libc v0.2.174 (build)[0m (17.8% 4r,67w,252b,70c/393t)
+> /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v69-native-prefix-resume-20260826.source-built-fixed-point-staging-2777399/rust-provider-scratch/sources/mrustc-0.12.0/bin/mrustc rustc-1.90.0-src/vendor/libc-0.2.174/build.rs -o output/cargo-build/host/build_libc-0_2_174_H20_run -C emit-depfile=output/cargo-build/host/build_libc-0_2_174_H20_run.d --cfg debug_assertions -O -L output -L output/cargo-build/host --cfg feature="std" --crate-name build --crate-type bin --edition 2021 > output/cargo-build/host/build_libc-0_2_174_H20_run_dbg.txt
+ (17.8% 4r,67w,252b,70c/393t): jiff v0.2.15, lazycell v1.3.0, libc v0.2.174 (build), libc v0.2.174 (build)
+gcc.real: warning: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v69-native-prefix-resume-20260826.source-built-fixed-point-staging-2777399/rust-provider-scratch/build/target-linker-runtime/musl-lfs-compat.o: linker input file unused because linking not done
+output/cargo-build/host/build_libc-0_2_174_H20_run.c: In function 'ZRICy12trim_matches1gfICx13is_whitespace0g':
+output/cargo-build/host/build_libc-0_2_174_H20_run.c:11919:9: error: expected declaration or statement at end of input
+11919 |  struct s_ZRG3cE9core0_0_03str7pattern19MultiCharEqSearcher1gfICx13is_whitespace0g var8; // ::"core-0_0_0"::str::pattern::MultiCharEqSearcher<'#local2,fn{<char /*- */>::is_whitespace},>/*S*/
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+output/cargo-build/host/build_libc-0_2_174_H20_run.c: At top level:
+output/cargo-build/host/build_libc-0_2_174_H20_run.c:3777:107: warning: 'ZRIG2cF10alloc0_0_05alloc6Global0g10alloc_impl0g' used but never defined
+ 3777 | static struct e_ZRG2cE9core0_0_06result6Result2gG3c_A3ptr8non_null7NonNull1gSCaG2c_A5alloc10AllocError0g  ZRIG2cF10alloc0_0_05alloc6Global0g10alloc_impl0g(
+      |                                                                                                           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+output/cargo-build/host/build_libc-0_2_174_H20_run.c:3784:107: warning: 'ZRIG2cF10alloc0_0_05alloc6Global0g9grow_impl0g' used but never defined
+ 3784 | static struct e_ZRG2cE9core0_0_06result6Result2gG3c_A3ptr8non_null7NonNull1gSCaG2c_A5alloc10AllocError0g  ZRIG2cF10alloc0_0_05alloc6Global0g9grow_impl0g(
+      |                                                                                                           ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+output/cargo-build/host/build_libc-0_2_174_H20_run.c:3978:19: warning: 'ZRIG2cF10alloc0_0_07raw_vec11RawVecInner1gG2c_A5alloc6Global0g8capacity0g' used but never defined
+ 3978 | static uintptr_t  ZRIG2cF10alloc0_0_07raw_vec11RawVecInner1gG2c_A5alloc6Global0g8capacity0g(
+      |                   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+output/cargo-build/host/build_libc-0_2_174_H20_run.c:3996:101: warning: 'ZRIG2cF10alloc0_0_07raw_vec11RawVecInner1gG2c_A5alloc6Global0g14grow_amortized0g' used but never defined
+ 3996 | static struct e_ZRG2cE9core0_0_06result6Result2gT0G2cF10alloc0_0_011collections15TryReserveError0g  ZRIG2cF10alloc0_0_07raw_vec11RawVecInner1gG2c_A5alloc6Global0g14grow_amortized0g(
+      |                                                                                                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+output/cargo-build/host/build_libc-0_2_174_H20_run.c:4012:80: warning: 'ZRIG2cF10alloc0_0_07raw_vec11RawVecInner1gG2c_A5alloc6Global0g6new_in0g' used but never defined
+ 4012 | static struct s_ZRG2cF10alloc0_0_07raw_vec11RawVecInner1gG2c_A5alloc6Global0g  ZRIG2cF10alloc0_0_07raw_vec11RawVecInner1gG2c_A5alloc6Global0g6new_in0g(
+      |                                                                                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+output/cargo-build/host/build_libc-0_2_174_H20_run.c:4018:18: warning: 'ZRIG2cF10alloc0_0_07raw_vec11RawVecInner1gG2c_A5alloc6Global0g3ptr1gCa' used but never defined
+ 4018 | static uint8_t * ZRIG2cF10alloc0_0_07raw_vec11RawVecInner1gG2c_A5alloc6Global0g3ptr1gCa(
+--- [32mBUILDING libloading v0.8.8[0m (18.1% 4r,66w,252b,71c/393t)
+> /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v69-native-prefix-resume-20260826.source-built-fixed-point-staging-2777399/rust-provider-scratch/sources/mrustc-0.12.0/bin/mrustc rustc-1.90.0-src/vendor/libloading-0.8.8/src/lib.rs -o output/cargo-build/liblibloading-0_8_8.rlib -C emit-depfile=output/cargo-build/liblibloading-0_8_8.rlib.d --cfg debug_assertions -O -L output -L output/cargo-build -L output/cargo-build/host --crate-name libloading --crate-type rlib --crate-tag 0_8_8 --target x86_64-unknown-linux-musl --edition 2015 --extern cfg_if=output/cargo-build/libcfg_if-1_0_1.rlib > output/cargo-build/liblibloading-0_8_8.rlib_dbg.txt
+ (18.1% 4r,66w,252b,71c/393t): jiff v0.2.15, libc v0.2.174 (build), libc v0.2.174 (build), libloading v0.8.8
+[31mProcess exited with non-zero exit status 1
+[0mFAILING COMMAND: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v69-native-prefix-resume-20260826.source-built-fixed-point-staging-2777399/rust-provider-scratch/sources/mrustc-0.12.0/bin/mrustc rustc-1.90.0-src/vendor/libc-0.2.174/build.rs -o output/cargo-build/host/build_libc-0_2_174_H20_run -C emit-depfile=output/cargo-build/host/build_libc-0_2_174_H20_run.d --cfg debug_assertions -O -L output -L output/cargo-build/host --cfg feature="std" --crate-name build --crate-type bin --edition 2021
+Env:  CARGO_MANIFEST_DIR=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v69-native-prefix-resume-20260826.source-built-fixed-point-staging-2777399/rust-provider-scratch/sources/mrustc-0.12.0/rustc-1.90.0-src/vendor/libc-0.2.174 CARGO_PKG_NAME=libc CARGO_PKG_VERSION=0.2.174 CARGO_PKG_VERSION_MAJOR=0 CARGO_PKG_VERSION_MINOR=2 CARGO_PKG_VERSION_PATCH=174
+ (18.3% 3r,66w,252b,72c/393t): jiff v0.2.15, libc v0.2.174 (build), libloading v0.8.8
+Completed libc v0.2.174 (build)
+ (18.6% 2r,66w,252b,73c/393t): jiff v0.2.15, libloading v0.8.8
+gcc.real: warning: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v69-native-prefix-resume-20260826.source-built-fixed-point-staging-2777399/rust-provider-scratch/build/target-linker-runtime/musl-lfs-compat.o: linker input file unused because linking not done
+Completed libloading v0.8.8
+ (18.8% 1r,66w,252b,74c/393t): jiff v0.2.15
+gcc.real: warning: /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v69-native-prefix-resume-20260826.source-built-fixed-point-staging-2777399/rust-provider-scratch/build/target-linker-runtime/musl-lfs-compat.o: linker input file unused because linking not done
+Completed jiff v0.2.15
+ (19.1% 0r,66w,252b,75c/393t):
+BUILD FAILED
+make: *** [minicargo.mk:291: output/cargo] Error 1

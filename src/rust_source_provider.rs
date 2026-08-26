@@ -229,6 +229,7 @@ const FIRST_STAGE_PROC_MACRO_WORKSPACE_MEMBER: &str = "lib/libproc_macro";
 const FIRST_STAGE_MINICARGO_WORKSPACE_RESOLVER: &str = "2";
 const FIRST_STAGE_MAKE_PROGRAM: &str = "make";
 const FIRST_STAGE_MAKE_PARALLEL_ARG: &str = "-j \"$PARLEVEL\"";
+const FIRST_STAGE_TRANSLATED_CARGO_MINICARGO_JOB_COUNT: u32 = 1;
 const FIRST_STAGE_COPY_PROGRAM: &str = "cp";
 const FIRST_STAGE_PKG_CONFIG_PROGRAM: &str = "pkg-config";
 const FIRST_STAGE_CMAKE_PROGRAM: &str = "cmake";
@@ -7665,9 +7666,7 @@ fn push_first_stage_build_pipeline(
     script.push_str(&format!(
         "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_RUSTC_BINARY}\n"
     ));
-    script.push_str(&format!(
-        "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_CARGO_BINARY}\n"
-    ));
+    push_first_stage_translated_cargo_build(script, full_source_bound);
     push_first_stage_patch_plan_operations(
         script,
         patch_plan,
@@ -7688,6 +7687,18 @@ fn push_first_stage_build_pipeline(
     )?;
     push_first_stage_run_rustc_stage_tool_absolute_patch(script, full_source_bound);
     Ok(())
+}
+
+fn push_first_stage_translated_cargo_build(script: &mut String, full_source_bound: bool) {
+    let original_len = script.len();
+    debug_assert!(!script.contains('\0'));
+    script.push_str(&format!("$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE}"));
+    if full_source_bound {
+        script.push_str(&format!(" PARLEVEL={FIRST_STAGE_TRANSLATED_CARGO_MINICARGO_JOB_COUNT}"));
+    }
+    script.push_str(&format!(" {FIRST_STAGE_TRANSLATED_CARGO_BINARY}\n"));
+    assert!(script.len() > original_len);
+    assert!(script[original_len..].contains(FIRST_STAGE_TRANSLATED_CARGO_BINARY));
 }
 
 fn push_first_stage_busybox_patch_normalization(script: &mut String) {
@@ -9713,6 +9724,26 @@ mod tests {
         assert!(compatibility_script.is_empty());
         assert!(full_source_script.contains(FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_PROTECTED_TOKEN));
         assert!(full_source_script.contains(FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_PROTECTED_TOKEN));
+    }
+
+    #[test]
+    fn full_source_translated_cargo_build_serializes_minicargo_jobs() {
+        let mut script = String::new();
+        push_first_stage_translated_cargo_build(&mut script, true);
+
+        assert!(script.contains(&format!(
+            "PARLEVEL={FIRST_STAGE_TRANSLATED_CARGO_MINICARGO_JOB_COUNT} {FIRST_STAGE_TRANSLATED_CARGO_BINARY}"
+        )));
+        assert!(script.contains(FIRST_STAGE_MAKE_PARALLEL_ARG));
+    }
+
+    #[test]
+    fn compatibility_translated_cargo_build_keeps_parallel_minicargo_jobs() {
+        let mut script = String::new();
+        push_first_stage_translated_cargo_build(&mut script, false);
+
+        assert!(script.contains(&format!("-f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_CARGO_BINARY}")));
+        assert!(!script.contains(&format!("PARLEVEL={FIRST_STAGE_TRANSLATED_CARGO_MINICARGO_JOB_COUNT}")));
     }
 
     #[test]
