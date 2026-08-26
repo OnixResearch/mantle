@@ -283,6 +283,8 @@ const FIRST_STAGE_MINICARGO_RUSTC_THREADS_FLAG_LINE: &str = "        args.push_b
 const FIRST_STAGE_MINICARGO_RUSTC_THREADS_VALUE_LINE: &str = "        args.push_back(\"threads=1\");";
 const FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_ORIGINAL_LINE: &str = "MINICARGO ?= bin/minicargo$(EXESUF)";
 const FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE: &str = "MINICARGO ?= $(CURDIR)/bin/minicargo$(EXESUF)";
+const FIRST_STAGE_RUN_RUSTC_MINICARGO_ORIGINAL_LINE: &str = "MINICARGO ?= ../bin/minicargo$(EXESUF)";
+const FIRST_STAGE_RUN_RUSTC_MINICARGO_PROTECTED_LINE: &str = "MINICARGO ?= $(abspath ../bin/minicargo$(EXESUF))";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_ORIGINAL_LINE: &str =
     "\t$Vcd $(RUSTCSRC)build && cmake $(addprefix -D , $(LLVM_CMAKE_OPTS)) ../$(LLVM_DIR)";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE: &str = "\t$Vcd $(RUSTCSRC)build && cmake $(addprefix -D , $(LLVM_CMAKE_OPTS)) ../$(LLVM_DIR) && $(MANTLE_LLVM_RULE_NORMALIZER) $(abspath $(RUSTCSRC)build)";
@@ -7300,7 +7302,7 @@ fn push_first_stage_target_cc_wrapper(script: &mut String, full_source_bound: bo
         script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$target_alias_dir/emcc\"\n");
         script.push_str("printf '%s\\n' 'exit 127' >> \"$target_alias_dir/emcc\"\n");
         script.push_str("chmod +x \"$target_alias_dir/emcc\"\n");
-        for unavailable_tool in ["pkg-config", "pkgconf"] {
+        for unavailable_tool in ["pkg-config", "pkgconf", "git"] {
             script.push_str(&format!(
                 "printf '%s\\n' \"#!$SHELL_PROGRAM\" 'exit 127' > \"$target_alias_dir/{unavailable_tool}\"\n"
             ));
@@ -7933,6 +7935,7 @@ fn push_first_stage_minicargo_protected_execution_paths(script: &mut String, ful
     ));
     script.push_str("$COPY_PROGRAM \"$minicargo_exec_tmp\" \"$minicargo_makefile\"\n");
     script.push_str("rm -f \"$minicargo_exec_tmp\"\n");
+    push_first_stage_run_rustc_minicargo_absolute_patch(script);
     push_first_stage_mrustc_bound_shell_patch(script);
     push_first_stage_mrustc_proc_macro_absolute_patch(script);
     push_first_stage_llvm_rule_normalizer(script);
@@ -7954,6 +7957,37 @@ fn push_first_stage_minicargo_protected_execution_paths(script: &mut String, ful
     assert!(script.len() > original_len);
     assert!(script[original_len..].contains(FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE));
     assert!(script[original_len..].contains("SHELL=$SHELL_PROGRAM"));
+}
+
+fn push_first_stage_run_rustc_minicargo_absolute_patch(script: &mut String) {
+    debug_assert!(!script.contains('\0'));
+    script.push_str("run_rustc_makefile=run_rustc/Makefile\n");
+    script.push_str("run_rustc_minicargo_tmp=\"$BUILD_DIR/run-rustc-minicargo.mk\"\n");
+    script.push_str(&format!(
+        "run_rustc_minicargo_original={}\n",
+        shell_quote(FIRST_STAGE_RUN_RUSTC_MINICARGO_ORIGINAL_LINE)
+    ));
+    script.push_str(&format!(
+        "run_rustc_minicargo_patched={}\n",
+        shell_quote(FIRST_STAGE_RUN_RUSTC_MINICARGO_PROTECTED_LINE)
+    ));
+    script.push_str("run_rustc_minicargo_replaced=false\nrun_rustc_minicargo_seen=false\n");
+    script.push_str(": > \"$run_rustc_minicargo_tmp\"\n");
+    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str("  if [ \"$line\" = \"$run_rustc_minicargo_original\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$run_rustc_minicargo_patched\" >> \"$run_rustc_minicargo_tmp\"\n");
+    script.push_str("    run_rustc_minicargo_replaced=true\n  else\n");
+    script
+        .push_str("    if [ \"$line\" = \"$run_rustc_minicargo_patched\" ]; then run_rustc_minicargo_seen=true; fi\n");
+    script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_minicargo_tmp\"\n  fi\n");
+    script.push_str("done < \"$run_rustc_makefile\"\n");
+    script.push_str(&format!(
+        "if [ \"$run_rustc_minicargo_replaced\" = false ] && [ \"$run_rustc_minicargo_seen\" = false ]; then printf '%s\\n' 'run_rustc Makefile lacks the expected protected minicargo executable' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("$COPY_PROGRAM \"$run_rustc_minicargo_tmp\" \"$run_rustc_makefile\"\n");
+    script.push_str("rm -f \"$run_rustc_minicargo_tmp\"\n");
+    assert!(script.contains(FIRST_STAGE_RUN_RUSTC_MINICARGO_PROTECTED_LINE));
+    assert!(script.contains("run_rustc Makefile lacks the expected protected minicargo executable"));
 }
 
 fn push_first_stage_mrustc_bound_shell_patch(script: &mut String) {
@@ -9577,6 +9611,8 @@ mod tests {
 
         assert!(compatibility_script.is_empty());
         assert!(full_source_script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE));
+        assert!(full_source_script.contains(FIRST_STAGE_RUN_RUSTC_MINICARGO_PROTECTED_LINE));
+        assert!(full_source_script.contains("run_rustc Makefile lacks the expected protected minicargo executable"));
         assert!(full_source_script.contains("receipt-make-bin"));
         assert!(full_source_script.contains("SHELL=$SHELL_PROGRAM"));
         assert!(full_source_script.contains("MRUSTC_SHELL=\"$SHELL_PROGRAM\""));
@@ -9634,11 +9670,14 @@ mod tests {
         assert!(script.contains("$target_alias_dir/emcc"));
         assert!(script.contains("$target_alias_dir/pkg-config"));
         assert!(script.contains("$target_alias_dir/pkgconf"));
+        assert!(script.contains("$target_alias_dir/git"));
         assert!(script.contains("$target_alias_dir/perl"));
         assert!(script.contains("$target_alias_dir/make"));
         assert!(script.contains("disabling OpenSSL assembly generators for protected source bootstrap"));
         assert!(script.contains("configure.arg(\"no-asm\");"));
         assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE));
+        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_MINICARGO_PROTECTED_LINE));
+        assert!(script.contains("run_rustc Makefile lacks the expected protected minicargo executable"));
         assert!(script.contains("::waitpid(child_pid"));
         assert!(script.contains("\"$(pwd)/bin/minicargo\" --vendor-dir"));
         assert!(!script.contains(
