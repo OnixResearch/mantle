@@ -285,6 +285,10 @@ const FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_ORIGINAL_LINE: &str = "MINICARGO 
 const FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE: &str = "MINICARGO ?= $(CURDIR)/bin/minicargo$(EXESUF)";
 const FIRST_STAGE_RUN_RUSTC_MINICARGO_ORIGINAL_LINE: &str = "MINICARGO ?= ../bin/minicargo$(EXESUF)";
 const FIRST_STAGE_RUN_RUSTC_MINICARGO_PROTECTED_LINE: &str = "MINICARGO ?= $(abspath ../bin/minicargo$(EXESUF))";
+const FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_ORIGINAL_TOKEN: &str = "$(BINDIR_S)rustc ";
+const FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_PROTECTED_TOKEN: &str = "$(abspath $(BINDIR_S)rustc) ";
+const FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_ORIGINAL_TOKEN: &str = "$(BINDIR_S)cargo ";
+const FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_PROTECTED_TOKEN: &str = "$(abspath $(BINDIR_S)cargo) ";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_ORIGINAL_LINE: &str =
     "\t$Vcd $(RUSTCSRC)build && cmake $(addprefix -D , $(LLVM_CMAKE_OPTS)) ../$(LLVM_DIR)";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE: &str = "\t$Vcd $(RUSTCSRC)build && cmake $(addprefix -D , $(LLVM_CMAKE_OPTS)) ../$(LLVM_DIR) && $(MANTLE_LLVM_RULE_NORMALIZER) $(abspath $(RUSTCSRC)build)";
@@ -7682,6 +7686,7 @@ fn push_first_stage_build_pipeline(
         RustBootstrapPatchPhase::FirstStageRunRustcTarget,
         full_source_bound,
     )?;
+    push_first_stage_run_rustc_stage_tool_absolute_patch(script, full_source_bound);
     Ok(())
 }
 
@@ -7988,6 +7993,86 @@ fn push_first_stage_run_rustc_minicargo_absolute_patch(script: &mut String) {
     script.push_str("rm -f \"$run_rustc_minicargo_tmp\"\n");
     assert!(script.contains(FIRST_STAGE_RUN_RUSTC_MINICARGO_PROTECTED_LINE));
     assert!(script.contains("run_rustc Makefile lacks the expected protected minicargo executable"));
+}
+
+fn push_first_stage_run_rustc_stage_tool_absolute_patch(script: &mut String, full_source_bound: bool) {
+    let original_len = script.len();
+    debug_assert!(!script.contains('\0'));
+    if !full_source_bound {
+        return;
+    }
+    push_first_stage_run_rustc_stage_tool_bindings(script);
+    push_first_stage_run_rustc_stage_tool_rewrite(script);
+    push_first_stage_run_rustc_stage_tool_validation(script);
+    assert!(script.len() > original_len);
+    assert!(script[original_len..].contains(FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_PROTECTED_TOKEN));
+    assert!(script[original_len..].contains(FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_PROTECTED_TOKEN));
+}
+
+fn push_first_stage_run_rustc_stage_tool_bindings(script: &mut String) {
+    debug_assert!(!script.contains('\0'));
+    script.push_str("printf '%s\\n' 'binding run_rustc stage tools to protected absolute executables'\n");
+    script.push_str("run_rustc_stage_tool_makefile=run_rustc/Makefile\n");
+    script.push_str("run_rustc_stage_tool_tmp=\"$BUILD_DIR/run-rustc-stage-tools.mk\"\n");
+    script.push_str("run_rustc_stage_tool_tab=$(printf '\\t')\n");
+    for (name, token) in [
+        ("rustc_original", FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_ORIGINAL_TOKEN),
+        ("rustc_patched", FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_PROTECTED_TOKEN),
+        ("cargo_original", FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_ORIGINAL_TOKEN),
+        ("cargo_patched", FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_PROTECTED_TOKEN),
+    ] {
+        script.push_str(&format!("run_rustc_stage_{name}={}\n", shell_quote(token)));
+    }
+    script.push_str("run_rustc_stage_rustc_seen=false\nrun_rustc_stage_cargo_seen=false\n");
+    assert!(script.contains("run_rustc_stage_rustc_original"));
+    assert!(script.contains("run_rustc_stage_cargo_patched"));
+}
+
+fn push_first_stage_run_rustc_stage_tool_rewrite(script: &mut String) {
+    debug_assert!(!script.contains('\0'));
+    script.push_str(": > \"$run_rustc_stage_tool_tmp\"\n");
+    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str("  case \"$line\" in\n");
+    script.push_str("    \"$run_rustc_stage_tool_tab\"*)\n");
+    script.push_str("      case \"$line\" in\n");
+    push_first_stage_run_rustc_stage_tool_rewrite_arm(script, "rustc");
+    push_first_stage_run_rustc_stage_tool_rewrite_arm(script, "cargo");
+    script.push_str("        *) printf '%s\\n' \"$line\" >> \"$run_rustc_stage_tool_tmp\" ;;\n");
+    script.push_str("      esac\n      ;;\n");
+    script.push_str("    *) printf '%s\\n' \"$line\" >> \"$run_rustc_stage_tool_tmp\" ;;\n");
+    script.push_str("  esac\n");
+    script.push_str("done < \"$run_rustc_stage_tool_makefile\"\n");
+    assert!(script.contains("run_rustc_stage_prefix"));
+    assert!(script.contains("run_rustc_stage_suffix"));
+}
+
+fn push_first_stage_run_rustc_stage_tool_rewrite_arm(script: &mut String, tool: &str) {
+    debug_assert!(tool == "rustc" || tool == "cargo");
+    debug_assert!(!script.contains('\0'));
+    script.push_str(&format!("        *\"$run_rustc_stage_{tool}_original\"*)\n"));
+    script.push_str(&format!("          run_rustc_stage_prefix=${{line%%\"$run_rustc_stage_{tool}_original\"*}}\n"));
+    script.push_str(&format!("          run_rustc_stage_suffix=${{line#*\"$run_rustc_stage_{tool}_original\"}}\n"));
+    script.push_str(&format!(
+        "          case \"$run_rustc_stage_suffix\" in *\"$run_rustc_stage_{tool}_original\"*) printf '%s\\n' 'run_rustc {tool} recipe contains repeated executable tokens' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE} ;; esac\n"
+    ));
+    script.push_str(&format!(
+        "          printf '%s%s%s\\n' \"$run_rustc_stage_prefix\" \"$run_rustc_stage_{tool}_patched\" \"$run_rustc_stage_suffix\" >> \"$run_rustc_stage_tool_tmp\"\n"
+    ));
+    script.push_str(&format!("          run_rustc_stage_{tool}_seen=true\n          ;;\n"));
+    assert!(script.contains(&format!("run_rustc_stage_{tool}_seen=true")));
+}
+
+fn push_first_stage_run_rustc_stage_tool_validation(script: &mut String) {
+    debug_assert!(!script.contains('\0'));
+    for tool in ["rustc", "cargo"] {
+        script.push_str(&format!(
+            "if [ \"$run_rustc_stage_{tool}_seen\" = false ]; then printf '%s\\n' 'run_rustc Makefile lacks a protected stage {tool} recipe' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+        ));
+    }
+    script.push_str("$COPY_PROGRAM \"$run_rustc_stage_tool_tmp\" \"$run_rustc_stage_tool_makefile\"\n");
+    script.push_str("rm -f \"$run_rustc_stage_tool_tmp\"\n");
+    assert!(script.contains("lacks a protected stage rustc recipe"));
+    assert!(script.contains("lacks a protected stage cargo recipe"));
 }
 
 fn push_first_stage_mrustc_bound_shell_patch(script: &mut String) {
@@ -9623,6 +9708,51 @@ mod tests {
         assert!(full_source_script.contains("spawn_executable"));
         assert!(full_source_script.contains("realpath(executable"));
         assert!(!full_source_script.contains("SHELL=/bin/sh"));
+        push_first_stage_run_rustc_stage_tool_absolute_patch(&mut compatibility_script, false);
+        push_first_stage_run_rustc_stage_tool_absolute_patch(&mut full_source_script, true);
+        assert!(compatibility_script.is_empty());
+        assert!(full_source_script.contains(FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_PROTECTED_TOKEN));
+        assert!(full_source_script.contains(FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_PROTECTED_TOKEN));
+    }
+
+    #[test]
+    fn run_rustc_stage_tool_patch_rewrites_only_recipe_executables() {
+        let makefile =
+            "target: $(BINDIR_S)rustc $(BINDIR_S)cargo\n\t$(BINDIR_S)rustc --version\n\t$(BINDIR_S)cargo --version\n";
+        let (output, rewritten) = run_test_run_rustc_stage_tool_patch(makefile);
+
+        assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(rewritten.contains("target: $(BINDIR_S)rustc $(BINDIR_S)cargo"));
+        assert!(rewritten.contains("\t$(abspath $(BINDIR_S)rustc) --version"));
+        assert!(rewritten.contains("\t$(abspath $(BINDIR_S)cargo) --version"));
+    }
+
+    #[test]
+    fn run_rustc_stage_tool_patch_rejects_repeated_executable_token() {
+        let makefile = "target:\n\t$(BINDIR_S)rustc $(BINDIR_S)rustc --version\n\t$(BINDIR_S)cargo --version\n";
+        let (output, rewritten) = run_test_run_rustc_stage_tool_patch(makefile);
+
+        assert!(!output.status.success());
+        assert!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("run_rustc rustc recipe contains repeated executable tokens")
+        );
+        assert_eq!(rewritten, makefile);
+    }
+
+    fn run_test_run_rustc_stage_tool_patch(makefile: &str) -> (std::process::Output, String) {
+        let dir = tempfile::tempdir().unwrap();
+        let run_rustc_dir = dir.path().join(FIRST_STAGE_RUN_RUSTC_DIR);
+        let build_dir = dir.path().join("build");
+        fs::create_dir_all(&run_rustc_dir).unwrap();
+        fs::create_dir_all(&build_dir).unwrap();
+        let makefile_path = run_rustc_dir.join(FIRST_STAGE_MAKEFILE);
+        fs::write(&makefile_path, makefile).unwrap();
+        let mut script = format!("set -eu\nBUILD_DIR={}\nCOPY_PROGRAM=cp\n", shell_quote(build_dir.to_str().unwrap()));
+        push_first_stage_run_rustc_stage_tool_absolute_patch(&mut script, true);
+        let output = Command::new("/bin/sh").arg("-c").arg(script).current_dir(dir.path()).output().unwrap();
+        let rewritten = fs::read_to_string(makefile_path).unwrap();
+        (output, rewritten)
     }
 
     #[test]
