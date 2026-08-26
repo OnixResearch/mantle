@@ -7300,6 +7300,18 @@ fn push_first_stage_target_cc_wrapper(script: &mut String, full_source_bound: bo
         script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$target_alias_dir/emcc\"\n");
         script.push_str("printf '%s\\n' 'exit 127' >> \"$target_alias_dir/emcc\"\n");
         script.push_str("chmod +x \"$target_alias_dir/emcc\"\n");
+        for unavailable_tool in ["pkg-config", "pkgconf"] {
+            script.push_str(&format!(
+                "printf '%s\\n' \"#!$SHELL_PROGRAM\" 'exit 127' > \"$target_alias_dir/{unavailable_tool}\"\n"
+            ));
+            script.push_str(&format!("chmod +x \"$target_alias_dir/{unavailable_tool}\"\n"));
+        }
+        script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$target_alias_dir/perl\"\n");
+        script.push_str("printf '%s\\n' \"exec \\\"$PERL_PROGRAM\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/perl\"\n");
+        script.push_str("chmod +x \"$target_alias_dir/perl\"\n");
+        script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$target_alias_dir/make\"\n");
+        script.push_str("printf '%s\\n' \"exec \\\"$MAKE_PROGRAM\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/make\"\n");
+        script.push_str("chmod +x \"$target_alias_dir/make\"\n");
         script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$target_alias_dir/cc\"\n");
     } else {
         script.push_str("printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/cc\"\n");
@@ -9586,6 +9598,10 @@ mod tests {
         assert!(script.contains("MRUSTC_SHELL=\"$SHELL_PROGRAM\""));
         assert!(script.contains("$target_alias_dir/sh"));
         assert!(script.contains("$target_alias_dir/emcc"));
+        assert!(script.contains("$target_alias_dir/pkg-config"));
+        assert!(script.contains("$target_alias_dir/pkgconf"));
+        assert!(script.contains("$target_alias_dir/perl"));
+        assert!(script.contains("$target_alias_dir/make"));
         assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE));
         assert!(script.contains("::waitpid(child_pid"));
         assert!(script.contains("\"$(pwd)/bin/minicargo\" --vendor-dir"));
