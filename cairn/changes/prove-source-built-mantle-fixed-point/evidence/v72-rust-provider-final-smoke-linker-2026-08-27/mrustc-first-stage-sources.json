@@ -1,0 +1,32 @@
+{
+  "blocked_reason": "source-built Rust provider completion remains pending until every planned stage passes and the validated final provider is published",
+  "route_plan_digest_blake3": "58c6ea33a72121463d8e1e71310f60562f63528385b6cd2b86d98e8d37b2281c",
+  "route_policy_digest_blake3": "66a76c43410fabbbd3747a64f3715506acfe7034220e81e3b564dd5fd97e935a",
+  "schema": "mantle-rust-source-provider-first-stage-sources-v1",
+  "source_count": 2,
+  "sources": [
+    {
+      "archive_entry_count": 696,
+      "archive_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v72-native-prefix-resume-20260826.source-built-fixed-point-staging-3826571/rust-provider-scratch/archives/mrustc-0.12.0.tar.gz",
+      "archive_sha256_hex": "c1ba35f5fc5c4ca2952d9f5526e900dcb6632ea7fd4d71fa58029b3bb563ae56",
+      "extracted_digest_blake3": "d57b5a09561774c1055738dc98b41fbbde0dd00722dd030dcdf7ebb14fed65a9",
+      "extracted_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v72-native-prefix-resume-20260826.source-built-fixed-point-staging-3826571/rust-provider-scratch/sources/mrustc-0.12.0",
+      "id": "mrustc-0.12.0",
+      "source_input_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v72-native-prefix-resume-20260826.source-built-fixed-point-staging-3826571/inputs/rust-source-archives/mrustc-0.12.0.tar.gz",
+      "source_policy": "authenticated-offline-only",
+      "url": "https://github.com/thepowersgang/mrustc/archive/refs/tags/v0.12.0.tar.gz"
+    },
+    {
+      "archive_entry_count": 279266,
+      "archive_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v72-native-prefix-resume-20260826.source-built-fixed-point-staging-3826571/rust-provider-scratch/archives/rust-1.90.0.tar.gz",
+      "archive_sha256_hex": "799a9f9cba4ed5351e071048bcf6b5560755d9009648def33a407dd4961f9b7e",
+      "extracted_digest_blake3": "9070ed35f953862e274acd1dc29b6132561c70bd5ac266762ea25ac5b63ebf03",
+      "extracted_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v72-native-prefix-resume-20260826.source-built-fixed-point-staging-3826571/rust-provider-scratch/sources/rust-1.90.0",
+      "id": "rust-1.90.0",
+      "source_input_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v72-native-prefix-resume-20260826.source-built-fixed-point-staging-3826571/inputs/rust-source-archives/rust-1.90.0.tar.gz",
+      "source_policy": "authenticated-offline-only",
+      "url": "https://static.rust-lang.org/dist/rustc-1.90.0-src.tar.gz"
+    }
+  ],
+  "stage_id": "mrustc-to-rust-1.90.0"
+}

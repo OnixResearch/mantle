@@ -290,6 +290,9 @@ const FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_ORIGINAL_TOKEN: &str = "$(BINDIR_S)
 const FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_PROTECTED_TOKEN: &str = "$(abspath $(BINDIR_S)rustc) ";
 const FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_ORIGINAL_TOKEN: &str = "$(BINDIR_S)cargo ";
 const FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_PROTECTED_TOKEN: &str = "$(abspath $(BINDIR_S)cargo) ";
+const FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_ORIGINAL_LINE: &str = "\t$V$(DBG) $(BINDIR)rustc -L $(LIBDIR) $< -o $@";
+const FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_PROTECTED_LINE: &str =
+    "\t$V$(DBG) $(abspath $(BINDIR)rustc) -C linker=$(MANTLE_TARGET_LINKER) -L $(LIBDIR) $< -o $@";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_ORIGINAL_LINE: &str =
     "\t$Vcd $(RUSTCSRC)build && cmake $(addprefix -D , $(LLVM_CMAKE_OPTS)) ../$(LLVM_DIR)";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE: &str = "\t$Vcd $(RUSTCSRC)build && cmake $(addprefix -D , $(LLVM_CMAKE_OPTS)) ../$(LLVM_DIR) && $(MANTLE_LLVM_RULE_NORMALIZER) $(abspath $(RUSTCSRC)build)";
@@ -8017,9 +8020,11 @@ fn push_first_stage_run_rustc_stage_tool_absolute_patch(script: &mut String, ful
     push_first_stage_run_rustc_stage_tool_bindings(script);
     push_first_stage_run_rustc_stage_tool_rewrite(script);
     push_first_stage_run_rustc_stage_tool_validation(script);
+    push_first_stage_run_rustc_final_smoke_patch(script);
     assert!(script.len() > original_len);
     assert!(script[original_len..].contains(FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_PROTECTED_TOKEN));
     assert!(script[original_len..].contains(FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_PROTECTED_TOKEN));
+    assert!(script[original_len..].contains(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_PROTECTED_LINE));
 }
 
 fn push_first_stage_run_rustc_stage_tool_bindings(script: &mut String) {
@@ -8086,6 +8091,39 @@ fn push_first_stage_run_rustc_stage_tool_validation(script: &mut String) {
     script.push_str("rm -f \"$run_rustc_stage_tool_tmp\"\n");
     assert!(script.contains("lacks a protected stage rustc recipe"));
     assert!(script.contains("lacks a protected stage cargo recipe"));
+}
+
+fn push_first_stage_run_rustc_final_smoke_patch(script: &mut String) {
+    debug_assert!(!script.contains('\0'));
+    script.push_str("run_rustc_final_smoke_tmp=\"$BUILD_DIR/run-rustc-final-smoke.mk\"\n");
+    script.push_str(&format!(
+        "run_rustc_final_smoke_original={}\n",
+        shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_ORIGINAL_LINE)
+    ));
+    script.push_str(&format!(
+        "run_rustc_final_smoke_protected={}\n",
+        shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_PROTECTED_LINE)
+    ));
+    script.push_str("run_rustc_final_smoke_replaced=false\nrun_rustc_final_smoke_seen=false\n");
+    script.push_str(": > \"$run_rustc_final_smoke_tmp\"\n");
+    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str("  if [ \"$line\" = \"$run_rustc_final_smoke_original\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$run_rustc_final_smoke_protected\" >> \"$run_rustc_final_smoke_tmp\"\n");
+    script.push_str("    run_rustc_final_smoke_replaced=true\n");
+    script.push_str("  elif [ \"$line\" = \"$run_rustc_final_smoke_protected\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_final_smoke_tmp\"\n");
+    script.push_str("    run_rustc_final_smoke_seen=true\n");
+    script.push_str("  else\n");
+    script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_final_smoke_tmp\"\n");
+    script.push_str("  fi\n");
+    script.push_str("done < \"$run_rustc_stage_tool_makefile\"\n");
+    script.push_str(&format!(
+        "if [ \"$run_rustc_final_smoke_replaced\" = false ] && [ \"$run_rustc_final_smoke_seen\" = false ]; then printf '%s\\n' 'run_rustc Makefile lacks the protected final rustc smoke recipe' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("$COPY_PROGRAM \"$run_rustc_final_smoke_tmp\" \"$run_rustc_stage_tool_makefile\"\n");
+    script.push_str("rm -f \"$run_rustc_final_smoke_tmp\"\n");
+    assert!(script.contains("run_rustc_final_smoke_replaced=true"));
+    assert!(script.contains(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_PROTECTED_LINE));
 }
 
 fn push_first_stage_mrustc_bound_shell_patch(script: &mut String) {
@@ -8514,9 +8552,15 @@ fn push_first_stage_run_rustc_host(script: &mut String, full_source_bound: bool)
     push_first_stage_target_linker_wrapper(script, full_source_bound);
     push_first_stage_musl_proc_macro_runtime(script);
     push_first_stage_run_rustc_dylib_ext(script);
-    script.push_str(&format!(
-        "if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -C {FIRST_STAGE_RUN_RUSTC_DIR} DYLIB_EXT=\"$RUN_RUSTC_DYLIB_EXT\"; else $MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -C {FIRST_STAGE_RUN_RUSTC_DIR}; fi\n"
-    ));
+    if full_source_bound {
+        script.push_str(&format!(
+            "if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -C {FIRST_STAGE_RUN_RUSTC_DIR} DYLIB_EXT=\"$RUN_RUSTC_DYLIB_EXT\" MANTLE_TARGET_LINKER=\"$target_alias_dir/cc\"; else $MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -C {FIRST_STAGE_RUN_RUSTC_DIR} MANTLE_TARGET_LINKER=\"$target_alias_dir/cc\"; fi\n"
+        ));
+    } else {
+        script.push_str(&format!(
+            "if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -C {FIRST_STAGE_RUN_RUSTC_DIR} DYLIB_EXT=\"$RUN_RUSTC_DYLIB_EXT\"; else $MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -C {FIRST_STAGE_RUN_RUSTC_DIR}; fi\n"
+        ));
+    }
 }
 
 fn push_first_stage_musl_proc_macro_runtime(script: &mut String) {
@@ -9757,14 +9801,17 @@ mod tests {
 
     #[test]
     fn run_rustc_stage_tool_patch_rewrites_only_recipe_executables() {
-        let makefile =
-            "target: $(BINDIR_S)rustc $(BINDIR_S)cargo\n\t$(BINDIR_S)rustc --version\n\t$(BINDIR_S)cargo --version\n";
-        let (output, rewritten) = run_test_run_rustc_stage_tool_patch(makefile);
+        let makefile = format!(
+            "target: $(BINDIR_S)rustc $(BINDIR_S)cargo\n\t$(BINDIR_S)rustc --version\n\t$(BINDIR_S)cargo --version\n{FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_ORIGINAL_LINE}\n"
+        );
+        let (output, rewritten) = run_test_run_rustc_stage_tool_patch(&makefile);
 
         assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
         assert!(rewritten.contains("target: $(BINDIR_S)rustc $(BINDIR_S)cargo"));
         assert!(rewritten.contains("\t$(abspath $(BINDIR_S)rustc) --version"));
         assert!(rewritten.contains("\t$(abspath $(BINDIR_S)cargo) --version"));
+        assert!(rewritten.contains(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_PROTECTED_LINE));
+        assert!(!rewritten.contains(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_ORIGINAL_LINE));
     }
 
     #[test]
@@ -9782,7 +9829,9 @@ mod tests {
 
     #[test]
     fn run_rustc_stage_tool_and_all_static_patches_compose() {
-        let makefile = format!("target:\n\t$(BINDIR_S)rustc --version\n{FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_LINE}\n");
+        let makefile = format!(
+            "target:\n\t$(BINDIR_S)rustc --version\n{FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_LINE}\n{FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_ORIGINAL_LINE}\n"
+        );
         let (output, rewritten) = run_test_run_rustc_composed_patches(&makefile);
 
         assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
@@ -9792,8 +9841,10 @@ mod tests {
 
     #[test]
     fn run_rustc_all_static_patch_rejects_unknown_protected_cargo_recipe() {
-        let makefile = "target:\n\t$(BINDIR_S)rustc --version\n\t$(BINDIR_S)cargo build --unexpected\n";
-        let (output, rewritten) = run_test_run_rustc_composed_patches(makefile);
+        let makefile = format!(
+            "target:\n\t$(BINDIR_S)rustc --version\n\t$(BINDIR_S)cargo build --unexpected\n{FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_ORIGINAL_LINE}\n"
+        );
+        let (output, rewritten) = run_test_run_rustc_composed_patches(&makefile);
 
         assert!(!output.status.success());
         assert!(
@@ -9801,6 +9852,19 @@ mod tests {
                 .contains("mrustc run_rustc Makefile lacks expected Cargo build line for all-static normalization")
         );
         assert!(rewritten.contains("\t$(abspath $(BINDIR_S)cargo) build --unexpected"));
+    }
+
+    #[test]
+    fn run_rustc_stage_tool_patch_rejects_unknown_final_smoke_recipe() {
+        let makefile = "target:\n\t$(BINDIR_S)rustc --version\n\t$(BINDIR_S)cargo --version\n\t$V$(DBG) $(BINDIR)rustc --unexpected\n";
+        let (output, rewritten) = run_test_run_rustc_stage_tool_patch(makefile);
+
+        assert!(!output.status.success());
+        assert!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("run_rustc Makefile lacks the protected final rustc smoke recipe")
+        );
+        assert!(rewritten.contains("\t$V$(DBG) $(BINDIR)rustc --unexpected"));
     }
 
     fn run_test_run_rustc_stage_tool_patch(makefile: &str) -> (std::process::Output, String) {
@@ -12599,7 +12663,7 @@ let Plan = {
     }
 
     fn test_mrustc_run_rustc_makefile() -> &'static [u8] {
-        b"RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))\nCARGO_ENV_STAGE2_STD := CARGO_TARGET_DIR=$(OUTDIR)build-std2 RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)\nCARGO_ENV_RUSTC := CARGO_TARGET_DIR=$(OUTDIR)build-rustc RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)\n\nall:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf '%s\\n' '#!/bin/sh' 'd=$$(dirname $$0)' 'LD_LIBRARY_PATH=/old/build/prefix/lib $$d/rustc_binary \"$$@\"' > output/prefix/bin/rustc\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc_binary\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib\n\tprintf 'synthetic prefix musl host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/rustc_binary output/prefix/bin/cargo\n\n$(BINDIR_S)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR_2)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR)rustc: $(BINDIR_2)rustc\n\t@mkdir -p $(BINDIR)\n\t$Vprintf '#!/bin/sh\\nd=$$(dirname $$0)\\nLD_LIBRARY_PATH=\"$(abspath $(OUTDIR)prefix/lib):$(abspath $(LIBDIR))\" $$d/rustc_binary \"$$@\"' >$@\n\t$Vchmod +x $@\n\n$(BINDIR)cargo: $(BINDIR)rustc\n\t$VTMPDIR=$(abspath $(PREFIX)tmp) $(CARGO_ENV_RUSTC) $(BINDIR_S)cargo build $(CARGO_FLAGS) --manifest-path $(RUST_SRC_CARGO)Cargo.toml\n\t$Vcp $(CARGO_OUTDIR_RUSTC)cargo $(BINDIR)cargo\n\noutput%/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib:\n\tmkdir -p $(@D)\n\tprintf 'synthetic target std\\n' > $@\n"
+        b"RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))\nCARGO_ENV_STAGE2_STD := CARGO_TARGET_DIR=$(OUTDIR)build-std2 RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)\nCARGO_ENV_RUSTC := CARGO_TARGET_DIR=$(OUTDIR)build-rustc RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)\n\nall:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf '%s\\n' '#!/bin/sh' 'd=$$(dirname $$0)' 'LD_LIBRARY_PATH=/old/build/prefix/lib $$d/rustc_binary \"$$@\"' > output/prefix/bin/rustc\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc_binary\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib\n\tprintf 'synthetic prefix musl host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/rustc_binary output/prefix/bin/cargo\n\nfinal-smoke:\n\t$V$(DBG) $(BINDIR)rustc -L $(LIBDIR) $< -o $@\n\n$(BINDIR_S)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR_2)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR)rustc: $(BINDIR_2)rustc\n\t@mkdir -p $(BINDIR)\n\t$Vprintf '#!/bin/sh\\nd=$$(dirname $$0)\\nLD_LIBRARY_PATH=\"$(abspath $(OUTDIR)prefix/lib):$(abspath $(LIBDIR))\" $$d/rustc_binary \"$$@\"' >$@\n\t$Vchmod +x $@\n\n$(BINDIR)cargo: $(BINDIR)rustc\n\t$VTMPDIR=$(abspath $(PREFIX)tmp) $(CARGO_ENV_RUSTC) $(BINDIR_S)cargo build $(CARGO_FLAGS) --manifest-path $(RUST_SRC_CARGO)Cargo.toml\n\t$Vcp $(CARGO_OUTDIR_RUSTC)cargo $(BINDIR)cargo\n\noutput%/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib:\n\tmkdir -p $(@D)\n\tprintf 'synthetic target std\\n' > $@\n"
     }
 
     fn test_rustc_driver_manifest() -> &'static [u8] {

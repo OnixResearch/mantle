@@ -1,0 +1,13 @@
+started_at=2026-08-26T22:52:38-04:00
+wrapper_pid=3826290
+source_commit=602fe3b5
+source_transfer_parity=exact
+profile_blake3=757b89ef193ffdcb98a9f015de5509e16c93a9dc48ee7b7739257f2b59341397
+orchestrator_blake3=829921d06dfa66fb042904fb75c1f28fd8c77daf1b8402853a1abb0b1793ee1d
+checkpoint_mode=native-prefix-resume
+native_checkpoint_attempt=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v61-runtime-shim-prefix-cold-20260825.source-built-fixed-point-staging-3637585
+output=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-fixed-point-v72-native-prefix-resume-20260826
+proof_disk_bytes_max=700000000000
+proof_jobs=16
+finished_at=2026-08-27T02:38:38-04:00
+exit_code=1
