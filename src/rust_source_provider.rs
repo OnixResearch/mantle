@@ -4691,6 +4691,7 @@ fn smoke_rustc_stage1_provider_candidate(
 ) -> Result<RustSourceProviderSmokeEvidence, RustSourceProviderError> {
     let validation = validate_materialized_rust_source_provider(&candidate.candidate_dir)?;
     let smoke = smoke_rust_source_provider(&candidate.candidate_dir, &boundary.provider_candidate_smoke_work_dir)?;
+    smoke_rust_source_provider_cargo(&candidate.candidate_dir)?;
     persist_rust_source_provider_smoke_evidence(&boundary.provider_candidate_smoke_dir, &smoke, &validation)
 }
 
@@ -5005,6 +5006,7 @@ fn smoke_rustc_final_provider_candidate(
 ) -> Result<RustSourceProviderSmokeEvidence, RustSourceProviderError> {
     let validation = validate_materialized_rust_source_provider(&candidate.candidate_dir)?;
     let smoke = smoke_rust_source_provider(&candidate.candidate_dir, &boundary.provider_candidate_smoke_work_dir)?;
+    smoke_rust_source_provider_cargo(&candidate.candidate_dir)?;
     persist_rust_source_provider_smoke_evidence(&boundary.provider_candidate_smoke_dir, &smoke, &validation)
 }
 
@@ -5399,7 +5401,35 @@ fn smoke_first_stage_provider_candidate(
 ) -> Result<RustSourceProviderSmokeEvidence, RustSourceProviderError> {
     let validation = validate_materialized_rust_source_provider(&candidate.candidate_dir)?;
     let smoke = smoke_rust_source_provider(&candidate.candidate_dir, &boundary.provider_candidate_smoke_work_dir)?;
+    smoke_rust_source_provider_cargo(&candidate.candidate_dir)?;
     persist_rust_source_provider_smoke_evidence(&boundary.provider_candidate_smoke_dir, &smoke, &validation)
+}
+
+fn smoke_rust_source_provider_cargo(candidate_dir: &Path) -> Result<(), RustSourceProviderError> {
+    let cargo_path = candidate_dir.join(PROVIDER_CARGO_RELATIVE_PATH);
+    if !cargo_path.is_file() {
+        return Err(RustSourceProviderError::Smoke(format!(
+            "provider Cargo smoke executable is missing: {}",
+            cargo_path.display()
+        )));
+    }
+    let args = [OsString::from("--version")];
+    let output = run_smoke_rustc_with_bounded_launch_retry(&cargo_path, &args)
+        .map_err(|error| RustSourceProviderError::Smoke(format!("launch {}: {error}", cargo_path.display())))?;
+    let stdout = bounded_output_text(&output.stdout);
+    let stderr = bounded_output_text(&output.stderr);
+    if !output.status.success() {
+        return Err(RustSourceProviderError::Smoke(format!(
+            "provider Cargo smoke failed with status {}; stdout={stdout:?}; stderr={stderr:?}",
+            output.status
+        )));
+    }
+    if stdout.is_empty() {
+        return Err(RustSourceProviderError::Smoke("provider Cargo smoke returned empty version output".to_string()));
+    }
+    assert!(output.status.success());
+    assert!(!stdout.is_empty());
+    Ok(())
 }
 
 fn validate_first_stage_candidate_request(
@@ -12244,6 +12274,36 @@ mod tests {
         assert!(smoke.stderr.is_empty());
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn first_stage_cargo_smoke_promotes_successful_candidate() {
+        let dir = tempfile::tempdir().unwrap();
+        let cargo_path = dir.path().join(PROVIDER_CARGO_RELATIVE_PATH);
+        fs::create_dir_all(cargo_path.parent().unwrap()).unwrap();
+        fs::write(&cargo_path, "#!/bin/sh\nprintf 'cargo 0.0.0\\n'\n").unwrap();
+        make_executable(&cargo_path);
+
+        smoke_rust_source_provider_cargo(dir.path()).unwrap();
+
+        assert!(cargo_path.is_file());
+        assert_eq!(script_mode(&cargo_path), EXECUTABLE_MODE);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn first_stage_cargo_smoke_rejects_failed_candidate() {
+        let dir = tempfile::tempdir().unwrap();
+        let cargo_path = dir.path().join(PROVIDER_CARGO_RELATIVE_PATH);
+        fs::create_dir_all(cargo_path.parent().unwrap()).unwrap();
+        fs::write(&cargo_path, "#!/bin/sh\nexit 1\n").unwrap();
+        make_executable(&cargo_path);
+
+        let error = smoke_rust_source_provider_cargo(dir.path()).unwrap_err();
+
+        assert!(error.to_string().contains("provider Cargo smoke failed"));
+        assert!(cargo_path.is_file());
+    }
+
     #[test]
     fn smoke_rustc_args_do_not_duplicate_provider_wrapper_sysroot() {
         let provider_dir = PathBuf::from("provider");
@@ -12876,7 +12936,7 @@ let Plan = {
     }
 
     fn test_mrustc_run_rustc_makefile() -> &'static [u8] {
-        b"RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))\nCARGO_ENV_STAGE2_STD := CARGO_TARGET_DIR=$(OUTDIR)build-std2 RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)\nCARGO_ENV_RUSTC := CARGO_TARGET_DIR=$(OUTDIR)build-rustc RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)\n\nall:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf '%s\\n' '#!/bin/sh' 'd=$$(dirname $$0)' 'LD_LIBRARY_PATH=/old/build/prefix/lib $$d/rustc_binary \"$$@\"' > output/prefix/bin/rustc\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc_binary\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib\n\tprintf 'synthetic prefix musl host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/rustc_binary output/prefix/bin/cargo\n\nfinal-smoke:\n\t$V$(DBG) $(BINDIR)rustc -L $(LIBDIR) $< -o $@\n\t./$@\n\n$(BINDIR_S)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR_2)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR)rustc: $(BINDIR_2)rustc\n\t@mkdir -p $(BINDIR)\n\t$Vprintf '#!/bin/sh\\nd=$$(dirname $$0)\\nLD_LIBRARY_PATH=\"$(abspath $(OUTDIR)prefix/lib):$(abspath $(LIBDIR))\" $$d/rustc_binary \"$$@\"' >$@\n\t$Vchmod +x $@\n\n$(BINDIR)cargo: $(BINDIR)rustc\n\t$VTMPDIR=$(abspath $(PREFIX)tmp) $(CARGO_ENV_RUSTC) $(BINDIR_S)cargo build $(CARGO_FLAGS) --manifest-path $(RUST_SRC_CARGO)Cargo.toml\n\t$Vcp $(CARGO_OUTDIR_RUSTC)cargo $(BINDIR)cargo\n\noutput%/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib:\n\tmkdir -p $(@D)\n\tprintf 'synthetic target std\\n' > $@\n"
+        b"RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))\nCARGO_ENV_STAGE2_STD := CARGO_TARGET_DIR=$(OUTDIR)build-std2 RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)\nCARGO_ENV_RUSTC := CARGO_TARGET_DIR=$(OUTDIR)build-rustc RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)\n\nall:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf '%s\\n' '#!/bin/sh' 'd=$$(dirname $$0)' 'LD_LIBRARY_PATH=/old/build/prefix/lib $$d/rustc_binary \"$$@\"' > output/prefix/bin/rustc\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc_binary\n\tprintf '%s\\n' '#!/bin/sh' 'echo cargo 0.0.0' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib\n\tprintf 'synthetic prefix musl host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/rustc_binary output/prefix/bin/cargo\n\nfinal-smoke:\n\t$V$(DBG) $(BINDIR)rustc -L $(LIBDIR) $< -o $@\n\t./$@\n\n$(BINDIR_S)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR_2)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR)rustc: $(BINDIR_2)rustc\n\t@mkdir -p $(BINDIR)\n\t$Vprintf '#!/bin/sh\\nd=$$(dirname $$0)\\nLD_LIBRARY_PATH=\"$(abspath $(OUTDIR)prefix/lib):$(abspath $(LIBDIR))\" $$d/rustc_binary \"$$@\"' >$@\n\t$Vchmod +x $@\n\n$(BINDIR)cargo: $(BINDIR)rustc\n\t$VTMPDIR=$(abspath $(PREFIX)tmp) $(CARGO_ENV_RUSTC) $(BINDIR_S)cargo build $(CARGO_FLAGS) --manifest-path $(RUST_SRC_CARGO)Cargo.toml\n\t$Vcp $(CARGO_OUTDIR_RUSTC)cargo $(BINDIR)cargo\n\noutput%/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib:\n\tmkdir -p $(@D)\n\tprintf 'synthetic target std\\n' > $@\n"
     }
 
     fn test_mrustc_run_rustc_proxy() -> &'static [u8] {
@@ -12888,15 +12948,15 @@ let Plan = {
     }
 
     fn test_rustc_stage1_build_script() -> &'static [u8] {
-        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf 'synthetic shared libgcc runtime\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so.1\"\nprintf 'synthetic shared libgcc linker name\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic stage1 rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic stage1 cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic stage1 host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic stage1 target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\n"
+        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf 'synthetic shared libgcc runtime\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so.1\"\nprintf 'synthetic shared libgcc linker name\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic stage1 rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf '%s\\n' '#!/bin/sh' 'echo cargo 0.0.0' > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic stage1 host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic stage1 target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\n"
     }
 
     fn test_rustc_final_build_script() -> &'static [u8] {
-        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf 'synthetic shared libgcc runtime\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so.1\"\nprintf 'synthetic shared libgcc linker name\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic final rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic final cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic final rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic final host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic final target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
+        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf 'synthetic shared libgcc runtime\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so.1\"\nprintf 'synthetic shared libgcc linker name\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic final rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf '%s\\n' '#!/bin/sh' 'echo cargo 0.0.0' > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic final rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic final host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic final target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
     }
 
     fn test_rustc_xpy_script() -> &'static [u8] {
-        b"#!/bin/sh\nset -eu\nprintf '%s\\n' \"synthetic x.py for $MANTLE_RUST_VERSION $*\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf 'synthetic shared libgcc runtime\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so.1\"\nprintf 'synthetic shared libgcc linker name\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic xpy rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic xpy cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic xpy rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic xpy host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic xpy target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
+        b"#!/bin/sh\nset -eu\nprintf '%s\\n' \"synthetic x.py for $MANTLE_RUST_VERSION $*\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf 'synthetic shared libgcc runtime\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so.1\"\nprintf 'synthetic shared libgcc linker name\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic xpy rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf '%s\\n' '#!/bin/sh' 'echo cargo 0.0.0' > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic xpy rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic xpy host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic xpy target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
     }
 
     fn sha256_file_hex(path: &Path) -> String {
