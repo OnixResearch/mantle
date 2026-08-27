@@ -332,6 +332,8 @@ const FIRST_STAGE_RUN_RUSTC_FINAL_ENV_LINE: &str = "CARGO_ENV_RUSTC := CARGO_TAR
 const FIRST_STAGE_RUN_RUSTC_FINAL_PREFIX2_ENV_LINE: &str = "CARGO_ENV_RUSTC := CARGO_TARGET_DIR=$(OUTDIR)build-rustc RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_2)rustc) $(CARGO_ENV)";
 const FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_LINE: &str = "\t$VTMPDIR=$(abspath $(PREFIX)tmp) $(CARGO_ENV_RUSTC) $(BINDIR_S)cargo build $(CARGO_FLAGS) --manifest-path $(RUST_SRC_CARGO)Cargo.toml";
 const FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_ALL_STATIC_LINE: &str = "\t$VTMPDIR=$(abspath $(PREFIX)tmp) $(CARGO_ENV_RUSTC) $(BINDIR_S)cargo build $(CARGO_FLAGS) --manifest-path $(RUST_SRC_CARGO)Cargo.toml --features all-static";
+const FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_PROTECTED_LINE: &str = "\t$VTMPDIR=$(abspath $(PREFIX)tmp) $(CARGO_ENV_RUSTC) $(abspath $(BINDIR_S)cargo) build $(CARGO_FLAGS) --manifest-path $(RUST_SRC_CARGO)Cargo.toml";
+const FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_PROTECTED_ALL_STATIC_LINE: &str = "\t$VTMPDIR=$(abspath $(PREFIX)tmp) $(CARGO_ENV_RUSTC) $(abspath $(BINDIR_S)cargo) build $(CARGO_FLAGS) --manifest-path $(RUST_SRC_CARGO)Cargo.toml --features all-static";
 const FIRST_STAGE_RUN_RUSTC_STAGE1_RUSTC_RULE_LINE: &str = "$(BINDIR_S)rustc: ../output$(OUTDIR_SUF)/rustc";
 const FIRST_STAGE_RUN_RUSTC_STAGE2_RUSTC_RULE_LINE: &str = "$(BINDIR_2)rustc: ../output$(OUTDIR_SUF)/rustc";
 const FIRST_STAGE_RUN_RUSTC_COPY_PREREQ_LINE: &str = "\tcp $< $@";
@@ -8618,12 +8620,14 @@ fn push_first_stage_run_rustc_cargo_all_static_patch(script: &mut String) {
     debug_assert!(!script.contains('\0'));
     script.push_str("printf '%s\\n' 'normalizing run_rustc Cargo static feature set for source-root musl host'\n");
     script.push_str("run_rustc_cargo_tmp=\"$BUILD_DIR/run-rustc-cargo-all-static-Makefile\"\n");
-    script
-        .push_str(&format!("run_rustc_cargo_original_line={}\n", shell_quote(FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_LINE)));
-    script.push_str(&format!(
-        "run_rustc_cargo_patched_line={}\n",
-        shell_quote(FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_ALL_STATIC_LINE)
-    ));
+    for (name, line) in [
+        ("original", FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_LINE),
+        ("patched", FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_ALL_STATIC_LINE),
+        ("protected_original", FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_PROTECTED_LINE),
+        ("protected_patched", FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_PROTECTED_ALL_STATIC_LINE),
+    ] {
+        script.push_str(&format!("run_rustc_cargo_{name}_line={}\n", shell_quote(line)));
+    }
     script.push_str("run_rustc_cargo_replaced=false\n");
     script.push_str("run_rustc_cargo_seen_patched=false\n");
     script.push_str(": > \"$run_rustc_cargo_tmp\"\n");
@@ -8631,7 +8635,12 @@ fn push_first_stage_run_rustc_cargo_all_static_patch(script: &mut String) {
     script.push_str("  if [ \"$line\" = \"$run_rustc_cargo_original_line\" ]; then\n");
     script.push_str("    printf '%s\\n' \"$run_rustc_cargo_patched_line\" >> \"$run_rustc_cargo_tmp\"\n");
     script.push_str("    run_rustc_cargo_replaced=true\n");
-    script.push_str("  elif [ \"$line\" = \"$run_rustc_cargo_patched_line\" ]; then\n");
+    script.push_str("  elif [ \"$line\" = \"$run_rustc_cargo_protected_original_line\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$run_rustc_cargo_protected_patched_line\" >> \"$run_rustc_cargo_tmp\"\n");
+    script.push_str("    run_rustc_cargo_replaced=true\n");
+    script.push_str(
+        "  elif [ \"$line\" = \"$run_rustc_cargo_patched_line\" ] || [ \"$line\" = \"$run_rustc_cargo_protected_patched_line\" ]; then\n",
+    );
     script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_cargo_tmp\"\n");
     script.push_str("    run_rustc_cargo_seen_patched=true\n");
     script.push_str("  else\n");
@@ -9771,6 +9780,29 @@ mod tests {
         assert_eq!(rewritten, makefile);
     }
 
+    #[test]
+    fn run_rustc_stage_tool_and_all_static_patches_compose() {
+        let makefile = format!("target:\n\t$(BINDIR_S)rustc --version\n{FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_LINE}\n");
+        let (output, rewritten) = run_test_run_rustc_composed_patches(&makefile);
+
+        assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(rewritten.lines().any(|line| line == FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_PROTECTED_ALL_STATIC_LINE));
+        assert!(!rewritten.lines().any(|line| line == FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_PROTECTED_LINE));
+    }
+
+    #[test]
+    fn run_rustc_all_static_patch_rejects_unknown_protected_cargo_recipe() {
+        let makefile = "target:\n\t$(BINDIR_S)rustc --version\n\t$(BINDIR_S)cargo build --unexpected\n";
+        let (output, rewritten) = run_test_run_rustc_composed_patches(makefile);
+
+        assert!(!output.status.success());
+        assert!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("mrustc run_rustc Makefile lacks expected Cargo build line for all-static normalization")
+        );
+        assert!(rewritten.contains("\t$(abspath $(BINDIR_S)cargo) build --unexpected"));
+    }
+
     fn run_test_run_rustc_stage_tool_patch(makefile: &str) -> (std::process::Output, String) {
         let dir = tempfile::tempdir().unwrap();
         let run_rustc_dir = dir.path().join(FIRST_STAGE_RUN_RUSTC_DIR);
@@ -9781,6 +9813,23 @@ mod tests {
         fs::write(&makefile_path, makefile).unwrap();
         let mut script = format!("set -eu\nBUILD_DIR={}\nCOPY_PROGRAM=cp\n", shell_quote(build_dir.to_str().unwrap()));
         push_first_stage_run_rustc_stage_tool_absolute_patch(&mut script, true);
+        let output = Command::new("/bin/sh").arg("-c").arg(script).current_dir(dir.path()).output().unwrap();
+        let rewritten = fs::read_to_string(makefile_path).unwrap();
+        (output, rewritten)
+    }
+
+    fn run_test_run_rustc_composed_patches(makefile: &str) -> (std::process::Output, String) {
+        let dir = tempfile::tempdir().unwrap();
+        let run_rustc_dir = dir.path().join(FIRST_STAGE_RUN_RUSTC_DIR);
+        let build_dir = dir.path().join("build");
+        fs::create_dir_all(&run_rustc_dir).unwrap();
+        fs::create_dir_all(&build_dir).unwrap();
+        let makefile_path = run_rustc_dir.join(FIRST_STAGE_MAKEFILE);
+        fs::write(&makefile_path, makefile).unwrap();
+        let mut script = format!("set -eu\nBUILD_DIR={}\nCOPY_PROGRAM=cp\n", shell_quote(build_dir.to_str().unwrap()));
+        push_first_stage_run_rustc_stage_tool_absolute_patch(&mut script, true);
+        script.push_str(&format!("run_rustc_makefile={FIRST_STAGE_RUN_RUSTC_DIR}/{FIRST_STAGE_MAKEFILE}\n"));
+        push_first_stage_run_rustc_cargo_all_static_patch(&mut script);
         let output = Command::new("/bin/sh").arg("-c").arg(script).current_dir(dir.path()).output().unwrap();
         let rewritten = fs::read_to_string(makefile_path).unwrap();
         (output, rewritten)
