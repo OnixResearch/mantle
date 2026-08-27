@@ -296,6 +296,9 @@ const FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_PROTECTED_LINE: &str =
 const FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_EXEC_ORIGINAL_LINE: &str = "\t./$@";
 const FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_EXEC_PROTECTED_LINE: &str = "\t$(abspath $@)";
 const FIRST_STAGE_RUN_RUSTC_PROXY_PATH: &str = "run_rustc/rustc_proxy.sh";
+const FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_ORIGINAL_LINE: &str = "    ${PROXY_RUSTC} \"$@\"";
+const FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_PROTECTED_LINE: &str =
+    "    ${PROXY_RUSTC} -C linker=\"$MANTLE_TARGET_LINKER\" \"$@\"";
 const FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_ORIGINAL_LINE: &str = "    ${PROXY_MRUSTC} \"$@\"";
 const FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_PROTECTED_LINE: &str =
     "    ${PROXY_MRUSTC} -C linker=\"$MANTLE_TARGET_LINKER\" \"$@\"";
@@ -8614,33 +8617,51 @@ fn push_first_stage_run_rustc_proxy_linker_patch(script: &mut String) {
     debug_assert!(!script.contains('\0'));
     script.push_str(&format!("run_rustc_proxy={}\n", shell_quote(FIRST_STAGE_RUN_RUSTC_PROXY_PATH)));
     script.push_str("run_rustc_proxy_tmp=\"$BUILD_DIR/rustc-proxy.sh\"\n");
-    script.push_str(&format!(
-        "run_rustc_proxy_original={}\n",
-        shell_quote(FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_ORIGINAL_LINE)
-    ));
-    script.push_str(&format!(
-        "run_rustc_proxy_protected={}\n",
-        shell_quote(FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_PROTECTED_LINE)
-    ));
-    script.push_str("run_rustc_proxy_replaced=false\nrun_rustc_proxy_seen=false\n");
+    for (name, original, protected) in [
+        (
+            "target",
+            FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_ORIGINAL_LINE,
+            FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_PROTECTED_LINE,
+        ),
+        (
+            "bootstrap",
+            FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_ORIGINAL_LINE,
+            FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_PROTECTED_LINE,
+        ),
+    ] {
+        script.push_str(&format!("run_rustc_proxy_{name}_original={}\n", shell_quote(original)));
+        script.push_str(&format!("run_rustc_proxy_{name}_protected={}\n", shell_quote(protected)));
+        script.push_str(&format!("run_rustc_proxy_{name}_replaced=false\nrun_rustc_proxy_{name}_seen=false\n"));
+    }
     script.push_str(": > \"$run_rustc_proxy_tmp\"\n");
     script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
-    script.push_str("  if [ \"$line\" = \"$run_rustc_proxy_original\" ]; then\n");
-    script.push_str("    printf '%s\\n' \"$run_rustc_proxy_protected\" >> \"$run_rustc_proxy_tmp\"\n");
-    script.push_str("    run_rustc_proxy_replaced=true\n");
-    script.push_str("  elif [ \"$line\" = \"$run_rustc_proxy_protected\" ]; then\n");
+    script.push_str("  if [ \"$line\" = \"$run_rustc_proxy_target_original\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$run_rustc_proxy_target_protected\" >> \"$run_rustc_proxy_tmp\"\n");
+    script.push_str("    run_rustc_proxy_target_replaced=true\n");
+    script.push_str("  elif [ \"$line\" = \"$run_rustc_proxy_target_protected\" ]; then\n");
     script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_proxy_tmp\"\n");
-    script.push_str("    run_rustc_proxy_seen=true\n");
+    script.push_str("    run_rustc_proxy_target_seen=true\n");
+    script.push_str("  elif [ \"$line\" = \"$run_rustc_proxy_bootstrap_original\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$run_rustc_proxy_bootstrap_protected\" >> \"$run_rustc_proxy_tmp\"\n");
+    script.push_str("    run_rustc_proxy_bootstrap_replaced=true\n");
+    script.push_str("  elif [ \"$line\" = \"$run_rustc_proxy_bootstrap_protected\" ]; then\n");
+    script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_proxy_tmp\"\n");
+    script.push_str("    run_rustc_proxy_bootstrap_seen=true\n");
     script.push_str("  else\n");
     script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_proxy_tmp\"\n");
     script.push_str("  fi\n");
     script.push_str("done < \"$run_rustc_proxy\"\n");
-    script.push_str(&format!(
-        "if [ \"$run_rustc_proxy_replaced\" = false ] && [ \"$run_rustc_proxy_seen\" = false ]; then printf '%s\\n' 'run_rustc proxy lacks the protected bootstrap linker invocation' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
+    for name in ["target", "bootstrap"] {
+        script.push_str(&format!(
+            "if [ \"$run_rustc_proxy_{name}_replaced\" = false ] && [ \"$run_rustc_proxy_{name}_seen\" = false ]; then printf '%s\\n' 'run_rustc proxy lacks the protected {name} linker invocation' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
+        ));
+    }
     script.push_str("$COPY_PROGRAM \"$run_rustc_proxy_tmp\" \"$run_rustc_proxy\"\n");
+    script.push_str("chmod +x \"$run_rustc_proxy\"\n");
     script.push_str("rm -f \"$run_rustc_proxy_tmp\"\n");
-    assert!(script.contains("run_rustc_proxy_replaced=true"));
+    assert!(script.contains("run_rustc_proxy_target_replaced=true"));
+    assert!(script.contains("run_rustc_proxy_bootstrap_replaced=true"));
+    assert!(script.contains(FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_PROTECTED_LINE));
     assert!(script.contains(FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_PROTECTED_LINE));
 }
 
@@ -9952,18 +9973,24 @@ mod tests {
 
     #[test]
     fn run_rustc_proxy_patch_binds_bootstrap_linker() {
-        let proxy = format!("#!/bin/sh\n{FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_ORIGINAL_LINE}\n");
+        let proxy = format!(
+            "#!/bin/sh\n{FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_ORIGINAL_LINE}\n{FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_ORIGINAL_LINE}\n"
+        );
         let (output, rewritten) = run_test_run_rustc_proxy_patch(&proxy);
 
         assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(rewritten.contains(FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_PROTECTED_LINE));
+        assert!(!rewritten.contains(FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_ORIGINAL_LINE));
         assert!(rewritten.contains(FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_PROTECTED_LINE));
         assert!(!rewritten.contains(FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_ORIGINAL_LINE));
     }
 
     #[test]
     fn run_rustc_proxy_patch_rejects_unknown_bootstrap_invocation() {
-        let proxy = "#!/bin/sh\n    ${PROXY_MRUSTC} --unexpected \"$@\"\n";
-        let (output, rewritten) = run_test_run_rustc_proxy_patch(proxy);
+        let proxy = format!(
+            "#!/bin/sh\n{FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_ORIGINAL_LINE}\n    ${{PROXY_MRUSTC}} --unexpected \"$@\"\n"
+        );
+        let (output, rewritten) = run_test_run_rustc_proxy_patch(&proxy);
 
         assert!(!output.status.success());
         assert!(

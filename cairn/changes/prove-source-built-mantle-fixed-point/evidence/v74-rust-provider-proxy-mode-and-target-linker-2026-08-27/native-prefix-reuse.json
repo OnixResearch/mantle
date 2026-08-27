@@ -1,0 +1,8 @@
+{
+  "current_plan_digest_blake3": "ce7870a9c33a3c1461f5f857b037cc8ea396d17ebd21f17ae597932989816f37",
+  "imported_attempt": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v61-runtime-shim-prefix-cold-20260825.source-built-fixed-point-staging-3637585",
+  "imported_plan_digest_blake3": "6af6bce72c1531b55e5a20ca5a8a5f7b9ebe3ccab68d90cecd92a0f80f9a7d93",
+  "non_claim": "native-prefix reuse validates StageX, native, host-tool, and action evidence; it does not claim Rust-provider completion",
+  "schema": "mantle-source-built-native-prefix-reuse-v1",
+  "status": "complete"
+}
