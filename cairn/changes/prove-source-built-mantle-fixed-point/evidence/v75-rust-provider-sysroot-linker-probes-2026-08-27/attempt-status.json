@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "5c3b6af4523add5fc0bb9610dbd57e6f72f8630f989105e183ef93c84f8c7fb3",
+  "blocker": "error: build failed\nsource-built fixed-point blocked: constructing full-source Rust provider: build: Rust provider action authority blocked: Rust provider action mrustc-to-rust-1.90.0 reconciliation is incomplete: denied-stage-exec-events"
+}

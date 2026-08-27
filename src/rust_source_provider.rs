@@ -8598,6 +8598,7 @@ fn push_first_stage_run_rustc_host(script: &mut String, full_source_bound: bool)
     push_first_stage_target_linker_wrapper(script, full_source_bound);
     if full_source_bound {
         script.push_str("export MANTLE_TARGET_LINKER=\"$target_alias_dir/cc\"\n");
+        push_first_stage_run_rustc_sysroot_linker_aliases(script);
         push_first_stage_run_rustc_proxy_linker_patch(script);
     }
     push_first_stage_musl_proc_macro_runtime(script);
@@ -8611,6 +8612,26 @@ fn push_first_stage_run_rustc_host(script: &mut String, full_source_bound: bool)
             "if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -C {FIRST_STAGE_RUN_RUSTC_DIR} DYLIB_EXT=\"$RUN_RUSTC_DYLIB_EXT\"; else $MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -C {FIRST_STAGE_RUN_RUSTC_DIR}; fi\n"
         ));
     }
+}
+
+fn push_first_stage_run_rustc_sysroot_linker_aliases(script: &mut String) {
+    debug_assert!(!script.contains('\0'));
+    script.push_str("printf '%s\\n' 'binding run_rustc sysroot linker aliases to the protected wrapper'\n");
+    script
+        .push_str("run_rustc_sysroot_linker_dir=\"$(pwd)/run_rustc/output/prefix-s/lib/rustlib/$RUSTC_TARGET/bin\"\n");
+    script.push_str("run_rustc_self_contained_linker_dir=\"$run_rustc_sysroot_linker_dir/self-contained\"\n");
+    script.push_str("mkdir -p \"$run_rustc_sysroot_linker_dir\" \"$run_rustc_self_contained_linker_dir\"\n");
+    script.push_str(
+        "for linker_alias in \"$run_rustc_sysroot_linker_dir/cc\" \"$run_rustc_self_contained_linker_dir/cc\"; do\n",
+    );
+    script.push_str("  rm -f \"$linker_alias\"\n");
+    script.push_str("  $COPY_PROGRAM \"$MANTLE_TARGET_LINKER\" \"$linker_alias\"\n");
+    script.push_str("  chmod +x \"$linker_alias\"\n");
+    script.push_str("done\n");
+    script.push_str("test -x \"$run_rustc_sysroot_linker_dir/cc\"\n");
+    script.push_str("test -x \"$run_rustc_self_contained_linker_dir/cc\"\n");
+    assert!(script.contains("run_rustc/output/prefix-s/lib/rustlib/$RUSTC_TARGET/bin"));
+    assert!(script.contains("$run_rustc_self_contained_linker_dir/cc"));
 }
 
 fn push_first_stage_run_rustc_proxy_linker_patch(script: &mut String) {
@@ -9969,6 +9990,44 @@ mod tests {
                 .contains("run_rustc Makefile lacks the protected final rustc smoke recipe")
         );
         assert!(rewritten.contains("\t$V$(DBG) $(BINDIR)rustc --unexpected"));
+    }
+
+    #[test]
+    fn run_rustc_sysroot_linker_aliases_copy_protected_wrapper() {
+        let dir = tempfile::tempdir().unwrap();
+        let linker = dir.path().join("protected-linker");
+        fs::write(&linker, "protected linker\n").unwrap();
+        let mut script = format!(
+            "set -eu\nCOPY_PROGRAM=cp\nMANTLE_TARGET_LINKER={}\nRUSTC_TARGET={}\n",
+            shell_quote(linker.to_str().unwrap()),
+            shell_quote(FIRST_STAGE_MUSL_TRIPLE)
+        );
+        push_first_stage_run_rustc_sysroot_linker_aliases(&mut script);
+        let output = Command::new("/bin/sh").arg("-c").arg(script).current_dir(dir.path()).output().unwrap();
+        let linker_dir =
+            dir.path().join("run_rustc/output/prefix-s/lib/rustlib").join(FIRST_STAGE_MUSL_TRIPLE).join("bin");
+
+        assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(fs::read_to_string(linker_dir.join("cc")).unwrap(), "protected linker\n");
+        assert_eq!(fs::read_to_string(linker_dir.join("self-contained/cc")).unwrap(), "protected linker\n");
+    }
+
+    #[test]
+    fn run_rustc_sysroot_linker_aliases_reject_missing_wrapper() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut script = format!(
+            "set -eu\nCOPY_PROGRAM=cp\nMANTLE_TARGET_LINKER={}\nRUSTC_TARGET={}\n",
+            shell_quote(dir.path().join("missing-linker").to_str().unwrap()),
+            shell_quote(FIRST_STAGE_MUSL_TRIPLE)
+        );
+        push_first_stage_run_rustc_sysroot_linker_aliases(&mut script);
+        let output = Command::new("/bin/sh").arg("-c").arg(script).current_dir(dir.path()).output().unwrap();
+        let linker_dir =
+            dir.path().join("run_rustc/output/prefix-s/lib/rustlib").join(FIRST_STAGE_MUSL_TRIPLE).join("bin");
+
+        assert!(!output.status.success());
+        assert!(!linker_dir.join("cc").exists());
+        assert!(!linker_dir.join("self-contained/cc").exists());
     }
 
     #[test]
