@@ -6,6 +6,10 @@ const CHECKPOINT_CLOSURE_RELOCATION_REPORT_SCHEMA: &str = "mantle-source-built-c
 const CHECKPOINT_RUST_BINDING_RELOCATION_REPORT_FILE: &str = "provider-checkpoint-rust-binding-relocation.json";
 const CHECKPOINT_RUST_BINDING_RELOCATION_REPORT_SCHEMA: &str =
     "mantle-source-built-checkpoint-rust-binding-relocation-v1";
+const IMPORTED_NATIVE_PREFIX_DIR: &str = "imported-native-prefix";
+const IMPORTED_NATIVE_ORIGIN_REVALIDATION_FILE: &str = "imported-native-provider-origin-revalidation.json";
+const IMPORTED_NATIVE_MATERIALIZATION_REPORT_FILE: &str = "imported-native-provider-materialization.json";
+const IMPORTED_NATIVE_MATERIALIZATION_REPORT_SCHEMA: &str = "mantle-source-built-native-provider-materialization-v1";
 
 pub(super) fn import_provider_checkpoint_attempt(
     options: &SourceBuiltFixedPointOptions<'_>,
@@ -178,19 +182,17 @@ fn imported_native_provider_prefix(
         })?)
         .map_err(|error| proof_error(format!("parsing imported native admission: {error}")))?;
     let native_basename = required_utf8_basename(&imported_admission.provider_path, "imported native provider")?;
-    let native_path = import_root.join(NATIVE_STORE_DIR).join(native_basename);
+    let origin_native_path = import_root.join(NATIVE_STORE_DIR).join(native_basename);
     let native_source_manifest = import_root.join(NATIVE_SOURCE_MANIFEST_FILE);
-    let revalidation_path = prepared.staging_dir.join("imported-native-provider-revalidation.json");
-    let native_admission = crate::full_source_provider::cmd_admit_full_source_provider(
-        &native_path,
-        options.expected_native_provider_blake3,
+    let (native_path, native_admission, revalidation_path) = materialize_imported_native_provider(
+        options,
+        prepared,
+        &origin_native_path,
         &native_source_manifest,
-        &crate::source_bundle::read_source_bundle(&native_source_manifest)?.manifest_blake3,
-        &revalidation_path,
-        false,
+        native_basename,
     )?;
     let native_transcript = import_root.join(TRANSCRIPTS_DIR).join(format!("{NATIVE_PROVIDER_ID}.json"));
-    let native_provider = imported_native_observation(&native_path, &native_transcript, &imported_admission_path)?;
+    let native_provider = imported_native_observation(&native_path, &native_transcript, &revalidation_path)?;
     let stagex_path = import_root.join(NATIVE_STORE_DIR).join(STAGEX_PROVIDER_STORE_BASENAME);
     let stagex_provider_report = imported_stagex_provider_report(&stagex_path)?;
     let rust_host_tools = imported_host_tool_observations(import_root)?;
@@ -214,6 +216,89 @@ fn imported_native_provider_prefix(
         rust_host_tool_evidence_dir,
         rust_host_tool_manifest_path: host_tool_manifest_path,
     })
+}
+
+fn materialize_imported_native_provider(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    origin_native_path: &Path,
+    native_source_manifest: &Path,
+    native_basename: &str,
+) -> Result<(PathBuf, crate::full_source_provider::FullSourceProviderAdmissionReport, PathBuf), RunError> {
+    debug_assert!(origin_native_path.is_absolute());
+    debug_assert!(prepared.staging_dir.is_absolute());
+    let source_closure_blake3 = crate::source_bundle::read_source_bundle(native_source_manifest)?.manifest_blake3;
+    let origin_revalidation_path = prepared.staging_dir.join(IMPORTED_NATIVE_ORIGIN_REVALIDATION_FILE);
+    let origin_admission = crate::full_source_provider::cmd_admit_full_source_provider(
+        origin_native_path,
+        options.expected_native_provider_blake3,
+        native_source_manifest,
+        &source_closure_blake3,
+        &origin_revalidation_path,
+        false,
+    )?;
+    let materialized_root = prepared.staging_dir.join(IMPORTED_NATIVE_PREFIX_DIR).join(NATIVE_STORE_DIR);
+    let materialized_path = materialized_root.join(native_basename);
+    let materialized_identity = copy_imported_native_provider_tree(origin_native_path, &materialized_path)?;
+    if materialized_identity.1 != origin_admission.output_digest_blake3 {
+        return Err(proof_error("isolated imported native provider copy changed provider identity".to_string()));
+    }
+    let revalidation_path = prepared.staging_dir.join("imported-native-provider-revalidation.json");
+    let admission = crate::full_source_provider::cmd_admit_full_source_provider(
+        &materialized_path,
+        options.expected_native_provider_blake3,
+        native_source_manifest,
+        &source_closure_blake3,
+        &revalidation_path,
+        false,
+    )?;
+    let origin_identity = crate::release_tree_copy::hash_directory_tree(origin_native_path)
+        .map_err(|error| proof_error(format!("rehashing imported native provider origin: {error}")))?;
+    if origin_identity.1 != origin_admission.output_digest_blake3 {
+        return Err(proof_error("imported native provider origin changed during isolated materialization".to_string()));
+    }
+    write_imported_native_materialization_report(
+        prepared,
+        origin_native_path,
+        &materialized_path,
+        &origin_revalidation_path,
+        &revalidation_path,
+        &admission.output_digest_blake3,
+    )?;
+    Ok((materialized_path, admission, revalidation_path))
+}
+
+fn copy_imported_native_provider_tree(origin: &Path, materialized: &Path) -> Result<(u64, String), RunError> {
+    debug_assert!(!origin.as_os_str().is_empty());
+    debug_assert_ne!(origin, materialized);
+    crate::release_tree_copy::copy_directory_tree(origin, materialized)
+        .map_err(|error| proof_error(format!("copying imported native provider into isolated staging: {error}")))?;
+    crate::release_tree_copy::hash_directory_tree(materialized)
+        .map_err(|error| proof_error(format!("hashing isolated imported native provider: {error}")))
+}
+
+fn write_imported_native_materialization_report(
+    prepared: &PreparedAttempt,
+    origin: &Path,
+    materialized: &Path,
+    origin_revalidation: &Path,
+    materialized_revalidation: &Path,
+    output_digest_blake3: &str,
+) -> Result<(), RunError> {
+    assert_eq!(output_digest_blake3.len(), BLAKE3_HEX_LENGTH);
+    debug_assert_ne!(origin, materialized);
+    let report = serde_json::json!({
+        "schema": IMPORTED_NATIVE_MATERIALIZATION_REPORT_SCHEMA,
+        "status": "complete",
+        "origin": origin,
+        "origin_revalidation": origin_revalidation,
+        "materialized": materialized,
+        "materialized_revalidation": materialized_revalidation,
+        "output_digest_blake3": output_digest_blake3,
+        "copy_semantics": "bounded-no-follow-byte-copy",
+        "non_claim": "isolated materialization preserves validated provider identity without repeating provider construction",
+    });
+    write_json_create_new(&prepared.staging_dir.join(IMPORTED_NATIVE_MATERIALIZATION_REPORT_FILE), &report)
 }
 
 fn imported_host_tool_observations(import_root: &Path) -> Result<BTreeMap<String, BuildObservation>, RunError> {
@@ -1706,5 +1791,64 @@ mod tests {
         assert!(message.contains("imported StageX provider receipt is missing"));
         assert!(message.contains(crate::stagex_provider::PROVIDER_RECEIPT_RELATIVE_PATH));
         assert!(!provider_root.join(crate::stagex_provider::PROVIDER_RECEIPT_RELATIVE_PATH).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn imported_native_provider_copy_is_identity_preserving_and_inode_isolated() {
+        use std::os::unix::fs::MetadataExt as _;
+        use std::os::unix::fs::PermissionsExt as _;
+
+        const PERMISSION_BITS_MASK: u32 = 0o777;
+        const READ_ONLY_FILE_MODE: u32 = 0o444;
+        const WRITABLE_FILE_MODE: u32 = 0o644;
+        const PAYLOAD: &[u8] = b"provider payload\n";
+        const CHANGED_PAYLOAD: &[u8] = b"changed payload\n";
+
+        let temp = tempfile::tempdir().expect("temporary native provider roots");
+        let origin = temp.path().join("origin");
+        let materialized = temp.path().join("materialized");
+        fs::create_dir(&origin).expect("origin provider directory");
+        let origin_file = origin.join("payload");
+        fs::write(&origin_file, PAYLOAD).expect("origin provider payload");
+        fs::set_permissions(&origin_file, fs::Permissions::from_mode(READ_ONLY_FILE_MODE))
+            .expect("read-only origin payload");
+        let origin_identity = crate::release_tree_copy::hash_directory_tree(&origin).expect("origin identity");
+
+        let materialized_identity =
+            copy_imported_native_provider_tree(&origin, &materialized).expect("isolated provider copy");
+
+        let materialized_file = materialized.join("payload");
+        assert_eq!(materialized_identity, origin_identity);
+        assert_ne!(fs::metadata(&origin_file).unwrap().ino(), fs::metadata(&materialized_file).unwrap().ino());
+        fs::set_permissions(&materialized_file, fs::Permissions::from_mode(WRITABLE_FILE_MODE))
+            .expect("writable materialized payload");
+        fs::write(&materialized_file, CHANGED_PAYLOAD).expect("change materialized payload");
+        assert_eq!(fs::read(&origin_file).unwrap(), PAYLOAD);
+        assert_eq!(
+            fs::metadata(&origin_file).unwrap().permissions().mode() & PERMISSION_BITS_MASK,
+            READ_ONLY_FILE_MODE
+        );
+    }
+
+    #[test]
+    fn imported_native_provider_copy_rejects_a_nonempty_destination() {
+        const ORIGIN_PAYLOAD: &[u8] = b"origin\n";
+        const DESTINATION_PAYLOAD: &[u8] = b"destination\n";
+
+        let temp = tempfile::tempdir().expect("temporary native provider roots");
+        let origin = temp.path().join("origin");
+        let materialized = temp.path().join("materialized");
+        fs::create_dir(&origin).expect("origin provider directory");
+        fs::create_dir(&materialized).expect("materialized provider directory");
+        fs::write(origin.join("payload"), ORIGIN_PAYLOAD).expect("origin provider payload");
+        fs::write(materialized.join("existing"), DESTINATION_PAYLOAD).expect("existing destination payload");
+
+        let error = copy_imported_native_provider_tree(&origin, &materialized)
+            .expect_err("nonempty destination must fail closed");
+
+        assert!(error.to_string().contains("destination"));
+        assert_eq!(fs::read(origin.join("payload")).unwrap(), ORIGIN_PAYLOAD);
+        assert_eq!(fs::read(materialized.join("existing")).unwrap(), DESTINATION_PAYLOAD);
     }
 }

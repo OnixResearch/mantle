@@ -1,0 +1,4 @@
+mantle-runtime-fingerprint {"schema":"mantle-runtime-fingerprint-v1","mantle_version":"0.1.0","command":"self-build","logical_store_prefix":"/mantle/store","physical_store_dir":"/nix/store","state_dir":"/home/brittonr/.local/state/crunch","json_mode":false,"verbosity_source":"verbose-flag","diagnostic_scope":"selected-runtime-context-only","hermeticity_mode":"strict","substitution_mode":"disabled","substituter_count":0,"signing_key_selected":false,"trusted_public_key_count":0,"trust_unsigned":false}
+error: build failed
+source-built fixed-point proof failed closed: error: build failed
+full-source provider admission failed closed: output-blake3-mismatch:expected=63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9 observed=a5c6a9749a93dcea577784a8eace2eda6e0f7a4cf1889140ec9255d10336a118; preserved_attempt=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v79-native-prefix-resume-20260828.source-built-fixed-point-staging-734898

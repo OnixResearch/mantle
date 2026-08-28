@@ -1,0 +1,10 @@
+derived_at=2026-08-28T10:16:38-04:00
+origin=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v61-runtime-shim-prefix-cold-20260825.source-built-fixed-point-staging-3637585
+origin_observed_mutated_blake3=a5c6a9749a93dcea577784a8eace2eda6e0f7a4cf1889140ec9255d10336a118
+derived=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-native-prefix-v61-repaired-20260828
+restored_output_blake3=63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9
+source_closure_blake3=7a97f836c8daa3dc5cbdf51a2d6ca59e7b995debac22fe5d08c091e667828778
+repaired_file_count=6
+repair=remove-owner-write-from-exact-musl-crt-and-libc-archive-set
+copy_semantics=ordinary-byte-copy
+verdict=derived-prefix-restores-previously-admitted-provider-identity

@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "b71018723e80c5fe225c39b1dc3c7a95e9ed7ad9a4ee3278d3b9c4f52145b858",
+  "blocker": "error: build failed\nfull-source provider admission failed closed: output-blake3-mismatch:expected=63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9 observed=a5c6a9749a93dcea577784a8eace2eda6e0f7a4cf1889140ec9255d10336a118"
+}

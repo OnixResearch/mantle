@@ -1,0 +1,127 @@
+$ cargo test -p mantle --bin mantle source_built_fixed_point_shell:: -- --test-threads=1
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.19s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 37 tests
+test source_built_fixed_point_shell::checkpoint_integration::tests::imported_native_provider_copy_is_identity_preserving_and_inode_isolated ... ok
+test source_built_fixed_point_shell::checkpoint_integration::tests::imported_native_provider_copy_rejects_a_nonempty_destination ... ok
+test source_built_fixed_point_shell::checkpoint_integration::tests::imported_stagex_provider_report_rejects_the_legacy_root_receipt_path ... ok
+test source_built_fixed_point_shell::checkpoint_integration::tests::imported_stagex_provider_report_uses_the_published_receipt_path ... ok
+test source_built_fixed_point_shell::checkpoint_integration::tests::restored_paths_keep_the_checkpoint_closure_as_origin_evidence ... ok
+test source_built_fixed_point_shell::checkpoint_integration::tests::restored_rust_binding_relocates_provider_host_and_native_authority ... ok
+test source_built_fixed_point_shell::tests::adopt_cached_provider_subtrees_copies_and_returns_observation ... ok
+test source_built_fixed_point_shell::tests::checkpoint_import_rejects_running_attempt_status ... ok
+test source_built_fixed_point_shell::tests::conventional_native_chain_is_cut_over_to_fresh_stagex_authority ... ok
+test source_built_fixed_point_shell::tests::dev_cache_adoption_requires_validated_entry_and_present_subtrees ... ok
+test source_built_fixed_point_shell::tests::dev_handoff_reuses_only_an_identical_persistent_tree ... ok
+test source_built_fixed_point_shell::tests::disk_capacity_accepts_sufficient_space_and_rejects_shortfall ... ok
+test source_built_fixed_point_shell::tests::imported_provider_authority_accepts_legacy_plan_only_with_matching_recipe_projection ... ok
+test source_built_fixed_point_shell::tests::isolated_exec_worker_returns_values_and_reports_invalid_completion ... ok
+test source_built_fixed_point_shell::tests::last_published_source_digest_reads_latest_receipt_binding ... ok
+test source_built_fixed_point_shell::tests::materialized_source_records_preserve_bound_union_and_allow_profile_bound_fetches ... ok
+test source_built_fixed_point_shell::tests::materialized_vendor_inputs_are_checked_before_construction ... ok
+test source_built_fixed_point_shell::tests::missing_stagex_transition_handoff_input_leaves_destination_absent ... ok
+test source_built_fixed_point_shell::tests::native_build_command_is_strict_offline_and_substitution_free ... ok
+test source_built_fixed_point_shell::tests::native_build_failure_summary_preserves_offline_blockers_and_rejects_malformed_output ... ok
+test source_built_fixed_point_shell::tests::open_file_descriptor_limit_child ... ok
+test source_built_fixed_point_shell::tests::open_file_descriptor_limit_is_enforced_in_a_subprocess ... ok
+test source_built_fixed_point_shell::tests::open_file_descriptor_limit_planning_is_bounded_and_fail_closed ... ok
+test source_built_fixed_point_shell::tests::options_reject_existing_output_and_malformed_digests ... ok
+test source_built_fixed_point_shell::tests::policy_digests_are_domain_separated_and_stable ... ok
+test source_built_fixed_point_shell::tests::preparation_failure_status_preserves_blocker_without_inventing_plan_identity ... ok
+test source_built_fixed_point_shell::tests::projects_and_imports_retained_stagex_transition_handoff ... ignored, requires retained completed StageX transition
+test source_built_fixed_point_shell::tests::publication_rolls_bundle_back_when_alias_transaction_fails ... ok
+test source_built_fixed_point_shell::tests::runtime_bounds_reject_elapsed_timeout_before_disk_probe ... ok
+test source_built_fixed_point_shell::tests::stage_marker_write_read_and_reject_mutation ... ok
+test source_built_fixed_point_shell::tests::stagex_native_handoff_uses_only_the_fresh_reserved_provider_path ... ok
+test source_built_fixed_point_shell::tests::stagex_provider_cache_reuses_only_the_same_normalized_payload ... ok
+test source_built_fixed_point_shell::tests::stagex_provider_handoff_accepts_only_expected_normalized_identity ... ok
+test source_built_fixed_point_shell::tests::stagex_transition_handoff_projects_only_declared_runtime_outputs ... ok
+test source_built_fixed_point_shell::tests::store_seed_is_disabled_without_cache_flag ... ok
+test source_built_fixed_point_shell::tests::store_service_registration_adopts_real_provider_and_is_observable ... ok
+test source_built_fixed_point_shell::tests::success_alias_transaction_updates_both_or_neither ... ok
+
+test result: ok. 36 passed; 0 failed; 1 ignored; 0 measured; 2479 filtered out; finished in 0.07s
+
+$ cargo check -p mantle --bin mantle
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: function `prepare_rustc_compatibility` is never used
+    --> src/cargo_free_self_build.rs:1662:4
+     |
+1662 | fn prepare_rustc_compatibility(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `execution_path_env` is never used
+    --> src/cargo_free_self_build.rs:3499:4
+     |
+3499 | fn execution_path_env(cargo_path_dir: &Path, toolchain_closure: &LoadedToolchainClosure) -> Result<OsString, RunError> {
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `write_toolchain_path_aliases` is never used
+    --> src/cargo_free_self_build.rs:3552:4
+     |
+3552 | fn write_toolchain_path_aliases(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: method `as_str` is never used
+  --> src/remote_nominal.rs:55:20
+   |
+50 |         impl $name {
+   |         ---------- method in this implementation
+...
+55 |             pub fn as_str(&self) -> &str {
+   |                    ^^^^^^
+...
+62 | remote_id!(RemoteRequestId);
+   | --------------------------- in this macro invocation
+   |
+   = note: this warning originates in the macro `remote_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: method `as_str` is never used
+  --> src/remote_nominal.rs:55:20
+   |
+50 |         impl $name {
+   |         ---------- method in this implementation
+...
+55 |             pub fn as_str(&self) -> &str {
+   |                    ^^^^^^
+...
+63 | remote_id!(RemoteProtocolSessionId);
+   | ----------------------------------- in this macro invocation
+   |
+   = note: this warning originates in the macro `remote_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: variant `IncompleteReconciliation` is never constructed
+   --> src/source_built_rust_action_plan.rs:209:5
+    |
+206 | pub(crate) enum RustChildActionPlanErrorKind {
+    |                 ---------------------------- variant in this enum
+...
+209 |     IncompleteReconciliation,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `RustChildActionPlanErrorKind` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `reconcile_rust_child_actions` is never used
+   --> src/source_built_rust_action_plan.rs:876:15
+    |
+876 | pub(crate) fn reconcile_rust_child_actions(
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle") generated 7 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.19s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 8`
+$ rustfmt --edition 2024 --check src/source_built_fixed_point_shell/checkpoint_integration.rs
+$ git diff --check

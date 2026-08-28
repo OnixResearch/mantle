@@ -1,0 +1,10 @@
+pruned_at=2026-08-28T09:46:00-04:00
+root=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v78-native-prefix-resume-20260827.source-built-fixed-point-staging-592125
+status=failed
+preserved_evidence_commit=b36c782a
+size_bytes=75614546366
+free_bytes_before=808123711488
+free_bytes_after=886503329792
+reclaimed_bytes=78379618304
+retained_native_prefix=v61
+verdict=failed-root-pruned-after-local-evidence-preservation
