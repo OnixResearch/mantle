@@ -160,6 +160,12 @@ const RUSTC_SOURCE_BOOTSTRAP_MANIFEST: &str = "src/bootstrap/Cargo.toml";
 const RUSTC_SOURCE_CRANELIFT_MANIFEST: &str = "compiler/rustc_codegen_cranelift/Cargo.toml";
 const RUSTC_SOURCE_CODEGEN_GCC_MANIFEST: &str = "compiler/rustc_codegen_gcc/Cargo.toml";
 const RUSTC_SOURCE_RUSTC_DRIVER_MANIFEST: &str = "compiler/rustc_driver/Cargo.toml";
+const RUSTC_SOURCE_LLVM_TABLEGEN_CMAKE: &str = "src/llvm-project/llvm/cmake/modules/TableGen.cmake";
+const RUSTC_SOURCE_LLVM_TABLEGEN_EXE_ORIGINAL_LINE: &str = "  set(tablegen_exe ${${project}_TABLEGEN_EXE})";
+const RUSTC_SOURCE_LLVM_TABLEGEN_TARGET_MARKER_LINE: &str = "  if(TARGET ${${project}_TABLEGEN_EXE})";
+const RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_ORIGINAL_LINE: &str = "    COMMAND ${tablegen_exe} ${ARG_UNPARSED_ARGUMENTS}";
+const RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_PROTECTED_LINE: &str =
+    "    COMMAND ${CMAKE_COMMAND} -E env -- ${tablegen_exe} ${ARG_UNPARSED_ARGUMENTS}";
 const RUSTC_SOURCE_FILESEARCH_SOURCE: &str = "compiler/rustc_session/src/filesearch.rs";
 const RUSTC_SOURCE_TOOL_BUILD_SOURCE: &str = "src/bootstrap/src/core/build_steps/tool.rs";
 const RUSTC_SOURCE_TOOL_BUILD_CARGO_ANCHOR_LINE: &str = "        let mut cargo = prepare_tool_cargo(";
@@ -2781,6 +2787,9 @@ fn push_rustc_source_patch_plan_operation(
         RustBootstrapPatchOperationKind::RustBootstrapTargetToolConfig => {
             push_rustc_source_build_target_tool_config(script);
         }
+        RustBootstrapPatchOperationKind::RustBootstrapLlvmAbsoluteTablegen => {
+            push_rustc_source_llvm_absolute_tablegen_patch(script);
+        }
         RustBootstrapPatchOperationKind::RustBootstrapWorkspaceIsolation => {
             push_rustc_source_bootstrap_workspace_isolation(script);
         }
@@ -2801,6 +2810,74 @@ fn push_rustc_source_patch_plan_operation(
         }
     }
     Ok(())
+}
+
+fn push_rustc_source_llvm_absolute_tablegen_patch(script: &mut String) {
+    debug_assert!(script.len() <= script.capacity());
+    debug_assert!(!script.contains('\0'));
+    script.push_str(&format!("if [ \"$MANTLE_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
+    script
+        .push_str("  printf '%s\\n' 'normalizing generated LLVM tablegen executions to target-file absolute paths'\n");
+    script.push_str("  llvm_tablegen_cmake=\"$MANTLE_RUST_SOURCE/");
+    script.push_str(RUSTC_SOURCE_LLVM_TABLEGEN_CMAKE);
+    script.push_str("\"\n");
+    script.push_str(&format!(
+        "  if [ ! -f \"$llvm_tablegen_cmake\" ]; then printf '%s\\n' 'LLVM TableGen CMake source missing before executable-path normalization' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("  llvm_tablegen_tmp=\"$MANTLE_BUILD_DIR/llvm-TableGen.cmake\"\n");
+    script.push_str("  llvm_tablegen_replaced=false\n");
+    script.push_str("  llvm_tablegen_seen_absolute=false\n");
+    script.push_str("  llvm_tablegen_in_absolute_block=false\n");
+    script.push_str("  llvm_tablegen_command_replaced=false\n");
+    script.push_str("  llvm_tablegen_command_seen_protected=false\n");
+    script.push_str("  : > \"$llvm_tablegen_tmp\"\n");
+    script.push_str("  while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str("    if [ \"$llvm_tablegen_in_absolute_block\" = true ]; then\n");
+    script.push_str("      printf '%s\\n' \"$line\" >> \"$llvm_tablegen_tmp\"\n");
+    script.push_str("      if [ \"$line\" = '  endif()' ]; then llvm_tablegen_in_absolute_block=false; fi\n");
+    script.push_str("      continue\n");
+    script.push_str("    fi\n");
+    script.push_str("    case \"$line\" in\n");
+    script.push_str(&format!(
+        "      {original})\n",
+        original = shell_quote(RUSTC_SOURCE_LLVM_TABLEGEN_EXE_ORIGINAL_LINE),
+    ));
+    for replacement_line in [
+        RUSTC_SOURCE_LLVM_TABLEGEN_TARGET_MARKER_LINE,
+        "    set(tablegen_exe \"${LLVM_TOOLS_BINARY_DIR}/${${project}_TABLEGEN_EXE}${CMAKE_EXECUTABLE_SUFFIX}\")",
+        "  else()",
+        RUSTC_SOURCE_LLVM_TABLEGEN_EXE_ORIGINAL_LINE,
+        "  endif()",
+    ] {
+        script
+            .push_str(&format!("        printf '%s\\n' {} >> \"$llvm_tablegen_tmp\"\n", shell_quote(replacement_line)));
+    }
+    script.push_str("        llvm_tablegen_replaced=true\n");
+    script.push_str("        ;;\n");
+    script.push_str(&format!(
+        "      {marker}) llvm_tablegen_seen_absolute=true; llvm_tablegen_in_absolute_block=true; printf '%s\\n' \"$line\" >> \"$llvm_tablegen_tmp\" ;;\n",
+        marker = shell_quote(RUSTC_SOURCE_LLVM_TABLEGEN_TARGET_MARKER_LINE),
+    ));
+    script.push_str(&format!(
+        "      {command_original}) printf '%s\\n' {command_protected} >> \"$llvm_tablegen_tmp\"; llvm_tablegen_command_replaced=true ;;\n",
+        command_original = shell_quote(RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_ORIGINAL_LINE),
+        command_protected = shell_quote(RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_PROTECTED_LINE),
+    ));
+    script.push_str(&format!(
+        "      {command_protected}) llvm_tablegen_command_seen_protected=true; printf '%s\\n' \"$line\" >> \"$llvm_tablegen_tmp\" ;;\n",
+        command_protected = shell_quote(RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_PROTECTED_LINE),
+    ));
+    script.push_str("      *) printf '%s\\n' \"$line\" >> \"$llvm_tablegen_tmp\" ;;\n");
+    script.push_str("    esac\n");
+    script.push_str("  done < \"$llvm_tablegen_cmake\"\n");
+    script.push_str(&format!(
+        "  if [ \"$llvm_tablegen_replaced\" = false ] && [ \"$llvm_tablegen_seen_absolute\" = false ]; then printf '%s\\n' 'LLVM TableGen CMake source lacks expected executable selection for absolute-path normalization' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str(&format!(
+        "  if [ \"$llvm_tablegen_command_replaced\" = false ] && [ \"$llvm_tablegen_command_seen_protected\" = false ]; then printf '%s\\n' 'LLVM TableGen CMake source lacks expected command for absolute-path launcher normalization' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("  mv \"$llvm_tablegen_tmp\" \"$llvm_tablegen_cmake\"\n");
+    script.push_str("fi\n");
 }
 
 fn push_rustc_source_musl_rustc_driver_rlib_patch(script: &mut String) {
@@ -3497,6 +3574,25 @@ fn push_rustc_source_target_companion_wrappers(script: &mut String, full_source_
     );
     script.push_str("    chmod +x \"$target_alias_dir/c++\"\n");
     script.push_str("    for target_tool in ar ranlib; do case \"$target_tool\" in ar) target_program=\"$target_ar_path\" ;; ranlib) target_program=\"$target_ranlib_path\" ;; esac; printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/$target_tool\"; printf '%s\\n' \"exec \\\"$target_program\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/$target_tool\"; chmod +x \"$target_alias_dir/$target_tool\"; done\n");
+    if full_source_bound {
+        for (alias, program) in [
+            ("sh", "$SHELL_PROGRAM"),
+            ("cmake", "$CMAKE_PROGRAM"),
+            ("make", "$MAKE_PROGRAM"),
+            ("perl", "$PERL_PROGRAM"),
+        ] {
+            script.push_str(&format!(
+                "    printf '%s\\n' \"#!$SHELL_PROGRAM\" \"exec \\\"{program}\\\" \\\"\\$@\\\"\" > \"$target_alias_dir/{alias}\"\n"
+            ));
+            script.push_str(&format!("    chmod +x \"$target_alias_dir/{alias}\"\n"));
+        }
+        for unavailable_tool in ["emcc", "pkg-config", "pkgconf", "git"] {
+            script.push_str(&format!(
+                "    printf '%s\\n' \"#!$SHELL_PROGRAM\" 'exit 127' > \"$target_alias_dir/{unavailable_tool}\"\n"
+            ));
+            script.push_str(&format!("    chmod +x \"$target_alias_dir/{unavailable_tool}\"\n"));
+        }
+    }
     push_first_stage_target_musl_libatomic_shim(script, full_source_bound);
     script.push_str("    ");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
@@ -9718,6 +9814,70 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn rust_bootstrap_llvm_tablegen_patch_emits_absolute_target_file_and_is_idempotent() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_root = temp.path().join("source");
+        let build_root = temp.path().join("build");
+        let tablegen_path = source_root.join(RUSTC_SOURCE_LLVM_TABLEGEN_CMAKE);
+        fs::create_dir_all(tablegen_path.parent().unwrap()).unwrap();
+        fs::create_dir(&build_root).unwrap();
+        fs::write(
+            &tablegen_path,
+            format!(
+                "before\n{RUSTC_SOURCE_LLVM_TABLEGEN_EXE_ORIGINAL_LINE}\n{RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_ORIGINAL_LINE}\nafter\n"
+            ),
+        )
+        .unwrap();
+        let script = llvm_tablegen_patch_test_script(&source_root, &build_root);
+
+        let first = Command::new("/bin/sh").arg("-c").arg(&script).output().unwrap();
+        let second = Command::new("/bin/sh").arg("-c").arg(&script).output().unwrap();
+        let patched = fs::read_to_string(&tablegen_path).unwrap();
+
+        assert!(first.status.success(), "{}", String::from_utf8_lossy(&first.stderr));
+        assert!(second.status.success(), "{}", String::from_utf8_lossy(&second.stderr));
+        assert_eq!(patched.matches(RUSTC_SOURCE_LLVM_TABLEGEN_TARGET_MARKER_LINE).count(), 1);
+        assert!(patched.contains(
+            "set(tablegen_exe \"${LLVM_TOOLS_BINARY_DIR}/${${project}_TABLEGEN_EXE}${CMAKE_EXECUTABLE_SUFFIX}\")"
+        ));
+        assert!(patched.contains(RUSTC_SOURCE_LLVM_TABLEGEN_EXE_ORIGINAL_LINE));
+        assert!(patched.contains(RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_PROTECTED_LINE));
+        assert!(!patched.contains(RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_ORIGINAL_LINE));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rust_bootstrap_llvm_tablegen_patch_rejects_unknown_recipe() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_root = temp.path().join("source");
+        let build_root = temp.path().join("build");
+        let tablegen_path = source_root.join(RUSTC_SOURCE_LLVM_TABLEGEN_CMAKE);
+        fs::create_dir_all(tablegen_path.parent().unwrap()).unwrap();
+        fs::create_dir(&build_root).unwrap();
+        fs::write(&tablegen_path, "set(tablegen_exe unknown-recipe)\n").unwrap();
+        let script = llvm_tablegen_patch_test_script(&source_root, &build_root);
+
+        let output = Command::new("/bin/sh").arg("-c").arg(script).output().unwrap();
+
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("lacks expected executable selection"));
+        assert_eq!(fs::read_to_string(tablegen_path).unwrap(), "set(tablegen_exe unknown-recipe)\n");
+    }
+
+    #[cfg(unix)]
+    fn llvm_tablegen_patch_test_script(source_root: &Path, build_root: &Path) -> String {
+        let mut script = format!(
+            "set -eu\nMANTLE_HOST_TRIPLE={}\nMANTLE_RUST_SOURCE={}\nMANTLE_BUILD_DIR={}\n",
+            shell_quote(FIRST_STAGE_MUSL_TRIPLE),
+            shell_quote(&source_root.display().to_string()),
+            shell_quote(&build_root.display().to_string()),
+        );
+        push_rustc_source_llvm_absolute_tablegen_patch(&mut script);
+        script
+    }
+
     #[test]
     fn stage_construction_evidence_rejects_missing_source_file() {
         let temp = tempfile::tempdir().unwrap();
@@ -9786,6 +9946,7 @@ mod tests {
         push_generated_script_shebang(&mut script, Some(&context)).unwrap();
         push_full_source_tool_bindings(&mut script, &context).unwrap();
         push_first_stage_target_linker_wrapper(&mut script, true);
+        push_rustc_source_target_companion_wrappers(&mut script, true);
         push_rustc_source_build_tool_discovery(&mut script, Some(&context)).unwrap();
 
         assert!(script.starts_with("#!/receipt-bound/sh\n"));
@@ -9804,6 +9965,11 @@ mod tests {
         assert!(script.contains("export CFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MANTLE_LINUX_HEADERS_CFLAGS\""));
         assert!(script.contains("unset GCC_EXEC_PREFIX COMPILER_PATH"));
         assert!(script.contains("MANTLE_TARGET_CC='/native-provider/bin/x86_64-linux-musl-gcc'"));
+        assert!(script.contains("$target_alias_dir/emcc"));
+        assert!(script.contains("$target_alias_dir/pkg-config"));
+        assert!(script.contains("$target_alias_dir/git"));
+        assert!(script.contains("$target_alias_dir/cmake"));
+        assert!(script.contains("$target_alias_dir/sh"));
         assert!(!script.contains("ZLIB_CFLAGS=\nZLIB_LIBS=\n"));
         assert!(!script.contains("command -v"));
         assert!(!script.contains("/nix/store"));
@@ -10923,6 +11089,13 @@ mod tests {
         assert!(rustc_stage1_script.contains("export TMPDIR=\"$TEMP_ROOT\""));
         assert!(!rustc_stage1_script.contains("TMPDIR=/tmp"));
         assert!(rustc_stage1_script.contains(RUSTC_SOURCE_LLVM_BUILD_CONFIG.trim_end()));
+        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_LLVM_TABLEGEN_CMAKE));
+        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_LLVM_TABLEGEN_TARGET_MARKER_LINE));
+        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_PROTECTED_LINE));
+        assert!(
+            rustc_stage1_script
+                .contains("${LLVM_TOOLS_BINARY_DIR}/${${project}_TABLEGEN_EXE}${CMAKE_EXECUTABLE_SUFFIX}")
+        );
         assert!(rustc_stage1_script.contains("\"LLVM_ENABLE_ZLIB\" = \"OFF\""));
         assert!(!rustc_stage1_script.contains("\"LLVM_ENABLE_ZLIB\" = \"ON\""));
         assert!(rustc_stage1_script.contains("LLVM_TOOL_LTO_BUILD"));
@@ -12806,6 +12979,14 @@ let Plan = {
                 &mut builder,
                 &format!("{top_dir}/{RUSTC_SOURCE_BOOTSTRAP_MANIFEST}"),
                 b"[package]\nname = \"bootstrap\"\nversion = \"0.0.0\"\nedition = \"2024\"\n",
+            );
+            append_test_tar_file(
+                &mut builder,
+                &format!("{top_dir}/{RUSTC_SOURCE_LLVM_TABLEGEN_CMAKE}"),
+                format!(
+                    "before\n{RUSTC_SOURCE_LLVM_TABLEGEN_EXE_ORIGINAL_LINE}\n{RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_ORIGINAL_LINE}\nafter\n"
+                )
+                .as_bytes(),
             );
         }
         if top_dir == "rust-1.90.0" {

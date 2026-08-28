@@ -21,7 +21,7 @@ const PATCH_PLAN_MAX_SOURCE_IDENTITIES: usize = 16;
 const PATCH_PLAN_MAX_OPERATIONS: usize = 64;
 const PATCH_PLAN_BASE_RECEIPT_ARGUMENTS: usize = 10;
 const FIRST_STAGE_MUSL_REPAIR_OPERATION_COUNT: usize = 8;
-const RUST_BOOTSTRAP_REPAIR_OPERATION_COUNT: usize = 5;
+const RUST_BOOTSTRAP_REPAIR_OPERATION_COUNT: usize = 6;
 const OPERATION_LABEL_SEPARATOR: &str = ":";
 
 const _: () = {
@@ -96,6 +96,7 @@ pub(crate) enum RustBootstrapPatchOperationKind {
     RunRustcHostRuntime,
     RunRustcTargetRustlib,
     RustBootstrapTargetToolConfig,
+    RustBootstrapLlvmAbsoluteTablegen,
     RustBootstrapWorkspaceIsolation,
     RustBootstrapRustcDriverRlib,
     RustBootstrapSysrootFallback,
@@ -449,6 +450,14 @@ fn derive_rust_bootstrap_operations(
         Some("Rust bootstrap target tool configuration"),
     ));
     operations.push(patch_operation!(
+        "rust-bootstrap-llvm-absolute-tablegen",
+        RustBootstrapPatchOperationKind::RustBootstrapLlvmAbsoluteTablegen,
+        RustBootstrapPatchPhase::RustBootstrapBeforeXpy,
+        "emit generated LLVM tablegen commands with runtime-output absolute paths",
+        Some(&format!("rust-{}", input.rust_version)),
+        Some("src/llvm-project/llvm/cmake/modules/TableGen.cmake tablegen executable selection"),
+    ));
+    operations.push(patch_operation!(
         "rust-bootstrap-workspace-isolation",
         RustBootstrapPatchOperationKind::RustBootstrapWorkspaceIsolation,
         RustBootstrapPatchPhase::RustBootstrapBeforeXpy,
@@ -636,6 +645,7 @@ mod tests {
         let plan = derive_rust_bootstrap_patch_plan(input).unwrap();
 
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::RustBootstrapTargetToolConfig));
+        assert!(plan.contains_operation(RustBootstrapPatchOperationKind::RustBootstrapLlvmAbsoluteTablegen));
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::RustBootstrapRustcPrivateToolRlibLookup));
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::ProviderContractAssertion));
         assert!(plan.receipt_arguments().iter().any(|argument| argument.contains("output-digest=")));
