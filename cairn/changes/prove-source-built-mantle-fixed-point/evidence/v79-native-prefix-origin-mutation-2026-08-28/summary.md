@@ -16,7 +16,7 @@ The fail-closed admission rejected the provider. No Rust stage ran and no checkp
 
 ## Root cause
 
-Native-prefix reuse returned the imported provider path directly to downstream Rust construction. The Rust bootstrap made six musl inputs owner-writable:
+Native-prefix reuse returned the imported provider path directly to downstream Rust construction. The working tree retained shared inodes for six musl inputs. V78 cleanup applied a recursive permission change to its failed root, which made the shared origin files owner-writable:
 
 - `Scrt1.o`
 - `crt1.o`
@@ -25,7 +25,7 @@ Native-prefix reuse returned the imported provider path directly to downstream R
 - `libc.a`
 - `rcrt1.o`
 
-A later failed-root cleanup could not treat that imported prefix as immutable authority. The six mode changes were enough to change the provider-tree identity. `v79-provider-writable-files.txt` records the exact bounded set.
+The six mode changes were enough to change the provider-tree identity. `v79-provider-writable-files.txt` records the exact bounded set. V80 later confirmed that normal Rust execution did not make either the repaired origin or its isolated copy owner-writable.
 
 ## Repair
 

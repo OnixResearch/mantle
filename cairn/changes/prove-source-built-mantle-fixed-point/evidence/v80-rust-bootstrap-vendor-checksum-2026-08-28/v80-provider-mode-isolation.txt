@@ -1,0 +1,5 @@
+origin=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-native-prefix-v61-repaired-20260828/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain
+materialized=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v80-native-prefix-isolated-20260828.source-built-fixed-point-staging-738158/imported-native-prefix/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain
+origin_owner_writable_files=0
+materialized_owner_writable_files=0
+materialized_writable_paths:

@@ -173,6 +173,112 @@ const RUSTC_SOURCE_OPENSSL_NO_ASM_MARKER: &str =
     "        // Mantle: avoid Perl assembly pipes that require ambient /bin/sh.";
 const RUSTC_SOURCE_OPENSSL_NO_ASM_LINE: &str = "        configure.arg(\"no-asm\");";
 const RUSTC_SOURCE_OPENSSL_CONFIG_COUNT_MAX: usize = 8;
+const RUSTC_SOURCE_OPENSSL_CONFIG_BYTES_MAX: usize = 2_097_152;
+const RUSTC_SOURCE_CARGO_CHECKSUM_BYTES_MAX: usize = 1_048_576;
+const RUSTC_SOURCE_OPENSSL_READ_CHUNK_BYTES: usize = 65_536;
+const RUSTC_SOURCE_OPENSSL_READ_ITERATIONS_MAX: usize =
+    RUSTC_SOURCE_OPENSSL_CONFIG_BYTES_MAX / RUSTC_SOURCE_OPENSSL_READ_CHUNK_BYTES + 2;
+const RUSTC_SOURCE_CARGO_CHECKSUM_MEMBER: &str = "src/lib.rs";
+const RUSTC_SOURCE_CARGO_CHECKSUM_ARGUMENT_COUNT: usize = 4;
+const SHA256_DIGEST_HEX_LENGTH: usize = 64;
+const RUSTC_SOURCE_CARGO_CHECKSUM_NORMALIZER_PY: &str = r#"import hashlib
+import json
+import os
+import stat
+import sys
+
+ARGUMENT_COUNT = __MANTLE_ARGUMENT_COUNT__
+SOURCE_BYTES_MAX = __MANTLE_SOURCE_BYTES_MAX__
+CHECKSUM_BYTES_MAX = __MANTLE_CHECKSUM_BYTES_MAX__
+READ_CHUNK_BYTES = __MANTLE_READ_CHUNK_BYTES__
+READ_ITERATIONS_MAX = __MANTLE_READ_ITERATIONS_MAX__
+WRITE_ITERATIONS_MAX = CHECKSUM_BYTES_MAX
+SHA256_HEX_LENGTH = __MANTLE_SHA256_HEX_LENGTH__
+CHECKSUM_MEMBER = "__MANTLE_CHECKSUM_MEMBER__"
+
+
+def read_regular_nofollow(path, size_bytes_max):
+    observed = os.lstat(path)
+    if not stat.S_ISREG(observed.st_mode):
+        raise RuntimeError("expected regular file: %s" % path)
+    if not hasattr(os, "O_NOFOLLOW"):
+        raise RuntimeError("O_NOFOLLOW is unavailable")
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        opened = os.fstat(descriptor)
+        if (opened.st_dev, opened.st_ino) != (observed.st_dev, observed.st_ino):
+            raise RuntimeError("file identity changed while opening: %s" % path)
+        parts = []
+        total_bytes = 0
+        iteration_count = 0
+        while True:
+            iteration_count += 1
+            if iteration_count > READ_ITERATIONS_MAX:
+                raise RuntimeError("file read exceeded iteration bound: %s" % path)
+            chunk = os.read(descriptor, READ_CHUNK_BYTES)
+            if not chunk:
+                break
+            total_bytes += len(chunk)
+            if total_bytes > size_bytes_max:
+                raise RuntimeError("file exceeds byte bound: %s" % path)
+            parts.append(chunk)
+        return b"".join(parts)
+    finally:
+        os.close(descriptor)
+
+
+if len(sys.argv) != ARGUMENT_COUNT:
+    raise RuntimeError("unexpected OpenSSL checksum argument count")
+source_path, patched_path, checksum_path = sys.argv[1:]
+source_bytes = read_regular_nofollow(source_path, SOURCE_BYTES_MAX)
+patched_bytes = read_regular_nofollow(patched_path, SOURCE_BYTES_MAX)
+checksum_bytes = read_regular_nofollow(checksum_path, CHECKSUM_BYTES_MAX)
+document = json.loads(checksum_bytes)
+if not isinstance(document, dict) or set(document.keys()) != set(("files", "package")):
+    raise RuntimeError("unexpected Cargo checksum top-level shape")
+files = document.get("files")
+if not isinstance(files, dict):
+    raise RuntimeError("Cargo checksum files entry is not an object")
+current_digest = files.get(CHECKSUM_MEMBER)
+if not isinstance(current_digest, str) or len(current_digest) != SHA256_HEX_LENGTH:
+    raise RuntimeError("Cargo checksum source entry is malformed")
+if any(character not in "0123456789abcdef" for character in current_digest):
+    raise RuntimeError("Cargo checksum source entry is not lowercase hexadecimal")
+source_digest = hashlib.sha256(source_bytes).hexdigest()
+patched_digest = hashlib.sha256(patched_bytes).hexdigest()
+if current_digest != source_digest:
+    raise RuntimeError("Cargo checksum source entry does not bind the pre-patch source")
+needle = ('"%s":"%s"' % (CHECKSUM_MEMBER, current_digest)).encode("ascii")
+replacement = ('"%s":"%s"' % (CHECKSUM_MEMBER, patched_digest)).encode("ascii")
+if checksum_bytes.count(needle) != 1:
+    raise RuntimeError("Cargo checksum source entry is not uniquely encoded")
+rewritten = checksum_bytes.replace(needle, replacement, 1)
+if len(rewritten) != len(checksum_bytes):
+    raise RuntimeError("Cargo checksum normalization changed metadata length")
+temporary_path = checksum_path + ".mantle-tmp"
+flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+descriptor = os.open(temporary_path, flags, stat.S_IMODE(os.lstat(checksum_path).st_mode))
+try:
+    os.fchmod(descriptor, stat.S_IMODE(os.lstat(checksum_path).st_mode))
+    offset = 0
+    iteration_count = 0
+    while offset < len(rewritten):
+        iteration_count += 1
+        if iteration_count > WRITE_ITERATIONS_MAX:
+            raise RuntimeError("Cargo checksum write exceeded iteration bound")
+        written = os.write(descriptor, rewritten[offset:])
+        if written <= 0:
+            raise RuntimeError("Cargo checksum write made no progress")
+        offset += written
+    os.fsync(descriptor)
+except BaseException:
+    os.close(descriptor)
+    os.unlink(temporary_path)
+    raise
+else:
+    os.close(descriptor)
+os.replace(temporary_path, checksum_path)
+"#;
 const RUSTC_SOURCE_FILESEARCH_SOURCE: &str = "compiler/rustc_session/src/filesearch.rs";
 const RUSTC_SOURCE_TOOL_BUILD_SOURCE: &str = "src/bootstrap/src/core/build_steps/tool.rs";
 const RUSTC_SOURCE_TOOL_BUILD_CARGO_ANCHOR_LINE: &str = "        let mut cargo = prepare_tool_cargo(";
@@ -2864,7 +2970,38 @@ fn push_rustc_source_openssl_no_asm_patch(script: &mut String) {
     script.push_str(&format!(
         "    if [ \"$openssl_inserted\" = true ] && {{ [ \"$openssl_marker_matches\" -ne 0 ] || [ \"$openssl_line_matches\" -ne 0 ]; }}; then printf '%s\\n' 'vendored OpenSSL no-asm normalization conflicts with existing source' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
     ));
+    push_rustc_source_cargo_checksum_normalization(script);
     script.push_str("    mv \"$openssl_src_tmp\" \"$openssl_src_config\"\n  done\nfi\n");
+}
+
+fn push_rustc_source_cargo_checksum_normalization(script: &mut String) {
+    debug_assert!(RUSTC_SOURCE_CARGO_CHECKSUM_BYTES_MAX < RUSTC_SOURCE_OPENSSL_CONFIG_BYTES_MAX);
+    debug_assert!(RUSTC_SOURCE_OPENSSL_READ_ITERATIONS_MAX > 1);
+    let normalizer = rustc_source_cargo_checksum_normalizer_python();
+    script.push_str("    openssl_src_root=${openssl_src_config%/src/lib.rs}\n");
+    script.push_str("    openssl_checksum_config=\"$openssl_src_root/.cargo-checksum.json\"\n");
+    script.push_str(&format!(
+        "    if [ ! -f \"$openssl_checksum_config\" ]; then printf '%s\\n' 'vendored OpenSSL Cargo checksum metadata is missing' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str(
+        "    \"$MANTLE_PYTHON_PROGRAM\" - \"$openssl_src_config\" \"$openssl_src_tmp\" \"$openssl_checksum_config\" <<'MANTLE_OPENSSL_CHECKSUM_PY'\n",
+    );
+    script.push_str(&normalizer);
+    script.push_str("MANTLE_OPENSSL_CHECKSUM_PY\n");
+}
+
+fn rustc_source_cargo_checksum_normalizer_python() -> String {
+    let normalizer = RUSTC_SOURCE_CARGO_CHECKSUM_NORMALIZER_PY
+        .replace("__MANTLE_ARGUMENT_COUNT__", &RUSTC_SOURCE_CARGO_CHECKSUM_ARGUMENT_COUNT.to_string())
+        .replace("__MANTLE_SOURCE_BYTES_MAX__", &RUSTC_SOURCE_OPENSSL_CONFIG_BYTES_MAX.to_string())
+        .replace("__MANTLE_CHECKSUM_BYTES_MAX__", &RUSTC_SOURCE_CARGO_CHECKSUM_BYTES_MAX.to_string())
+        .replace("__MANTLE_READ_CHUNK_BYTES__", &RUSTC_SOURCE_OPENSSL_READ_CHUNK_BYTES.to_string())
+        .replace("__MANTLE_READ_ITERATIONS_MAX__", &RUSTC_SOURCE_OPENSSL_READ_ITERATIONS_MAX.to_string())
+        .replace("__MANTLE_SHA256_HEX_LENGTH__", &SHA256_DIGEST_HEX_LENGTH.to_string())
+        .replace("__MANTLE_CHECKSUM_MEMBER__", RUSTC_SOURCE_CARGO_CHECKSUM_MEMBER);
+    assert!(!normalizer.contains("__MANTLE_"));
+    debug_assert!(normalizer.ends_with('\n'));
+    normalizer
 }
 
 fn push_rustc_source_llvm_absolute_tablegen_patch(script: &mut String) {
@@ -9882,8 +10019,7 @@ mod tests {
         let first_config = source_root.join("vendor/openssl-src-300.5.0/src/lib.rs");
         let second_config = source_root.join("vendor/openssl-src-300.5.2/src/lib.rs");
         for config in [&first_config, &second_config] {
-            fs::create_dir_all(config.parent().unwrap()).unwrap();
-            fs::write(config, test_openssl_source_config()).unwrap();
+            write_test_openssl_source_config(config, test_openssl_source_config());
         }
         fs::create_dir(&build_root).unwrap();
         let script = openssl_no_asm_patch_test_script(&source_root, &build_root);
@@ -9895,9 +10031,15 @@ mod tests {
         assert!(second.status.success(), "{}", String::from_utf8_lossy(&second.stderr));
         for config in [&first_config, &second_config] {
             let patched = fs::read_to_string(config).unwrap();
+            let checksum: serde_json::Value =
+                serde_json::from_slice(&fs::read(test_openssl_checksum_path(config)).unwrap()).unwrap();
             assert_eq!(patched.matches(RUSTC_SOURCE_OPENSSL_NO_ASM_MARKER).count(), 1);
             assert_eq!(patched.matches(RUSTC_SOURCE_OPENSSL_NO_ASM_LINE).count(), 1);
             assert_eq!(patched.matches(RUSTC_SOURCE_OPENSSL_NO_ASM_ANCHOR).count(), 1);
+            assert_eq!(
+                checksum["files"][RUSTC_SOURCE_CARGO_CHECKSUM_MEMBER].as_str().unwrap(),
+                sha256_hex(patched.as_bytes())
+            );
         }
     }
 
@@ -9921,15 +10063,52 @@ mod tests {
     }
 
     #[cfg(unix)]
+    #[test]
+    fn rust_bootstrap_openssl_no_asm_patch_rejects_missing_checksum_metadata() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_root = temp.path().join("source");
+        let build_root = temp.path().join("build");
+        let config = source_root.join("vendor/openssl-src-300.5.2/src/lib.rs");
+        fs::create_dir_all(config.parent().unwrap()).unwrap();
+        fs::create_dir(&build_root).unwrap();
+        fs::write(&config, test_openssl_source_config()).unwrap();
+        let script = openssl_no_asm_patch_test_script(&source_root, &build_root);
+
+        let output = Command::new("/bin/sh").arg("-c").arg(script).output().unwrap();
+
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("Cargo checksum metadata is missing"));
+        assert_eq!(fs::read(&config).unwrap(), test_openssl_source_config());
+        assert!(!test_openssl_checksum_path(&config).exists());
+    }
+
+    #[cfg(unix)]
     fn openssl_no_asm_patch_test_script(source_root: &Path, build_root: &Path) -> String {
         let mut script = format!(
-            "set -eu\nMANTLE_HOST_TRIPLE={}\nMANTLE_RUST_SOURCE={}\nMANTLE_BUILD_DIR={}\n",
+            "set -eu\nMANTLE_HOST_TRIPLE={}\nMANTLE_RUST_SOURCE={}\nMANTLE_BUILD_DIR={}\nMANTLE_PYTHON_PROGRAM=python3\n",
             shell_quote(FIRST_STAGE_MUSL_TRIPLE),
             shell_quote(&source_root.display().to_string()),
             shell_quote(&build_root.display().to_string()),
         );
         push_rustc_source_openssl_no_asm_patch(&mut script);
         script
+    }
+
+    #[cfg(unix)]
+    fn write_test_openssl_source_config(config: &Path, source: &[u8]) {
+        fs::create_dir_all(config.parent().unwrap()).unwrap();
+        fs::write(config, source).unwrap();
+        let checksum = format!(
+            "{{\"files\":{{\"{}\":\"{}\"}},\"package\":null}}",
+            RUSTC_SOURCE_CARGO_CHECKSUM_MEMBER,
+            sha256_hex(source)
+        );
+        fs::write(test_openssl_checksum_path(config), checksum).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn test_openssl_checksum_path(config: &Path) -> PathBuf {
+        config.parent().unwrap().parent().unwrap().join(".cargo-checksum.json")
     }
 
     #[cfg(unix)]
@@ -13109,10 +13288,21 @@ let Plan = {
         let mut builder = tar::Builder::new(encoder);
         append_test_tar_file(&mut builder, &format!("{top_dir}/README.txt"), readme);
         if matches!(top_dir, "rust-1.91.1" | "rust-1.92.0" | "rust-1.93.1" | "rust-1.94.0") {
+            let openssl_source = test_openssl_source_config();
             append_test_tar_file(
                 &mut builder,
                 &format!("{top_dir}/vendor/openssl-src-300.5.2/src/lib.rs"),
-                test_openssl_source_config(),
+                openssl_source,
+            );
+            let openssl_checksum = format!(
+                "{{\"files\":{{\"{}\":\"{}\"}},\"package\":null}}",
+                RUSTC_SOURCE_CARGO_CHECKSUM_MEMBER,
+                sha256_hex(openssl_source)
+            );
+            append_test_tar_file(
+                &mut builder,
+                &format!("{top_dir}/vendor/openssl-src-300.5.2/.cargo-checksum.json"),
+                openssl_checksum.as_bytes(),
             );
         }
         if use_xpy_adapters && matches!(top_dir, "rust-1.91.1" | "rust-1.92.0" | "rust-1.93.1" | "rust-1.94.0") {

@@ -8,7 +8,7 @@ Accepted (2026-08-28)
 
 A promoted proof can reuse a validated native-provider prefix from a stopped attempt. The reuse path revalidated the imported provider, but it returned the origin path to Rust construction.
 
-Rust bootstrap can change selected musl input modes while it prepares a sysroot. V78 changed six files in the imported V61 provider. The provider bytes stayed the same, but its tree identity changed because file modes are identity inputs. V79 then rejected the changed origin.
+Rust bootstrap can retain shared inodes for selected musl inputs while it prepares a sysroot. V78 cleanup applied a recursive permission change to its failed working root. Six shared V61 files became owner-writable. The provider bytes stayed the same, but its tree identity changed because file modes are identity inputs. V79 then rejected the changed origin.
 
 The source attempt is evidence. Downstream execution must not mutate it.
 
