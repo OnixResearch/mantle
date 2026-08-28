@@ -166,6 +166,13 @@ const RUSTC_SOURCE_LLVM_TABLEGEN_TARGET_MARKER_LINE: &str = "  if(TARGET ${${pro
 const RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_ORIGINAL_LINE: &str = "    COMMAND ${tablegen_exe} ${ARG_UNPARSED_ARGUMENTS}";
 const RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_PROTECTED_LINE: &str =
     "    COMMAND ${CMAKE_COMMAND} -E env -- ${tablegen_exe} ${ARG_UNPARSED_ARGUMENTS}";
+const RUSTC_SOURCE_OPENSSL_CONFIG_GLOB: &str = "vendor/openssl-src-300.*/src/lib.rs";
+const RUSTC_SOURCE_OPENSSL_NO_ASM_ANCHOR: &str =
+    "        // On Android it looks like not passing no-stdio may cause a build";
+const RUSTC_SOURCE_OPENSSL_NO_ASM_MARKER: &str =
+    "        // Mantle: avoid Perl assembly pipes that require ambient /bin/sh.";
+const RUSTC_SOURCE_OPENSSL_NO_ASM_LINE: &str = "        configure.arg(\"no-asm\");";
+const RUSTC_SOURCE_OPENSSL_CONFIG_COUNT_MAX: usize = 8;
 const RUSTC_SOURCE_FILESEARCH_SOURCE: &str = "compiler/rustc_session/src/filesearch.rs";
 const RUSTC_SOURCE_TOOL_BUILD_SOURCE: &str = "src/bootstrap/src/core/build_steps/tool.rs";
 const RUSTC_SOURCE_TOOL_BUILD_CARGO_ANCHOR_LINE: &str = "        let mut cargo = prepare_tool_cargo(";
@@ -2787,6 +2794,9 @@ fn push_rustc_source_patch_plan_operation(
         RustBootstrapPatchOperationKind::RustBootstrapTargetToolConfig => {
             push_rustc_source_build_target_tool_config(script);
         }
+        RustBootstrapPatchOperationKind::OpenSslNoAsm => {
+            push_rustc_source_openssl_no_asm_patch(script);
+        }
         RustBootstrapPatchOperationKind::RustBootstrapLlvmAbsoluteTablegen => {
             push_rustc_source_llvm_absolute_tablegen_patch(script);
         }
@@ -2810,6 +2820,51 @@ fn push_rustc_source_patch_plan_operation(
         }
     }
     Ok(())
+}
+
+fn push_rustc_source_openssl_no_asm_patch(script: &mut String) {
+    debug_assert!(script.len() <= script.capacity());
+    debug_assert!(!script.contains('\0'));
+    script.push_str(&format!("if [ \"$MANTLE_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
+    script.push_str("  printf '%s\\n' 'disabling OpenSSL assembly generators for protected Rust bootstrap'\n");
+    script.push_str("  set -- \"$MANTLE_RUST_SOURCE\"/");
+    script.push_str(RUSTC_SOURCE_OPENSSL_CONFIG_GLOB);
+    script.push('\n');
+    script.push_str(&format!(
+        "  if [ \"$#\" -gt {RUSTC_SOURCE_OPENSSL_CONFIG_COUNT_MAX} ]; then printf '%s\\n' 'vendored OpenSSL source configuration count exceeds the bound' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("  openssl_src_index=0\n");
+    script.push_str("  for openssl_src_config in \"$@\"; do\n");
+    script.push_str(&format!(
+        "    if [ ! -f \"$openssl_src_config\" ]; then printf '%s\\n' 'vendored OpenSSL source configuration is missing' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("    openssl_src_index=$((openssl_src_index + 1))\n");
+    script.push_str("    openssl_src_tmp=\"$MANTLE_BUILD_DIR/openssl-src-no-asm-$openssl_src_index.rs\"\n");
+    script.push_str("    openssl_anchor_matches=0\n    openssl_marker_matches=0\n    openssl_line_matches=0\n    openssl_inserted=false\n");
+    script.push_str("    : > \"$openssl_src_tmp\"\n");
+    script.push_str("    while IFS= read -r line || [ -n \"$line\" ]; do\n");
+    script.push_str(&format!(
+        "      if [ \"$line\" = {anchor} ]; then\n        openssl_anchor_matches=$((openssl_anchor_matches + 1))\n        if [ \"$openssl_marker_matches\" -eq 0 ] && [ \"$openssl_line_matches\" -eq 0 ]; then\n          printf '%s\\n' {marker} {no_asm} >> \"$openssl_src_tmp\"\n          openssl_inserted=true\n        fi\n      fi\n",
+        anchor = shell_quote(RUSTC_SOURCE_OPENSSL_NO_ASM_ANCHOR),
+        marker = shell_quote(RUSTC_SOURCE_OPENSSL_NO_ASM_MARKER),
+        no_asm = shell_quote(RUSTC_SOURCE_OPENSSL_NO_ASM_LINE),
+    ));
+    script.push_str(&format!(
+        "      if [ \"$line\" = {marker} ]; then openssl_marker_matches=$((openssl_marker_matches + 1)); fi\n      if [ \"$line\" = {no_asm} ]; then openssl_line_matches=$((openssl_line_matches + 1)); fi\n",
+        marker = shell_quote(RUSTC_SOURCE_OPENSSL_NO_ASM_MARKER),
+        no_asm = shell_quote(RUSTC_SOURCE_OPENSSL_NO_ASM_LINE),
+    ));
+    script.push_str("      printf '%s\\n' \"$line\" >> \"$openssl_src_tmp\"\n    done < \"$openssl_src_config\"\n");
+    script.push_str(&format!(
+        "    if [ \"$openssl_anchor_matches\" -ne 1 ]; then printf '%s\\n' 'vendored OpenSSL configuration lacks one expected insertion point' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str(&format!(
+        "    if [ \"$openssl_inserted\" = false ] && {{ [ \"$openssl_marker_matches\" -ne 1 ] || [ \"$openssl_line_matches\" -ne 1 ]; }}; then printf '%s\\n' 'vendored OpenSSL no-asm normalization is incomplete' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str(&format!(
+        "    if [ \"$openssl_inserted\" = true ] && {{ [ \"$openssl_marker_matches\" -ne 0 ] || [ \"$openssl_line_matches\" -ne 0 ]; }}; then printf '%s\\n' 'vendored OpenSSL no-asm normalization conflicts with existing source' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
+    ));
+    script.push_str("    mv \"$openssl_src_tmp\" \"$openssl_src_config\"\n  done\nfi\n");
 }
 
 fn push_rustc_source_llvm_absolute_tablegen_patch(script: &mut String) {
@@ -3575,6 +3630,10 @@ fn push_rustc_source_target_companion_wrappers(script: &mut String, full_source_
     script.push_str("    chmod +x \"$target_alias_dir/c++\"\n");
     script.push_str("    for target_tool in ar ranlib; do case \"$target_tool\" in ar) target_program=\"$target_ar_path\" ;; ranlib) target_program=\"$target_ranlib_path\" ;; esac; printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/$target_tool\"; printf '%s\\n' \"exec \\\"$target_program\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/$target_tool\"; chmod +x \"$target_alias_dir/$target_tool\"; done\n");
     if full_source_bound {
+        script.push_str(
+            "    printf '%s\\n' \"#!$SHELL_PROGRAM\" 'set -eu' \"MANTLE_TARGET_CC_PATH=\\\"$target_cxx_path\\\"\" 'export MANTLE_TARGET_CC_PATH' \"exec \\\"$SHELL_PROGRAM\\\" \\\"$target_alias_dir/cc\\\" \\\"\\$@\\\"\" > \"$target_alias_dir/g++\"\n",
+        );
+        script.push_str("    chmod +x \"$target_alias_dir/g++\"\n");
         for (alias, program) in [
             ("sh", "$SHELL_PROGRAM"),
             ("cmake", "$CMAKE_PROGRAM"),
@@ -9816,6 +9875,65 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn rust_bootstrap_openssl_no_asm_patch_covers_all_configs_and_is_idempotent() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_root = temp.path().join("source");
+        let build_root = temp.path().join("build");
+        let first_config = source_root.join("vendor/openssl-src-300.5.0/src/lib.rs");
+        let second_config = source_root.join("vendor/openssl-src-300.5.2/src/lib.rs");
+        for config in [&first_config, &second_config] {
+            fs::create_dir_all(config.parent().unwrap()).unwrap();
+            fs::write(config, test_openssl_source_config()).unwrap();
+        }
+        fs::create_dir(&build_root).unwrap();
+        let script = openssl_no_asm_patch_test_script(&source_root, &build_root);
+
+        let first = Command::new("/bin/sh").arg("-c").arg(&script).output().unwrap();
+        let second = Command::new("/bin/sh").arg("-c").arg(&script).output().unwrap();
+
+        assert!(first.status.success(), "{}", String::from_utf8_lossy(&first.stderr));
+        assert!(second.status.success(), "{}", String::from_utf8_lossy(&second.stderr));
+        for config in [&first_config, &second_config] {
+            let patched = fs::read_to_string(config).unwrap();
+            assert_eq!(patched.matches(RUSTC_SOURCE_OPENSSL_NO_ASM_MARKER).count(), 1);
+            assert_eq!(patched.matches(RUSTC_SOURCE_OPENSSL_NO_ASM_LINE).count(), 1);
+            assert_eq!(patched.matches(RUSTC_SOURCE_OPENSSL_NO_ASM_ANCHOR).count(), 1);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rust_bootstrap_openssl_no_asm_patch_rejects_unknown_source() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_root = temp.path().join("source");
+        let build_root = temp.path().join("build");
+        let config = source_root.join("vendor/openssl-src-300.5.2/src/lib.rs");
+        fs::create_dir_all(config.parent().unwrap()).unwrap();
+        fs::create_dir(&build_root).unwrap();
+        fs::write(&config, "unknown OpenSSL recipe\n").unwrap();
+        let script = openssl_no_asm_patch_test_script(&source_root, &build_root);
+
+        let output = Command::new("/bin/sh").arg("-c").arg(script).output().unwrap();
+
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("lacks one expected insertion point"));
+        assert_eq!(fs::read_to_string(config).unwrap(), "unknown OpenSSL recipe\n");
+    }
+
+    #[cfg(unix)]
+    fn openssl_no_asm_patch_test_script(source_root: &Path, build_root: &Path) -> String {
+        let mut script = format!(
+            "set -eu\nMANTLE_HOST_TRIPLE={}\nMANTLE_RUST_SOURCE={}\nMANTLE_BUILD_DIR={}\n",
+            shell_quote(FIRST_STAGE_MUSL_TRIPLE),
+            shell_quote(&source_root.display().to_string()),
+            shell_quote(&build_root.display().to_string()),
+        );
+        push_rustc_source_openssl_no_asm_patch(&mut script);
+        script
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn rust_bootstrap_llvm_tablegen_patch_emits_absolute_target_file_and_is_idempotent() {
         let temp = tempfile::tempdir().unwrap();
         let source_root = temp.path().join("source");
@@ -9968,11 +10086,27 @@ mod tests {
         assert!(script.contains("$target_alias_dir/emcc"));
         assert!(script.contains("$target_alias_dir/pkg-config"));
         assert!(script.contains("$target_alias_dir/git"));
+        assert!(script.contains("$target_alias_dir/g++"));
+        assert!(script.contains("exec \\\"$SHELL_PROGRAM\\\" \\\"$target_alias_dir/cc\\\""));
         assert!(script.contains("$target_alias_dir/cmake"));
         assert!(script.contains("$target_alias_dir/sh"));
         assert!(!script.contains("ZLIB_CFLAGS=\nZLIB_LIBS=\n"));
         assert!(!script.contains("command -v"));
         assert!(!script.contains("/nix/store"));
+    }
+
+    #[test]
+    fn rust_bootstrap_gxx_alias_is_full_source_only() {
+        let mut compatibility_script = String::new();
+        let mut full_source_script = String::new();
+
+        push_rustc_source_target_companion_wrappers(&mut compatibility_script, false);
+        push_rustc_source_target_companion_wrappers(&mut full_source_script, true);
+
+        assert!(!compatibility_script.contains("$target_alias_dir/g++"));
+        assert!(full_source_script.contains("$target_alias_dir/g++"));
+        assert!(full_source_script.contains("#!$SHELL_PROGRAM"));
+        assert!(full_source_script.contains("exec \\\"$SHELL_PROGRAM\\\" \\\"$target_alias_dir/cc\\\""));
     }
 
     #[test]
@@ -12974,6 +13108,13 @@ let Plan = {
         let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
         let mut builder = tar::Builder::new(encoder);
         append_test_tar_file(&mut builder, &format!("{top_dir}/README.txt"), readme);
+        if matches!(top_dir, "rust-1.91.1" | "rust-1.92.0" | "rust-1.93.1" | "rust-1.94.0") {
+            append_test_tar_file(
+                &mut builder,
+                &format!("{top_dir}/vendor/openssl-src-300.5.2/src/lib.rs"),
+                test_openssl_source_config(),
+            );
+        }
         if use_xpy_adapters && matches!(top_dir, "rust-1.91.1" | "rust-1.92.0" | "rust-1.93.1" | "rust-1.94.0") {
             append_test_tar_file(
                 &mut builder,
@@ -13126,6 +13267,10 @@ let Plan = {
 
     fn test_rustc_driver_manifest() -> &'static [u8] {
         b"[package]\nname = \"rustc_driver\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[lib]\ncrate-type = [\"dylib\"]\n"
+    }
+
+    fn test_openssl_source_config() -> &'static [u8] {
+        b"before\n        // On Android it looks like not passing no-stdio may cause a build\nafter\n"
     }
 
     fn test_rustc_stage1_build_script() -> &'static [u8] {

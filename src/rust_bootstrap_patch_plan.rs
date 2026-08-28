@@ -21,7 +21,7 @@ const PATCH_PLAN_MAX_SOURCE_IDENTITIES: usize = 16;
 const PATCH_PLAN_MAX_OPERATIONS: usize = 64;
 const PATCH_PLAN_BASE_RECEIPT_ARGUMENTS: usize = 10;
 const FIRST_STAGE_MUSL_REPAIR_OPERATION_COUNT: usize = 8;
-const RUST_BOOTSTRAP_REPAIR_OPERATION_COUNT: usize = 6;
+const RUST_BOOTSTRAP_REPAIR_OPERATION_COUNT: usize = 7;
 const OPERATION_LABEL_SEPARATOR: &str = ":";
 
 const _: () = {
@@ -450,6 +450,14 @@ fn derive_rust_bootstrap_operations(
         Some("Rust bootstrap target tool configuration"),
     ));
     operations.push(patch_operation!(
+        "rust-bootstrap-openssl-no-asm",
+        RustBootstrapPatchOperationKind::OpenSslNoAsm,
+        RustBootstrapPatchPhase::RustBootstrapBeforeXpy,
+        "disable OpenSSL assembly generators that require an ambient shell",
+        Some(&format!("rust-{}", input.rust_version)),
+        Some("vendored openssl-src configure arguments"),
+    ));
+    operations.push(patch_operation!(
         "rust-bootstrap-llvm-absolute-tablegen",
         RustBootstrapPatchOperationKind::RustBootstrapLlvmAbsoluteTablegen,
         RustBootstrapPatchPhase::RustBootstrapBeforeXpy,
@@ -603,6 +611,7 @@ mod tests {
     const DIGEST_C: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
     const DIGEST_D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
     const EXPECTED_FIRST_STAGE_MUSL_OPERATION_COUNT: u32 = 11;
+    const EXPECTED_RUST_BOOTSTRAP_MUSL_OPERATION_COUNT: u32 = 8;
     const EXPECTED_GNU_OPERATION_COUNT: u32 = 3;
 
     #[test]
@@ -644,7 +653,9 @@ mod tests {
 
         let plan = derive_rust_bootstrap_patch_plan(input).unwrap();
 
+        assert_eq!(plan.operation_count, EXPECTED_RUST_BOOTSTRAP_MUSL_OPERATION_COUNT);
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::RustBootstrapTargetToolConfig));
+        assert!(plan.contains_operation(RustBootstrapPatchOperationKind::OpenSslNoAsm));
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::RustBootstrapLlvmAbsoluteTablegen));
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::RustBootstrapRustcPrivateToolRlibLookup));
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::ProviderContractAssertion));

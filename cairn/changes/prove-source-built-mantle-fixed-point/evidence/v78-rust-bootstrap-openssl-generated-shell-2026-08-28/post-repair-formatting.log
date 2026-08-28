@@ -1,0 +1,5 @@
+$ rustfmt --edition 2024 --check src/rust_bootstrap_patch_plan.rs src/rust_source_provider.rs
+status: passed
+
+$ git diff --check
+status: passed
