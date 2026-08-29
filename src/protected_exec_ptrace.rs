@@ -9,8 +9,29 @@
 #![cfg(target_os = "linux")]
 
 mod linux {
+    use std::collections::BTreeSet;
     use std::io;
+    use std::io::Read;
+    use std::io::Write;
+    use std::os::fd::AsRawFd;
+    use std::os::fd::IntoRawFd;
+    use std::os::unix::process::CommandExt;
+    use std::path::PathBuf;
     use std::process::Command;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use std::sync::RwLock;
+    use std::thread;
+
+    use crate::protected_exec::ExecRequest;
+    use crate::protected_exec::OutputPromotionRecord;
+    use crate::protected_exec::PHASE_PROTECTED;
+    use crate::protected_exec::PlannedProducedExecutableRoot;
+    use crate::protected_exec::PromotedExecutable;
+    use crate::protected_exec::ProtectedExecError;
+    use crate::protected_exec::ProtectedExecPolicy;
+    use crate::protected_exec::ProtectedSeccompAuditEvent;
+    use crate::protected_exec::blake3_file_hex;
 
     const AUDIT_ARCH_X86_64: u32 = 0xC000_003E;
     const AUDIT_ARCH_AARCH64: u32 = 0xC000_00B7;
@@ -325,6 +346,17 @@ mod linux {
     fn is_syscall_stop(wait_status: i32) -> bool {
         let bits = wait_status as u32;
         bits & 0xFF == STOP_LOW_BYTE_MARKER && (bits >> 8) & 0xFF == SYSCALL_STOP_SIGTRAP_BYTE
+    }
+
+    fn is_signal_delivery_stop(wait_status: i32) -> bool {
+        libc::WIFSTOPPED(wait_status)
+            && !is_seccomp_event_stop(wait_status)
+            && !is_syscall_stop(wait_status)
+            && libc::WSTOPSIG(wait_status) != libc::SIGSTOP
+    }
+
+    fn is_initial_group_stop(wait_status: i32) -> bool {
+        libc::WIFSTOPPED(wait_status) && libc::WSTOPSIG(wait_status) == libc::SIGSTOP
     }
 
     fn exec_entry_from_stop(wait_status: i32, pid: i32) -> Result<ExecStop, PtraceSupervisorError> {
