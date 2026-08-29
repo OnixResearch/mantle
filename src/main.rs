@@ -119,6 +119,7 @@ mod proof_clock_seccomp;
 #[allow(dead_code)]
 mod protected_exec;
 #[allow(dead_code)]
+mod protected_exec_ptrace;
 mod protected_exec_seccomp;
 #[allow(dead_code)]
 mod realization_routing;
