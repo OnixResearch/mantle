@@ -1,0 +1,6 @@
+running 1 test
+test protected_exec_seccomp::linux::tests::seccomp_supervisor_allows_concurrent_declared_execve ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2519 filtered out; finished in 873.64s
+worker_count=4
+executions_per_worker=6000
+total_executions=24000
