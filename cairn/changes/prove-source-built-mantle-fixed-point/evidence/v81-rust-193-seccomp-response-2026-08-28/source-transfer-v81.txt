@@ -1,0 +1,12 @@
+captured_at=2026-08-28T16:23:55-04:00
+commit=1f3926ab
+source=/home/brittonr/mantle-runs/receipt-fix-v31/source-1f3926ab
+binary=/home/brittonr/mantle-runs/receipt-fix-v31/mantle-1f3926ab-release
+binary_blake3=d51e09d3866e277807c5ffa67598550e5791f34deab424137dad56fc4bb47cf6
+binary_roundtrip_parity=exact
+rsync_checksum_parity=exact
+root_anchored_excludes=true
+excluded_roots=/.git,/.jj,/target,/.pi/worktrees
+source_number_of_files=68,180 (reg: 55,725, dir: 12,455)
+source_regular_files_transferred=0
+source_total_file_size=2,095,265,370 bytes

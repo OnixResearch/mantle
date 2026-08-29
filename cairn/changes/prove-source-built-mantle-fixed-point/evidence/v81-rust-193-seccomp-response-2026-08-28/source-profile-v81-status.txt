@@ -1,0 +1,11 @@
+started_at=2026-08-28T16:24:09-04:00
+wrapper_pid=873380
+source_commit=1f3926ab
+orchestrator_blake3=d51e09d3866e277807c5ffa67598550e5791f34deab424137dad56fc4bb47cf6
+source_transfer_parity=exact
+from=/home/brittonr/mantle-runs/receipt-fix-v31/authority/source-built-fixed-point-sources-v80-34cfde7d.json
+to=/home/brittonr/mantle-runs/receipt-fix-v31/authority/source-built-fixed-point-sources-v81-1f3926ab.json
+finished_at=2026-08-28T16:30:38-04:00
+exit_code=0
+profile_blake3=ca12bc8f3fec329e1c516e8934e25d9396415f00d0c040d1754bfaf346d04505
+refresh_verify_parity=exact

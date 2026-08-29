@@ -41,6 +41,7 @@ mod linux {
     const DIAGNOSTIC_EXEC_PATH_COUNT_MAX: usize = 256;
     const DIAGNOSTIC_EXEC_EVENT_COUNT_MAX: usize = 131_072;
     const PROTECTED_EXEC_EVENT_COUNT_MAX: usize = 262_144;
+    const SEND_RESPONSE_EINTR_RETRY_COUNT_MAX: u32 = 16;
     const ADOPTED_DESCENDANT_REAP_POLL_COUNT_MAX: u32 = 3_000;
     const ADOPTED_DESCENDANT_REAP_POLL_INTERVAL_MS: u64 = 10;
     const AUDIT_QUIESCENCE_POLL_COUNT_MAX: u32 = 3_000;
@@ -48,6 +49,7 @@ mod linux {
     const AUDIT_QUIESCENCE_POLL_INTERVAL_MS: u64 = 10;
     const _: () = assert!(ADOPTED_DESCENDANT_REAP_POLL_COUNT_MAX > 0);
     const _: () = assert!(AUDIT_QUIESCENCE_STABLE_POLL_COUNT > 0);
+    const _: () = assert!(SEND_RESPONSE_EINTR_RETRY_COUNT_MAX > 1);
     const PHASE_DIAGNOSTIC: &str = "diagnostic";
 
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -530,19 +532,19 @@ mod linux {
                 audit_event,
                 promotion,
             } = decision;
+            let mut events = match audit_events.lock() {
+                Ok(events) => events,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            let response = send_response(listener_fd, notif.id, allowed);
+            let (audit_event, promotion) = bind_response_result(audit_event, promotion, response);
             if let Some(promotion) = promotion {
                 match auto_promotions.lock() {
                     Ok(mut promotions) => promotions.push(promotion),
                     Err(poisoned) => poisoned.into_inner().push(promotion),
                 }
             }
-            match audit_events.lock() {
-                Ok(mut events) => events.push(audit_event),
-                Err(poisoned) => poisoned.into_inner().push(audit_event),
-            }
-            if send_response(listener_fd, notif.id, allowed).is_err() {
-                continue;
-            }
+            events.push(audit_event);
         }
     }
 
@@ -932,20 +934,46 @@ mod linux {
     }
 
     fn send_response(listener_fd: RawFd, id: u64, allowed: bool) -> Result<(), String> {
-        let mut resp: libc::seccomp_notif_resp = unsafe { std::mem::zeroed() };
-        resp.id = id;
+        let mut response: libc::seccomp_notif_resp = unsafe { std::mem::zeroed() };
+        response.id = id;
         if allowed {
-            resp.flags = u32::try_from(libc::SECCOMP_USER_NOTIF_FLAG_CONTINUE)
+            response.flags = u32::try_from(libc::SECCOMP_USER_NOTIF_FLAG_CONTINUE)
                 .map_err(|_| "seccomp continue flag exceeds u32".to_string())?;
         } else {
-            resp.error = -libc::EACCES;
+            response.error = -libc::EACCES;
         }
-        #[allow(clippy::unnecessary_cast)]
-        let rc = unsafe { libc::ioctl(listener_fd, SECCOMP_IOCTL_NOTIF_SEND as libc::Ioctl, &mut resp) };
-        if rc == 0 {
-            return Ok(());
+        for attempt in 0..SEND_RESPONSE_EINTR_RETRY_COUNT_MAX {
+            #[allow(clippy::unnecessary_cast)]
+            let result = unsafe { libc::ioctl(listener_fd, SECCOMP_IOCTL_NOTIF_SEND as libc::Ioctl, &mut response) };
+            if result == 0 {
+                return Ok(());
+            }
+            let error = io::Error::last_os_error();
+            let retryable = error.raw_os_error() == Some(libc::EINTR);
+            let retries_remain = attempt.saturating_add(1) < SEND_RESPONSE_EINTR_RETRY_COUNT_MAX;
+            if retryable && retries_remain {
+                continue;
+            }
+            return Err(format!("SECCOMP_IOCTL_NOTIF_SEND: {error}"));
         }
-        Err(last_os_error("SECCOMP_IOCTL_NOTIF_SEND"))
+        Err("SECCOMP_IOCTL_NOTIF_SEND exhausted its bounded retry loop".to_string())
+    }
+
+    fn bind_response_result(
+        mut audit_event: ProtectedSeccompAuditEvent,
+        promotion: Option<OutputPromotionRecord>,
+        response: Result<(), String>,
+    ) -> (ProtectedSeccompAuditEvent, Option<OutputPromotionRecord>) {
+        if let Err(error) = response {
+            audit_event.policy_decision = "denied".to_string();
+            audit_event.reason = format!("seccomp notification response failed: {error}");
+            assert_eq!(audit_event.policy_decision, "denied");
+            assert!(audit_event.reason.contains("SECCOMP_IOCTL_NOTIF_SEND"));
+            return (audit_event, None);
+        }
+        debug_assert!(!audit_event.policy_decision.is_empty());
+        debug_assert!(!audit_event.reason.is_empty());
+        (audit_event, promotion)
     }
 
     fn syscall_name(syscall_nr: libc::c_int) -> &'static str {
@@ -979,10 +1007,16 @@ mod linux {
         const RUST_ACTION_ALLOW_CHILD_MODE: &str = "rust-action-allow";
         const RUST_ACTION_DENY_CHILD_MODE: &str = "rust-action-deny";
         const AUTO_PROMOTION_CHILD_MODE: &str = "auto-promotion";
+        const CONCURRENT_ALLOW_CHILD_MODE: &str = "concurrent-allow";
+        const CONCURRENT_ALLOW_WORKER_COUNT: usize = 4;
+        const CONCURRENT_ALLOW_EXECUTIONS_PER_WORKER: usize = 128;
         const FRESH_LISTENER_WORKER_COUNT: usize = 2;
         const _: () = assert!(FRESH_LISTENER_WORKER_COUNT > 1);
+        const _: () = assert!(CONCURRENT_ALLOW_WORKER_COUNT > 1);
+        const _: () = assert!(CONCURRENT_ALLOW_EXECUTIONS_PER_WORKER > 1);
         const AUDIT_FLUSH_WAIT_MS: u64 = 50;
         const DIAGNOSTIC_TEST_EVENT_COUNT: usize = 2;
+        const TEST_BLAKE3_HEX_LENGTH: usize = 64;
         const ORPHAN_EXEC_DELAY_US: libc::useconds_t = 100_000;
 
         fn current_exe_policy(digest_hex: String) -> ProtectedExecPolicy {
@@ -1069,6 +1103,56 @@ mod linux {
         }
 
         #[test]
+        fn successful_seccomp_response_preserves_allowed_audit_and_promotion() {
+            let event = sample_allowed_audit_event();
+            let promotion = sample_promotion();
+
+            let (bound_event, bound_promotion) = bind_response_result(event.clone(), Some(promotion.clone()), Ok(()));
+
+            assert_eq!(bound_event, event);
+            assert_eq!(bound_promotion, Some(promotion));
+        }
+
+        #[test]
+        fn failed_seccomp_response_becomes_denied_and_discards_promotion() {
+            let event = sample_allowed_audit_event();
+
+            let (bound_event, bound_promotion) = bind_response_result(
+                event,
+                Some(sample_promotion()),
+                Err("SECCOMP_IOCTL_NOTIF_SEND: Interrupted system call".to_string()),
+            );
+
+            assert_eq!(bound_event.policy_decision, "denied");
+            assert!(bound_event.reason.contains("Interrupted system call"));
+            assert!(bound_promotion.is_none());
+        }
+
+        fn sample_allowed_audit_event() -> ProtectedSeccompAuditEvent {
+            ProtectedSeccompAuditEvent {
+                pid: 1,
+                syscall: "execve".to_string(),
+                executable_path: PathBuf::from("/test/tool"),
+                tracee_path: PathBuf::from("/test/tool"),
+                resolved_host_path: PathBuf::from("/test/tool"),
+                digest_hex: "a".repeat(TEST_BLAKE3_HEX_LENGTH),
+                reason: "bound test executable".to_string(),
+                phase: PHASE_PROTECTED.to_string(),
+                inventory_entry_id: Some("test-tool".to_string()),
+                policy_decision: "allowed".to_string(),
+            }
+        }
+
+        fn sample_promotion() -> OutputPromotionRecord {
+            OutputPromotionRecord {
+                source_entry_id: "test-source".to_string(),
+                extraction_rules: vec!["test-rule".to_string()],
+                promoted_executables: Vec::new(),
+                promoted_at_policy_size: 1,
+            }
+        }
+
+        #[test]
         fn diagnostic_exec_path_validation_is_bounded_and_absolute() {
             let empty = BTreeSet::new();
             let relative = BTreeSet::from([PathBuf::from("relative-tool")]);
@@ -1123,6 +1207,29 @@ mod linux {
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
+        }
+
+        #[test]
+        fn seccomp_supervisor_allows_concurrent_declared_execve() {
+            if std::env::var(CHILD_MODE_VAR).ok().as_deref() == Some(CONCURRENT_ALLOW_CHILD_MODE) {
+                run_concurrent_allow_child();
+                return;
+            }
+            let output = Command::new(std::env::current_exe().unwrap())
+                .arg("--exact")
+                .arg("protected_exec_seccomp::linux::tests::seccomp_supervisor_allows_concurrent_declared_execve")
+                .arg("--nocapture")
+                .env(CHILD_MODE_VAR, CONCURRENT_ALLOW_CHILD_MODE)
+                .output()
+                .unwrap();
+
+            assert!(
+                output.status.success(),
+                "stdout={}\nstderr={}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(output.stderr.is_empty(), "stderr={}", String::from_utf8_lossy(&output.stderr));
         }
 
         #[test]
@@ -1502,6 +1609,39 @@ mod linux {
             assert_eq!(events[0].syscall, "execve");
             assert_eq!(events[0].executable_path, current_exe);
             assert_eq!(events[0].inventory_entry_id.as_deref(), Some("sandbox-entry"));
+        }
+
+        fn run_concurrent_allow_child() {
+            let executable = std::fs::canonicalize("/bin/sh").unwrap();
+            let digest_hex = blake3_file_hex(&executable).unwrap();
+            let shell_placeholder = executable.with_extension("sandbox-shell-placeholder");
+            let inventory = Stage0Inventory {
+                executable_entries: vec![
+                    seed_entry("sandbox-entry", "sandbox-entry", &executable, digest_hex.clone(), true),
+                    seed_entry("sandbox-shell", "sandbox-shell", &shell_placeholder, digest_hex, true),
+                ],
+                source_entries: Vec::new(),
+            };
+            let policy = ProtectedExecPolicy::from_inventory(inventory).unwrap();
+            let supervisor = install_current_thread_exec_supervisor(policy).unwrap();
+            std::thread::scope(|scope| {
+                for _ in 0..CONCURRENT_ALLOW_WORKER_COUNT {
+                    let executable = executable.clone();
+                    scope.spawn(move || {
+                        for _ in 0..CONCURRENT_ALLOW_EXECUTIONS_PER_WORKER {
+                            let status = Command::new(&executable).arg("-c").arg(":").status().unwrap();
+                            assert!(status.success());
+                        }
+                    });
+                }
+            });
+            supervisor.wait_for_audit_quiescence().unwrap();
+            let events = supervisor.audit_events();
+            let expected_event_count =
+                CONCURRENT_ALLOW_WORKER_COUNT.checked_mul(CONCURRENT_ALLOW_EXECUTIONS_PER_WORKER).unwrap();
+
+            assert_eq!(events.len(), expected_event_count);
+            assert!(events.iter().all(|event| event.policy_decision == "allowed"));
         }
 
         fn run_deny_child() {
