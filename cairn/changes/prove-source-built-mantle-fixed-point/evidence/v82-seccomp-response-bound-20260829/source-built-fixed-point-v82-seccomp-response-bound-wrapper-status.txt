@@ -1,0 +1,13 @@
+started_at=2026-08-29T01:04:35-04:00
+wrapper_pid=1107190
+source_commit=0d4211e5
+source_transfer_parity=exact
+profile_blake3=31a85f2ae9b85e6b1d6840589aaa6ea971d57d158179084374a150e4ced3f0d1
+orchestrator_blake3=0ae486a7e6cd12652d6bf9d3c2bd42a2e84fb5676fa9c2a6cf6bd4bfdb0872fd
+checkpoint_mode=native-prefix-isolated
+native_checkpoint_attempt=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-native-prefix-v61-repaired-20260828
+output=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-fixed-point-v82-seccomp-response-bound-20260829
+proof_disk_bytes_max=700000000000
+proof_jobs=16
+finished_at=2026-08-29T08:16:41-04:00
+exit_code=1

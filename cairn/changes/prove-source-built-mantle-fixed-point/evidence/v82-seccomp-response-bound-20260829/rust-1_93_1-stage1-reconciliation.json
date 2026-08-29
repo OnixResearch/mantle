@@ -1,0 +1,14 @@
+{
+  "schema": "mantle-source-built-rust-provider-stage-action-reconciliation-v1",
+  "action_plan_digest_blake3": "d37aee08334c3baf8eac7e0304db8883776b34cb59e764f665a08c3cf0923ea5",
+  "execution_succeeded": false,
+  "observed_event_count": 22192,
+  "matched_event_count": 22192,
+  "denied_event_count": 0,
+  "promotion_count": 24,
+  "local_only": true,
+  "blockers": [
+    "stage-execution-failed"
+  ],
+  "reconciliation_digest_blake3": "d5a13ec71db0fd34c2f542fbfddb7e0f357cadb0fb014272319d747a1f56235e"
+}
