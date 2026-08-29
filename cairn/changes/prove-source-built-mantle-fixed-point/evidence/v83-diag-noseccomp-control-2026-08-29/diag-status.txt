@@ -1,0 +1,10 @@
+started_at=2026-08-29T14:01:24-04:00
+wrapper_pid=1380976
+origin=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v82-seccomp-response-bound-20260829.source-built-fixed-point-staging-1107472/rust-provider-scratch/rustc-stage1-chain/rust-1.93.1-stage1
+diagnostic_root=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v82-seccomp-response-bound-20260829.source-built-fixed-point-staging-1107472/rust-provider-scratch/rustc-stage1-chain/rust-1.93.1-stage1-diag
+seccomp=disabled-diagnostic-only
+strace=strace -f -qq -e trace=execve
+copied_at=2026-08-29T14:01:46-04:00
+path_rewrite=origin-dir-to-diag-dir-only
+finished_at=2026-08-29T16:54:45-04:00
+exit_code=0
