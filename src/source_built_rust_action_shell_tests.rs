@@ -82,7 +82,7 @@ fn fixed_tool(
 }
 
 #[test]
-fn rust_action_runtime_records_complete_seccomp_reconciliation() {
+fn rust_action_runtime_records_complete_ptrace_reconciliation() {
     if std::env::var(CHILD_MODE_ENV).ok().as_deref() == Some(CHILD_MODE_VALUE) {
         run_runtime_child();
         return;
@@ -90,7 +90,7 @@ fn rust_action_runtime_records_complete_seccomp_reconciliation() {
     let dir = tempfile::tempdir().unwrap();
     let output = Command::new(std::env::current_exe().unwrap())
         .arg("--exact")
-        .arg("source_built_rust_action_shell::tests::rust_action_runtime_records_complete_seccomp_reconciliation")
+        .arg("source_built_rust_action_shell::tests::rust_action_runtime_records_complete_ptrace_reconciliation")
         .arg("--nocapture")
         .env(CHILD_MODE_ENV, CHILD_MODE_VALUE)
         .env("MANTLE_TEST_RUST_ACTION_DIR", dir.path())
@@ -125,7 +125,8 @@ fn run_runtime_child() {
     write_new_json(&authority_path, &authority).unwrap();
     let runtime = SourceBuiltRustActionRuntime::start(&authority_path, &graph(), &evidence_dir).unwrap();
     let scope = runtime.begin_action("test-unit", RustChildActionExecutionPhase::CompileUnit).unwrap();
-    let status = Command::new(&rustc).status().unwrap();
+    let mut command = Command::new(&rustc);
+    let status = runtime.run_output(&mut command).unwrap().status;
     runtime.end_action(scope).unwrap();
     let reconciliation = runtime.finish().unwrap();
 
@@ -135,7 +136,7 @@ fn run_runtime_child() {
 }
 
 #[test]
-fn rust_action_runtime_rejects_fixed_executable_byte_drift_before_seccomp() {
+fn rust_action_runtime_rejects_fixed_executable_byte_drift_before_ptrace() {
     let dir = tempfile::tempdir().unwrap();
     let executable = dir.path().join("rustc");
     fs::write(&executable, b"#!/bin/sh\nexit 0\n").unwrap();

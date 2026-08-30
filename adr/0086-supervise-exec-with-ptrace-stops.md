@@ -26,7 +26,9 @@ Replace the notification mechanism with `SECCOMP_RET_TRACE` plus ptrace supervis
 
 The supervised stage child installs, in its `pre_exec` hook: `PR_SET_NO_NEW_PRIVS`, a seccomp filter that returns `SECCOMP_RET_TRACE` for `execve` and `execveat` (all else allow), and then raises `SIGSTOP`. The child writes its pid through a pre-opened pipe.
 
-The supervisor thread reads the pid from the pipe, attaches with `PTRACE_SEIZE`, sets `PTRACE_O_TRACEFORK | PTRACE_O_TRACECLONE | PTRACE_O_TRACEVFORK | PTRACE_O_TRACESYSGOOD`, and resumes it. Because attaching reparents the tracee to the tracer for wait purposes, and because the attach options auto-attach every descendant to the same tracer, one tracer thread observes the entire process tree through `waitpid`.
+The supervisor thread reads the pid from the pipe, attaches with `PTRACE_SEIZE`, sets `PTRACE_O_TRACEFORK | PTRACE_O_TRACECLONE | PTRACE_O_TRACEVFORK | PTRACE_O_TRACEEXEC | PTRACE_O_TRACESECCOMP | PTRACE_O_TRACESYSGOOD`, and resumes it. Because attaching reparents the tracee to the tracer for wait purposes, and because the attach options auto-attach every descendant to the same tracer, one tracer thread observes the entire process tree through `waitpid`.
+
+The tracer also owns each root command's wait. A normal `Command::wait` in another thread can consume a ptrace stop because Linux wait authority is shared by the process thread group. The supervisor therefore exposes bounded `status` and `output` operations. These operations spawn the prepared root, leave every ptrace stop to the tracer, and receive the final raw wait status from the tracer. `PTRACE_O_TRACEEXEC` turns the legacy post-exec `SIGTRAP` into an explicit ptrace event. This prevents the command caller from observing a stopped process as a completed command.
 
 On each `PTRACE_EVENT_SECCOMP` syscall-entry stop, the tracer:
 
@@ -64,6 +66,7 @@ Rejected for now: requires a loaded BPF program with root and CAP_BPF, a new ker
 
 - ptrace stops and signal forwarding add bounded overhead per exec and per signal; heavy parallel builds pay more than before but remain practical (the unsupervised diagnostic completed the same stage in under three hours even under strace).
 - The tracer is a single thread per supervised stage; tracer failure fails the stage closed.
+- Supervised commands must use the supervisor-owned `status` or `output` operation. Calling `Command::wait`, `status`, or `output` after preparation would race the tracer and is outside the accepted boundary.
 - `PR_SET_CHILD_SUBREAPER` and the tracer replace the listener fd; the ADR 0053 fresh-worker-lineage rule still applies, with the tracer thread as the stage's protected worker.
 - Existing stage plans, policies, audit schemas, reconciliations, and checkpoint payloads are unchanged, so completed stage evidence stays comparable across the mechanism switch.
 - This decision does not itself prove any construction; supervised reruns must re-establish the Rust provider evidence from the first affected stage.

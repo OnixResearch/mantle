@@ -1,7 +1,7 @@
 //! Linux shell for enforcing and recording source-built Rust child actions.
 //!
 //! The pure action plan owns authority and reconciliation meaning. This module
-//! owns file reads, seccomp installation, output promotion, and evidence writes.
+//! owns file reads, ptrace supervision, output promotion, and evidence writes.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -18,7 +18,7 @@ use crate::RunError;
 use crate::protected_exec::OutputPromotionRecord;
 use crate::protected_exec::PromotedExecutable;
 use crate::protected_exec::ProtectedSeccompAuditEvent;
-use crate::protected_exec_seccomp::ProtectedSeccompSupervisor;
+use crate::protected_exec_ptrace::ProtectedPtraceSupervisor;
 use crate::rust_plan::RustChildActionExecutionPhase;
 use crate::rust_plan::RustChildActionExecutionPort;
 use crate::rust_plan::RustChildActionExecutionScope;
@@ -60,7 +60,7 @@ struct RuntimeState {
 pub(crate) struct SourceBuiltRustActionRuntime {
     plan: RustChildActionPlan,
     evidence_dir: PathBuf,
-    supervisor: ProtectedSeccompSupervisor,
+    supervisor: ProtectedPtraceSupervisor,
     state: Mutex<RuntimeState>,
 }
 
@@ -89,7 +89,7 @@ impl SourceBuiltRustActionRuntime {
             crate::source_built_rust_action_plan::protected_exec_inputs(&plan).map_err(action_error)?;
         let policy = crate::protected_exec::ProtectedExecPolicy::from_action_plan(&producer_ids, &planned_executables)
             .map_err(|error| RunError::Build(format!("construct Rust child-action exec policy: {error}")))?;
-        let supervisor = crate::protected_exec_seccomp::install_current_thread_exec_supervisor(policy)
+        let supervisor = crate::protected_exec_ptrace::install_exec_supervisor(policy)
             .map_err(|error| RunError::Build(format!("install Rust child-action exec policy: {error}")))?;
         assert!(!plan.actions.is_empty());
         assert_eq!(plan.plan_digest_blake3.len(), BLAKE3_HEX_LENGTH);
@@ -215,6 +215,12 @@ impl SourceBuiltRustActionRuntime {
 }
 
 impl RustChildActionExecutionPort for SourceBuiltRustActionRuntime {
+    fn run_output(&self, command: &mut std::process::Command) -> Result<std::process::Output, RunError> {
+        self.supervisor
+            .output(command)
+            .map_err(|error| RunError::Build(format!("run ptrace-supervised Rust child action: {error}")))
+    }
+
     fn begin_action(
         &self,
         unit_id: &str,
@@ -246,6 +252,9 @@ impl RustChildActionExecutionPort for SourceBuiltRustActionRuntime {
     }
 
     fn end_action(&self, scope: RustChildActionExecutionScope) -> Result<(), RunError> {
+        self.supervisor
+            .wait_for_audit_quiescence()
+            .map_err(|error| RunError::Build(format!("wait for Rust child-action audit: {error}")))?;
         let raw_events = self.supervisor.audit_events();
         if scope.audit_event_start > raw_events.len() {
             return Err(RunError::Build(format!(

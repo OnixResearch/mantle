@@ -934,6 +934,10 @@ pub(crate) struct RustChildActionExecutionScope {
 }
 
 pub(crate) trait RustChildActionExecutionPort: std::fmt::Debug + Send + Sync {
+    fn run_output(&self, command: &mut Command) -> Result<std::process::Output, RunError> {
+        command.output().map_err(|error| RunError::Internal(format!("running Rust child action: {error}")))
+    }
+
     fn begin_action(
         &self,
         unit_id: &str,
@@ -15273,12 +15277,16 @@ fn run_build_script_metadata_with_action_port(
     } else {
         None
     };
-    let output = command.output();
+    let output = match action_port {
+        Some(port) => port.run_output(&mut command),
+        None => command
+            .output()
+            .map_err(|error| RunError::Internal(format!("running build-script unit {}: {error}", unit.unit_id))),
+    };
     if let (Some(port), Some(scope)) = (action_port, scope) {
         port.end_action(scope)?;
     }
-    let output =
-        output.map_err(|err| RunError::Internal(format!("running build-script unit {}: {err}", unit.unit_id)))?;
+    let output = output?;
     if !output.status.success() {
         let diagnostic = redacted_diagnostic(&output.stderr);
         return Ok(Err(build_script_run_failure_blocker(unit, &diagnostic, selected_c_compiler.as_ref())));
@@ -16382,6 +16390,7 @@ fn execute_rust_compiler_command(
     options: &RustUnitExecutionOptions,
     unit_output_dir: &Path,
     compiler_policy: Option<&RustCompilerPolicyInvocation>,
+    action_port: Option<&dyn RustChildActionExecutionPort>,
 ) -> Result<std::process::Output, RunError> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
@@ -16415,6 +16424,9 @@ fn execute_rust_compiler_command(
     }
     if let Some(source_root) = rustc_source_root_from_remaps(&unit.derivation.args) {
         command.current_dir(source_root);
+    }
+    if let Some(port) = action_port {
+        return port.run_output(&mut command);
     }
     command.output().map_err(|err| {
         let executable = compiler_policy
@@ -16605,6 +16617,7 @@ fn failed_rust_compiler_execution(
     options: &RustUnitExecutionOptions,
     inputs: &mut RustUnitExecutionInputs,
     output: &std::process::Output,
+    action_port: Option<&dyn RustChildActionExecutionPort>,
 ) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
     debug_assert!(!output.status.success());
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
@@ -16637,7 +16650,7 @@ fn failed_rust_compiler_execution(
         .map(Some);
     }
     prepare_unit_output_dir(&inputs.output_dir)?;
-    let fallback_output = execute_rust_compiler_command(unit, options, &inputs.output_dir, None)?;
+    let fallback_output = execute_rust_compiler_command(unit, options, &inputs.output_dir, None, action_port)?;
     if !fallback_output.status.success() {
         let diagnostic = redacted_diagnostic(&fallback_output.stderr);
         let policy = inputs
@@ -17319,7 +17332,7 @@ fn execute_rust_unit_with_action_port(
     let scope = action_port
         .map(|port| port.begin_action(&unit.unit_id, RustChildActionExecutionPhase::CompileUnit))
         .transpose()?;
-    let result = execute_rust_unit_inner(unit, options);
+    let result = execute_rust_unit_inner(unit, options, action_port);
     if let (Some(port), Some(scope)) = (action_port, scope) {
         port.end_action(scope)?;
     }
@@ -17329,6 +17342,7 @@ fn execute_rust_unit_with_action_port(
 fn execute_rust_unit_inner(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
+    action_port: Option<&dyn RustChildActionExecutionPort>,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!RUST_UNIT_EXECUTION_RECEIPT_FILE.is_empty());
@@ -17358,10 +17372,15 @@ fn execute_rust_unit_inner(
         return Ok(receipt);
     }
     prepare_unit_output_dir(&inputs.output_dir)?;
-    let output =
-        execute_rust_compiler_command(unit, options, &inputs.output_dir, inputs.compiler_policy_invocation.as_ref())?;
+    let output = execute_rust_compiler_command(
+        unit,
+        options,
+        &inputs.output_dir,
+        inputs.compiler_policy_invocation.as_ref(),
+        action_port,
+    )?;
     if !output.status.success() {
-        if let Some(receipt) = failed_rust_compiler_execution(unit, options, &mut inputs, &output)? {
+        if let Some(receipt) = failed_rust_compiler_execution(unit, options, &mut inputs, &output, action_port)? {
             return Ok(receipt);
         }
     } else if let Some(receipt) = validate_successful_compiler_policy_report(unit, options, &mut inputs)? {

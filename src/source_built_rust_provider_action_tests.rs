@@ -60,9 +60,11 @@ fn run_child() {
         })
         .unwrap();
     let native_backend = root.join("native/bin/g++.real");
-    let native_status = Command::new(&native_backend).status().unwrap();
+    let mut native_command = Command::new(&native_backend);
+    let native_status = runtime.run_status(&mut native_command).unwrap();
     let generated = write_text(&output_root.join("generated-rustc"), "#!/bin/sh\nexit 0\n", true);
-    let status = Command::new(&generated).status().unwrap();
+    let mut generated_command = Command::new(&generated);
+    let status = runtime.run_status(&mut generated_command).unwrap();
     runtime.end_stage(scope, native_status.success() && status.success()).unwrap();
     let evidence = runtime.finish().unwrap();
     let revalidated = validate_rust_provider_action_evidence(&root.join("evidence")).unwrap();

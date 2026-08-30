@@ -1195,11 +1195,12 @@ fn materialize_rust_source_provider_internal(
     let mut action_runtime = start_rust_provider_action_runtime(&plan, &route, action_limits)?;
     let first_scope = begin_rust_provider_action_stage(action_runtime.as_mut(), first_stage_action_input(&boundary))?;
     let first_result = (|| {
-        let first_stage_build = run_first_stage_build(&boundary, verbose)?;
+        let first_stage_build = run_first_stage_build(&boundary, action_runtime.as_ref(), verbose)?;
         write_first_stage_build_manifest(&boundary, &first_stage_build)?;
         let first_stage_candidate =
             assemble_first_stage_provider_candidate(&boundary, &route, &first_stage_sources, &first_stage_build)?;
-        let first_stage_candidate_smoke = smoke_first_stage_provider_candidate(&boundary, &first_stage_candidate)?;
+        let first_stage_candidate_smoke =
+            smoke_first_stage_provider_candidate(&boundary, &first_stage_candidate, action_runtime.as_ref())?;
         write_first_stage_provider_candidate_manifest(&boundary, &first_stage_candidate)?;
         Ok((first_stage_candidate, first_stage_candidate_smoke))
     })();
@@ -1736,6 +1737,14 @@ pub(crate) fn smoke_rust_source_provider(
     provider_dir: &Path,
     scratch_dir: &Path,
 ) -> Result<RustSourceProviderSmoke, RustSourceProviderError> {
+    smoke_rust_source_provider_with_action_runtime(provider_dir, scratch_dir, None)
+}
+
+fn smoke_rust_source_provider_with_action_runtime(
+    provider_dir: &Path,
+    scratch_dir: &Path,
+    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
+) -> Result<RustSourceProviderSmoke, RustSourceProviderError> {
     let validation = validate_materialized_rust_source_provider(provider_dir)?;
     let plan = plan_smoke(provider_dir, scratch_dir, &validation.metadata)?;
     fs::create_dir_all(&plan.scratch_dir).map_err(|err| {
@@ -1748,7 +1757,7 @@ pub(crate) fn smoke_rust_source_provider(
         RustSourceProviderError::Smoke(format!("write smoke source {}: {err}", plan.source_path.display()))
     })?;
     let rustc_args = smoke_rustc_args(&plan);
-    let output = run_smoke_rustc_with_bounded_launch_retry(&plan.rustc_path, &rustc_args)
+    let output = run_smoke_rustc_with_bounded_launch_retry(&plan.rustc_path, &rustc_args, action_runtime)
         .map_err(|err| RustSourceProviderError::Smoke(format!("launch {}: {err}", plan.rustc_path.display())))?;
     let stdout = bounded_output_text(&output.stdout);
     let stderr = bounded_output_text(&output.stderr);
@@ -2264,10 +2273,10 @@ fn run_rustc_stage1_provider_candidate(
     write_rustc_stage1_sources_manifest(&boundary, &sources)?;
     let scope = begin_rust_provider_action_stage(action_runtime.as_deref_mut(), rustc_stage1_action_input(&boundary))?;
     let result = (|| {
-        let build = run_rustc_stage1_build(&boundary, verbose)?;
+        let build = run_rustc_stage1_build(&boundary, action_runtime.as_deref(), verbose)?;
         write_rustc_stage1_build_manifest(&boundary, &build)?;
         let candidate = assemble_rustc_stage1_provider_candidate(&boundary, route, &sources, &build)?;
-        let smoke = smoke_rustc_stage1_provider_candidate(&boundary, &candidate)?;
+        let smoke = smoke_rustc_stage1_provider_candidate(&boundary, &candidate, action_runtime.as_deref())?;
         write_rustc_stage1_provider_candidate_manifest(&boundary, &candidate)?;
         Ok(RustSourceProviderRustcStage1ProviderCandidateRun {
             boundary,
@@ -2362,10 +2371,10 @@ fn run_rustc_final_provider_candidate(
     write_rustc_final_sources_manifest(&boundary, &sources)?;
     let scope = begin_rust_provider_action_stage(action_runtime.as_deref_mut(), rustc_final_action_input(&boundary))?;
     let result = (|| {
-        let build = run_rustc_final_build(&boundary, verbose)?;
+        let build = run_rustc_final_build(&boundary, action_runtime.as_deref(), verbose)?;
         write_rustc_final_build_manifest(&boundary, &build)?;
         let candidate = assemble_rustc_final_provider_candidate(&boundary, route, &sources, &build)?;
-        let smoke = smoke_rustc_final_provider_candidate(&boundary, &candidate)?;
+        let smoke = smoke_rustc_final_provider_candidate(&boundary, &candidate, action_runtime.as_deref())?;
         write_rustc_final_provider_candidate_manifest(&boundary, &candidate, false)?;
         Ok(RustSourceProviderRustcFinalProviderCandidateRun {
             boundary,
@@ -4370,11 +4379,20 @@ fn should_retry_smoke_process_output(output: &Output, attempt: u32) -> bool {
     shell_rejected_exec && text_file_busy
 }
 
-fn run_smoke_rustc_with_bounded_launch_retry(rustc_path: &Path, rustc_args: &[OsString]) -> std::io::Result<Output> {
+fn run_smoke_rustc_with_bounded_launch_retry(
+    rustc_path: &Path,
+    rustc_args: &[OsString],
+    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
+) -> std::io::Result<Output> {
     debug_assert!(!rustc_path.as_os_str().is_empty());
     debug_assert!(!rustc_args.is_empty());
     for attempt in 1..=GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS {
-        let result = Command::new(rustc_path).env_clear().args(rustc_args).output();
+        let mut command = Command::new(rustc_path);
+        command.env_clear().args(rustc_args);
+        let result = match action_runtime {
+            Some(runtime) => runtime.run_output(&mut command),
+            None => command.output(),
+        };
         match result {
             Ok(output) if should_retry_smoke_process_output(&output, attempt) => {
                 std::thread::sleep(Duration::from_millis(GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS));
@@ -4404,6 +4422,7 @@ fn run_generated_script_with_log(
     script_path: &Path,
     log_path: &Path,
     full_source_context: Option<&FullSourceRustExecutionContext>,
+    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
 ) -> Result<ExitStatus, RustSourceProviderError> {
     if script_path == log_path {
         return Err(RustSourceProviderError::Build("generated script path and build log path must differ".to_string()));
@@ -4423,7 +4442,12 @@ fn run_generated_script_with_log(
         if full_source_context.is_some() {
             command.env_clear();
         }
-        match command.stdout(stdout).stderr(stderr).status() {
+        command.stdout(stdout).stderr(stderr);
+        let result = match action_runtime {
+            Some(runtime) => runtime.run_status(&mut command),
+            None => command.status(),
+        };
+        match result {
             Ok(status) => return Ok(status),
             Err(error) if should_retry_generated_script_launch(&error, attempt) => {
                 std::thread::sleep(Duration::from_millis(GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS));
@@ -4441,6 +4465,7 @@ fn run_generated_script_with_log(
 
 fn run_rustc_stage1_build(
     boundary: &RustSourceProviderRustcStage1Boundary,
+    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
     verbose: bool,
 ) -> Result<RustSourceProviderRustcStage1Build, RustSourceProviderError> {
     validate_rustc_stage1_build_inputs(boundary)?;
@@ -4453,6 +4478,7 @@ fn run_rustc_stage1_build(
         &boundary.script_path,
         &boundary.build_log_path,
         boundary.full_source_context.as_ref(),
+        action_runtime,
     )?;
     if !status.success() {
         let log_tail = fs::read(&boundary.build_log_path)
@@ -4494,6 +4520,7 @@ fn validate_rustc_stage1_build_inputs(
 
 fn run_rustc_final_build(
     boundary: &RustSourceProviderRustcFinalBoundary,
+    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
     verbose: bool,
 ) -> Result<RustSourceProviderRustcFinalBuild, RustSourceProviderError> {
     validate_rustc_final_build_inputs(boundary)?;
@@ -4506,6 +4533,7 @@ fn run_rustc_final_build(
         &boundary.script_path,
         &boundary.build_log_path,
         boundary.full_source_context.as_ref(),
+        action_runtime,
     )?;
     if !status.success() {
         let log_tail = fs::read(&boundary.build_log_path)
@@ -4980,10 +5008,15 @@ LD_LIBRARY_PATH=\"$ld_path\" exec \"$loader\" \"$self_dir/{tool_binary_name}\" \
 fn smoke_rustc_stage1_provider_candidate(
     boundary: &RustSourceProviderRustcStage1Boundary,
     candidate: &RustSourceProviderRustcStage1ProviderCandidate,
+    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
 ) -> Result<RustSourceProviderSmokeEvidence, RustSourceProviderError> {
     let validation = validate_materialized_rust_source_provider(&candidate.candidate_dir)?;
-    let smoke = smoke_rust_source_provider(&candidate.candidate_dir, &boundary.provider_candidate_smoke_work_dir)?;
-    smoke_rust_source_provider_cargo(&candidate.candidate_dir)?;
+    let smoke = smoke_rust_source_provider_with_action_runtime(
+        &candidate.candidate_dir,
+        &boundary.provider_candidate_smoke_work_dir,
+        action_runtime,
+    )?;
+    smoke_rust_source_provider_cargo(&candidate.candidate_dir, action_runtime)?;
     persist_rust_source_provider_smoke_evidence(&boundary.provider_candidate_smoke_dir, &smoke, &validation)
 }
 
@@ -5295,10 +5328,15 @@ fn assemble_rustc_final_provider_candidate(
 fn smoke_rustc_final_provider_candidate(
     boundary: &RustSourceProviderRustcFinalBoundary,
     candidate: &RustSourceProviderRustcFinalProviderCandidate,
+    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
 ) -> Result<RustSourceProviderSmokeEvidence, RustSourceProviderError> {
     let validation = validate_materialized_rust_source_provider(&candidate.candidate_dir)?;
-    let smoke = smoke_rust_source_provider(&candidate.candidate_dir, &boundary.provider_candidate_smoke_work_dir)?;
-    smoke_rust_source_provider_cargo(&candidate.candidate_dir)?;
+    let smoke = smoke_rust_source_provider_with_action_runtime(
+        &candidate.candidate_dir,
+        &boundary.provider_candidate_smoke_work_dir,
+        action_runtime,
+    )?;
+    smoke_rust_source_provider_cargo(&candidate.candidate_dir, action_runtime)?;
     persist_rust_source_provider_smoke_evidence(&boundary.provider_candidate_smoke_dir, &smoke, &validation)
 }
 
@@ -5554,6 +5592,7 @@ fn write_rustc_final_provider_candidate_manifest(
 
 fn run_first_stage_build(
     boundary: &RustSourceProviderFirstStageBoundary,
+    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
     verbose: bool,
 ) -> Result<RustSourceProviderFirstStageBuild, RustSourceProviderError> {
     let build_sources = first_stage_build_sources(boundary)?;
@@ -5566,6 +5605,7 @@ fn run_first_stage_build(
         &boundary.script_path,
         &boundary.build_log_path,
         boundary.full_source_context.as_ref(),
+        action_runtime,
     )?;
     if !status.success() {
         let log_tail = fs::read(&boundary.build_log_path)
@@ -5690,14 +5730,22 @@ fn assemble_first_stage_provider_candidate(
 fn smoke_first_stage_provider_candidate(
     boundary: &RustSourceProviderFirstStageBoundary,
     candidate: &RustSourceProviderFirstStageProviderCandidate,
+    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
 ) -> Result<RustSourceProviderSmokeEvidence, RustSourceProviderError> {
     let validation = validate_materialized_rust_source_provider(&candidate.candidate_dir)?;
-    let smoke = smoke_rust_source_provider(&candidate.candidate_dir, &boundary.provider_candidate_smoke_work_dir)?;
-    smoke_rust_source_provider_cargo(&candidate.candidate_dir)?;
+    let smoke = smoke_rust_source_provider_with_action_runtime(
+        &candidate.candidate_dir,
+        &boundary.provider_candidate_smoke_work_dir,
+        action_runtime,
+    )?;
+    smoke_rust_source_provider_cargo(&candidate.candidate_dir, action_runtime)?;
     persist_rust_source_provider_smoke_evidence(&boundary.provider_candidate_smoke_dir, &smoke, &validation)
 }
 
-fn smoke_rust_source_provider_cargo(candidate_dir: &Path) -> Result<(), RustSourceProviderError> {
+fn smoke_rust_source_provider_cargo(
+    candidate_dir: &Path,
+    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
+) -> Result<(), RustSourceProviderError> {
     let cargo_path = candidate_dir.join(PROVIDER_CARGO_RELATIVE_PATH);
     if !cargo_path.is_file() {
         return Err(RustSourceProviderError::Smoke(format!(
@@ -5706,7 +5754,7 @@ fn smoke_rust_source_provider_cargo(candidate_dir: &Path) -> Result<(), RustSour
         )));
     }
     let args = [OsString::from("--version")];
-    let output = run_smoke_rustc_with_bounded_launch_retry(&cargo_path, &args)
+    let output = run_smoke_rustc_with_bounded_launch_retry(&cargo_path, &args, action_runtime)
         .map_err(|error| RustSourceProviderError::Smoke(format!("launch {}: {error}", cargo_path.display())))?;
     let stdout = bounded_output_text(&output.stdout);
     let stderr = bounded_output_text(&output.stderr);
@@ -12469,9 +12517,12 @@ mod tests {
         normalize_first_stage_provider_wrappers(&provider_dir, HOST_TRIPLE).unwrap();
         let wrapper = fs::read_to_string(provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH)).unwrap();
         let rustc_args = [OsString::from("-o"), output_path.as_os_str().to_os_string()];
-        let output =
-            run_smoke_rustc_with_bounded_launch_retry(&provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH), &rustc_args)
-                .unwrap();
+        let output = run_smoke_rustc_with_bounded_launch_retry(
+            &provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH),
+            &rustc_args,
+            None,
+        )
+        .unwrap();
 
         assert!(!wrapper.contains(MRUSTC_RUSTC_WRAPPER_DIRNAME_MARKER));
         assert!(wrapper.contains("self_dir=${self%/*}"));
@@ -12769,7 +12820,7 @@ mod tests {
         fs::write(&cargo_path, "#!/bin/sh\nprintf 'cargo 0.0.0\\n'\n").unwrap();
         make_executable(&cargo_path);
 
-        smoke_rust_source_provider_cargo(dir.path()).unwrap();
+        smoke_rust_source_provider_cargo(dir.path(), None).unwrap();
 
         assert!(cargo_path.is_file());
         assert_eq!(script_mode(&cargo_path), EXECUTABLE_MODE);
@@ -12784,7 +12835,7 @@ mod tests {
         fs::write(&cargo_path, "#!/bin/sh\nexit 1\n").unwrap();
         make_executable(&cargo_path);
 
-        let error = smoke_rust_source_provider_cargo(dir.path()).unwrap_err();
+        let error = smoke_rust_source_provider_cargo(dir.path(), None).unwrap_err();
 
         assert!(error.to_string().contains("provider Cargo smoke failed"));
         assert!(cargo_path.is_file());

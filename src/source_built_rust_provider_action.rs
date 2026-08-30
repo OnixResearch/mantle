@@ -1,7 +1,7 @@
 //! Staged action authority for full-source Rust-provider construction.
 //!
 //! Each bootstrap stage writes its plan before execution. The Linux shell then
-//! scopes seccomp observations to that producer action. Executables created
+//! scopes ptrace entry-stop observations to that producer action. Executables created
 //! under a declared output root receive a BLAKE3 identity at first exec and are
 //! pinned before the kernel continues the launch.
 
@@ -13,6 +13,7 @@ use std::io::Write;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Command;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -23,7 +24,7 @@ use crate::protected_exec::OutputPromotionRecord;
 use crate::protected_exec::PlannedExecutable;
 use crate::protected_exec::PlannedProducedExecutableRoot;
 use crate::protected_exec::ProtectedSeccompAuditEvent;
-use crate::protected_exec_seccomp::ProtectedSeccompSupervisor;
+use crate::protected_exec_ptrace::ProtectedPtraceSupervisor;
 use crate::rust_source_provider::RustSourceProviderError;
 use crate::source_toolchain_closure::RustSourceProviderBootstrapPlan;
 use crate::source_toolchain_closure::RustSourceProviderBootstrapStageKind;
@@ -222,7 +223,7 @@ pub(crate) struct RustProviderActionRuntime {
     evidence_dir: PathBuf,
     expected_stage_ids: BTreeSet<String>,
     completed: BTreeMap<String, CompletedStage>,
-    supervisor: ProtectedSeccompSupervisor,
+    supervisor: ProtectedPtraceSupervisor,
 }
 
 impl RustProviderActionRuntime {
@@ -266,7 +267,7 @@ impl RustProviderActionRuntime {
             .collect::<Vec<_>>();
         let policy = crate::protected_exec::ProtectedExecPolicy::from_action_plan(&producer_action_ids, &planned)
             .map_err(|error| provider_error(format!("constructing Rust provider exec policy: {error}")))?;
-        let supervisor = crate::protected_exec_seccomp::install_current_thread_exec_supervisor(policy)
+        let supervisor = crate::protected_exec_ptrace::install_exec_supervisor(policy)
             .map_err(|error| provider_error(format!("installing Rust provider exec policy: {error}")))?;
         assert!(!authority.fixed_executables.is_empty());
         assert_eq!(authority.authority_digest_blake3.len(), BLAKE3_HEX_LENGTH);
@@ -277,6 +278,14 @@ impl RustProviderActionRuntime {
             completed: BTreeMap::new(),
             supervisor,
         })
+    }
+
+    pub(crate) fn run_status(&self, command: &mut Command) -> std::io::Result<std::process::ExitStatus> {
+        self.supervisor.status(command)
+    }
+
+    pub(crate) fn run_output(&self, command: &mut Command) -> std::io::Result<std::process::Output> {
+        self.supervisor.output(command)
     }
 
     pub(crate) fn begin_stage(
@@ -334,6 +343,9 @@ impl RustProviderActionRuntime {
         scope: RustProviderStageScope,
         execution_succeeded: bool,
     ) -> Result<(), RustSourceProviderError> {
+        self.supervisor
+            .wait_for_audit_quiescence()
+            .map_err(|error| provider_error(format!("waiting for Rust provider stage audit: {error}")))?;
         self.supervisor
             .end_producer_action(&scope.stage_id)
             .map_err(|error| provider_error(format!("ending Rust provider action {}: {error}", scope.stage_id)))?;
