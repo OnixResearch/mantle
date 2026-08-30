@@ -24,9 +24,9 @@ The supervisor's own decisions, audit binding, and response handling were exoner
 
 Replace the notification mechanism with `SECCOMP_RET_TRACE` plus ptrace supervision.
 
-The supervised stage child installs, in its `pre_exec` hook: `PR_SET_NO_NEW_PRIVS`, a seccomp filter that returns `SECCOMP_RET_TRACE` for `execve` and `execveat` (all else allow), and then raises `SIGSTOP`. The child writes its pid through a pre-opened pipe.
+The supervised stage child installs, in its `pre_exec` hook: `PR_SET_NO_NEW_PRIVS` and a seccomp filter that returns `SECCOMP_RET_TRACE` for `execve` and `execveat` (all else allow). It then sends an acknowledged root handshake and raises `SIGSTOP`. ADR 0087 defines the acknowledgment order that guarantees ptrace ownership before this stop.
 
-The supervisor thread reads the pid from the pipe, attaches with `PTRACE_SEIZE`, sets `PTRACE_O_TRACEFORK | PTRACE_O_TRACECLONE | PTRACE_O_TRACEVFORK | PTRACE_O_TRACEEXEC | PTRACE_O_TRACESECCOMP | PTRACE_O_TRACESYSGOOD`, and resumes it. Because attaching reparents the tracee to the tracer for wait purposes, and because the attach options auto-attach every descendant to the same tracer, one tracer thread observes the entire process tree through `waitpid`.
+The supervisor thread reads the root handshake, attaches with `PTRACE_SEIZE`, activates `PTRACE_O_TRACEFORK | PTRACE_O_TRACECLONE | PTRACE_O_TRACEVFORK | PTRACE_O_TRACEEXEC | PTRACE_O_TRACESECCOMP | PTRACE_O_TRACESYSGOOD`, acknowledges the seize, and resumes the tracee after its stop. Because attaching reparents the tracee to the tracer for wait purposes, and because the attach options auto-attach every descendant to the same tracer, one tracer thread observes the entire process tree through `waitpid`.
 
 The tracer also owns each root command's wait. A normal `Command::wait` in another thread can consume a ptrace stop because Linux wait authority is shared by the process thread group. The supervisor therefore exposes bounded `status` and `output` operations. These operations spawn the prepared root, leave every ptrace stop to the tracer, and receive the final raw wait status from the tracer. `PTRACE_O_TRACEEXEC` turns the legacy post-exec `SIGTRAP` into an explicit ptrace event. This prevents the command caller from observing a stopped process as a completed command.
 

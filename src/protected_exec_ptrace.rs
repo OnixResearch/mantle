@@ -1,8 +1,8 @@
 //! Linux ptrace-based exec supervision (ADR 0086).
 //!
 //! A supervised root command installs `SECCOMP_RET_TRACE` for `execve` and
-//! `execveat`, writes its PID through a pre-opened pipe, and stops before
-//! `exec`. One tracer thread seizes each root and auto-attaches descendants.
+//! `execveat`, sends an acknowledged root handshake, and stops before `exec`.
+//! One tracer thread seizes each root and auto-attaches descendants.
 //! The shared functional policy still owns allow, deny, and promotion meaning.
 #![cfg(target_os = "linux")]
 
@@ -31,6 +31,7 @@ mod linux {
     use std::sync::Arc;
     use std::sync::Mutex;
     use std::sync::RwLock;
+    use std::sync::atomic::AtomicU64;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
     use std::thread;
@@ -59,7 +60,6 @@ mod linux {
     const SECCOMP_RET_ALLOW: u32 = 0x7FFF_0000;
     const SECCOMP_SET_MODE_FILTER: libc::c_long = 1;
     const SYS_SECCOMP: libc::c_long = 317;
-    const PTRACE_SETOPTIONS: libc::c_uint = 0x4200;
     const PTRACE_GETEVENTMSG: libc::c_uint = 0x4201;
     const PTRACE_SEIZE: libc::c_uint = 0x4206;
     const PTRACE_CONT: libc::c_uint = 7;
@@ -92,9 +92,18 @@ mod linux {
     const QUIESCENCE_STABLE_POLL_COUNT: u32 = 2;
     const QUIESCENCE_POLL_INTERVAL_MS: u64 = 5;
     const PID_BYTES: usize = std::mem::size_of::<libc::pid_t>();
+    const ROOT_HANDSHAKE_TOKEN_BYTES: usize = std::mem::size_of::<u64>();
+    const ROOT_HANDSHAKE_BYTES: usize = PID_BYTES + ROOT_HANDSHAKE_TOKEN_BYTES;
     const PIPE_FD_COUNT: usize = 2;
     const PIPE_READ_INDEX: usize = 0;
     const PIPE_WRITE_INDEX: usize = 1;
+    const PID_T_BYTES_EXPECTED: usize = 4;
+    const U64_BYTES_EXPECTED: usize = 8;
+    const PIPE_ATOMIC_WRITE_BYTES_MIN: usize = 512;
+    const SEIZE_ACK_BYTES: usize = 1;
+    const SEIZE_ACK: u8 = 1;
+    const FIRST_ROOT_HANDSHAKE_TOKEN: u64 = 1;
+    const ROOT_HANDSHAKES_MAX: usize = TRACEES_MAX;
 
     #[derive(Debug, Eq, PartialEq)]
     pub enum PtraceSupervisorError {
@@ -147,6 +156,12 @@ mod linux {
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct RootHandshake {
+        pid: i32,
+        token: u64,
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     struct EntryRegs {
         syscall_nr: u64,
         arg0: u64,
@@ -186,6 +201,8 @@ mod linux {
         fatal_error: Arc<Mutex<Option<String>>>,
         active_tracees: Arc<AtomicUsize>,
         completed_roots: Arc<Mutex<BTreeMap<i32, i32>>>,
+        pending_root_acks: Arc<Mutex<BTreeMap<u64, OwnedFd>>>,
+        next_root_handshake_token: AtomicU64,
         pid_writer: OwnedFd,
     }
 
@@ -232,26 +249,35 @@ mod linux {
             policy.promote_verified_output(source_entry_id, extraction_rules, executables)
         }
 
-        /// Adds the race-free child half of ADR 0086 to a root command.
+        /// Adds the acknowledged child half of ADR 0087 to a root command.
         /// Descendants inherit the filter and are attached by ptrace options.
-        pub fn prepare_command(&self, command: &mut Command) -> Result<(), PtraceSupervisorError> {
+        fn prepare_command(&self, command: &mut Command) -> Result<u64, PtraceSupervisorError> {
             self.require_healthy()?;
+            let (ack_reader, ack_writer) = create_seize_ack_pipe()?;
+            let token = self.next_root_handshake_token()?;
+            self.register_root_ack(token, ack_writer)?;
             let pid_writer = self.pid_writer.as_raw_fd();
             // SAFETY: the closure calls only bounded libc operations before exec.
             unsafe {
                 command.pre_exec(move || {
                     pre_exec_install_trace_filter().map_err(io::Error::other)?;
-                    pre_exec_write_pid(pid_writer)?;
-                    pre_exec_raise_stop()?;
-                    Ok(())
+                    pre_exec_write_root_handshake(pid_writer, token)?;
+                    pre_exec_wait_for_seize_ack(ack_reader.as_raw_fd())?;
+                    pre_exec_raise_stop()
                 });
             }
-            Ok(())
+            Ok(token)
         }
 
         pub fn status(&self, command: &mut Command) -> io::Result<ExitStatus> {
-            self.prepare_command(command).map_err(ptracer_io_error)?;
-            let child = command.spawn()?;
+            let token = self.prepare_command(command).map_err(ptracer_io_error)?;
+            let child = match command.spawn() {
+                Ok(child) => child,
+                Err(error) => {
+                    self.cancel_root_ack(token);
+                    return Err(error);
+                }
+            };
             let pid = i32::try_from(child.id()).map_err(|_| io::Error::other("child pid exceeds i32"))?;
             drop(child);
             let raw_status = self.wait_for_root_status(pid)?;
@@ -259,9 +285,15 @@ mod linux {
         }
 
         pub fn output(&self, command: &mut Command) -> io::Result<Output> {
-            self.prepare_command(command).map_err(ptracer_io_error)?;
+            let token = self.prepare_command(command).map_err(ptracer_io_error)?;
             command.stdout(Stdio::piped()).stderr(Stdio::piped());
-            let mut child = command.spawn()?;
+            let mut child = match command.spawn() {
+                Ok(child) => child,
+                Err(error) => {
+                    self.cancel_root_ack(token);
+                    return Err(error);
+                }
+            };
             let pid = i32::try_from(child.id()).map_err(|_| io::Error::other("child pid exceeds i32"))?;
             let mut stdout = child.stdout.take().ok_or_else(|| io::Error::other("child stdout pipe is missing"))?;
             let mut stderr = child.stderr.take().ok_or_else(|| io::Error::other("child stderr pipe is missing"))?;
@@ -282,6 +314,42 @@ mod linux {
                 stdout,
                 stderr,
             })
+        }
+
+        #[allow(
+            deprecated,
+            reason = "Rust 1.93 requires fetch_update; try_update is not stable there"
+        )]
+        fn next_root_handshake_token(&self) -> Result<u64, PtraceSupervisorError> {
+            self.next_root_handshake_token
+                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |token| token.checked_add(1))
+                .map_err(|_| PtraceSupervisorError::Install("root handshake token space exhausted".to_string()))
+        }
+
+        fn register_root_ack(&self, token: u64, writer: OwnedFd) -> Result<(), PtraceSupervisorError> {
+            assert_ne!(token, 0);
+            let mut pending = self
+                .pending_root_acks
+                .lock()
+                .map_err(|_| PtraceSupervisorError::Install("root handshake lock was poisoned".to_string()))?;
+            if pending.len() >= ROOT_HANDSHAKES_MAX {
+                return Err(PtraceSupervisorError::Install(format!(
+                    "pending root handshakes exceed bound {ROOT_HANDSHAKES_MAX}"
+                )));
+            }
+            if pending.contains_key(&token) {
+                return Err(PtraceSupervisorError::Install(format!("duplicate root handshake token {token}")));
+            }
+            pending.insert(token, writer);
+            Ok(())
+        }
+
+        fn cancel_root_ack(&self, token: u64) {
+            let mut pending = match self.pending_root_acks.lock() {
+                Ok(pending) => pending,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            pending.remove(&token);
         }
 
         pub fn wait_for_audit_quiescence(&self) -> Result<usize, PtraceSupervisorError> {
@@ -347,6 +415,7 @@ mod linux {
         let fatal_error = Arc::new(Mutex::new(None));
         let active_tracees = Arc::new(AtomicUsize::new(0));
         let completed_roots = Arc::new(Mutex::new(BTreeMap::new()));
+        let pending_root_acks = Arc::new(Mutex::new(BTreeMap::new()));
         spawn_tracer_thread(
             pid_reader,
             shared_policy.clone(),
@@ -355,6 +424,7 @@ mod linux {
             fatal_error.clone(),
             active_tracees.clone(),
             completed_roots.clone(),
+            pending_root_acks.clone(),
         )?;
         Ok(ProtectedPtraceSupervisor {
             audit_events,
@@ -363,6 +433,8 @@ mod linux {
             fatal_error,
             active_tracees,
             completed_roots,
+            pending_root_acks,
+            next_root_handshake_token: AtomicU64::new(FIRST_ROOT_HANDSHAKE_TOKEN),
             pid_writer,
         })
     }
@@ -459,8 +531,20 @@ mod linux {
     }
 
     fn create_pid_pipe() -> Result<(OwnedFd, OwnedFd), PtraceSupervisorError> {
-        const { assert!(PIPE_FD_COUNT == 2) };
-        const { assert!(PID_BYTES == 4) };
+        const { assert!(PID_BYTES == PID_T_BYTES_EXPECTED) };
+        const { assert!(ROOT_HANDSHAKE_TOKEN_BYTES == U64_BYTES_EXPECTED) };
+        const { assert!(ROOT_HANDSHAKE_BYTES <= PIPE_ATOMIC_WRITE_BYTES_MIN) };
+        let (reader, writer) = create_cloexec_pipe()?;
+        set_nonblocking(reader.as_raw_fd())?;
+        Ok((reader, writer))
+    }
+
+    fn create_seize_ack_pipe() -> Result<(OwnedFd, OwnedFd), PtraceSupervisorError> {
+        const { assert!(SEIZE_ACK_BYTES == 1) };
+        create_cloexec_pipe()
+    }
+
+    fn create_cloexec_pipe() -> Result<(OwnedFd, OwnedFd), PtraceSupervisorError> {
         let mut fds = [-1; PIPE_FD_COUNT];
         let result = unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) };
         if result != 0 {
@@ -470,7 +554,6 @@ mod linux {
         let reader = unsafe { OwnedFd::from_raw_fd(fds[PIPE_READ_INDEX]) };
         // SAFETY: pipe2 returned two new descriptors owned by this function.
         let writer = unsafe { OwnedFd::from_raw_fd(fds[PIPE_WRITE_INDEX]) };
-        set_nonblocking(reader.as_raw_fd())?;
         Ok((reader, writer))
     }
 
@@ -513,17 +596,44 @@ mod linux {
         Ok(())
     }
 
-    fn pre_exec_write_pid(pid_writer: RawFd) -> io::Result<()> {
+    fn pre_exec_write_root_handshake(pid_writer: RawFd, token: u64) -> io::Result<()> {
+        assert_ne!(token, 0);
         let pid = unsafe { libc::getpid() };
-        let bytes = pid.to_ne_bytes();
+        let mut bytes = [0_u8; ROOT_HANDSHAKE_BYTES];
+        bytes[..PID_BYTES].copy_from_slice(&pid.to_ne_bytes());
+        bytes[PID_BYTES..].copy_from_slice(&token.to_ne_bytes());
         let result = unsafe { libc::write(pid_writer, bytes.as_ptr().cast::<libc::c_void>(), bytes.len()) };
-        if result == PID_BYTES as isize {
+        if result == ROOT_HANDSHAKE_BYTES as isize {
             return Ok(());
         }
         if result < 0 {
             return Err(io::Error::last_os_error());
         }
-        Err(io::Error::other("ptrace PID pipe write was short"))
+        Err(io::Error::other("ptrace root handshake pipe write was short"))
+    }
+
+    fn pre_exec_wait_for_seize_ack(ack_reader: RawFd) -> io::Result<()> {
+        let mut ack = [0_u8; SEIZE_ACK_BYTES];
+        loop {
+            let result = unsafe { libc::read(ack_reader, ack.as_mut_ptr().cast::<libc::c_void>(), ack.len()) };
+            if result == SEIZE_ACK_BYTES as isize && ack[0] == SEIZE_ACK {
+                return Ok(());
+            }
+            if result == SEIZE_ACK_BYTES as isize {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "ptrace seize acknowledgment is invalid"));
+            }
+            if result == 0 {
+                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "ptrace seize acknowledgment pipe closed"));
+            }
+            if result < 0 {
+                let error = io::Error::last_os_error();
+                if error.kind() == io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(error);
+            }
+            return Err(io::Error::other("ptrace seize acknowledgment read was short"));
+        }
     }
 
     fn pre_exec_raise_stop() -> io::Result<()> {
@@ -542,6 +652,7 @@ mod linux {
         fatal_error: Arc<Mutex<Option<String>>>,
         active_tracees: Arc<AtomicUsize>,
         completed_roots: Arc<Mutex<BTreeMap<i32, i32>>>,
+        pending_root_acks: Arc<Mutex<BTreeMap<u64, OwnedFd>>>,
     ) -> Result<(), PtraceSupervisorError> {
         thread::Builder::new()
             .name("mantle-ptrace-exec-supervisor".to_string())
@@ -554,6 +665,7 @@ mod linux {
                     fatal_error,
                     active_tracees,
                     completed_roots,
+                    pending_root_acks,
                 );
             })
             .map(|_| ())
@@ -568,18 +680,34 @@ mod linux {
         fatal_error: Arc<Mutex<Option<String>>>,
         active_tracees: Arc<AtomicUsize>,
         completed_roots: Arc<Mutex<BTreeMap<i32, i32>>>,
+        pending_root_acks: Arc<Mutex<BTreeMap<u64, OwnedFd>>>,
     ) {
         let mut tracees = BTreeSet::new();
         let mut tracked_roots = BTreeSet::new();
         let mut pipe_closed = false;
         loop {
             if !pipe_closed {
-                match read_root_pids(pid_reader.as_raw_fd()) {
-                    Ok((root_pids, closed)) => {
+                match read_root_handshakes(pid_reader.as_raw_fd()) {
+                    Ok((root_handshakes, closed)) => {
                         pipe_closed = closed;
-                        for pid in root_pids {
+                        for handshake in root_handshakes {
+                            let pid = handshake.pid;
                             tracked_roots.insert(pid);
-                            if let Err(error) = attach_root_tracee(pid, &mut tracees, &active_tracees) {
+                            let ack_writer = match take_root_ack(handshake.token, &pending_root_acks) {
+                                Ok(writer) => writer,
+                                Err(error) => {
+                                    record_tracer_failure(
+                                        pid,
+                                        error.to_string(),
+                                        &audit_events,
+                                        &auto_promotions,
+                                        &fatal_error,
+                                    );
+                                    kill_pid(pid);
+                                    continue;
+                                }
+                            };
+                            if let Err(error) = attach_root_tracee(pid, ack_writer, &mut tracees, &active_tracees) {
                                 record_tracer_failure(
                                     pid,
                                     error.to_string(),
@@ -622,34 +750,54 @@ mod linux {
         }
     }
 
-    fn read_root_pids(pid_reader: RawFd) -> Result<(Vec<i32>, bool), PtraceSupervisorError> {
-        let mut pids = Vec::new();
+    fn read_root_handshakes(pid_reader: RawFd) -> Result<(Vec<RootHandshake>, bool), PtraceSupervisorError> {
+        let mut handshakes = Vec::new();
         loop {
-            let mut bytes = [0_u8; PID_BYTES];
+            let mut bytes = [0_u8; ROOT_HANDSHAKE_BYTES];
             let result = unsafe { libc::read(pid_reader, bytes.as_mut_ptr().cast::<libc::c_void>(), bytes.len()) };
-            if result == PID_BYTES as isize {
-                let pid = libc::pid_t::from_ne_bytes(bytes);
-                if pid <= 0 {
-                    return Err(PtraceSupervisorError::Attach(format!("PID pipe returned invalid pid {pid}")));
+            if result == ROOT_HANDSHAKE_BYTES as isize {
+                let mut pid_bytes = [0_u8; PID_BYTES];
+                pid_bytes.copy_from_slice(&bytes[..PID_BYTES]);
+                let mut token_bytes = [0_u8; ROOT_HANDSHAKE_TOKEN_BYTES];
+                token_bytes.copy_from_slice(&bytes[PID_BYTES..]);
+                let pid = libc::pid_t::from_ne_bytes(pid_bytes);
+                let token = u64::from_ne_bytes(token_bytes);
+                if pid <= 0 || token < FIRST_ROOT_HANDSHAKE_TOKEN {
+                    return Err(PtraceSupervisorError::Attach(format!(
+                        "root handshake returned invalid pid={pid} token={token}"
+                    )));
                 }
-                pids.push(pid);
+                handshakes.push(RootHandshake { pid, token });
                 continue;
             }
             if result == 0 {
-                return Ok((pids, true));
+                return Ok((handshakes, true));
             }
             if result < 0 {
                 let error = io::Error::last_os_error();
                 if error.kind() == io::ErrorKind::WouldBlock {
-                    return Ok((pids, false));
+                    return Ok((handshakes, false));
                 }
                 if error.kind() == io::ErrorKind::Interrupted {
                     continue;
                 }
-                return Err(PtraceSupervisorError::TracerLoop(format!("read PID pipe: {error}")));
+                return Err(PtraceSupervisorError::TracerLoop(format!("read root handshake pipe: {error}")));
             }
-            return Err(PtraceSupervisorError::TracerLoop(format!("PID pipe read was short: {result}")));
+            return Err(PtraceSupervisorError::TracerLoop(format!("root handshake pipe read was short: {result}")));
         }
+    }
+
+    fn take_root_ack(
+        token: u64,
+        pending_root_acks: &Arc<Mutex<BTreeMap<u64, OwnedFd>>>,
+    ) -> Result<OwnedFd, PtraceSupervisorError> {
+        assert_ne!(token, 0);
+        let mut pending = pending_root_acks
+            .lock()
+            .map_err(|_| PtraceSupervisorError::Attach("root handshake lock was poisoned".to_string()))?;
+        pending
+            .remove(&token)
+            .ok_or_else(|| PtraceSupervisorError::Attach(format!("root handshake token {token} has no acknowledgment")))
     }
 
     fn poll_pid_pipe(pid_reader: RawFd) {
@@ -666,19 +814,38 @@ mod linux {
 
     fn attach_root_tracee(
         pid: i32,
+        ack_writer: OwnedFd,
         tracees: &mut BTreeSet<i32>,
         active_tracees: &AtomicUsize,
     ) -> Result<(), PtraceSupervisorError> {
         seize(pid)?;
+        acknowledge_root_seize(ack_writer)?;
         insert_tracee(pid, tracees, active_tracees)?;
         let status = wait_for_tracee_stop(pid)?;
-        if !libc::WIFSTOPPED(status) || libc::WSTOPSIG(status) != libc::SIGSTOP {
+        if !libc::WIFSTOPPED(status) || libc::WSTOPSIG(status) != libc::SIGSTOP || ptrace_event(status) != 0 {
             return Err(PtraceSupervisorError::Attach(format!(
-                "root tracee {pid} did not stop with SIGSTOP: status={status:#x}"
+                "root tracee {pid} did not enter the acknowledged SIGSTOP: status={status:#x}"
             )));
         }
-        set_options(pid, ptrace_options())?;
         cont_with_signal(pid, 0)
+    }
+
+    fn acknowledge_root_seize(ack_writer: OwnedFd) -> Result<(), PtraceSupervisorError> {
+        let ack = [SEIZE_ACK; SEIZE_ACK_BYTES];
+        loop {
+            let result = unsafe { libc::write(ack_writer.as_raw_fd(), ack.as_ptr().cast::<libc::c_void>(), ack.len()) };
+            if result == SEIZE_ACK_BYTES as isize {
+                return Ok(());
+            }
+            if result < 0 {
+                let error = io::Error::last_os_error();
+                if error.kind() == io::ErrorKind::Interrupted {
+                    continue;
+                }
+                return Err(PtraceSupervisorError::Attach(format!("write ptrace seize acknowledgment: {error}")));
+            }
+            return Err(PtraceSupervisorError::Attach("ptrace seize acknowledgment write was short".to_string()));
+        }
     }
 
     fn seize(pid: i32) -> Result<(), PtraceSupervisorError> {
@@ -717,21 +884,6 @@ mod linux {
             }
             return Err(PtraceSupervisorError::Attach(last_error("waitpid initial SIGSTOP")));
         }
-    }
-
-    fn set_options(pid: i32, options: libc::c_uint) -> Result<(), PtraceSupervisorError> {
-        let result = unsafe {
-            libc::ptrace(
-                PTRACE_SETOPTIONS,
-                pid as libc::pid_t,
-                std::ptr::null_mut::<libc::c_void>(),
-                options as usize as *mut libc::c_void,
-            )
-        };
-        if result == 0 {
-            return Ok(());
-        }
-        Err(PtraceSupervisorError::Attach(last_error("PTRACE_SETOPTIONS")))
     }
 
     fn insert_tracee(
@@ -836,7 +988,6 @@ mod linux {
             return cont_with_signal(pid, 0);
         }
         if is_initial_group_stop(status) || event == PTRACE_EVENT_STOP {
-            set_options(pid, ptrace_options())?;
             return cont_with_signal(pid, 0);
         }
         if event != 0 || is_syscall_stop(status) {
@@ -1363,6 +1514,8 @@ mod linux {
         const CONCURRENT_WORKERS: usize = 4;
         const CONCURRENT_EXECS_PER_WORKER: usize = 128;
         const DESCENDANT_EXEC_EVENT_COUNT: usize = 2;
+        const SEQUENTIAL_STAGE_COUNT: usize = 2;
+        const INVALID_SEIZE_ACK: u8 = 2;
         const BLAKE3_HEX_LENGTH: usize = 64;
         const TEST_SHELL_PATH: &str = "/run/current-system/sw/bin/sh";
         const OUTPUT_SENTINEL: &str = "ptrace-output-ok";
@@ -1517,6 +1670,37 @@ mod linux {
             let memory_error = read_tracee_memory(u32::MAX, 1, &mut buffer).unwrap_err();
             assert!(register_error.to_string().contains("PTRACE_GETREGS"));
             assert_eq!(memory_error, format!("target pid exceeds pid_t: {}", u32::MAX));
+        }
+
+        #[test]
+        fn seize_acknowledgment_rejects_wrong_token_and_closed_pipe() {
+            let (reader, writer) = create_seize_ack_pipe().unwrap();
+            let invalid = [INVALID_SEIZE_ACK; SEIZE_ACK_BYTES];
+            let written =
+                unsafe { libc::write(writer.as_raw_fd(), invalid.as_ptr().cast::<libc::c_void>(), invalid.len()) };
+            assert_eq!(written, SEIZE_ACK_BYTES as isize);
+            let invalid_error = pre_exec_wait_for_seize_ack(reader.as_raw_fd()).unwrap_err();
+            assert_eq!(invalid_error.kind(), io::ErrorKind::InvalidData);
+
+            let (reader, writer) = create_seize_ack_pipe().unwrap();
+            drop(writer);
+            let closed_error = pre_exec_wait_for_seize_ack(reader.as_raw_fd()).unwrap_err();
+            assert_eq!(closed_error.kind(), io::ErrorKind::UnexpectedEof);
+        }
+
+        #[test]
+        fn ptrace_supervisor_handles_sequential_roots_after_quiescence() {
+            let executable = std::fs::canonicalize(TEST_SHELL_PATH).unwrap();
+            let digest = blake3_file_hex(&executable).unwrap();
+            let supervisor = install_exec_supervisor(executable_policy(&executable, digest)).unwrap();
+            for stage_index in 0..SEQUENTIAL_STAGE_COUNT {
+                let mut command = Command::new(TEST_SHELL_PATH);
+                command.args(["-c", ":"]);
+                assert!(supervisor.status(&mut command).unwrap().success());
+                let event_count = supervisor.wait_for_audit_quiescence().unwrap();
+                assert_eq!(event_count, stage_index.saturating_add(1));
+            }
+            assert_eq!(supervisor.audit_events().len(), SEQUENTIAL_STAGE_COUNT);
         }
 
         #[test]

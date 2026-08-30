@@ -1,0 +1,9 @@
+capture_source=pueue-task-11
+compiler=V84 source-built rustc 1.90.0-stable-mrustc
+source=/tmp/atomic-fetch-update-compat.rs
+command=rustc --edition 2024 --emit metadata
+exit_code=0
+stdout_bytes=0
+stderr_bytes=0
+result=fetch_update and allow-reason syntax compile under the predecessor compiler
+non_claim=this diagnostic does not validate the full Mantle crate or promote V84 output

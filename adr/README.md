@@ -93,3 +93,4 @@ compatibility surface, crate name, or historical decision.
 | [0084](0084-isolate-native-prefix-imports-before-downstream-execution.md) | Isolate native-prefix imports before downstream execution | Accepted |
 | [0085](0085-bind-seccomp-audit-decisions-to-kernel-responses.md) | Bind seccomp audit decisions to kernel responses | Accepted |
 | [0086](0086-supervise-exec-with-ptrace-stops.md) | Supervise exec with ptrace stops instead of user-notify continue | Accepted |
+| [0087](0087-acknowledge-ptrace-seize-before-root-stop.md) | Acknowledge ptrace seize before the root stop | Accepted |

@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "fa926c2bd84a7e220e4ae9ca3bdde6a32cf5f51555169bf69b1c748c8ce9f3ac",
+  "blocker": "error: build failed\nsource-built fixed-point blocked: constructing full-source Rust provider: build: build: launch /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v84-ptrace-supervised-20260829.source-built-fixed-point-staging-2155887/rust-provider-scratch/run-rustc-stage1.sh: ptrace tracer loop failed: attaching ptrace supervisor failed: PTRACE_SETOPTIONS: No such process (os error 3); Rust provider action reconciliation also failed: build: Rust provider action authority blocked: waiting for Rust provider stage audit: ptrace tracer loop failed: attaching ptrace supervisor failed: PTRACE_SETOPTIONS: No such process (os error 3)"
+}
