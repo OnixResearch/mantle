@@ -1,0 +1,260 @@
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization)
+warning: function `prepare_rustc_compatibility` is never used
+    --> src/cargo_free_self_build.rs:1662:4
+     |
+1662 | fn prepare_rustc_compatibility(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `execution_path_env` is never used
+    --> src/cargo_free_self_build.rs:3499:4
+     |
+3499 | fn execution_path_env(cargo_path_dir: &Path, toolchain_closure: &LoadedToolchainClosure) -> Result<OsString, RunError> {
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `write_toolchain_path_aliases` is never used
+    --> src/cargo_free_self_build.rs:3552:4
+     |
+3552 | fn write_toolchain_path_aliases(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DIAGNOSTIC_EXEC_PATH_COUNT_MAX` is never used
+  --> src/protected_exec_seccomp.rs:41:11
+   |
+41 |     const DIAGNOSTIC_EXEC_PATH_COUNT_MAX: usize = 256;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DIAGNOSTIC_EXEC_EVENT_COUNT_MAX` is never used
+  --> src/protected_exec_seccomp.rs:42:11
+   |
+42 |     const DIAGNOSTIC_EXEC_EVENT_COUNT_MAX: usize = 131_072;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `PHASE_DIAGNOSTIC` is never used
+  --> src/protected_exec_seccomp.rs:53:11
+   |
+53 |     const PHASE_DIAGNOSTIC: &str = "diagnostic";
+   |           ^^^^^^^^^^^^^^^^
+
+warning: struct `DiagnosticExecObserver` is never constructed
+  --> src/protected_exec_seccomp.rs:75:16
+   |
+75 |     pub struct DiagnosticExecObserver {
+   |                ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `audit_events`, `listener_fd`, and `wait_for_audit_quiescence` are never used
+  --> src/protected_exec_seccomp.rs:81:16
+   |
+80 |     impl DiagnosticExecObserver {
+   |     --------------------------- methods in this implementation
+81 |         pub fn audit_events(&self) -> Vec<ProtectedSeccompAuditEvent> {
+   |                ^^^^^^^^^^^^
+...
+88 |         pub fn listener_fd(&self) -> RawFd {
+   |                ^^^^^^^^^^^
+...
+92 |         pub fn wait_for_audit_quiescence(&self) -> Result<usize, ProtectedSeccompError> {
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: fields `auto_promotions` and `listener_fd` are never read
+   --> src/protected_exec_seccomp.rs:101:9
+    |
+ 98 |     pub struct ProtectedSeccompSupervisor {
+    |                -------------------------- fields in this struct
+...
+101 |         auto_promotions: Arc<Mutex<Vec<OutputPromotionRecord>>>,
+    |         ^^^^^^^^^^^^^^^
+102 |         shared_policy: Arc<RwLock<ProtectedExecPolicy>>,
+103 |         listener_fd: RawFd,
+    |         ^^^^^^^^^^^
+    |
+    = note: `ProtectedSeccompSupervisor` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: methods `listener_fd`, `automatic_promotions`, `register_planned_produced_roots`, `begin_producer_action`, and `end_producer_action` are never used
+   --> src/protected_exec_seccomp.rs:114:16
+    |
+106 |     impl ProtectedSeccompSupervisor {
+    |     ------------------------------- methods in this implementation
+...
+114 |         pub fn listener_fd(&self) -> RawFd {
+    |                ^^^^^^^^^^^
+...
+118 |         pub fn automatic_promotions(&self) -> Vec<OutputPromotionRecord> {
+    |                ^^^^^^^^^^^^^^^^^^^^
+...
+125 |         pub fn register_planned_produced_roots(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+133 |         pub fn begin_producer_action(&self, producer_action_id: &str) -> Result<(), ProtectedExecError> {
+    |                ^^^^^^^^^^^^^^^^^^^^^
+...
+138 |         pub fn end_producer_action(&self, producer_action_id: &str) -> Result<(), ProtectedExecError> {
+    |                ^^^^^^^^^^^^^^^^^^^
+
+warning: function `install_current_thread_diagnostic_exec_observer` is never used
+   --> src/protected_exec_seccomp.rs:222:12
+    |
+222 |     pub fn install_current_thread_diagnostic_exec_observer(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_diagnostic_paths` is never used
+   --> src/protected_exec_seccomp.rs:238:8
+    |
+238 |     fn validate_diagnostic_paths(allowed_paths: &BTreeSet<PathBuf>) -> Result<(), ProtectedSeccompError> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `spawn_diagnostic_observer_thread` is never used
+   --> src/protected_exec_seccomp.rs:428:8
+    |
+428 |     fn spawn_diagnostic_observer_thread(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `diagnostic_observer_loop` is never used
+   --> src/protected_exec_seccomp.rs:440:8
+    |
+440 |     fn diagnostic_observer_loop(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `classify_diagnostic_notification` is never used
+   --> src/protected_exec_seccomp.rs:570:8
+    |
+570 |     fn classify_diagnostic_notification(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `diagnostic_tracee_context` is never used
+   --> src/protected_exec_seccomp.rs:590:8
+    |
+590 |     fn diagnostic_tracee_context(pid: u32) -> String {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `classify_diagnostic_path` is never used
+   --> src/protected_exec_seccomp.rs:597:8
+    |
+597 |     fn classify_diagnostic_path(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `diagnostic_path_allowed` is never used
+   --> src/protected_exec_seccomp.rs:646:8
+    |
+646 |     fn diagnostic_path_allowed(allowed_paths: &BTreeSet<PathBuf>, target: &ExecTarget) -> bool {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: method `as_str` is never used
+  --> src/remote_nominal.rs:55:20
+   |
+50 |         impl $name {
+   |         ---------- method in this implementation
+...
+55 |             pub fn as_str(&self) -> &str {
+   |                    ^^^^^^
+...
+62 | remote_id!(RemoteRequestId);
+   | --------------------------- in this macro invocation
+   |
+   = note: this warning originates in the macro `remote_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: method `as_str` is never used
+  --> src/remote_nominal.rs:55:20
+   |
+50 |         impl $name {
+   |         ---------- method in this implementation
+...
+55 |             pub fn as_str(&self) -> &str {
+   |                    ^^^^^^
+...
+63 | remote_id!(RemoteProtocolSessionId);
+   | ----------------------------------- in this macro invocation
+   |
+   = note: this warning originates in the macro `remote_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: variant `IncompleteReconciliation` is never constructed
+   --> src/source_built_rust_action_plan.rs:209:5
+    |
+206 | pub(crate) enum RustChildActionPlanErrorKind {
+    |                 ---------------------------- variant in this enum
+...
+209 |     IncompleteReconciliation,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `RustChildActionPlanErrorKind` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `reconcile_rust_child_actions` is never used
+   --> src/source_built_rust_action_plan.rs:876:15
+    |
+876 | pub(crate) fn reconcile_rust_child_actions(
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: large size difference between variants
+   --> src/nix_free_demo_cmd.rs:43:1
+    |
+ 43 | /   pub(crate) enum NixFreeDemoAction {
+ 44 | |       /// Validate a Nix-free demo bundle machine summary JSON file
+ 45 | | /     Validate {
+ 46 | | |         /// Path to `mantle-nix-free-demo-summary-v1` JSON
+ 47 | | |         summary: PathBuf,
+ 48 | | |     },
+    | | |_____- the second-largest variant contains at least 24 bytes
+...   |
+ 57 | | /     Generate {
+ 58 | | |         /// Output directory to create or reuse if empty
+ 59 | | |         #[arg(long)]
+ 60 | | |         out: PathBuf,
+...   | |
+108 | | |         synthetic: bool,
+109 | | |     },
+    | | |_____- the largest variant contains at least 289 bytes
+110 | |   }
+    | |___^ the entire enum is at least 296 bytes
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#large_enum_variant
+    = note: `#[warn(clippy::large_enum_variant)]` on by default
+help: consider boxing the large fields or introducing indirection in some other way to reduce the total size of the enum
+    |
+ 96 ~         artifact_digests: Box<Vec<String>>,
+ 97 |
+ 98 |         /// Replay hint to include in the summary; repeat for each hint
+ 99 |         #[arg(long = "replay-hint")]
+100 ~         replay_hints: Box<Vec<String>>,
+101 |
+102 |         /// Explicit non-claim text; repeat for each non-claim
+103 |         #[arg(long = "non-claim")]
+104 ~         non_claims: Box<Vec<String>>,
+    |
+
+warning: using `chunks_exact` with a constant chunk size
+    --> src/rust_plan.rs:9489:37
+     |
+9489 |     for replacement in replacements.chunks_exact(RUSTC_CODEGEN_ARGUMENT_PAIR_WIDTH) {
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using `as_chunks` instead: `as_chunks::<RUSTC_CODEGEN_ARGUMENT_PAIR_WIDTH>().0`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#chunks_exact_to_as_chunks
+     = note: `#[warn(clippy::chunks_exact_to_as_chunks)]` on by default
+
+warning: this assertion has a constant value
+    --> src/rust_source_provider.rs:2987:5
+     |
+2987 |     debug_assert!(RUSTC_SOURCE_CARGO_CHECKSUM_BYTES_MAX < RUSTC_SOURCE_OPENSSL_CONFIG_BYTES_MAX);
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: consider moving this into a const block: `const { assert!(..) }`
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#assertions_on_constants
+     = note: `#[warn(clippy::assertions_on_constants)]` on by default
+
+warning: this assertion has a constant value
+    --> src/rust_source_provider.rs:2988:5
+     |
+2988 |     debug_assert!(RUSTC_SOURCE_OPENSSL_READ_ITERATIONS_MAX > 1);
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: consider moving this into a const block: `const { assert!(..) }`
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#assertions_on_constants
+
+warning: `mantle` (bin "mantle") generated 26 warnings (run `cargo clippy --fix --bin "mantle" -p mantle -- --no-deps` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 24.84s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 11`

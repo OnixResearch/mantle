@@ -9,6 +9,10 @@ const TEST_DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 const TEST_EVENT_MAX: u32 = 64;
 const TEST_FD_MAX: u32 = 64;
 const TEST_STORAGE_MAX: u64 = 1_048_576;
+const V85_EXEC_EVENTS_PER_STAGE_MAX: u32 = 262_144;
+const V85_STAGE_COUNT: u32 = 5;
+const V85_AGGREGATE_EVENT_COUNT: u32 = 391_207;
+const V85_AGGREGATE_EVENT_COUNT_MAX: u32 = 1_310_720;
 
 #[test]
 fn rust_provider_action_runtime_pins_outputs_and_emits_complete_evidence() {
@@ -79,6 +83,18 @@ fn run_child() {
     assert_eq!(evidence.reconciliation_digest_blake3.len(), BLAKE3_HEX_LENGTH);
     assert_eq!(revalidated.plan_digest_blake3, evidence.plan_digest_blake3);
     assert_eq!(revalidated.reconciliation_digest_blake3, evidence.reconciliation_digest_blake3);
+}
+
+#[test]
+fn rust_provider_aggregate_event_limit_scales_with_stages_and_rejects_invalid_factors() {
+    let aggregate_max = aggregate_exec_event_count_max(V85_EXEC_EVENTS_PER_STAGE_MAX, V85_STAGE_COUNT).unwrap();
+    let zero_stage_error = aggregate_exec_event_count_max(V85_EXEC_EVENTS_PER_STAGE_MAX, 0).unwrap_err();
+    let overflow_error = aggregate_exec_event_count_max(u32::MAX, V85_STAGE_COUNT).unwrap_err();
+
+    assert_eq!(aggregate_max, V85_AGGREGATE_EVENT_COUNT_MAX);
+    assert!(V85_AGGREGATE_EVENT_COUNT <= aggregate_max);
+    assert!(zero_stage_error.to_string().contains("factors must be positive"));
+    assert!(overflow_error.to_string().contains("aggregate event limit overflow"));
 }
 
 #[test]

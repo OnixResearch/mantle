@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "artifact_count": 5,
+    "evidence_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-stage1-chain/rust-1.92.0-stage1/rustc-stage1-provider-candidate-smoke/provider-metadata.json",
+    "host_triple": "x86_64-unknown-linux-musl",
+    "metadata_digest_blake3": "36b7d7baefcdd6e6ef0b92ce971d25b2dc2bb2416ec5cd2c9a8f5522deb96518",
+    "original_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-stage1-chain/rust-1.92.0-stage1/rustc-stage1-provider-candidate/share/mantle-rust-provider/provider.json",
+    "policy_digest_blake3": "e3e9e513df06ec5ac9a0d01f7fc45f58141c3d83bc0cf37bc4377aee6c78d0bb",
+    "receipt_count": 1,
+    "source_count": 2,
+    "target_triple": "x86_64-unknown-linux-musl"
+  },
+  "output_digest_blake3": "99f17a7f92554d57a61d253483d9b88a4da2623fb1b072caaa887f483bcca8e4",
+  "output_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-stage1-chain/rust-1.92.0-stage1/rustc-stage1-provider-candidate-smoke/smoke-output.rlib",
+  "provider_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-stage1-chain/rust-1.92.0-stage1/rustc-stage1-provider-candidate",
+  "rustc_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-stage1-chain/rust-1.92.0-stage1/rustc-stage1-provider-candidate/bin/rustc",
+  "schema": "mantle-rust-source-provider-smoke-evidence-v1",
+  "source_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-stage1-chain/rust-1.92.0-stage1/rustc-stage1-provider-candidate-smoke/smoke-source.rs",
+  "stderr_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-stage1-chain/rust-1.92.0-stage1/rustc-stage1-provider-candidate-smoke/smoke-stderr.txt",
+  "stdout_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-stage1-chain/rust-1.92.0-stage1/rustc-stage1-provider-candidate-smoke/smoke-stdout.txt",
+  "target_triple": "x86_64-unknown-linux-musl"
+}

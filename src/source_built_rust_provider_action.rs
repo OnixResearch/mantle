@@ -515,9 +515,12 @@ impl RustProviderActionRuntime {
             .values()
             .try_fold(0_u32, |count, stage| count.checked_add(stage.reconciliation.matched_event_count))
             .ok_or_else(|| provider_error("Rust provider matched event count overflow".to_string()))?;
-        if observed_event_count > self.authority.limits.exec_events_per_stage_max {
+        let aggregate_event_count_max =
+            aggregate_exec_event_count_max(self.authority.limits.exec_events_per_stage_max, action_count)?;
+        if observed_event_count > aggregate_event_count_max {
             return Err(provider_error(format!(
-                "Rust provider aggregate exec event count {observed_event_count} exceeds {}",
+                "Rust provider aggregate exec event count {observed_event_count} exceeds derived limit \
+                 {aggregate_event_count_max} ({} per stage across {action_count} stages)",
                 self.authority.limits.exec_events_per_stage_max
             )));
         }
@@ -951,6 +954,18 @@ fn validate_digest(label: &str, digest: &str) -> Result<(), RustSourceProviderEr
         return Err(provider_error(format!("invalid Rust provider action {label} BLAKE3")));
     }
     Ok(())
+}
+
+fn aggregate_exec_event_count_max(
+    exec_events_per_stage_max: u32,
+    stage_count: u32,
+) -> Result<u32, RustSourceProviderError> {
+    if exec_events_per_stage_max == 0 || stage_count == 0 {
+        return Err(provider_error("Rust provider aggregate event factors must be positive".to_string()));
+    }
+    exec_events_per_stage_max
+        .checked_mul(stage_count)
+        .ok_or_else(|| provider_error("Rust provider aggregate event limit overflow".to_string()))
 }
 
 fn bounded_count(label: &str, count: usize) -> Result<u32, RustSourceProviderError> {

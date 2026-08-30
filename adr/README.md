@@ -94,3 +94,4 @@ compatibility surface, crate name, or historical decision.
 | [0085](0085-bind-seccomp-audit-decisions-to-kernel-responses.md) | Bind seccomp audit decisions to kernel responses | Accepted |
 | [0086](0086-supervise-exec-with-ptrace-stops.md) | Supervise exec with ptrace stops instead of user-notify continue | Accepted |
 | [0087](0087-acknowledge-ptrace-seize-before-root-stop.md) | Acknowledge ptrace seize before the root stop | Accepted |
+| [0088](0088-derive-rust-provider-aggregate-event-bounds.md) | Derive Rust-provider aggregate event bounds from stage bounds | Accepted |

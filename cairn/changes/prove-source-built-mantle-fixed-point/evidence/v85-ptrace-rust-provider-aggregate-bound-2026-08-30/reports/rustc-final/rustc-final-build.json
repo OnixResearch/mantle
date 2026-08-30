@@ -1,0 +1,138 @@
+{
+  "bootstrap_provider_candidate": {
+    "metadata_digest_blake3": "d1ee1f83bcdb0ca1f11664d8127957a8f253c6ce40b18b6de43ea30bb889dc18",
+    "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-stage1-chain/rust-1.93.1-stage1/rustc-stage1-provider-candidate",
+    "policy_digest_blake3": "9ad5007cc9d26e0b6bd429db42abee4ccda62dc0bc52143cfeb7690cbae1d393"
+  },
+  "bootstrap_stage_id": "rust-1.93.1-stage1",
+  "build": {
+    "cargo_digest_blake3": "69d864bdd6a33829fed9c3b42f2676d71cfa0d2414b1ad3ff006223a90ff5e13",
+    "cargo_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-final/rustc-final-output/bin/cargo",
+    "host_rustlib_digest_blake3": "837de21733f07a9398428959ff98768953c865368583658f46366349ae06bffd",
+    "host_rustlib_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-final/rustc-final-output/lib/rustlib/x86_64-unknown-linux-musl/lib",
+    "log_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-final/rustc-final-build.log",
+    "parallel_job_count": 4,
+    "plan_digest_blake3": "449554922edf03560e5e7d46dccfe73f80d9e69b4679facf5b218eded4823033",
+    "rustc_digest_blake3": "42ef78c4f1bc8860a80d8c8ed67e6a64447604f907b4f86f2a83bc198465e092",
+    "rustc_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-final/rustc-final-output/bin/rustc",
+    "rustdoc_digest_blake3": "bf197575c700dc2000009e80a84e4b2d6bcdec8c8c330450c0e39b0450598d62",
+    "rustdoc_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-final/rustc-final-output/bin/rustdoc",
+    "script_digest_blake3": "cb9d4a502d248ea9436fbb9cef2705cbe5205185969ee6ca5215c3cbaca2c536",
+    "script_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-final/run-rustc-final.sh",
+    "stage_id": "rust-1.94.0-final",
+    "stage_output_digest_blake3": "d3d58c8efbf2a47bdfd91050538e706d986109546c56c20aefa5cdc5685d0e7c",
+    "stage_output_dir": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-final/rustc-final-output",
+    "target_rustlib_digest_blake3": "837de21733f07a9398428959ff98768953c865368583658f46366349ae06bffd",
+    "target_rustlib_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v85-ptrace-acknowledged-20260830.source-built-fixed-point-staging-2241078/rust-provider-scratch/rustc-final/rustc-final-output/lib/rustlib/x86_64-unknown-linux-musl/lib"
+  },
+  "candidate_only": true,
+  "next_blocked_reason": "source-built Rust provider completion remains pending until every planned stage passes and the validated final provider is published",
+  "patch_plan": {
+    "input": {
+      "capabilities": {
+        "dynamic_tool_runtime": true,
+        "proc_macro_runtime": true,
+        "provider_contract_version": "mantle-rust-source-provider-v1",
+        "rustdoc_tool": true,
+        "source_built_provider": true,
+        "static_executable_linking": true
+      },
+      "host_triple": "x86_64-unknown-linux-musl",
+      "mrustc_version": null,
+      "route_id": "rust-source-musl-host-plan",
+      "route_plan_digest_blake3": "58c6ea33a72121463d8e1e71310f60562f63528385b6cd2b86d98e8d37b2281c",
+      "route_policy_digest_blake3": "66a76c43410fabbbd3747a64f3715506acfe7034220e81e3b564dd5fd97e935a",
+      "rust_version": "1.94.0",
+      "source_identities": [
+        {
+          "digest": "b83f921cd3f321ff614f9c06a8b870d89299fc02888b48a5549683a36823474c",
+          "digest_kind": "sha256",
+          "id": "rust-1.94.0",
+          "name": "rust-compiler-source"
+        },
+        {
+          "digest": "d1ee1f83bcdb0ca1f11664d8127957a8f253c6ce40b18b6de43ea30bb889dc18",
+          "digest_kind": "blake3",
+          "id": "rust-1.94.0-final-bootstrap-provider",
+          "name": "bootstrap-provider-candidate"
+        }
+      ],
+      "stage": "rust-bootstrap",
+      "stage_id": "rust-1.94.0-final",
+      "target_triple": "x86_64-unknown-linux-musl"
+    },
+    "input_digest_blake3": "57d3e65eb35bca1fe04154e2897b67c6fff5a36200dd741e30656219c8681161",
+    "operation_count": 8,
+    "operations": [
+      {
+        "expected_anchor": "Rust bootstrap target tool configuration",
+        "id": "rust-bootstrap-target-tool-config",
+        "kind": "rust-bootstrap-target-tool-config",
+        "phase": "rust-bootstrap-before-xpy",
+        "source_id": "rust-1.94.0",
+        "summary": "bind source-root target tools and runtime paths in Rust bootstrap config"
+      },
+      {
+        "expected_anchor": "vendored openssl-src configure arguments",
+        "id": "rust-bootstrap-openssl-no-asm",
+        "kind": "open-ssl-no-asm",
+        "phase": "rust-bootstrap-before-xpy",
+        "source_id": "rust-1.94.0",
+        "summary": "disable OpenSSL assembly generators that require an ambient shell"
+      },
+      {
+        "expected_anchor": "src/llvm-project/llvm/cmake/modules/TableGen.cmake tablegen executable selection",
+        "id": "rust-bootstrap-llvm-absolute-tablegen",
+        "kind": "rust-bootstrap-llvm-absolute-tablegen",
+        "phase": "rust-bootstrap-before-xpy",
+        "source_id": "rust-1.94.0",
+        "summary": "emit generated LLVM tablegen commands with runtime-output absolute paths"
+      },
+      {
+        "expected_anchor": "src/bootstrap/Cargo.toml workspace members",
+        "id": "rust-bootstrap-workspace-isolation",
+        "kind": "rust-bootstrap-workspace-isolation",
+        "phase": "rust-bootstrap-before-xpy",
+        "source_id": "rust-1.94.0",
+        "summary": "keep optional compiler workspaces outside the bootstrap member set"
+      },
+      {
+        "expected_anchor": "compiler/rustc_driver/Cargo.toml crate-type",
+        "id": "rust-bootstrap-rustc-driver-rlib",
+        "kind": "rust-bootstrap-rustc-driver-rlib",
+        "phase": "rust-bootstrap-before-xpy",
+        "source_id": "rust-1.94.0",
+        "summary": "build rustc_driver as rlib for static musl compiler host"
+      },
+      {
+        "expected_anchor": "compiler/rustc_session/src/filesearch.rs default sysroot",
+        "id": "rust-bootstrap-sysroot-fallback",
+        "kind": "rust-bootstrap-sysroot-fallback",
+        "phase": "rust-bootstrap-before-xpy",
+        "source_id": "rust-1.94.0",
+        "summary": "prefer explicit sysroot environment before dynamic compiler fallback"
+      },
+      {
+        "expected_anchor": "src/bootstrap/src/core/build_steps/tool.rs ToolBuild cargo",
+        "id": "rust-bootstrap-rustc-private-tool-rlibs",
+        "kind": "rust-bootstrap-rustc-private-tool-rlib-lookup",
+        "phase": "rust-bootstrap-before-xpy",
+        "source_id": "rust-1.94.0",
+        "summary": "teach rustc-private tools where stage2 compiler rlibs live"
+      },
+      {
+        "expected_anchor": "provider metadata contract",
+        "id": "provider-contract-assertion",
+        "kind": "provider-contract-assertion",
+        "phase": "provider-evidence",
+        "summary": "assert provider contract mantle-rust-source-provider-v1 from explicit route facts"
+      }
+    ],
+    "output_digest_blake3": "03c2326364296662acf2f9bbfb298a57252453b6086949ce262d0ac6f9cd54bc",
+    "schema": "mantle-rust-bootstrap-patch-plan-v1"
+  },
+  "route_plan_digest_blake3": "58c6ea33a72121463d8e1e71310f60562f63528385b6cd2b86d98e8d37b2281c",
+  "route_policy_digest_blake3": "66a76c43410fabbbd3747a64f3715506acfe7034220e81e3b564dd5fd97e935a",
+  "schema": "mantle-rust-source-provider-rustc-final-build-v1",
+  "stage_id": "rust-1.94.0-final"
+}
