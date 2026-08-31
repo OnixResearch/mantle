@@ -68,6 +68,13 @@ const EXECUTION_OUTPUT_ROOT_FLAG: &str = "--execution-output-root";
 const HELP_FLAG: &str = "--help";
 const TOOLCHAIN_DIR: &str = "toolchain";
 const RUSTC_WRAPPER_FILE: &str = "rustc-normalized";
+const RUSTC_RUNTIME_WRAPPER_FILE: &str = "rustc-receipt-bound-runtime";
+const RUSTC_LIBSTDCXX_RUNTIME_FILE: &str = "libstdc++.so.6.0.28";
+const RUSTC_LIBSTDCXX_SONAME: &str = "libstdc++.so.6";
+const RUSTC_DYNAMIC_LOADER_FILE: &str = "ld-musl-x86_64.so.1";
+const RUSTC_DYNAMIC_BINARY_FILE: &str = "rustc.dynamic";
+const RUSTC_RUNTIME_HOST_TRIPLE: &str = "x86_64-unknown-linux-musl";
+const DYNAMIC_LIBRARY_PATH_ENV: &str = "LD_LIBRARY_PATH";
 const COMPATIBILITY_FILE: &str = "compatibility.json";
 const TOOLCHAIN_COMPATIBILITY_PATH_DIR: &str = "receipt-bound-path";
 const TOOLCHAIN_ALIAS_RUNTIME_DIR: &str = ".toolchain-runtime";
@@ -89,6 +96,7 @@ const WRAPPER_PROBE_BYTES_MAX: usize = 4096;
 const SHEBANG_BYTES: &[u8] = b"#!";
 const WRAPPER_RUSTC_MARKER: &[u8] = b"rustc";
 const NORMALIZATION_NONE: &str = "none";
+const NORMALIZATION_RECEIPT_BOUND_RUNTIME: &str = "receipt-bound-dynamic-runtime";
 const NORMALIZATION_STRIP_LINK_SELF_CONTAINED: &str = "strip-link-self-contained-no";
 const SIGNAL_STATUS_TEXT: &str = "signal";
 const BLOCKED_SMOKE_STDOUT: &str = "not run: blocked before binary\n";
@@ -184,6 +192,12 @@ struct RustSourceProviderBindingStatus {
     source_count: Option<usize>,
     receipt_count: Option<usize>,
     rustc_path: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct BoundRustcRuntime {
+    library_dir: PathBuf,
+    loader: PathBuf,
 }
 
 #[derive(Clone, Debug)]
@@ -1426,14 +1440,17 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     let requested_rustc = selected_cargo_free_rustc(&loaded_rust_provider, options.rustc);
     let compatibility_rustc = prepare_rustc_for_compatibility(requested_rustc, &loaded_toolchain_closure)?;
     let execution_shell = selected_execution_shell(&loaded_rust_provider);
+    let runtime = bound_rustc_runtime(&loaded_rust_provider.source_built_native_artifacts)?;
     let compatibility = prepare_rustc_compatibility_with_shell(
         &bundle_dir,
         &compatibility_rustc,
         &loaded_toolchain_closure,
         execution_shell,
+        runtime.as_ref(),
     )?;
     let plan = plan_fixed_point_paths(&root, &bundle_dir, &compatibility.summary.stage_rustc, options.targets)?;
     let toolchain_status = enforce_fixed_point_toolchain(
+        &compatibility.summary.requested_rustc,
         &compatibility.summary.stage_rustc,
         &loaded_toolchain_closure,
         &loaded_rust_provider,
@@ -1666,7 +1683,7 @@ fn prepare_rustc_compatibility(
     requested: &Path,
     toolchain_closure: &LoadedToolchainClosure,
 ) -> Result<RustcCompatibility, RunError> {
-    prepare_rustc_compatibility_with_shell(bundle_dir, requested, toolchain_closure, Path::new("/bin/sh"))
+    prepare_rustc_compatibility_with_shell(bundle_dir, requested, toolchain_closure, Path::new("/bin/sh"), None)
 }
 
 fn prepare_rustc_compatibility_with_shell(
@@ -1674,6 +1691,7 @@ fn prepare_rustc_compatibility_with_shell(
     requested: &Path,
     toolchain_closure: &LoadedToolchainClosure,
     execution_shell: &Path,
+    runtime: Option<&BoundRustcRuntime>,
 ) -> Result<RustcCompatibility, RunError> {
     let requested_rustc = resolve_executable(requested, "rustc")?;
     let toolchain_dir = bundle_dir.join(TOOLCHAIN_DIR);
@@ -1681,15 +1699,30 @@ fn prepare_rustc_compatibility_with_shell(
     debug_assert_ne!(toolchain_dir, requested_rustc);
     fs::create_dir_all(&toolchain_dir)
         .map_err(|err| internal(format!("create toolchain dir {}: {err}", toolchain_dir.display())))?;
+    let runtime_wrapper = runtime
+        .map(|runtime| {
+            let wrapper = toolchain_dir.join(RUSTC_RUNTIME_WRAPPER_FILE);
+            write_bound_rustc_runtime_wrapper(&wrapper, &requested_rustc, runtime, execution_shell)?;
+            Ok::<PathBuf, RunError>(wrapper)
+        })
+        .transpose()?;
+    let probe_rustc = runtime_wrapper.as_deref().unwrap_or(&requested_rustc);
     let probe_path_env =
         prepare_rustc_compatibility_path_env_with_shell(&toolchain_dir, toolchain_closure, execution_shell)?;
-    if rustc_accepts_link_self_contained_no(&requested_rustc, &toolchain_dir, probe_path_env.as_deref())? {
+    if rustc_accepts_link_self_contained_no(probe_rustc, &toolchain_dir, probe_path_env.as_deref())? {
+        let wrapper_blake3 = runtime_wrapper.as_deref().map(blake3_file).transpose()?;
+        let stage_rustc = probe_rustc.to_path_buf();
+        let normalization = if runtime_wrapper.is_some() {
+            NORMALIZATION_RECEIPT_BOUND_RUNTIME
+        } else {
+            NORMALIZATION_NONE
+        };
         let summary = RustcCompatibilitySummary {
-            requested_rustc: requested_rustc.clone(),
-            stage_rustc: requested_rustc,
-            normalization: NORMALIZATION_NONE,
-            wrapper: None,
-            wrapper_blake3: None,
+            requested_rustc,
+            stage_rustc,
+            normalization,
+            wrapper: runtime_wrapper,
+            wrapper_blake3,
         };
         write_rustc_compatibility(&toolchain_dir.join(COMPATIBILITY_FILE), &summary)?;
         return Ok(RustcCompatibility { summary });
@@ -1786,6 +1819,54 @@ fn rustc_accepts_link_self_contained_no(
     let is_accepted = command.output().is_ok_and(|output| output.status.success());
     remove_owned_path(&probe_dir)?;
     Ok(is_accepted)
+}
+
+fn write_bound_rustc_runtime_wrapper(
+    wrapper: &Path,
+    real_rustc: &Path,
+    runtime: &BoundRustcRuntime,
+    execution_shell: &Path,
+) -> Result<(), RunError> {
+    require_executable(real_rustc)?;
+    require_executable(&runtime.loader)?;
+    require_executable(execution_shell)?;
+    let rust_root = real_rustc
+        .parent()
+        .and_then(Path::parent)
+        .ok_or_else(|| RunError::Build("receipt-bound rustc has no provider root".to_string()))?;
+    if !real_rustc.ends_with("bin/rustc") {
+        return Err(RunError::Build(format!(
+            "receipt-bound rustc path has unexpected shape: {}",
+            real_rustc.display()
+        )));
+    }
+    let dynamic_rustc = rust_root.join("bin").join(RUSTC_DYNAMIC_BINARY_FILE);
+    require_executable(&dynamic_rustc)?;
+    let rust_lib = rust_root.join("lib");
+    let runtime_lib = rust_lib.join("mantle-runtime");
+    let rust_stdlib = rust_lib.join("rustlib").join(RUSTC_RUNTIME_HOST_TRIPLE).join("lib");
+    for directory in [&runtime_lib, &runtime.library_dir, &rust_lib, &rust_stdlib] {
+        if !directory.is_dir() {
+            return Err(RunError::Build(format!(
+                "receipt-bound rustc runtime directory is unavailable: {}",
+                directory.display()
+            )));
+        }
+    }
+    let library_path = env::join_paths([&runtime_lib, &runtime.library_dir, &rust_lib, &rust_stdlib])
+        .map_err(|error| internal(format!("construct receipt-bound rustc library path: {error}")))?;
+    let execution_shell = path_to_string(execution_shell)?;
+    let script = format!(
+        "#!{execution_shell}\nset -eu\nhas_sysroot=false\nfor arg in \"$@\"; do\n  if [ \"$arg\" = \"--sysroot\" ]; then has_sysroot=true; break; fi\n  case \"$arg\" in --sysroot=*) has_sysroot=true; break ;; esac\ndone\nif [ \"$has_sysroot\" = false ]; then set -- --sysroot {} \"$@\"; fi\n{DYNAMIC_LIBRARY_PATH_ENV}={}\nexport {DYNAMIC_LIBRARY_PATH_ENV}\nexec {} {} \"$@\"\n",
+        shell_quote(rust_root),
+        shell_quote(Path::new(&library_path)),
+        shell_quote(&runtime.loader),
+        shell_quote(&dynamic_rustc)
+    );
+    write_text(wrapper, &script)?;
+    set_executable(wrapper)?;
+    assert!(wrapper.is_file());
+    Ok(())
 }
 
 fn write_rustc_wrapper(wrapper: &Path, real_rustc: &Path) -> Result<(), RunError> {
@@ -2956,9 +3037,8 @@ fn prepare_execution_toolchain(
     rust_source_provider: &LoadedRustSourceProvider,
 ) -> Result<ExecutionToolchain, RunError> {
     let execution_toolchain = if let Some(manifest) = &toolchain_closure.manifest {
-        let rustc = resolve_executable(requested_rustc, "rustc")?;
-        reject_undeclared_external_rustc_wrapper(&rustc, manifest)?;
-        let status = enforce_receipt_bound_toolchain(&rustc, toolchain_closure, manifest)?;
+        let original_rustc = resolve_executable(requested_rustc, "rustc")?;
+        reject_undeclared_external_rustc_wrapper(&original_rustc, manifest)?;
         let c_compiler_route = Some(receipt_bound_c_compiler_route(manifest)?);
         let execution_shell = selected_execution_shell(rust_source_provider);
         if let Some(bound_shell) = &rust_source_provider.source_built_shell {
@@ -2973,6 +3053,16 @@ fn prepare_execution_toolchain(
             &rust_source_provider.source_built_host_tools,
             execution_shell,
         )?;
+        let runtime = bound_rustc_runtime(&rust_source_provider.source_built_native_artifacts)?;
+        let rustc = if let Some(runtime) = runtime {
+            let wrapper = guard_path_dir.join(RUSTC_RUNTIME_WRAPPER_FILE);
+            write_bound_rustc_runtime_wrapper(&wrapper, &original_rustc, &runtime, execution_shell)?;
+            wrapper
+        } else {
+            original_rustc.clone()
+        };
+        let status =
+            enforce_receipt_bound_toolchain_with_runtime(&original_rustc, &rustc, toolchain_closure, manifest)?;
         ExecutionToolchain {
             rustc,
             path_env,
@@ -3172,11 +3262,11 @@ fn rust_fixed_kind_for_native_artifact(
         | FullSourceNativeArtifactRole::ObjectCopy
         | FullSourceNativeArtifactRole::ObjectDump
         | FullSourceNativeArtifactRole::ObjectFormat => Some(RustFixedExecutableKind::NativeHelper),
+        FullSourceNativeArtifactRole::DynamicLinker => Some(RustFixedExecutableKind::NativeHelper),
         FullSourceNativeArtifactRole::CrtObject
         | FullSourceNativeArtifactRole::Libc
         | FullSourceNativeArtifactRole::Libgcc
-        | FullSourceNativeArtifactRole::Libstdcxx
-        | FullSourceNativeArtifactRole::DynamicLinker => None,
+        | FullSourceNativeArtifactRole::Libstdcxx => None,
     }
 }
 
@@ -3327,6 +3417,7 @@ fn is_probable_external_wrapper(path: &Path) -> Result<bool, RunError> {
 }
 
 fn enforce_fixed_point_toolchain(
+    requested_rustc: &Path,
     stage_rustc: &Path,
     toolchain_closure: &LoadedToolchainClosure,
     rust_source_provider: &LoadedRustSourceProvider,
@@ -3334,7 +3425,7 @@ fn enforce_fixed_point_toolchain(
     let Some(manifest) = &toolchain_closure.manifest else {
         return Ok(effective_source_built_toolchain_closure(toolchain_closure, rust_source_provider));
     };
-    enforce_receipt_bound_toolchain(stage_rustc, toolchain_closure, manifest)
+    enforce_receipt_bound_toolchain_with_runtime(requested_rustc, stage_rustc, toolchain_closure, manifest)
 }
 
 fn effective_source_built_toolchain_closure(
@@ -3355,13 +3446,7 @@ fn enforce_receipt_bound_toolchain(
     toolchain_closure: &LoadedToolchainClosure,
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
 ) -> Result<crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus, RunError> {
-    let manifest_path = toolchain_closure
-        .manifest_path
-        .clone()
-        .ok_or_else(|| internal("toolchain closure manifest path missing during enforcement".to_string()))?;
-    let observed = observed_toolchain_inputs(rustc, manifest)?;
-    let validation = enforce_observed_toolchain_subset(manifest, &observed)?;
-    Ok(crate::source_toolchain_closure::enforced_source_built_toolchain_closure(manifest_path, &validation))
+    enforce_receipt_bound_toolchain_with_runtime(rustc, rustc, toolchain_closure, manifest)
 }
 
 fn enforce_observed_toolchain_subset(
@@ -3372,8 +3457,24 @@ fn enforce_observed_toolchain_subset(
         .map_err(|err| RunError::Build(format!("source-built toolchain closure blocked: {}", err.message())))
 }
 
+fn enforce_receipt_bound_toolchain_with_runtime(
+    rustc: &Path,
+    runtime_rustc: &Path,
+    toolchain_closure: &LoadedToolchainClosure,
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+) -> Result<crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus, RunError> {
+    let manifest_path = toolchain_closure
+        .manifest_path
+        .clone()
+        .ok_or_else(|| internal("toolchain closure manifest path missing during enforcement".to_string()))?;
+    let observed = observed_toolchain_inputs(rustc, runtime_rustc, manifest)?;
+    let validation = enforce_observed_toolchain_subset(manifest, &observed)?;
+    Ok(crate::source_toolchain_closure::enforced_source_built_toolchain_closure(manifest_path, &validation))
+}
+
 fn observed_toolchain_inputs(
     rustc: &Path,
+    runtime_rustc: &Path,
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
 ) -> Result<Vec<crate::source_toolchain_closure::ToolchainObservedInput>, RunError> {
     use crate::source_toolchain_closure::ToolchainRole;
@@ -3386,7 +3487,7 @@ fn observed_toolchain_inputs(
     );
     debug_assert!(observed.capacity() >= BASE_OBSERVED_TOOLCHAIN_INPUT_COUNT);
     observed.push(observed_file_tool(ToolchainRole::Rustc, rustc)?);
-    observed.push(observed_sysroot_tool(rustc)?);
+    observed.push(observed_sysroot_tool(runtime_rustc)?);
     for role in [ToolchainRole::Linker, ToolchainRole::CCompiler] {
         let member = single_member_for_role(manifest, role)?;
         observed.push(observed_member_tool(member)?);
@@ -4144,6 +4245,93 @@ fn bound_rust_execution_shell(
     })
 }
 
+fn bound_rustc_runtime(
+    artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
+) -> Result<Option<BoundRustcRuntime>, RunError> {
+    use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
+
+    if artifacts.is_empty() {
+        return Ok(None);
+    }
+    let cxx_runtime = unique_bound_runtime_artifact(
+        artifacts,
+        FullSourceNativeArtifactRole::Libstdcxx,
+        RUSTC_LIBSTDCXX_RUNTIME_FILE,
+    )?;
+    let loader = unique_bound_runtime_artifact(
+        artifacts,
+        FullSourceNativeArtifactRole::DynamicLinker,
+        RUSTC_DYNAMIC_LOADER_FILE,
+    )?;
+    let cxx_runtime_path = validated_bound_runtime_file(cxx_runtime, "Rust C++ runtime")?;
+    let loader_path = validated_bound_runtime_file(loader, "Rust dynamic loader")?;
+    require_executable(&loader_path)?;
+    let library_dir = cxx_runtime_path
+        .parent()
+        .ok_or_else(|| RunError::Build("full-source Rust C++ runtime has no parent directory".to_string()))?;
+    if loader_path.parent() != Some(library_dir) {
+        return Err(RunError::Build("Rust C++ runtime and dynamic loader use different bound directories".to_string()));
+    }
+    let soname_path = library_dir.join(RUSTC_LIBSTDCXX_SONAME);
+    let resolved_soname = fs::canonicalize(&soname_path).map_err(|error| {
+        RunError::Build(format!("resolve Rust C++ runtime soname {}: {error}", soname_path.display()))
+    })?;
+    if resolved_soname != cxx_runtime_path {
+        return Err(RunError::Build(format!(
+            "Rust C++ runtime soname {} does not resolve to bound artifact {}",
+            soname_path.display(),
+            cxx_runtime_path.display()
+        )));
+    }
+    assert!(library_dir.is_absolute());
+    assert!(library_dir.is_dir());
+    Ok(Some(BoundRustcRuntime {
+        library_dir: library_dir.to_path_buf(),
+        loader: loader_path,
+    }))
+}
+
+fn unique_bound_runtime_artifact<'a>(
+    artifacts: &'a [crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
+    role: crate::full_source_rust_binding::FullSourceNativeArtifactRole,
+    file_name: &str,
+) -> Result<&'a crate::full_source_rust_binding::FullSourceNativeArtifactBinding, RunError> {
+    let candidates = artifacts
+        .iter()
+        .filter(|artifact| artifact.role == role)
+        .filter(|artifact| Path::new(&artifact.path).file_name() == Some(OsStr::new(file_name)))
+        .collect::<Vec<_>>();
+    let [artifact] = candidates.as_slice() else {
+        return Err(RunError::Build(format!(
+            "full-source Rust runtime requires one {file_name} artifact, found {}",
+            candidates.len()
+        )));
+    };
+    Ok(*artifact)
+}
+
+fn validated_bound_runtime_file(
+    artifact: &crate::full_source_rust_binding::FullSourceNativeArtifactBinding,
+    label: &str,
+) -> Result<PathBuf, RunError> {
+    let path = Path::new(&artifact.path);
+    if !path.is_absolute() {
+        return Err(RunError::Build(format!("full-source {label} is not absolute: {}", path.display())));
+    }
+    if !path.is_file() {
+        return Err(RunError::Build(format!("full-source {label} is unavailable: {}", path.display())));
+    }
+    let observed = crate::protected_exec::blake3_file_hex(path)
+        .map_err(|error| RunError::Build(format!("hash full-source {label}: {error}")))?;
+    if observed != artifact.content_digest_blake3 {
+        return Err(RunError::Build(format!(
+            "full-source {label} digest mismatch: expected {}, got {observed}",
+            artifact.content_digest_blake3
+        )));
+    }
+    fs::canonicalize(path).map_err(|error| RunError::Build(format!("resolve full-source {label}: {error}")))
+}
+
 fn rebase_bound_native_artifacts(
     native_provider_root: &Path,
     artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
@@ -4243,6 +4431,7 @@ fn full_source_native_artifact_is_executable(
             | FullSourceNativeArtifactRole::ObjectCopy
             | FullSourceNativeArtifactRole::ObjectDump
             | FullSourceNativeArtifactRole::ObjectFormat
+            | FullSourceNativeArtifactRole::DynamicLinker
     )
 }
 
@@ -5184,6 +5373,70 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn receipt_bound_rustc_runtime_wrapper_uses_only_the_validated_cxx_runtime() {
+        use crate::full_source_rust_binding::FullSourceNativeArtifactBinding;
+        use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
+
+        let dir = tempfile::tempdir().unwrap();
+        let runtime_dir = dir.path().join("native-provider/x86_64-linux-musl/lib");
+        let cxx_runtime = runtime_dir.join(RUSTC_LIBSTDCXX_RUNTIME_FILE);
+        let soname = runtime_dir.join(RUSTC_LIBSTDCXX_SONAME);
+        let loader = runtime_dir.join(RUSTC_DYNAMIC_LOADER_FILE);
+        fs::create_dir_all(&runtime_dir).unwrap();
+        fs::write(&cxx_runtime, b"bound cxx runtime\n").unwrap();
+        std::os::unix::fs::symlink(RUSTC_LIBSTDCXX_RUNTIME_FILE, &soname).unwrap();
+        write_fake_executable(
+            &loader,
+            "#!/bin/sh\nprintf '%s\\n' \"${LD_LIBRARY_PATH-unset}\"\nprintf '%s\\n' \"$1\"\n",
+        );
+        let cxx_artifact = FullSourceNativeArtifactBinding {
+            role: FullSourceNativeArtifactRole::Libstdcxx,
+            path: cxx_runtime.display().to_string(),
+            content_digest_blake3: crate::protected_exec::blake3_file_hex(&cxx_runtime).unwrap(),
+        };
+        let loader_artifact = FullSourceNativeArtifactBinding {
+            role: FullSourceNativeArtifactRole::DynamicLinker,
+            path: loader.display().to_string(),
+            content_digest_blake3: crate::protected_exec::blake3_file_hex(&loader).unwrap(),
+        };
+        let rust_root = dir.path().join("rust-provider");
+        let real_rustc = rust_root.join("bin/rustc");
+        let dynamic_rustc = rust_root.join("bin").join(RUSTC_DYNAMIC_BINARY_FILE);
+        let runtime_lib = rust_root.join("lib/mantle-runtime");
+        let rust_lib = rust_root.join("lib");
+        let rust_stdlib = rust_lib.join("rustlib").join(RUSTC_RUNTIME_HOST_TRIPLE).join("lib");
+        fs::create_dir_all(&runtime_lib).unwrap();
+        fs::create_dir_all(&rust_stdlib).unwrap();
+        fs::create_dir_all(real_rustc.parent().unwrap()).unwrap();
+        write_fake_executable(&real_rustc, "#!/bin/sh\nexit 0\n");
+        write_fake_executable(&dynamic_rustc, "#!/bin/sh\nexit 0\n");
+        let wrapper = dir.path().join("rustc-wrapper");
+        let artifacts = [cxx_artifact.clone(), loader_artifact];
+
+        let selected = bound_rustc_runtime(&artifacts).unwrap().expect("bound Rust runtime");
+        write_bound_rustc_runtime_wrapper(&wrapper, &real_rustc, &selected, Path::new("/bin/sh")).unwrap();
+        let output = Command::new(&wrapper).env(DYNAMIC_LIBRARY_PATH_ENV, "/ambient/not-authorized").output().unwrap();
+        fs::remove_file(&soname).unwrap();
+        let wrong_runtime = runtime_dir.join("wrong-runtime");
+        fs::write(&wrong_runtime, b"wrong runtime\n").unwrap();
+        std::os::unix::fs::symlink("wrong-runtime", &soname).unwrap();
+        let error = bound_rustc_runtime(&artifacts).unwrap_err();
+        let expected_library_path = env::join_paths([runtime_lib, runtime_dir, rust_lib, rust_stdlib]).unwrap();
+        let stdout = String::from_utf8(output.stdout).unwrap();
+
+        assert!(output.status.success());
+        assert_eq!(stdout, format!("{}\n{}\n", expected_library_path.to_string_lossy(), dynamic_rustc.display()));
+        assert!(!String::from_utf8(output.stderr).unwrap().contains("ambient"));
+        assert!(error.message().contains("does not resolve to bound artifact"));
+        assert!(full_source_native_artifact_is_executable(FullSourceNativeArtifactRole::DynamicLinker));
+        assert_eq!(
+            rust_fixed_kind_for_native_artifact(FullSourceNativeArtifactRole::DynamicLinker),
+            Some(crate::source_built_rust_action_plan::RustFixedExecutableKind::NativeHelper)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn relative_native_binding_rebases_under_the_closure_root_and_rejects_escape() {
         use crate::full_source_rust_binding::FullSourceNativeArtifactBinding;
         use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
@@ -5873,6 +6126,30 @@ mod tests {
 
         assert!(err.message().contains(EXTERNAL_WRAPPER_BLOCKER));
         assert!(err.message().contains("not a declared source-built toolchain closure member"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_enforcement_uses_original_rustc_identity_and_runtime_sysroot() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let closure = loaded_toolchain_closure(dir.path().join("closure.json"), manifest.clone());
+        let runtime_wrapper = dir.path().join("runtime-rustc");
+        write_fake_executable(&runtime_wrapper, &format!("#!/bin/sh\nexec {} \"$@\"\n", shell_quote(&tools.rustc)));
+
+        let status =
+            enforce_receipt_bound_toolchain_with_runtime(&tools.rustc, &runtime_wrapper, &closure, &manifest).unwrap();
+        let leaked_sysroot = dir.path().join("leaked-sysroot");
+        fs::create_dir(&leaked_sysroot).unwrap();
+        write_fake_executable(&runtime_wrapper, &rustc_sysroot_script(&leaked_sysroot));
+        let error = enforce_receipt_bound_toolchain_with_runtime(&tools.rustc, &runtime_wrapper, &closure, &manifest)
+            .unwrap_err();
+
+        assert_eq!(status.status, ENFORCED_SOURCE_BUILT_STATUS);
+        assert!(status.claim);
+        assert!(error.message().contains("host-tool-leakage"));
+        assert!(error.message().contains("Sysroot"));
     }
 
     #[cfg(unix)]

@@ -1,0 +1,2 @@
+#!/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v88-sysroot-relocation-20260831.source-built-fixed-point-staging-3356531/rust-host-tools/busybox/bin/sh
+exec '/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v88-sysroot-relocation-20260831.source-built-fixed-point-staging-3356531/rust-provider/bin/rustc' "$@"

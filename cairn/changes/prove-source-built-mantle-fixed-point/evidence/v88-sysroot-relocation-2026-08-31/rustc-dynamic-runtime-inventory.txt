@@ -1,0 +1,13 @@
+rustc_dynamic=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v88-sysroot-relocation-20260831.source-built-fixed-point-staging-3356531/rust-provider/bin/rustc.dynamic
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so]
+provider_runtime_entries:
+libc.so f  855752
+libgcc_s.so.1 f  579304
+libgcc_s.so f  579304
+mantle-runtime d  4096
+bound_cxx_runtime_entries:
+libstdc++.a f  5675636
+libstdc++.so.6.0.28 f  2437088
+libstdc++.so.6 l libstdc++.so.6.0.28 19
+libstdc++.so l libstdc++.so.6 14

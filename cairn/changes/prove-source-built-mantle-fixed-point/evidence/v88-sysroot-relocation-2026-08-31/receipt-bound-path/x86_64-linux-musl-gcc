@@ -1,0 +1,37 @@
+#!/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v88-sysroot-relocation-20260831.source-built-fixed-point-staging-3356531/rust-host-tools/busybox/bin/sh
+runtime_dir='/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v88-sysroot-relocation-20260831.source-built-fixed-point-staging-3356531/cargo-free-fixed-point/toolchain/receipt-bound-path/.toolchain-runtime'
+mapped_args_set=false
+static_pie_normalized=false
+response_index=0
+rewrite_response_file() {
+  response_source=$1
+  response_index=$((response_index + 1))
+  response_target="$runtime_dir/response-$response_index.rsp"
+  : > "$response_target" || exit 1
+  while IFS= read -r response_arg || [ -n "$response_arg" ]; do
+    case "$response_arg" in
+      crt1.o|*/crt1.o|rcrt1.o|*/rcrt1.o) response_arg="$runtime_dir/crt1.o" ;;
+      -static-pie) response_arg="-static"; static_pie_normalized=true ;;
+    esac
+    printf '%s\n' "$response_arg" >> "$response_target" || exit 1
+  done < "$response_source" || exit 1
+  mapped_arg="@$response_target"
+}
+for arg in "$@"; do
+  case "$arg" in
+    @*) response_source=${arg#@}; if [ -r "$response_source" ]; then rewrite_response_file "$response_source"; else mapped_arg="$arg"; fi ;;
+    crt1.o|*/crt1.o|rcrt1.o|*/rcrt1.o) mapped_arg="$runtime_dir/crt1.o" ;;
+    -static-pie) mapped_arg="-static"; static_pie_normalized=true ;;
+    *) mapped_arg="$arg" ;;
+  esac
+  if [ "$mapped_args_set" = false ]; then
+    set -- "$mapped_arg"
+    mapped_args_set=true
+  else
+    set -- "$@" "$mapped_arg"
+  fi
+done
+if [ "$static_pie_normalized" = true ]; then
+  set -- "$@" -no-pie
+fi
+exec '/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v88-sysroot-relocation-20260831.source-built-fixed-point-staging-3356531/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-gcc' -L"$runtime_dir" "$@"
