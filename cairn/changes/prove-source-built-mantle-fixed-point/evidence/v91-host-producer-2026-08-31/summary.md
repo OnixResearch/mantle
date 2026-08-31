@@ -75,7 +75,14 @@ analysis, operator scripts, and validation evidence.
 
 ## Owner and next action
 
-The Mantle source-built fixed-point change owns the repair. Build and transfer a
-new release binary, refresh a Ready profile, and restore the same checkpoint in
-a fresh promoted proof. Preserve V91 until the new proof no longer needs its
-stage1 planning diagnostics.
+The Mantle source-built fixed-point change owns the repair. After repository
+evidence preservation, the no-follow V91 cleanup removed only its failed
+staging root and increased free bytes from 669,870,936,064 to 702,864,977,920.
+
+A second no-follow cleanup removed eight older staging roots already superseded
+by V61, V86, and current repository evidence. It increased free bytes from
+702,803,431,424 to 718,236,725,248. Both receipts record directory-only mode
+changes and no regular-file mode changes.
+
+Build and transfer a new release binary, refresh a Ready profile, and restore
+the same checkpoint in a fresh promoted proof.
