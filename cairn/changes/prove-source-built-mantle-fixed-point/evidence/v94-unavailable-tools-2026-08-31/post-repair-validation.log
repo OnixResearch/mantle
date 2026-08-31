@@ -1,0 +1,104 @@
+$ rustfmt --edition 2024 --check src/cargo_free_self_build.rs
+$ cargo test --release -p mantle --bin mantle cargo_free_self_build::tests:: -- --test-threads=1
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: field `listener_fd` is never read
+  --> src/protected_exec_seccomp.rs:77:9
+   |
+75 |     pub struct DiagnosticExecObserver {
+   |                ---------------------- field in this struct
+76 |         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
+77 |         listener_fd: RawFd,
+   |         ^^^^^^^^^^^
+   |
+   = note: `DiagnosticExecObserver` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `listener_fd` is never used
+  --> src/protected_exec_seccomp.rs:88:16
+   |
+80 |     impl DiagnosticExecObserver {
+   |     --------------------------- method in this implementation
+...
+88 |         pub fn listener_fd(&self) -> RawFd {
+   |                ^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle" test) generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 0.22s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/tmp/mantle-release-a1537652/release/deps/mantle-0544c5891b3b5e27)
+
+running 66 tests
+test cargo_free_self_build::tests::blocked_topology_classifier_fails_closed_on_ambiguous_units ... ok
+test cargo_free_self_build::tests::blocked_topology_classifier_fails_closed_on_missing_identity ... ok
+test cargo_free_self_build::tests::blocked_topology_classifier_names_root_unit_package_role_triple_and_predecessor ... ok
+test cargo_free_self_build::tests::blocked_topology_classifier_surfaces_nested_planner_blocker ... ok
+test cargo_free_self_build::tests::bound_rust_execution_shell_requires_exact_busybox_and_receipt_bytes ... ok
+test cargo_free_self_build::tests::bundle_local_path_keeps_external_paths_absolute ... ok
+test cargo_free_self_build::tests::child_blocker_accepts_successful_guarded_execution ... ok
+test cargo_free_self_build::tests::child_blocker_fails_when_cargo_guard_was_invoked ... ok
+test cargo_free_self_build::tests::compatibility_probe_failure_with_explicit_closure_fails_closed ... ok
+test cargo_free_self_build::tests::compatibility_probe_uses_receipt_bound_path_for_explicit_closure ... ok
+test cargo_free_self_build::tests::effective_closure_keeps_absent_non_claim_without_provider ... ok
+test cargo_free_self_build::tests::effective_closure_prefers_explicit_manifest_over_provider_status ... ok
+test cargo_free_self_build::tests::effective_closure_uses_provider_only_when_manifest_absent ... ok
+test cargo_free_self_build::tests::fixed_point_plan_describes_stage_paths_and_commands ... ok
+test cargo_free_self_build::tests::fixed_point_plan_rejects_bundle_inside_source_root ... ok
+test cargo_free_self_build::tests::fixed_point_plan_rejects_relative_source_root ... ok
+test cargo_free_self_build::tests::fixed_point_plan_threads_targets_into_stage_commands ... ok
+test cargo_free_self_build::tests::fixed_point_preflight_records_bundle_local_execution_path ... ok
+test cargo_free_self_build::tests::fixed_point_preflight_rejects_undeclared_external_rustc_wrapper ... ok
+test cargo_free_self_build::tests::fixed_point_status_accepts_matching_policy_digest ... ok
+test cargo_free_self_build::tests::fixed_point_status_rejects_policy_digest_mismatch_before_success ... ok
+test cargo_free_self_build::tests::fixed_point_status_rejects_policy_digest_presence_mismatch_before_success ... ok
+test cargo_free_self_build::tests::fixed_point_summary_keeps_closure_non_claim_even_when_policy_matches ... ok
+test cargo_free_self_build::tests::fixed_point_summary_omits_closure_non_claim_when_explicit_complete_closure_claims ... ok
+test cargo_free_self_build::tests::fixed_point_summary_omits_closure_non_claim_when_provider_supplies_claim ... ok
+test cargo_free_self_build::tests::fixed_point_summary_records_bundle_local_stage_paths ... ok
+test cargo_free_self_build::tests::mantle_unit_from_receipt_rejects_null_source_digest ... ok
+test cargo_free_self_build::tests::mantle_unit_from_receipt_requires_source_digest ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_accepts_informational_proof_audit_events ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_accepts_valid_bounded_bundle ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rebases_copied_bundle_stage_paths ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_missing_bounded_non_claims ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_missing_enforced_closure ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_non_strict_hermeticity_modes ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_protected_env_and_host_tool_degradation ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_stage_digest_mismatch ... ok
+test cargo_free_self_build::tests::provider_fixed_point_verifier_rejects_unapproved_proof_audit_event ... ok
+test cargo_free_self_build::tests::receipt_bound_c_compiler_alias_materializes_declared_runtime_inputs ... ok
+test cargo_free_self_build::tests::receipt_bound_c_compiler_alias_rejects_ambiguous_target_crt ... ok
+test cargo_free_self_build::tests::receipt_bound_c_compiler_alias_rejects_missing_target_crt ... ok
+test cargo_free_self_build::tests::receipt_bound_c_compiler_alias_rewrites_response_file_runtime_inputs ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_rejects_c_compiler_digest_mismatch ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_rejects_linker_digest_mismatch ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_rejects_pkg_config_digest_mismatch ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_rejects_runtime_library_digest_mismatch ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_rejects_sysroot_leakage ... ok
+test cargo_free_self_build::tests::receipt_bound_enforcement_uses_original_rustc_identity_and_runtime_sysroot ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_bind_the_selected_source_built_shell ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_expose_declared_linker_for_collect2 ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_expose_declared_pkg_config_only ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_expose_target_prefixed_member_name ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_reject_member_name_conflict ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_reject_undeclared_nix_profile_tools ... ok
+test cargo_free_self_build::tests::receipt_bound_path_aliases_reject_unsafe_member_name ... ok
+test cargo_free_self_build::tests::receipt_bound_path_env_omits_ambient_path_entries ... ok
+test cargo_free_self_build::tests::receipt_bound_rustc_runtime_wrapper_uses_only_the_validated_cxx_runtime ... ok
+test cargo_free_self_build::tests::relative_native_binding_rebases_under_the_closure_root_and_rejects_escape ... ok
+test cargo_free_self_build::tests::rust_action_fixed_authority_includes_receipt_bound_aliases_and_host_tools ... ok
+test cargo_free_self_build::tests::rust_source_provider_binding_rejects_prebuilt_provider_metadata ... ok
+test cargo_free_self_build::tests::rust_source_provider_binding_uses_validated_provider_rustc ... ok
+test cargo_free_self_build::tests::rust_source_provider_selection_prefers_validated_provider_and_keeps_fallback ... ok
+test cargo_free_self_build::tests::rustc_wrapper_runs_with_posix_shell_and_preserves_remaining_args ... ok
+test cargo_free_self_build::tests::rustc_wrapper_script_strips_link_self_contained_runtime_args ... ok
+test cargo_free_self_build::tests::safe_path_component_replaces_unsafe_path_bytes ... ok
+test cargo_free_self_build::tests::self_build_non_claims_omit_closure_non_claim_when_provider_supplies_claim ... ok
+test cargo_free_self_build::tests::unavailable_rust_tool_aliases_exit_127_without_replacing_declared_tools ... ok
+
+test result: ok. 66 passed; 0 failed; 0 ignored; 0 measured; 2476 filtered out; finished in 0.23s
+
+$ git diff --check

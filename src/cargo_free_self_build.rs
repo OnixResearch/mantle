@@ -2281,8 +2281,12 @@ fn execute_fixed_point_stage(
     let execution_shell = bound_shell.map_or_else(|| Path::new("/bin/sh"), |shell| shell.execution_path.as_path());
     debug_assert!(execution_shell.is_absolute());
     prepare_fixed_point_stage(stage)?;
-    let path_env = execution_path_env_with_shell(&stage.guard_path_dir, toolchain_closure, execution_shell)?;
-    write_bound_rust_host_tool_aliases(&stage.guard_path_dir, source_built_host_tools, execution_shell)?;
+    let path_env = prepare_receipt_bound_guard_path(
+        &stage.guard_path_dir,
+        toolchain_closure,
+        source_built_host_tools,
+        execution_shell,
+    )?;
     let rust_action_evidence_dir = stage.stage_dir.join(RUST_CHILD_ACTION_EVIDENCE_DIR);
     let rust_action_authority_path = rust_action_evidence_dir.join(RUST_CHILD_ACTION_AUTHORITY_FILE);
     let rust_action_enabled = prepare_rust_child_action_authority(
@@ -3062,15 +3066,9 @@ fn prepare_execution_toolchain(
             debug_assert!(!bound_shell.source_id.is_empty());
             debug_assert_eq!(bound_shell.construction_receipt_digest_blake3.len(), blake3::OUT_LEN * 2);
         }
-        let path_env = execution_path_env_with_shell(guard_path_dir, toolchain_closure, execution_shell)?;
-        write_bound_rust_host_tool_aliases(
+        let path_env = prepare_receipt_bound_guard_path(
             guard_path_dir,
-            &rust_source_provider.source_built_host_tools,
-            execution_shell,
-        )?;
-        write_unavailable_rust_tool_aliases(
-            guard_path_dir,
-            manifest,
+            toolchain_closure,
             &rust_source_provider.source_built_host_tools,
             execution_shell,
         )?;
@@ -3678,6 +3676,22 @@ fn execution_path_env_with_shell(
     };
     write_toolchain_path_aliases_with_shell(cargo_path_dir, manifest, execution_shell)?;
     env::join_paths([cargo_path_dir]).map_err(|err| internal(format!("construct receipt-bound PATH: {err}")))
+}
+
+fn prepare_receipt_bound_guard_path(
+    guard_path_dir: &Path,
+    toolchain_closure: &LoadedToolchainClosure,
+    source_built_host_tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
+    execution_shell: &Path,
+) -> Result<OsString, RunError> {
+    let path_env = execution_path_env_with_shell(guard_path_dir, toolchain_closure, execution_shell)?;
+    write_bound_rust_host_tool_aliases(guard_path_dir, source_built_host_tools, execution_shell)?;
+    if let Some(manifest) = &toolchain_closure.manifest {
+        write_unavailable_rust_tool_aliases(guard_path_dir, manifest, source_built_host_tools, execution_shell)?;
+    }
+    debug_assert!(!path_env.is_empty());
+    debug_assert!(guard_path_dir.is_absolute() || !guard_path_dir.as_os_str().is_empty());
+    Ok(path_env)
 }
 
 fn write_bound_rust_host_tool_aliases(
@@ -5660,12 +5674,10 @@ mod tests {
             construction_receipt_digest_blake3: crate::protected_exec::blake3_file_hex(&receipt).unwrap(),
         };
         let bound_shell = bound_rust_execution_shell(&binding).unwrap();
-        write_toolchain_path_aliases_with_shell(&guard, &manifest, &bound_shell.execution_path).unwrap();
-        write_bound_rust_host_tool_aliases(&guard, std::slice::from_ref(&binding), &bound_shell.execution_path)
-            .unwrap();
-        write_unavailable_rust_tool_aliases(
+        let closure = loaded_toolchain_closure(dir.path().join("closure.json"), manifest.clone());
+        let path_env = prepare_receipt_bound_guard_path(
             &guard,
-            &manifest,
+            &closure,
             std::slice::from_ref(&binding),
             &bound_shell.execution_path,
         )
@@ -5717,6 +5729,7 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(authorities.iter().filter(|authority| authority.kind == RustFixedExecutableKind::Rustc).count(), 1);
+        assert_eq!(env::split_paths(&path_env).collect::<Vec<_>>(), vec![guard.clone()]);
         assert_eq!(unavailable_count, RUST_UNAVAILABLE_TOOL_ALIASES.len());
         assert_eq!(paths.len(), authorities.len());
         assert!(paths.contains(path_to_string(&fs::canonicalize(&busybox).unwrap()).unwrap().as_str()));

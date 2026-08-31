@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "baa2bb443f8e5bc9e3b4329c9675b339a1b167d0181deb3e8e8fd5cb72cda552",
+  "blocker": "error: build failed\nread unavailable Rust tool alias /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v94-unavailable-tools-20260831.source-built-fixed-point-staging-3418546/cargo-free-fixed-point/stage1/cargo-guard-bin/emcc: No such file or directory (os error 2)"
+}

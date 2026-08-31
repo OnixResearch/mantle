@@ -103,3 +103,4 @@ compatibility surface, crate name, or historical decision.
 | [0094](0094-resolve-target-dependency-producers-from-the-ready-rust-graph.md) | Resolve target dependency producers from the ready Rust graph | Accepted |
 | [0095](0095-bind-rustc-linker-before-ptrace.md) | Bind the rustc linker before ptrace | Accepted |
 | [0096](0096-bind-unavailable-rust-tool-probes.md) | Bind unavailable Rust tool probes | Accepted |
+| [0097](0097-compose-rust-guard-path-once.md) | Compose the Rust guard path once | Accepted |
