@@ -1,0 +1,52 @@
+{
+  "schema": "mantle-source-built-rust-provider-stage-action-plan-v1",
+  "route_plan_digest_blake3": "58c6ea33a72121463d8e1e71310f60562f63528385b6cd2b86d98e8d37b2281c",
+  "authority_digest_blake3": "d3cd45c2ed1db48af29f2fe009be260c9207320f8ec4f6adaf76046a452363be",
+  "stage_id": "rust-1.91.1-stage1",
+  "stage_kind": "rustc-stage1",
+  "producer_action_ids": [
+    "mrustc-to-rust-1.90.0"
+  ],
+  "input_digests_blake3": {
+    "bootstrap-metadata": "5dd178c95ed06f9d13db030395cae31a11305bdf0c71f598e2da624e39e6f5d9",
+    "stage-plan": "7a13d433e66cbc479876a99ffa4f39a0d7ea5f2d2125b7283dba0dc8b83bfa9f",
+    "stage-script": "799302c8f342a3333880dc42334f580d9dbf1f8e06abef234c8d3a49b39c1535",
+    "stage-sources": "5abcb5fe40babf3c6e7c5b01793193f6ab550d853d70562b51d22de46ea4c7da"
+  },
+  "output_roots": [
+    {
+      "root": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v86-aggregate-bound-20260830.source-built-fixed-point-staging-2894954/rust-provider-scratch/rustc-stage1-build",
+      "output_identity_blake3": "10e8d0f5105202a542a42084427f047ca8b6afeb34df950e8fa4ed76e796103f",
+      "promotion_count_max": 262144
+    },
+    {
+      "root": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v86-aggregate-bound-20260830.source-built-fixed-point-staging-2894954/rust-provider-scratch/rustc-stage1-output",
+      "output_identity_blake3": "4d71a0d01cc5047e6dfcb9930734edae26a693d655b70b436689ed7294aab353",
+      "promotion_count_max": 262144
+    },
+    {
+      "root": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v86-aggregate-bound-20260830.source-built-fixed-point-staging-2894954/rust-provider-scratch/rustc-stage1-provider-candidate",
+      "output_identity_blake3": "560d55532f28992691e4cb4ff0e3caa3ac652d9b5bb95bfe3300b06fb8ffe7b5",
+      "promotion_count_max": 262144
+    },
+    {
+      "root": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v86-aggregate-bound-20260830.source-built-fixed-point-staging-2894954/rust-provider-scratch/rustc-stage1-provider-candidate-smoke/work",
+      "output_identity_blake3": "2eaf880370f3c96c397c8d3decd1940cb3058f14aa556385a251985c44b47b28",
+      "promotion_count_max": 262144
+    },
+    {
+      "root": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v86-aggregate-bound-20260830.source-built-fixed-point-staging-2894954/rust-provider-scratch/rustc-stage1-sources",
+      "output_identity_blake3": "b81c5831709ebe34d68da01a3a036d7bce81b0db2d18f6ea64fdb624d8669da5",
+      "promotion_count_max": 262144
+    }
+  ],
+  "limits": {
+    "parallel_jobs_max": 4,
+    "open_file_descriptors_max": 4096,
+    "storage_bytes_max": 700000000000,
+    "exec_events_per_stage_max": 262144
+  },
+  "local_only": true,
+  "cache_only_completion_allowed": false,
+  "plan_digest_blake3": "b4c6663823fea750558863c12c7d5f2a66e29ea3e787af4dbb8221d682bcf2ae"
+}

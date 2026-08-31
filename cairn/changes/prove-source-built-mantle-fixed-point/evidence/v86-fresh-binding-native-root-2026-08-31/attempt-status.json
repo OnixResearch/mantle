@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "108a29bb040c6e9fec17d0105e904d6784518d576fa7f6e1f94a8643a7c8e9f6",
+  "blocker": "error: build failed\nfull-source native artifact is unavailable: bin/ar"
+}

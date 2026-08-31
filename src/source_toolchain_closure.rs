@@ -621,6 +621,16 @@ pub(crate) fn enforce_observed_toolchain_inputs(
     validation_from_normalized_manifest(&normalized)
 }
 
+pub(crate) fn source_built_native_provider_root(
+    manifest: &ToolchainClosureManifest,
+) -> Result<PathBuf, ToolchainClosureError> {
+    let normalized = normalize_manifest(manifest)?;
+    let roots = closure_provider_roots(&normalized)?;
+    assert!(roots.native.is_absolute());
+    assert_ne!(roots.native, roots.rust);
+    Ok(roots.native)
+}
+
 pub(crate) fn select_receipt_bound_c_compiler_route(
     manifest: &ToolchainClosureManifest,
 ) -> Result<ReceiptBoundCCompilerRoute, ToolchainClosureError> {
@@ -2313,6 +2323,16 @@ mod tests {
         assert_ne!(validation.origin_policy_digest_blake3, validation.relocated_policy_digest_blake3);
         assert!(validation.origin_policy_digest_blake3.len() == BLAKE3_HEX_CHAR_COUNT);
         assert!(validation.relocated_policy_digest_blake3.len() == BLAKE3_HEX_CHAR_COUNT);
+    }
+
+    #[test]
+    fn native_provider_root_uses_the_receipt_bound_c_compiler() {
+        let manifest = relocatable_manifest("/proof/new-attempt");
+
+        let root = source_built_native_provider_root(&manifest).unwrap();
+
+        assert_eq!(root, PathBuf::from("/proof/new-attempt/native-provider"));
+        assert_ne!(root, PathBuf::from("/proof/new-attempt/rust-provider"));
     }
 
     #[test]

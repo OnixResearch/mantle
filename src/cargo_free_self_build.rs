@@ -1352,8 +1352,9 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
     prepare_output_dir(&paths)?;
     write_cargo_shim(&paths.explicit_cargo_shim, &paths.marker_path)?;
     write_cargo_shim(&paths.path_cargo_shim, &paths.marker_path)?;
-    let loaded_rust_provider = load_rust_source_provider(options.rust_source_provider)?;
     let loaded_toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
+    let loaded_rust_provider =
+        load_rust_source_provider(options.rust_source_provider, loaded_toolchain_closure.manifest.as_ref())?;
     let initial_toolchain_status =
         effective_source_built_toolchain_closure(&loaded_toolchain_closure, &loaded_rust_provider);
     write_non_claims(&paths.out_dir, &initial_toolchain_status)?;
@@ -1419,8 +1420,9 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     debug_assert!(root.is_absolute());
     debug_assert!(!bundle_dir.starts_with(&root));
     prepare_fixed_point_output_dir(&bundle_dir)?;
-    let loaded_rust_provider = load_rust_source_provider(options.rust_source_provider)?;
     let loaded_toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
+    let loaded_rust_provider =
+        load_rust_source_provider(options.rust_source_provider, loaded_toolchain_closure.manifest.as_ref())?;
     let requested_rustc = selected_cargo_free_rustc(&loaded_rust_provider, options.rustc);
     let compatibility_rustc = prepare_rustc_for_compatibility(requested_rustc, &loaded_toolchain_closure)?;
     let execution_shell = selected_execution_shell(&loaded_rust_provider);
@@ -3984,7 +3986,10 @@ fn selected_execution_shell(provider: &LoadedRustSourceProvider) -> &Path {
         .map_or_else(|| Path::new("/bin/sh"), |shell| shell.execution_path.as_path())
 }
 
-fn load_rust_source_provider(provider_dir: Option<&Path>) -> Result<LoadedRustSourceProvider, RunError> {
+fn load_rust_source_provider(
+    provider_dir: Option<&Path>,
+    closure_manifest: Option<&crate::source_toolchain_closure::ToolchainClosureManifest>,
+) -> Result<LoadedRustSourceProvider, RunError> {
     debug_assert_eq!(RUST_SOURCE_PROVIDER_REQUIRED_ROLE_COUNT, 1);
     debug_assert_ne!(RUST_SOURCE_PROVIDER_STATUS_ABSENT, RUST_SOURCE_PROVIDER_STATUS_VALIDATED);
     let Some(provider_dir) = provider_dir else {
@@ -4017,7 +4022,7 @@ fn load_rust_source_provider(provider_dir: Option<&Path>) -> Result<LoadedRustSo
         validation.metadata_path.clone(),
         &validation.validation,
     );
-    let execution_authority = load_bound_rust_execution_authority(&provider_dir)?;
+    let execution_authority = load_bound_rust_execution_authority(&provider_dir, closure_manifest)?;
     let action_trust_dir = provider_dir.join(crate::rust_source_provider::RUST_PROVIDER_ACTION_EVIDENCE_RELATIVE_PATH);
     let source_built_action_trust = action_trust_dir
         .is_dir()
@@ -4035,7 +4040,10 @@ fn load_rust_source_provider(provider_dir: Option<&Path>) -> Result<LoadedRustSo
     })
 }
 
-fn load_bound_rust_execution_authority(provider_dir: &Path) -> Result<BoundRustExecutionAuthority, RunError> {
+fn load_bound_rust_execution_authority(
+    provider_dir: &Path,
+    closure_manifest: Option<&crate::source_toolchain_closure::ToolchainClosureManifest>,
+) -> Result<BoundRustExecutionAuthority, RunError> {
     let binding_path = provider_dir.join(crate::full_source_rust_binding_shell::FULL_SOURCE_RUST_BINDING_RELATIVE_PATH);
     if !binding_path.is_file() {
         return Ok(BoundRustExecutionAuthority {
@@ -4055,9 +4063,19 @@ fn load_bound_rust_execution_authority(provider_dir: &Path) -> Result<BoundRustE
     for tool in &binding.host_tools {
         validate_bound_rust_host_tool(tool)?;
     }
-    for artifact in &binding.native_artifacts {
-        validate_bound_native_artifact(artifact)?;
-    }
+    let closure_manifest = closure_manifest.ok_or_else(|| {
+        RunError::Build(
+            "full-source Rust binding requires an explicit validated toolchain closure to resolve native artifacts"
+                .to_string(),
+        )
+    })?;
+    let native_provider_root = crate::source_toolchain_closure::source_built_native_provider_root(closure_manifest)
+        .map_err(|error| {
+            RunError::Build(format!(
+                "resolving full-source Rust native-provider root from the validated closure failed: {error}"
+            ))
+        })?;
+    let native_artifacts = rebase_bound_native_artifacts(&native_provider_root, &binding.native_artifacts)?;
     let candidates = binding
         .host_tools
         .iter()
@@ -4071,7 +4089,6 @@ fn load_bound_rust_execution_authority(provider_dir: &Path) -> Result<BoundRustE
     };
     let shell = bound_rust_execution_shell(busybox)?;
     let host_tools = binding.host_tools;
-    let native_artifacts = binding.native_artifacts;
     assert!(!host_tools.is_empty());
     assert!(!native_artifacts.is_empty());
     assert!(host_tools.iter().all(|tool| Path::new(&tool.path).is_absolute()));
@@ -4125,6 +4142,64 @@ fn bound_rust_execution_shell(
         source_id: busybox.source_id.clone(),
         construction_receipt_digest_blake3: busybox.construction_receipt_digest_blake3.clone(),
     })
+}
+
+fn rebase_bound_native_artifacts(
+    native_provider_root: &Path,
+    artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
+) -> Result<Vec<crate::full_source_rust_binding::FullSourceNativeArtifactBinding>, RunError> {
+    if !native_provider_root.is_absolute() {
+        return Err(RunError::Build(format!(
+            "full-source native-provider root is not absolute: {}",
+            native_provider_root.display()
+        )));
+    }
+    if !native_provider_root.is_dir() {
+        return Err(RunError::Build(format!(
+            "full-source native-provider root is unavailable: {}",
+            native_provider_root.display()
+        )));
+    }
+    let mut rebound = Vec::with_capacity(artifacts.len());
+    for artifact in artifacts {
+        let relative_path = require_provider_relative_native_artifact_path(artifact)?;
+        let mut runtime_artifact = artifact.clone();
+        runtime_artifact.path = native_provider_root.join(relative_path).display().to_string();
+        validate_bound_native_artifact(&runtime_artifact)?;
+        assert!(Path::new(&runtime_artifact.path).is_absolute());
+        rebound.push(runtime_artifact);
+    }
+    assert_eq!(rebound.len(), artifacts.len());
+    Ok(rebound)
+}
+
+fn require_provider_relative_native_artifact_path(
+    artifact: &crate::full_source_rust_binding::FullSourceNativeArtifactBinding,
+) -> Result<&Path, RunError> {
+    let path = Path::new(&artifact.path);
+    if artifact.path.is_empty() {
+        return Err(invalid_provider_relative_native_artifact_path(artifact));
+    }
+    if path.is_absolute() {
+        return Err(invalid_provider_relative_native_artifact_path(artifact));
+    }
+    for component in path.components() {
+        if !matches!(component, Component::Normal(_)) {
+            return Err(invalid_provider_relative_native_artifact_path(artifact));
+        }
+    }
+    assert!(!artifact.path.is_empty());
+    assert!(!path.is_absolute());
+    Ok(path)
+}
+
+fn invalid_provider_relative_native_artifact_path(
+    artifact: &crate::full_source_rust_binding::FullSourceNativeArtifactBinding,
+) -> RunError {
+    RunError::Build(format!(
+        "full-source native artifact path must stay provider-relative: role={:?} path={}",
+        artifact.role, artifact.path
+    ))
 }
 
 fn validate_bound_native_artifact(
@@ -5089,7 +5164,7 @@ mod tests {
         fs::create_dir(&provider_dir).unwrap();
         write_fake_rust_source_provider(&provider_dir, false);
 
-        let loaded = load_rust_source_provider(Some(&provider_dir)).unwrap();
+        let loaded = load_rust_source_provider(Some(&provider_dir), None).unwrap();
         let expected_provider_dir = fs::canonicalize(&provider_dir).unwrap();
         let expected_rustc = expected_provider_dir.join("bin/rustc");
 
@@ -5105,6 +5180,34 @@ mod tests {
         assert!(status.claim);
         assert!(status.non_claim.is_none());
         assert_eq!(status.policy_digest_blake3, loaded.status.policy_digest_blake3);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn relative_native_binding_rebases_under_the_closure_root_and_rejects_escape() {
+        use crate::full_source_rust_binding::FullSourceNativeArtifactBinding;
+        use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
+
+        let dir = tempfile::tempdir().unwrap();
+        let native_root = dir.path().join("native-provider");
+        let archiver = native_root.join("bin/ar");
+        fs::create_dir_all(archiver.parent().unwrap()).unwrap();
+        write_fake_executable(&archiver, "#!/bin/sh\nexit 0\n");
+        let artifact = FullSourceNativeArtifactBinding {
+            role: FullSourceNativeArtifactRole::ArchiveTool,
+            path: "bin/ar".to_string(),
+            content_digest_blake3: crate::protected_exec::blake3_file_hex(&archiver).unwrap(),
+        };
+
+        let rebound = rebase_bound_native_artifacts(&native_root, std::slice::from_ref(&artifact)).unwrap();
+        let mut escaping = artifact;
+        escaping.path = "../bin/ar".to_string();
+        let error = rebase_bound_native_artifacts(&native_root, &[escaping]).unwrap_err();
+
+        assert_eq!(rebound.len(), 1);
+        assert_eq!(rebound[0].path, archiver.display().to_string());
+        assert!(Path::new(&rebound[0].path).is_absolute());
+        assert!(error.message().contains("must stay provider-relative"));
     }
 
     #[cfg(unix)]
@@ -5285,7 +5388,7 @@ mod tests {
         fs::create_dir(&provider_dir).unwrap();
         write_fake_rust_source_provider(&provider_dir, true);
 
-        let err = load_rust_source_provider(Some(&provider_dir)).unwrap_err();
+        let err = load_rust_source_provider(Some(&provider_dir), None).unwrap_err();
         let message = err.message();
 
         assert!(message.contains("source-built Rust provider blocked"));

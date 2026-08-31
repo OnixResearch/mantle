@@ -1,0 +1,6 @@
+path=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-native-prefix-v61-repaired-20260828/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/ar
+mode=555 size=1383896 type=regular file
+blake3=3a90141c6ca90962c0a0334b14b8c1d2b5c4365ea2e6f01efeaa0e8d9485c5ce
+path=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v86-aggregate-bound-20260830.source-built-fixed-point-staging-2894954/imported-native-prefix/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/ar
+mode=555 size=1383896 type=regular file
+blake3=3a90141c6ca90962c0a0334b14b8c1d2b5c4365ea2e6f01efeaa0e8d9485c5ce

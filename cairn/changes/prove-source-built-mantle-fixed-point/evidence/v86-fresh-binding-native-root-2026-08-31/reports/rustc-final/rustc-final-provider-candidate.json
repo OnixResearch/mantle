@@ -1,0 +1,25 @@
+{
+  "bootstrap_provider_candidate": {
+    "metadata_digest_blake3": "aacaab8c4a6d7766f39cb72a64e98649e9f66d547afde19759bf7f69e723e400",
+    "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v86-aggregate-bound-20260830.source-built-fixed-point-staging-2894954/rust-provider-scratch/rustc-stage1-chain/rust-1.93.1-stage1/rustc-stage1-provider-candidate",
+    "policy_digest_blake3": "84ae82c9aa5e1c3918d4cc6ba7f203b2d433e92d50f691d271b151072dcad155"
+  },
+  "bootstrap_stage_id": "rust-1.93.1-stage1",
+  "candidate": {
+    "artifact_count": 6,
+    "candidate_dir": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v86-aggregate-bound-20260830.source-built-fixed-point-staging-2894954/rust-provider-scratch/rustc-final/rustc-final-provider-candidate",
+    "metadata_digest_blake3": "7404bcf172e4f15976a27516a7446662d0a077145bfdc672bedc53ce5f038079",
+    "metadata_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v86-aggregate-bound-20260830.source-built-fixed-point-staging-2894954/rust-provider-scratch/rustc-final/rustc-final-provider-candidate/share/mantle-rust-provider/provider.json",
+    "policy_digest_blake3": "138e3a564dd6272f4a2eb1f496175cb42ebadfe395a3c08d9f10282d35f2b5bf",
+    "receipt_count": 1,
+    "source_count": 2,
+    "stage_id": "rust-1.94.0-final"
+  },
+  "candidate_only": false,
+  "final_output_path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v86-aggregate-bound-20260830.source-built-fixed-point-staging-2894954/rust-provider",
+  "final_output_written": true,
+  "route_plan_digest_blake3": "58c6ea33a72121463d8e1e71310f60562f63528385b6cd2b86d98e8d37b2281c",
+  "route_policy_digest_blake3": "66a76c43410fabbbd3747a64f3715506acfe7034220e81e3b564dd5fd97e935a",
+  "schema": "mantle-rust-source-provider-rustc-final-candidate-v1",
+  "stage_id": "rust-1.94.0-final"
+}

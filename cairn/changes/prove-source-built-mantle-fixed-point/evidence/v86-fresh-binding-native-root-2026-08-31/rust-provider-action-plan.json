@@ -1,0 +1,18 @@
+{
+  "schema": "mantle-source-built-rust-provider-action-plan-v1",
+  "route_plan_digest_blake3": "58c6ea33a72121463d8e1e71310f60562f63528385b6cd2b86d98e8d37b2281c",
+  "authority_digest_blake3": "d3cd45c2ed1db48af29f2fe009be260c9207320f8ec4f6adaf76046a452363be",
+  "adapter_count": 1,
+  "action_count": 5,
+  "stage_plan_digests_blake3": [
+    "8a311dff4437fd3211dafeb3384317718de5faaae718eefc8861b43d81e9b673",
+    "b4c6663823fea750558863c12c7d5f2a66e29ea3e787af4dbb8221d682bcf2ae",
+    "07b44afda17f7252258ead728e757691c991c6da10a813c906b2baafb6f32b40",
+    "e489070acd43c84d1323591118e3b9e52785eecd08bd61f498b0d7533cefc445",
+    "0d163c0a25bf294b049394018bca0fd4ee98c636f680b5e9e696c2a7708ba587"
+  ],
+  "local_only": true,
+  "cache_only_completion_allowed": false,
+  "blockers": [],
+  "plan_digest_blake3": "129d9a8d320e4c21471f563ad1fa3fd9ec7cf58a7aafd76f21a51b9880d2d585"
+}
