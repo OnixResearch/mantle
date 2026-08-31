@@ -1,0 +1,10 @@
+launched_at=2026-08-31T09:54:50-04:00
+launcher=ssh-nohup-setsid
+setsid_pid=3398763
+wrapper_pid=3398763
+proc_start_ticks=74421071
+command=/bin/sh /tmp/run-proof-v91-host-producer.sh 
+script=/tmp/run-proof-v91-host-producer.sh
+launcher_log=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-fixed-point-v91-host-producer-detached-launcher.log
+detached_from_pueue=true
+detached_from_ssh_stdio=true
