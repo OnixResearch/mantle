@@ -1,4 +1,5 @@
 b2a09a8b0b676778f3dd0ec32e56779fda236408a0aea588ba15ac0338921b6f  ./attempt-status.json
+7d3cc3c0d13c7f9ee01598d45c8e8144a0f058af6a373f4913d1b3d4bf32fd94  ./cleanup-v88-before-v89.txt
 95a99937fb3021e0444a5e63e5f749f7732dda60f3b927609e2f2cc6b83a1425  ./closure-relocation.json
 414bed3efea81c340e4049ba1660174964e4aceef22b7701cadac06f1ae6c8ec  ./initial-proof-log.txt
 3ecf9e3649b8a5c4a5d0ebf08e73cf6a2c555458ba436605a01b93bc09f22868  ./launch-profile-v88-sysroot-relocation.sh
@@ -7,6 +8,7 @@ b2a09a8b0b676778f3dd0ec32e56779fda236408a0aea588ba15ac0338921b6f  ./attempt-stat
 454b581337969dff951e68357b74d14c60bfb21ae81e5406da6ecbe6a7be683b  ./origin-toolchain-closure.json
 6511bd65d9c3e615130ee7f342eb80d8b08a1499b6befaa5a22892e526f2df33  ./post-repair-validation.log
 539b694a123b2f1c23657700b0c1e9ac41a7a5f4b3db0847fa40dd5bab5e7874  ./provider-checkpoint-restore.txt
+e630efc6ba57a7018b9182d34b4f5e8537f2c9de0f3c558479476ca6da23737e  ./prune-v88-before-v89.rs
 ffe76321a141e39915512b9bc8ff82238e0d5027ec8d179b677f788b7d38b5f7  ./receipt-bound-direct-loader-probe.txt
 8052e1a9dadfdf50a6576b196b2f1b0ec08ea2e1c99e348f4ea5cedd1cce6207  ./receipt-bound-path/.toolchain-runtime/crt1.o
 bc537e0c66e6e554feb0b4d399b1645b17cd56ed524dfc43024d34d6e0ee1630  ./receipt-bound-path/.toolchain-runtime/libunwind.a
@@ -36,7 +38,7 @@ b9f1f9f7b96842a1162eb1622610dbc9b8ab64f69cd90b58a0d6278718c7cd04  ./source-profi
 9461f5749ab18c89aed053412e0c7d86945cce771bcb58099d010e1616f6b616  ./source-profile-v88-status.txt
 19092311c6beb8ebd8944c42c9cf5e3f9d0bdf7369df509a7baa94bdfd9242f9  ./source-profile-v88-verification.log
 9bb18279eb14c97fb35db2984bb5bab09612d8188d4eae30e126013baa842c21  ./source-transfer-v88.txt
-8392a57106e420519da7911001fe071569e448a10f38c98bbdb0ededa881e739  ./summary.md
+a3074484512bf2c516ae95c3cdf9c46762770059aeb7b73f2bbd4c9f765d8406  ./summary.md
 fbb5b5edbd6e61da102d7bdc3cc68ca12dd551f1c6a803327c895976acedb94d  ./transfer-79cd761a-release.sh
 af04b108fc1af344f80943f11e836da3357971f608586857f6e59d700bbd1a92  ./transfer-binary-79cd761a.sh
 785f8c94d1d995b131364fdc635f7c42580fe5672048caa8f4a71a76fcb2292b  ./unbound-rustc-runtime-stderr.txt.gz
