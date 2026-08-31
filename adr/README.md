@@ -104,3 +104,4 @@ compatibility surface, crate name, or historical decision.
 | [0095](0095-bind-rustc-linker-before-ptrace.md) | Bind the rustc linker before ptrace | Accepted |
 | [0096](0096-bind-unavailable-rust-tool-probes.md) | Bind unavailable Rust tool probes | Accepted |
 | [0097](0097-compose-rust-guard-path-once.md) | Compose the Rust guard path once | Accepted |
+| [0098](0098-bind-gcc-subprogram-prefix.md) | Bind the GCC subprogram prefix | Accepted |

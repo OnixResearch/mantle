@@ -1,0 +1,22 @@
+{
+  "checkpoint_digest_blake3": "c9918c0ede2fd774f5348a775981838c5590903ce6ba6a691317a766a052b3eb",
+  "member_count": 17,
+  "non_claim": "closure relocation changes absolute provider roots plus one receipt-bound Rust sysroot binding identity; it does not repeat provider execution or permit other member changes",
+  "origin_closure": {
+    "digest_blake3": "454b581337969dff951e68357b74d14c60bfb21ae81e5406da6ecbe6a7be683b",
+    "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v95-guard-composition-20260831.source-built-fixed-point-staging-3421705/provider-checkpoint-origin/source-built-toolchain-closure.json",
+    "policy_digest_blake3": "2af733999525e8e907c206be5a82bfde27e36810c4923a55cea1b14fcfc57256"
+  },
+  "relocated_closure": {
+    "digest_blake3": "e255ec0de35071841f17005bac44e9df28b4d4627bea027d155bf5db0b0b5237",
+    "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v95-guard-composition-20260831.source-built-fixed-point-staging-3421705/source-built-toolchain-closure.json",
+    "policy_digest_blake3": "1c0e97ae52fbe0748ac5fbdf84fa31c5390be0a386d638554f4b6ad7cf8b9b8e"
+  },
+  "rust_sysroot_relocation": {
+    "binding_report": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v95-guard-composition-20260831.source-built-fixed-point-staging-3421705/provider-checkpoint-rust-binding-relocation.json",
+    "binding_report_digest_blake3": "6fefd012d86ee727a907ac67e8f82516396a12e7396919eec86d9e05a63ee563",
+    "origin_digest_blake3": "69740316b19be878af5b1788afa0181891489bf303e7b8791f92115aed1be96e",
+    "relocated_digest_blake3": "ed705b02fa6e35d825b735510d5bce8d19425dce1ea8f77e56634e6071c81b42"
+  },
+  "schema": "mantle-source-built-checkpoint-closure-relocation-v1"
+}

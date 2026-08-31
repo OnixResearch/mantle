@@ -1,0 +1,7 @@
+{
+  "normalization": "receipt-bound-dynamic-runtime",
+  "requested_rustc": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v95-guard-composition-20260831.source-built-fixed-point-staging-3421705/rust-provider/bin/rustc",
+  "stage_rustc": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v95-guard-composition-20260831.source-built-fixed-point-staging-3421705/cargo-free-fixed-point/toolchain/rustc-receipt-bound-runtime",
+  "wrapper": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v95-guard-composition-20260831.source-built-fixed-point-staging-3421705/cargo-free-fixed-point/toolchain/rustc-receipt-bound-runtime",
+  "wrapper_blake3": "c7c89014622b8b97987c0ec42593a27c935f7cfec9728c5fca41d79f07b8f897"
+}

@@ -78,6 +78,7 @@ const RUSTC_RUNTIME_HOST_TRIPLE: &str = "x86_64-unknown-linux-musl";
 const RUSTC_BOUND_LINKER_ALIAS: &str = "cc";
 const RUST_UNAVAILABLE_TOOL_ALIASES: &[&str] = &["emcc", "pkg-config", "pkgconf", "git"];
 const RUST_UNAVAILABLE_TOOL_EXIT_CODE: i32 = 127;
+const REQUIRED_GCC_COMPILER_SUBPROGRAMS: &[&str] = &["cc1", "cc1plus", "collect2", "lto-wrapper"];
 const DYNAMIC_LIBRARY_PATH_ENV: &str = "LD_LIBRARY_PATH";
 const COMPATIBILITY_FILE: &str = "compatibility.json";
 const TOOLCHAIN_COMPATIBILITY_PATH_DIR: &str = "receipt-bound-path";
@@ -216,6 +217,7 @@ struct ExecutionToolchain {
 struct CcCompilerAliasRuntimeInputs {
     unwind_archive: Option<PathBuf>,
     crt1_object: PathBuf,
+    compiler_subprogram_dir: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1450,6 +1452,7 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
         &compatibility_rustc,
         &loaded_toolchain_closure,
         execution_shell,
+        &loaded_rust_provider.source_built_native_artifacts,
         runtime.as_ref(),
     )?;
     let plan = plan_fixed_point_paths(&root, &bundle_dir, &compatibility.summary.stage_rustc, options.targets)?;
@@ -1687,7 +1690,7 @@ fn prepare_rustc_compatibility(
     requested: &Path,
     toolchain_closure: &LoadedToolchainClosure,
 ) -> Result<RustcCompatibility, RunError> {
-    prepare_rustc_compatibility_with_shell(bundle_dir, requested, toolchain_closure, Path::new("/bin/sh"), None)
+    prepare_rustc_compatibility_with_shell(bundle_dir, requested, toolchain_closure, Path::new("/bin/sh"), &[], None)
 }
 
 fn prepare_rustc_compatibility_with_shell(
@@ -1695,6 +1698,7 @@ fn prepare_rustc_compatibility_with_shell(
     requested: &Path,
     toolchain_closure: &LoadedToolchainClosure,
     execution_shell: &Path,
+    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
     runtime: Option<&BoundRustcRuntime>,
 ) -> Result<RustcCompatibility, RunError> {
     let requested_rustc = resolve_executable(requested, "rustc")?;
@@ -1703,8 +1707,12 @@ fn prepare_rustc_compatibility_with_shell(
     debug_assert_ne!(toolchain_dir, requested_rustc);
     fs::create_dir_all(&toolchain_dir)
         .map_err(|err| internal(format!("create toolchain dir {}: {err}", toolchain_dir.display())))?;
-    let probe_path_env =
-        prepare_rustc_compatibility_path_env_with_shell(&toolchain_dir, toolchain_closure, execution_shell)?;
+    let probe_path_env = prepare_rustc_compatibility_path_env_with_shell(
+        &toolchain_dir,
+        toolchain_closure,
+        execution_shell,
+        source_built_native_artifacts,
+    )?;
     let receipt_bound_linker = toolchain_dir.join(TOOLCHAIN_COMPATIBILITY_PATH_DIR).join(RUSTC_BOUND_LINKER_ALIAS);
     let runtime_wrapper = runtime
         .map(|runtime| {
@@ -1762,6 +1770,7 @@ fn prepare_rustc_compatibility_path_env_with_shell(
     toolchain_dir: &Path,
     toolchain_closure: &LoadedToolchainClosure,
     execution_shell: &Path,
+    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
 ) -> Result<Option<OsString>, RunError> {
     let Some(manifest) = &toolchain_closure.manifest else {
         return Ok(None);
@@ -1770,7 +1779,12 @@ fn prepare_rustc_compatibility_path_env_with_shell(
     remove_owned_path(&path_dir)?;
     fs::create_dir_all(&path_dir)
         .map_err(|err| internal(format!("create receipt-bound rustc probe PATH dir {}: {err}", path_dir.display())))?;
-    write_toolchain_path_aliases_with_shell(&path_dir, manifest, execution_shell)?;
+    write_toolchain_path_aliases_with_shell_and_native_artifacts(
+        &path_dir,
+        manifest,
+        execution_shell,
+        source_built_native_artifacts,
+    )?;
     let path_env = env::join_paths([path_dir])
         .map_err(|err| internal(format!("construct receipt-bound rustc probe PATH: {err}")))?;
     Ok(Some(path_env))
@@ -2285,6 +2299,7 @@ fn execute_fixed_point_stage(
         &stage.guard_path_dir,
         toolchain_closure,
         source_built_host_tools,
+        source_built_native_artifacts,
         execution_shell,
     )?;
     let rust_action_evidence_dir = stage.stage_dir.join(RUST_CHILD_ACTION_EVIDENCE_DIR);
@@ -3070,6 +3085,7 @@ fn prepare_execution_toolchain(
             guard_path_dir,
             toolchain_closure,
             &rust_source_provider.source_built_host_tools,
+            &rust_source_provider.source_built_native_artifacts,
             execution_shell,
         )?;
         let runtime = bound_rustc_runtime(&rust_source_provider.source_built_native_artifacts)?;
@@ -3671,10 +3687,24 @@ fn execution_path_env_with_shell(
     toolchain_closure: &LoadedToolchainClosure,
     execution_shell: &Path,
 ) -> Result<OsString, RunError> {
+    execution_path_env_with_shell_and_native_artifacts(cargo_path_dir, toolchain_closure, execution_shell, &[])
+}
+
+fn execution_path_env_with_shell_and_native_artifacts(
+    cargo_path_dir: &Path,
+    toolchain_closure: &LoadedToolchainClosure,
+    execution_shell: &Path,
+    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
+) -> Result<OsString, RunError> {
     let Some(manifest) = &toolchain_closure.manifest else {
         return guarded_path(cargo_path_dir);
     };
-    write_toolchain_path_aliases_with_shell(cargo_path_dir, manifest, execution_shell)?;
+    write_toolchain_path_aliases_with_shell_and_native_artifacts(
+        cargo_path_dir,
+        manifest,
+        execution_shell,
+        source_built_native_artifacts,
+    )?;
     env::join_paths([cargo_path_dir]).map_err(|err| internal(format!("construct receipt-bound PATH: {err}")))
 }
 
@@ -3682,9 +3712,15 @@ fn prepare_receipt_bound_guard_path(
     guard_path_dir: &Path,
     toolchain_closure: &LoadedToolchainClosure,
     source_built_host_tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
+    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
     execution_shell: &Path,
 ) -> Result<OsString, RunError> {
-    let path_env = execution_path_env_with_shell(guard_path_dir, toolchain_closure, execution_shell)?;
+    let path_env = execution_path_env_with_shell_and_native_artifacts(
+        guard_path_dir,
+        toolchain_closure,
+        execution_shell,
+        source_built_native_artifacts,
+    )?;
     write_bound_rust_host_tool_aliases(guard_path_dir, source_built_host_tools, execution_shell)?;
     if let Some(manifest) = &toolchain_closure.manifest {
         write_unavailable_rust_tool_aliases(guard_path_dir, manifest, source_built_host_tools, execution_shell)?;
@@ -3792,6 +3828,15 @@ fn write_toolchain_path_aliases_with_shell(
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
     execution_shell: &Path,
 ) -> Result<(), RunError> {
+    write_toolchain_path_aliases_with_shell_and_native_artifacts(guard_path_dir, manifest, execution_shell, &[])
+}
+
+fn write_toolchain_path_aliases_with_shell_and_native_artifacts(
+    guard_path_dir: &Path,
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+    execution_shell: &Path,
+    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
+) -> Result<(), RunError> {
     if !execution_shell.is_absolute() {
         return Err(RunError::Build(format!(
             "receipt-bound toolchain shell is not absolute: {}",
@@ -3800,14 +3845,15 @@ fn write_toolchain_path_aliases_with_shell(
     }
     let aliases = toolchain_path_aliases(manifest)?;
     let c_compiler = c_compiler_alias_target(manifest)?;
-    let c_compiler_runtime = c_compiler_alias_runtime_inputs(manifest)?;
+    let compiler_drivers = bound_compiler_driver_paths(source_built_native_artifacts)?;
+    let c_compiler_runtime = c_compiler_alias_runtime_inputs(manifest, source_built_native_artifacts)?;
     for (alias, target) in aliases {
         let link = guard_path_dir.join(alias);
         if link.file_name() == Some(OsStr::new(CARGO_SHIM_NAME)) {
             return Err(RunError::Build("source-built toolchain closure blocked: Cargo must stay guarded".to_string()));
         }
         remove_owned_path(&link)?;
-        if c_compiler.as_ref().is_some_and(|compiler| compiler == &target) {
+        if c_compiler.as_ref().is_some_and(|compiler| compiler == &target) || compiler_drivers.contains(&target) {
             write_c_compiler_toolchain_alias(&target, &c_compiler_runtime, &link, execution_shell)?;
             continue;
         }
@@ -3852,11 +3898,84 @@ fn c_compiler_alias_target(
 
 fn c_compiler_alias_runtime_inputs(
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
 ) -> Result<CcCompilerAliasRuntimeInputs, RunError> {
     Ok(CcCompilerAliasRuntimeInputs {
         unwind_archive: declared_unwind_archive(manifest)?,
         crt1_object: declared_target_crt1_object(manifest)?,
+        compiler_subprogram_dir: bound_compiler_subprogram_dir(source_built_native_artifacts)?,
     })
+}
+
+fn bound_compiler_driver_paths(
+    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
+) -> Result<BTreeSet<PathBuf>, RunError> {
+    use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
+    let mut paths = BTreeSet::new();
+    for artifact in source_built_native_artifacts {
+        if !matches!(
+            artifact.role,
+            FullSourceNativeArtifactRole::CCompiler
+                | FullSourceNativeArtifactRole::CxxCompiler
+                | FullSourceNativeArtifactRole::Preprocessor
+        ) {
+            continue;
+        }
+        let path = canonical_action_executable(Path::new(&artifact.path))?;
+        let observed_digest = blake3_file(&path)?;
+        if observed_digest != artifact.content_digest_blake3 {
+            return Err(RunError::Build(format!("bound compiler driver digest mismatch: {}", path.display())));
+        }
+        paths.insert(path);
+    }
+    assert!(source_built_native_artifacts.is_empty() || paths.len() <= source_built_native_artifacts.len());
+    Ok(paths)
+}
+
+fn bound_compiler_subprogram_dir(
+    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
+) -> Result<Option<PathBuf>, RunError> {
+    use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
+    let internals = source_built_native_artifacts
+        .iter()
+        .filter(|artifact| artifact.role == FullSourceNativeArtifactRole::CompilerInternal)
+        .collect::<Vec<_>>();
+    if internals.is_empty() {
+        return Ok(None);
+    }
+    let mut by_name = BTreeMap::new();
+    for artifact in internals {
+        let path = canonical_action_executable(Path::new(&artifact.path))?;
+        let name = path_file_name(&path)?;
+        if !REQUIRED_GCC_COMPILER_SUBPROGRAMS.contains(&name.as_str()) {
+            return Err(RunError::Build(format!("unexpected bound GCC compiler subprogram: {name}")));
+        }
+        let observed_digest = blake3_file(&path)?;
+        if observed_digest != artifact.content_digest_blake3 {
+            return Err(RunError::Build(format!("bound GCC compiler subprogram digest mismatch: {}", path.display())));
+        }
+        if by_name.insert(name.clone(), path).is_some() {
+            return Err(RunError::Build(format!("duplicate bound GCC compiler subprogram: {name}")));
+        }
+    }
+    for required in REQUIRED_GCC_COMPILER_SUBPROGRAMS {
+        if !by_name.contains_key(*required) {
+            return Err(RunError::Build(format!("missing bound GCC compiler subprogram: {required}")));
+        }
+    }
+    let parents = by_name
+        .values()
+        .map(|path| path.parent().map(Path::to_path_buf))
+        .collect::<Option<BTreeSet<_>>>()
+        .ok_or_else(|| RunError::Build("bound GCC compiler subprogram has no parent".to_string()))?;
+    let mut parents = parents.into_iter();
+    let directory = parents
+        .next()
+        .ok_or_else(|| RunError::Build("bound GCC compiler subprogram directory is missing".to_string()))?;
+    if parents.next().is_some() {
+        return Err(RunError::Build("bound GCC compiler subprograms do not share one directory".to_string()));
+    }
+    Ok(Some(directory))
 }
 
 fn declared_unwind_archive(
@@ -4018,11 +4137,22 @@ fn write_c_compiler_toolchain_alias(
         &runtime_dir.join(TOOLCHAIN_ALIAS_CRT1_OBJECT),
         "target crt1.o",
     )?;
+    let compiler_subprogram_prefix = runtime_inputs
+        .compiler_subprogram_dir
+        .as_ref()
+        .map(|directory| {
+            let directory = path_to_string(directory)?;
+            let argument = format!("-B{directory}/");
+            Ok::<String, RunError>(format!(" {}", shell_quote(Path::new(&argument))))
+        })
+        .transpose()?
+        .unwrap_or_default();
     let script = format!(
-        "#!{}\nruntime_dir={}\nmapped_args_set=false\nstatic_pie_normalized=false\nresponse_index=0\nrewrite_response_file() {{\n  response_source=$1\n  response_index=$((response_index + 1))\n  response_target=\"$runtime_dir/response-$response_index.rsp\"\n  : > \"$response_target\" || exit 1\n  while IFS= read -r response_arg || [ -n \"$response_arg\" ]; do\n    case \"$response_arg\" in\n      {crt1}|*/{crt1}|{rcrt1}|*/{rcrt1}) response_arg=\"$runtime_dir/{crt1}\" ;;\n      {static_pie}) response_arg=\"{static}\"; static_pie_normalized=true ;;\n    esac\n    printf '%s\\n' \"$response_arg\" >> \"$response_target\" || exit 1\n  done < \"$response_source\" || exit 1\n  mapped_arg=\"@$response_target\"\n}}\nfor arg in \"$@\"; do\n  case \"$arg\" in\n    @*) response_source=${{arg#@}}; if [ -r \"$response_source\" ]; then rewrite_response_file \"$response_source\"; else mapped_arg=\"$arg\"; fi ;;\n    {crt1}|*/{crt1}|{rcrt1}|*/{rcrt1}) mapped_arg=\"$runtime_dir/{crt1}\" ;;\n    {static_pie}) mapped_arg=\"{static}\"; static_pie_normalized=true ;;\n    *) mapped_arg=\"$arg\" ;;\n  esac\n  if [ \"$mapped_args_set\" = false ]; then\n    set -- \"$mapped_arg\"\n    mapped_args_set=true\n  else\n    set -- \"$@\" \"$mapped_arg\"\n  fi\ndone\nif [ \"$static_pie_normalized\" = true ]; then\n  set -- \"$@\" {non_pie}\nfi\nexec {} -L\"$runtime_dir\" \"$@\"\n",
+        "#!{}\nruntime_dir={}\nmapped_args_set=false\nstatic_pie_normalized=false\nresponse_index=0\nrewrite_response_file() {{\n  response_source=$1\n  response_index=$((response_index + 1))\n  response_target=\"$runtime_dir/response-$response_index.rsp\"\n  : > \"$response_target\" || exit 1\n  while IFS= read -r response_arg || [ -n \"$response_arg\" ]; do\n    case \"$response_arg\" in\n      {crt1}|*/{crt1}|{rcrt1}|*/{rcrt1}) response_arg=\"$runtime_dir/{crt1}\" ;;\n      {static_pie}) response_arg=\"{static}\"; static_pie_normalized=true ;;\n    esac\n    printf '%s\\n' \"$response_arg\" >> \"$response_target\" || exit 1\n  done < \"$response_source\" || exit 1\n  mapped_arg=\"@$response_target\"\n}}\nfor arg in \"$@\"; do\n  case \"$arg\" in\n    @*) response_source=${{arg#@}}; if [ -r \"$response_source\" ]; then rewrite_response_file \"$response_source\"; else mapped_arg=\"$arg\"; fi ;;\n    {crt1}|*/{crt1}|{rcrt1}|*/{rcrt1}) mapped_arg=\"$runtime_dir/{crt1}\" ;;\n    {static_pie}) mapped_arg=\"{static}\"; static_pie_normalized=true ;;\n    *) mapped_arg=\"$arg\" ;;\n  esac\n  if [ \"$mapped_args_set\" = false ]; then\n    set -- \"$mapped_arg\"\n    mapped_args_set=true\n  else\n    set -- \"$@\" \"$mapped_arg\"\n  fi\ndone\nif [ \"$static_pie_normalized\" = true ]; then\n  set -- \"$@\" {non_pie}\nfi\nexec {} -L\"$runtime_dir\" \"$@\"{}\n",
         execution_shell.display(),
         shell_quote(&runtime_dir),
         shell_quote(target),
+        compiler_subprogram_prefix,
         crt1 = TOOLCHAIN_ALIAS_CRT1_OBJECT,
         rcrt1 = TOOLCHAIN_ALIAS_STATIC_PIE_CRT_OBJECT,
         static_pie = TOOLCHAIN_ALIAS_STATIC_PIE_FLAG,
@@ -5679,6 +5809,7 @@ mod tests {
             &guard,
             &closure,
             std::slice::from_ref(&binding),
+            &[],
             &bound_shell.execution_path,
         )
         .unwrap();
@@ -6156,6 +6287,74 @@ mod tests {
         assert!(guard_dir.join(C_COMPILER_ALIAS).exists());
         assert!(!path_env.to_string_lossy().contains("/nix/var/nix/profiles"));
         assert!(!path_env.to_string_lossy().contains("/run/current-system/sw"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_bound_c_compiler_alias_uses_one_bound_normalized_subprogram_directory() {
+        use crate::full_source_rust_binding::FullSourceNativeArtifactBinding;
+        use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
+        let dir = tempfile::TempDir::new().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let observed_args = dir.path().join("observed-compiler-args.txt");
+        write_fake_executable(
+            &tools.c_compiler,
+            &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nexit 0\n", shell_quote(&observed_args)),
+        );
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let subprogram_dir = dir.path().join("native/libexec/gcc/target/version");
+        fs::create_dir_all(&subprogram_dir).unwrap();
+        let mut artifacts = Vec::new();
+        for name in REQUIRED_GCC_COMPILER_SUBPROGRAMS {
+            let path = subprogram_dir.join(name);
+            write_fake_executable(&path, "#!/bin/sh\nexit 0\n");
+            artifacts.push(FullSourceNativeArtifactBinding {
+                role: FullSourceNativeArtifactRole::CompilerInternal,
+                path: path.display().to_string(),
+                content_digest_blake3: crate::protected_exec::blake3_file_hex(&path).unwrap(),
+            });
+        }
+        artifacts.push(FullSourceNativeArtifactBinding {
+            role: FullSourceNativeArtifactRole::CCompiler,
+            path: tools.c_compiler.display().to_string(),
+            content_digest_blake3: crate::protected_exec::blake3_file_hex(&tools.c_compiler).unwrap(),
+        });
+        let cxx_compiler = dir.path().join("native/bin/x86_64-linux-musl-g++");
+        fs::create_dir_all(cxx_compiler.parent().unwrap()).unwrap();
+        write_fake_executable(&cxx_compiler, "#!/bin/sh\nexit 0\n");
+        artifacts.push(FullSourceNativeArtifactBinding {
+            role: FullSourceNativeArtifactRole::CxxCompiler,
+            path: cxx_compiler.display().to_string(),
+            content_digest_blake3: crate::protected_exec::blake3_file_hex(&cxx_compiler).unwrap(),
+        });
+        let guard = dir.path().join("guard-bin");
+        fs::create_dir_all(&guard).unwrap();
+
+        write_toolchain_path_aliases_with_shell_and_native_artifacts(
+            &guard,
+            &manifest,
+            Path::new("/bin/sh"),
+            &artifacts,
+        )
+        .unwrap();
+        let status = Command::new(guard.join(C_COMPILER_ALIAS)).arg("input.c").status().unwrap();
+        let observed = fs::read_to_string(&observed_args).unwrap();
+        let compiler_drivers = bound_compiler_driver_paths(&artifacts).unwrap();
+        let missing_subprogram = REQUIRED_GCC_COMPILER_SUBPROGRAMS.last().unwrap();
+        let mut missing = artifacts.clone();
+        missing.retain(|artifact| Path::new(&artifact.path).file_name() != Some(OsStr::new(missing_subprogram)));
+        let missing_error = bound_compiler_subprogram_dir(&missing).unwrap_err();
+        let mut wrong_digest = artifacts;
+        wrong_digest[0].content_digest_blake3 = FIXED_POINT_TEST_DIGEST_A.to_string();
+        let digest_error = bound_compiler_subprogram_dir(&wrong_digest).unwrap_err();
+
+        assert!(status.success());
+        assert!(observed.contains(&format!("-B{}/", subprogram_dir.display())));
+        assert!(!observed.contains("/../"));
+        assert!(compiler_drivers.contains(&fs::canonicalize(&tools.c_compiler).unwrap()));
+        assert!(compiler_drivers.contains(&fs::canonicalize(&cxx_compiler).unwrap()));
+        assert!(missing_error.message().contains("missing bound GCC compiler subprogram"));
+        assert!(digest_error.message().contains("digest mismatch"));
     }
 
     #[cfg(unix)]

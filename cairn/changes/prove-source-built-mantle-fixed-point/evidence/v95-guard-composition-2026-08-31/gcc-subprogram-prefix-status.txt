@@ -1,0 +1,6 @@
+schema=mantle-v95-gcc-subprogram-prefix-diagnostic-v1
+status=0
+cc1_parent_component_execs=0
+cc1_normalized_execs=1
+object_present=true
+cc1_dir=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v95-guard-composition-20260831.source-built-fixed-point-staging-3421705/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/libexec/gcc/x86_64-unknown-linux-musl/10.5.0
