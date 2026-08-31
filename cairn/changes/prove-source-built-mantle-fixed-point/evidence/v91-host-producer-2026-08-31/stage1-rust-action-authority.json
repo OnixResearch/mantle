@@ -1,0 +1,477 @@
+{
+  "schema": "mantle-source-built-rust-child-action-authority-v1",
+  "stage_id": "mantle-stage1",
+  "resources": {
+    "parallel_jobs_max": 16,
+    "open_file_descriptors_max": 4096,
+    "storage_bytes_max": 700000000000,
+    "exec_events_per_action_max": 262144
+  },
+  "fixed_executables": [
+    {
+      "authority_id": "fixed:01fe52318a3bdd620ad196209200c2c1390e73879c846b787fb3535f7763728b",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca",
+      "output_identity_blake3": "b3f798b3c646675b6245141c7e5baa5f1a756dad09e098803182cfd7dbdef677",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/stage1/cargo-guard-bin/cmake",
+      "digest_blake3": "b3f798b3c646675b6245141c7e5baa5f1a756dad09e098803182cfd7dbdef677",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:03db55fb95d07bcfd42e77c13eeb78ca169b541dcc73e5befd6d5cb332b5fdb2",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:ObjectFormat",
+      "output_identity_blake3": "3cb2ed55de6347841d6b0d9bbc77af5320c6a58d5a938caabeee159612b09f70",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/readelf",
+      "digest_blake3": "3cb2ed55de6347841d6b0d9bbc77af5320c6a58d5a938caabeee159612b09f70",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:04fb5da6784c7a1d36db8693b67c2760da33121f23d96e425ef25c2e9cf9ead5",
+      "producer_action_id": "toolchain-build:mantle-source-built-native-root-receipt:281615af3158122f084e4839cce8955ca2cbc9759e5d8def9bf4387a26fe4475",
+      "output_identity_blake3": "1a92d4ba385da9634c9a6fbd73ada9482c3ca2242cddacadb20d061816f34e23",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-g++",
+      "digest_blake3": "1a92d4ba385da9634c9a6fbd73ada9482c3ca2242cddacadb20d061816f34e23",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:0ad6dfb8e46bcf7256d1bea3c6197b0e3cb6b484b7c0df9e5202398811551def",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:ObjectFormat",
+      "output_identity_blake3": "3a26399602f5754263c065a47cfa7c40f94ff15d5e72277cf039684cea9f0fe9",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-size",
+      "digest_blake3": "3a26399602f5754263c065a47cfa7c40f94ff15d5e72277cf039684cea9f0fe9",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:147acc38b9cff2adab27b495429816b07f2da7a338b91ad9b74e16130dc56354",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca",
+      "output_identity_blake3": "fc6bc92e11857f7277a0bfbdb5da7d3dcde3f1dcbbf28e6793561e8b8011c75a",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/stage1/cargo-guard-bin/x86_64-linux-musl-ranlib",
+      "digest_blake3": "fc6bc92e11857f7277a0bfbdb5da7d3dcde3f1dcbbf28e6793561e8b8011c75a",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:229a345fc174609437a806461ea45245fd58e576eb5d05cc0ee0c569dbe9bb03",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:Assembler",
+      "output_identity_blake3": "4bd2728c850a1884f6f47741afb8b11b4322e518a56d69e81ee9e420b94668ee",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/as",
+      "digest_blake3": "4bd2728c850a1884f6f47741afb8b11b4322e518a56d69e81ee9e420b94668ee",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:2319dc7626ab1e71b8009d78c7b02d2e864c5361948416591cb79f3766b3d6f0",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca:selected-rustc",
+      "output_identity_blake3": "074d852ce4d8b3631d74ad9332bac11304ed711dfcd3ffdf898dde861ac4ac1a",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/toolchain/rustc-receipt-bound-runtime",
+      "digest_blake3": "074d852ce4d8b3631d74ad9332bac11304ed711dfcd3ffdf898dde861ac4ac1a",
+      "kind": "rustc"
+    },
+    {
+      "authority_id": "fixed:28d5b8fad420408c3f331a85df649cc9beaa715ede8fecde24e8a454043b1d05",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca",
+      "output_identity_blake3": "99d7ecb6096a781f8d947cfa484858ff0ac88a253e1d1d14f3b9634f18eaf7b2",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/stage1/cargo-guard-bin/make",
+      "digest_blake3": "99d7ecb6096a781f8d947cfa484858ff0ac88a253e1d1d14f3b9634f18eaf7b2",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:42f3c7e836c77edad8b266646e3705e6c0086e0e358bd0af69a864e3787e0a51",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:SymbolTool",
+      "output_identity_blake3": "52ab820149d099935b87411fd306231f173d58807f495b99d32c1eb9b6401127",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/nm",
+      "digest_blake3": "52ab820149d099935b87411fd306231f173d58807f495b99d32c1eb9b6401127",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:464bf25563d00c0c3ddc75746970208b4914cac06751978433ff74e1d9d78e2b",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:ArchiveTool",
+      "output_identity_blake3": "3a90141c6ca90962c0a0334b14b8c1d2b5c4365ea2e6f01efeaa0e8d9485c5ce",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-gcc-ar",
+      "digest_blake3": "3a90141c6ca90962c0a0334b14b8c1d2b5c4365ea2e6f01efeaa0e8d9485c5ce",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:4e92ae4e1dadd0ca5f52a7755bd56dd819d82e9d584f8c35d0d9476200ec347a",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:CompilerInternal",
+      "output_identity_blake3": "b20bcc04db3690d8f112b5ed12b05c4611eb764f1c582d544abddbe090022f05",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/lto-wrapper",
+      "digest_blake3": "b20bcc04db3690d8f112b5ed12b05c4611eb764f1c582d544abddbe090022f05",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:517ca9421cb3e6cbcf50613ca3fc9c314a495c331647b86575758fb75469d979",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:CxxCompiler",
+      "output_identity_blake3": "b64c93b5a89d4bd87648baa6b3d24d1710dbd4d15384d5cd3eb775cfe40c11a2",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/g++.real",
+      "digest_blake3": "b64c93b5a89d4bd87648baa6b3d24d1710dbd4d15384d5cd3eb775cfe40c11a2",
+      "kind": "cxx-compiler"
+    },
+    {
+      "authority_id": "fixed:5ff342f0636ad478405a21b449ce15fad41f32f3a6565e27ca3af9ef91828680",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:CompilerInternal",
+      "output_identity_blake3": "c1386970f8c7035643f5cf990c245f4143eb72db02bb3674c15c59b952b7592a",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/collect2",
+      "digest_blake3": "c1386970f8c7035643f5cf990c245f4143eb72db02bb3674c15c59b952b7592a",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:6145df1c837981e186c8ec5247d480960af8632da3df90df427f50c1ca71cce4",
+      "producer_action_id": "toolchain-build:mantle-source-built-native-root-receipt:281615af3158122f084e4839cce8955ca2cbc9759e5d8def9bf4387a26fe4475",
+      "output_identity_blake3": "3a90141c6ca90962c0a0334b14b8c1d2b5c4365ea2e6f01efeaa0e8d9485c5ce",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-ar",
+      "digest_blake3": "3a90141c6ca90962c0a0334b14b8c1d2b5c4365ea2e6f01efeaa0e8d9485c5ce",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:649f503ea92e4f1fa39a61f680175d8df067fe6a073972432265559f5a4c26b4",
+      "producer_action_id": "rust-host-tool:cpython-3.13.5:da60d12bfa09f2b2e8c6368e9e847cb8cd44a37887c6f4fe371b2be9287eaed4",
+      "output_identity_blake3": "a330ef37bd4d5c135581a4e02b4c3ec28d944b4058f097eaa77e936028f854f4",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/rust-host-tools/python/bin/python3.13",
+      "digest_blake3": "a330ef37bd4d5c135581a4e02b4c3ec28d944b4058f097eaa77e936028f854f4",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:660302f7271d2ed77d34a4e1b8347793d5b5d2add0b2e06103fc792d6ca145e6",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca",
+      "output_identity_blake3": "eac63cc12ecdd953d4e5e2217b29fa46a6345c3abc124bce2b319a026a92cac3",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/stage1/cargo-guard-bin/ld",
+      "digest_blake3": "eac63cc12ecdd953d4e5e2217b29fa46a6345c3abc124bce2b319a026a92cac3",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:7117b997bb1278f0a0fef4f226ad3509f9b1f71d1d7dd2d9d3cd8d5e067b20d1",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca",
+      "output_identity_blake3": "8b006ed940ad45f6e5cdcd57b2088bc96ba9c966065e0b061c186e2417e6a669",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/stage1/cargo-guard-bin/x86_64-linux-musl-ar",
+      "digest_blake3": "8b006ed940ad45f6e5cdcd57b2088bc96ba9c966065e0b061c186e2417e6a669",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:738429b94d3f9c9cde048abe8ac14397367a6f6265c5cc3383729664c5c43c79",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca",
+      "output_identity_blake3": "994668c108a4d18a4dbdaf67d1b403db1d9f7f89588c1f85e55bb154bc8b9d0d",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/stage1/cargo-guard-bin/x86_64-linux-musl-g++",
+      "digest_blake3": "994668c108a4d18a4dbdaf67d1b403db1d9f7f89588c1f85e55bb154bc8b9d0d",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:742246aea16c514482ac8f91d61baeb9041f72ad0cf3a50460ba7b8d2b8c3c6c",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca",
+      "output_identity_blake3": "e15369c568f552710ed5f6ab079a3207291971a447cd5038faa5ce4be2802bf7",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/stage1/cargo-guard-bin/busybox",
+      "digest_blake3": "e15369c568f552710ed5f6ab079a3207291971a447cd5038faa5ce4be2802bf7",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:751878fc7f011fd56b5f033324cc7da8f263b056ae1a970e430742c4c8c431c5",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:ObjectCopy",
+      "output_identity_blake3": "9bf98425e211099d0cdf07451b45fcc3b3c00e38a16e97297cfd163535898f6b",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/strip",
+      "digest_blake3": "9bf98425e211099d0cdf07451b45fcc3b3c00e38a16e97297cfd163535898f6b",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:7587bf4ab649d55b89ae7950e8f1cf1337685c1253e62095c60d43caf570472a",
+      "producer_action_id": "toolchain-build:mantle-source-built-native-root-receipt:281615af3158122f084e4839cce8955ca2cbc9759e5d8def9bf4387a26fe4475",
+      "output_identity_blake3": "aa592f79c790baf0a1789242bdc1548db174fe814c8076fdef5620fd8019e895",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-ld",
+      "digest_blake3": "aa592f79c790baf0a1789242bdc1548db174fe814c8076fdef5620fd8019e895",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:762fd5b0dbed6394b21dfeaf3d869d411831291bce70cf36e4ea423a4df01721",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca",
+      "output_identity_blake3": "8686039be4953ca501e8f2300b39068d3bf72c179ee099b871e39022d0e93f71",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/stage1/cargo-guard-bin/python",
+      "digest_blake3": "8686039be4953ca501e8f2300b39068d3bf72c179ee099b871e39022d0e93f71",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:78061e25b7962f1e74e486765e264953a56e32cf9f7c76939b27346054b1473e",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:DynamicLinker",
+      "output_identity_blake3": "0a2b92b529abef28293e8cffc4c8ccab70be7fa7e4e62b3c77fd696b4d3e58f6",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/x86_64-linux-musl/lib/ld-musl-x86_64.so.1",
+      "digest_blake3": "0a2b92b529abef28293e8cffc4c8ccab70be7fa7e4e62b3c77fd696b4d3e58f6",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:7896a8ca02fbd8d2a01f76faee9b7cedb20d7e9d4f0c9884a4ecfad1b2c70f80",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca",
+      "output_identity_blake3": "aeb75791deaa86bf2ff59cc74c397774116a3529d8ce361fc2c54fcb808f2bfb",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/stage1/cargo-guard-bin/x86_64-linux-musl-gcc",
+      "digest_blake3": "aeb75791deaa86bf2ff59cc74c397774116a3529d8ce361fc2c54fcb808f2bfb",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:7b11814ff71332c7cdea8a21429a79f87798478dd220cf70d6f24028bd42cbbb",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:CCompiler",
+      "output_identity_blake3": "ba0b5484d166dff1ca6ebdcc976088bb42dda7370a11108e805247772baf074a",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/gcc.real",
+      "digest_blake3": "ba0b5484d166dff1ca6ebdcc976088bb42dda7370a11108e805247772baf074a",
+      "kind": "c-compiler"
+    },
+    {
+      "authority_id": "fixed:81fda7e6d14eea239a55116817b367de01729dc01b5f0f2af4e558c598421e1c",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:ObjectDump",
+      "output_identity_blake3": "a9e05f7047a76f23b074121c7a8d0bfe04d1854a52adb8ba964c6cd13d292ddb",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/objdump",
+      "digest_blake3": "a9e05f7047a76f23b074121c7a8d0bfe04d1854a52adb8ba964c6cd13d292ddb",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:848a4b885f978da065858447106d23ff0759cde2692bd6bacb626b17c8b8a1e8",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca",
+      "output_identity_blake3": "342c9f556e10d0787d3768e41e72cd555771a93c2ccdd393b398569041bdfec8",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/stage1/cargo-guard-bin/perl",
+      "digest_blake3": "342c9f556e10d0787d3768e41e72cd555771a93c2ccdd393b398569041bdfec8",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:8af03d51f4e4be4127d2c3baba6d616b007148473928e295d933cf5595885bf8",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:Ranlib",
+      "output_identity_blake3": "5745a8cbbb881473c6db3064ef62136bb888ce71627d95ae386e4c8c326f428b",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-gcc-ranlib",
+      "digest_blake3": "5745a8cbbb881473c6db3064ef62136bb888ce71627d95ae386e4c8c326f428b",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:8bcb32c1e6a631955e32d9c2a1ba8d500334269c7523e915cf28ea0e0cd6cc83",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca",
+      "output_identity_blake3": "639b7258cf46561588422f3f1b88e5fe31bb7e9bb817c6e65bd136f3a7369f73",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/stage1/cargo-guard-bin/x86_64-linux-musl-ld",
+      "digest_blake3": "639b7258cf46561588422f3f1b88e5fe31bb7e9bb817c6e65bd136f3a7369f73",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:8c13017f1e6a8cb9dd229bfba34c85ba064d474a79383aeeb96c30fee7adab26",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:Preprocessor",
+      "output_identity_blake3": "f497be4b5b22c6b929d8c3856f93a1b9890f45dff7f023de71469436dabdd131",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-cpp",
+      "digest_blake3": "f497be4b5b22c6b929d8c3856f93a1b9890f45dff7f023de71469436dabdd131",
+      "kind": "c-compiler"
+    },
+    {
+      "authority_id": "fixed:8e155e2b75543ca634e6bfe04a2def644aaf2433b38a6f52cef85c09db7f40d3",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:ObjectFormat",
+      "output_identity_blake3": "884cb2613cfe9669bdc0002009c746b310ad9ea155100d2a488d4b118132eafa",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/strings",
+      "digest_blake3": "884cb2613cfe9669bdc0002009c746b310ad9ea155100d2a488d4b118132eafa",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:8ff36984cab6a218e86cd1610337f2fbdb2a282e0227bfbcc3cdb1d28ac6e8d3",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:ObjectDump",
+      "output_identity_blake3": "a9e05f7047a76f23b074121c7a8d0bfe04d1854a52adb8ba964c6cd13d292ddb",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-objdump",
+      "digest_blake3": "a9e05f7047a76f23b074121c7a8d0bfe04d1854a52adb8ba964c6cd13d292ddb",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:9276deaa97b029566bf67e1c5774447dd82e679601f9854be4072cc38ff21812",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:SymbolTool",
+      "output_identity_blake3": "52ab820149d099935b87411fd306231f173d58807f495b99d32c1eb9b6401127",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-gcc-nm",
+      "digest_blake3": "52ab820149d099935b87411fd306231f173d58807f495b99d32c1eb9b6401127",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:9de50e3f86bde31d7b0d948132930b5bf751701eeaa92e0e8b9cb406d428015b",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:ArchiveTool",
+      "output_identity_blake3": "3a90141c6ca90962c0a0334b14b8c1d2b5c4365ea2e6f01efeaa0e8d9485c5ce",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/ar",
+      "digest_blake3": "3a90141c6ca90962c0a0334b14b8c1d2b5c4365ea2e6f01efeaa0e8d9485c5ce",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:a2955ab06fcbe0830966f44e9aedf27224573fe845471d19d5af122f4f22f06d",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:CompilerInternal",
+      "output_identity_blake3": "22dd5457a6a25bf8e2b06928464359b1ea3ae5b15d426aed51a72e0392acaa63",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/cc1",
+      "digest_blake3": "22dd5457a6a25bf8e2b06928464359b1ea3ae5b15d426aed51a72e0392acaa63",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:a69615e98480403d19dd6bd9669fb9a4d8b4cc75309e276d01767409ce47bb80",
+      "producer_action_id": "rust-host-tool:busybox-1.37.0:764bb152ab58c6afa9b31c550ba8f9af55ded4c02500b6e36735a80f8bce0843",
+      "output_identity_blake3": "da5b5b1ca280f8a545eb750c27894766311c1b10b326da5ce10e6e1ee8c7f4c8",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/rust-host-tools/busybox/bin/busybox",
+      "digest_blake3": "da5b5b1ca280f8a545eb750c27894766311c1b10b326da5ce10e6e1ee8c7f4c8",
+      "kind": "shell"
+    },
+    {
+      "authority_id": "fixed:ae809844130d1df282f810a1180b5e803d3f7255fffb0c9350cd9e4df7912d74",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:CompilerInternal",
+      "output_identity_blake3": "879812cd90824b21220fb4df5288a0a54cfebf41cc59493fd9164a6a8d871bf7",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/cc1plus",
+      "digest_blake3": "879812cd90824b21220fb4df5288a0a54cfebf41cc59493fd9164a6a8d871bf7",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:b19fd6717d9e1f8a13dfb2acbac2cfff4d1a3d987e0582ec3e1e5d471d4a32d6",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:Assembler",
+      "output_identity_blake3": "4bd2728c850a1884f6f47741afb8b11b4322e518a56d69e81ee9e420b94668ee",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-as",
+      "digest_blake3": "4bd2728c850a1884f6f47741afb8b11b4322e518a56d69e81ee9e420b94668ee",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:bc346c5fe27355c3890c95670f226b87b1234d09a6851c2c9bee437d211a3a9a",
+      "producer_action_id": "rust-host-tool:gnu-make-4.4.1:7b574a64dc5386183695ad752695e1031475cb04b50a52b06bb3324cfa61ff9b",
+      "output_identity_blake3": "11e99bd96b27689e78797520566b915d3b519f4550197ebb6678a67bed215866",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/rust-host-tools/make/bin/make",
+      "digest_blake3": "11e99bd96b27689e78797520566b915d3b519f4550197ebb6678a67bed215866",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:bc4c0e4c8140c3f5bfecf4b732d79eacf58abeb666c3444b3cce088f798245d3",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:ObjectCopy",
+      "output_identity_blake3": "818ac29b577851d2d7d3f56c81b1e2f3a7ad2813c426734d8d1e5548b55011c1",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-objcopy",
+      "digest_blake3": "818ac29b577851d2d7d3f56c81b1e2f3a7ad2813c426734d8d1e5548b55011c1",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:bcbc064e07fed1608feba2b236365aa580a374d9721f300ccf437bff9e5df925",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:ObjectFormat",
+      "output_identity_blake3": "884cb2613cfe9669bdc0002009c746b310ad9ea155100d2a488d4b118132eafa",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-strings",
+      "digest_blake3": "884cb2613cfe9669bdc0002009c746b310ad9ea155100d2a488d4b118132eafa",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:c0afdd4e37948001b780e55982802d24ee0835bacf64e7db1c10ffd15f71903f",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:ObjectFormat",
+      "output_identity_blake3": "3a26399602f5754263c065a47cfa7c40f94ff15d5e72277cf039684cea9f0fe9",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/size",
+      "digest_blake3": "3a26399602f5754263c065a47cfa7c40f94ff15d5e72277cf039684cea9f0fe9",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:c717018da024ee5376635a4cdf18513982df5c7c714fea620569dd5f3745368e",
+      "producer_action_id": "rust-host-tool:perl-5.10.1:f55defa6fc2582a792a56561f48bab68f292a16f3c566ea7d76a77e90445ca14",
+      "output_identity_blake3": "b80529ad47e175480a77a6411a741d3d2af01cad0dd3a1a6d30de99560160147",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/rust-host-tools/perl/bin/perl",
+      "digest_blake3": "b80529ad47e175480a77a6411a741d3d2af01cad0dd3a1a6d30de99560160147",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:cc546c8395d5bdea02ee61a76d782feb0e72303c2a042863a07a03d0499c09ac",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:ObjectCopy",
+      "output_identity_blake3": "818ac29b577851d2d7d3f56c81b1e2f3a7ad2813c426734d8d1e5548b55011c1",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/objcopy",
+      "digest_blake3": "818ac29b577851d2d7d3f56c81b1e2f3a7ad2813c426734d8d1e5548b55011c1",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:cf5dddeae846b9923d4d33fa5274e220f662822eebc2b8c7025e34d2fe81d572",
+      "producer_action_id": "toolchain-build:mantle-source-built-native-root-receipt:281615af3158122f084e4839cce8955ca2cbc9759e5d8def9bf4387a26fe4475",
+      "output_identity_blake3": "d7a9976841679e85b6dfeabbef802e0fb2f78730d3c6e0e95b590184113256af",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-gcc",
+      "digest_blake3": "d7a9976841679e85b6dfeabbef802e0fb2f78730d3c6e0e95b590184113256af",
+      "kind": "c-compiler"
+    },
+    {
+      "authority_id": "fixed:d1243290c9d97bdd574d12093f9619e0ed411aafc8057523cc4fa5a9b98a9dae",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca",
+      "output_identity_blake3": "8686039be4953ca501e8f2300b39068d3bf72c179ee099b871e39022d0e93f71",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/stage1/cargo-guard-bin/python3",
+      "digest_blake3": "8686039be4953ca501e8f2300b39068d3bf72c179ee099b871e39022d0e93f71",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:d8801ba22b28f046da98c10e571a4cde764740573dd86e364238cfb3ae966df4",
+      "producer_action_id": "toolchain-build:mantle-source-built-native-root-receipt:281615af3158122f084e4839cce8955ca2cbc9759e5d8def9bf4387a26fe4475",
+      "output_identity_blake3": "5745a8cbbb881473c6db3064ef62136bb888ce71627d95ae386e4c8c326f428b",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-ranlib",
+      "digest_blake3": "5745a8cbbb881473c6db3064ef62136bb888ce71627d95ae386e4c8c326f428b",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:ded8fce81dd95375849fd71a5a3e9beb4e7007b688fdbbbdab46b8a1a1deff0f",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:ObjectCopy",
+      "output_identity_blake3": "9bf98425e211099d0cdf07451b45fcc3b3c00e38a16e97297cfd163535898f6b",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-strip",
+      "digest_blake3": "9bf98425e211099d0cdf07451b45fcc3b3c00e38a16e97297cfd163535898f6b",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:e5f355a0e03a7390fd80b8e4550ce6c10a69cbc6a7f1577a5612c5c1fbbf4e46",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca",
+      "output_identity_blake3": "8686039be4953ca501e8f2300b39068d3bf72c179ee099b871e39022d0e93f71",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/stage1/cargo-guard-bin/python3.13",
+      "digest_blake3": "8686039be4953ca501e8f2300b39068d3bf72c179ee099b871e39022d0e93f71",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:e999e1977bfc87582aa3c201a90980378ec33500908264c176f9a27fc0ca553e",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:Ranlib",
+      "output_identity_blake3": "5745a8cbbb881473c6db3064ef62136bb888ce71627d95ae386e4c8c326f428b",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/ranlib",
+      "digest_blake3": "5745a8cbbb881473c6db3064ef62136bb888ce71627d95ae386e4c8c326f428b",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:ede74f04a5b666ee95edfc3234d9400fa3e47b7b4b7bb03e7aacce9a8d2fc5b5",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:ObjectFormat",
+      "output_identity_blake3": "3cb2ed55de6347841d6b0d9bbc77af5320c6a58d5a938caabeee159612b09f70",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-readelf",
+      "digest_blake3": "3cb2ed55de6347841d6b0d9bbc77af5320c6a58d5a938caabeee159612b09f70",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:ee77e55fc0aa80f353da576479a765c41ea8f50e791e51388f7cbe1b99f6283a",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:SymbolTool",
+      "output_identity_blake3": "52ab820149d099935b87411fd306231f173d58807f495b99d32c1eb9b6401127",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/x86_64-linux-musl-nm",
+      "digest_blake3": "52ab820149d099935b87411fd306231f173d58807f495b99d32c1eb9b6401127",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:eeb5fc94f38d83d26d38e7048f864df18bb062d53a640af9feeab375c674d26d",
+      "producer_action_id": "toolchain-build:mantle-source-built-native-root-receipt:281615af3158122f084e4839cce8955ca2cbc9759e5d8def9bf4387a26fe4475",
+      "output_identity_blake3": "aa592f79c790baf0a1789242bdc1548db174fe814c8076fdef5620fd8019e895",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/ld",
+      "digest_blake3": "aa592f79c790baf0a1789242bdc1548db174fe814c8076fdef5620fd8019e895",
+      "kind": "linker"
+    },
+    {
+      "authority_id": "fixed:efa6b3e511826379f7230a1b660cdd9e8010f8ca78dd9864c82ded52e5dde961",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca",
+      "output_identity_blake3": "aeb75791deaa86bf2ff59cc74c397774116a3529d8ce361fc2c54fcb808f2bfb",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/stage1/cargo-guard-bin/cc",
+      "digest_blake3": "aeb75791deaa86bf2ff59cc74c397774116a3529d8ce361fc2c54fcb808f2bfb",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:f462c085e81875ddd40b6e071a9f5eae95f2deff4a30f2336d900c8621620e55",
+      "producer_action_id": "rust-provider-action:129d9a8d320e4c21471f563ad1fa3fd9ec7cf58a7aafd76f21a51b9880d2d585:d24cc96e2761bd4395ef515fe8b9976a012115865c9fceb44e5a3de6600375f9",
+      "output_identity_blake3": "fc8954789b9c63e3fa820aefeb882158d4abec75acf339d8b62fe005f5104b61",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/rust-provider/bin/rustc",
+      "digest_blake3": "fc8954789b9c63e3fa820aefeb882158d4abec75acf339d8b62fe005f5104b61",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:f77716ac054a730d79ba327acc5c317305a66333ee72dbf47ae909c02a126a6c",
+      "producer_action_id": "rust-host-tool:cmake-3.31.8:b0d026e389ecd80a74b647d44a185aac908a089f8d6b39d23ea7b4a01558d0e8",
+      "output_identity_blake3": "134d045f02a1265620f3547c4a103afe138015abf9c720f468f16378fc5fc093",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/rust-host-tools/cmake/bin/cmake",
+      "digest_blake3": "134d045f02a1265620f3547c4a103afe138015abf9c720f468f16378fc5fc093",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:f7c9256d7f627b89376b31e4ab74237b0b3e17335c921e760d0f0ec74e5d07fb",
+      "producer_action_id": "receipt-bound-aliases:f58cdb9913b1a453371f42b839598b8b8d86c4538c848da2d5a1e05b4729ffca",
+      "output_identity_blake3": "e36352766bb7c262f5c47838f5687fe49227a02bf8c495cfa11acb9b2d2b66a1",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/cargo-free-fixed-point/stage1/cargo-guard-bin/rustc",
+      "digest_blake3": "e36352766bb7c262f5c47838f5687fe49227a02bf8c495cfa11acb9b2d2b66a1",
+      "kind": "native-helper"
+    },
+    {
+      "authority_id": "fixed:f936c2a15404ed5e003deb663c0f83bd5ddec4389a1eb46ef6f1c175acc556af",
+      "producer_action_id": "full-source-native-provider:e7dd230cd950af389124157514521fa43e5193273623b24372456cddf9a3bf35:Preprocessor",
+      "output_identity_blake3": "d11f8870d15d53a250d0460b61f834b3aa22d2d330db4434b20f0d6b385418f0",
+      "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v91-host-producer-20260831.source-built-fixed-point-staging-3399045/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/cpp.real",
+      "digest_blake3": "d11f8870d15d53a250d0460b61f834b3aa22d2d330db4434b20f0d6b385418f0",
+      "kind": "c-compiler"
+    }
+  ],
+  "authority_digest_blake3": "131904847381b83b36178062172a04f0bcfbdc9263c76bd2d8be5b5113b2ff66"
+}

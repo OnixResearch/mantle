@@ -1,9 +1,13 @@
-# V91 consumed-host producer proof launch
+# V91 target producer-index failure
 
-## Status
+## Verdict
 
-V91 launched as a detached promoted proof on Leviathan. This record does not
-claim completion.
+V91 passed checkpoint restoration, closure relocation, the bound rustc runtime,
+BLAKE3 source framing, and consumed-host proc-macro fallback. Stage1 then failed
+on an ordinary target dependency without a direct producer field.
+
+This attempt does not prove Rust unit execution, stage1 completion, stage2,
+fixed-point equality, the final receipt, or complete trust.
 
 ## Bound inputs
 
@@ -12,40 +16,66 @@ claim completion.
   `1a8829e3fedf133585a54759a65f72ba410ba5382ae43ece44dacf388c33c52b`
 - Ready source-profile BLAKE3:
   `8f044865fdcfe1ee15d00a56b405038d76b6746368c363cca41722185a413c61`
-- Expected StageX lineage BLAKE3:
-  `e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d`
-- Expected native-provider BLAKE3:
-  `63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9`
 - Hermeticity: strict
 - Substitution: disabled
 - Proof jobs: 16
 - Observed free bytes before execution: 702,941,278,208
 
-## Detached process identity
+## Passed boundaries
 
-- Wrapper PID: `3398763`
-- `/proc` start ticks: `74421071`
-- Launch time: `2026-08-31T09:54:50-04:00`
-- Watcher: local pueue task `1012`
+V91 restored the immutable 17-payload checkpoint without repeating Rust
+provider execution. Closure relocation and rustc compatibility passed.
 
-The launcher detached the proof from SSH and pueue standard input and output.
-The watcher checks PID liveness and `/proc` start ticks.
+Stage1 accepted typed source identities and resolved `strum_macros ->
+rustversion` through its unique consumed host artifact.
 
-## Expected route
+## Root cause
 
-V91 must restore the immutable checkpoint, pass closure and rustc runtime
-checks, and retain BLAKE3-framed source identities.
+Stage1 rejected target unit `proc-macro-crate` because its `toml_edit`
+dependency artifact had no direct `producer_unit_id`.
 
-Stage1 must resolve Cargo-omitted proc-macro producers only through the unit's
-unique consumed host artifact.
+`proc-macro-crate-toml-edit-edge.json` shows that the ready derivation graph
+contains one exact target `toml_edit` library with the same package identity and
+selected triple.
 
-## Non-claims
+`target-producer-index-analysis.json` inspects all 2,203 target dependency
+artifacts without direct producers. Every artifact has exactly one target
+library producer with the same package identity and selected triple. Most also
+match the normalized dependency name. The rest are renamed dependencies with a
+unique package-level library.
 
-This record does not prove stage1 execution, fixed-point equality, the final
-receipt, or complete trust.
+The action adapter considered direct and consumed-host authority only. It did
+not index the explicit ready graph.
 
-## Next action
+## Decision
 
-Monitor the exact detached process. On failure, preserve its staging evidence
-before repair or cleanup. On success, verify stage equality, the final receipt,
-and the operator trust report.
+ADR 0094 builds one bounded target-library producer index from the ready graph.
+It keys producers by package/triple and by package/triple/normalized target name.
+
+After direct and consumed-host authority, target dependencies prefer the exact
+normalized-name producer. Otherwise, they require one package-and-triple
+library producer.
+
+The selected unit enters action ordering and dependency input authority.
+Cross-triple, binary-target, missing, and ambiguous candidates fail. This uses
+explicit ready-graph authority, not ambient package discovery.
+
+## Validation
+
+`post-repair-validation.log` records positive target fallback, renamed fallback,
+ambiguous fallback, consumed-host fallback, all Rust child-action plan tests,
+and Rust formatting.
+
+## Preserved evidence
+
+This directory contains the exact launch records, full proof log, failed status,
+checkpoint and closure reports, rustc compatibility, stage1 stderr and
+authority, the extracted consumer/producer edge, the complete match-count
+analysis, operator scripts, and validation evidence.
+
+## Owner and next action
+
+The Mantle source-built fixed-point change owns the repair. Build and transfer a
+new release binary, refresh a Ready profile, and restore the same checkpoint in
+a fresh promoted proof. Preserve V91 until the new proof no longer needs its
+stage1 planning diagnostics.

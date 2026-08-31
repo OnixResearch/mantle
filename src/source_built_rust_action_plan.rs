@@ -92,6 +92,12 @@ pub(crate) struct RustUnitActionInput {
     pub(crate) environment_digest_blake3: String,
 }
 
+#[derive(Debug, Default)]
+struct RustDependencyProducerIndex {
+    target_lib_by_package: BTreeMap<(String, String), BTreeSet<String>>,
+    target_lib_by_exact_name: BTreeMap<(String, String, String), BTreeSet<String>>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct RustChildActionPlan {
     pub(crate) schema: String,
@@ -1156,17 +1162,52 @@ pub(crate) fn rust_unit_action_inputs_from_graph(
         ));
     }
     bounded_count("Rust graph unit", graph.derivations.len(), RUST_UNIT_COUNT_MAX)?;
+    let producer_index = rust_dependency_producer_index(&graph.derivations)?;
     let mut units = Vec::with_capacity(graph.derivations.len());
     for unit in &graph.derivations {
-        units.push(rust_unit_action_input(unit)?);
+        units.push(rust_unit_action_input(unit, &producer_index)?);
     }
     assert_eq!(units.len(), graph.derivations.len());
     debug_assert!(!units.is_empty());
     Ok(units)
 }
 
+fn rust_dependency_producer_index(
+    derivations: &[crate::rust_plan::RustUnitDerivationSummary],
+) -> Result<RustDependencyProducerIndex, RustChildActionPlanError> {
+    let mut index = RustDependencyProducerIndex::default();
+    for producer in derivations {
+        if producer.execution_kind != "target" {
+            continue;
+        }
+        if producer.target_kind != "lib" {
+            continue;
+        }
+        validate_text("graph producer unit", &producer.unit_id)?;
+        validate_text("graph producer package", &producer.package_id)?;
+        validate_text("graph producer target", &producer.target_name)?;
+        validate_text("graph producer triple", &producer.selected_triple)?;
+        let package_key = (producer.package_id.clone(), producer.selected_triple.clone());
+        index.target_lib_by_package.entry(package_key).or_default().insert(producer.unit_id.clone());
+        let exact_key = (
+            producer.package_id.clone(),
+            producer.selected_triple.clone(),
+            normalized_dependency_name(&producer.target_name),
+        );
+        index.target_lib_by_exact_name.entry(exact_key).or_default().insert(producer.unit_id.clone());
+    }
+    assert!(index.target_lib_by_exact_name.len() <= derivations.len());
+    assert!(index.target_lib_by_package.len() <= derivations.len());
+    Ok(index)
+}
+
+fn normalized_dependency_name(name: &str) -> String {
+    name.replace('-', "_")
+}
+
 fn rust_unit_action_input(
     unit: &crate::rust_plan::RustUnitDerivationSummary,
+    producer_index: &RustDependencyProducerIndex,
 ) -> Result<RustUnitActionInput, RustChildActionPlanError> {
     if unit.derivation.builder != "rustc" {
         return Err(plan_error(
@@ -1175,8 +1216,8 @@ fn rust_unit_action_input(
         ));
     }
     let source_digest_blake3 = canonical_source_identity_blake3(&unit.source_digest)?;
-    let producer_unit_ids = rust_unit_producer_ids(unit)?;
-    let input_authority_ids = rust_unit_input_authority_ids(unit, &source_digest_blake3)?;
+    let producer_unit_ids = rust_unit_producer_ids(unit, producer_index)?;
+    let input_authority_ids = rust_unit_input_authority_ids(unit, &source_digest_blake3, producer_index)?;
     let environment_digest_blake3 = canonical_environment_digest(&unit.derivation.env)?;
     Ok(RustUnitActionInput {
         unit_id: unit.unit_id.clone(),
@@ -1203,10 +1244,11 @@ fn canonical_source_identity_blake3(
 
 fn rust_unit_producer_ids(
     unit: &crate::rust_plan::RustUnitDerivationSummary,
+    producer_index: &RustDependencyProducerIndex,
 ) -> Result<Vec<String>, RustChildActionPlanError> {
     let mut producers = Vec::new();
     for artifact in &unit.dependency_artifacts {
-        producers.push(rust_dependency_artifact_producer(unit, artifact)?);
+        producers.push(rust_dependency_artifact_producer(unit, artifact, producer_index)?);
     }
     for (label, producer) in rust_unit_optional_non_dependency_producers(unit) {
         let producer = producer.ok_or_else(|| {
@@ -1242,61 +1284,119 @@ fn rust_unit_optional_non_dependency_producers(
 fn rust_dependency_artifact_producer(
     unit: &crate::rust_plan::RustUnitDerivationSummary,
     artifact: &crate::rust_plan::RustDependencyArtifact,
+    producer_index: &RustDependencyProducerIndex,
 ) -> Result<String, RustChildActionPlanError> {
     if let Some(producer) = &artifact.producer_unit_id {
         validate_text("dependency producer", producer)?;
         return Ok(producer.clone());
     }
+    let host_matches = consumed_host_dependency_producers(unit, artifact);
+    if let Some(producer) = unique_dependency_producer(unit, artifact, "host", &host_matches)? {
+        return Ok(producer);
+    }
+    if unit.execution_kind != "target" {
+        return Err(unbound_dependency_producer_error(unit, artifact));
+    }
+    let graph_matches = indexed_target_dependency_producers(unit, artifact, producer_index);
+    if let Some(producer) = unique_dependency_producer(unit, artifact, "graph", &graph_matches)? {
+        return Ok(producer);
+    }
+    Err(unbound_dependency_producer_error(unit, artifact))
+}
+
+fn consumed_host_dependency_producers(
+    unit: &crate::rust_plan::RustUnitDerivationSummary,
+    artifact: &crate::rust_plan::RustDependencyArtifact,
+) -> BTreeSet<String> {
     let package_matches = unit
         .consumed_host_artifacts
         .iter()
         .filter(|candidate| candidate.package_id == artifact.package_id)
         .filter_map(|candidate| candidate.producer_unit_id.clone())
         .collect::<BTreeSet<_>>();
+    let artifact_name = normalized_dependency_name(&artifact.name);
     let exact_matches = unit
         .consumed_host_artifacts
         .iter()
         .filter(|candidate| candidate.package_id == artifact.package_id)
-        .filter(|candidate| candidate.target_name == artifact.name)
+        .filter(|candidate| normalized_dependency_name(&candidate.target_name) == artifact_name)
         .filter_map(|candidate| candidate.producer_unit_id.clone())
         .collect::<BTreeSet<_>>();
-    let matches = if exact_matches.is_empty() {
+    if exact_matches.is_empty() {
         package_matches
     } else {
         exact_matches
-    };
-    let producers = matches.iter().collect::<Vec<_>>();
-    let producer = match producers.as_slice() {
-        [producer] => *producer,
-        [] => {
-            return Err(plan_error(
-                RustChildActionPlanErrorKind::IncompleteGraph,
-                &format!(
-                    "Rust unit {} has unbound dependency artifact producer for {} from {}",
-                    unit.unit_id, artifact.name, artifact.package_id
-                ),
-            ));
+    }
+}
+
+fn indexed_target_dependency_producers(
+    unit: &crate::rust_plan::RustUnitDerivationSummary,
+    artifact: &crate::rust_plan::RustDependencyArtifact,
+    producer_index: &RustDependencyProducerIndex,
+) -> BTreeSet<String> {
+    let exact_key = (
+        artifact.package_id.clone(),
+        unit.selected_triple.clone(),
+        normalized_dependency_name(&artifact.name),
+    );
+    if let Some(exact) = producer_index.target_lib_by_exact_name.get(&exact_key) {
+        if !exact.is_empty() {
+            return exact.clone();
         }
-        _ => {
-            return Err(plan_error(
-                RustChildActionPlanErrorKind::IncompleteGraph,
-                &format!(
-                    "Rust unit {} has {} host producers for dependency artifact {} from {}",
-                    unit.unit_id,
-                    matches.len(),
-                    artifact.name,
-                    artifact.package_id
-                ),
-            ));
-        }
-    };
+    }
+    let package_key = (artifact.package_id.clone(), unit.selected_triple.clone());
+    producer_index.target_lib_by_package.get(&package_key).cloned().unwrap_or_default()
+}
+
+fn unique_dependency_producer(
+    unit: &crate::rust_plan::RustUnitDerivationSummary,
+    artifact: &crate::rust_plan::RustDependencyArtifact,
+    source: &str,
+    matches: &BTreeSet<String>,
+) -> Result<Option<String>, RustChildActionPlanError> {
+    if matches.is_empty() {
+        return Ok(None);
+    }
+    if matches.len() > 1 {
+        return Err(ambiguous_dependency_producer_error(unit, artifact, source, matches.len()));
+    }
+    let producer = matches.iter().next().ok_or_else(|| unbound_dependency_producer_error(unit, artifact))?;
     validate_text("dependency producer", producer)?;
-    Ok(producer.clone())
+    Ok(Some(producer.clone()))
+}
+
+fn unbound_dependency_producer_error(
+    unit: &crate::rust_plan::RustUnitDerivationSummary,
+    artifact: &crate::rust_plan::RustDependencyArtifact,
+) -> RustChildActionPlanError {
+    plan_error(
+        RustChildActionPlanErrorKind::IncompleteGraph,
+        &format!(
+            "Rust unit {} has unbound dependency artifact producer for {} from {}",
+            unit.unit_id, artifact.name, artifact.package_id
+        ),
+    )
+}
+
+fn ambiguous_dependency_producer_error(
+    unit: &crate::rust_plan::RustUnitDerivationSummary,
+    artifact: &crate::rust_plan::RustDependencyArtifact,
+    source: &str,
+    count: usize,
+) -> RustChildActionPlanError {
+    plan_error(
+        RustChildActionPlanErrorKind::IncompleteGraph,
+        &format!(
+            "Rust unit {} has {count} {source} producers for dependency artifact {} from {}",
+            unit.unit_id, artifact.name, artifact.package_id
+        ),
+    )
 }
 
 fn rust_unit_input_authority_ids(
     unit: &crate::rust_plan::RustUnitDerivationSummary,
     source_digest_blake3: &str,
+    producer_index: &RustDependencyProducerIndex,
 ) -> Result<Vec<String>, RustChildActionPlanError> {
     let mut authorities = vec![
         format!("package:{}", unit.package_id),
@@ -1304,7 +1404,7 @@ fn rust_unit_input_authority_ids(
         format!("target:{}:{}", unit.selected_triple, unit.target_name),
     ];
     for artifact in &unit.dependency_artifacts {
-        let producer = rust_dependency_artifact_producer(unit, artifact)?;
+        let producer = rust_dependency_artifact_producer(unit, artifact, producer_index)?;
         authorities.push(format!("dependency:{producer}:{}:{}", artifact.package_id, artifact.name));
     }
     for artifact in &unit.consumed_host_artifacts {
@@ -1720,6 +1820,30 @@ mod tests {
         assert!(build_input.input_authority_ids.contains(&"dependency:dep:dep:dep".to_string()));
         assert_eq!(ambiguous_error.kind, RustChildActionPlanErrorKind::IncompleteGraph);
         assert!(ambiguous_error.message.contains("2 host producers"));
+    }
+
+    #[test]
+    fn rust_graph_dependency_uses_unique_target_lib_producer_fallback() {
+        let mut target_graph = graph();
+        for unit in &mut target_graph.derivations {
+            unit.execution_kind = "target".to_string();
+        }
+        target_graph.derivations[1].dependency_artifacts[0].producer_unit_id = None;
+        target_graph.derivations[1].dependency_artifacts[0].package_id = "package:dep".to_string();
+
+        let units = rust_unit_action_inputs_from_graph(&target_graph).unwrap();
+        let build_input = units.iter().find(|unit| unit.unit_id == "build").expect("build unit action input");
+        let mut ambiguous_graph = target_graph;
+        let mut duplicate = ambiguous_graph.derivations[0].clone();
+        duplicate.unit_id = "dep-other".to_string();
+        ambiguous_graph.derivations.push(duplicate);
+        ambiguous_graph.derivation_count = ambiguous_graph.derivations.len();
+        let ambiguous_error = rust_unit_action_inputs_from_graph(&ambiguous_graph).unwrap_err();
+
+        assert!(build_input.producer_unit_ids.contains(&"dep".to_string()));
+        assert!(build_input.input_authority_ids.contains(&"dependency:dep:package:dep:dep".to_string()));
+        assert_eq!(ambiguous_error.kind, RustChildActionPlanErrorKind::IncompleteGraph);
+        assert!(ambiguous_error.message.contains("2 graph producers"));
     }
 
     #[test]

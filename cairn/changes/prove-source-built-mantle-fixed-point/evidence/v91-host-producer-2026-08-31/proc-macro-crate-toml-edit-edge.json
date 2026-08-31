@@ -1,0 +1,23 @@
+{
+  "consumer": {
+    "unit_id": "native:01476c0b4b56bccdc7086032cfe022f8d71efe9c31e9c9c5e4c21fea0f34c39d:registry+https://github.com/rust-lang/crates.io-index#proc-macro-crate@3.5.0:proc_macro_crate:lib:build",
+    "execution_kind": "target",
+    "selected_triple": "x86_64-unknown-linux-musl",
+    "target_kind": "lib",
+    "dependency_artifacts": [
+      {
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#toml_edit@0.25.10+spec-1.1.0",
+        "name": "toml_edit",
+        "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#toml_edit@0.25.10+spec-1.1.0:toml_edit"
+      }
+    ]
+  },
+  "producer": {
+    "unit_id": "native:3730d6f9e2346302688011b483567f4673cd294718672c3662d7236224f99df3:registry+https://github.com/rust-lang/crates.io-index#toml_edit@0.25.10+spec-1.1.0:toml_edit:lib:build",
+    "package_id": "registry+https://github.com/rust-lang/crates.io-index#toml_edit@0.25.10+spec-1.1.0",
+    "target_name": "toml_edit",
+    "target_kind": "lib",
+    "execution_kind": "target",
+    "selected_triple": "x86_64-unknown-linux-musl"
+  }
+}
