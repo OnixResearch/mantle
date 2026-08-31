@@ -1,12 +1,14 @@
 f1fe9dce390058174f6fc718d32caa08dca5bbf6be09f620d0f134fb64249e70  ./attempt-status.json
 c7acfe43af7d6e0588a5a18a88ddbdc7c7e8aeff16bfd40841316de2501472d5  ./cargo-free-meta.json
 a7f0bfd8a02c12d106c59504e70cb98c8ad20b56a1baa379b425e918c94d1c30  ./cargo-free-preflight.json
+6825c4c651d10e3c0cd3ec6aa6a5e192ce4a77ba5ba9a9c6269ce0e22c36ebaa  ./cleanup-v89-before-v90.txt
 9ad429c31e839eaa7416f4c52a112823f526931db2193377a2b9e7a04c55a541  ./closure-relocation.json
 414bed3efea81c340e4049ba1660174964e4aceef22b7701cadac06f1ae6c8ec  ./initial-proof-log.txt
 c9df6aa4859c66b98b360296a32ddb383dae115642d209d7b3b1279a3966509a  ./launch-profile-v89-bound-rustc-runtime.sh
 3276476dda101bdc22d8679864dbc1bb4b9dfdeddc282a799b392395b590f529  ./launch-v89-bound-rustc-runtime.sh
 b8b66b8e3fe0bdb6b8a8409668905616bcbede15a8c45d47f81596af446e3102  ./post-repair-validation.log
 539b694a123b2f1c23657700b0c1e9ac41a7a5f4b3db0847fa40dd5bab5e7874  ./provider-checkpoint-restore.txt
+2821e73ffee738c19af6229c7ae7ad5165ee18ed457f7f51dc5cf9d00bd4e5c5  ./prune-v89-before-v90.rs
 1f5176836c5605045331a3e9d41276c6de1f3fa9c94522012173bd7cb3d1b3ca  ./relocated-toolchain-closure.json
 514b1f6bc63f63f31a836a0a7cbd0c2d1700307a2e540f8823eccdc5b185cbd8  ./run-profile-v89-bound-rustc-runtime.sh
 e9f76c6e26aad061d4bae80d592b8e64f2c12bdb25053696c7fb2d2d676b573a  ./run-proof-v89-bound-rustc-runtime.sh
@@ -26,7 +28,7 @@ c6a46002586c5bf12f83007f0dc29f678799abe60d1fd183ca10c1fcb09fb5d3  ./source-profi
 10059f08ef506a2b8a0d725a9d14cc63be7b685a141dd2d3059b6759caf76376  ./stage1-rust-action-authority.json
 50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9  ./stage1-status.txt
 f6feb2f7c7b0c4b54882fdb639f7aab3b0755f255f7d5f25cdb2552b183155e8  ./stage1-stderr.json
-57155e3fb815b7068f673e862c7a21a631f1ed6b6219fce19d1ea1398eaf9e1f  ./summary.md
+a55f2ac40c2c2d61e1ac2b889d1f9c98e3b215bf2ff68795a2547d4aba4fd4b4  ./summary.md
 7f0c0f73df41e7b7aaa16ae8612cd091026e2c5ef71f8b42064f611c0e76bdbb  ./transfer-bf2abe26-release.sh
 78945b052675aed9d0a777e6ddd35b2633321f439ab0807753e57195701467e8  ./transfer-binary-bf2abe26.sh
 8306e51bbde57e88d87cbafe67e641b381181c17e7ecab276fb98715a07b678e  ./watch-profile-v89-bound-rustc-runtime.sh

@@ -79,7 +79,10 @@ operator scripts, and validation evidence.
 
 ## Owner and next action
 
-The Mantle source-built fixed-point change owns the repair. Build and transfer a
-new release binary, refresh a Ready profile, and restore the same checkpoint in
-a fresh promoted proof. Preserve V89 until its stage1 diagnostics are no longer
-needed.
+The Mantle source-built fixed-point change owns the repair. After repository
+evidence preservation, the no-follow cleanup inspected 154,158 entries and
+removed only the failed V89 staging root. It changed directory modes only and
+increased free bytes from 677,175,332,864 to 710,179,024,896.
+
+Build and transfer a new release binary, refresh a Ready profile, and restore
+the same checkpoint in a fresh promoted proof.
