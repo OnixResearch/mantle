@@ -1,4 +1,5 @@
 48889fca0a6065b83709d79e92ec089809e2f0cb6885c3c9463bf2b41220ca85  ./attempt-status.json
+926e4f93bb5612047cd363162e9cb0024169e4869c7fa729aed130afa398fd5e  ./cleanup-v87-before-v88.txt
 414bed3efea81c340e4049ba1660174964e4aceef22b7701cadac06f1ae6c8ec  ./initial-proof-log.txt
 ec0719b053053807fa3b3714124240e023a3132c350cfd11dd8a4d855daa58fd  ./launch-profile-v87-native-binding-root.sh
 6ef3ae41a528c10f6d1576aee018c1da1d21d74442968eb1f45083d5b7b0692f  ./launch-v87-native-binding-root.sh
@@ -7,6 +8,7 @@ ec0719b053053807fa3b3714124240e023a3132c350cfd11dd8a4d855daa58fd  ./launch-profi
 1b96fa2d5f040b878b8a6f232b632d111c36ecd4b11115c8a2d058709dc5693b  ./post-repair-validation.log
 6f78d28e364468fc13af55bfa6edd881bd9e173d4ba77b89ea7728c941f8fdfd  ./pre-repair-validation.log
 bb1a1bfbc09fc599579835bb92f68c269c4ece3374658f222f8bb9b962b33b83  ./provider-checkpoint-manifest.json
+a3af60fa9d10c03d0363c86ab3f8618e41421b3d47dca045b3ec36a2a7bf5f39  ./prune-v87-before-v88.rs
 71028924b63495adddc9a966263c4e1dc46b537f0870759691ba7ff2cf5614e2  ./relocated-full-source-binding.json
 ab1e21c5736b293c344dc290e3eaef58cfde8c51f275148d153e19b984e0db79  ./relocated-toolchain-closure.json
 8d3239f5925e40b56ac66bc2cdc4b464ac6977d3c0a63c5f10d3a344cf6d9469  ./run-profile-v87-native-binding-root.sh
@@ -23,7 +25,7 @@ b4ff1c6d418343838cc432efaa193cb642641fc1f712adc394131c5711d56390  ./source-profi
 e0c619ce071174a8b24f8f35053a225a27c5769f6f9f14467631b13b07f31664  ./source-profile-v87-status.txt
 87140366c76f2e98c27c8f70c6080677e81635d152e09ba975ba7df1935e11b3  ./source-profile-v87-verification.log
 a326443905571a37654799287cbe0f31234047b2910bc85e9ce37ca2144c20d8  ./source-transfer-v87.txt
-de842f1b2bc1fad1c1e69b8f21a08264725a9416e295565bdb54d00d2ce50cb4  ./summary.md
+38b7c2a94bcc9e23ea836102d16f5a7d9420449c649e85ae28693f59310988b2  ./summary.md
 ee31697d3cac8f07c55c2a16814b6c4a0dc531d41a7f9ea4acf183bd59593d2e  ./transfer-a1537652-release.sh
 b00222f4865b96d2c0bed03d8a1373ab260d04c3521acf961084bab1bd244f87  ./transfer-binary-a1537652.sh
 79301617642917cdb3adc1d3e0d51c09dd287d2b2ab8ee9736607b3dffbd4980  ./watch-profile-v87-native-binding-root.sh
