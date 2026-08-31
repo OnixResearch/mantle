@@ -1,9 +1,13 @@
-# V89 bound-rustc-runtime proof launch
+# V89 Rust source-identity adapter failure
 
-## Status
+## Verdict
 
-V89 launched as a detached promoted proof on Leviathan. This record does not
-claim completion.
+V89 restored the promoted checkpoint, passed closure relocation, and passed the
+receipt-bound rustc compatibility probe. Stage1 then failed during Rust action
+planning.
+
+This attempt does not prove Rust unit execution, stage1 completion, stage2,
+fixed-point equality, the final receipt, or complete trust.
 
 ## Bound inputs
 
@@ -12,42 +16,70 @@ claim completion.
   `1b320d7e01124dbee258e6f8c7d94d1fa9d79ba9a6cd8818e66f85fce2238ac3`
 - Ready source-profile BLAKE3:
   `d3cb7e46c2386b9c3c30245e0bd322a252f739c66136f2c271ce1a64c7b59514`
-- Expected StageX lineage BLAKE3:
-  `e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d`
-- Expected native-provider BLAKE3:
-  `63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9`
 - Hermeticity: strict
 - Substitution: disabled
 - Proof jobs: 16
 - Observed free bytes before execution: 710,194,757,632
 
-## Detached process identity
+## Checkpoint, closure, and runtime result
 
-- Wrapper PID: `3388643`
-- `/proc` start ticks: `73385511`
-- Launch time: `2026-08-31T07:02:14-04:00`
-- Watcher: local pueue task `815`
-
-The launcher detached the proof from SSH and pueue standard input and output.
-The watcher checks PID liveness and `/proc` start ticks.
-
-## Expected checkpoint and runtime route
-
-V89 must restore immutable checkpoint
+V89 restored immutable checkpoint
 `3d6ba9154ac60e3214e8486f8088050157c007667208e2e8970e8e397b1824ca` /
 `c9918c0ede2fd774f5348a775981838c5590903ce6ba6a691317a766a052b3eb`.
-It must not repeat the five Rust-provider builds.
+It did not repeat the five Rust-provider builds.
 
-The proof must launch restored `rustc.dynamic` through the binding-owned musl
-loader and C++ runtime. Ambient `LD_LIBRARY_PATH` remains forbidden.
+The 17-member closure accepted the exact binding-induced Rust sysroot
+relocation. `rustc-compatibility.json` records normalization
+`receipt-bound-dynamic-runtime` and wrapper BLAKE3
+`9e6329fe137ec0bac4ae194d0c8c312de1ca84406a6b65088d6b88dbd4bf32b2`.
 
-## Non-claims
+The compatibility probe passed. The proof then created stage1 Rust child-action
+authority and started native Rust planning.
 
-This record does not prove checkpoint restoration, rustc compatibility, stage
-execution, fixed-point equality, final receipt validity, or complete trust.
+## Root cause
 
-## Next action
+Stage1 rejected unit
+`0:path+native#snix-build@0.1.0:build-script-build:custom-build:build` with:
 
-Monitor the exact detached process. On failure, preserve its staging evidence
-before repair or cleanup. On success, verify stage equality, the final receipt,
-and the operator trust report.
+```text
+source digest is not BLAKE3
+```
+
+Native path sources use the typed algorithm `blake3-tree-v1`. Registry sources
+retain Cargo checksum semantics, and Git sources retain resolved revisions.
+
+The action adapter incorrectly required the literal algorithm `blake3`, then
+copied the source value into `source_digest_blake3`. That rule rejected real
+path units and could not correctly represent registry or Git source values.
+
+## Decision
+
+ADR 0092 validates the source algorithm and value as bounded text. It frames
+them as `algorithm NUL value`, then BLAKE3-hashes the frame under
+`mantle-source-built-rust-source-identity-v1`.
+
+The action plan receives a 64-character BLAKE3 identity for every source type.
+Rust planning receipts keep their original algorithm and value. Cargo SHA-256
+remains only where Cargo interoperability requires it.
+
+Equal values from different source algorithms cannot alias. Empty or malformed
+source identities fail before action planning.
+
+## Validation
+
+`post-repair-validation.log` records positive and negative source-framing tests,
+the complete Rust child-action plan module tests, and Rust formatting.
+
+## Preserved evidence
+
+This directory contains the exact launch records, full proof log, failed status,
+checkpoint and closure reports, rustc runtime wrapper and compatibility report,
+stage1 stderr, stage1 action authority, fixed-point preflight and metadata,
+operator scripts, and validation evidence.
+
+## Owner and next action
+
+The Mantle source-built fixed-point change owns the repair. Build and transfer a
+new release binary, refresh a Ready profile, and restore the same checkpoint in
+a fresh promoted proof. Preserve V89 until its stage1 diagnostics are no longer
+needed.

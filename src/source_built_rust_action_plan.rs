@@ -23,6 +23,7 @@ const AUTHORITY_DIGEST_CONTEXT: &str = "mantle-source-built-rust-child-action-au
 const AUDIT_DIGEST_CONTEXT: &str = "mantle-source-built-rust-child-action-audit-v1";
 const UNIT_OUTPUT_IDENTITY_CONTEXT: &str = "mantle-source-built-rust-unit-output-v1";
 const ACTION_ID_CONTEXT: &str = "mantle-source-built-rust-action-id-v1";
+const SOURCE_IDENTITY_CONTEXT: &str = "mantle-source-built-rust-source-identity-v1";
 const BLAKE3_HEX_LENGTH: usize = 64;
 const RUST_UNIT_COUNT_MAX: u32 = 16_384;
 const RUST_ACTION_COUNT_MAX: u32 = RUST_UNIT_COUNT_MAX * 2;
@@ -1173,12 +1174,7 @@ fn rust_unit_action_input(
             &format!("Rust unit {} uses unsupported builder {}", unit.unit_id, unit.derivation.builder),
         ));
     }
-    if unit.source_digest.algorithm != "blake3" {
-        return Err(plan_error(
-            RustChildActionPlanErrorKind::InvalidInput,
-            &format!("Rust unit {} source digest is not BLAKE3", unit.unit_id),
-        ));
-    }
+    let source_digest_blake3 = canonical_source_identity_blake3(&unit.source_digest)?;
     let producer_unit_ids = rust_unit_producer_ids(unit)?;
     let input_authority_ids = rust_unit_input_authority_ids(unit);
     let environment_digest_blake3 = canonical_environment_digest(&unit.derivation.env)?;
@@ -1188,10 +1184,21 @@ fn rust_unit_action_input(
         producer_unit_ids,
         input_authority_ids,
         declared_outputs: unit.derivation.outputs.clone(),
-        source_digest_blake3: unit.source_digest.value.clone(),
+        source_digest_blake3,
         rustc_args_digest_blake3: unit.rustc_args_digest_blake3.clone(),
         environment_digest_blake3,
     })
+}
+
+fn canonical_source_identity_blake3(
+    source_digest: &crate::rust_plan::SourceDigest,
+) -> Result<String, RustChildActionPlanError> {
+    validate_text("source digest algorithm", &source_digest.algorithm)?;
+    validate_text("source digest value", &source_digest.value)?;
+    let framed = format!("{}\0{}", source_digest.algorithm, source_digest.value);
+    let digest = digest_text(SOURCE_IDENTITY_CONTEXT, &framed);
+    assert_eq!(digest.len(), BLAKE3_HEX_LENGTH);
+    Ok(digest)
 }
 
 fn rust_unit_producer_ids(
@@ -1603,6 +1610,30 @@ mod tests {
             ],
             seed_exceptions: Vec::new(),
         }
+    }
+
+    #[test]
+    fn rust_graph_source_identities_are_blake3_framed_across_input_algorithms() {
+        let mut path_graph = graph();
+        for unit in &mut path_graph.derivations {
+            unit.source_digest.algorithm = "blake3-tree-v1".to_string();
+        }
+        let path_units = rust_unit_action_inputs_from_graph(&path_graph).unwrap();
+        let mut registry_graph = path_graph.clone();
+        for unit in &mut registry_graph.derivations {
+            unit.source_digest.algorithm = "cargo-checksum-sha256".to_string();
+        }
+        let registry_units = rust_unit_action_inputs_from_graph(&registry_graph).unwrap();
+        let mut invalid_graph = path_graph;
+        invalid_graph.derivations[0].source_digest.algorithm.clear();
+        let invalid_error = rust_unit_action_inputs_from_graph(&invalid_graph).unwrap_err();
+
+        assert_eq!(path_units[0].source_digest_blake3.len(), BLAKE3_HEX_LENGTH);
+        assert_eq!(registry_units[0].source_digest_blake3.len(), BLAKE3_HEX_LENGTH);
+        assert_ne!(path_units[0].source_digest_blake3, DIGEST_B);
+        assert_ne!(path_units[0].source_digest_blake3, registry_units[0].source_digest_blake3);
+        assert_eq!(invalid_error.kind, RustChildActionPlanErrorKind::InvalidInput);
+        assert!(invalid_error.to_string().contains("source digest algorithm"));
     }
 
     #[test]
