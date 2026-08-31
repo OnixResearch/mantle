@@ -12429,23 +12429,40 @@ fn combined_topology_execution_order(
     })
 }
 
-pub(crate) fn combined_topology_execution_unit_ids(
+pub(crate) fn combined_topology_execution_unit_order(
     graph: &UnitDerivationGraphSummary,
-) -> Result<BTreeSet<String>, RustUnitExecutionBlocker> {
+) -> Result<Vec<String>, RustUnitExecutionBlocker> {
     let ordered_indices = combined_topology_execution_order(graph)?;
-    let mut unit_ids = BTreeSet::new();
+    let mut seen = BTreeSet::new();
+    let mut unit_ids = Vec::with_capacity(ordered_indices.len());
     for index in ordered_indices {
         let unit = graph.derivations.get(index).ok_or_else(|| RustUnitExecutionBlocker {
             class: "invalid-combined-topology-index".to_string(),
             message: format!("combined topology index {index} is outside the derivation graph"),
         })?;
-        if !unit_ids.insert(unit.unit_id.clone()) {
+        if !seen.insert(unit.unit_id.clone()) {
             return Err(RustUnitExecutionBlocker {
                 class: "duplicate-combined-topology-unit".to_string(),
                 message: format!("combined topology selected unit {} more than once", unit.unit_id),
             });
         }
+        unit_ids.push(unit.unit_id.clone());
     }
+    if unit_ids.is_empty() {
+        return Err(RustUnitExecutionBlocker {
+            class: "empty-combined-topology".to_string(),
+            message: "combined topology selected no executable units".to_string(),
+        });
+    }
+    assert!(unit_ids.len() <= graph.derivations.len());
+    Ok(unit_ids)
+}
+
+pub(crate) fn combined_topology_execution_unit_ids(
+    graph: &UnitDerivationGraphSummary,
+) -> Result<BTreeSet<String>, RustUnitExecutionBlocker> {
+    let order = combined_topology_execution_unit_order(graph)?;
+    let unit_ids = order.into_iter().collect::<BTreeSet<_>>();
     if unit_ids.is_empty() {
         return Err(RustUnitExecutionBlocker {
             class: "empty-combined-topology".to_string(),

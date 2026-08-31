@@ -1,0 +1,29 @@
+schema=mantle-ptrace-request-musl-typecheck-v1
+rustc=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v97-action-scope-20260831.source-built-fixed-point-staging-3483179/cargo-free-fixed-point/toolchain/rustc-receipt-bound-runtime
+positive_status=0
+negative_status=1
+negative_e0308=true
+negative_expected_i32_found_u32=true
+positive_metadata_present=true
+===negative-stderr===
+error[E0308]: mismatched types
+  --> /tmp/ptrace-request-musl-negative.rs:14:21
+   |
+14 |     unsafe { ptrace(PTRACE_SEIZE, 1_i32, core::ptr::null_mut::<u8>(), core::ptr::null_mut::<u8>()) }
+   |              ------ ^^^^^^^^^^^^ expected `i32`, found `u32`
+   |              |
+   |              arguments to this function are incorrect
+   |
+note: function defined here
+  --> /tmp/ptrace-request-musl-negative.rs:8:8
+   |
+ 8 |     fn ptrace(request: c_int, ...) -> c_long;
+   |        ^^^^^^ -------
+help: you can convert a `u32` to an `i32` and panic if the converted value doesn't fit
+   |
+14 |     unsafe { ptrace(PTRACE_SEIZE.try_into().unwrap(), 1_i32, core::ptr::null_mut::<u8>(), core::ptr::null_mut::<u8>()) }
+   |                                 ++++++++++++++++++++
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0308`.

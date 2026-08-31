@@ -851,7 +851,7 @@ mod linux {
     fn seize(pid: i32) -> Result<(), PtraceSupervisorError> {
         let result = unsafe {
             libc::ptrace(
-                PTRACE_SEIZE,
+                PTRACE_SEIZE as _,
                 pid as libc::pid_t,
                 std::ptr::null_mut::<libc::c_void>(),
                 ptrace_options() as usize as *mut libc::c_void,
@@ -1345,7 +1345,7 @@ mod linux {
         let mut regs: libc::user_regs_struct = unsafe { std::mem::zeroed() };
         let result = unsafe {
             libc::ptrace(
-                PTRACE_GETREGS,
+                PTRACE_GETREGS as _,
                 pid as libc::pid_t,
                 std::ptr::null_mut::<libc::c_void>(),
                 &mut regs as *mut libc::user_regs_struct as *mut libc::c_void,
@@ -1365,7 +1365,7 @@ mod linux {
         let mut regs: libc::user_regs_struct = unsafe { std::mem::zeroed() };
         let result = unsafe {
             libc::ptrace(
-                PTRACE_GETREGS,
+                PTRACE_GETREGS as _,
                 pid as libc::pid_t,
                 std::ptr::null_mut::<libc::c_void>(),
                 &mut regs as *mut libc::user_regs_struct as *mut libc::c_void,
@@ -1378,7 +1378,7 @@ mod linux {
         regs.orig_rax = DENIED_SYSCALL_MARKER;
         let result = unsafe {
             libc::ptrace(
-                PTRACE_SETREGS,
+                PTRACE_SETREGS as _,
                 pid as libc::pid_t,
                 std::ptr::null_mut::<libc::c_void>(),
                 &regs as *const libc::user_regs_struct as *const libc::c_void,
@@ -1392,8 +1392,9 @@ mod linux {
 
     fn cont_with_signal(pid: i32, signal: libc::c_int) -> Result<(), PtraceSupervisorError> {
         let signal_data = usize::try_from(signal).unwrap_or(0) as *mut libc::c_void;
-        let result =
-            unsafe { libc::ptrace(PTRACE_CONT, pid as libc::pid_t, std::ptr::null_mut::<libc::c_void>(), signal_data) };
+        let result = unsafe {
+            libc::ptrace(PTRACE_CONT as _, pid as libc::pid_t, std::ptr::null_mut::<libc::c_void>(), signal_data)
+        };
         if result == 0 {
             return Ok(());
         }
@@ -1404,7 +1405,7 @@ mod linux {
         let mut child_pid: libc::c_ulong = 0;
         let result = unsafe {
             libc::ptrace(
-                PTRACE_GETEVENTMSG,
+                PTRACE_GETEVENTMSG as _,
                 pid as libc::pid_t,
                 std::ptr::null_mut::<libc::c_void>(),
                 &mut child_pid as *mut libc::c_ulong as *mut libc::c_void,

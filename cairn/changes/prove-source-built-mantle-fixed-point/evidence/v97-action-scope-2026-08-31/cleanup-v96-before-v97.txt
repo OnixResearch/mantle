@@ -1,0 +1,16 @@
+schema=mantle-failed-proof-cleanup-v1
+finished_unix_s=1788207343
+reason=reclaim failed-proof staging after repository evidence preservation
+no_follow_preflight=true
+regular_file_modes_changed=false
+free_bytes_before=653003780096
+free_bytes_after=692861599744
+root_0=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v96-gcc-subprogram-prefix-20260831.source-built-fixed-point-staging-3427684
+root_0_directories=15543
+root_0_files=141114
+root_0_symlinks=492
+root_0_apparent_bytes=39395626718
+root_0_directory_mode_adjustments=615
+root_0_removed=true
+evidence_v96_commit=506e4e05
+evidence_v96=cairn/changes/prove-source-built-mantle-fixed-point/evidence/v96-gcc-subprogram-prefix-2026-08-31

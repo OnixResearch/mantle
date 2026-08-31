@@ -1,0 +1,10 @@
+captured_at=2026-08-31T16:06:58-04:00
+commit=506e4e0510208c725517ccbb4b489aa05b0b307d
+source=/home/brittonr/mantle-runs/receipt-fix-v31/source-506e4e05
+binary=/home/brittonr/mantle-runs/receipt-fix-v31/mantle-506e4e05-release
+binary_blake3=d7e1891a2d61cc6c131c58f5487b837b3400ec20514e135090c1d13b9663ac58
+binary_roundtrip_parity=exact
+rsync_checksum_parity=exact
+root_anchored_excludes=true
+excluded_roots=/.git,/.jj,/target,/.pi/worktrees
+source_counts=  12488 d;  56401 f;

@@ -8257,7 +8257,15 @@ fn execute_topology_rust_plan(request: RustPlanExecutionRequest<'_>) -> Result<(
             match (execution, reconciliation) {
                 (Ok(execution), Ok(_reconciliation)) => execution,
                 (Err(execution_error), Ok(_reconciliation)) => return Err(execution_error),
-                (Ok(_execution), Err(reconciliation_error)) => return Err(reconciliation_error),
+                (Ok(execution), Err(reconciliation_error)) => {
+                    if execution.execution_status == "success" {
+                        return Err(reconciliation_error);
+                    }
+                    return Err(RunError::Build(format!(
+                        "Rust topology execution blocked: {}; reconciliation also failed: {reconciliation_error}",
+                        rust_topology_blocker_summary(&execution)
+                    )));
+                }
                 (Err(execution_error), Err(reconciliation_error)) => {
                     return Err(RunError::Build(format!(
                         "Rust topology execution failed: {execution_error}; reconciliation also failed: {reconciliation_error}"
@@ -8285,6 +8293,13 @@ fn execute_topology_rust_plan(request: RustPlanExecutionRequest<'_>) -> Result<(
             topology_execution,
         },
         request.json,
+    )
+}
+
+fn rust_topology_blocker_summary(execution: &rust_plan::RustUnitTopologyExecutionReceipt) -> String {
+    execution.blocker.as_ref().map_or_else(
+        || format!("status={} without blocker", execution.execution_status),
+        |blocker| format!("{}: {}", blocker.class, blocker.message),
     )
 }
 
@@ -9406,6 +9421,26 @@ mod tests {
         validate_rust_child_action_cli(RustPlanExecutionMode::PrintOnly, None, None).unwrap();
         assert!(missing_pair.to_string().contains("supplied together"));
         assert!(wrong_mode.to_string().contains("requires --execute-topology"));
+    }
+
+    #[test]
+    fn rust_topology_blocker_summary_preserves_blocker_and_missing_blocker_state() {
+        let mut receipt = rust_plan::RustUnitTopologyExecutionReceipt {
+            schema_version: 1,
+            execution_status: "blocked".to_string(),
+            claim: "test".to_string(),
+            unit_executions: Vec::new(),
+            build_script_metadata_runs: Vec::new(),
+            blocker: Some(rust_plan::RustUnitExecutionBlocker {
+                class: "missing-artifact".to_string(),
+                message: "dependency artifact is absent".to_string(),
+            }),
+            receipt_hash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+        };
+
+        assert_eq!(rust_topology_blocker_summary(&receipt), "missing-artifact: dependency artifact is absent");
+        receipt.blocker = None;
+        assert_eq!(rust_topology_blocker_summary(&receipt), "status=blocked without blocker");
     }
 
     #[cfg(unix)]
