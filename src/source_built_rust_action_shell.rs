@@ -72,8 +72,14 @@ impl SourceBuiltRustActionRuntime {
     ) -> Result<Self, RunError> {
         let authority = read_authority(authority_path)?;
         validate_fixed_executable_bytes(&authority.fixed_executables)?;
-        let units =
-            crate::source_built_rust_action_plan::rust_unit_action_inputs_from_graph(graph).map_err(action_error)?;
+        let execution_unit_ids = crate::rust_plan::combined_topology_execution_unit_ids(graph).map_err(|blocker| {
+            RunError::Build(format!("derive Rust child-action execution scope: {}: {}", blocker.class, blocker.message))
+        })?;
+        let units = crate::source_built_rust_action_plan::rust_unit_action_inputs_from_graph_selection(
+            graph,
+            &execution_unit_ids,
+        )
+        .map_err(action_error)?;
         let plan = crate::source_built_rust_action_plan::plan_rust_child_actions(RustChildActionPlanInput {
             stage_id: authority.stage_id,
             resources: authority.resources,

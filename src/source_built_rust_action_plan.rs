@@ -1155,19 +1155,51 @@ fn plan_error(kind: RustChildActionPlanErrorKind, message: &str) -> RustChildAct
 pub(crate) fn rust_unit_action_inputs_from_graph(
     graph: &crate::rust_plan::UnitDerivationGraphSummary,
 ) -> Result<Vec<RustUnitActionInput>, RustChildActionPlanError> {
+    let unit_ids = graph.derivations.iter().map(|unit| unit.unit_id.clone()).collect::<BTreeSet<_>>();
+    if unit_ids.len() != graph.derivations.len() {
+        return Err(plan_error(
+            RustChildActionPlanErrorKind::IncompleteGraph,
+            "Rust unit derivation graph contains duplicate unit IDs",
+        ));
+    }
+    rust_unit_action_inputs_from_graph_selection(graph, &unit_ids)
+}
+
+pub(crate) fn rust_unit_action_inputs_from_graph_selection(
+    graph: &crate::rust_plan::UnitDerivationGraphSummary,
+    selected_unit_ids: &BTreeSet<String>,
+) -> Result<Vec<RustUnitActionInput>, RustChildActionPlanError> {
     if !graph.ready || !graph.blockers.is_empty() {
         return Err(plan_error(
             RustChildActionPlanErrorKind::IncompleteGraph,
             "Rust unit derivation graph is not ready for action planning",
         ));
     }
-    bounded_count("Rust graph unit", graph.derivations.len(), RUST_UNIT_COUNT_MAX)?;
-    let producer_index = rust_dependency_producer_index(&graph.derivations)?;
-    let mut units = Vec::with_capacity(graph.derivations.len());
-    for unit in &graph.derivations {
+    if selected_unit_ids.is_empty() {
+        return Err(plan_error(
+            RustChildActionPlanErrorKind::InvalidInput,
+            "Rust child action execution scope is empty",
+        ));
+    }
+    let derivations = graph
+        .derivations
+        .iter()
+        .filter(|unit| selected_unit_ids.contains(&unit.unit_id))
+        .cloned()
+        .collect::<Vec<_>>();
+    if derivations.len() != selected_unit_ids.len() {
+        return Err(plan_error(
+            RustChildActionPlanErrorKind::IncompleteGraph,
+            "Rust child action execution scope contains an unknown or duplicate unit",
+        ));
+    }
+    bounded_count("Rust graph unit", derivations.len(), RUST_UNIT_COUNT_MAX)?;
+    let producer_index = rust_dependency_producer_index(&derivations)?;
+    let mut units = Vec::with_capacity(derivations.len());
+    for unit in &derivations {
         units.push(rust_unit_action_input(unit, &producer_index)?);
     }
-    assert_eq!(units.len(), graph.derivations.len());
+    assert_eq!(units.len(), selected_unit_ids.len());
     debug_assert!(!units.is_empty());
     Ok(units)
 }
@@ -1763,6 +1795,27 @@ mod tests {
             ],
             seed_exceptions: Vec::new(),
         }
+    }
+
+    #[test]
+    fn rust_graph_action_selection_excludes_unexecuted_units_and_rejects_unknown_scope() {
+        const EXPECTED_SELECTED_UNIT_COUNT: usize = 2;
+        let mut graph = graph();
+        graph.derivations.push(graph_unit("unexecuted", "example", None));
+        graph.derivation_count = graph.derivations.len();
+        let selected = BTreeSet::from(["dep".to_string(), "build".to_string()]);
+        let units = rust_unit_action_inputs_from_graph_selection(&graph, &selected).unwrap();
+        let mut unknown = selected.clone();
+        unknown.insert("missing".to_string());
+        let unknown_error = rust_unit_action_inputs_from_graph_selection(&graph, &unknown).unwrap_err();
+        let empty_error = rust_unit_action_inputs_from_graph_selection(&graph, &BTreeSet::new()).unwrap_err();
+
+        assert_eq!(units.len(), EXPECTED_SELECTED_UNIT_COUNT);
+        assert!(units.iter().any(|unit| unit.unit_id == "dep"));
+        assert!(units.iter().any(|unit| unit.unit_id == "build"));
+        assert!(!units.iter().any(|unit| unit.unit_id == "unexecuted"));
+        assert!(unknown_error.message.contains("unknown or duplicate unit"));
+        assert!(empty_error.message.contains("execution scope is empty"));
     }
 
     #[test]

@@ -12429,6 +12429,33 @@ fn combined_topology_execution_order(
     })
 }
 
+pub(crate) fn combined_topology_execution_unit_ids(
+    graph: &UnitDerivationGraphSummary,
+) -> Result<BTreeSet<String>, RustUnitExecutionBlocker> {
+    let ordered_indices = combined_topology_execution_order(graph)?;
+    let mut unit_ids = BTreeSet::new();
+    for index in ordered_indices {
+        let unit = graph.derivations.get(index).ok_or_else(|| RustUnitExecutionBlocker {
+            class: "invalid-combined-topology-index".to_string(),
+            message: format!("combined topology index {index} is outside the derivation graph"),
+        })?;
+        if !unit_ids.insert(unit.unit_id.clone()) {
+            return Err(RustUnitExecutionBlocker {
+                class: "duplicate-combined-topology-unit".to_string(),
+                message: format!("combined topology selected unit {} more than once", unit.unit_id),
+            });
+        }
+    }
+    if unit_ids.is_empty() {
+        return Err(RustUnitExecutionBlocker {
+            class: "empty-combined-topology".to_string(),
+            message: "combined topology selected no executable units".to_string(),
+        });
+    }
+    assert!(unit_ids.len() <= graph.derivations.len());
+    Ok(unit_ids)
+}
+
 #[derive(Default)]
 struct RustUnitTopologyExecutionState {
     executions: Vec<RustUnitExecutionReceipt>,
@@ -24024,6 +24051,24 @@ rust-version = "1.80"
 
         assert_eq!(err.class, "missing-build-script-metadata-producer");
         assert!(err.message.contains(linked_id));
+    }
+
+    #[test]
+    fn combined_unit_topology_action_scope_excludes_unsupported_derivations() {
+        let supported = test_rust_derivation(0, "package:supported", "lib", "target", Vec::new());
+        let unsupported = test_rust_derivation(1, "package:unsupported", "example", "target", Vec::new());
+        let supported_id = supported.unit_id.clone();
+        let unsupported_id = unsupported.unit_id.clone();
+        let graph = test_unit_derivation_graph(vec![supported, unsupported.clone()]);
+        let unsupported_graph = test_unit_derivation_graph(vec![unsupported]);
+
+        let selected = combined_topology_execution_unit_ids(&graph).unwrap();
+        let error = combined_topology_execution_unit_ids(&unsupported_graph).unwrap_err();
+
+        assert!(selected.contains(&supported_id));
+        assert!(!selected.contains(&unsupported_id));
+        assert_eq!(selected.len(), 1);
+        assert_eq!(error.class, "missing-supported-unit");
     }
 
     #[test]

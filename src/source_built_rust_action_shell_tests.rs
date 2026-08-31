@@ -22,7 +22,7 @@ fn resources() -> crate::source_built_rust_action_plan::RustActionResourceLimits
 fn graph() -> crate::rust_plan::UnitDerivationGraphSummary {
     crate::rust_plan::UnitDerivationGraphSummary {
         derivation_count: 1,
-        host_unit_count: 1,
+        host_unit_count: 0,
         host_artifact_count: 0,
         ready: true,
         digest_blake3: TEST_DIGEST.to_string(),
@@ -31,7 +31,7 @@ fn graph() -> crate::rust_plan::UnitDerivationGraphSummary {
             package_id: "test-package".to_string(),
             target_name: "test".to_string(),
             target_kind: "lib".to_string(),
-            execution_kind: "host".to_string(),
+            execution_kind: "target".to_string(),
             selected_triple: "x86_64-unknown-linux-musl".to_string(),
             rustc_metadata_hash: TEST_DIGEST.to_string(),
             crate_types: vec!["lib".to_string()],
