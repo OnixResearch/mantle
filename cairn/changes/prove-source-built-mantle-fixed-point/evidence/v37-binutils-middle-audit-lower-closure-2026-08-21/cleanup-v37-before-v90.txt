@@ -1,0 +1,17 @@
+schema=mantle-failed-proof-cleanup-v1
+finished_unix_s=1788180703
+reason=reclaim failed-proof staging after repository evidence preservation
+no_follow_preflight=true
+regular_file_modes_changed=false
+free_bytes_before=697291333632
+free_bytes_after=701845913600
+root_0=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v37-binutils-middle-closure-20260821.source-built-fixed-point-staging-3859936
+root_0_directories=3834
+root_0_files=92716
+root_0_symlinks=496
+root_0_apparent_bytes=4266680587
+root_0_preflight_directory_mode_adjustments=673
+root_0_removal_directory_mode_adjustments=0
+root_0_removed=true
+evidence_v37=cairn/changes/prove-source-built-mantle-fixed-point/evidence/v37-binutils-middle-audit-lower-closure-2026-08-21
+superseded_by_v48=true

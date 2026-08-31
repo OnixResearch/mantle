@@ -64,3 +64,10 @@ Build and transfer a new release orchestrator. Refresh the paired source/vendor 
 ## Non-claims
 
 This repair does not admit a new executable, denied event, fallback path, or broader StageX behavior. A fresh promoted proof remains required.
+
+## Superseded staging cleanup
+
+V48 superseded this failed staging tree with complete fixed-point evidence. The
+no-follow V37 cleanup later inspected 97,046 entries, adjusted directory modes
+only, and removed the old staging root. It increased free bytes from
+697,291,333,632 to 701,845,913,600 before V90 launch.
