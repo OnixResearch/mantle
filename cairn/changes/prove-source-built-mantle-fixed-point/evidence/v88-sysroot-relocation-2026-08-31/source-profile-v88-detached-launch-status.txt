@@ -1,0 +1,10 @@
+launched_at=2026-08-31T01:56:46-04:00
+launcher=ssh-nohup-setsid
+setsid_pid=3355344
+wrapper_pid=3355344
+proc_start_ticks=71552680
+command=/bin/sh /tmp/run-profile-v88-sysroot-relocation.sh 
+script=/tmp/run-profile-v88-sysroot-relocation.sh
+launcher_log=/home/brittonr/mantle-runs/receipt-fix-v31/authority/source-profile-v88-detached-launcher.log
+detached_from_pueue=true
+detached_from_ssh_stdio=true
