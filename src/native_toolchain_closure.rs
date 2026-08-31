@@ -519,7 +519,7 @@ impl NativeCandidateAccumulator {
             return Ok(());
         }
         let execution_path = canonical_path(input.path)?;
-        let digest = path_blake3(&execution_path)?;
+        let digest = toolchain_closure_path_blake3(&execution_path)?;
         self.candidates.push(NativeClosureCandidateMember {
             role: input.role,
             name: input.name.to_string(),
@@ -649,7 +649,7 @@ fn canonical_path(path: &Path) -> Result<PathBuf, RunError> {
     fs::canonicalize(path).map_err(|err| RunError::Build(format!("canonicalize {}: {err}", path.display())))
 }
 
-fn path_blake3(path: &Path) -> Result<String, RunError> {
+pub(crate) fn toolchain_closure_path_blake3(path: &Path) -> Result<String, RunError> {
     let metadata = fs::symlink_metadata(path)
         .map_err(|err| RunError::Build(format!("stat native closure path {}: {err}", path.display())))?;
     if metadata.is_dir() {

@@ -412,6 +412,12 @@ pub(crate) struct ToolchainClosureRelocationValidation {
     pub(crate) member_count: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ToolchainClosureRustSysrootRelocation<'a> {
+    pub(crate) origin_content_digest_blake3: &'a str,
+    pub(crate) relocated_content_digest_blake3: &'a str,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ToolchainObservedInput {
     pub(crate) role: ToolchainRole,
@@ -586,6 +592,22 @@ pub(crate) fn validate_relocated_toolchain_closure(
     origin: &ToolchainClosureManifest,
     relocated: &ToolchainClosureManifest,
 ) -> Result<ToolchainClosureRelocationValidation, ToolchainClosureError> {
+    validate_relocated_toolchain_closure_inner(origin, relocated, None)
+}
+
+pub(crate) fn validate_relocated_toolchain_closure_with_rust_sysroot(
+    origin: &ToolchainClosureManifest,
+    relocated: &ToolchainClosureManifest,
+    rust_sysroot: ToolchainClosureRustSysrootRelocation<'_>,
+) -> Result<ToolchainClosureRelocationValidation, ToolchainClosureError> {
+    validate_relocated_toolchain_closure_inner(origin, relocated, Some(rust_sysroot))
+}
+
+fn validate_relocated_toolchain_closure_inner(
+    origin: &ToolchainClosureManifest,
+    relocated: &ToolchainClosureManifest,
+    rust_sysroot: Option<ToolchainClosureRustSysrootRelocation<'_>>,
+) -> Result<ToolchainClosureRelocationValidation, ToolchainClosureError> {
     let origin = normalize_manifest(origin)?;
     let relocated = normalize_manifest(relocated)?;
     require_relocation_manifest_shape(&origin, &relocated)?;
@@ -594,8 +616,27 @@ pub(crate) fn validate_relocated_toolchain_closure(
     if origin_roots == relocated_roots {
         return Err(relocation_error("toolchain provider roots did not move into the fresh proof root"));
     }
+    let mut rust_sysroot_used = false;
     for (origin_member, relocated_member) in origin.members.iter().zip(&relocated.members) {
+        if is_host_rust_sysroot(origin_member) {
+            if let Some(observation) = rust_sysroot {
+                require_relocated_rust_sysroot_member(
+                    origin_member,
+                    relocated_member,
+                    &origin_roots,
+                    &relocated_roots,
+                    observation,
+                )?;
+                rust_sysroot_used = true;
+                continue;
+            }
+        }
         require_relocated_member(origin_member, relocated_member, &origin_roots, &relocated_roots)?;
+    }
+    if rust_sysroot.is_some() {
+        if !rust_sysroot_used {
+            return Err(relocation_error("bound Rust sysroot relocation did not match the host sysroot member"));
+        }
     }
     let origin_validation = validation_from_normalized_manifest(&origin)?;
     let relocated_validation = validation_from_normalized_manifest(&relocated)?;
@@ -833,6 +874,32 @@ fn required_closure_member<'a>(
         .iter()
         .find(|member| member.role == role && member.name == name)
         .ok_or_else(|| relocation_error(format!("toolchain relocation is missing member {name}")))
+}
+
+fn is_host_rust_sysroot(member: &ToolchainClosureMember) -> bool {
+    member.role == ToolchainRole::Sysroot && member.name == NATIVE_HOST_SYSROOT_NAME
+}
+
+fn require_relocated_rust_sysroot_member(
+    origin: &ToolchainClosureMember,
+    relocated: &ToolchainClosureMember,
+    origin_roots: &ToolchainProviderRoots,
+    relocated_roots: &ToolchainProviderRoots,
+    observation: ToolchainClosureRustSysrootRelocation<'_>,
+) -> Result<(), ToolchainClosureError> {
+    assert!(is_host_rust_sysroot(origin));
+    if observation.origin_content_digest_blake3 == observation.relocated_content_digest_blake3 {
+        return Err(relocation_error("bound Rust sysroot relocation did not change its tree identity"));
+    }
+    if origin.content_digest_blake3 != observation.origin_content_digest_blake3 {
+        return Err(relocation_error("bound Rust sysroot origin digest does not match the checkpoint closure"));
+    }
+    if relocated.content_digest_blake3 != observation.relocated_content_digest_blake3 {
+        return Err(relocation_error("bound Rust sysroot relocated digest does not match the fresh closure"));
+    }
+    let mut comparable_origin = origin.clone();
+    comparable_origin.content_digest_blake3 = relocated.content_digest_blake3.clone();
+    require_relocated_member(&comparable_origin, relocated, origin_roots, relocated_roots)
 }
 
 fn require_relocated_member(
@@ -2333,6 +2400,47 @@ mod tests {
 
         assert_eq!(root, PathBuf::from("/proof/new-attempt/native-provider"));
         assert_ne!(root, PathBuf::from("/proof/new-attempt/rust-provider"));
+    }
+
+    #[test]
+    fn relocation_accepts_only_the_observed_rust_sysroot_binding_rewrite() {
+        let origin = relocatable_manifest("/proof/old-attempt");
+        let mut relocated = relocatable_manifest("/proof/new-attempt");
+        let host_sysroot = relocated
+            .members
+            .iter_mut()
+            .find(|member| is_host_rust_sysroot(member))
+            .expect("host Rust sysroot member");
+        host_sysroot.content_digest_blake3 = DIGEST_F.to_string();
+        let observation = ToolchainClosureRustSysrootRelocation {
+            origin_content_digest_blake3: DIGEST_D,
+            relocated_content_digest_blake3: DIGEST_F,
+        };
+
+        let validation =
+            validate_relocated_toolchain_closure_with_rust_sysroot(&origin, &relocated, observation).unwrap();
+        let strict_error = validate_relocated_toolchain_closure(&origin, &relocated).unwrap_err();
+        let wrong_observation = ToolchainClosureRustSysrootRelocation {
+            origin_content_digest_blake3: DIGEST_D,
+            relocated_content_digest_blake3: DIGEST_E,
+        };
+        let wrong_error =
+            validate_relocated_toolchain_closure_with_rust_sysroot(&origin, &relocated, wrong_observation).unwrap_err();
+        let mut unrelated_change = relocated.clone();
+        unrelated_change
+            .members
+            .iter_mut()
+            .find(|member| member.role == ToolchainRole::Rustc)
+            .expect("Rust compiler member")
+            .content_digest_blake3 = DIGEST_F.to_string();
+        let unrelated_error =
+            validate_relocated_toolchain_closure_with_rust_sysroot(&origin, &unrelated_change, observation)
+                .unwrap_err();
+
+        assert_eq!(validation.member_count, REQUIRED_TOOLCHAIN_ROLES.len());
+        assert!(strict_error.message().contains("authority changed for host-sysroot"));
+        assert!(wrong_error.message().contains("relocated digest does not match"));
+        assert!(unrelated_error.message().contains("authority changed for rustc"));
     }
 
     #[test]

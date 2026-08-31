@@ -534,6 +534,14 @@ pub(super) fn restore_constructed_provider_checkpoint(
     Ok(Some(providers))
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct RustBindingRelocationObservation {
+    origin_binding_digest_blake3: String,
+    relocated_binding_digest_blake3: String,
+    origin_sysroot_digest_blake3: String,
+    relocated_sysroot_digest_blake3: String,
+}
+
 struct RestoredProviderPaths {
     stagex_transition: PathBuf,
     stagex_provider: PathBuf,
@@ -733,7 +741,7 @@ fn validate_restored_provider_checkpoint(
         &native_admission_report_path,
         false,
     )?;
-    relocate_restored_rust_binding(&paths)?;
+    let rust_binding_relocation = relocate_restored_rust_binding(&paths)?;
     let origin_rust_action_trust = restored_rust_provider_action_trust(&paths)?;
     let rust_action_trust = crate::source_built_rust_provider_action::validate_rust_provider_action_evidence(
         &paths.rust_provider.join(crate::rust_source_provider::RUST_PROVIDER_ACTION_EVIDENCE_RELATIVE_PATH),
@@ -751,7 +759,7 @@ fn validate_restored_provider_checkpoint(
     let recipe_digest = crate::protected_exec::blake3_file_hex(&prepared.source_root.join(RUST_RECIPE_NCL))
         .map_err(|error| proof_error(format!("hashing restored Rust provider recipe: {error}")))?;
     let native_action_trust = restored_native_action_trust(&paths)?;
-    materialize_relocated_toolchain_closure(prepared, &paths, &restored)?;
+    materialize_relocated_toolchain_closure(prepared, &paths, &restored, &rust_binding_relocation)?;
     let native_provider = restored_native_provider_observation(
         prepared,
         &paths.native_provider,
@@ -789,7 +797,10 @@ fn restored_rust_provider_action_trust(
         .map_err(|error| proof_error(format!("validating restored Rust provider action evidence: {error}")))
 }
 
-fn relocate_restored_rust_binding(paths: &RestoredProviderPaths) -> Result<(), RunError> {
+fn relocate_restored_rust_binding(paths: &RestoredProviderPaths) -> Result<RustBindingRelocationObservation, RunError> {
+    let origin_sysroot_digest_blake3 =
+        crate::native_toolchain_closure::toolchain_closure_path_blake3(&paths.rust_provider)
+            .map_err(|error| proof_error(format!("hashing checkpoint-origin Rust sysroot: {error}")))?;
     let binding_path = paths.rust_provider.join(RUST_PROVIDER_BINDING_RECEIPT_RELATIVE);
     let origin_bytes = fs::read(&binding_path)
         .map_err(|error| proof_error(format!("reading restored Rust binding {}: {error}", binding_path.display())))?;
@@ -810,7 +821,7 @@ fn relocate_restored_rust_binding(paths: &RestoredProviderPaths) -> Result<(), R
         let relative = required_native_artifact_relative_path(artifact.role, &artifact.path)?;
         let relocated = paths.native_provider.join(relative);
         require_relocated_binding_path(&relocated, "native artifact")?;
-        artifact.path = path_to_utf8(&relocated, "native artifact")?;
+        artifact.path = relative.to_string();
     }
     for tool in &mut binding.host_tools {
         let name = rust_host_tool_name(tool.role);
@@ -842,15 +853,60 @@ fn relocate_restored_rust_binding(paths: &RestoredProviderPaths) -> Result<(), R
         .map_err(|error| proof_error(format!("serializing relocated Rust binding: {error}")))?;
     fs::write(&binding_path, &relocated_bytes)
         .map_err(|error| proof_error(format!("writing relocated Rust binding {}: {error}", binding_path.display())))?;
+    let observation =
+        observe_rust_binding_relocation(paths, origin_sysroot_digest_blake3, &origin_bytes, &relocated_bytes)?;
+    write_rust_binding_relocation_report(paths, &binding, &binding_path, &observation)?;
+    Ok(observation)
+}
+
+fn observe_rust_binding_relocation(
+    paths: &RestoredProviderPaths,
+    origin_sysroot_digest_blake3: String,
+    origin_bytes: &[u8],
+    relocated_bytes: &[u8],
+) -> Result<RustBindingRelocationObservation, RunError> {
+    let relocated_sysroot_digest_blake3 =
+        crate::native_toolchain_closure::toolchain_closure_path_blake3(&paths.rust_provider)
+            .map_err(|error| proof_error(format!("hashing relocated Rust sysroot: {error}")))?;
+    if origin_sysroot_digest_blake3 == relocated_sysroot_digest_blake3 {
+        return Err(proof_error(
+            "restored Rust binding relocation did not change the Rust sysroot identity".to_string(),
+        ));
+    }
+    let origin_binding_digest_blake3 = blake3::hash(origin_bytes).to_hex().to_string();
+    let relocated_binding_digest_blake3 = blake3::hash(relocated_bytes).to_hex().to_string();
+    if origin_binding_digest_blake3 == relocated_binding_digest_blake3 {
+        return Err(proof_error("restored Rust binding relocation did not change the binding identity".to_string()));
+    }
+    assert_eq!(origin_binding_digest_blake3.len(), blake3::OUT_LEN * 2);
+    assert_eq!(relocated_binding_digest_blake3.len(), blake3::OUT_LEN * 2);
+    Ok(RustBindingRelocationObservation {
+        origin_binding_digest_blake3,
+        relocated_binding_digest_blake3,
+        origin_sysroot_digest_blake3,
+        relocated_sysroot_digest_blake3,
+    })
+}
+
+fn write_rust_binding_relocation_report(
+    paths: &RestoredProviderPaths,
+    binding: &crate::full_source_rust_binding::FullSourceRustProviderBindingReceipt,
+    binding_path: &Path,
+    observation: &RustBindingRelocationObservation,
+) -> Result<(), RunError> {
     let report = serde_json::json!({
         "schema": CHECKPOINT_RUST_BINDING_RELOCATION_REPORT_SCHEMA,
         "origin_binding": {
             "path": paths.origin_rust_binding,
-            "digest_blake3": blake3::hash(&origin_bytes).to_hex().to_string(),
+            "digest_blake3": &observation.origin_binding_digest_blake3,
         },
         "relocated_binding": {
             "path": binding_path,
-            "digest_blake3": blake3::hash(&relocated_bytes).to_hex().to_string(),
+            "digest_blake3": &observation.relocated_binding_digest_blake3,
+        },
+        "rust_sysroot": {
+            "origin_digest_blake3": &observation.origin_sysroot_digest_blake3,
+            "relocated_digest_blake3": &observation.relocated_sysroot_digest_blake3,
         },
         "host_tool_count": binding.host_tools.len(),
         "native_artifact_count": binding.native_artifacts.len(),
@@ -1021,6 +1077,7 @@ fn materialize_relocated_toolchain_closure(
     prepared: &PreparedAttempt,
     paths: &RestoredProviderPaths,
     restored: &crate::source_built_fixed_point_checkpoint_shell::RestoredProviderCheckpoint,
+    rust_binding: &RustBindingRelocationObservation,
 ) -> Result<(), RunError> {
     crate::native_toolchain_closure::cmd_materialize_native_toolchain_closure(NativeToolchainClosureOptions {
         rust_source_provider: &paths.rust_provider,
@@ -1030,8 +1087,16 @@ fn materialize_relocated_toolchain_closure(
     })?;
     let origin = read_toolchain_closure_manifest(&paths.origin_toolchain_closure)?;
     let relocated = read_toolchain_closure_manifest(&paths.toolchain_closure)?;
-    let validation = crate::source_toolchain_closure::validate_relocated_toolchain_closure(&origin, &relocated)
-        .map_err(|error| proof_error(format!("validating restored toolchain closure relocation: {error}")))?;
+    let rust_sysroot = crate::source_toolchain_closure::ToolchainClosureRustSysrootRelocation {
+        origin_content_digest_blake3: &rust_binding.origin_sysroot_digest_blake3,
+        relocated_content_digest_blake3: &rust_binding.relocated_sysroot_digest_blake3,
+    };
+    let validation = crate::source_toolchain_closure::validate_relocated_toolchain_closure_with_rust_sysroot(
+        &origin,
+        &relocated,
+        rust_sysroot,
+    )
+    .map_err(|error| proof_error(format!("validating restored toolchain closure relocation: {error}")))?;
     let required_count = crate::source_toolchain_closure::required_native_closure_member_names().len();
     if validation.member_count != required_count {
         return Err(proof_error(format!(
@@ -1039,7 +1104,7 @@ fn materialize_relocated_toolchain_closure(
             validation.member_count
         )));
     }
-    write_toolchain_closure_relocation_report(prepared, paths, restored, &validation)
+    write_toolchain_closure_relocation_report(prepared, paths, restored, rust_binding, &validation)
 }
 
 fn read_toolchain_closure_manifest(
@@ -1055,12 +1120,16 @@ fn write_toolchain_closure_relocation_report(
     prepared: &PreparedAttempt,
     paths: &RestoredProviderPaths,
     restored: &crate::source_built_fixed_point_checkpoint_shell::RestoredProviderCheckpoint,
+    rust_binding: &RustBindingRelocationObservation,
     validation: &crate::source_toolchain_closure::ToolchainClosureRelocationValidation,
 ) -> Result<(), RunError> {
     let origin_digest = crate::protected_exec::blake3_file_hex(&paths.origin_toolchain_closure)
         .map_err(|error| proof_error(format!("hashing checkpoint origin closure: {error}")))?;
     let relocated_digest = crate::protected_exec::blake3_file_hex(&paths.toolchain_closure)
         .map_err(|error| proof_error(format!("hashing relocated checkpoint closure: {error}")))?;
+    let rust_binding_report = prepared.staging_dir.join(CHECKPOINT_RUST_BINDING_RELOCATION_REPORT_FILE);
+    let rust_binding_report_digest = crate::protected_exec::blake3_file_hex(&rust_binding_report)
+        .map_err(|error| proof_error(format!("hashing checkpoint Rust binding relocation report: {error}")))?;
     let report = serde_json::json!({
         "schema": CHECKPOINT_CLOSURE_RELOCATION_REPORT_SCHEMA,
         "checkpoint_digest_blake3": restored.admission.checkpoint_digest_blake3,
@@ -1074,8 +1143,14 @@ fn write_toolchain_closure_relocation_report(
             "digest_blake3": relocated_digest,
             "policy_digest_blake3": validation.relocated_policy_digest_blake3,
         },
+        "rust_sysroot_relocation": {
+            "origin_digest_blake3": &rust_binding.origin_sysroot_digest_blake3,
+            "relocated_digest_blake3": &rust_binding.relocated_sysroot_digest_blake3,
+            "binding_report": rust_binding_report,
+            "binding_report_digest_blake3": rust_binding_report_digest,
+        },
         "member_count": validation.member_count,
-        "non_claim": "closure relocation changes only absolute provider roots and does not repeat provider execution",
+        "non_claim": "closure relocation changes absolute provider roots plus one receipt-bound Rust sysroot binding identity; it does not repeat provider execution or permit other member changes",
     });
     write_json_create_new(&prepared.staging_dir.join(CHECKPOINT_CLOSURE_RELOCATION_REPORT_FILE), &report)
 }
@@ -1756,16 +1831,43 @@ mod tests {
             toolchain_closure: root.join("closure.json"),
         };
 
-        relocate_restored_rust_binding(&paths).unwrap();
+        let observation = relocate_restored_rust_binding(&paths).unwrap();
         let relocated: FullSourceRustProviderBindingReceipt =
             serde_json::from_slice(&fs::read(&binding_path).unwrap()).unwrap();
+        let report: serde_json::Value =
+            serde_json::from_slice(&fs::read(root.join(CHECKPOINT_RUST_BINDING_RELOCATION_REPORT_FILE)).unwrap())
+                .unwrap();
+        let unchanged_error = observe_rust_binding_relocation(
+            &paths,
+            observation.relocated_sysroot_digest_blake3.clone(),
+            b"same binding",
+            b"same binding",
+        )
+        .unwrap_err();
+        let unchanged_binding_error =
+            observe_rust_binding_relocation(&paths, DIGEST_A.to_string(), b"same binding", b"same binding")
+                .unwrap_err();
 
         assert!(paths.origin_rust_binding.is_file());
+        assert_ne!(observation.origin_binding_digest_blake3, observation.relocated_binding_digest_blake3);
+        assert_ne!(observation.origin_sysroot_digest_blake3, observation.relocated_sysroot_digest_blake3);
+        assert_eq!(observation.origin_sysroot_digest_blake3.len(), blake3::OUT_LEN * 2);
+        assert_eq!(observation.relocated_sysroot_digest_blake3.len(), blake3::OUT_LEN * 2);
+        assert!(unchanged_error.to_string().contains("did not change the Rust sysroot identity"));
+        assert!(unchanged_binding_error.to_string().contains("did not change the binding identity"));
+        assert_eq!(
+            report.pointer("/rust_sysroot/origin_digest_blake3").and_then(serde_json::Value::as_str),
+            Some(observation.origin_sysroot_digest_blake3.as_str())
+        );
+        assert_eq!(
+            report.pointer("/rust_sysroot/relocated_digest_blake3").and_then(serde_json::Value::as_str),
+            Some(observation.relocated_sysroot_digest_blake3.as_str())
+        );
         assert_eq!(
             relocated.rust_artifacts[0].path,
             rust_provider.join(RUST_PROVIDER_RUSTC_RELATIVE).display().to_string()
         );
-        assert_eq!(relocated.native_artifacts[0].path, native_provider.join(native_relative).display().to_string());
+        assert_eq!(relocated.native_artifacts[0].path, native_relative);
         assert_eq!(
             relocated.host_tools[0].path,
             paths.rust_host_tool("busybox").join(busybox_relative).display().to_string()

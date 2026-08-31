@@ -96,3 +96,4 @@ compatibility surface, crate name, or historical decision.
 | [0087](0087-acknowledge-ptrace-seize-before-root-stop.md) | Acknowledge ptrace seize before the root stop | Accepted |
 | [0088](0088-derive-rust-provider-aggregate-event-bounds.md) | Derive Rust-provider aggregate event bounds from stage bounds | Accepted |
 | [0089](0089-resolve-native-bindings-through-the-validated-closure.md) | Resolve native bindings through the validated closure | Accepted |
+| [0090](0090-bind-rust-sysroot-relocation-to-the-binding-rewrite.md) | Bind Rust sysroot relocation to the binding rewrite | Accepted |

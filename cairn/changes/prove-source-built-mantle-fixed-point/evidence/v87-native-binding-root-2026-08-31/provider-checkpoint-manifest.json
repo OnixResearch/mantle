@@ -1,0 +1,194 @@
+{
+  "schema": "mantle-source-built-provider-checkpoint-v2",
+  "origin": "promoted-execution",
+  "lookup_key_blake3": "3d6ba9154ac60e3214e8486f8088050157c007667208e2e8970e8e397b1824ca",
+  "resource_bounds_digest_blake3": "5890e260bfcfe8ed98eef2634969645d32054d5f22c7be4b63bf0294a6b4679e",
+  "stages": [
+    {
+      "stage_id": "stagex-transition",
+      "output_role": "stagex-transition",
+      "stage_authority_digest_blake3": "e8c0f02f2ee64fd575098bfc16c705159184d6fee49228666aada90b7be7f5de",
+      "output_digest_blake3": "91b89607c0b816bf89ab5e37fb5a6e93e2374e70fde1a24b8fc2d38b09246f66",
+      "semantic_output_digest_blake3": "91b89607c0b816bf89ab5e37fb5a6e93e2374e70fde1a24b8fc2d38b09246f66",
+      "payload_digest_blake3": "91b89607c0b816bf89ab5e37fb5a6e93e2374e70fde1a24b8fc2d38b09246f66",
+      "execution_evidence_digest_blake3": "90c9c1ed253e7379cd682b7afa05ef139e1e839caba89505ae1a096a7a2ada47",
+      "producer_executable_digest_blake3": "06aebf46a90b565bf616c546d40ddf96bf0f7a8fcefd3dd6b98691344e4c9e0d",
+      "authority_violations": [],
+      "fallback_events": []
+    },
+    {
+      "stage_id": "stagex-provider-publication",
+      "output_role": "stagex-provider",
+      "stage_authority_digest_blake3": "2785a2633b6ebd1571f8c3471a8a752b3c9af3167e580e8182d4d0793fd587fc",
+      "output_digest_blake3": "250fd6c09b72e1b00e639ba9e27d113afdffd6d4ca11198276786a12198bf97d",
+      "semantic_output_digest_blake3": "e1039a3c844d709f51586f7afa2aacdbbe92aa224f1e20a778ea80573603ada3",
+      "payload_digest_blake3": "250fd6c09b72e1b00e639ba9e27d113afdffd6d4ca11198276786a12198bf97d",
+      "execution_evidence_digest_blake3": "e4a91b65fc8f91eec5dbe911b401034c75aecd21a8234c74423d27decc0da32d",
+      "producer_executable_digest_blake3": "06aebf46a90b565bf616c546d40ddf96bf0f7a8fcefd3dd6b98691344e4c9e0d",
+      "authority_violations": [],
+      "fallback_events": []
+    },
+    {
+      "stage_id": "full-source-native-provider",
+      "output_role": "full-source-native-provider",
+      "stage_authority_digest_blake3": "1eace9122ff4207217e9c6920796f84865aa635960169dd665760442c6a606f0",
+      "output_digest_blake3": "63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9",
+      "semantic_output_digest_blake3": "63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9",
+      "payload_digest_blake3": "63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9",
+      "execution_evidence_digest_blake3": "2bcf0dd1b2e5db2a5d0f97272e598b7ba10424eb44cf97c2aefc1eb5029168b3",
+      "producer_executable_digest_blake3": "06aebf46a90b565bf616c546d40ddf96bf0f7a8fcefd3dd6b98691344e4c9e0d",
+      "authority_violations": [],
+      "fallback_events": []
+    },
+    {
+      "stage_id": "full-source-rust-provider",
+      "output_role": "full-source-rust-provider",
+      "stage_authority_digest_blake3": "ab38d5ce06bc5401a1cb16a9b1a17f17e71f552a3d7411c64261873ca9dc1470",
+      "output_digest_blake3": "cbea6ce37bb635599b6cc2aa32a1833ce075cc95411fdba3d60b36150b5d0a16",
+      "semantic_output_digest_blake3": "cbea6ce37bb635599b6cc2aa32a1833ce075cc95411fdba3d60b36150b5d0a16",
+      "payload_digest_blake3": "cbea6ce37bb635599b6cc2aa32a1833ce075cc95411fdba3d60b36150b5d0a16",
+      "execution_evidence_digest_blake3": "2ea9d56d17e54227e7d1e6bcf9c1f7a8d154b7b45dc9d370bf63164ca6897308",
+      "producer_executable_digest_blake3": "06aebf46a90b565bf616c546d40ddf96bf0f7a8fcefd3dd6b98691344e4c9e0d",
+      "authority_violations": [],
+      "fallback_events": []
+    }
+  ],
+  "payloads": [
+    {
+      "payload_id": "native-action-plan",
+      "relative_path": "payload/evidence/native-provider-action-plan.json",
+      "kind": "regular-file",
+      "digest_blake3": "d8cd5562f5b8e20edf6b73f1bdfde6f3f3093e67b342af89d86531c555d0e9f8",
+      "total_file_bytes": 113862,
+      "entry_count": 1
+    },
+    {
+      "payload_id": "native-action-reconciliation",
+      "relative_path": "payload/evidence/native-provider-action-reconciliation.json",
+      "kind": "regular-file",
+      "digest_blake3": "030ed3061a8e79ac3b56c0e1dc0360e70ef4d941c948fb8339f89e12457051a7",
+      "total_file_bytes": 41496,
+      "entry_count": 1
+    },
+    {
+      "payload_id": "native-admission",
+      "relative_path": "payload/evidence/native-admission.json",
+      "kind": "regular-file",
+      "digest_blake3": "d5801d964ece7de550e7f655118f20b706962302f4753f8d87e9eb1417459ce5",
+      "total_file_bytes": 2692,
+      "entry_count": 1
+    },
+    {
+      "payload_id": "native-provider",
+      "relative_path": "payload/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain",
+      "kind": "directory",
+      "digest_blake3": "63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9",
+      "total_file_bytes": 156221121,
+      "entry_count": 1250
+    },
+    {
+      "payload_id": "native-transcript",
+      "relative_path": "payload/evidence/native-provider.json",
+      "kind": "regular-file",
+      "digest_blake3": "f979e02868c3cbda574036c367444b27389dc7e17c79379602b72890d38592a5",
+      "total_file_bytes": 478862,
+      "entry_count": 1
+    },
+    {
+      "payload_id": "rust-action-trust",
+      "relative_path": "payload/evidence/rust-provider-action-trust",
+      "kind": "preserved-tree",
+      "digest_blake3": "5ef6815277b9e131b4bcc562f5fbf69ac6683e95f85e0e158491bde31b5a3b3c",
+      "total_file_bytes": 1108575692,
+      "entry_count": 20
+    },
+    {
+      "payload_id": "rust-host-busybox",
+      "relative_path": "payload/rust-host-tools/busybox",
+      "kind": "directory",
+      "digest_blake3": "d8977f21b9b0f72a970e4ec4edaeb952f000f2297a4d85358b40a2652ea26c60",
+      "total_file_bytes": 1300595,
+      "entry_count": 407
+    },
+    {
+      "payload_id": "rust-host-cmake",
+      "relative_path": "payload/rust-host-tools/cmake",
+      "kind": "directory",
+      "digest_blake3": "492297bc52ee82a26202408670779f6bebf721122a258bf0ee111253f6252c25",
+      "total_file_bytes": 71638285,
+      "entry_count": 3881
+    },
+    {
+      "payload_id": "rust-host-evidence",
+      "relative_path": "payload/evidence/rust-host-tools",
+      "kind": "preserved-tree",
+      "digest_blake3": "339bfa8f9354536da563a85b443c573736f1e067170c647daa0defb4a8001977",
+      "total_file_bytes": 34995,
+      "entry_count": 12
+    },
+    {
+      "payload_id": "rust-host-linux-headers",
+      "relative_path": "payload/rust-host-tools/linux-headers",
+      "kind": "directory",
+      "digest_blake3": "0fdac41832c7b489a3896fb70d7395110c7542a18bbf511432c78fe3757e3778",
+      "total_file_bytes": 6494991,
+      "entry_count": 2008
+    },
+    {
+      "payload_id": "rust-host-make",
+      "relative_path": "payload/rust-host-tools/make",
+      "kind": "directory",
+      "digest_blake3": "b922031379eb7150b938e69e57533b41e44765e308db54480050b7e97e4b15b4",
+      "total_file_bytes": 348987,
+      "entry_count": 5
+    },
+    {
+      "payload_id": "rust-host-perl",
+      "relative_path": "payload/rust-host-tools/perl",
+      "kind": "directory",
+      "digest_blake3": "0d046e7600fda5f7b6f7086a8e8682b267848b44218a77ea54ddf98a610afcf6",
+      "total_file_bytes": 20442769,
+      "entry_count": 2215
+    },
+    {
+      "payload_id": "rust-host-python",
+      "relative_path": "payload/rust-host-tools/python",
+      "kind": "directory",
+      "digest_blake3": "b305063535f4169b17f2f56047302725510a7526079b620a519acf684c2c0f57",
+      "total_file_bytes": 230880900,
+      "entry_count": 2974
+    },
+    {
+      "payload_id": "rust-provider",
+      "relative_path": "payload/rust-provider",
+      "kind": "directory",
+      "digest_blake3": "cbea6ce37bb635599b6cc2aa32a1833ce075cc95411fdba3d60b36150b5d0a16",
+      "total_file_bytes": 2776269320,
+      "entry_count": 233
+    },
+    {
+      "payload_id": "stagex-provider",
+      "relative_path": "payload/native-store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider",
+      "kind": "directory",
+      "digest_blake3": "250fd6c09b72e1b00e639ba9e27d113afdffd6d4ca11198276786a12198bf97d",
+      "total_file_bytes": 35294639,
+      "entry_count": 462
+    },
+    {
+      "payload_id": "stagex-transition-execution",
+      "relative_path": "payload/stagex-transition-execution",
+      "kind": "preserved-tree",
+      "digest_blake3": "91b89607c0b816bf89ab5e37fb5a6e93e2374e70fde1a24b8fc2d38b09246f66",
+      "total_file_bytes": 1082888089,
+      "entry_count": 83046
+    },
+    {
+      "payload_id": "toolchain-closure",
+      "relative_path": "payload/evidence/source-built-toolchain-closure.json",
+      "kind": "regular-file",
+      "digest_blake3": "454b581337969dff951e68357b74d14c60bfb21ae81e5406da6ecbe6a7be683b",
+      "total_file_bytes": 15528,
+      "entry_count": 1
+    }
+  ]
+}

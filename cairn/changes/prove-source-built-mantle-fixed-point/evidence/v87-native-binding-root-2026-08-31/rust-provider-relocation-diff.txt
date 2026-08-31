@@ -1,0 +1,9 @@
+rsync_content_delta_begin
+>fcsT...... share/mantle-rust-provider/receipts/full-source-binding.json
+rsync_content_delta_end
+origin_binding_blake3=9684d1753f538e769b945275eb619893f80a9135e7d20b0854bcbe6557fd3ee9
+relocated_binding_blake3=71028924b63495adddc9a966263c4e1dc46b537f0870759691ba7ff2cf5614e2
+origin_entry_counts=     31 d;    203 f;
+relocated_entry_counts=     31 d;    203 f;
+origin_host_sysroot_blake3=      "content_digest_blake3": "69740316b19be878af5b1788afa0181891489bf303e7b8791f92115aed1be96e",
+relocated_host_sysroot_blake3=      "content_digest_blake3": "6fb5ada63ae8d107e29083f9707e08f6f1b291e6258cd5e3343ac19352091db0",

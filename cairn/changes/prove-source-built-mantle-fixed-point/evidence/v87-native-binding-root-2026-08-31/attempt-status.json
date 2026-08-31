@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "fbdcff404a050980f2a74d3e535af3a58c4fdc9cbfe4c8b38ee4e2a1f13de5b6",
+  "blocker": "error: build failed\nsource-built fixed-point blocked: validating restored toolchain closure relocation: toolchain member authority changed for host-sysroot"
+}
