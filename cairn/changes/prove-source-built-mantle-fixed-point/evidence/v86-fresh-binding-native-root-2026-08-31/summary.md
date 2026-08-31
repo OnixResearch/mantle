@@ -82,6 +82,12 @@ This directory contains:
 
 ## Owner and next action
 
-The Mantle source-built fixed-point change owns the repair. Build and transfer a
-new release binary, refresh a Ready profile, and run a fresh promoted proof.
-Keep V86 until the fresh run no longer needs its Rust-provider diagnostics.
+The Mantle source-built fixed-point change owns the repair. Commit `a1537652`
+built and transferred with exact round-trip BLAKE3 parity.
+
+After evidence preservation, the no-follow V86 cleanup inspected 2,007,828
+entries and removed only the failed staging root. It changed directory modes
+only and increased free bytes from 573,084,286,976 to 749,023,784,960.
+
+Refresh a Ready profile and run a fresh promoted proof. The repository evidence
+now preserves the V86 diagnostics after its remote staging cleanup.
