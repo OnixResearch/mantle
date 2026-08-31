@@ -99,3 +99,4 @@ compatibility surface, crate name, or historical decision.
 | [0090](0090-bind-rust-sysroot-relocation-to-the-binding-rewrite.md) | Bind Rust sysroot relocation to the binding rewrite | Accepted |
 | [0091](0091-launch-restored-rustc-through-the-bound-loader.md) | Launch restored rustc through the bound loader | Accepted |
 | [0092](0092-frame-rust-source-identities-with-blake3.md) | Frame Rust source identities with BLAKE3 | Accepted |
+| [0093](0093-resolve-rust-dependency-producers-from-consumed-host-artifacts.md) | Resolve Rust dependency producers from consumed host artifacts | Accepted |

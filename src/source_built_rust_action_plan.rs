@@ -1176,7 +1176,7 @@ fn rust_unit_action_input(
     }
     let source_digest_blake3 = canonical_source_identity_blake3(&unit.source_digest)?;
     let producer_unit_ids = rust_unit_producer_ids(unit)?;
-    let input_authority_ids = rust_unit_input_authority_ids(unit);
+    let input_authority_ids = rust_unit_input_authority_ids(unit, &source_digest_blake3)?;
     let environment_digest_blake3 = canonical_environment_digest(&unit.derivation.env)?;
     Ok(RustUnitActionInput {
         unit_id: unit.unit_id.clone(),
@@ -1205,7 +1205,10 @@ fn rust_unit_producer_ids(
     unit: &crate::rust_plan::RustUnitDerivationSummary,
 ) -> Result<Vec<String>, RustChildActionPlanError> {
     let mut producers = Vec::new();
-    for (label, producer) in rust_unit_optional_producers(unit) {
+    for artifact in &unit.dependency_artifacts {
+        producers.push(rust_dependency_artifact_producer(unit, artifact)?);
+    }
+    for (label, producer) in rust_unit_optional_non_dependency_producers(unit) {
         let producer = producer.ok_or_else(|| {
             plan_error(
                 RustChildActionPlanErrorKind::IncompleteGraph,
@@ -1219,15 +1222,10 @@ fn rust_unit_producer_ids(
     Ok(producers)
 }
 
-fn rust_unit_optional_producers(
+fn rust_unit_optional_non_dependency_producers(
     unit: &crate::rust_plan::RustUnitDerivationSummary,
 ) -> Vec<(&'static str, Option<&str>)> {
     let mut producers = Vec::new();
-    producers.extend(
-        unit.dependency_artifacts
-            .iter()
-            .map(|artifact| ("dependency artifact", artifact.producer_unit_id.as_deref())),
-    );
     producers.extend(
         unit.consumed_host_artifacts
             .iter()
@@ -1241,31 +1239,86 @@ fn rust_unit_optional_producers(
     producers
 }
 
-fn rust_unit_input_authority_ids(unit: &crate::rust_plan::RustUnitDerivationSummary) -> Vec<String> {
+fn rust_dependency_artifact_producer(
+    unit: &crate::rust_plan::RustUnitDerivationSummary,
+    artifact: &crate::rust_plan::RustDependencyArtifact,
+) -> Result<String, RustChildActionPlanError> {
+    if let Some(producer) = &artifact.producer_unit_id {
+        validate_text("dependency producer", producer)?;
+        return Ok(producer.clone());
+    }
+    let package_matches = unit
+        .consumed_host_artifacts
+        .iter()
+        .filter(|candidate| candidate.package_id == artifact.package_id)
+        .filter_map(|candidate| candidate.producer_unit_id.clone())
+        .collect::<BTreeSet<_>>();
+    let exact_matches = unit
+        .consumed_host_artifacts
+        .iter()
+        .filter(|candidate| candidate.package_id == artifact.package_id)
+        .filter(|candidate| candidate.target_name == artifact.name)
+        .filter_map(|candidate| candidate.producer_unit_id.clone())
+        .collect::<BTreeSet<_>>();
+    let matches = if exact_matches.is_empty() {
+        package_matches
+    } else {
+        exact_matches
+    };
+    let producers = matches.iter().collect::<Vec<_>>();
+    let producer = match producers.as_slice() {
+        [producer] => *producer,
+        [] => {
+            return Err(plan_error(
+                RustChildActionPlanErrorKind::IncompleteGraph,
+                &format!(
+                    "Rust unit {} has unbound dependency artifact producer for {} from {}",
+                    unit.unit_id, artifact.name, artifact.package_id
+                ),
+            ));
+        }
+        _ => {
+            return Err(plan_error(
+                RustChildActionPlanErrorKind::IncompleteGraph,
+                &format!(
+                    "Rust unit {} has {} host producers for dependency artifact {} from {}",
+                    unit.unit_id,
+                    matches.len(),
+                    artifact.name,
+                    artifact.package_id
+                ),
+            ));
+        }
+    };
+    validate_text("dependency producer", producer)?;
+    Ok(producer.clone())
+}
+
+fn rust_unit_input_authority_ids(
+    unit: &crate::rust_plan::RustUnitDerivationSummary,
+    source_digest_blake3: &str,
+) -> Result<Vec<String>, RustChildActionPlanError> {
     let mut authorities = vec![
         format!("package:{}", unit.package_id),
-        format!("source:{}", unit.source_digest.value),
+        format!("source:{source_digest_blake3}"),
         format!("target:{}:{}", unit.selected_triple, unit.target_name),
     ];
-    authorities.extend(unit.dependency_artifacts.iter().map(|artifact| {
-        format!(
-            "dependency:{}:{}:{}",
-            artifact.producer_unit_id.as_deref().unwrap_or("unbound"),
-            artifact.package_id,
-            artifact.name
-        )
-    }));
-    authorities.extend(unit.consumed_host_artifacts.iter().map(|artifact| {
-        format!(
-            "host:{}:{}:{}",
-            artifact.producer_unit_id.as_deref().unwrap_or("unbound"),
-            artifact.package_id,
-            artifact.target_name
-        )
-    }));
+    for artifact in &unit.dependency_artifacts {
+        let producer = rust_dependency_artifact_producer(unit, artifact)?;
+        authorities.push(format!("dependency:{producer}:{}:{}", artifact.package_id, artifact.name));
+    }
+    for artifact in &unit.consumed_host_artifacts {
+        let producer = artifact.producer_unit_id.as_deref().ok_or_else(|| {
+            plan_error(
+                RustChildActionPlanErrorKind::IncompleteGraph,
+                &format!("Rust unit {} has unbound host artifact producer", unit.unit_id),
+            )
+        })?;
+        authorities.push(format!("host:{producer}:{}:{}", artifact.package_id, artifact.target_name));
+    }
     authorities.sort();
     authorities.dedup();
-    authorities
+    Ok(authorities)
 }
 
 fn canonical_environment_digest(environment: &BTreeMap<String, String>) -> Result<String, RustChildActionPlanError> {
@@ -1634,6 +1687,39 @@ mod tests {
         assert_ne!(path_units[0].source_digest_blake3, registry_units[0].source_digest_blake3);
         assert_eq!(invalid_error.kind, RustChildActionPlanErrorKind::InvalidInput);
         assert!(invalid_error.to_string().contains("source digest algorithm"));
+    }
+
+    #[test]
+    fn rust_graph_dependency_uses_unique_consumed_host_producer_fallback() {
+        let mut fallback_graph = graph();
+        let build = &mut fallback_graph.derivations[1];
+        build.dependency_artifacts[0].producer_unit_id = None;
+        build.consumed_host_artifacts.push(crate::rust_plan::RustHostArtifact {
+            package_id: "dep".to_string(),
+            target_name: "dep".to_string(),
+            target_kind: "proc-macro".to_string(),
+            producer_unit_id: Some("dep".to_string()),
+            artifact: "host-artifact:dep".to_string(),
+            metadata_digest_blake3: None,
+        });
+
+        let units = rust_unit_action_inputs_from_graph(&fallback_graph).unwrap();
+        let build_input = units.iter().find(|unit| unit.unit_id == "build").expect("build unit action input");
+        let mut ambiguous_graph = fallback_graph;
+        ambiguous_graph.derivations[1].consumed_host_artifacts.push(crate::rust_plan::RustHostArtifact {
+            package_id: "dep".to_string(),
+            target_name: "dep".to_string(),
+            target_kind: "proc-macro".to_string(),
+            producer_unit_id: Some("other-dep".to_string()),
+            artifact: "host-artifact:other-dep".to_string(),
+            metadata_digest_blake3: None,
+        });
+        let ambiguous_error = rust_unit_action_inputs_from_graph(&ambiguous_graph).unwrap_err();
+
+        assert!(build_input.producer_unit_ids.contains(&"dep".to_string()));
+        assert!(build_input.input_authority_ids.contains(&"dependency:dep:dep:dep".to_string()));
+        assert_eq!(ambiguous_error.kind, RustChildActionPlanErrorKind::IncompleteGraph);
+        assert!(ambiguous_error.message.contains("2 host producers"));
     }
 
     #[test]

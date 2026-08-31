@@ -11,3 +11,5 @@ native_checkpoint_attempt=/home/brittonr/mantle-runs/receipt-fix-v31/source-buil
 output=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-fixed-point-v90-source-identity-20260831
 proof_disk_bytes_max=700000000000
 proof_jobs=16
+finished_at=2026-08-31T09:07:39-04:00
+exit_code=1
