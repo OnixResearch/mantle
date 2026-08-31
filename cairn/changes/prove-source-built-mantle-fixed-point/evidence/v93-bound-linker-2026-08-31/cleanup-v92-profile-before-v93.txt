@@ -1,0 +1,12 @@
+schema=mantle-source-profile-cleanup-v1
+finished_unix_s=1788192719
+old_profile=/home/brittonr/mantle-runs/receipt-fix-v31/authority/source-built-fixed-point-sources-v92-bdb1d565.json
+old_profile_size=10305713661
+old_profile_regular_no_follow=true
+replacement_profile=/home/brittonr/mantle-runs/receipt-fix-v31/authority/source-built-fixed-point-sources-v93-2e67a21e.json
+replacement_manifest_blake3=8923006e7b3a41b68911eb5ff1493a28acdf5e8fa90477fb79b0e55e23a2af9e
+replacement_readiness=Ready
+free_bytes_before=692608946176
+free_bytes_after=702914646016
+regular_file_modes_changed=false
+removed=true

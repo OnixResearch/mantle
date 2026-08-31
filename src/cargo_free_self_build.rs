@@ -1,5 +1,6 @@
 // machine-artifact-public: self-build.cargo-free-reports
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::env;
 use std::ffi::OsStr;
 use std::ffi::OsString;
@@ -75,6 +76,8 @@ const RUSTC_DYNAMIC_LOADER_FILE: &str = "ld-musl-x86_64.so.1";
 const RUSTC_DYNAMIC_BINARY_FILE: &str = "rustc.dynamic";
 const RUSTC_RUNTIME_HOST_TRIPLE: &str = "x86_64-unknown-linux-musl";
 const RUSTC_BOUND_LINKER_ALIAS: &str = "cc";
+const RUST_UNAVAILABLE_TOOL_ALIASES: &[&str] = &["emcc", "pkg-config", "pkgconf", "git"];
+const RUST_UNAVAILABLE_TOOL_EXIT_CODE: i32 = 127;
 const DYNAMIC_LIBRARY_PATH_ENV: &str = "LD_LIBRARY_PATH";
 const COMPATIBILITY_FILE: &str = "compatibility.json";
 const TOOLCHAIN_COMPATIBILITY_PATH_DIR: &str = "receipt-bound-path";
@@ -3065,6 +3068,12 @@ fn prepare_execution_toolchain(
             &rust_source_provider.source_built_host_tools,
             execution_shell,
         )?;
+        write_unavailable_rust_tool_aliases(
+            guard_path_dir,
+            manifest,
+            &rust_source_provider.source_built_host_tools,
+            execution_shell,
+        )?;
         let runtime = bound_rustc_runtime(&rust_source_provider.source_built_native_artifacts)?;
         let rustc = if let Some(runtime) = runtime {
             let wrapper = guard_path_dir.join(RUSTC_RUNTIME_WRAPPER_FILE);
@@ -3216,11 +3225,20 @@ fn rust_child_action_fixed_executables(
         let authority = measured_rust_fixed_authority(&path, kind, &producer)?;
         insert_rust_fixed_authority(&mut by_path, authority)?;
     }
-    let toolchain_aliases = toolchain_path_aliases(manifest)?;
-    let host_tool_aliases = bound_rust_host_tool_aliases(source_built_host_tools)?;
-    for alias in toolchain_aliases.keys().chain(host_tool_aliases.keys()) {
+    let reserved_aliases = rust_reserved_tool_aliases(manifest, source_built_host_tools)?;
+    for alias in &reserved_aliases {
         let path = canonical_action_executable(&guard_path_dir.join(alias))?;
         let authority = measured_rust_fixed_authority(&path, RustFixedExecutableKind::NativeHelper, &alias_producer)?;
+        insert_rust_fixed_authority(&mut by_path, authority)?;
+    }
+    for alias in RUST_UNAVAILABLE_TOOL_ALIASES {
+        if reserved_aliases.contains(*alias) {
+            continue;
+        }
+        let path = verify_unavailable_rust_tool_alias(&guard_path_dir.join(alias), &bound_shell.execution_path)?;
+        let producer = format!("{alias_producer}:unavailable-tool:{alias}");
+        let authority =
+            measured_rust_fixed_authority(&path, RustFixedExecutableKind::CompilerPolicyAdapter, &producer)?;
         insert_rust_fixed_authority(&mut by_path, authority)?;
     }
     let shell_path = canonical_action_executable(&bound_shell.execution_path)?;
@@ -3673,6 +3691,55 @@ fn write_bound_rust_host_tool_aliases(
         write_toolchain_alias(&target, &path, execution_shell)?;
     }
     Ok(())
+}
+
+fn write_unavailable_rust_tool_aliases(
+    guard_path_dir: &Path,
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+    tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
+    execution_shell: &Path,
+) -> Result<(), RunError> {
+    let reserved_aliases = rust_reserved_tool_aliases(manifest, tools)?;
+    let script = unavailable_rust_tool_script(execution_shell)?;
+    for alias in RUST_UNAVAILABLE_TOOL_ALIASES {
+        if reserved_aliases.contains(*alias) {
+            continue;
+        }
+        let alias = safe_toolchain_alias(alias)?;
+        let path = guard_path_dir.join(alias);
+        remove_owned_path(&path)?;
+        write_text(&path, &script)?;
+        set_executable(&path)?;
+    }
+    Ok(())
+}
+
+fn rust_reserved_tool_aliases(
+    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
+    tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
+) -> Result<BTreeSet<String>, RunError> {
+    let toolchain_aliases = toolchain_path_aliases(manifest)?;
+    let host_tool_aliases = bound_rust_host_tool_aliases(tools)?;
+    let aliases = toolchain_aliases.keys().chain(host_tool_aliases.keys()).cloned().collect::<BTreeSet<_>>();
+    assert!(toolchain_aliases.is_empty() || !aliases.is_empty());
+    assert!(host_tool_aliases.is_empty() || !aliases.is_empty());
+    Ok(aliases)
+}
+
+fn unavailable_rust_tool_script(execution_shell: &Path) -> Result<String, RunError> {
+    require_executable(execution_shell)?;
+    let execution_shell = path_to_string(execution_shell)?;
+    Ok(format!("#!{execution_shell}\nexit {RUST_UNAVAILABLE_TOOL_EXIT_CODE}\n"))
+}
+
+fn verify_unavailable_rust_tool_alias(path: &Path, execution_shell: &Path) -> Result<PathBuf, RunError> {
+    let expected = unavailable_rust_tool_script(execution_shell)?;
+    let observed = fs::read_to_string(path)
+        .map_err(|error| RunError::Build(format!("read unavailable Rust tool alias {}: {error}", path.display())))?;
+    if observed != expected {
+        return Err(RunError::Build(format!("unavailable Rust tool alias has unexpected bytes: {}", path.display())));
+    }
+    canonical_action_executable(path)
 }
 
 fn bound_rust_host_tool_aliases(
@@ -5596,6 +5663,13 @@ mod tests {
         write_toolchain_path_aliases_with_shell(&guard, &manifest, &bound_shell.execution_path).unwrap();
         write_bound_rust_host_tool_aliases(&guard, std::slice::from_ref(&binding), &bound_shell.execution_path)
             .unwrap();
+        write_unavailable_rust_tool_aliases(
+            &guard,
+            &manifest,
+            std::slice::from_ref(&binding),
+            &bound_shell.execution_path,
+        )
+        .unwrap();
         let action_trust = crate::source_built_rust_provider_action::RustProviderActionEvidence {
             plan_path: dir.path().join("rust-provider-action-plan.json"),
             plan_digest_blake3: FIXED_POINT_TEST_DIGEST_A.to_string(),
@@ -5613,7 +5687,7 @@ mod tests {
             &tools.rustc,
             &manifest,
             &bound_shell,
-            &[binding],
+            std::slice::from_ref(&binding),
             &[],
             &action_trust,
             &guard,
@@ -5621,12 +5695,73 @@ mod tests {
         )
         .unwrap();
         let paths = authorities.iter().map(|authority| authority.path.as_str()).collect::<BTreeSet<_>>();
+        let unavailable_count = authorities
+            .iter()
+            .filter(|authority| authority.kind == RustFixedExecutableKind::CompilerPolicyAdapter)
+            .count();
+        let unavailable_scripts = RUST_UNAVAILABLE_TOOL_ALIASES
+            .iter()
+            .map(|alias| fs::read_to_string(guard.join(alias)).unwrap())
+            .collect::<Vec<_>>();
+        fs::write(guard.join("emcc"), "#!/bin/sh\nexit 0\n").unwrap();
+        let corrupted_alias_error = rust_child_action_fixed_executables(
+            &tools.rustc,
+            &manifest,
+            &bound_shell,
+            std::slice::from_ref(&binding),
+            &[],
+            &action_trust,
+            &guard,
+            Some(FIXED_POINT_TEST_DIGEST_A),
+        )
+        .unwrap_err();
 
         assert_eq!(authorities.iter().filter(|authority| authority.kind == RustFixedExecutableKind::Rustc).count(), 1);
+        assert_eq!(unavailable_count, RUST_UNAVAILABLE_TOOL_ALIASES.len());
         assert_eq!(paths.len(), authorities.len());
         assert!(paths.contains(path_to_string(&fs::canonicalize(&busybox).unwrap()).unwrap().as_str()));
         assert!(paths.contains(path_to_string(&fs::canonicalize(guard.join("busybox")).unwrap()).unwrap().as_str()));
+        assert!(RUST_UNAVAILABLE_TOOL_ALIASES.iter().all(|alias| {
+            paths.contains(path_to_string(&fs::canonicalize(guard.join(alias)).unwrap()).unwrap().as_str())
+        }));
+        assert!(unavailable_scripts.iter().all(|script| script.contains("exit 127")));
+        assert!(corrupted_alias_error.message().contains("unexpected bytes"));
         assert!(authorities.iter().all(|authority| authority.output_identity_blake3 == authority.digest_blake3));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unavailable_rust_tool_aliases_exit_127_without_replacing_declared_tools() {
+        let dir = tempfile::tempdir().unwrap();
+        let tools = fake_toolchain(&dir, false);
+        let manifest = fake_toolchain_manifest(&tools, None);
+        let guard = dir.path().join("guard");
+        let declared_git = dir.path().join("declared-tools/git");
+        let declared_receipt = dir.path().join("declared-tools/receipt.json");
+        fs::create_dir_all(&guard).unwrap();
+        fs::create_dir_all(declared_git.parent().unwrap()).unwrap();
+        write_fake_executable(&declared_git, "#!/bin/sh\nexit 42\n");
+        fs::write(&declared_receipt, b"{\"status\":\"built\"}\n").unwrap();
+        let binding = crate::full_source_rust_binding::FullSourceRustHostToolBinding {
+            role: crate::full_source_rust_binding::FullSourceRustHostToolRole::Make,
+            path: declared_git.display().to_string(),
+            content_digest_blake3: crate::protected_exec::blake3_file_hex(&declared_git).unwrap(),
+            source_id: "declared-git-source".to_string(),
+            construction_receipt_path: declared_receipt.display().to_string(),
+            construction_receipt_digest_blake3: crate::protected_exec::blake3_file_hex(&declared_receipt).unwrap(),
+        };
+        let preserved_git_bytes = b"declared git alias\n";
+        fs::write(guard.join("git"), preserved_git_bytes).unwrap();
+        set_executable(&guard.join("git")).unwrap();
+
+        write_unavailable_rust_tool_aliases(&guard, &manifest, &[binding], Path::new("/bin/sh")).unwrap();
+        let emcc_status = Command::new(guard.join("emcc")).status().unwrap();
+
+        assert_eq!(emcc_status.code(), Some(RUST_UNAVAILABLE_TOOL_EXIT_CODE));
+        assert_eq!(fs::read(guard.join("git")).unwrap(), preserved_git_bytes);
+        assert!(guard.join("pkg-config").is_file());
+        assert!(guard.join("pkgconf").is_file());
+        assert!(!fs::read_to_string(guard.join("emcc")).unwrap().contains("/usr/bin"));
     }
 
     #[test]

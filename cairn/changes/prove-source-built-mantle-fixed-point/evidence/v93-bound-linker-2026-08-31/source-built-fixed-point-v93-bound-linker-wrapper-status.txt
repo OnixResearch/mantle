@@ -1,0 +1,15 @@
+started_at=2026-08-31T12:14:56-04:00
+wrapper_pid=3412572
+source_commit=2e67a21ec7d574e82f876be171f93c1f5efb43a5
+source_transfer_parity=exact
+profile_blake3=8923006e7b3a41b68911eb5ff1493a28acdf5e8fa90477fb79b0e55e23a2af9e
+orchestrator_blake3=a0d99154bf770694a71200a13db2b4b7dab1693412beb0368186bb02e0391fb3
+protected_exec_mechanism=seccomp-ret-trace-ptrace-v1-acknowledged-root
+aggregate_exec_bound=per-stage-times-authenticated-stage-count
+checkpoint_mode=native-prefix-isolated
+native_checkpoint_attempt=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-native-prefix-v61-repaired-20260828
+output=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-fixed-point-v93-bound-linker-20260831
+proof_disk_bytes_max=700000000000
+proof_jobs=16
+finished_at=2026-08-31T12:30:57-04:00
+exit_code=1
