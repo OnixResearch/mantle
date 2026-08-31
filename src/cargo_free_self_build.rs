@@ -74,6 +74,7 @@ const RUSTC_LIBSTDCXX_SONAME: &str = "libstdc++.so.6";
 const RUSTC_DYNAMIC_LOADER_FILE: &str = "ld-musl-x86_64.so.1";
 const RUSTC_DYNAMIC_BINARY_FILE: &str = "rustc.dynamic";
 const RUSTC_RUNTIME_HOST_TRIPLE: &str = "x86_64-unknown-linux-musl";
+const RUSTC_BOUND_LINKER_ALIAS: &str = "cc";
 const DYNAMIC_LIBRARY_PATH_ENV: &str = "LD_LIBRARY_PATH";
 const COMPATIBILITY_FILE: &str = "compatibility.json";
 const TOOLCHAIN_COMPATIBILITY_PATH_DIR: &str = "receipt-bound-path";
@@ -1699,16 +1700,23 @@ fn prepare_rustc_compatibility_with_shell(
     debug_assert_ne!(toolchain_dir, requested_rustc);
     fs::create_dir_all(&toolchain_dir)
         .map_err(|err| internal(format!("create toolchain dir {}: {err}", toolchain_dir.display())))?;
+    let probe_path_env =
+        prepare_rustc_compatibility_path_env_with_shell(&toolchain_dir, toolchain_closure, execution_shell)?;
+    let receipt_bound_linker = toolchain_dir.join(TOOLCHAIN_COMPATIBILITY_PATH_DIR).join(RUSTC_BOUND_LINKER_ALIAS);
     let runtime_wrapper = runtime
         .map(|runtime| {
             let wrapper = toolchain_dir.join(RUSTC_RUNTIME_WRAPPER_FILE);
-            write_bound_rustc_runtime_wrapper(&wrapper, &requested_rustc, runtime, execution_shell)?;
+            write_bound_rustc_runtime_wrapper(
+                &wrapper,
+                &requested_rustc,
+                runtime,
+                execution_shell,
+                &receipt_bound_linker,
+            )?;
             Ok::<PathBuf, RunError>(wrapper)
         })
         .transpose()?;
     let probe_rustc = runtime_wrapper.as_deref().unwrap_or(&requested_rustc);
-    let probe_path_env =
-        prepare_rustc_compatibility_path_env_with_shell(&toolchain_dir, toolchain_closure, execution_shell)?;
     if rustc_accepts_link_self_contained_no(probe_rustc, &toolchain_dir, probe_path_env.as_deref())? {
         let wrapper_blake3 = runtime_wrapper.as_deref().map(blake3_file).transpose()?;
         let stage_rustc = probe_rustc.to_path_buf();
@@ -1826,10 +1834,12 @@ fn write_bound_rustc_runtime_wrapper(
     real_rustc: &Path,
     runtime: &BoundRustcRuntime,
     execution_shell: &Path,
+    receipt_bound_linker: &Path,
 ) -> Result<(), RunError> {
     require_executable(real_rustc)?;
     require_executable(&runtime.loader)?;
     require_executable(execution_shell)?;
+    require_executable(receipt_bound_linker)?;
     let rust_root = real_rustc
         .parent()
         .and_then(Path::parent)
@@ -1856,9 +1866,11 @@ fn write_bound_rustc_runtime_wrapper(
     let library_path = env::join_paths([&runtime_lib, &runtime.library_dir, &rust_lib, &rust_stdlib])
         .map_err(|error| internal(format!("construct receipt-bound rustc library path: {error}")))?;
     let execution_shell = path_to_string(execution_shell)?;
+    let linker_arg = format!("linker={}", receipt_bound_linker.display());
     let script = format!(
-        "#!{execution_shell}\nset -eu\nhas_sysroot=false\nfor arg in \"$@\"; do\n  if [ \"$arg\" = \"--sysroot\" ]; then has_sysroot=true; break; fi\n  case \"$arg\" in --sysroot=*) has_sysroot=true; break ;; esac\ndone\nif [ \"$has_sysroot\" = false ]; then set -- --sysroot {} \"$@\"; fi\n{DYNAMIC_LIBRARY_PATH_ENV}={}\nexport {DYNAMIC_LIBRARY_PATH_ENV}\nexec {} {} \"$@\"\n",
+        "#!{execution_shell}\nset -eu\nhas_sysroot=false\nfor arg in \"$@\"; do\n  if [ \"$arg\" = \"--sysroot\" ]; then has_sysroot=true; break; fi\n  case \"$arg\" in --sysroot=*) has_sysroot=true; break ;; esac\ndone\nif [ \"$has_sysroot\" = false ]; then set -- --sysroot {} \"$@\"; fi\nset -- \"$@\" -C {}\n{DYNAMIC_LIBRARY_PATH_ENV}={}\nexport {DYNAMIC_LIBRARY_PATH_ENV}\nexec {} {} \"$@\"\n",
         shell_quote(rust_root),
+        shell_quote(Path::new(&linker_arg)),
         shell_quote(Path::new(&library_path)),
         shell_quote(&runtime.loader),
         shell_quote(&dynamic_rustc)
@@ -3056,7 +3068,14 @@ fn prepare_execution_toolchain(
         let runtime = bound_rustc_runtime(&rust_source_provider.source_built_native_artifacts)?;
         let rustc = if let Some(runtime) = runtime {
             let wrapper = guard_path_dir.join(RUSTC_RUNTIME_WRAPPER_FILE);
-            write_bound_rustc_runtime_wrapper(&wrapper, &original_rustc, &runtime, execution_shell)?;
+            let receipt_bound_linker = guard_path_dir.join(RUSTC_BOUND_LINKER_ALIAS);
+            write_bound_rustc_runtime_wrapper(
+                &wrapper,
+                &original_rustc,
+                &runtime,
+                execution_shell,
+                &receipt_bound_linker,
+            )?;
             wrapper
         } else {
             original_rustc.clone()
@@ -3207,6 +3226,11 @@ fn rust_child_action_fixed_executables(
     let shell_path = canonical_action_executable(&bound_shell.execution_path)?;
     let shell = measured_rust_fixed_authority(&shell_path, RustFixedExecutableKind::Shell, &alias_producer)?;
     insert_rust_fixed_authority(&mut by_path, shell)?;
+    if let Some(linker) = rustc_runtime_wrapper_linker(&selected_rustc)? {
+        let producer = format!("{alias_producer}:rustc-linker");
+        let linker = measured_rust_fixed_authority(&linker, RustFixedExecutableKind::CCompiler, &producer)?;
+        insert_rust_fixed_authority(&mut by_path, linker)?;
+    }
     if !by_path.contains_key(&selected_rustc) {
         let rustc_producer = format!("{alias_producer}:selected-rustc");
         let rustc = measured_rust_fixed_authority(&selected_rustc, RustFixedExecutableKind::Rustc, &rustc_producer)?;
@@ -3222,6 +3246,29 @@ fn rust_child_action_fixed_executables(
     assert!(!authorities.is_empty());
     assert!(authorities.iter().all(|authority| Path::new(&authority.path).is_absolute()));
     Ok(authorities)
+}
+
+fn rustc_runtime_wrapper_linker(selected_rustc: &Path) -> Result<Option<PathBuf>, RunError> {
+    if selected_rustc.file_name() != Some(OsStr::new(RUSTC_RUNTIME_WRAPPER_FILE)) {
+        return Ok(None);
+    }
+    let parent = selected_rustc
+        .parent()
+        .ok_or_else(|| RunError::Build("receipt-bound rustc wrapper has no parent".to_string()))?;
+    let candidates = [
+        parent.join(RUSTC_BOUND_LINKER_ALIAS),
+        parent.join(TOOLCHAIN_COMPATIBILITY_PATH_DIR).join(RUSTC_BOUND_LINKER_ALIAS),
+    ]
+    .into_iter()
+    .filter(|candidate| candidate.is_file())
+    .collect::<Vec<_>>();
+    let [linker] = candidates.as_slice() else {
+        return Err(RunError::Build(format!(
+            "receipt-bound rustc wrapper requires one linker alias, found {}",
+            candidates.len()
+        )));
+    };
+    canonical_action_executable(linker).map(Some)
 }
 
 fn rust_action_alias_producer(
@@ -5387,7 +5434,7 @@ mod tests {
         std::os::unix::fs::symlink(RUSTC_LIBSTDCXX_RUNTIME_FILE, &soname).unwrap();
         write_fake_executable(
             &loader,
-            "#!/bin/sh\nprintf '%s\\n' \"${LD_LIBRARY_PATH-unset}\"\nprintf '%s\\n' \"$1\"\n",
+            "#!/bin/sh\nprintf '%s\\n' \"${LD_LIBRARY_PATH-unset}\"\nprintf '%s\\n' \"$@\"\n",
         );
         let cxx_artifact = FullSourceNativeArtifactBinding {
             role: FullSourceNativeArtifactRole::Libstdcxx,
@@ -5410,22 +5457,41 @@ mod tests {
         fs::create_dir_all(real_rustc.parent().unwrap()).unwrap();
         write_fake_executable(&real_rustc, "#!/bin/sh\nexit 0\n");
         write_fake_executable(&dynamic_rustc, "#!/bin/sh\nexit 0\n");
-        let wrapper = dir.path().join("rustc-wrapper");
+        let wrapper = dir.path().join(RUSTC_RUNTIME_WRAPPER_FILE);
+        let receipt_bound_linker = dir.path().join(TOOLCHAIN_COMPATIBILITY_PATH_DIR).join(RUSTC_BOUND_LINKER_ALIAS);
+        fs::create_dir_all(receipt_bound_linker.parent().unwrap()).unwrap();
+        write_fake_executable(&receipt_bound_linker, "#!/bin/sh\nexit 0\n");
         let artifacts = [cxx_artifact.clone(), loader_artifact];
 
         let selected = bound_rustc_runtime(&artifacts).unwrap().expect("bound Rust runtime");
-        write_bound_rustc_runtime_wrapper(&wrapper, &real_rustc, &selected, Path::new("/bin/sh")).unwrap();
+        write_bound_rustc_runtime_wrapper(
+            &wrapper,
+            &real_rustc,
+            &selected,
+            Path::new("/bin/sh"),
+            &receipt_bound_linker,
+        )
+        .unwrap();
         let output = Command::new(&wrapper).env(DYNAMIC_LIBRARY_PATH_ENV, "/ambient/not-authorized").output().unwrap();
         fs::remove_file(&soname).unwrap();
         let wrong_runtime = runtime_dir.join("wrong-runtime");
         fs::write(&wrong_runtime, b"wrong runtime\n").unwrap();
         std::os::unix::fs::symlink("wrong-runtime", &soname).unwrap();
         let error = bound_rustc_runtime(&artifacts).unwrap_err();
+        let action_linker = rustc_runtime_wrapper_linker(&wrapper).unwrap().expect("runtime wrapper linker");
+        let ambiguous_linker = wrapper.parent().unwrap().join(RUSTC_BOUND_LINKER_ALIAS);
+        write_fake_executable(&ambiguous_linker, "#!/bin/sh\nexit 0\n");
+        let ambiguous_linker_error = rustc_runtime_wrapper_linker(&wrapper).unwrap_err();
         let expected_library_path = env::join_paths([runtime_lib, runtime_dir, rust_lib, rust_stdlib]).unwrap();
         let stdout = String::from_utf8(output.stdout).unwrap();
 
         assert!(output.status.success());
-        assert_eq!(stdout, format!("{}\n{}\n", expected_library_path.to_string_lossy(), dynamic_rustc.display()));
+        assert!(stdout.contains(expected_library_path.to_string_lossy().as_ref()));
+        assert!(stdout.contains(dynamic_rustc.to_string_lossy().as_ref()));
+        assert!(stdout.contains(&format!("linker={}", receipt_bound_linker.display())));
+        assert_eq!(action_linker, fs::canonicalize(&receipt_bound_linker).unwrap());
+        assert!(ambiguous_linker_error.message().contains("found 2"));
+        assert!(!stdout.contains("ambient/not-authorized"));
         assert!(!String::from_utf8(output.stderr).unwrap().contains("ambient"));
         assert!(error.message().contains("does not resolve to bound artifact"));
         assert!(full_source_native_artifact_is_executable(FullSourceNativeArtifactRole::DynamicLinker));

@@ -101,3 +101,4 @@ compatibility surface, crate name, or historical decision.
 | [0092](0092-frame-rust-source-identities-with-blake3.md) | Frame Rust source identities with BLAKE3 | Accepted |
 | [0093](0093-resolve-rust-dependency-producers-from-consumed-host-artifacts.md) | Resolve Rust dependency producers from consumed host artifacts | Accepted |
 | [0094](0094-resolve-target-dependency-producers-from-the-ready-rust-graph.md) | Resolve target dependency producers from the ready Rust graph | Accepted |
+| [0095](0095-bind-rustc-linker-before-ptrace.md) | Bind the rustc linker before ptrace | Accepted |
