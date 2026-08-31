@@ -1,6 +1,7 @@
 d20e9a959564055d55a4ea576681740e63e541bc938d5940edc61fd38366ff08  ./attempt-status.json
 6026c5a4d329efe08d8f437898e3b38f25f579d3f7ce536c73842e83508d504c  ./cargo-free-meta.json
 7b115683d3903aa3c607be222828e0186faa582e859b9e46b9dd6a3d67ee3749  ./cargo-free-preflight.json
+610c6d3bb4542c985f338981ab83c7347524a3886a3f6564396641c5ccaf17a2  ./cleanup-v90-before-v91.txt
 4424bea3742b774b8f319cc6b377175a679e74a45b9e3e428777baf764c403af  ./closure-relocation.json
 414bed3efea81c340e4049ba1660174964e4aceef22b7701cadac06f1ae6c8ec  ./initial-proof-log.txt
 8f2e01317895eec1da94490a4d8a9aaf359ac94b98fa1e43df1f573d5dc32e19  ./launch-profile-v90-source-identity.sh
@@ -8,6 +9,7 @@ d20e9a959564055d55a4ea576681740e63e541bc938d5940edc61fd38366ff08  ./attempt-stat
 1b194f1588b2fd11add5c220364708adaccec793143258051e76107b031fa782  ./native-rust-plan-only-status.txt
 cf087455917fec55fe3a227c7635b474add5abf19ad9bc574ae9841b8e541ae3  ./native-rust-plan-only.json.gz
 4d233f54f6b32f9dc9d93e58d5170fe7e6ec9701c2f3e2e9f15c602da21cf94a  ./post-repair-validation.log
+453b467c2d0061129e443e330b3ba3b2989b1a8ebf117c26ad88c09a42bfd61c  ./prune-v90-before-v91.rs
 d3f125bb08ff39ef0744de29d7ad5591440945fd0ee57ef585f0544102e829d5  ./relocated-toolchain-closure.json
 a3e1dd17cd6e8662819142d6c16ceb9d08b7e46a006fab859a0c413b0e9b77a4  ./run-profile-v90-source-identity.sh
 02e995bf5834c025577fe1a7abad4312ee2c04c4201106a106c6bd8499daed8a  ./run-proof-v90-source-identity.sh
@@ -27,7 +29,7 @@ eb39eb429cecb1e1ca5f0c6e1c51c1e16d2efb3a732d4575ed292b154668271a  ./source-trans
 50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9  ./stage1-status.txt
 8da0aa353bc9d615956c12ce96d25b49ac511161e245297691561b5837891037  ./stage1-stderr.json
 338289e2abcefda9cba1571be793d7cd48c219a45e4da3265842aeff15acc194  ./strum-macros-unit-97.json
-5ba6c2f9f2380e6ad2958480e0afe006eb0ec01231ab66c3f1214a724283fcde  ./summary.md
+5766edb9d352cd7e5b7a8100f4030f84a01061acf7c484a53edc429669306f3a  ./summary.md
 72b70ec6eb41df6cdb1a7148f7ed98da88f63e520a2add64043c19157b23f742  ./transfer-8346c02d-release.sh
 dd38612095948e26418fb4d4a4ad42bd656d8bba6f85ac00ca55993083cc762e  ./transfer-binary-8346c02d.sh
 8ecf396e24f3e598489d99582872aecc66eb698298618dce2bef309991f7ab9c  ./watch-profile-v90-source-identity.sh

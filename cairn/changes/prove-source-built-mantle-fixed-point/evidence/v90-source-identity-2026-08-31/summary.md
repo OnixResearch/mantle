@@ -74,7 +74,10 @@ authority, a complete compressed planning-only receipt, the extracted
 
 ## Owner and next action
 
-The Mantle source-built fixed-point change owns the repair. Build and transfer a
-new release binary, refresh a Ready profile, and restore the same checkpoint in
-a fresh promoted proof. Preserve V90 until the new proof no longer needs its
-stage1 planning diagnostics.
+The Mantle source-built fixed-point change owns the repair. After repository
+evidence preservation, the no-follow cleanup inspected 154,158 entries and
+removed only the failed V90 staging root. It changed directory modes only and
+increased free bytes from 668,850,032,640 to 701,853,736,960.
+
+Build and transfer a new release binary, refresh a Ready profile, and restore
+the same checkpoint in a fresh promoted proof.
