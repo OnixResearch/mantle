@@ -1,0 +1,1 @@
+RUSTFLAGS='-D warnings' cargo -Zscript scripts/check-source-built-parity-promotion.rs --self-test

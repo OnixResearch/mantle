@@ -248,6 +248,32 @@ This lane does not prove compiler correctness, does not prove full Cargo
 compatibility, does not prove release reproducibility, does not prove deploy
 success, and does not prove general Nix replacement completeness.
 
+## Promoted full-bootstrap parity bundle
+
+The V98 promotion bundle is at
+`bootstrap/evidence/full-bootstrap-parity-v98/`. It contains compressed native,
+StageX, Rust-provider, and stage1/stage2 action evidence. The manifest binds both
+the compressed files and their exact decoded JSON bytes with BLAKE3.
+
+Run the independent verifier and its negative matrix:
+
+```bash
+cargo -Zscript scripts/check-source-built-parity-promotion.rs --self-test
+cargo -Zscript scripts/check-source-built-parity-promotion.rs \
+  --root . \
+  --bundle bootstrap/evidence/full-bootstrap-parity-v98 \
+  --out /tmp/mantle-full-bootstrap-parity-verification.json
+```
+
+The checker is separate from the in-process parity collector. It validates five
+native rows, five action adapters, 1,914 planned and matched actions, and 478,870
+observed and matched events. It also requires local execution, zero fallback,
+zero cache-only completion, and no selected witness policy.
+
+The resulting verification receipt can be release external evidence. It does
+not establish witness quorum, independent rebuild agreement, release
+reproducibility, compiler correctness, seed correctness, or kernel isolation.
+
 ## Nix-free demo bundle validation
 
 Nix-free demo wording is claimable only from the demo-profile validator. The

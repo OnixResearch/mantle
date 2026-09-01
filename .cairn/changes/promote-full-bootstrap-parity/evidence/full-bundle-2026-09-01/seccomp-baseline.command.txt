@@ -1,0 +1,1 @@
+cargo test -p mantle --bin mantle protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path -- --exact --test-threads=1

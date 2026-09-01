@@ -146,6 +146,12 @@ pub struct ParityProofDetails {
     pub observed_events: u64,
     pub matched_events: u64,
     pub local_only: bool,
+    pub independent_bundle_manifest_file_blake3: String,
+    pub independent_bundle_manifest_identity_blake3: String,
+    pub independent_verification_file_blake3: String,
+    pub independent_verification_identity_blake3: String,
+    pub independent_verifier_source_blake3: String,
+    pub independent_exporter_source_blake3: String,
     pub bounded_claim: String,
 }
 
@@ -2494,6 +2500,24 @@ fn validate_real_self_build_proof_parity_evidence(project_root: &Path) -> Result
         observed_events: promotion.as_ref().map_or(0, |p| p.observed_events),
         matched_events: promotion.as_ref().map_or(0, |p| p.matched_events),
         local_only: promotion.as_ref().is_some_and(|p| p.local_only),
+        independent_bundle_manifest_file_blake3: promotion
+            .as_ref()
+            .map_or_else(String::new, |p| p.independent_bundle_manifest_file_blake3.clone()),
+        independent_bundle_manifest_identity_blake3: promotion
+            .as_ref()
+            .map_or_else(String::new, |p| p.independent_bundle_manifest_identity_blake3.clone()),
+        independent_verification_file_blake3: promotion
+            .as_ref()
+            .map_or_else(String::new, |p| p.independent_verification_file_blake3.clone()),
+        independent_verification_identity_blake3: promotion
+            .as_ref()
+            .map_or_else(String::new, |p| p.independent_verification_identity_blake3.clone()),
+        independent_verifier_source_blake3: promotion
+            .as_ref()
+            .map_or_else(String::new, |p| p.independent_verifier_source_blake3.clone()),
+        independent_exporter_source_blake3: promotion
+            .as_ref()
+            .map_or_else(String::new, |p| p.independent_exporter_source_blake3.clone()),
         bounded_claim: summary.bounded_claim,
     };
     if promotion.is_some() {

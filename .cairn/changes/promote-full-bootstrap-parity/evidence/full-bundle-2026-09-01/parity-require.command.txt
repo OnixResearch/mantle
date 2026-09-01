@@ -1,0 +1,1 @@
+cargo run -q -p mantle --bin mantle -- --json bootstrap parity-report --require live-bootstrap --require guix --require stagex

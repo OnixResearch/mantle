@@ -1,0 +1,2 @@
+RUSTFLAGS='-D warnings' cargo -Zscript scripts/check-source-built-parity-promotion.rs --root . --bundle bootstrap/evidence/full-bootstrap-parity-v98 --out /tmp/mantle-full-bootstrap-parity-verification-evidence.json
+cmp bootstrap/evidence/full-bootstrap-parity-v98/verification.json /tmp/mantle-full-bootstrap-parity-verification-evidence.json

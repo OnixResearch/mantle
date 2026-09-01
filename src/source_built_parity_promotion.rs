@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -14,8 +15,22 @@ const REQUIRED_EXECUTED_STAGE_COUNT: u64 = 2;
 const REQUIRED_RESTORED_STAGE_COUNT: u64 = 4;
 const REQUIRED_ADAPTER_COUNT: u64 = 5;
 const REQUIRED_RUN_COUNT: usize = 2;
+const REQUIRED_NATIVE_ROW_COUNT: u64 = 5;
+const REQUIRED_PARITY_AXES: &[&str] = &["live-bootstrap", "guix", "stagex"];
+const REQUIRED_NON_CLAIMS: &[&str] = &[
+    "compiler-correctness",
+    "seed-correctness",
+    "kernel-isolation",
+    "independent-rebuild-agreement",
+    "bit-for-bit-release-reproducibility",
+    "deployment-success",
+    "full-cargo-compatibility",
+];
+const INDEPENDENT_BUNDLE_SCHEMA: &str = "mantle-full-bootstrap-parity-bundle-v1";
+const INDEPENDENT_VERIFICATION_SCHEMA: &str = "mantle-full-bootstrap-parity-verification-v1";
 const COUNT_MIN: u64 = 1;
 const BLAKE3_HEX_LENGTH: usize = 64;
+const SOURCE_COMMIT_HEX_LENGTH: usize = 40;
 
 #[derive(Clone, Copy)]
 pub(crate) struct PromotionEvidence<'a> {
@@ -27,6 +42,12 @@ pub(crate) struct PromotionEvidence<'a> {
     pub(crate) action_reconciliation_file_blake3: &'a str,
     pub(crate) trust_report: &'a Value,
     pub(crate) trust_report_file_blake3: &'a str,
+    pub(crate) independent_bundle_manifest: &'a Value,
+    pub(crate) independent_bundle_manifest_file_blake3: &'a str,
+    pub(crate) independent_verification: &'a Value,
+    pub(crate) independent_verification_file_blake3: &'a str,
+    pub(crate) independent_verifier_source_blake3: &'a str,
+    pub(crate) independent_exporter_source_blake3: &'a str,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
@@ -47,6 +68,12 @@ pub(crate) struct PromotionSummary {
     pub(crate) observed_events: u64,
     pub(crate) matched_events: u64,
     pub(crate) local_only: bool,
+    pub(crate) independent_bundle_manifest_file_blake3: String,
+    pub(crate) independent_bundle_manifest_identity_blake3: String,
+    pub(crate) independent_verification_file_blake3: String,
+    pub(crate) independent_verification_identity_blake3: String,
+    pub(crate) independent_verifier_source_blake3: String,
+    pub(crate) independent_exporter_source_blake3: String,
 }
 
 #[derive(Debug)]
@@ -69,6 +96,63 @@ struct ActionFacts {
     matched_actions: u64,
     observed_events: u64,
     matched_events: u64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct IndependentBundleManifest {
+    schema: String,
+    release_id: String,
+    source_commit: String,
+    source_blake3: String,
+    selected_provider_kind: String,
+    parity_axes: Vec<String>,
+    witness_policy: String,
+    witness_sidecar_count: u32,
+    members: Vec<IndependentBundleMember>,
+    non_claims: Vec<String>,
+    manifest_identity_blake3: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct IndependentBundleMember {
+    role: String,
+    source_class: String,
+    source_path: String,
+    bundle_path: String,
+    expected_schema: String,
+    encoding: String,
+    content_blake3: String,
+    content_bytes: u64,
+    compressed_blake3: String,
+    compressed_bytes: u64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct IndependentVerification {
+    schema: String,
+    status: String,
+    bundle_manifest_identity_blake3: String,
+    source_commit: String,
+    source_blake3: String,
+    selected_provider_kind: String,
+    parity_axes: Vec<String>,
+    native_row_count: u64,
+    adapter_count: u64,
+    planned_actions: u64,
+    matched_actions: u64,
+    observed_events: u64,
+    matched_events: u64,
+    local_only: bool,
+    witness_policy: String,
+    witness_sidecar_count: u32,
+    blockers: Vec<String>,
+    non_claims: Vec<String>,
+    verification_identity_blake3: String,
+}
+
+struct IndependentFacts {
+    bundle_manifest_identity_blake3: String,
+    verification_identity_blake3: String,
 }
 
 pub(crate) fn validate_promotion(evidence: PromotionEvidence<'_>) -> Result<PromotionSummary, String> {
@@ -96,6 +180,7 @@ pub(crate) fn validate_promotion(evidence: PromotionEvidence<'_>) -> Result<Prom
         evidence.action_plan_file_blake3,
         evidence.action_reconciliation_file_blake3,
     )?;
+    let independent = validate_independent_verification(&evidence, &deterministic, &action)?;
     Ok(PromotionSummary {
         selected_provider_kind: REQUIRED_PROVIDER_KIND.to_string(),
         receipt_digest_blake3: deterministic.receipt_digest_blake3,
@@ -113,6 +198,12 @@ pub(crate) fn validate_promotion(evidence: PromotionEvidence<'_>) -> Result<Prom
         observed_events: action.observed_events,
         matched_events: action.matched_events,
         local_only: true,
+        independent_bundle_manifest_file_blake3: evidence.independent_bundle_manifest_file_blake3.to_string(),
+        independent_bundle_manifest_identity_blake3: independent.bundle_manifest_identity_blake3,
+        independent_verification_file_blake3: evidence.independent_verification_file_blake3.to_string(),
+        independent_verification_identity_blake3: independent.verification_identity_blake3,
+        independent_verifier_source_blake3: evidence.independent_verifier_source_blake3.to_string(),
+        independent_exporter_source_blake3: evidence.independent_exporter_source_blake3.to_string(),
     })
 }
 
@@ -122,6 +213,10 @@ fn validate_file_digests(evidence: &PromotionEvidence<'_>) -> Result<(), String>
         ("action_plan_file_blake3", evidence.action_plan_file_blake3),
         ("action_reconciliation_file_blake3", evidence.action_reconciliation_file_blake3),
         ("trust_report_file_blake3", evidence.trust_report_file_blake3),
+        ("independent_bundle_manifest_file_blake3", evidence.independent_bundle_manifest_file_blake3),
+        ("independent_verification_file_blake3", evidence.independent_verification_file_blake3),
+        ("independent_verifier_source_blake3", evidence.independent_verifier_source_blake3),
+        ("independent_exporter_source_blake3", evidence.independent_exporter_source_blake3),
     ] {
         require_blake3(field, digest)?;
     }
@@ -366,6 +461,104 @@ fn validate_trust_actions(
     require_bool(trust, "local_only", true)
 }
 
+fn validate_independent_verification(
+    evidence: &PromotionEvidence<'_>,
+    deterministic: &DeterministicFacts,
+    action: &ActionFacts,
+) -> Result<IndependentFacts, String> {
+    let manifest: IndependentBundleManifest = serde_json::from_value(evidence.independent_bundle_manifest.clone())
+        .map_err(|error| format!("independent bundle manifest is invalid: {error}"))?;
+    let verification: IndependentVerification = serde_json::from_value(evidence.independent_verification.clone())
+        .map_err(|error| format!("independent verification receipt is invalid: {error}"))?;
+    validate_independent_manifest(&manifest, deterministic)?;
+    validate_independent_receipt(&verification, &manifest, deterministic, action)?;
+    Ok(IndependentFacts {
+        bundle_manifest_identity_blake3: manifest.manifest_identity_blake3,
+        verification_identity_blake3: verification.verification_identity_blake3,
+    })
+}
+
+fn validate_independent_manifest(
+    manifest: &IndependentBundleManifest,
+    deterministic: &DeterministicFacts,
+) -> Result<(), String> {
+    require_equal("independent bundle schema", &manifest.schema, INDEPENDENT_BUNDLE_SCHEMA)?;
+    require_equal("independent bundle provider", &manifest.selected_provider_kind, REQUIRED_PROVIDER_KIND)?;
+    require_equal("independent bundle source", &manifest.source_blake3, &deterministic.source_blake3)?;
+    require_hex("independent source commit", &manifest.source_commit, SOURCE_COMMIT_HEX_LENGTH)?;
+    require_string_set("independent parity axes", &manifest.parity_axes, REQUIRED_PARITY_AXES)?;
+    require_string_set("independent non-claims", &manifest.non_claims, REQUIRED_NON_CLAIMS)?;
+    if manifest.witness_policy != "not-selected" || manifest.witness_sidecar_count != 0 {
+        return Err("independent bundle selected witness policy or sidecars".to_string());
+    }
+    if manifest.members.is_empty() {
+        return Err("independent bundle has no evidence members".to_string());
+    }
+    for member in &manifest.members {
+        require_blake3("independent member content", &member.content_blake3)?;
+        require_blake3("independent member compressed", &member.compressed_blake3)?;
+        if member.role.is_empty() || member.source_path.is_empty() || member.bundle_path.is_empty() {
+            return Err("independent bundle has an unnamed member or path".to_string());
+        }
+    }
+    require_blake3("independent bundle identity", &manifest.manifest_identity_blake3)
+}
+
+fn validate_independent_receipt(
+    receipt: &IndependentVerification,
+    manifest: &IndependentBundleManifest,
+    deterministic: &DeterministicFacts,
+    action: &ActionFacts,
+) -> Result<(), String> {
+    require_equal("independent verification schema", &receipt.schema, INDEPENDENT_VERIFICATION_SCHEMA)?;
+    require_equal("independent verification status", &receipt.status, REQUIRED_TRUST_STATUS)?;
+    require_equal(
+        "independent verification bundle identity",
+        &receipt.bundle_manifest_identity_blake3,
+        &manifest.manifest_identity_blake3,
+    )?;
+    require_equal("independent verification commit", &receipt.source_commit, &manifest.source_commit)?;
+    require_equal("independent verification source", &receipt.source_blake3, &deterministic.source_blake3)?;
+    require_equal("independent verification provider", &receipt.selected_provider_kind, REQUIRED_PROVIDER_KIND)?;
+    require_string_set("independent verification axes", &receipt.parity_axes, REQUIRED_PARITY_AXES)?;
+    require_string_set("independent verification non-claims", &receipt.non_claims, REQUIRED_NON_CLAIMS)?;
+    if receipt.native_row_count != REQUIRED_NATIVE_ROW_COUNT || receipt.adapter_count != REQUIRED_ADAPTER_COUNT {
+        return Err("independent verification row or adapter count is incomplete".to_string());
+    }
+    if receipt.planned_actions != action.planned_actions
+        || receipt.matched_actions != action.matched_actions
+        || receipt.observed_events != action.observed_events
+        || receipt.matched_events != action.matched_events
+    {
+        return Err("independent verification action counts differ from root evidence".to_string());
+    }
+    if !receipt.local_only || !receipt.blockers.is_empty() {
+        return Err("independent verification is blocked or nonlocal".to_string());
+    }
+    if receipt.witness_policy != "not-selected" || receipt.witness_sidecar_count != 0 {
+        return Err("independent verification depends on witness policy".to_string());
+    }
+    require_blake3("independent verification identity", &receipt.verification_identity_blake3)
+}
+
+fn require_string_set(label: &str, actual: &[String], expected: &[&str]) -> Result<(), String> {
+    let actual = actual.iter().map(String::as_str).collect::<std::collections::BTreeSet<_>>();
+    let expected = expected.iter().copied().collect::<std::collections::BTreeSet<_>>();
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(format!("{label} differ from the required set"))
+    }
+}
+
+fn require_hex(field: &str, value: &str, length: usize) -> Result<(), String> {
+    if value.len() == length && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
+        Ok(())
+    } else {
+        Err(format!("{field} is not lowercase hexadecimal with length {length}"))
+    }
+}
+
 fn require_object<'a>(value: &'a Value, field: &str) -> Result<&'a Value, String> {
     let child = value.get(field).ok_or_else(|| format!("missing object field {field}"))?;
     if child.is_object() {
@@ -462,7 +655,7 @@ mod tests {
     const D6: &str = "6666666666666666666666666666666666666666666666666666666666666666";
     const D7: &str = "7777777777777777777777777777777777777777777777777777777777777777";
 
-    fn fixture() -> (Value, Value, Value, Value) {
+    fn fixture() -> (Value, Value, Value, Value, Value, Value) {
         let adapters = (0..REQUIRED_ADAPTER_COUNT)
             .map(|_| {
                 json!({
@@ -557,12 +750,66 @@ mod tests {
             },
             "blockers": []
         });
-        (deterministic, plan, reconciliation, trust)
+        let mut bundle = IndependentBundleManifest {
+            schema: INDEPENDENT_BUNDLE_SCHEMA.to_string(),
+            release_id: "test-release".to_string(),
+            source_commit: "a".repeat(SOURCE_COMMIT_HEX_LENGTH),
+            source_blake3: D1.to_string(),
+            selected_provider_kind: REQUIRED_PROVIDER_KIND.to_string(),
+            parity_axes: REQUIRED_PARITY_AXES.iter().map(|value| (*value).to_string()).collect(),
+            witness_policy: "not-selected".to_string(),
+            witness_sidecar_count: 0,
+            members: vec![IndependentBundleMember {
+                role: "proof".to_string(),
+                source_class: "proof".to_string(),
+                source_path: "proof.json".to_string(),
+                bundle_path: "members/proof.json.zst".to_string(),
+                expected_schema: DETERMINISTIC_PROOF_SCHEMA.to_string(),
+                encoding: "zstd-json-v1".to_string(),
+                content_blake3: D0.to_string(),
+                content_bytes: 1,
+                compressed_blake3: D1.to_string(),
+                compressed_bytes: 1,
+            }],
+            non_claims: REQUIRED_NON_CLAIMS.iter().map(|value| (*value).to_string()).collect(),
+            manifest_identity_blake3: String::new(),
+        };
+        bundle.manifest_identity_blake3 = D4.to_string();
+        let mut verification = IndependentVerification {
+            schema: INDEPENDENT_VERIFICATION_SCHEMA.to_string(),
+            status: REQUIRED_TRUST_STATUS.to_string(),
+            bundle_manifest_identity_blake3: bundle.manifest_identity_blake3.clone(),
+            source_commit: bundle.source_commit.clone(),
+            source_blake3: D1.to_string(),
+            selected_provider_kind: REQUIRED_PROVIDER_KIND.to_string(),
+            parity_axes: bundle.parity_axes.clone(),
+            native_row_count: REQUIRED_NATIVE_ROW_COUNT,
+            adapter_count: REQUIRED_ADAPTER_COUNT,
+            planned_actions: REQUIRED_ADAPTER_COUNT,
+            matched_actions: REQUIRED_ADAPTER_COUNT,
+            observed_events: REQUIRED_ADAPTER_COUNT * 2,
+            matched_events: REQUIRED_ADAPTER_COUNT * 2,
+            local_only: true,
+            witness_policy: "not-selected".to_string(),
+            witness_sidecar_count: 0,
+            blockers: Vec::new(),
+            non_claims: bundle.non_claims.clone(),
+            verification_identity_blake3: String::new(),
+        };
+        verification.verification_identity_blake3 = D5.to_string();
+        (
+            deterministic,
+            plan,
+            reconciliation,
+            trust,
+            serde_json::to_value(bundle).unwrap(),
+            serde_json::to_value(verification).unwrap(),
+        )
     }
 
     #[test]
     fn complete_promotion_links_exact_local_action_evidence() {
-        let (deterministic, plan, reconciliation, trust) = fixture();
+        let (deterministic, plan, reconciliation, trust, bundle, verification) = fixture();
         let summary = validate_promotion(PromotionEvidence {
             deterministic_proof: &deterministic,
             deterministic_file_blake3: D0,
@@ -572,6 +819,12 @@ mod tests {
             action_reconciliation_file_blake3: D6,
             trust_report: &trust,
             trust_report_file_blake3: D7,
+            independent_bundle_manifest: &bundle,
+            independent_bundle_manifest_file_blake3: D0,
+            independent_verification: &verification,
+            independent_verification_file_blake3: D1,
+            independent_verifier_source_blake3: D2,
+            independent_exporter_source_blake3: D3,
         })
         .unwrap();
         assert_eq!(summary.planned_actions, REQUIRED_ADAPTER_COUNT);
@@ -581,7 +834,7 @@ mod tests {
 
     #[test]
     fn promotion_rejects_unknown_event_and_plan_digest_drift() {
-        let (deterministic, plan, mut reconciliation, trust) = fixture();
+        let (deterministic, plan, mut reconciliation, trust, bundle, verification) = fixture();
         reconciliation["unknown_event_count"] = json!(1);
         let error = validate_promotion(PromotionEvidence {
             deterministic_proof: &deterministic,
@@ -592,14 +845,65 @@ mod tests {
             action_reconciliation_file_blake3: D6,
             trust_report: &trust,
             trust_report_file_blake3: D7,
+            independent_bundle_manifest: &bundle,
+            independent_bundle_manifest_file_blake3: D0,
+            independent_verification: &verification,
+            independent_verification_file_blake3: D1,
+            independent_verifier_source_blake3: D2,
+            independent_exporter_source_blake3: D3,
         })
         .unwrap_err();
         assert!(error.contains("unknown_event_count"));
 
-        let (_, _, mut reconciliation, _) = fixture();
+        let (_, _, mut reconciliation, _, _, _) = fixture();
         reconciliation["action_plan_digest_blake3"] = json!(D4);
         let error = validate_reconciliation(&reconciliation, D5, REQUIRED_ADAPTER_COUNT, REQUIRED_ADAPTER_COUNT * 2)
             .unwrap_err();
         assert!(error.contains("action_plan_digest_blake3"));
+    }
+
+    #[test]
+    fn promotion_rejects_witness_bound_or_source_drifted_independent_evidence() {
+        let (deterministic, plan, reconciliation, trust, bundle, mut verification) = fixture();
+        verification["witness_policy"] = json!("witness-quorum");
+        let witness_error = validate_promotion(PromotionEvidence {
+            deterministic_proof: &deterministic,
+            deterministic_file_blake3: D0,
+            action_plan: &plan,
+            action_plan_file_blake3: D5,
+            action_reconciliation: &reconciliation,
+            action_reconciliation_file_blake3: D6,
+            trust_report: &trust,
+            trust_report_file_blake3: D7,
+            independent_bundle_manifest: &bundle,
+            independent_bundle_manifest_file_blake3: D0,
+            independent_verification: &verification,
+            independent_verification_file_blake3: D1,
+            independent_verifier_source_blake3: D2,
+            independent_exporter_source_blake3: D3,
+        })
+        .unwrap_err();
+        assert!(witness_error.contains("witness policy"));
+
+        let (deterministic, plan, reconciliation, trust, mut bundle, verification) = fixture();
+        bundle["source_blake3"] = json!(D2);
+        let source_error = validate_promotion(PromotionEvidence {
+            deterministic_proof: &deterministic,
+            deterministic_file_blake3: D0,
+            action_plan: &plan,
+            action_plan_file_blake3: D5,
+            action_reconciliation: &reconciliation,
+            action_reconciliation_file_blake3: D6,
+            trust_report: &trust,
+            trust_report_file_blake3: D7,
+            independent_bundle_manifest: &bundle,
+            independent_bundle_manifest_file_blake3: D0,
+            independent_verification: &verification,
+            independent_verification_file_blake3: D1,
+            independent_verifier_source_blake3: D2,
+            independent_exporter_source_blake3: D3,
+        })
+        .unwrap_err();
+        assert!(source_error.contains("bundle source"));
     }
 }

@@ -14,6 +14,11 @@ const DETERMINISTIC_KEY: &str = "deterministic_proof";
 const ACTION_PLAN_KEY: &str = "action_plan";
 const ACTION_RECONCILIATION_KEY: &str = "action_reconciliation";
 const TRUST_REPORT_KEY: &str = "trust_report";
+const INDEPENDENT_VERIFICATION_FIELD: &str = "independent_verification";
+const BUNDLE_MANIFEST_KEY: &str = "bundle_manifest";
+const VERIFICATION_RECEIPT_KEY: &str = "verification_receipt";
+const VERIFIER_SOURCE_KEY: &str = "verifier_source";
+const EXPORTER_SOURCE_KEY: &str = "exporter_source";
 const PATH_BYTES_MAX: usize = 1_024;
 const BYTES_PER_KIBIBYTE: u64 = 1_024;
 const KIBIBYTES_PER_MEBIBYTE: u64 = 1_024;
@@ -35,6 +40,24 @@ pub(crate) fn validate_bound_promotion(project_root: &Path, descriptor: &Value) 
     let action_plan = load_binding(project_root, bindings, ACTION_PLAN_KEY)?;
     let reconciliation = load_binding(project_root, bindings, ACTION_RECONCILIATION_KEY)?;
     let trust_report = load_binding(project_root, bindings, TRUST_REPORT_KEY)?;
+    let independent = descriptor
+        .get(INDEPENDENT_VERIFICATION_FIELD)
+        .and_then(Value::as_object)
+        .ok_or_else(|| format!("missing object field {INDEPENDENT_VERIFICATION_FIELD}"))?;
+    let bundle_manifest = load_binding(project_root, independent, BUNDLE_MANIFEST_KEY)?;
+    let verification = load_binding(project_root, independent, VERIFICATION_RECEIPT_KEY)?;
+    let verifier_source_blake3 = verify_raw_binding(project_root, independent, VERIFIER_SOURCE_KEY)?;
+    let exporter_source_blake3 = verify_raw_binding(project_root, independent, EXPORTER_SOURCE_KEY)?;
+    let expected_verification_identity = independent
+        .get("verification_identity_blake3")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "independent verification identity is not a string".to_string())?;
+    validate_blake3(expected_verification_identity, "verification_identity_blake3")?;
+    if verification.value.get("verification_identity_blake3").and_then(Value::as_str)
+        != Some(expected_verification_identity)
+    {
+        return Err("independent verification identity differs from the parity descriptor".to_string());
+    }
     validate_promotion(PromotionEvidence {
         deterministic_proof: &deterministic.value,
         deterministic_file_blake3: &deterministic.digest_blake3,
@@ -44,6 +67,12 @@ pub(crate) fn validate_bound_promotion(project_root: &Path, descriptor: &Value) 
         action_reconciliation_file_blake3: &reconciliation.digest_blake3,
         trust_report: &trust_report.value,
         trust_report_file_blake3: &trust_report.digest_blake3,
+        independent_bundle_manifest: &bundle_manifest.value,
+        independent_bundle_manifest_file_blake3: &bundle_manifest.digest_blake3,
+        independent_verification: &verification.value,
+        independent_verification_file_blake3: &verification.digest_blake3,
+        independent_verifier_source_blake3: &verifier_source_blake3,
+        independent_exporter_source_blake3: &exporter_source_blake3,
     })
 }
 
@@ -80,6 +109,33 @@ fn load_binding(
         digest_blake3: observed_digest,
         value,
     })
+}
+
+fn verify_raw_binding(
+    project_root: &Path,
+    bindings: &serde_json::Map<String, Value>,
+    key: &str,
+) -> Result<String, String> {
+    let binding = bindings
+        .get(key)
+        .and_then(Value::as_object)
+        .ok_or_else(|| format!("bound evidence {key} is not an object"))?;
+    let relative = binding
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("bound evidence {key}.path is not a string"))?;
+    let expected_digest = binding
+        .get("blake3")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("bound evidence {key}.blake3 is not a string"))?;
+    validate_relative_path(relative)?;
+    validate_blake3(expected_digest, key)?;
+    let bytes = read_bounded_regular_file(&project_root.join(relative))?;
+    let observed = blake3::hash(&bytes).to_hex().to_string();
+    if observed != expected_digest {
+        return Err(format!("bound evidence {key} digest mismatch: expected {expected_digest}, observed {observed}"));
+    }
+    Ok(observed)
 }
 
 fn validate_relative_path(value: &str) -> Result<PathBuf, String> {

@@ -1155,15 +1155,37 @@ report; the evaluator remains the gate.
 `bootstrap parity-report` consumes the checked-in compatibility descriptor at
 `bootstrap/evidence/real-self-build-proof-parity.json` for the
 `crunch.self-build` row. The descriptor binds the archived V98 deterministic
-receipt, root action plan, reconciliation, and complete trust report by BLAKE3.
-The validator recomputes those file identities, source and provider linkage,
+receipt, root action plan, reconciliation, complete trust report, compressed
+full-parity bundle, independent verification receipt, and both verifier source
+files by BLAKE3. The in-process validator checks source and provider linkage,
 stage equality, adapter sums, and 1,914-action/478,870-event local coverage.
-Run the same core through the standalone checker:
+
+The standalone checker is a separate implementation. It decompresses and
+hashes each bundle member, validates all five native rows against current source
+records, checks StageX and Rust executable authority, and reads every exported
+audit event. Run both its negative matrix and the checked-in bundle:
 
 ```bash
 cargo -Zscript scripts/check-source-built-parity-promotion.rs --self-test
-cargo -Zscript scripts/check-source-built-parity-promotion.rs
+cargo -Zscript scripts/check-source-built-parity-promotion.rs \
+  --root . \
+  --bundle bootstrap/evidence/full-bootstrap-parity-v98 \
+  --out /tmp/mantle-full-bootstrap-parity-verification.json
 ```
+
+To export the accepted verification into release evidence without selecting a
+witness policy, add these options to `mantle release create`:
+
+```bash
+--external-evidence bootstrap/evidence/full-bootstrap-parity-v98/verification.json \
+--external-evidence-role full-bootstrap-parity \
+--external-evidence-schema mantle-full-bootstrap-parity-verification-v1 \
+--external-evidence-claim-scope recorded-stagex-to-mantle-fixed-point \
+--external-evidence-non-claim 'does not establish build-witness quorum'
+```
+
+A later `optional-witness` or explicit quorum result remains separate. It cannot
+change bootstrap-axis status.
 
 When every native row and the V98 binding validate, `--require live-bootstrap
 --require guix --require stagex` passes. This is a bounded promotion over the

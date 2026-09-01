@@ -1,0 +1,1 @@
+cargo clippy -p mantle --bin mantle --tests --no-deps -- -D warnings

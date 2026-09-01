@@ -479,13 +479,21 @@ ambient compiler discovery.
 This methodology proves bounded bootstrap facts for the recorded seed, source,
 tools, platform, and policy. The promoted V98 parity path additionally requires
 a matching two-stage Mantle binary plus complete local reconciliation of 1,914
-actions and 478,870 events. Validate it with:
+actions and 478,870 events. The checked-in compressed bundle contains the five
+native receipts and all five action domains. Its independent checker does not
+import the parity collector implementation. Validate both paths with:
 
 ```bash
 mantle --json bootstrap parity-report \
   --require live-bootstrap --require guix --require stagex
 cargo -Zscript scripts/check-source-built-parity-promotion.rs --self-test
+cargo -Zscript scripts/check-source-built-parity-promotion.rs \
+  --root . \
+  --bundle bootstrap/evidence/full-bootstrap-parity-v98
 ```
+
+The independent receipt is suitable for release external evidence. It does not
+select or satisfy a build-witness policy.
 
 These results do not prove compiler correctness, semantic correctness, seed or
 kernel correctness, independent rebuild agreement, or universal

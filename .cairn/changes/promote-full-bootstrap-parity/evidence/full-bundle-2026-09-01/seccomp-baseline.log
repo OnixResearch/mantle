@@ -1,0 +1,50 @@
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 13`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 1 test
+test protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path ... FAILED
+
+failures:
+
+---- protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path stdout ----
+
+thread 'protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path' (1106972) panicked at src/protected_exec_seccomp.rs:1470:13:
+stdout=
+running 1 test
+test protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path has been running for over 60 seconds
+
+running 1 test
+test protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2550 filtered out; finished in 0.00s
+
+test protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path ... FAILED
+
+failures:
+
+failures:
+    protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2550 filtered out; finished in 102.88s
+
+
+stderr=
+thread 'protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path' (1106974) panicked at src/protected_exec_seccomp.rs:1833:64:
+called `Result::unwrap()` on an `Err` value: Supervisor("adopted StageX descendants did not exit within 30000 ms")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    protected_exec_seccomp::linux::tests::seccomp_supervisor_reads_deep_descendant_exec_path
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2550 filtered out; finished in 102.88s
+
+error: test failed, to rerun pass `-p mantle --bin mantle`

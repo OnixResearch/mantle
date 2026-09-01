@@ -1533,6 +1533,69 @@ fn release_create_and_verify_external_evidence_sidecar() {
     assert_human_release_verify_rejection(output, "external evidence role required but missing");
 }
 
+#[test]
+fn release_exports_full_bootstrap_parity_without_witness_quorum() {
+    const PARITY_ROLE: &str = "full-bootstrap-parity";
+    const PARITY_SCHEMA: &str = "mantle-full-bootstrap-parity-verification-v1";
+    const PARITY_SCOPE: &str = "recorded-stagex-to-mantle-fixed-point";
+    const PARITY_NON_CLAIM: &str = "does not establish build-witness quorum";
+
+    let temp = tempfile::tempdir().unwrap();
+    create_minimal_release_repo(temp.path());
+    let binary_path = temp.path().join("mantle-bin");
+    write_file(&binary_path, b"mantle-binary");
+    let stage2_digest = blake3::hash(b"mantle-binary").to_hex().to_string();
+    let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+    let proof_dir = temp.path().join("proof-input");
+    write_full_proof_bundle(&proof_dir, &stage2_digest, &inventory_digest);
+    let parity_receipt =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("bootstrap/evidence/full-bootstrap-parity-v98/verification.json");
+    let bundle_dir = temp.path().join("bundle-full-bootstrap-parity");
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("create")
+        .arg("--release-id")
+        .arg("mantle-full-bootstrap-parity-test")
+        .arg("--bundle-dir")
+        .arg(&bundle_dir)
+        .arg("--binary")
+        .arg(&binary_path)
+        .arg("--proof-bundle")
+        .arg(&proof_dir)
+        .arg("--external-evidence")
+        .arg(&parity_receipt)
+        .arg("--external-evidence-role")
+        .arg(PARITY_ROLE)
+        .arg("--external-evidence-schema")
+        .arg(PARITY_SCHEMA)
+        .arg("--external-evidence-claim-scope")
+        .arg(PARITY_SCOPE)
+        .arg("--external-evidence-non-claim")
+        .arg(PARITY_NON_CLAIM)
+        .assert()
+        .success();
+
+    let manifest: ReleaseEvidenceManifest =
+        serde_json::from_slice(&std::fs::read(bundle_dir.join("manifest.json")).unwrap()).unwrap();
+    let evidence = manifest.external_evidence.first().expect("parity evidence is exported");
+    assert_eq!(evidence.role, PARITY_ROLE);
+    assert_eq!(evidence.schema, PARITY_SCHEMA);
+    assert_eq!(evidence.claim_scope, PARITY_SCOPE);
+    assert_eq!(evidence.non_claims, vec![PARITY_NON_CLAIM.to_string()]);
+
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("verify")
+        .arg(&bundle_dir)
+        .arg("--require-external-evidence-role")
+        .arg(PARITY_ROLE)
+        .assert()
+        .success();
+}
+
 // r[verify mantle.release_provenance.valence_receipt_binding]
 // r[verify mantle.release_provenance.valence_required_policy.required_valid]
 #[test]

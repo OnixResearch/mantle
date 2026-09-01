@@ -1,0 +1,2 @@
+cargo fmt --check -p mantle -v
+git diff --check

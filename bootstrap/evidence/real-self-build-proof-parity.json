@@ -26,6 +26,25 @@
       "blake3": "d48728409158ee368923e3bd59934518cfb90a018482b177f34b73d7bf36bfcc"
     }
   },
+  "independent_verification": {
+    "bundle_manifest": {
+      "path": "bootstrap/evidence/full-bootstrap-parity-v98/manifest.json",
+      "blake3": "fcf550d8a44b369f2d5a0b834859249bf0dd92346205ca31277058f593cb75c7"
+    },
+    "verification_receipt": {
+      "path": "bootstrap/evidence/full-bootstrap-parity-v98/verification.json",
+      "blake3": "09a258e1c9fd3ec05d9a74a73c5444322cb80a80c5746b90276059fae8aa912e"
+    },
+    "verification_identity_blake3": "de1b3f03c62b3cf90b5c33f964efdb72a9b0165537beadbf0880f3469cb6c538",
+    "verifier_source": {
+      "path": "scripts/check-source-built-parity-promotion.rs",
+      "blake3": "ccea5fce96ccb8431d12f6dfea47076893493eefac7a73890251fd3d918ef290"
+    },
+    "exporter_source": {
+      "path": "scripts/export-source-built-parity-bundle.rs",
+      "blake3": "6a910e6be60faf62a40115fbc1f0a002d6232454b4c4e417800efd387c12779e"
+    }
+  },
   "deterministic_proof": {
     "workflow": "mantle-deterministic-proof-receipt-v2",
     "verdict": "self-rebuild-match",
