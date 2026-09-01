@@ -326,11 +326,11 @@ async fn fetch_http_narinfo_text_bounded(
     let mut bytes = Vec::new();
     let mut stream = response.bytes_stream();
     while let Some(chunk) = stream.try_next().await.map_err(|error| format!("reading {narinfo_url}: {error}"))? {
-        let next_length = u64::try_from(bytes.len())
+        let next_size_bytes = u64::try_from(bytes.len())
             .ok()
             .and_then(|length| length.checked_add(u64::try_from(chunk.len()).ok()?))
             .ok_or_else(|| "narinfo response size overflow".to_string())?;
-        if next_length > max_bytes {
+        if next_size_bytes > max_bytes {
             return Err(format!("narinfo response exceeds {max_bytes} bytes"));
         }
         bytes.extend_from_slice(&chunk);
@@ -384,6 +384,19 @@ pub async fn import_paths_from_http_cache(
     Ok(pull_result)
 }
 
+pub struct HttpClosureImportValidation<F> {
+    pub limits: HttpClosureLimits,
+    pub validate_plan: F,
+}
+
+struct HttpClosureDiscoveryRequest<'a> {
+    cache_url: &'a Url,
+    root: &'a StorePath<String>,
+    store_dir: &'a str,
+    options: &'a PullOptions,
+    limits: HttpClosureLimits,
+}
+
 /// Discover and import one complete signed HTTP cache closure.
 /// r[impl cache_substitution.complete_http_closure_pull]
 pub async fn import_http_cache_closure(
@@ -393,7 +406,11 @@ pub async fn import_http_cache_closure(
     options: &PullOptions,
     limits: HttpClosureLimits,
 ) -> Result<HttpClosurePullReport, Error> {
-    import_http_cache_closure_with_validator(handle, cache_url, root, options, limits, |_| Ok(())).await
+    import_http_cache_closure_with_validator(handle, cache_url, root, options, HttpClosureImportValidation {
+        limits,
+        validate_plan: |_plan: &HttpClosurePlan| Ok(()),
+    })
+    .await
 }
 
 /// Discover and validate the complete metadata closure before content import.
@@ -402,27 +419,36 @@ pub async fn import_http_cache_closure_with_validator<F>(
     cache_url: &Url,
     root: &StorePath<String>,
     options: &PullOptions,
-    limits: HttpClosureLimits,
-    validate_plan: F,
+    validation: HttpClosureImportValidation<F>,
 ) -> Result<HttpClosurePullReport, Error>
 where
     F: FnOnce(&HttpClosurePlan) -> Result<(), String>,
 {
+    let HttpClosureImportValidation { limits, validate_plan } = validation;
     handle.revalidate_overlay_bases()?;
     validate_http_cache_url(cache_url)?;
     let client = build_http_pull_client()?;
     let normalized_cache_url = normalize_http_cache_base_url(cache_url);
     validate_remote_store_dir(&client, &normalized_cache_url, handle.store_dir()).await?;
 
-    let discovered =
-        discover_http_cache_closure(&client, &normalized_cache_url, root, handle.store_dir(), options, limits).await?;
+    let discovered = discover_http_cache_closure(&client, HttpClosureDiscoveryRequest {
+        cache_url: &normalized_cache_url,
+        root,
+        store_dir: handle.store_dir(),
+        options,
+        limits,
+    })
+    .await?;
+    assert!(!discovered.plan.members.is_empty());
+    assert_eq!(discovered.plan.root, root.to_string());
     if !verify_http_closure_plan_identity(&discovered.plan).map_err(http_closure_plan_error)? {
         return Err(Error::Store("http-closure-plan-identity-mismatch".to_string()));
     }
     validate_plan(&discovered.plan).map_err(Error::Store)?;
-    let report = import_discovered_http_closure(handle, &client, &normalized_cache_url, options, discovered).await?;
+    let closure_outcome =
+        import_discovered_http_closure(handle, &client, &normalized_cache_url, options, discovered).await?;
     handle.revalidate_overlay_bases()?;
-    Ok(report)
+    Ok(closure_outcome)
 }
 
 #[derive(Debug)]
@@ -439,12 +465,15 @@ struct DiscoveredHttpClosure {
 
 async fn discover_http_cache_closure(
     client: &reqwest::Client,
-    cache_url: &Url,
-    root: &StorePath<String>,
-    store_dir: &str,
-    options: &PullOptions,
-    limits: HttpClosureLimits,
+    request: HttpClosureDiscoveryRequest<'_>,
 ) -> Result<DiscoveredHttpClosure, Error> {
+    let HttpClosureDiscoveryRequest {
+        cache_url,
+        root,
+        store_dir,
+        options,
+        limits,
+    } = request;
     let trust_policy_blake3 = http_pull_trust_policy_blake3(options)?;
     let mut builder = HttpClosurePlanBuilder::new(
         root.clone(),
@@ -454,18 +483,28 @@ async fn discover_http_cache_closure(
         limits,
     )
     .map_err(http_closure_plan_error)?;
-    let mut narinfos = BTreeMap::new();
+    let mut narinfo_entries = Vec::with_capacity(
+        usize::try_from(limits.max_members)
+            .map_err(|_| Error::Store("http closure member limit exceeds usize".to_string()))?,
+    );
 
     while let Some(request) = builder.take_next_request().map_err(http_closure_plan_error)? {
         let text = fetch_required_closure_narinfo(client, cache_url, &request.path, limits.max_narinfo_bytes).await?;
         let observation = strict_http_closure_observation(&text, &request.path, store_dir, options)?;
         let map_key = request.path.to_string();
         builder.observe(observation).map_err(http_closure_plan_error)?;
-        narinfos.insert(map_key, DiscoveredHttpNarinfo {
+        if u32::try_from(narinfo_entries.len()).map_or(true, |value| value >= limits.max_members) {
+            return Err(Error::Store("http closure narinfo map exceeds member limit".to_string()));
+        }
+        narinfo_entries
+            .try_reserve(1)
+            .map_err(|error| Error::Store(format!("reserving http closure metadata: {error}")))?;
+        narinfo_entries.push((map_key, DiscoveredHttpNarinfo {
             path: request.path,
             text,
-        });
+        }));
     }
+    let narinfos = narinfo_entries.into_iter().collect::<BTreeMap<_, _>>();
     let plan = builder.finalize().map_err(http_closure_plan_error)?;
     if plan.members.len() != narinfos.len() {
         return Err(Error::Store("http-closure-plan-member-count-mismatch".to_string()));
@@ -552,26 +591,27 @@ async fn import_discovered_http_closure(
         .narinfos
         .get(&discovered.plan.root)
         .ok_or_else(|| Error::Store("http-closure-root-metadata-missing-after-import".to_string()))?;
-    let root_admitted = local_member_is_complete(
-        handle,
-        root_member,
-        discovered.plan.members.last().expect("closure plan must contain the root"),
-        options,
-    )
-    .await?;
-    if !root_admitted {
+    let root_plan_member = discovered
+        .plan
+        .members
+        .last()
+        .ok_or_else(|| Error::Store("http-closure-plan-has-no-root-member".to_string()))?;
+    let is_root_admitted = local_member_is_complete(handle, root_member, root_plan_member, options).await?;
+    if !is_root_admitted {
         return Err(Error::Store("http-closure-root-not-admitted".to_string()));
     }
     debug_assert_eq!(
         discovered.plan.members.last().map(|member| member.store_path.as_str()),
         Some(discovered.plan.root.as_str())
     );
-    debug_assert_eq!(pull.imported_count.saturating_add(reused_complete_count) as usize, discovered.plan.members.len());
+    if let Ok(member_count) = u32::try_from(discovered.plan.members.len()) {
+        debug_assert_eq!(pull.imported_count.saturating_add(reused_complete_count), member_count);
+    }
     Ok(HttpClosurePullReport {
         plan: discovered.plan,
         pull,
         reused_complete_count,
-        root_admitted,
+        root_admitted: is_root_admitted,
     })
 }
 
@@ -607,13 +647,21 @@ fn ensure_pathinfo_matches_plan(
     let mut references = path_info.references.iter().map(ToString::to_string).collect::<Vec<_>>();
     references.sort();
     let nar_sha256_hex = data_encoding::HEXLOWER.encode(&path_info.nar_sha256);
-    if path_info.store_path != discovered.path
-        || path_info.store_path.to_string() != member.store_path
-        || path_info.nar_size != member.nar_size
-        || nar_sha256_hex != member.nar_sha256_hex
-        || references != member.references
-    {
-        return Err(Error::Store(format!("http-closure-local-metadata-conflict: {}", member.store_path)));
+    let conflict = || Error::Store(format!("http-closure-local-metadata-conflict: {}", member.store_path));
+    if path_info.store_path != discovered.path {
+        return Err(conflict());
+    }
+    if path_info.store_path.to_string() != member.store_path {
+        return Err(conflict());
+    }
+    if path_info.nar_size != member.nar_size {
+        return Err(conflict());
+    }
+    if nar_sha256_hex != member.nar_sha256_hex {
+        return Err(conflict());
+    }
+    if references != member.references {
+        return Err(conflict());
     }
     debug_assert_eq!(references, member.references);
     debug_assert_eq!(nar_sha256_hex, member.nar_sha256_hex);
@@ -678,6 +726,8 @@ async fn import_planned_http_member(
     if ingested.nar_sha256 != narinfo.nar_hash || ingested.nar_size_bytes != narinfo.nar_size {
         return Err(Error::Store(format!("http-closure-nar-facts-mismatch: {}", member.store_path)));
     }
+    assert_eq!(ingested.nar_sha256, narinfo.nar_hash);
+    assert_eq!(ingested.nar_size_bytes, narinfo.nar_size);
     let path_info = PathInfo {
         store_path: discovered.path.clone(),
         node: ingested.node,
@@ -710,13 +760,21 @@ fn ensure_narinfo_matches_plan(
     references.sort();
     let nar_hash_hex = data_encoding::HEXLOWER.encode(&narinfo.nar_hash);
     let narinfo_blake3 = blake3::hash(text.as_bytes()).to_hex().to_string();
-    if narinfo.store_path.to_string() != member.store_path
-        || narinfo.nar_size != member.nar_size
-        || nar_hash_hex != member.nar_sha256_hex
-        || references != member.references
-        || narinfo_blake3 != member.narinfo_blake3
-    {
-        return Err(Error::Store(format!("http-closure-planned-metadata-mismatch: {}", member.store_path)));
+    let mismatch = || Error::Store(format!("http-closure-planned-metadata-mismatch: {}", member.store_path));
+    if narinfo.store_path.to_string() != member.store_path {
+        return Err(mismatch());
+    }
+    if narinfo.nar_size != member.nar_size {
+        return Err(mismatch());
+    }
+    if nar_hash_hex != member.nar_sha256_hex {
+        return Err(mismatch());
+    }
+    if references != member.references {
+        return Err(mismatch());
+    }
+    if narinfo_blake3 != member.narinfo_blake3 {
+        return Err(mismatch());
     }
     if !verify_narinfo_signatures(narinfo, store_dir, options) {
         return Err(Error::Store(format!("http-closure-planned-signature-mismatch: {}", member.store_path)));
@@ -950,8 +1008,8 @@ async fn ingest_http_nar(
             return Ok(None);
         }
     };
-    let nar_read_limit = narinfo.nar_size.saturating_add(1);
-    let mut bounded_nar_reader = nar_reader.take(nar_read_limit);
+    let maximum_nar_bytes = narinfo.nar_size.saturating_add(1);
+    let mut bounded_nar_reader = nar_reader.take(maximum_nar_bytes);
     let ingestion = ingest_nar_and_hash(
         context.handle.blob_service(),
         context.handle.directory_service(),
@@ -2032,8 +2090,10 @@ mod tests {
             &server.base_url,
             &root.store_path,
             &default_pull_options(),
-            HttpClosureLimits::default(),
-            |_| Err("fixture-plan-rejected".to_string()),
+            HttpClosureImportValidation {
+                limits: HttpClosureLimits::default(),
+                validate_plan: |_plan: &HttpClosurePlan| Err("fixture-plan-rejected".to_string()),
+            },
         )
         .await
         .unwrap_err();

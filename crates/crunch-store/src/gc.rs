@@ -16,6 +16,7 @@ use crunch_gc_core::plan_gc;
 use crunch_gc_core::report_decision;
 use crunch_gc_core::retention::RetentionDecision;
 use crunch_gc_core::retention::RetentionDisposition;
+use crunch_gc_core::retention::RetentionPlan;
 use crunch_gc_core::retention::UsageObjectObservation;
 use crunch_gc_core::retention::aggregate_usage;
 use crunch_gc_core::retention::plan_retention;
@@ -176,6 +177,26 @@ struct LiveCastoreState {
     chunk_digests: HashSet<B3Digest>,
 }
 
+struct RootRetentionState {
+    all_roots: Vec<GcRootRecord>,
+    retention_plan: RetentionPlan,
+    retained_roots: Vec<GcRootRecord>,
+}
+
+struct GcCandidateState {
+    live_pathinfos: Vec<PathInfo>,
+    dead_pathinfos: Vec<PathInfo>,
+    live_castore: LiveCastoreState,
+    orphaned_on_disk: Vec<PathBuf>,
+    artifact_attestation_paths: Vec<PathBuf>,
+    closure_attestation_paths: Vec<PathBuf>,
+    blob_index_paths: Vec<PathBuf>,
+    blob_chunk_paths: Vec<PathBuf>,
+    action_result_record_paths: Vec<PathBuf>,
+    action_result_index_paths: Vec<PathBuf>,
+    reclaim_summary: ReclaimObservationSummary,
+}
+
 struct GcPlan {
     plan_id: String,
     retention_plan_id: String,
@@ -220,12 +241,7 @@ pub async fn run_gc(
         return Err(Error::Gc(format!("stale-gc-plan: accepted={accepted_plan_id} observed={}", plan.plan_id)));
     }
     let core_decision = plan.core_decision;
-    let live_paths: BTreeSet<String> = plan
-        .live_pathinfos
-        .iter()
-        .map(|path_info| path_info.store_path.to_absolute_path_with_prefix(ctx.store_dir))
-        .collect();
-    let mut gc_result = GcReport {
+    let gc_result = GcReport {
         schema: GC_REPORT_SCHEMA.to_string(),
         plan_id: plan.plan_id.clone(),
         retention_plan_id: plan.retention_plan_id.clone(),
@@ -261,22 +277,37 @@ pub async fn run_gc(
     if core_decision.mutation_disposition == GcMutationDisposition::ReportOnly {
         return Ok(gc_result);
     }
+    execute_gc_plan(ctx, ca_mappings, &plan, gc_result).await
+}
 
+async fn execute_gc_plan(
+    ctx: &GcContext<'_>,
+    ca_mappings: &mut CaMappings,
+    plan: &GcPlan,
+    mut gc_result: GcReport,
+) -> Result<GcReport, Error> {
+    assert!(!gc_result.is_dry_run);
+    assert_eq!(plan.core_decision.mutation_disposition, GcMutationDisposition::Execute);
+    let live_paths = plan
+        .live_pathinfos
+        .iter()
+        .map(|path_info| path_info.store_path.to_absolute_path_with_prefix(ctx.store_dir))
+        .collect::<BTreeSet<_>>();
     let pathinfo_result = rewrite_pathinfo_db(ctx.state_dir, &plan.live_pathinfos).await;
     if !record_gc_operation(&mut gc_result, GcOperationKind::PathInfoRewrite, pathinfo_result) {
         return Ok(gc_result);
     }
-    let _exported_outputs_succeeded = record_gc_operation(
+    record_gc_operation(
         &mut gc_result,
         GcOperationKind::ExportedOutputs,
         remove_exported_outputs(&plan.orphaned_on_disk),
     );
-    let _artifact_attestations_succeeded = record_gc_operation(
+    record_gc_operation(
         &mut gc_result,
         GcOperationKind::ArtifactAttestations,
         remove_files(&plan.artifact_attestation_paths),
     );
-    let _closure_attestations_succeeded = record_gc_operation(
+    record_gc_operation(
         &mut gc_result,
         GcOperationKind::ClosureAttestations,
         remove_files(&plan.closure_attestation_paths),
@@ -285,27 +316,22 @@ pub async fn run_gc(
     if !record_gc_operation(&mut gc_result, GcOperationKind::DirectoryRewrite, directory_result) {
         return Ok(gc_result);
     }
-    let _blob_indexes_succeeded =
-        record_gc_operation(&mut gc_result, GcOperationKind::BlobIndexFiles, remove_files(&plan.blob_index_paths));
-    let _blob_chunks_succeeded =
-        record_gc_operation(&mut gc_result, GcOperationKind::BlobChunkFiles, remove_files(&plan.blob_chunk_paths));
+    record_gc_operation(&mut gc_result, GcOperationKind::BlobIndexFiles, remove_files(&plan.blob_index_paths));
+    record_gc_operation(&mut gc_result, GcOperationKind::BlobChunkFiles, remove_files(&plan.blob_chunk_paths));
     let action_result = remove_action_result_files(&plan.action_result_record_paths, &plan.action_result_index_paths);
-    let _action_results_succeeded = record_gc_operation(&mut gc_result, GcOperationKind::ActionResults, action_result);
+    record_gc_operation(&mut gc_result, GcOperationKind::ActionResults, action_result);
     ca_mappings.retain_output_paths(&live_paths);
     let ca_mapping_result = ca_mappings
         .save_checked(ctx.state_dir)
         .map_err(|error| Error::Gc(format!("saving CA mappings: {error}")));
-    let _ca_mappings_succeeded = record_gc_operation(&mut gc_result, GcOperationKind::CaMappings, ca_mapping_result);
-
+    record_gc_operation(&mut gc_result, GcOperationKind::CaMappings, ca_mapping_result);
     gc_result.execution_complete = gc_result.failed_operations.is_empty();
     Ok(gc_result)
 }
 
-// r[impl store_lifecycle.gc_explanation]
-async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result<GcPlan, Error> {
-    assert!(!ctx.store_dir.is_empty(), "build_plan: store_dir must not be empty");
-    assert!(ctx.store_dir.starts_with('/'), "build_plan: store_dir must be absolute");
-
+fn plan_root_retention(ctx: &GcContext<'_>) -> Result<RootRetentionState, Error> {
+    assert!(!ctx.store_dir.is_empty());
+    assert!(ctx.store_dir.starts_with('/'));
     let all_roots = roots::list_roots(ctx.state_dir)?;
     let current_unix_s = roots::current_unix_seconds()?;
     let retention_policy = crate::retention::core_retention_policy();
@@ -323,12 +349,80 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
         .filter(|root| retained_root_ids.contains(root.logical_path.as_str()))
         .cloned()
         .collect::<Vec<_>>();
+    Ok(RootRetentionState {
+        all_roots,
+        retention_plan,
+        retained_roots,
+    })
+}
+
+async fn collect_candidate_state(
+    ctx: &GcContext<'_>,
+    retained_roots: &[GcRootRecord],
+    overlay_snapshot: Vec<PathInfo>,
+    live_paths: &BTreeSet<String>,
+) -> Result<GcCandidateState, Error> {
+    assert!(retained_roots.len() <= crunch_gc_core::MAX_GC_ENTRIES);
+    assert!(live_paths.len() <= crunch_gc_core::MAX_GC_ENTRIES);
+    let (live_pathinfos, dead_pathinfos) = split_pathinfos(overlay_snapshot, live_paths, ctx.store_dir);
+    let live_castore = collect_live_castore_state(
+        &live_pathinfos,
+        ctx.retained_castore_roots,
+        ctx.overlay_directory_service,
+        ctx.overlay_blob_service,
+    )
+    .await?;
+    let orphaned_on_disk = collect_existing_exported_outputs(&dead_pathinfos, ctx.output_dir_str)?;
+    let artifact_attestation_paths =
+        collect_existing_artifact_attestation_paths(ctx.state_dir, ctx.store_dir, &dead_pathinfos)?;
+    let closure_attestation_paths = collect_dead_closure_attestations(ctx.state_dir, retained_roots)?;
+    let blob_index_paths = collect_dead_blob_files(ctx.state_dir, &live_castore.blob_index_digests, true)?;
+    let blob_chunk_paths = collect_dead_blob_files(ctx.state_dir, &live_castore.chunk_digests, false)?;
+    let action_result_gc = local_action_result_gc_candidates(ctx.state_dir, live_paths)
+        .map_err(|error| Error::Gc(format!("planning action-result metadata collection: {error}")))?;
+    let reclaim_summary = compute_reclaimable_bytes(ReclaimObservationPaths {
+        orphaned_on_disk: &orphaned_on_disk,
+        artifact_attestations: &artifact_attestation_paths,
+        closure_attestations: &closure_attestation_paths,
+        blob_indexes: &blob_index_paths,
+        blob_chunks: &blob_chunk_paths,
+        action_result_records: &action_result_gc.record_paths,
+        action_result_indexes: &action_result_gc.index_marker_paths,
+    })?;
+    Ok(GcCandidateState {
+        live_pathinfos,
+        dead_pathinfos,
+        live_castore,
+        orphaned_on_disk,
+        artifact_attestation_paths,
+        closure_attestation_paths,
+        blob_index_paths,
+        blob_chunk_paths,
+        action_result_record_paths: action_result_gc.record_paths,
+        action_result_index_paths: action_result_gc.index_marker_paths,
+        reclaim_summary,
+    })
+}
+
+fn overlay_trusted_keys(ctx: &GcContext<'_>) -> Result<Option<Vec<nix_compat::narinfo::VerifyingKey>>, Error> {
+    if ctx.overlay_plan_identity.is_none() {
+        return Ok(None);
+    }
+    crate::overlay::load_layer_trust_keys(ctx.state_dir).map(Some)
+}
+
+// r[impl store_lifecycle.gc_explanation]
+async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result<GcPlan, Error> {
+    assert!(!ctx.store_dir.is_empty(), "build_plan: store_dir must not be empty");
+    assert!(ctx.store_dir.starts_with('/'), "build_plan: store_dir must be absolute");
+
+    let RootRetentionState {
+        all_roots,
+        retention_plan,
+        retained_roots,
+    } = plan_root_retention(ctx)?;
     let overlay_snapshot = snapshot_pathinfos(ctx.overlay_pathinfo).await?;
-    let overlay_trusted_keys = if ctx.overlay_plan_identity.is_some() {
-        Some(crate::overlay::load_layer_trust_keys(ctx.state_dir)?)
-    } else {
-        None
-    };
+    let overlay_trusted_keys = overlay_trusted_keys(ctx)?;
     let composed_snapshot = compose_gc_snapshot(
         &overlay_snapshot,
         &retained_roots,
@@ -347,46 +441,22 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
         &retention_plan.decisions,
         ctx.store_dir,
     )?;
-    let explanation_link_limit =
+    let maximum_explanation_link_count =
         crate::retention::store_retention_runtime_policy().limits.max_closure_links_per_explanation;
-    let path_explanations = build_path_explanations(&core_plan, explanation_link_limit)?;
+    let path_explanations = build_path_explanations(&core_plan, maximum_explanation_link_count)?;
     let base_reachability = build_base_reachability(&core_plan.retaining_roots, &composed_snapshot.ownership);
     let core_plan_id = core_plan.plan_id.into_bytes();
     let retention_plan_id_bytes = retention_plan.plan_id.into_bytes();
     let retention_plan_id = encode_blake3_identity(&retention_plan_id_bytes);
     let retention_explanations = build_retention_explanations(&retention_plan.decisions, &all_roots)?;
-    let (live_pathinfos, dead_pathinfos) = split_pathinfos(overlay_snapshot, &live_paths, ctx.store_dir);
-    let live_castore = collect_live_castore_state(
-        &live_pathinfos,
-        ctx.retained_castore_roots,
-        ctx.overlay_directory_service,
-        ctx.overlay_blob_service,
-    )
-    .await?;
-    let orphaned_on_disk = collect_existing_exported_outputs(&dead_pathinfos, ctx.output_dir_str)?;
-    let artifact_attestation_paths =
-        collect_existing_artifact_attestation_paths(ctx.state_dir, ctx.store_dir, &dead_pathinfos)?;
-    let closure_attestation_paths = collect_dead_closure_attestations(ctx.state_dir, &retained_roots)?;
-    let blob_index_paths = collect_dead_blob_files(ctx.state_dir, &live_castore.blob_index_digests, true)?;
-    let blob_chunk_paths = collect_dead_blob_files(ctx.state_dir, &live_castore.chunk_digests, false)?;
-    let action_result_gc = local_action_result_gc_candidates(ctx.state_dir, &live_paths)
-        .map_err(|error| Error::Gc(format!("planning action-result metadata collection: {error}")))?;
-    let reclaim_summary = compute_reclaimable_bytes(ReclaimObservationPaths {
-        orphaned_on_disk: &orphaned_on_disk,
-        artifact_attestations: &artifact_attestation_paths,
-        closure_attestations: &closure_attestation_paths,
-        blob_indexes: &blob_index_paths,
-        blob_chunks: &blob_chunk_paths,
-        action_result_records: &action_result_gc.record_paths,
-        action_result_indexes: &action_result_gc.index_marker_paths,
-    })?;
+    let candidates = collect_candidate_state(ctx, &retained_roots, overlay_snapshot, &live_paths).await?;
     let candidate_paths = core_plan.candidate_path_ids.clone();
     let plan_id = execution_plan_id(ExecutionPlanIdentityInput {
         core_plan_id: &core_plan_id,
         retention_plan_id: &retention_plan_id_bytes,
         overlay_plan_identity: ctx.overlay_plan_identity.as_ref(),
         candidate_paths: &candidate_paths,
-        reclaim_observations: &reclaim_summary.observations,
+        reclaim_observations: &candidates.reclaim_summary.observations,
     });
     let core_decision = report_decision(core_plan);
 
@@ -399,19 +469,19 @@ async fn build_plan(ctx: &GcContext<'_>, is_execution_requested: bool) -> Result
         path_explanations,
         base_reachability,
         usage,
-        live_pathinfos,
-        dead_pathinfos,
-        live_castore,
-        orphaned_on_disk,
-        artifact_attestation_paths,
-        closure_attestation_paths,
-        blob_index_paths,
-        blob_chunk_paths,
-        action_result_record_paths: action_result_gc.record_paths,
-        action_result_index_paths: action_result_gc.index_marker_paths,
+        live_pathinfos: candidates.live_pathinfos,
+        dead_pathinfos: candidates.dead_pathinfos,
+        live_castore: candidates.live_castore,
+        orphaned_on_disk: candidates.orphaned_on_disk,
+        artifact_attestation_paths: candidates.artifact_attestation_paths,
+        closure_attestation_paths: candidates.closure_attestation_paths,
+        blob_index_paths: candidates.blob_index_paths,
+        blob_chunk_paths: candidates.blob_chunk_paths,
+        action_result_record_paths: candidates.action_result_record_paths,
+        action_result_index_paths: candidates.action_result_index_paths,
         candidate_paths,
-        reclaimable_bytes_total: reclaim_summary.reclaimable_bytes_total,
-        reclaim_observations: reclaim_summary.observations,
+        reclaimable_bytes_total: candidates.reclaim_summary.reclaimable_bytes_total,
+        reclaim_observations: candidates.reclaim_summary.observations,
     })
 }
 
@@ -433,14 +503,20 @@ fn record_gc_operation(report: &mut GcReport, kind: GcOperationKind, result: Res
 }
 
 fn remove_action_result_files(record_paths: &[PathBuf], index_paths: &[PathBuf]) -> Result<(), Error> {
-    remove_file_iter(record_paths.iter().chain(index_paths))
+    let expected_path_count = record_paths
+        .len()
+        .checked_add(index_paths.len())
+        .ok_or_else(|| Error::Gc("action-result cleanup path count overflowed usize".to_string()))?;
+    remove_file_iter(record_paths.iter().chain(index_paths), expected_path_count)
 }
 
 fn build_retention_explanations(
     decisions: &[RetentionDecision],
     roots: &[GcRootRecord],
 ) -> Result<Vec<GcRetentionExplanation>, Error> {
+    assert_eq!(decisions.len(), roots.len());
     let roots_by_path = roots.iter().map(|root| (root.logical_path.as_str(), root)).collect::<BTreeMap<_, _>>();
+    assert!(roots_by_path.len() <= roots.len());
     let mut explanations = Vec::with_capacity(decisions.len());
     for decision in decisions {
         let root = roots_by_path
@@ -481,6 +557,8 @@ fn build_path_explanations(
     if retaining_root_limit == 0 {
         return Err(Error::Gc("retaining-root explanation limit must be positive".to_string()));
     }
+    assert!(retaining_root_limit > 0);
+    assert!(core_plan.retaining_roots.len() <= crunch_gc_core::MAX_GC_ENTRIES);
     let mut explanations = Vec::with_capacity(core_plan.retaining_roots.len());
     for retained in &core_plan.retaining_roots {
         if retained.root_ids.len() > retaining_root_limit {
@@ -511,6 +589,8 @@ fn build_usage_report(
     decisions: &[RetentionDecision],
     store_dir: &str,
 ) -> Result<GcUsageReport, Error> {
+    assert!(!store_dir.is_empty());
+    assert!(store_dir.starts_with('/'));
     let roots_by_path = retaining_roots
         .iter()
         .map(|entry| (entry.path_id.as_str(), entry.root_ids.clone()))
@@ -527,17 +607,17 @@ fn build_usage_report(
             }
         })
         .collect();
-    let report = aggregate_usage(decisions, observations)
+    let usage_aggregate = aggregate_usage(decisions, observations)
         .map_err(|error| Error::Gc(format!("aggregating store usage: {error:?}")))?;
     Ok(GcUsageReport {
-        observed_bytes: report.observed_bytes,
-        retained_bytes: report.retained_bytes,
-        reclaimable_bytes: report.reclaimable_bytes,
-        quarantined_bytes: report.quarantined_bytes,
-        unclassified_bytes: report.unclassified_bytes,
-        shared_bytes: report.shared_bytes,
-        unknown_object_count: report.unknown_object_count,
-        roots: report
+        observed_bytes: usage_aggregate.observed_bytes,
+        retained_bytes: usage_aggregate.retained_bytes,
+        reclaimable_bytes: usage_aggregate.reclaimable_bytes,
+        quarantined_bytes: usage_aggregate.quarantined_bytes,
+        unclassified_bytes: usage_aggregate.unclassified_bytes,
+        shared_bytes: usage_aggregate.shared_bytes,
+        unknown_object_count: usage_aggregate.unknown_object_count,
+        roots: usage_aggregate
             .roots
             .into_iter()
             .map(|root| GcRootUsage {
@@ -559,6 +639,8 @@ struct ExecutionPlanIdentityInput<'a> {
 }
 
 fn execution_plan_id(input: ExecutionPlanIdentityInput<'_>) -> String {
+    assert_eq!(input.core_plan_id.len(), blake3::OUT_LEN);
+    assert!(input.candidate_paths.len() <= crunch_gc_core::MAX_GC_ENTRIES);
     let mut hasher = blake3::Hasher::new();
     hasher.update(GC_EXECUTION_PLAN_DOMAIN);
     hasher.update(input.core_plan_id);
@@ -624,20 +706,34 @@ fn encode_blake3_identity(bytes: &[u8; blake3::OUT_LEN]) -> String {
     format!("b3:{}", HEXLOWER.encode(bytes))
 }
 
-async fn compose_gc_snapshot(
+struct GcSnapshotSeed {
+    pathinfos_by_id: BTreeMap<String, PathInfo>,
+    ownership: BTreeMap<String, GcOwnership>,
+    queue: Vec<String>,
+}
+
+struct ComposedPathInfoRequest<'a> {
+    path_id: &'a str,
+    store_dir: &'a str,
+}
+
+fn seed_overlay_snapshot(
     overlay_snapshot: &[PathInfo],
-    retained_roots: &[GcRootRecord],
-    composed_pathinfo: &dyn PathInfoService,
     store_dir: &str,
     overlay_trusted_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
-) -> Result<ComposedGcSnapshot, Error> {
+) -> Result<GcSnapshotSeed, Error> {
+    assert!(!store_dir.is_empty());
+    assert!(overlay_snapshot.len() <= crunch_gc_core::MAX_GC_ENTRIES);
     let mut pathinfos_by_id = BTreeMap::new();
     let mut ownership = BTreeMap::new();
-    let mut queue = Vec::new();
+    let mut queue = Vec::with_capacity(overlay_snapshot.len());
     for path_info in overlay_snapshot {
         if let Some(trusted_keys) = overlay_trusted_keys {
             crate::overlay::verify_pathinfo_trust(path_info, trusted_keys)
                 .map_err(|error| Error::Gc(format!("overlay-gc-untrusted-layer: {error}")))?;
+        }
+        if pathinfos_by_id.len() >= crunch_gc_core::MAX_GC_ENTRIES {
+            return Err(Error::Gc("overlay GC snapshot exceeds PathInfo limit".to_string()));
         }
         let path_id = path_info.store_path.to_absolute_path_with_prefix(store_dir);
         if pathinfos_by_id.insert(path_id.clone(), path_info.clone()).is_some()
@@ -647,6 +743,59 @@ async fn compose_gc_snapshot(
         }
         queue.push(path_id);
     }
+    Ok(GcSnapshotSeed {
+        pathinfos_by_id,
+        ownership,
+        queue,
+    })
+}
+
+async fn load_composed_pathinfo(
+    composed_pathinfo: &dyn PathInfoService,
+    request: ComposedPathInfoRequest<'_>,
+) -> Result<(PathInfo, usize), Error> {
+    let path_id = request.path_id;
+    let store_dir = request.store_dir;
+    let store_path: StorePath<String> = StorePath::from_absolute_path_with_prefix(path_id.as_bytes(), store_dir)
+        .map_err(|error| Error::Gc(format!("parsing composed GC path {path_id}: {error}")))?;
+    let read = composed_pathinfo
+        .get_with_layer(*store_path.digest())
+        .await
+        .map_err(|error| Error::Gc(format!("resolving composed GC path {path_id}: {error}")))?
+        .ok_or_else(|| Error::MissingClosureFacts {
+            path: store_path,
+            store_dir: store_dir.to_string(),
+            detail: "composed GC path has no PathInfo".to_string(),
+        })?;
+    if read.layer_index == 0 {
+        return Err(Error::Gc(format!("overlay PathInfo is readable but absent from overlay GC listing: {path_id}")));
+    }
+    let observed_path = read.value.store_path.to_absolute_path_with_prefix(store_dir);
+    if observed_path != path_id {
+        return Err(Error::Gc(format!("composed GC digest collision: requested {path_id}, observed {observed_path}")));
+    }
+    assert!(read.layer_index > 0);
+    assert_eq!(observed_path, path_id);
+    Ok((read.value, read.layer_index))
+}
+
+async fn compose_gc_snapshot(
+    overlay_snapshot: &[PathInfo],
+    retained_roots: &[GcRootRecord],
+    composed_pathinfo: &dyn PathInfoService,
+    store_dir: &str,
+    overlay_trusted_keys: Option<&[nix_compat::narinfo::VerifyingKey]>,
+) -> Result<ComposedGcSnapshot, Error> {
+    assert!(!store_dir.is_empty());
+    assert!(retained_roots.len() <= crunch_gc_core::MAX_GC_ENTRIES);
+    let GcSnapshotSeed {
+        mut pathinfos_by_id,
+        mut ownership,
+        mut queue,
+    } = seed_overlay_snapshot(overlay_snapshot, store_dir, overlay_trusted_keys)?;
+    queue
+        .try_reserve(retained_roots.len())
+        .map_err(|error| Error::Gc(format!("reserving composed GC roots: {error}")))?;
     queue.extend(retained_roots.iter().map(|root| root.logical_path.clone()));
 
     let mut visited = BTreeSet::new();
@@ -658,43 +807,35 @@ async fn compose_gc_snapshot(
             continue;
         }
         if !pathinfos_by_id.contains_key(&path_id) {
-            let store_path: StorePath<String> =
-                StorePath::from_absolute_path_with_prefix(path_id.as_bytes(), store_dir)
-                    .map_err(|error| Error::Gc(format!("parsing composed GC path {path_id}: {error}")))?;
-            let read = composed_pathinfo
-                .get_with_layer(*store_path.digest())
-                .await
-                .map_err(|error| Error::Gc(format!("resolving composed GC path {path_id}: {error}")))?
-                .ok_or_else(|| Error::MissingClosureFacts {
-                    path: store_path.clone(),
-                    store_dir: store_dir.to_string(),
-                    detail: "composed GC path has no PathInfo".to_string(),
-                })?;
-            if read.layer_index == 0 {
-                return Err(Error::Gc(format!(
-                    "overlay PathInfo is readable but absent from overlay GC listing: {path_id}"
-                )));
-            }
-            let observed_path = read.value.store_path.to_absolute_path_with_prefix(store_dir);
-            if observed_path != path_id {
-                return Err(Error::Gc(format!(
-                    "composed GC digest collision: requested {path_id}, observed {observed_path}"
-                )));
-            }
-            if pathinfos_by_id.len() >= crunch_gc_core::MAX_GC_ENTRIES {
+            if pathinfos_by_id.len() >= crunch_gc_core::MAX_GC_ENTRIES
+                || ownership.len() >= crunch_gc_core::MAX_GC_ENTRIES
+            {
                 return Err(Error::Gc(format!(
                     "composed GC snapshot exceeds {} PathInfos",
                     crunch_gc_core::MAX_GC_ENTRIES
                 )));
             }
-            ownership.insert(path_id.clone(), GcOwnership::Base {
-                layer_index: read.layer_index,
-            });
-            pathinfos_by_id.insert(path_id.clone(), read.value);
+            let (path_info, layer_index) = load_composed_pathinfo(composed_pathinfo, ComposedPathInfoRequest {
+                path_id: &path_id,
+                store_dir,
+            })
+            .await?;
+            ownership.insert(path_id.clone(), GcOwnership::Base { layer_index });
+            pathinfos_by_id.insert(path_id.clone(), path_info);
         }
         let path_info = pathinfos_by_id
             .get(&path_id)
             .ok_or_else(|| Error::Gc(format!("composed GC snapshot lost PathInfo {path_id}")))?;
+        let pending_path_count = queue
+            .len()
+            .checked_add(path_info.references.len())
+            .ok_or_else(|| Error::Gc("composed GC queue length overflowed usize".to_string()))?;
+        if pending_path_count > crunch_gc_core::MAX_GC_ENTRIES {
+            return Err(Error::Gc(format!("composed GC queue exceeds {} paths", crunch_gc_core::MAX_GC_ENTRIES)));
+        }
+        queue
+            .try_reserve(path_info.references.len())
+            .map_err(|error| Error::Gc(format!("reserving composed GC references: {error}")))?;
         queue.extend(path_info.references.iter().map(|reference| reference.to_absolute_path_with_prefix(store_dir)));
     }
     Ok(ComposedGcSnapshot {
@@ -729,6 +870,8 @@ fn core_plan_request(
     if store_dir.is_empty() || !store_dir.starts_with('/') {
         return Err(Error::Gc(format!("core GC store directory is invalid: {store_dir:?}")));
     }
+    assert!(!store_dir.is_empty());
+    assert!(store_dir.starts_with('/'));
     let roots = retained_roots
         .iter()
         .map(|root| {
@@ -1243,6 +1386,7 @@ fn path_size_bytes(root: &Path) -> Result<PathSizeObservation, PathSizeBlocker> 
             worklist.push(entry.path());
         }
     }
+    assert!(seen_entries <= MAX_GC_BYTES_WALK_ENTRIES);
     Ok(PathSizeObservation {
         bytes: total,
         path_kind,
@@ -1250,7 +1394,7 @@ fn path_size_bytes(root: &Path) -> Result<PathSizeObservation, PathSizeBlocker> 
 }
 
 fn remove_exported_outputs(paths: &[PathBuf]) -> Result<(), Error> {
-    let mut failures = Vec::new();
+    let mut failures = Vec::with_capacity(paths.len());
     for path in paths {
         if let Err(error) = remove_path(path) {
             failures.push(error.to_string());
@@ -1260,11 +1404,11 @@ fn remove_exported_outputs(paths: &[PathBuf]) -> Result<(), Error> {
 }
 
 fn remove_files(paths: &[PathBuf]) -> Result<(), Error> {
-    remove_file_iter(paths.iter())
+    remove_file_iter(paths.iter(), paths.len())
 }
 
-fn remove_file_iter<'a>(paths: impl Iterator<Item = &'a PathBuf>) -> Result<(), Error> {
-    let mut failures = Vec::new();
+fn remove_file_iter<'a>(paths: impl Iterator<Item = &'a PathBuf>, expected_path_count: usize) -> Result<(), Error> {
+    let mut failures = Vec::with_capacity(expected_path_count);
     for path in paths {
         match std::fs::remove_file(path) {
             Ok(()) => {}

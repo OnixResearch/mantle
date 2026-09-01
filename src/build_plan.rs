@@ -713,7 +713,9 @@ impl PlanStore {
             }
             let base = overlay.as_ref().and_then(|report| {
                 let selected_index = layered.layer.service_index();
-                report.bases.iter().find(|base| base.declaration_index.saturating_add(1) == selected_index)
+                report.bases.iter().find(|base| {
+                    u32::try_from(base.declaration_index).is_ok_and(|index| index.saturating_add(1) == selected_index)
+                })
             });
             evidence.push(crate::realization_routing::RouteStoreLayerEvidence {
                 store_path,

@@ -137,6 +137,8 @@ pub enum HttpClosurePlanError {
     ConflictingPathIdentity { existing: String, observed: String },
     #[error("http-closure-incomplete-plan: {pending_count} member(s) pending")]
     IncompletePlan { pending_count: u32 },
+    #[error("http-closure-state-invariant: {detail}")]
+    StateInvariant { detail: &'static str },
     #[error("http-closure-plan-serialization: {detail}")]
     PlanSerialization { detail: String },
 }
@@ -158,9 +160,15 @@ impl HttpClosurePlanError {
             Self::DuplicateReference { .. } => "http-closure-duplicate-reference",
             Self::ConflictingPathIdentity { .. } => "http-closure-conflicting-path-identity",
             Self::IncompletePlan { .. } => "http-closure-incomplete-plan",
+            Self::StateInvariant { .. } => "http-closure-state-invariant",
             Self::PlanSerialization { .. } => "http-closure-plan-serialization",
         }
     }
+}
+
+struct IdentityField<'a> {
+    value: &'a str,
+    field: &'static str,
 }
 
 impl HttpClosurePlanBuilder {
@@ -171,9 +179,18 @@ impl HttpClosurePlanBuilder {
         store_dir: String,
         limits: HttpClosureLimits,
     ) -> Result<Self, HttpClosurePlanError> {
-        validate_identity_field(&cache_identity, "cache_identity")?;
-        validate_identity_field(&trust_policy_blake3, "trust_policy_blake3")?;
-        validate_identity_field(&store_dir, "store_dir")?;
+        validate_identity_field(IdentityField {
+            value: &cache_identity,
+            field: "cache_identity",
+        })?;
+        validate_identity_field(IdentityField {
+            value: &trust_policy_blake3,
+            field: "trust_policy_blake3",
+        })?;
+        validate_identity_field(IdentityField {
+            value: &store_dir,
+            field: "store_dir",
+        })?;
         validate_limits(limits)?;
 
         let root_digest = *root.digest();
@@ -213,7 +230,9 @@ impl HttpClosurePlanBuilder {
             debug_assert!(self.pending_by_digest.is_empty());
             return Ok(None);
         };
-        let pending = self.pending_by_digest.get(&digest).expect("pending order and pending map must stay aligned");
+        let pending = self.pending_by_digest.get(&digest).ok_or(HttpClosurePlanError::StateInvariant {
+            detail: "pending-order-map-mismatch",
+        })?;
         let request = HttpClosureRequest {
             path: pending.path.clone(),
             depth,
@@ -268,10 +287,9 @@ impl HttpClosurePlanBuilder {
         }
         self.add_references(&references, active.depth)?;
         let requested_digest = *observation.requested_path.digest();
-        let pending = self
-            .pending_by_digest
-            .remove(&requested_digest)
-            .expect("active request must remain in the pending map");
+        let pending = self.pending_by_digest.remove(&requested_digest).ok_or(HttpClosurePlanError::StateInvariant {
+            detail: "active-request-pending-member-missing",
+        })?;
         self.observed_by_digest.insert(requested_digest, ObservedMember {
             path: observation.requested_path,
             depth: pending.depth,
@@ -284,18 +302,26 @@ impl HttpClosurePlanBuilder {
         self.total_reference_count = next_reference_count;
         self.active_request = None;
 
-        debug_assert_eq!(self.member_count(), self.pending_by_digest.len() + self.observed_by_digest.len());
+        debug_assert_eq!(
+            self.member_count(),
+            self.pending_by_digest.len().saturating_add(self.observed_by_digest.len())
+        );
         debug_assert!(self.observed_by_digest.contains_key(&requested_digest));
         Ok(())
     }
 
     pub fn finalize(self) -> Result<HttpClosurePlan, HttpClosurePlanError> {
         if self.active_request.is_some() || !self.pending_by_digest.is_empty() {
-            let pending_count = u32::try_from(self.pending_by_digest.len()).unwrap_or(u32::MAX);
+            let pending_count =
+                u32::try_from(self.pending_by_digest.len()).map_err(|_| HttpClosurePlanError::MemberLimit {
+                    maximum: self.limits.max_members,
+                })?;
             return Err(HttpClosurePlanError::IncompletePlan { pending_count });
         }
         let root_digest = *self.root.digest();
-        let root_member = self.observed_by_digest.get(&root_digest).expect("complete plan must contain its root");
+        let root_member = self.observed_by_digest.get(&root_digest).ok_or(HttpClosurePlanError::StateInvariant {
+            detail: "complete-plan-root-missing",
+        })?;
         let mut members = self
             .observed_by_digest
             .values()
@@ -351,7 +377,9 @@ impl HttpClosurePlanBuilder {
             }
             self.insert_pending(reference.clone(), child_depth)?;
         }
-        debug_assert!(self.member_count() <= self.limits.max_members as usize);
+        if let Ok(maximum_members) = usize::try_from(self.limits.max_members) {
+            debug_assert!(self.member_count() <= maximum_members);
+        }
         debug_assert!(self.pending_order.len() <= self.pending_by_digest.len());
         Ok(())
     }
@@ -360,7 +388,11 @@ impl HttpClosurePlanBuilder {
         let next_count = self.member_count().checked_add(1).ok_or(HttpClosurePlanError::MemberLimit {
             maximum: self.limits.max_members,
         })?;
-        if next_count > self.limits.max_members as usize {
+        let maximum_members =
+            usize::try_from(self.limits.max_members).map_err(|_| HttpClosurePlanError::MemberLimit {
+                maximum: self.limits.max_members,
+            })?;
+        if next_count > maximum_members {
             return Err(HttpClosurePlanError::MemberLimit {
                 maximum: self.limits.max_members,
             });
@@ -385,12 +417,12 @@ impl HttpClosurePlanBuilder {
     }
 }
 
-fn validate_identity_field(value: &str, field: &'static str) -> Result<(), HttpClosurePlanError> {
-    if value.is_empty() {
-        return Err(HttpClosurePlanError::InvalidIdentity { field });
+fn validate_identity_field(input: IdentityField<'_>) -> Result<(), HttpClosurePlanError> {
+    if input.value.is_empty() {
+        return Err(HttpClosurePlanError::InvalidIdentity { field: input.field });
     }
-    debug_assert!(!value.is_empty());
-    debug_assert!(!field.is_empty());
+    debug_assert!(!input.value.is_empty());
+    debug_assert!(!input.field.is_empty());
     Ok(())
 }
 

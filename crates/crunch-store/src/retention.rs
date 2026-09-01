@@ -120,9 +120,11 @@ pub struct RootRegistration {
 #[must_use]
 pub fn store_retention_runtime_policy() -> &'static StoreRetentionRuntimePolicy {
     STORE_RETENTION_RUNTIME_POLICY.get_or_init(|| {
-        let policy: StoreRetentionRuntimePolicy = match serde_json::from_str(STORE_RETENTION_POLICY_JSON) {
-            Ok(policy) => policy,
-            Err(error) => panic!("embedded store retention policy must parse: {error}"),
+        let parsed_policy: Result<StoreRetentionRuntimePolicy, serde_json::Error> =
+            serde_json::from_str(STORE_RETENTION_POLICY_JSON);
+        assert!(parsed_policy.is_ok(), "embedded store retention policy must parse");
+        let Ok(policy) = parsed_policy else {
+            std::process::abort();
         };
         assert_eq!(policy.schema, STORE_RETENTION_POLICY_SCHEMA);
         assert_eq!(policy.hash_algorithm, "BLAKE3");
@@ -201,6 +203,8 @@ fn record_to_core(record: &GcRootRecord, current_policy: &str) -> Result<Retenti
         last_observed_unix_s: lease.last_observed_unix_s,
         renewal_count: lease.renewal_count,
     });
+    assert_eq!(record.policy_blake3, current_policy);
+    assert_eq!(lease.is_some(), record.lease.is_some());
     Ok(RetentionRoot {
         path_id: record.logical_path.clone(),
         class: record.root_class.into_core(),

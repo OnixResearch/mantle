@@ -39,8 +39,8 @@ use crate::release_attestation::create_witness_attestation;
 use crate::release_attestation::load_release_attestation_document;
 use crate::release_attestation::load_witness_documents;
 
-const MIN_ATTESTATION_BASE_LAYER_INDEX: usize = 1;
-const MAX_ATTESTATION_BASE_LAYERS: usize = 8;
+const MIN_ATTESTATION_BASE_LAYER_INDEX: u32 = 1;
+const MAX_ATTESTATION_BASE_LAYERS: u32 = 8;
 const MAX_ATTESTATION_SELECTED_LAYERS: usize = 65_536;
 use crate::release_attestation::verify_release_attestation_directory;
 use crate::witness_handoff::import_witness_material;

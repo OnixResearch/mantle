@@ -436,14 +436,16 @@ async fn hydrate_cache_only_runtime_closure(
         &cache_url,
         root,
         &pull_options,
-        limits,
-        |closure_plan| {
-            validate_prepared_cache_closure(
-                closure_plan,
-                &root.to_string(),
-                &plan.target_store_prefix,
-                &permitted_paths,
-            )
+        crunch_store::HttpClosureImportValidation {
+            limits,
+            validate_plan: |closure_plan: &crunch_store::HttpClosurePlan| {
+                validate_prepared_cache_closure(
+                    closure_plan,
+                    &root.to_string(),
+                    &plan.target_store_prefix,
+                    &permitted_paths,
+                )
+            },
         },
     )
     .await

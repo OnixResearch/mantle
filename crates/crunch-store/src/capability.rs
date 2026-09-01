@@ -522,7 +522,7 @@ impl OutputLookup {
             crate::overlay::verify_pathinfo_trust(&found.value, &trusted_keys)
                 .map_err(|error| Error::Store(format!("overlay-layer-trust-failure for {path}: {error}")))?;
         }
-        let shadows = self.shadow_observations(found.layer_index, &found.value).await;
+        let shadows = self.shadow_observations(found.layer_index, &found.value).await?;
         let mut layered = crate::layer::Layered::from_service_index(found.value, found.layer_index)
             .map_err(|error| Error::Store(format!("mapping output layer for {path}: {error}")))?;
         layered.shadows = shadows;
@@ -576,14 +576,15 @@ impl OutputLookup {
         &self,
         selected_layer_index: usize,
         selected: &PathInfo,
-    ) -> Vec<crate::layer::LayerShadowObservation> {
-        let mut observations = Vec::new();
+    ) -> Result<Vec<crate::layer::LayerShadowObservation>, Error> {
+        let mut observations = Vec::with_capacity(self.base_pathinfo_inspection_services.len());
         for (base_index, service) in self.base_pathinfo_inspection_services.iter().enumerate() {
             let layer_index = base_index.saturating_add(1);
             if layer_index <= selected_layer_index {
                 continue;
             }
-            let layer = crate::layer::StoreLayer::Base { index: layer_index };
+            let layer = crate::layer::StoreLayer::from_service_index(layer_index)
+                .map_err(|error| Error::Store(format!("mapping output shadow layer: {error}")))?;
             let status = match service.get(*selected.store_path.digest()).await {
                 Ok(Some(lower)) if lower.store_path != selected.store_path => {
                     crate::layer::LayerShadowStatus::DigestCollision
@@ -595,7 +596,7 @@ impl OutputLookup {
             };
             observations.push(crate::layer::LayerShadowObservation { layer, status });
         }
-        observations
+        Ok(observations)
     }
 }
 
@@ -651,14 +652,14 @@ impl RootRegistry {
         if !is_present {
             return Ok(None);
         }
-        roots::register_root_with_registration(
-            &self.state_dir,
-            &self.store_dir,
-            self.pathinfo_service.as_ref(),
+        roots::register_root_with_registration(roots::RootRegistrationRequest {
+            state_dir: &self.state_dir,
+            store_dir: &self.store_dir,
+            pathinfo: self.pathinfo_service.as_ref(),
             store_path,
             source,
             registration,
-        )
+        })
         .await
         .map(Some)
     }

@@ -20,11 +20,13 @@ pub enum StoreLayer {
     #[default]
     Overlay,
     /// Served from a read-only base. Index one is the first declared base.
-    Base { index: usize },
+    Base { index: u32 },
 }
 
 impl StoreLayer {
-    pub fn from_service_index(index: usize) -> Result<Self, LayerIndexError> {
+    pub fn from_service_index<I>(index: I) -> Result<Self, LayerIndexError>
+    where I: TryInto<u32> {
+        let index = index.try_into().map_err(|_| LayerIndexError)?;
         if index == 0 {
             return Ok(Self::Overlay);
         }
@@ -32,7 +34,7 @@ impl StoreLayer {
     }
 
     #[must_use]
-    pub const fn service_index(self) -> usize {
+    pub const fn service_index(self) -> u32 {
         match self {
             Self::Overlay => 0,
             Self::Base { index } => index,
@@ -127,7 +129,8 @@ impl<T> Layered<T> {
         }
     }
 
-    pub fn from_service_index(value: T, index: usize) -> Result<Self, LayerIndexError> {
+    pub fn from_service_index<I>(value: T, index: I) -> Result<Self, LayerIndexError>
+    where I: TryInto<u32> {
         Ok(Self {
             value,
             layer: StoreLayer::from_service_index(index)?,
@@ -150,8 +153,8 @@ impl<T> Layered<T> {
 mod tests {
     use super::*;
 
-    const FIRST_BASE_INDEX: usize = 1;
-    const SECOND_BASE_INDEX: usize = 2;
+    const FIRST_BASE_INDEX: u32 = 1;
+    const SECOND_BASE_INDEX: u32 = 2;
 
     #[test]
     fn store_layer_display_includes_exact_base_index() {

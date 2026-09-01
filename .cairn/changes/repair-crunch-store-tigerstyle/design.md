@@ -25,8 +25,10 @@ contracts.
   lost overflow or collection bounds, changed canonical identities, public API
   drift, and policy leakage from cores into I/O helpers.
 - **Budget:** current repository and pinned Tiger input only; 13 source files;
-  no new runtime authority or dependency; at most eight focused Tiger rounds;
-  local builders for final Nix evidence.
+  no new runtime authority or dependency; at most ten focused Tiger rounds;
+  local builders for final Nix evidence. The budget includes one post-Clippy
+  rerun because strict Clippy required two structural adjustments after the
+  first zero-store-finding pass.
 - **Allowed outcomes:** validated, exact later blocker, exhausted round budget,
   or user decision required for an incompatible public contract.
 

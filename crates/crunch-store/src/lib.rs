@@ -187,6 +187,7 @@ pub use publisher::NoopPublisher;
 pub use publisher::Publisher;
 #[cfg(test)]
 pub use publisher::RecordingPublisher;
+pub use pull::HttpClosureImportValidation;
 pub use pull::HttpClosurePullReport;
 pub use pull::PullOptions;
 pub use pull::PullReport;

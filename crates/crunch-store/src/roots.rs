@@ -34,6 +34,24 @@ pub struct LogicalStorePathRef<'a> {
     pub store_dir: &'a str,
 }
 
+pub(crate) struct RootRegistrationRequest<'a> {
+    pub state_dir: &'a Path,
+    pub store_dir: &'a str,
+    pub pathinfo: &'a dyn PathInfoService,
+    pub store_path: &'a StorePath<String>,
+    pub source: GcRootSource,
+    pub registration: RootRegistration,
+}
+
+struct TransitionIdentityInput<'a> {
+    logical_path: &'a str,
+    class: GcRootClass,
+    owner_scope: &'a str,
+    policy_blake3: &'a str,
+    created_unix_s: i64,
+    transition: &'a str,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum GcRootSource {
@@ -95,35 +113,47 @@ pub struct GcRootRecord {
     pub removal_requested: bool,
 }
 
+fn missing<T>() -> Option<T> {
+    None
+}
+
+const fn missing_schema_version() -> u32 {
+    0
+}
+
+const fn removal_not_requested() -> bool {
+    false
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawGcRootRecord {
-    #[serde(default)]
+    #[serde(default = "missing_schema_version")]
     schema_version: u32,
     logical_path: String,
     source: GcRootSource,
-    #[serde(default)]
+    #[serde(default = "missing")]
     root_class: Option<GcRootClass>,
-    #[serde(default)]
+    #[serde(default = "missing")]
     owner_scope: Option<String>,
-    #[serde(default)]
+    #[serde(default = "missing")]
     project_identity: Option<String>,
-    #[serde(default)]
+    #[serde(default = "missing")]
     selector: Option<String>,
-    #[serde(default)]
+    #[serde(default = "missing")]
     generation: Option<u64>,
-    #[serde(default)]
+    #[serde(default = "missing")]
     generation_identity: Option<String>,
-    #[serde(default)]
+    #[serde(default = "missing")]
     lease: Option<GcRootLease>,
-    #[serde(default)]
+    #[serde(default = "missing")]
     policy_blake3: Option<String>,
     created_unix_s: i64,
-    #[serde(default)]
+    #[serde(default = "missing")]
     last_transition_id: Option<String>,
-    #[serde(default)]
+    #[serde(default = "missing")]
     last_transition_reason: Option<String>,
-    #[serde(default)]
+    #[serde(default = "removal_not_requested")]
     removal_requested: bool,
 }
 
@@ -146,23 +176,27 @@ pub async fn register_root(
     source: GcRootSource,
 ) -> Result<GcRootRecord, Error> {
     let registration = registration_for_source(source);
-    register_root_with_registration(state_dir, store_dir, pathinfo, store_path, source, registration).await
-}
-
-pub async fn register_root_with_registration(
-    state_dir: &Path,
-    store_dir: &str,
-    pathinfo: &dyn PathInfoService,
-    store_path: &StorePath<String>,
-    source: GcRootSource,
-    registration: RootRegistration,
-) -> Result<GcRootRecord, Error> {
-    let records = register_root_batch_with_registration(state_dir, store_dir, pathinfo, vec![(
-        store_path.clone(),
+    register_root_with_registration(RootRegistrationRequest {
+        state_dir,
+        store_dir,
+        pathinfo,
+        store_path,
         source,
         registration,
-    )])
-    .await?;
+    })
+    .await
+}
+
+pub(crate) async fn register_root_with_registration(
+    request: RootRegistrationRequest<'_>,
+) -> Result<GcRootRecord, Error> {
+    let records =
+        register_root_batch_with_registration(request.state_dir, request.store_dir, request.pathinfo, vec![(
+            request.store_path.clone(),
+            request.source,
+            request.registration,
+        )])
+        .await?;
     records
         .into_iter()
         .next()
@@ -233,7 +267,9 @@ pub fn unpin_root(state_dir: &Path, path: LogicalStorePathRef<'_>) -> Result<Opt
 }
 
 pub(crate) fn load_registry(state_dir: &Path) -> Result<BTreeMap<String, GcRootRecord>, Error> {
+    assert!(!state_dir.as_os_str().is_empty());
     let path = roots_path(state_dir);
+    assert_eq!(path.file_name().and_then(|name| name.to_str()), Some(ROOTS_FILE_NAME));
     let bytes = match std::fs::read(&path) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeMap::new()),
@@ -276,11 +312,17 @@ fn resolve_project_generation(
     registry: &BTreeMap<String, GcRootRecord>,
     mut registration: RootRegistration,
 ) -> Result<RootRegistration, Error> {
-    if !matches!(registration.class, GcRootClass::ProjectOutputGeneration | GcRootClass::ProjectSourceGeneration)
-        || registration.generation.is_some()
-    {
+    if !matches!(registration.class, GcRootClass::ProjectOutputGeneration | GcRootClass::ProjectSourceGeneration) {
         return Ok(registration);
     }
+    if registration.generation.is_some() {
+        return Ok(registration);
+    }
+    assert!(matches!(
+        registration.class,
+        GcRootClass::ProjectOutputGeneration | GcRootClass::ProjectSourceGeneration
+    ));
+    assert!(registration.generation.is_none());
     let (Some(project_identity), Some(selector), Some(generation_identity)) = (
         registration.project_identity.as_deref(),
         registration.selector.as_deref(),
@@ -325,17 +367,23 @@ fn resolve_shell_lease_renewal(
     if registration.class != GcRootClass::ActiveShellLease {
         return Ok(registration);
     }
+    assert_eq!(registration.class, GcRootClass::ActiveShellLease);
     let Some(lease) = registration.lease.as_mut() else {
         return Err(Error::RootRegistry("active shell registration requires lease facts".to_string()));
     };
     let Some(existing) = registry.get(logical_path) else {
         return Ok(registration);
     };
-    if existing.root_class != GcRootClass::ActiveShellLease
-        || existing.project_identity != registration.project_identity
-        || existing.selector != registration.selector
-        || existing.owner_scope != registration.owner_scope
-    {
+    if existing.root_class != GcRootClass::ActiveShellLease {
+        return Ok(registration);
+    }
+    if existing.project_identity != registration.project_identity {
+        return Ok(registration);
+    }
+    if existing.selector != registration.selector {
+        return Ok(registration);
+    }
+    if existing.owner_scope != registration.owner_scope {
         return Ok(registration);
     }
     let Some(existing_lease) = existing.lease.as_ref() else {
@@ -351,7 +399,42 @@ fn resolve_shell_lease_renewal(
         return Err(Error::RootRegistry(format!("shell lease renewal exceeds policy limit {max_renewals}")));
     }
     lease.renewal_count = renewal_count;
+    assert_eq!(lease.renewal_count, renewal_count);
     Ok(registration)
+}
+
+fn is_shell_lease_renewal(existing: &GcRootRecord, registration: &RootRegistration) -> bool {
+    if registration.class != GcRootClass::ActiveShellLease {
+        return false;
+    }
+    if existing.root_class != GcRootClass::ActiveShellLease {
+        return false;
+    }
+    if existing.project_identity != registration.project_identity {
+        return false;
+    }
+    existing.selector == registration.selector
+}
+
+fn project_generation_transition(existing: &GcRootRecord, registration: &RootRegistration) -> Option<&'static str> {
+    if !matches!(registration.class, GcRootClass::ProjectOutputGeneration | GcRootClass::ProjectSourceGeneration) {
+        return None;
+    }
+    if existing.root_class != registration.class {
+        return None;
+    }
+    if existing.project_identity != registration.project_identity {
+        return None;
+    }
+    if existing.selector != registration.selector {
+        return None;
+    }
+    assert_eq!(existing.root_class, registration.class);
+    assert_eq!(existing.selector, registration.selector);
+    if existing.generation_identity == registration.generation_identity {
+        return Some("project-generation-reobserved");
+    }
+    Some("project-generation-advanced")
 }
 
 fn registration_transition_reason(
@@ -371,22 +454,15 @@ fn registration_transition_reason(
             GcRootClass::LegacyUnmanaged => "legacy-root-registered",
         };
     };
-    if registration.class == GcRootClass::ActiveShellLease
-        && existing.root_class == GcRootClass::ActiveShellLease
-        && existing.project_identity == registration.project_identity
-        && existing.selector == registration.selector
-    {
+    if is_shell_lease_renewal(existing, registration) {
+        assert_eq!(existing.root_class, registration.class);
+        assert_eq!(existing.selector, registration.selector);
         return "shell-lease-renewed";
     }
-    if matches!(registration.class, GcRootClass::ProjectOutputGeneration | GcRootClass::ProjectSourceGeneration)
-        && existing.root_class == registration.class
-        && existing.project_identity == registration.project_identity
-        && existing.selector == registration.selector
-    {
-        if existing.generation_identity == registration.generation_identity {
-            return "project-generation-reobserved";
-        }
-        return "project-generation-advanced";
+    if let Some(reason) = project_generation_transition(existing, registration) {
+        assert_eq!(existing.root_class, registration.class);
+        assert_eq!(existing.selector, registration.selector);
+        return reason;
     }
     "root-reclassified"
 }
@@ -448,15 +524,17 @@ fn new_record(
     created_unix_s: i64,
     last_transition_reason: &str,
 ) -> GcRootRecord {
+    assert!(!logical_path.is_empty());
+    assert!(!last_transition_reason.is_empty());
     let policy_blake3 = store_retention_policy_blake3();
-    let last_transition_id = transition_id(
-        &logical_path,
-        registration.class,
-        &registration.owner_scope,
-        &policy_blake3,
+    let last_transition_id = transition_id(TransitionIdentityInput {
+        logical_path: &logical_path,
+        class: registration.class,
+        owner_scope: &registration.owner_scope,
+        policy_blake3: &policy_blake3,
         created_unix_s,
-        last_transition_reason,
-    );
+        transition: last_transition_reason,
+    });
     GcRootRecord {
         schema_version: ROOT_RECORD_SCHEMA_VERSION,
         logical_path,
@@ -483,6 +561,8 @@ fn normalize_raw_record(raw: RawGcRootRecord) -> Result<GcRootRecord, Error> {
     if raw.schema_version != ROOT_RECORD_SCHEMA_VERSION && raw.schema_version != PREVIOUS_ROOT_RECORD_SCHEMA_VERSION {
         return Err(Error::RootRegistry(format!("unsupported root record schema version: {}", raw.schema_version)));
     }
+    assert!(matches!(raw.schema_version, ROOT_RECORD_SCHEMA_VERSION | PREVIOUS_ROOT_RECORD_SCHEMA_VERSION));
+    assert!(raw.root_class.is_some());
     let Some(root_class) = raw.root_class else {
         return Err(Error::RootRegistry("versioned root class is missing".to_string()));
     };
@@ -495,14 +575,14 @@ fn normalize_raw_record(raw: RawGcRootRecord) -> Result<GcRootRecord, Error> {
         raw.last_transition_reason.unwrap_or_default()
     };
     let last_transition_id = if is_previous_schema {
-        transition_id(
-            &raw.logical_path,
-            root_class,
-            &owner_scope,
-            &policy_blake3,
-            raw.created_unix_s,
-            &last_transition_reason,
-        )
+        transition_id(TransitionIdentityInput {
+            logical_path: &raw.logical_path,
+            class: root_class,
+            owner_scope: &owner_scope,
+            policy_blake3: &policy_blake3,
+            created_unix_s: raw.created_unix_s,
+            transition: &last_transition_reason,
+        })
     } else {
         raw.last_transition_id.unwrap_or_default()
     };
@@ -528,16 +608,20 @@ fn normalize_raw_record(raw: RawGcRootRecord) -> Result<GcRootRecord, Error> {
 }
 
 fn migrate_legacy_record(raw: RawGcRootRecord) -> GcRootRecord {
+    let is_legacy_schema = raw.schema_version <= 1;
+    let is_missing_root_class = raw.root_class.is_none();
+    assert_ne!((is_legacy_schema, is_missing_root_class), (false, false));
     let policy_blake3 = store_retention_policy_blake3();
     let owner_scope = LEGACY_OWNER_SCOPE.to_string();
-    let last_transition_id = transition_id(
-        &raw.logical_path,
-        GcRootClass::LegacyUnmanaged,
-        &owner_scope,
-        &policy_blake3,
-        raw.created_unix_s,
-        "migrated-from-path-only-v1",
-    );
+    assert_eq!(owner_scope, LEGACY_OWNER_SCOPE);
+    let last_transition_id = transition_id(TransitionIdentityInput {
+        logical_path: &raw.logical_path,
+        class: GcRootClass::LegacyUnmanaged,
+        owner_scope: &owner_scope,
+        policy_blake3: &policy_blake3,
+        created_unix_s: raw.created_unix_s,
+        transition: "migrated-from-path-only-v1",
+    });
     GcRootRecord {
         schema_version: ROOT_RECORD_SCHEMA_VERSION,
         logical_path: raw.logical_path,
@@ -621,11 +705,11 @@ fn validate_record(record: &GcRootRecord) -> Result<(), Error> {
         return Err(Error::RootRegistry(format!("root owner scope is missing: {}", record.logical_path)));
     }
     let owner_kind = record.owner_scope.split_once(':').map_or(record.owner_scope.as_str(), |(kind, _)| kind);
-    let owner_is_eligible = core_retention_policy()
+    let is_owner_eligible = core_retention_policy()
         .eligible_owner_scopes
         .get(&record.root_class.into_core())
         .is_some_and(|scopes| scopes.iter().any(|scope| scope == owner_kind));
-    if !owner_is_eligible {
+    if !is_owner_eligible {
         return Err(Error::RootRegistry(format!(
             "root owner scope is not eligible for {}: {}",
             record.root_class, record.logical_path
@@ -640,18 +724,20 @@ fn validate_record(record: &GcRootRecord) -> Result<(), Error> {
     if record.last_transition_reason.is_empty() {
         return Err(Error::RootRegistry(format!("root transition reason is missing: {}", record.logical_path)));
     }
-    let project_facts_complete = record.project_identity.as_ref().is_some_and(|value| !value.is_empty())
+    let is_project_fact_set_complete = record.project_identity.as_ref().is_some_and(|value| !value.is_empty())
         && record.selector.as_ref().is_some_and(|value| !value.is_empty())
         && record.generation.is_some()
         && record.generation_identity.as_ref().is_some_and(|value| !value.is_empty());
     if matches!(record.root_class, GcRootClass::ProjectOutputGeneration | GcRootClass::ProjectSourceGeneration)
-        && !project_facts_complete
+        && !is_project_fact_set_complete
     {
         return Err(Error::RootRegistry(format!("project root facts are incomplete: {}", record.logical_path)));
     }
     if record.root_class == GcRootClass::ActiveShellLease && record.lease.is_none() {
         return Err(Error::RootRegistry(format!("shell lease facts are missing: {}", record.logical_path)));
     }
+    assert_eq!(record.schema_version, ROOT_RECORD_SCHEMA_VERSION);
+    assert!(!record.owner_scope.is_empty());
     Ok(())
 }
 
@@ -663,22 +749,15 @@ fn is_blake3_identity(value: &str) -> bool {
         && hex.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
-fn transition_id(
-    logical_path: &str,
-    class: GcRootClass,
-    owner_scope: &str,
-    policy_blake3: &str,
-    created_unix_s: i64,
-    transition: &str,
-) -> String {
+fn transition_id(input: TransitionIdentityInput<'_>) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(TRANSITION_DOMAIN);
-    hash_transition_field(&mut hasher, logical_path);
-    hash_transition_field(&mut hasher, class.as_str());
-    hash_transition_field(&mut hasher, owner_scope);
-    hash_transition_field(&mut hasher, policy_blake3);
-    hasher.update(&created_unix_s.to_be_bytes());
-    hash_transition_field(&mut hasher, transition);
+    hash_transition_field(&mut hasher, input.logical_path);
+    hash_transition_field(&mut hasher, input.class.as_str());
+    hash_transition_field(&mut hasher, input.owner_scope);
+    hash_transition_field(&mut hasher, input.policy_blake3);
+    hasher.update(&input.created_unix_s.to_be_bytes());
+    hash_transition_field(&mut hasher, input.transition);
     format!("b3:{}", HEXLOWER.encode(hasher.finalize().as_bytes()))
 }
 
@@ -881,7 +960,14 @@ mod tests {
                 "owner_scope": "",
                 "policy_blake3": store_retention_policy_blake3(),
                 "created_unix_s": CREATED_UNIX_S,
-                "last_transition_id": transition_id("/nix/store/bad", GcRootClass::ExplicitPin, "", &store_retention_policy_blake3(), CREATED_UNIX_S, "created"),
+                "last_transition_id": transition_id(TransitionIdentityInput {
+                    logical_path: "/nix/store/bad",
+                    class: GcRootClass::ExplicitPin,
+                    owner_scope: "",
+                    policy_blake3: &store_retention_policy_blake3(),
+                    created_unix_s: CREATED_UNIX_S,
+                    transition: "created",
+                }),
                 "removal_requested": false,
             }
         });
