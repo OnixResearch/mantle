@@ -39,8 +39,8 @@ across 13 files. No gate was disabled or downgraded.
 - **Decision:** accept the focused repairs and preserve the store Tiger debt as
   the next separate change.
 - **Owner:** `close-full-check-blockers`.
-- **Next action:** sync the accepted requirement, archive this change, and keep
-  the store findings actionable.
+- **Next action:** push and integrate the verified archive while keeping the
+  store findings actionable.
 
 ## Non-claims
 

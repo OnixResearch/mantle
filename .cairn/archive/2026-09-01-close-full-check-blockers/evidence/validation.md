@@ -28,8 +28,8 @@ restored the original BLAKE3 identity.
 - **Decision:** accept exact proof-bound and explicit structural classification;
   keep all other marker text actionable.
 - **Owner:** `close-full-check-blockers`.
-- **Next action:** sync and archive the bounded repair with the store blocker
-  preserved for a separate change.
+- **Next action:** commit the synchronized archive, push the verified branch,
+  and integrate it into `origin/main`.
 
 ## Fixed-output and transport results
 
