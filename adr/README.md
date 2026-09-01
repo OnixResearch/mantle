@@ -107,3 +107,5 @@ compatibility surface, crate name, or historical decision.
 | [0098](0098-bind-gcc-subprogram-prefix.md) | Bind the GCC subprogram prefix | Accepted |
 | [0099](0099-bind-rust-actions-to-executed-topology.md) | Bind Rust actions to the executed topology | Accepted |
 | [0100](0100-normalize-ptrace-request-types.md) | Normalize ptrace request types at the libc boundary | Accepted |
+| [0101](0101-export-full-bootstrap-parity-as-an-independent-bundle.md) | Export full-bootstrap parity as an independent bundle | Accepted |
+| [0102](0102-vendor-wasi-virt-with-crane.md) | Vendor wasi-virt with Crane | Accepted |

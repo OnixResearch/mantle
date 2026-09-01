@@ -103,6 +103,7 @@
         };
 
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+        componentCraneLib = (crane.mkLib pkgs).overrideToolchain componentRustToolchain;
         cargoManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         artifactAuthRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1";
         artifactAuthRepository = "ssh://git@github.com/OnixResearch/onix-artifact.git";
@@ -443,16 +444,24 @@
         octetProfileId = "portable-component-baseline";
         octetPackage = octet.packages.${system}.cargo-octet;
         octetProfileConfig = "${octet}/standards/wasm-artifact/generated/profiles.json";
-        wasiVirt = pkgs.rustPlatform.buildRustPackage {
+        wasiVirtVendor = componentCraneLib.vendorCargoDeps {
+          src = wasi-virt;
+          cargoLock = "${wasi-virt}/Cargo.lock";
+        };
+        wasiVirtArtifacts = componentCraneLib.buildDepsOnly {
+          pname = "wasi-virt-dependencies";
+          version = wasiVirtVersion;
+          src = wasi-virt;
+          cargoVendorDir = wasiVirtVendor;
+          cargoExtraArgs = "--package wasi-virt --no-default-features";
+        };
+        wasiVirt = componentCraneLib.buildPackage {
           pname = "wasi-virt";
           version = wasiVirtVersion;
           src = wasi-virt;
-          cargoLock.lockFile = "${wasi-virt}/Cargo.lock";
-          cargoBuildFlags = [
-            "--package"
-            "wasi-virt"
-            "--no-default-features"
-          ];
+          cargoVendorDir = wasiVirtVendor;
+          cargoArtifacts = wasiVirtArtifacts;
+          cargoExtraArgs = "--package wasi-virt --no-default-features";
           doCheck = false;
           meta.mainProgram = "wasi-virt";
         };
@@ -1203,6 +1212,7 @@
           crunch = crunch;
           ast-grep-toolchain = astGrepToolchain;
           ast-grep-package-identity = astGrepPackageIdentity;
+          wasi-virt = wasiVirt;
           wasm-component-toolchain = wasmComponentToolchain;
           wasm-component-toolchain-identity = wasmComponentToolchainIdentity;
           wasm-component-toolchain-compatibility = wasmComponentToolchainCompatibility;
