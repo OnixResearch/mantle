@@ -44,9 +44,17 @@ The repository Tiger derivation also reports no pipeline finding. It now exits
 - Package formatting, diff checks, and Nix flake evaluation pass.
 - The source diff adds no lint allowance or expectation attribute.
 
+## Full-check boundaries
+
+The local-builder full check exits 1 at the same 36 root-library Tiger Style
+findings. The ordinary full check exits 1 earlier when a remote builder imports
+`rust-src-1.96.0-nightly-2026-03-21-x86_64-unknown-linux-gnu` with a SHA-256
+that differs from the specified fixed-output value. Neither full check reports
+a pipeline finding.
+
 ## Non-claims
 
 The repository Tiger derivation and full flake checks are not yet green. This
-change does not repair or suppress the 36 later root-library findings. It does
-not claim builder correctness, store durability, source trust, or release
-eligibility.
+change does not repair or suppress the 36 later root-library findings or the
+independent remote fixed-output mismatch. It does not claim builder correctness,
+store durability, source trust, or release eligibility.

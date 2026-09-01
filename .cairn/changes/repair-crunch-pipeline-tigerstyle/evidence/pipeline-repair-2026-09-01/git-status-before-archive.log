@@ -1,0 +1,25 @@
+## fix/repair-crunch-pipeline-tigerstyle-20260901...origin/main [ahead 2]
+ M .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/summary.md
+ M .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/validation.md
+ M .cairn/changes/repair-crunch-pipeline-tigerstyle/tasks.md
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/cairn-gate-design.log
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/cairn-gate-design.status
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/cairn-gate-proposal.log
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/cairn-gate-proposal.status
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/cairn-gate-tasks.log
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/cairn-gate-tasks.status
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/cairn-tracey.log
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/cairn-tracey.status
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/cairn-validate.log
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/cairn-validate.status
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/final-diff-check.log
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/final-diff-check.status
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/full-local.command.txt
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/full-local.log
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/full-local.status
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/full-ordinary.command.txt
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/full-ordinary.log
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/full-ordinary.status
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/full-pipeline-findings.status
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/full-pipeline-findings.txt
+?? .cairn/changes/repair-crunch-pipeline-tigerstyle/evidence/pipeline-repair-2026-09-01/git-status-before-archive.log
