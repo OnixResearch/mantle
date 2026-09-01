@@ -1,0 +1,35 @@
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling cc v1.2.59
+   Compiling blake3 v1.8.2
+   Compiling syn v2.0.117
+   Compiling serde_derive v1.0.228
+   Compiling crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-eval-budget-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.98s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/debug/deps/crunch_eval_budget_core-f3e5e0882a83daab)
+
+running 9 tests
+test tests::diagnostics_truncate_on_item_byte_and_utf8_boundaries ... ok
+test tests::framing_rejects_oversize_incomplete_and_trailing_data ... ok
+test tests::strict_support_and_policy_limits_fail_closed ... ok
+test tests::terminal_classification_gives_cancellation_and_teardown_precedence ... ok
+test tests::bounded_protocol_and_identity_properties_hold_across_fixture_matrix ... ok
+test tests::policy_and_request_identity_are_deterministic ... ok
+test tests::reports_keep_metric_roles_and_non_claims_explicit ... ok
+test tests::worker_response_validation_accepts_bound_facts_and_rejects_drift ... ok
+test tests::request_rejects_oversize_duplicates_and_identity_drift ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_eval_budget_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

@@ -1,591 +1,4 @@
 {
-  "platform_profiles": [
-    {
-      "blocker": null,
-      "command_root": "build",
-      "darwin_support": "remote-required",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": true,
-        "starts_processes": false,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": true,
-      "role": "portable-remote-build",
-      "trusted_builder_key_required": true
-    },
-    {
-      "blocker": "command requires the Linux local executor",
-      "command_root": "wasm-component",
-      "darwin_support": "unsupported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": true,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "linux-local-executor",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "doctor",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": false,
-        "uses_network": false,
-        "writes_files": false
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "__operator-contract",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": false,
-        "uses_network": false,
-        "writes_files": false
-      },
-      "remote_capability_required": false,
-      "role": "internal",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "import",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": true,
-        "starts_processes": false,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "filegen",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": true,
-        "starts_processes": false,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "graph",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": false,
-        "uses_network": false,
-        "writes_files": false
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "why",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": false,
-        "uses_network": false,
-        "writes_files": false
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "dependents",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": false,
-        "uses_network": false,
-        "writes_files": false
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "refactor",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": true,
-        "starts_processes": false,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": "proof execution is outside the portable client boundary",
-      "command_root": "transcript",
-      "darwin_support": "unsupported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": true,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "proof",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": "bootstrap execution is outside the portable client boundary",
-      "command_root": "stage0-inventory",
-      "darwin_support": "unsupported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": true,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "bootstrap",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": "proof execution is outside the portable client boundary",
-      "command_root": "nix-free-demo",
-      "darwin_support": "unsupported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": true,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "proof",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": "command requires the Linux local executor",
-      "command_root": "foreign-import",
-      "darwin_support": "unsupported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": true,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "linux-local-executor",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": "command requires the Linux local executor",
-      "command_root": "mantlepkgs",
-      "darwin_support": "unsupported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": true,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "linux-local-executor",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "eval",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": false,
-        "uses_network": false,
-        "writes_files": false
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "export",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": true,
-        "starts_processes": false,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": "bootstrap execution is outside the portable client boundary",
-      "command_root": "bootstrap",
-      "darwin_support": "unsupported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": true,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "bootstrap",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "log",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": false,
-        "uses_network": false,
-        "writes_files": false
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "store",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": true,
-        "starts_processes": false,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "source",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": true,
-        "starts_processes": false,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "receipt",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": true,
-        "starts_processes": false,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": "server operations require Linux; client operations remain available",
-      "command_root": "remote",
-      "darwin_support": "mixed",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": true,
-        "starts_processes": false,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "remote-mixed",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": "command requires a Linux worker or server",
-      "command_root": "__remote-secret-worker",
-      "darwin_support": "unsupported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": true,
-        "starts_processes": true,
-        "uses_network": false,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "linux-worker-server",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "artifact",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": true,
-        "starts_processes": false,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "attest",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": true,
-        "starts_processes": false,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": "proof execution is outside the portable client boundary",
-      "command_root": "release",
-      "darwin_support": "unsupported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": true,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "proof",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "init",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": true,
-        "starts_processes": false,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "check",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": false,
-        "uses_network": false,
-        "writes_files": false
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "show",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": false,
-        "uses_network": false,
-        "writes_files": false
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "refresh",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": true,
-        "starts_processes": false,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "list-stale",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": false,
-        "uses_network": false,
-        "writes_files": false
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": null,
-      "command_root": "upgrade",
-      "darwin_support": "supported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": true,
-        "starts_processes": false,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "portable-client",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": "proof execution is outside the portable client boundary",
-      "command_root": "self-build",
-      "darwin_support": "unsupported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": true,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "proof",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": "command requires a Linux worker or server",
-      "command_root": "rust-cache",
-      "darwin_support": "unsupported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": true,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "linux-worker-server",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": "command requires the Linux local executor",
-      "command_root": "rust-plan",
-      "darwin_support": "unsupported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": true,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "linux-local-executor",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": "command requires the Linux local executor",
-      "command_root": "shell",
-      "darwin_support": "unsupported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": true,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "linux-local-executor",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": "command requires the Linux local executor",
-      "command_root": "develop",
-      "darwin_support": "unsupported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": true,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "linux-local-executor",
-      "trusted_builder_key_required": false
-    },
-    {
-      "blocker": "command requires the Linux local executor",
-      "command_root": "run",
-      "darwin_support": "unsupported",
-      "effects": {
-        "reads_files": true,
-        "requires_trust_material": false,
-        "starts_processes": true,
-        "uses_network": true,
-        "writes_files": true
-      },
-      "remote_capability_required": false,
-      "role": "linux-local-executor",
-      "trusted_builder_key_required": false
-    }
-  ],
   "schema": "mantle-operator-surface-inventory-v1",
   "surfaces": [
     {
@@ -1792,7 +1205,7 @@
       "machine_schema": "mantle-command-json-v1",
       "migration_reference": null,
       "mutation": "none",
-      "network": "none",
+      "network": "optional",
       "owner": "mantle-cli",
       "removal_gate": null,
       "role": "public-command",
@@ -3770,7 +3183,7 @@
       "machine_schema": "mantle-command-json-v1",
       "migration_reference": null,
       "mutation": "none",
-      "network": "optional",
+      "network": "none",
       "owner": "mantle-cli",
       "removal_gate": null,
       "role": "public-command",
@@ -3808,8 +3221,8 @@
       "kind": "command",
       "machine_schema": "mantle-command-json-v1",
       "migration_reference": null,
-      "mutation": "project-files",
-      "network": "optional",
+      "mutation": "none",
+      "network": "none",
       "owner": "mantle-cli",
       "removal_gate": null,
       "role": "public-command",
@@ -3848,8 +3261,8 @@
       "kind": "command",
       "machine_schema": "mantle-command-json-v1",
       "migration_reference": null,
-      "mutation": "project-files",
-      "network": "optional",
+      "mutation": "none",
+      "network": "none",
       "owner": "mantle-cli",
       "removal_gate": null,
       "role": "public-command",
@@ -3888,7 +3301,7 @@
       "kind": "command",
       "machine_schema": "mantle-command-json-v1",
       "migration_reference": null,
-      "mutation": "project-files",
+      "mutation": "none",
       "network": "none",
       "owner": "mantle-cli",
       "removal_gate": null,
@@ -6095,6 +5508,7 @@
         "--proof-disk-bytes-max",
         "--proof-elapsed-seconds-max",
         "--proof-exec-events-max",
+        "--proof-native-checkpoint-attempt",
         "--proof-sandbox-shell",
         "--proof-source-records-max",
         "--rust-source-provider",
@@ -6905,7 +6319,7 @@
       "network": "none",
       "owner": "mantle-cli",
       "removal_gate": null,
-      "role": "experimental-command",
+      "role": "public-command",
       "support_tier": "advanced",
       "supported_operations": [
         "invoke",
@@ -6936,13 +6350,13 @@
         "-v"
       ],
       "kind": "command",
-      "machine_schema": "mantle-composition-plan-v1",
+      "machine_schema": "mantle-command-json-v1",
       "migration_reference": null,
       "mutation": "none",
       "network": "none",
       "owner": "mantle-cli",
       "removal_gate": null,
-      "role": "experimental-command",
+      "role": "public-command",
       "support_tier": "advanced",
       "supported_operations": [
         "invoke",
@@ -6974,13 +6388,13 @@
         "-v"
       ],
       "kind": "command",
-      "machine_schema": "mantle-composition-receipt-v1",
+      "machine_schema": "mantle-command-json-v1",
       "migration_reference": null,
-      "mutation": "store-state",
+      "mutation": "none",
       "network": "none",
       "owner": "mantle-cli",
       "removal_gate": null,
-      "role": "experimental-command",
+      "role": "public-command",
       "support_tier": "advanced",
       "supported_operations": [
         "invoke",
@@ -7663,7 +7077,7 @@
       ]
     },
     {
-      "canonical": ".crunch/",
+      "canonical": "crunch.ncl",
       "compatibility_spellings": [],
       "compatibility_state": "compatibility-read-write",
       "exit_classes": [],
@@ -7674,48 +7088,8 @@
       "mutation": "project-files",
       "network": "none",
       "owner": "mantle-project",
-      "removal_gate": "accepted project-state migration with consumer and rollback evidence",
-      "role": "legacy-project-state-directory",
-      "support_tier": "compatibility",
-      "supported_operations": [
-        "read",
-        "write"
-      ]
-    },
-    {
-      "canonical": ".crunch/inputs.ncl",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-write",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "project-file",
-      "machine_schema": null,
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "project-files",
-      "network": "none",
-      "owner": "mantle-project",
-      "removal_gate": "accepted generated-input migration with consumer evidence",
-      "role": "legacy-generated-project-input",
-      "support_tier": "compatibility",
-      "supported_operations": [
-        "read",
-        "write"
-      ]
-    },
-    {
-      "canonical": "crunch.lock",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-write",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "project-file",
-      "machine_schema": null,
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "project-files",
-      "network": "none",
-      "owner": "mantle-project",
-      "removal_gate": "accepted lockfile migration with consumer evidence",
-      "role": "legacy-project-lock",
+      "removal_gate": "accepted project-file migration with consumer evidence",
+      "role": "legacy-project-input",
       "support_tier": "compatibility",
       "supported_operations": [
         "read",
@@ -7743,7 +7117,7 @@
       ]
     },
     {
-      "canonical": "crunch.ncl",
+      "canonical": "crunch.lock",
       "compatibility_spellings": [],
       "compatibility_state": "compatibility-read-write",
       "exit_classes": [],
@@ -7754,12 +7128,31 @@
       "mutation": "project-files",
       "network": "none",
       "owner": "mantle-project",
-      "removal_gate": "accepted build-file migration with consumer evidence",
-      "role": "legacy-build-input",
+      "removal_gate": "accepted lockfile migration with consumer evidence",
+      "role": "legacy-project-lock",
       "support_tier": "compatibility",
       "supported_operations": [
         "read",
         "write"
+      ]
+    },
+    {
+      "canonical": "CRUNCH_STATE_DIR",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-write",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "environment",
+      "machine_schema": null,
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-cli",
+      "removal_gate": "accepted environment migration with consumer evidence",
+      "role": "legacy-environment-input",
+      "support_tier": "compatibility",
+      "supported_operations": [
+        "read"
       ]
     },
     {
@@ -7782,186 +7175,13 @@
       ]
     },
     {
-      "canonical": "CRUNCH_LOG_DIR",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-write",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "environment",
-      "machine_schema": null,
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": "accepted log-directory migration with consumer evidence",
-      "role": "legacy-environment-input",
-      "support_tier": "compatibility",
-      "supported_operations": [
-        "read"
-      ]
-    },
-    {
-      "canonical": "CRUNCH_NO_FUSE",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-write",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "environment",
-      "machine_schema": null,
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-build",
-      "removal_gate": "accepted sandbox-mode migration with host evidence",
-      "role": "legacy-sandbox-mode-input",
-      "support_tier": "compatibility",
-      "supported_operations": [
-        "read"
-      ]
-    },
-    {
-      "canonical": "CRUNCH_STATE_DIR",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-write",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "environment",
-      "machine_schema": null,
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": "accepted state-directory migration with consumer evidence",
-      "role": "legacy-environment-input",
-      "support_tier": "compatibility",
-      "supported_operations": [
-        "read"
-      ]
-    },
-    {
-      "canonical": "CRUNCH_STAGE0_SEED_BUILD_TOOLS",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-write",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "environment",
-      "machine_schema": null,
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-bootstrap",
-      "removal_gate": "accepted stage0 inventory migration with proof evidence",
-      "role": "legacy-stage0-seed-input",
-      "support_tier": "internal",
-      "supported_operations": [
-        "read"
-      ]
-    },
-    {
-      "canonical": "CRUNCH_STAGE0_SEED_SANDBOX_ENTRY",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-write",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "environment",
-      "machine_schema": null,
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-bootstrap",
-      "removal_gate": "accepted stage0 inventory migration with proof evidence",
-      "role": "legacy-stage0-seed-input",
-      "support_tier": "internal",
-      "supported_operations": [
-        "read"
-      ]
-    },
-    {
-      "canonical": "CRUNCH_STAGE0_SEED_SANDBOX_SHELL",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-write",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "environment",
-      "machine_schema": null,
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-bootstrap",
-      "removal_gate": "accepted stage0 inventory migration with proof evidence",
-      "role": "legacy-stage0-seed-input",
-      "support_tier": "internal",
-      "supported_operations": [
-        "read"
-      ]
-    },
-    {
-      "canonical": "CRUNCH_STAGE0_SEED_TOOLCHAIN_ROOT",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-write",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "environment",
-      "machine_schema": null,
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-bootstrap",
-      "removal_gate": "accepted stage0 inventory migration with proof evidence",
-      "role": "legacy-stage0-seed-input",
-      "support_tier": "internal",
-      "supported_operations": [
-        "read"
-      ]
-    },
-    {
-      "canonical": "crunch-bootstrap-parity-gap-report-v1",
+      "canonical": "crunch-doctor-report-v1",
       "compatibility_spellings": [],
       "compatibility_state": "compatibility-read-only",
       "exit_classes": [],
       "flags": [],
       "kind": "machine-schema",
-      "machine_schema": "crunch-bootstrap-parity-gap-report-v1",
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-bootstrap",
-      "removal_gate": "schema migration and reader evidence",
-      "role": "legacy-machine-output",
-      "support_tier": "compatibility",
-      "supported_operations": [
-        "produce",
-        "read"
-      ]
-    },
-    {
-      "canonical": "crunch-bootstrap-validation-v1",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-only",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "machine-schema",
-      "machine_schema": "crunch-bootstrap-validation-v1",
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-bootstrap",
-      "removal_gate": "schema migration and reader evidence",
-      "role": "legacy-machine-output",
-      "support_tier": "compatibility",
-      "supported_operations": [
-        "produce",
-        "read"
-      ]
-    },
-    {
-      "canonical": "crunch-build-plan-v1",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-only",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "machine-schema",
-      "machine_schema": "crunch-build-plan-v1",
+      "machine_schema": "crunch-doctor-report-v1",
       "migration_reference": "docs/mantle-naming.md",
       "mutation": "none",
       "network": "none",
@@ -7995,66 +7215,6 @@
       ]
     },
     {
-      "canonical": "crunch-doctor-report-v1",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-only",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "machine-schema",
-      "machine_schema": "crunch-doctor-report-v1",
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": "schema migration and reader evidence",
-      "role": "legacy-machine-output",
-      "support_tier": "compatibility",
-      "supported_operations": [
-        "produce",
-        "read"
-      ]
-    },
-    {
-      "canonical": "crunch-self-hosting-proof-v2",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-only",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "machine-schema",
-      "machine_schema": "crunch-self-hosting-proof-v2",
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-release",
-      "removal_gate": "workflow migration and witness replay evidence",
-      "role": "legacy-proof-workflow-identity",
-      "support_tier": "compatibility",
-      "supported_operations": [
-        "produce",
-        "read"
-      ]
-    },
-    {
-      "canonical": "crunch-stage0-inventory-preflight-v1",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-only",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "machine-schema",
-      "machine_schema": "crunch-stage0-inventory-preflight-v1",
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-bootstrap",
-      "removal_gate": "schema migration and reader evidence",
-      "role": "legacy-machine-output",
-      "support_tier": "compatibility",
-      "supported_operations": [
-        "produce",
-        "read"
-      ]
-    },
-    {
       "canonical": "mantle-runtime-fingerprint-v1",
       "compatibility_spellings": [],
       "compatibility_state": "canonical",
@@ -8069,86 +7229,6 @@
       "removal_gate": null,
       "role": "canonical-machine-output",
       "support_tier": "advanced",
-      "supported_operations": [
-        "produce",
-        "read"
-      ]
-    },
-    {
-      "canonical": "/crunch/store",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-write",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "identifier",
-      "machine_schema": null,
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "store-state",
-      "network": "none",
-      "owner": "mantle-store",
-      "removal_gate": "store-prefix migration and rollback evidence",
-      "role": "legacy-logical-store-prefix",
-      "support_tier": "compatibility",
-      "supported_operations": [
-        "read",
-        "write"
-      ]
-    },
-    {
-      "canonical": "crunch.fetchurl",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-write",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "identifier",
-      "machine_schema": null,
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "store-state",
-      "network": "optional",
-      "owner": "mantle-eval",
-      "removal_gate": "Nickel API migration and consumer evidence",
-      "role": "legacy-nickel-function",
-      "support_tier": "compatibility",
-      "supported_operations": [
-        "invoke",
-        "read"
-      ]
-    },
-    {
-      "canonical": "crunch.self-build",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-only",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "identifier",
-      "machine_schema": null,
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-release",
-      "removal_gate": "workflow identity migration and replay evidence",
-      "role": "legacy-workflow-identity",
-      "support_tier": "compatibility",
-      "supported_operations": [
-        "produce",
-        "read"
-      ]
-    },
-    {
-      "canonical": "not-crunch-bootstrap",
-      "compatibility_spellings": [],
-      "compatibility_state": "compatibility-read-only",
-      "exit_classes": [],
-      "flags": [],
-      "kind": "identifier",
-      "machine_schema": null,
-      "migration_reference": "docs/mantle-naming.md",
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-release",
-      "removal_gate": "non-claim schema migration and reader evidence",
-      "role": "legacy-non-claim-token",
-      "support_tier": "compatibility",
       "supported_operations": [
         "produce",
         "read"

@@ -1,0 +1,1 @@
+cargo test -p mantle --bin mantle evaluator_budget:: -- --test-threads=1

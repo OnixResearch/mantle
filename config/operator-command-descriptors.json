@@ -3188,6 +3188,7 @@
       "--proof-disk-bytes-max",
       "--proof-elapsed-seconds-max",
       "--proof-exec-events-max",
+      "--proof-native-checkpoint-attempt",
       "--proof-sandbox-shell",
       "--proof-source-records-max",
       "--rust-source-provider",

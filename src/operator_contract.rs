@@ -1,3 +1,4 @@
+// machine-artifact-public: operator.command-contract-reports
 use std::collections::BTreeMap;
 
 use serde::Deserialize;

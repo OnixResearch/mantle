@@ -1,0 +1,3 @@
+machine schema contract check failed: public producer marker completeness rejected:
+  - evaluation.budget-reports [schema] /producer/marker: producer marker evaluation.budget-reports is absent from Rust sources
+  - operator.command-contract-reports [schema] /producer/marker: producer marker operator.command-contract-reports is absent from Rust sources
