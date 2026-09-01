@@ -1,0 +1,1 @@
+nix develop -c cargo clippy -p crunch-store --lib --tests --no-deps -- -D warnings

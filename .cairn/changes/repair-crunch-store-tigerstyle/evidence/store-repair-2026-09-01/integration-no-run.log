@@ -1,0 +1,7 @@
+copying path '/nix/store/hhccdmpa2bhqbagn2zgmgrwjbcdinn55-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/1pzq6dhayzd6kgyhjwqr1bwq468z36vp0al101havv6d0pw1fa40.nar?hash=hhccdmpa2bhqbagn2zgmgrwjbcdinn55' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-store-tigerstyle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-store-tigerstyle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.39s
+  Executable tests/integration_build.rs (/home/brittonr/.cargo-target/debug/deps/integration_build-e412c0e5d215bc17)

@@ -111,3 +111,4 @@ compatibility surface, crate name, or historical decision.
 | [0102](0102-vendor-wasi-virt-with-crane.md) | Vendor wasi-virt with Crane | Accepted |
 | [0103](0103-retire-bootstrap-markers-through-proof-bound-identities.md) | Retire bootstrap markers through proof-bound identities | Accepted |
 | [0104](0104-vendor-spacewasm-with-crane.md) | Vendor SpaceWasm with Crane | Accepted |
+| [0105](0105-repair-store-structure-without-changing-authority.md) | Repair store structure without changing authority | Accepted |

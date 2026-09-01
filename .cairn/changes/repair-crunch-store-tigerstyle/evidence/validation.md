@@ -10,15 +10,23 @@
 The focused package result is the stronger implementation baseline. Completion
 requires zero findings there and in the repository derivation.
 
+## Accepted result
+
+- Focused and repository Tiger transcripts contain zero `crunch-store` finding.
+- Post-change tests pass 357 unit and 2 integration cases.
+- Strict Clippy, Mantle binary compatibility, formatting, and no-build Nix
+  evaluation pass.
+- Local and ordinary full checks advance to the later 20-finding build boundary.
+
 ## Review checkpoint
 
-- **Question:** Can strict conformance be restored without changing store
+- **Question:** Did strict store conformance return without changing store
   meaning or weakening the gate?
-- **Inspected evidence:** both Tiger baselines, source ownership boundaries,
-  accepted store lifecycle requirements, and 359 passing pre-change tests.
-- **Decision:** use local invariant repairs first and extract helpers only where
-  function length or interface shape requires it. Reject allowances and scope
-  reductions.
+- **Inspected evidence:** both Tiger baselines, nine repair rounds, 359
+  pre-change and post-change tests, strict Clippy, formatting, public-caller
+  compilation, local and ordinary Nix checks, and the no-suppression diff.
+- **Decision:** accept the store repair. Preserve the 19 `crunch-build` and one
+  `crunch-rustc-wrapper` findings as the next separate change.
 - **Owner:** `repair-crunch-store-tigerstyle`.
-- **Next action:** repair the 13 source files in bounded families and rerun the
-  focused command after each family.
+- **Next action:** complete Cairn validation, sync and archive this bounded
+  change, then integrate it without altering the later blocker.

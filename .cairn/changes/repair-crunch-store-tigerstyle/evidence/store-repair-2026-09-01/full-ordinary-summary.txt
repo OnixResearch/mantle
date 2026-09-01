@@ -1,0 +1,4 @@
+      9 crates/crunch-build/src/build_request.rs
+      3 crates/crunch-build/src/execution_profile.rs
+      3 crates/crunch-build/src/ca_plan.rs
+      1 crates/crunch-rustc-wrapper/src/lib.rs
