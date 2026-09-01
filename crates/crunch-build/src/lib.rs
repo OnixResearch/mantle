@@ -131,6 +131,7 @@ pub use network_policy::plan_network_policy;
 pub use orchestrate::BuildOutcome;
 pub use orchestrate::Builder;
 pub use registry::DerivationRegistry;
+pub use registry::ExecutionProfileRegistration;
 pub use registry::RegistryEntry;
 pub use registry::populate_registry;
 pub use scheduling::ContentLocalityClass;

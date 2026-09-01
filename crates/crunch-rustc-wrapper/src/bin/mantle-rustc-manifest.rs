@@ -8,10 +8,14 @@ const HASH_ARGUMENT_COUNT: usize = 4;
 
 fn main() {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
-    let result = match arguments.first().map(String::as_str) {
-        Some("publish") if arguments.len() == PUBLISH_ARGUMENT_COUNT => publish(&arguments),
-        Some("hash-path") if arguments.len() == HASH_ARGUMENT_COUNT => hash_path(&arguments),
-        _ => Err(usage()),
+    let result = match arguments.first() {
+        Some(command) => match command.as_str() {
+            "publish" if arguments.len() == PUBLISH_ARGUMENT_COUNT => publish(&arguments),
+            "hash-path" if arguments.len() == HASH_ARGUMENT_COUNT => hash_path(&arguments),
+            "publish" | "hash-path" => Err(usage()),
+            _ => Err(usage()),
+        },
+        None => Err(usage()),
     };
     if let Err(error) = result {
         eprintln!("mantle-rustc-manifest:{error}");

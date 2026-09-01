@@ -1,0 +1,1 @@
+nix develop -c cargo clippy -p crunch-build -p crunch-rustc-wrapper --all-targets --no-deps -- -D warnings

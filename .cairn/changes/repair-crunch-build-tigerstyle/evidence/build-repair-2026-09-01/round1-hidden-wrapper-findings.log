@@ -1,0 +1,105 @@
+copying path '/nix/store/hhccdmpa2bhqbagn2zgmgrwjbcdinn55-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/1pzq6dhayzd6kgyhjwqr1bwq468z36vp0al101havv6d0pw1fa40.nar?hash=hhccdmpa2bhqbagn2zgmgrwjbcdinn55' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-attestation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-attestation-core)
+    Checking crunch-nar v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-nar)
+    Checking crunch-action-result-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-action-result-core)
+    Checking crunch-overlay-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-overlay-core)
+    Checking crunch-repair-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-repair-core)
+    Checking crunch-gc-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-gc-core)
+    Checking crunch-composition-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-composition-core)
+    Checking crunch-rust-cache-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-rust-cache-core)
+    Checking crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-eval)
+    Checking crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-wasm-component-core)
+    Checking crunch-evaluation-stream-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-evaluation-stream-core)
+    Checking crunch-shell-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-shell-core)
+    Checking crunch-delta-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-delta-core)
+    Checking crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-release-core)
+    Checking crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-eval-budget-core)
+    Checking mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/mantlepkgs-core)
+    Checking mantle-portable-client-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/mantle-portable-client-core)
+    Checking crunch-kernelscript-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-kernelscript-core)
+    Checking crunch-spacewasm-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-spacewasm-core)
+    Checking crunch-hardware-simulation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-hardware-simulation-core)
+    Checking mantle-build-contract v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/mantle-build-contract)
+    Checking crunch-shell v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-shell)
+    Checking crunch-spacewasm v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-spacewasm)
+    Checking crunch-attestation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-attestation)
+    Checking crunch-project-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-project-core)
+    Checking crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-hardware-simulation)
+    Checking crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-store)
+    Checking crunch-glue v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-glue)
+    Checking crunch-kernelscript-adapter v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-kernelscript-adapter)
+    Checking crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-wasm-component)
+    Checking crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-project)
+    Checking crunch-rust-cache v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-rust-cache)
+    Checking crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-build)
+    Checking crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-delta)
+    Checking crunch-rustc-wrapper v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-rustc-wrapper)
+error: `build_environment_report` looks like a quantity but has no unit suffix
+   --> crates/crunch-build/src/build_request.rs:248:9
+    |
+248 |     let build_environment_report = environment_policy::success_report(action_name, &environment_vars);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Unit Suffixes): put the unit in the name of numeric quantities Example: timeout_ms
+    = note: structured suggestion applicability: HasPlaceholders
+    = note: see Tiger Style guide: Unit Suffixes
+    = note: `-D tigerstyle::numeric-units` implied by `-D numeric-units`
+    = help: to override `-D numeric-units` add `#[allow(tigerstyle::numeric_units)]`
+help: rename with an explicit unit suffix like `_ms`, `_secs`, or `_bytes`
+    |
+248 |     let build_environment_report_<unit> = environment_policy::success_report(action_name, &environment_vars);
+    |                                 +++++++
+
+error: function `validate_paths` has 0 assertion(s) in 25 lines (need 2+)
+   --> crates/crunch-build/src/execution_profile.rs:315:84
+    |
+315 |   fn validate_paths(profile: &ExecutionProfile) -> Result<(), ExecutionProfileError> {
+    |  ____________________________________________________________________________________^
+316 | |     validate_clean_relative_path(CleanRelativePathInput {
+317 | |         field: "work_directory",
+318 | |         value: &profile.work_directory,
+...   |
+338 | |     Ok(())
+339 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+    = note: `-D tigerstyle::assertion-density` implied by `-D assertion-density`
+    = help: to override `-D assertion-density` add `#[allow(tigerstyle::assertion_density)]`
+
+error: catch-all `_` on enum match returns deny value — new variants will be silently handled
+  --> crates/crunch-rustc-wrapper/src/bin/mantle-rustc-manifest.rs:14:9
+   |
+14 |         _ => Err(usage()),
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Exhaustive Matching): match enum variants explicitly so new variants cannot slip through `_` Example: match state { State::Open => ..., State::Closed => ... }
+   = note: see Tiger Style guide: Exhaustive Matching
+   = note: `-D tigerstyle::catch-all-on-enum` implied by `-D catch-all-on-enum`
+   = help: to override `-D catch-all-on-enum` add `#[allow(tigerstyle::catch_all_on_enum)]`
+
+error: boolean binding `run_once` should have a predicate prefix
+  --> crates/crunch-rustc-wrapper/src/bin/mantle-rust-cache-daemon.rs:25:9
+   |
+25 |     let run_once = arguments.iter().any(|argument| argument == "--once");
+   |         ^^^^^^^^
+   |
+   = help: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+   = note: structured suggestion applicability: MaybeIncorrect
+   = note: see Tiger Style guide: Positive Predicates
+   = note: `-D tigerstyle::bool-naming` implied by `-D bool-naming`
+   = help: to override `-D bool-naming` add `#[allow(tigerstyle::bool_naming)]`
+help: rename binding to `is_run_once`
+   |
+25 |     let is_run_once = arguments.iter().any(|argument| argument == "--once");
+   |         +++
+
+error: could not compile `crunch-rustc-wrapper` (bin "mantle-rustc-manifest") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `crunch-rustc-wrapper` (bin "mantle-rust-cache-daemon") due to 1 previous error
+error: could not compile `crunch-build` (lib) due to 2 previous errors

@@ -7,7 +7,7 @@ use nix_compat::store_path::StorePath;
 
 /// Maximum provisional path length we support for marker generation.
 /// Store paths are typically <256 bytes; this guards against pathological inputs.
-const MAX_PROVISIONAL_LEN: usize = 4096;
+const MAX_PROVISIONAL_BYTES: usize = 4_096;
 
 /// Generate a deterministic marker for CA self-reference rewriting.
 ///
@@ -15,13 +15,13 @@ const MAX_PROVISIONAL_LEN: usize = 4096;
 /// from a BLAKE3 hash of the output name. This avoids false matches
 /// against zero-padded ELF sections or BSS regions.
 ///
-/// Panics if `provisional_len` is 0 or exceeds `MAX_PROVISIONAL_LEN`.
+/// Panics if `provisional_len` is 0 or exceeds `MAX_PROVISIONAL_BYTES`.
 #[allow(tigerstyle::usize_in_public_api)] // crate-internal; callers pass Vec::len()
 pub fn generate_ca_marker(output_name: &str, provisional_len: usize) -> Vec<u8> {
     assert!(provisional_len > 0, "provisional length must be > 0");
     assert!(
-        provisional_len <= MAX_PROVISIONAL_LEN,
-        "provisional length {provisional_len} exceeds limit {MAX_PROVISIONAL_LEN}",
+        provisional_len <= MAX_PROVISIONAL_BYTES,
+        "provisional length {provisional_len} exceeds limit {MAX_PROVISIONAL_BYTES}",
     );
     assert!(!output_name.is_empty(), "output name must not be empty");
 
@@ -60,15 +60,21 @@ pub fn ca_output_path_name_typed(request: &CaOutputNameRequest) -> String {
     }
 }
 
-/// Compute the CA output path name from the stable compatibility API.
-#[allow(
-    tigerstyle::ambiguous_params,
-    reason = "stable compatibility wrapper admits values into the typed CA output-name request"
-)]
-pub fn ca_output_path_name(drv_name: &str, output_name: &str) -> String {
-    let request = CaOutputNameRequest::new(drv_name, output_name)
-        .unwrap_or_else(|error| panic!("invalid CA output-name request: {}", error.as_str()));
-    ca_output_path_name_typed(&request)
+/// Text input admitted by the CA output-path compatibility boundary.
+pub struct CaOutputPathInput<'a> {
+    pub derivation_name: &'a str,
+    pub output_name: &'a str,
+}
+
+/// Compute the CA output path name after admitting the text input.
+pub fn ca_output_path_name(input: CaOutputPathInput<'_>) -> Result<String, crate::Error> {
+    let request = CaOutputNameRequest::new(input.derivation_name, input.output_name)
+        .map_err(|error| nominal_ca_error("invalid CA output-name request", error))?;
+    Ok(ca_output_path_name_typed(&request))
+}
+
+fn nominal_ca_error(context: &str, error: crate::TrustBoundaryNominalError) -> crate::Error {
+    crate::Error::Store(format!("{context}: {}", error.as_str()))
 }
 
 /// Compute a content-addressed store path from the NAR hash.
@@ -117,35 +123,40 @@ pub fn plan_ca_outputs(
     drv_name: &str,
     outputs: &std::collections::BTreeMap<String, nix_compat::derivation::Output>,
     environment: &std::collections::BTreeMap<String, bstr::BString>,
-) -> Vec<CaOutputPlan> {
-    assert!(!outputs.is_empty(), "derivation must have at least one output");
-    assert!(!drv_name.is_empty(), "drv_name must not be empty");
-
-    let derivation = crate::DerivationName::new(drv_name)
-        .unwrap_or_else(|error| panic!("invalid derivation name: {}", error.as_str()));
-    outputs
-        .keys()
-        .map(|name| {
-            let provisional = environment.get(name).map(|v| String::from_utf8_lossy(v).to_string()).unwrap_or_default();
-            let marker = if provisional.is_empty() {
-                Vec::new()
-            } else {
-                generate_ca_marker(name, provisional.len())
-            };
-            let output =
-                crate::OutputName::new(name).unwrap_or_else(|error| panic!("invalid output name: {}", error.as_str()));
-            let path_name = ca_output_path_name_typed(&CaOutputNameRequest {
-                derivation: derivation.clone(),
-                output,
-            });
-            CaOutputPlan {
-                output_name: name.clone(),
-                provisional,
-                marker,
-                path_name,
-            }
-        })
-        .collect()
+) -> Result<Vec<CaOutputPlan>, crate::Error> {
+    if outputs.is_empty() {
+        return Err(crate::Error::Store("CA plan requires at least one derivation output".to_string()));
+    }
+    let derivation =
+        crate::DerivationName::new(drv_name).map_err(|error| nominal_ca_error("invalid derivation name", error))?;
+    let mut plans = Vec::with_capacity(outputs.len());
+    for name in outputs.keys() {
+        let provisional = environment.get(name).map(|v| String::from_utf8_lossy(v).to_string()).unwrap_or_default();
+        if provisional.len() > MAX_PROVISIONAL_BYTES {
+            return Err(crate::Error::Store(format!(
+                "CA provisional output '{name}' exceeds {MAX_PROVISIONAL_BYTES} bytes"
+            )));
+        }
+        let output = crate::OutputName::new(name).map_err(|error| nominal_ca_error("invalid output name", error))?;
+        let marker = if provisional.is_empty() {
+            Vec::new()
+        } else {
+            generate_ca_marker(output.as_str(), provisional.len())
+        };
+        let path_name = ca_output_path_name_typed(&CaOutputNameRequest {
+            derivation: derivation.clone(),
+            output,
+        });
+        plans.push(CaOutputPlan {
+            output_name: name.clone(),
+            provisional,
+            marker,
+            path_name,
+        });
+    }
+    debug_assert_eq!(plans.len(), outputs.len());
+    debug_assert!(plans.iter().all(|plan| outputs.contains_key(&plan.output_name)));
+    Ok(plans)
 }
 
 #[cfg(test)]
@@ -187,22 +198,49 @@ mod tests {
     #[test]
     #[should_panic(expected = "exceeds limit")]
     fn marker_too_long_panics() {
-        generate_ca_marker("out", MAX_PROVISIONAL_LEN + 1);
+        generate_ca_marker("out", MAX_PROVISIONAL_BYTES.saturating_add(1));
     }
 
     #[test]
     fn path_name_out_uses_base() {
-        assert_eq!(ca_output_path_name("hello.drv", "out"), "hello");
+        let name = ca_output_path_name(CaOutputPathInput {
+            derivation_name: "hello.drv",
+            output_name: "out",
+        })
+        .unwrap();
+        assert_eq!(name, "hello");
     }
 
     #[test]
     fn path_name_non_out_appends() {
-        assert_eq!(ca_output_path_name("hello.drv", "lib"), "hello-lib");
+        let name = ca_output_path_name(CaOutputPathInput {
+            derivation_name: "hello.drv",
+            output_name: "lib",
+        })
+        .unwrap();
+        assert_eq!(name, "hello-lib");
     }
 
     #[test]
     fn path_name_no_drv_suffix() {
-        assert_eq!(ca_output_path_name("hello", "out"), "hello");
+        let name = ca_output_path_name(CaOutputPathInput {
+            derivation_name: "hello",
+            output_name: "out",
+        })
+        .unwrap();
+        assert_eq!(name, "hello");
+    }
+
+    #[test]
+    fn path_name_rejects_invalid_derivation_name() {
+        let error = ca_output_path_name(CaOutputPathInput {
+            derivation_name: "",
+            output_name: "out",
+        })
+        .unwrap_err();
+
+        assert!(error.to_string().contains("invalid CA output-name request"));
+        assert!(error.to_string().contains("empty"));
     }
 
     #[test]
@@ -221,6 +259,17 @@ mod tests {
     }
 
     #[test]
+    fn plan_ca_outputs_rejects_empty_output_set() {
+        let outputs = std::collections::BTreeMap::new();
+        let environment = std::collections::BTreeMap::new();
+
+        let error = plan_ca_outputs("hello.drv", &outputs, &environment).unwrap_err();
+
+        assert!(error.to_string().contains("requires at least one derivation output"));
+        assert!(outputs.is_empty());
+    }
+
+    #[test]
     fn plan_ca_outputs_collects_all() {
         let mut outputs = std::collections::BTreeMap::new();
         outputs.insert("out".to_string(), nix_compat::derivation::Output {
@@ -235,7 +284,7 @@ mod tests {
         env.insert("out".to_string(), bstr::BString::from("/nix/store/aaa-hello"));
         env.insert("lib".to_string(), bstr::BString::from("/nix/store/bbb-hello-lib"));
 
-        let plans = plan_ca_outputs("hello.drv", &outputs, &env);
+        let plans = plan_ca_outputs("hello.drv", &outputs, &env).unwrap();
         assert_eq!(plans.len(), 2);
         assert_eq!(plans[0].output_name, "lib"); // BTreeMap is sorted
         assert_eq!(plans[1].output_name, "out");

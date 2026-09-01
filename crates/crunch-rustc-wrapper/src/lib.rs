@@ -1569,6 +1569,9 @@ fn commit_staged_outputs(stage_root: &Path, contracts: &[WrapperOutputContract])
 }
 
 fn rename_noreplace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    debug_assert!(!source.as_os_str().is_empty(), "staged source path must not be empty");
+    debug_assert!(!destination.as_os_str().is_empty(), "destination path must not be empty");
+    debug_assert_ne!(source, destination, "staged source and destination must differ");
     let source = CString::new(source.as_os_str().as_bytes())
         .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
     let destination = CString::new(destination.as_os_str().as_bytes())

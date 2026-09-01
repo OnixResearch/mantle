@@ -1,0 +1,164 @@
+copying path '/nix/store/hhccdmpa2bhqbagn2zgmgrwjbcdinn55-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/1pzq6dhayzd6kgyhjwqr1bwq468z36vp0al101havv6d0pw1fa40.nar?hash=hhccdmpa2bhqbagn2zgmgrwjbcdinn55' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Blocking waiting for file lock on build directory
+    Checking crunch-attestation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-attestation-core)
+    Checking crunch-action-result-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-action-result-core)
+    Checking crunch-nar v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-nar)
+    Checking crunch-overlay-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-overlay-core)
+    Checking crunch-repair-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-repair-core)
+    Checking crunch-composition-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-composition-core)
+    Checking crunch-gc-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-gc-core)
+    Checking crunch-rust-cache-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-rust-cache-core)
+    Checking crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-eval)
+    Checking crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-wasm-component-core)
+    Checking crunch-evaluation-stream-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-evaluation-stream-core)
+    Checking crunch-shell-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-shell-core)
+    Checking crunch-delta-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-delta-core)
+    Checking crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-release-core)
+    Checking mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/mantlepkgs-core)
+    Checking crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-eval-budget-core)
+    Checking mantle-portable-client-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/mantle-portable-client-core)
+    Checking crunch-spacewasm-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-spacewasm-core)
+    Checking crunch-kernelscript-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-kernelscript-core)
+    Checking crunch-hardware-simulation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-hardware-simulation-core)
+    Checking mantle-build-contract v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/mantle-build-contract)
+    Checking crunch-shell v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-shell)
+    Checking crunch-attestation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-attestation)
+    Checking crunch-project-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-project-core)
+    Checking crunch-spacewasm v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-spacewasm)
+    Checking crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-hardware-simulation)
+    Checking crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-store)
+    Checking crunch-glue v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-glue)
+    Checking crunch-kernelscript-adapter v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-kernelscript-adapter)
+    Checking crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-wasm-component)
+    Checking crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-project)
+    Checking crunch-rust-cache v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-rust-cache)
+    Checking crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-build)
+    Checking crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-delta)
+    Checking crunch-rustc-wrapper v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-rustc-wrapper)
+    Checking crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-pipeline)
+error: function `register_managed_generation` has 0 assertion(s) in 38 lines (need 2+)
+   --> crates/crunch-pipeline/src/lib.rs:531:24
+    |
+531 |   ) -> Result<(), Error> {
+    |  ________________________^
+532 | |     let Some(base_registration) = base_registration else {
+533 | |         return Ok(());
+534 | |     };
+...   |
+567 | |     Ok(())
+568 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+    = note: `-D tigerstyle::assertion-density` implied by `-D assertion-density`
+    = help: to override `-D assertion-density` add `#[allow(tigerstyle::assertion_density)]`
+
+error: function `create_cache_only_observer` has 0 assertion(s) in 29 lines (need 2+)
+   --> crates/crunch-pipeline/src/lib.rs:641:96
+    |
+641 |   ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
+    |  ________________________________________________________________________________________________^
+642 | |     let crunch_store::PipelineStoreParts {
+643 | |         build_store,
+644 | |         action_results,
+...   |
+668 | |     })
+669 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: collection grows in loop without a prior reservation or explicit local bound
+   --> crates/crunch-pipeline/src/lib.rs:255:9
+    |
+255 | /         roots.push(EagerDerivationRoot {
+256 | |             label: message.label,
+257 | |             drv_path: message.drv_path,
+258 | |         });
+    | |__________^
+    |
+    = help: Tiger Style (Bounded Resource Growth): reserve collection capacity or add an explicit local length bound before growing it in a loop Example: let mut items = Vec::with_capacity(limit);
+    = note: see Tiger Style guide: Bounded Resource Growth
+    = note: `-D tigerstyle::unbounded-collection-growth` implied by `-D unbounded-collection-growth`
+    = help: to override `-D unbounded-collection-growth` add `#[allow(tigerstyle::unbounded_collection_growth)]`
+
+error: function has 6 parameters (limit: 5) — consider an options struct
+   --> crates/crunch-pipeline/src/lib.rs:524:1
+    |
+524 | / async fn register_managed_generation(
+525 | |     base_registration: Option<&crunch_store::RootRegistration>,
+526 | |     root_retention_source: Option<GcRootSource>,
+527 | |     root_registry: &crunch_store::RootRegistry,
+...   |
+567 | |     Ok(())
+568 | | }
+    | |_^
+    |
+    = help: Tiger Style (Simple Interfaces): group many parameters into a named options struct instead of a long positional signature Example: fn connect(opts: ConnectOptions) -> ...
+    = note: see Tiger Style guide: Explicit Interfaces
+    = note: `-D tigerstyle::too-many-parameters` implied by `-D too-many-parameters`
+    = help: to override `-D too-many-parameters` add `#[allow(tigerstyle::too_many_parameters)]`
+
+error: boolean binding `include_source_generation` should have a predicate prefix
+   --> crates/crunch-pipeline/src/lib.rs:530:5
+    |
+530 |     include_source_generation: bool,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+    = note: structured suggestion applicability: MaybeIncorrect
+    = note: see Tiger Style guide: Positive Predicates
+    = note: `-D tigerstyle::bool-naming` implied by `-D bool-naming`
+    = help: to override `-D bool-naming` add `#[allow(tigerstyle::bool_naming)]`
+help: rename binding to `is_include_source_generation`
+    |
+530 |     is_include_source_generation: bool,
+    |     +++
+
+error: collection grows in loop without a prior reservation or explicit local bound
+   --> crates/crunch-pipeline/src/lib.rs:548:13
+    |
+548 |             registrations.push((path_info.store_path.clone(), source, base_registration.clone()));
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Bounded Resource Growth): reserve collection capacity or add an explicit local length bound before growing it in a loop Example: let mut items = Vec::with_capacity(limit);
+    = note: see Tiger Style guide: Bounded Resource Growth
+
+error: function has 7 parameters (limit: 5) — consider an options struct
+   --> crates/crunch-pipeline/src/lib.rs:571:1
+    |
+571 | / async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'static>(
+572 | |     config: &BuildConfig,
+573 | |     mut builder: Builder<S>,
+574 | |     known_paths: &mut DerivationRegistry,
+...   |
+634 | |     })
+635 | | }
+    | |_^
+    |
+    = help: Tiger Style (Simple Interfaces): group many parameters into a named options struct instead of a long positional signature Example: fn connect(opts: ConnectOptions) -> ...
+    = note: see Tiger Style guide: Explicit Interfaces
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+   --> crates/crunch-pipeline/src/lib.rs:972:1
+    |
+972 | / fn normalized_failed_drv_key(drv_key: &str, store_dir: &str) -> String {
+973 | |     if parse_drv_key(store_dir, drv_key).is_some() {
+974 | |         return drv_key.to_string();
+...   |
+979 | |     drv_key_for(store_dir, &drv_path)
+980 | | }
+    | |_^
+    |
+    = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+    = note: see Tiger Style guide: Explicit Interfaces
+    = note: `-D tigerstyle::ambiguous-params` implied by `-D ambiguous-params`
+    = help: to override `-D ambiguous-params` add `#[allow(tigerstyle::ambiguous_params)]`
+
+error: could not compile `crunch-pipeline` (lib) due to 8 previous errors

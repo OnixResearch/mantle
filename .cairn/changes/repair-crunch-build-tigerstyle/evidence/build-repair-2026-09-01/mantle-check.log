@@ -1,0 +1,56 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Checking crunch-attestation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-attestation-core)
+    Checking snix-tracing v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/vendor/snix-tracing)
+    Checking fuse-backend-rs v0.12.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/vendor/fuse-backend-rs)
+    Checking nix-compat v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/vendor/nix-compat)
+    Checking crunch-action-result-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-action-result-core)
+    Checking crunch-gc-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-gc-core)
+    Checking crunch-repair-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-repair-core)
+    Checking crunch-overlay-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-overlay-core)
+    Checking crunch-composition-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-composition-core)
+    Checking crunch-rust-cache-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-rust-cache-core)
+    Checking crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-eval)
+    Checking crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-wasm-component-core)
+    Checking crunch-evaluation-stream-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-evaluation-stream-core)
+    Checking crunch-shell-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-shell-core)
+    Checking crunch-delta-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-delta-core)
+    Checking crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-release-core)
+    Checking crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-eval-budget-core)
+    Checking mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/mantlepkgs-core)
+    Checking crunch-bootstrap-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-bootstrap-core)
+    Checking mantle-portable-client-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/mantle-portable-client-core)
+    Checking predicates-core v1.0.10
+    Checking float-cmp v0.10.0
+    Checking normalize-line-endings v0.3.0
+    Checking termtree v0.5.1
+    Checking difflib v0.4.0
+    Checking crunch-hardware-simulation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-hardware-simulation-core)
+    Checking crunch-shell v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-shell)
+    Checking crunch-kernelscript-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-kernelscript-core)
+    Checking transactional-reconciliation-core v0.1.0 (https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9#606489b5)
+    Checking predicates-tree v1.0.13
+    Checking predicates v3.1.4
+    Checking crunch-attestation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-attestation)
+    Checking crunch-project-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-project-core)
+    Checking assert_cmd v2.2.0
+    Checking snix-castore v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/vendor/snix-castore)
+    Checking crunch-nar v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-nar)
+    Checking crunch-glue v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-glue)
+    Checking crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-hardware-simulation)
+    Checking crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-wasm-component)
+    Checking crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-project)
+    Checking snix-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/vendor/snix-store)
+    Checking snix-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/vendor/snix-build)
+    Checking crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-store)
+    Checking crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-build)
+    Checking crunch-rust-cache v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-rust-cache)
+    Checking crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-delta)
+    Checking crunch-rustc-wrapper v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-rustc-wrapper)
+    Checking crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle/crates/crunch-pipeline)
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-crunch-build-tigerstyle)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 51.92s

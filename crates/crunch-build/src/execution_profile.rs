@@ -131,6 +131,11 @@ pub enum ExecutionProfileError {
     Serialization(String),
 }
 
+struct CleanRelativePathInput<'a> {
+    field: &'static str,
+    value: &'a str,
+}
+
 impl ExecutionProfile {
     #[must_use]
     pub fn native_compatibility() -> Self {
@@ -213,7 +218,9 @@ pub fn validate_execution_profile(profile: &ExecutionProfile) -> Result<(), Exec
     if profile.schema != EXECUTION_PROFILE_SCHEMA {
         return Err(ExecutionProfileError::UnsupportedSchema);
     }
+    debug_assert_eq!(profile.schema, EXECUTION_PROFILE_SCHEMA, "accepted profile schema must match");
     validate_profile_id(&profile.profile_id)?;
+    debug_assert!(!profile.profile_id.is_empty(), "accepted profile ID must not be empty");
     if profile.scope == ExecutionProfileScope::ForeignBound
         && profile.environment_mode == ExecutionEnvironmentMode::MantleCompatibility
     {
@@ -229,6 +236,7 @@ pub fn validate_execution_profile(profile: &ExecutionProfile) -> Result<(), Exec
             field: "syscall_exceptions",
         });
     }
+    debug_assert!(profile.syscall_exceptions.len() <= MAX_PROFILE_SYSCALL_EXCEPTIONS);
     if !profile.syscall_exceptions.is_empty() {
         return Err(ExecutionProfileError::SyscallExceptionsUnsupported);
     }
@@ -237,6 +245,7 @@ pub fn validate_execution_profile(profile: &ExecutionProfile) -> Result<(), Exec
             field: "unsupported_capabilities",
         });
     }
+    debug_assert!(profile.unsupported_capabilities.len() <= MAX_PROFILE_UNSUPPORTED_CAPABILITIES);
     if !profile.unsupported_capabilities.is_empty() {
         return Err(ExecutionProfileError::UnsupportedCapabilities);
     }
@@ -264,17 +273,15 @@ fn validate_environment(profile: &ExecutionProfile) -> Result<(), ExecutionProfi
             field: "fixed_environment",
         });
     }
+    debug_assert!(profile.fixed_environment.len() <= MAX_PROFILE_ENVIRONMENT_VARIABLES);
     if profile.protected_variables.len() > MAX_PROFILE_PROTECTED_VARIABLES {
         return Err(ExecutionProfileError::CollectionLimit {
             field: "protected_variables",
         });
     }
+    debug_assert!(profile.protected_variables.len() <= MAX_PROFILE_PROTECTED_VARIABLES);
     for (key, value) in &profile.fixed_environment {
-        if key.is_empty()
-            || key.len() > MAX_PROFILE_ENVIRONMENT_KEY_BYTES
-            || key.contains('=')
-            || key.bytes().any(|byte| byte == 0)
-        {
+        if is_environment_key_invalid(key) {
             return Err(ExecutionProfileError::InvalidEnvironmentKey { key: key.clone() });
         }
         if value.len() > MAX_PROFILE_ENVIRONMENT_VALUE_BYTES || value.bytes().any(|byte| byte == 0) {
@@ -292,37 +299,71 @@ fn validate_environment(profile: &ExecutionProfile) -> Result<(), ExecutionProfi
     Ok(())
 }
 
+fn is_environment_key_invalid(key: &str) -> bool {
+    if key.is_empty() {
+        return true;
+    }
+    if key.len() > MAX_PROFILE_ENVIRONMENT_KEY_BYTES {
+        return true;
+    }
+    if key.contains('=') {
+        return true;
+    }
+    key.bytes().any(|byte| byte == 0)
+}
+
 fn validate_paths(profile: &ExecutionProfile) -> Result<(), ExecutionProfileError> {
-    validate_clean_relative_path("work_directory", &profile.work_directory)?;
+    validate_clean_relative_path(CleanRelativePathInput {
+        field: "work_directory",
+        value: &profile.work_directory,
+    })?;
     if profile.writable_prefixes.is_empty() || profile.writable_prefixes.len() > MAX_PROFILE_WRITABLE_PREFIXES {
         return Err(ExecutionProfileError::CollectionLimit {
             field: "writable_prefixes",
         });
     }
+    debug_assert!(!profile.writable_prefixes.is_empty());
+    debug_assert!(profile.writable_prefixes.len() <= MAX_PROFILE_WRITABLE_PREFIXES);
     if !is_sorted_unique(&profile.writable_prefixes) {
         return Err(ExecutionProfileError::WritablePrefixesNotCanonical);
     }
     for path in &profile.writable_prefixes {
-        validate_clean_relative_path("writable_prefixes", path)?;
+        validate_clean_relative_path(CleanRelativePathInput {
+            field: "writable_prefixes",
+            value: path,
+        })?;
     }
     let work_directory = Path::new(&profile.work_directory);
     if !profile.writable_prefixes.iter().any(|prefix| work_directory.starts_with(prefix)) {
         return Err(ExecutionProfileError::WorkDirectoryNotWritable);
     }
+    debug_assert!(!profile.work_directory.is_empty());
+    debug_assert!(profile.writable_prefixes.iter().any(|prefix| work_directory.starts_with(prefix)));
     Ok(())
 }
 
-fn validate_clean_relative_path(field: &'static str, path: &str) -> Result<(), ExecutionProfileError> {
-    let valid = !path.is_empty()
-        && path.len() <= MAX_PROFILE_PATH_BYTES
-        && Path::new(path).components().all(|component| matches!(component, Component::Normal(_)));
-    if !valid {
-        return Err(ExecutionProfileError::InvalidPath {
-            field,
-            path: path.to_string(),
-        });
+fn validate_clean_relative_path(input: CleanRelativePathInput<'_>) -> Result<(), ExecutionProfileError> {
+    if input.value.is_empty() {
+        return Err(invalid_path_error(&input));
     }
+    if input.value.len() > MAX_PROFILE_PATH_BYTES {
+        return Err(invalid_path_error(&input));
+    }
+    let has_only_normal_components =
+        Path::new(input.value).components().all(|component| matches!(component, Component::Normal(_)));
+    if !has_only_normal_components {
+        return Err(invalid_path_error(&input));
+    }
+    debug_assert!(!input.value.is_empty());
+    debug_assert!(input.value.len() <= MAX_PROFILE_PATH_BYTES);
     Ok(())
+}
+
+fn invalid_path_error(input: &CleanRelativePathInput<'_>) -> ExecutionProfileError {
+    ExecutionProfileError::InvalidPath {
+        field: input.field,
+        path: input.value.to_string(),
+    }
 }
 
 fn is_sorted_unique(values: &[String]) -> bool {

@@ -22,7 +22,7 @@ fn main() {
 }
 
 fn parse_options(arguments: &[String]) -> Result<DaemonOptions, String> {
-    let run_once = arguments.iter().any(|argument| argument == "--once");
+    let is_run_once = arguments.iter().any(|argument| argument == "--once");
     let positional = arguments.iter().filter(|argument| argument.as_str() != "--once").cloned().collect::<Vec<_>>();
     if positional.len() != REQUIRED_ARGUMENT_COUNT {
         return Err(usage());
@@ -36,7 +36,7 @@ fn parse_options(arguments: &[String]) -> Result<DaemonOptions, String> {
         state_dir,
         store_output_dir,
         receipt_dir,
-        run_once,
+        run_once: is_run_once,
     })
 }
 

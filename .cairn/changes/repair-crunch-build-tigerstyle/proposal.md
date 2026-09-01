@@ -15,8 +15,8 @@ failure propagation, rustc-wrapper publication, and public compatibility.
 
 - Replace unchecked bound arithmetic with checked construction.
 - Keep malformed build data on typed error paths instead of panic or `expect`.
-- Replace recursive structured-attribute canonicalization with a bounded
-  iterative traversal.
+- Replace recursive structured-attribute canonicalization with bounded
+  non-recursive processing over size-admitted JSON.
 - Add meaningful assertions only for facts established by prior validation or
   successful effects.
 - Replace ambiguous private parameter groups with named input records while
@@ -27,8 +27,8 @@ failure propagation, rustc-wrapper publication, and public compatibility.
 
 ## Impact
 
-- **Files:** the six `crunch-build` and `crunch-rustc-wrapper` files named by
-  the baseline, focused tests, Tracey bindings, and lifecycle evidence.
+- **Files:** the six files named by the initial baseline, two wrapper CLI files
+  exposed after the library accepted, focused tests, and lifecycle evidence.
 - **Testing:** pre-change and post-change package tests, focused Tiger checks,
   repository Tiger checks, strict Clippy, formatting, full Nix checks, Cairn
   validation, Tracey coverage, and lifecycle gates.

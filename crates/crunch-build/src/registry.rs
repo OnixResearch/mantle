@@ -55,6 +55,16 @@ struct RegistryInsert {
     dynamic_admission_identity: Option<[u8; 32]>,
 }
 
+/// Explicit inputs for a derivation that carries an execution profile.
+pub struct ExecutionProfileRegistration {
+    pub drv_path: StorePath<String>,
+    pub hash_derivation_modulo: [u8; 32],
+    pub derivation: Arc<Derivation>,
+    pub content_addressed: bool,
+    pub provenance_claims: Option<Claims>,
+    pub execution_profile: ExecutionProfile,
+}
+
 /// Build-time derivation lookup for the Worker and Builder.
 ///
 /// Indexed by absolute derivation store path (e.g.,
@@ -182,26 +192,20 @@ impl DerivationRegistry {
     /// Register a derivation with an explicit identity-checked execution profile.
     pub fn insert_with_execution_profile(
         &mut self,
-        drv_path: StorePath<String>,
-        hdm: [u8; 32],
-        derivation: impl Into<Arc<Derivation>>,
-        content_addressed: bool,
-        provenance_claims: Option<Claims>,
-        execution_profile: ExecutionProfile,
+        registration: ExecutionProfileRegistration,
     ) -> Result<(), crate::Error> {
-        let derivation = derivation.into();
-        validate_execution_profile(&execution_profile)
+        validate_execution_profile(&registration.execution_profile)
             .map_err(|error| crate::Error::Store(format!("invalid execution profile: {error}")))?;
-        verify_execution_profile_binding(derivation.as_ref(), &execution_profile)
+        verify_execution_profile_binding(registration.derivation.as_ref(), &registration.execution_profile)
             .map_err(|error| crate::Error::Store(format!("invalid execution profile binding: {error}")))?;
         self.insert_registration(RegistryInsert {
-            drv_path,
-            hash_derivation_modulo: hdm,
-            derivation,
-            content_addressed,
+            drv_path: registration.drv_path,
+            hash_derivation_modulo: registration.hash_derivation_modulo,
+            derivation: registration.derivation,
+            content_addressed: registration.content_addressed,
             dynamic_plan_outputs: Vec::new(),
-            provenance_claims,
-            execution_profile,
+            provenance_claims: registration.provenance_claims,
+            execution_profile: registration.execution_profile,
             dynamic_admission_identity: None,
         });
         Ok(())
@@ -402,7 +406,14 @@ mod tests {
         crate::bind_execution_profile(&mut derivation, &profile).unwrap();
 
         registry
-            .insert_with_execution_profile(drv_path.clone(), [8u8; 32], derivation, false, None, profile.clone())
+            .insert_with_execution_profile(ExecutionProfileRegistration {
+                drv_path: drv_path.clone(),
+                hash_derivation_modulo: [8u8; 32],
+                derivation: Arc::new(derivation),
+                content_addressed: false,
+                provenance_claims: None,
+                execution_profile: profile.clone(),
+            })
             .unwrap();
 
         let entry = registry.get_by_drv_path(&drv_path.to_absolute_path()).unwrap();
@@ -420,7 +431,14 @@ mod tests {
         crate::bind_execution_profile(&mut derivation, &guix).unwrap();
 
         let error = registry
-            .insert_with_execution_profile(drv_path, [9u8; 32], derivation, false, None, nix)
+            .insert_with_execution_profile(ExecutionProfileRegistration {
+                drv_path,
+                hash_derivation_modulo: [9u8; 32],
+                derivation: Arc::new(derivation),
+                content_addressed: false,
+                provenance_claims: None,
+                execution_profile: nix,
+            })
             .unwrap_err();
 
         assert!(error.to_string().contains("binding digest does not match"));

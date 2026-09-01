@@ -195,6 +195,14 @@ pub struct FailedGoal {
     pub build_log: Option<String>,
 }
 
+struct FailurePropagationInput<'a> {
+    drv_key: &'a str,
+    origin_drv_key: &'a str,
+    failed_dep_name: &'a str,
+    origin_error: &'a str,
+    build_log: Option<&'a str>,
+}
+
 /// Result of running the Worker: outcomes for root goals.
 #[derive(Debug)]
 pub struct WorkerResult {
@@ -2011,7 +2019,16 @@ impl Worker {
 
         // Propagate failure to waiters.
         for waiter_key in &waiters {
-            self.propagate_failure(waiter_key, drv_key, &drv_name, error_msg, build_log, failed)?;
+            self.propagate_failure(
+                FailurePropagationInput {
+                    drv_key: waiter_key,
+                    origin_drv_key: drv_key,
+                    failed_dep_name: &drv_name,
+                    origin_error: error_msg,
+                    build_log,
+                },
+                failed,
+            )?;
         }
 
         Ok(())
@@ -2020,17 +2037,13 @@ impl Worker {
     /// Recursively propagate dep failure to waiting goals.
     fn propagate_failure(
         &mut self,
-        drv_key: &str,
-        origin_drv_key: &str,
-        failed_dep_name: &str,
-        origin_error: &str,
-        build_log: Option<&str>,
+        input: FailurePropagationInput<'_>,
         failed: &mut Vec<FailedGoal>,
     ) -> Result<(), Error> {
         let goal = self
             .registry
-            .get_mut(drv_key)
-            .ok_or_else(|| Error::Store(format!("propagating failure to unknown goal: {drv_key}")))?;
+            .get_mut(input.drv_key)
+            .ok_or_else(|| Error::Store(format!("propagating failure to unknown goal: {}", input.drv_key)))?;
 
         // Only propagate to goals still Waiting or AwaitingDerivation.
         if !matches!(goal.state, GoalState::Waiting { .. } | GoalState::AwaitingDerivation) {
@@ -2045,16 +2058,25 @@ impl Worker {
 
         if is_root {
             failed.push(FailedGoal {
-                drv_key: drv_key.to_string(),
-                origin_drv_key: origin_drv_key.to_string(),
-                error: format!("dependency {failed_dep_name} failed"),
-                origin_error: origin_error.to_string(),
-                build_log: build_log.map(str::to_string),
+                drv_key: input.drv_key.to_string(),
+                origin_drv_key: input.origin_drv_key.to_string(),
+                error: format!("dependency {} failed", input.failed_dep_name),
+                origin_error: input.origin_error.to_string(),
+                build_log: input.build_log.map(str::to_string),
             });
         }
 
         for waiter_key in &waiters {
-            self.propagate_failure(waiter_key, origin_drv_key, &drv_name, origin_error, build_log, failed)?;
+            self.propagate_failure(
+                FailurePropagationInput {
+                    drv_key: waiter_key,
+                    origin_drv_key: input.origin_drv_key,
+                    failed_dep_name: &drv_name,
+                    origin_error: input.origin_error,
+                    build_log: input.build_log,
+                },
+                failed,
+            )?;
         }
 
         Ok(())

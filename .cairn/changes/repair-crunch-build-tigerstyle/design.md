@@ -25,7 +25,8 @@ no-replace publication.
 - **Audit risks:** canonical JSON drift, content-addressed output drift,
   assertion-triggered aborts on untrusted data, scheduler effect reordering,
   registry API breakage, and weakened no-replace publication.
-- **Budget:** current repository and pinned Tiger input only; six source files;
+- **Budget:** current repository and pinned Tiger input only; the six initial
+  source files plus package-local targets exposed after early failures clear;
   no new dependency or runtime authority; at most ten focused Tiger rounds.
 - **Allowed outcomes:** validated, exact later blocker, exhausted round budget,
   or a user decision for an incompatible public contract.
@@ -58,20 +59,20 @@ invalid values.
 
 **State:** active.
 
-### Family: bounded iterative canonicalization
+### Family: bounded non-recursive canonicalization
 
-**Mechanism:** replace recursive JSON traversal with an explicit bounded stack
-that rebuilds arrays and sorted objects without changing scalar or object-key
-semantics.
+**Mechanism:** use the active key-sorted `serde_json::Map` representation after
+the existing byte-bounded parser, then serialize it directly. Keep array order
+and scalar values unchanged.
 
-**Claim:** recursion can close without changing canonical structured-attribute
-bytes or permitting unbounded growth.
+**Claim:** the redundant source recursion can close without changing canonical
+structured-attribute bytes or permitting unbounded input.
 
-**Artifact:** positive canonical-byte fixtures plus negative depth and size
-fixtures.
+**Artifact:** positive nested canonical-byte fixtures plus existing malformed
+and oversized-input fixtures.
 
-**State:** active if current serialization does not already provide the exact
-required canonical order.
+**State:** selected after inspection confirmed that the active map backend
+already provides the exact required key order.
 
 ### Family: policy suppression
 
@@ -121,8 +122,8 @@ findings reach zero.
 
 ## Risks / Trade-offs
 
-- Iterative canonicalization is more code than recursion and needs exact byte
-  parity tests.
+- Direct map serialization depends on the active sorted map backend and needs
+  exact nested-byte parity tests.
 - Removing panic paths can require a fallible boundary to move outward through
   callers.
 - Named request types can change source compatibility if no wrapper remains.

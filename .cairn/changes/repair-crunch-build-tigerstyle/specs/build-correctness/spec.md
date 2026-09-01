@@ -6,7 +6,7 @@ r[build_correctness.tiger_conformance] Mantle MUST keep `crunch-build` and `crun
 
 #### Scenario: strict build check accepts both packages
 
-GIVEN build-layer source uses checked arithmetic, bounded iterative traversal, meaningful invariants, typed error propagation, decomposed conditions, and named interfaces
+GIVEN build-layer source uses checked arithmetic, bounded non-recursive processing, meaningful invariants, typed error propagation, decomposed conditions, and named interfaces
 WHEN the focused package check and repository Tiger Style check run
 THEN both MUST report zero `crunch-build` and `crunch-rustc-wrapper` findings without an allowance or suppressed target
 AND positive and negative package tests, strict Clippy, and formatting MUST pass.

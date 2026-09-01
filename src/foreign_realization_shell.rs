@@ -243,14 +243,14 @@ pub(crate) async fn realize_foreign_plan(
             });
         }
         registry
-            .insert_with_execution_profile(
-                unit.drv_path.clone(),
-                unit.hdm,
-                registry_derivation,
-                false,
-                None,
-                unit.execution_profile.clone(),
-            )
+            .insert_with_execution_profile(crunch_build::ExecutionProfileRegistration {
+                drv_path: unit.drv_path.clone(),
+                hash_derivation_modulo: unit.hdm,
+                derivation: registry_derivation.into(),
+                content_addressed: false,
+                provenance_claims: None,
+                execution_profile: unit.execution_profile.clone(),
+            })
             .map_err(|error| {
                 RunError::Internal(format!("registering foreign realization unit {}: {error}", unit.node_id))
             })?;

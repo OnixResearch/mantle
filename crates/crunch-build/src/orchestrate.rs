@@ -744,7 +744,7 @@ where BServ: BuildService + 'static
             &prepared.drv_name,
             &prepared.derivation.outputs,
             &prepared.derivation.environment,
-        );
+        )?;
         assert_eq!(ca_plans.len(), prepared.derivation.outputs.len(), "CA plan count must match output count",);
 
         // Pass 1: marker replacement + CA path computation.
@@ -1260,7 +1260,10 @@ where BServ: BuildService + 'static
             .map_err(|error| Error::NarCalculation(error.to_string()))?;
 
         // 4. Compute CA store path from marker-replaced hash.
-        let path_name = crate::ca_plan::ca_output_path_name(drv_name, output_name);
+        let path_name = crate::ca_plan::ca_output_path_name(crate::ca_plan::CaOutputPathInput {
+            derivation_name: drv_name,
+            output_name,
+        })?;
         let ca_path = crate::ca_plan::compute_ca_store_path(&path_name, marker_nar_sha256, self.store.store_dir())?;
 
         // 5. Replace zero markers with the final CA path (in sandbox/logical space).
