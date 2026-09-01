@@ -213,6 +213,7 @@ impl RustChildActionReconciliation {
 pub(crate) enum RustChildActionPlanErrorKind {
     InvalidInput,
     IncompleteGraph,
+    #[cfg(test)]
     IncompleteReconciliation,
     Serialization,
 }
@@ -880,6 +881,7 @@ pub(crate) fn validate_rust_child_action_reconciliation(
     Ok(())
 }
 
+#[cfg(test)]
 pub(crate) fn reconcile_rust_child_actions(
     plan: &RustChildActionPlan,
     observations: &[RustChildExecObservation],
@@ -1152,6 +1154,7 @@ fn plan_error(kind: RustChildActionPlanErrorKind, message: &str) -> RustChildAct
     }
 }
 
+#[cfg(test)]
 pub(crate) fn rust_unit_action_inputs_from_graph(
     graph: &crate::rust_plan::UnitDerivationGraphSummary,
 ) -> Result<Vec<RustUnitActionInput>, RustChildActionPlanError> {
@@ -1371,10 +1374,10 @@ fn indexed_target_dependency_producers(
         unit.selected_triple.clone(),
         normalized_dependency_name(&artifact.name),
     );
-    if let Some(exact) = producer_index.target_lib_by_exact_name.get(&exact_key) {
-        if !exact.is_empty() {
-            return exact.clone();
-        }
+    if let Some(exact) = producer_index.target_lib_by_exact_name.get(&exact_key)
+        && !exact.is_empty()
+    {
+        return exact.clone();
     }
     let package_key = (artifact.package_id.clone(), unit.selected_triple.clone());
     producer_index.target_lib_by_package.get(&package_key).cloned().unwrap_or_default()

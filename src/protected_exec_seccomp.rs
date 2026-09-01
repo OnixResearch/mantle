@@ -1,5 +1,6 @@
 #[cfg(target_os = "linux")]
 mod linux {
+    #[cfg(test)]
     use std::collections::BTreeSet;
     use std::ffi::OsString;
     use std::fs::File;
@@ -18,6 +19,7 @@ mod linux {
     use crate::protected_exec::ExecRequest;
     use crate::protected_exec::OutputPromotionRecord;
     use crate::protected_exec::PHASE_PROTECTED;
+    #[cfg(test)]
     use crate::protected_exec::PlannedProducedExecutableRoot;
     use crate::protected_exec::PromotedExecutable;
     use crate::protected_exec::ProtectedExecError;
@@ -38,7 +40,9 @@ mod linux {
     const EXECVEAT_DIRFD_ARG_INDEX: usize = 0;
     const EXECVEAT_PATH_ARG_INDEX: usize = 1;
     const PROC_FD_PATH_PREFIX: &str = "/proc/self/fd";
+    #[cfg(test)]
     const DIAGNOSTIC_EXEC_PATH_COUNT_MAX: usize = 256;
+    #[cfg(test)]
     const DIAGNOSTIC_EXEC_EVENT_COUNT_MAX: usize = 131_072;
     const PROTECTED_EXEC_EVENT_COUNT_MAX: usize = 262_144;
     const SEND_RESPONSE_EINTR_RETRY_COUNT_MAX: u32 = 16;
@@ -50,6 +54,7 @@ mod linux {
     const _: () = assert!(ADOPTED_DESCENDANT_REAP_POLL_COUNT_MAX > 0);
     const _: () = assert!(AUDIT_QUIESCENCE_STABLE_POLL_COUNT > 0);
     const _: () = assert!(SEND_RESPONSE_EINTR_RETRY_COUNT_MAX > 1);
+    #[cfg(test)]
     const PHASE_DIAGNOSTIC: &str = "diagnostic";
 
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -71,22 +76,19 @@ mod linux {
 
     impl std::error::Error for ProtectedSeccompError {}
 
+    #[cfg(test)]
     #[derive(Debug)]
     pub struct DiagnosticExecObserver {
         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
-        listener_fd: RawFd,
     }
 
+    #[cfg(test)]
     impl DiagnosticExecObserver {
         pub fn audit_events(&self) -> Vec<ProtectedSeccompAuditEvent> {
             match self.audit_events.lock() {
                 Ok(events) => events.clone(),
                 Err(poisoned) => poisoned.into_inner().clone(),
             }
-        }
-
-        pub fn listener_fd(&self) -> RawFd {
-            self.listener_fd
         }
 
         pub fn wait_for_audit_quiescence(&self) -> Result<usize, ProtectedSeccompError> {
@@ -98,8 +100,10 @@ mod linux {
     pub struct ProtectedSeccompSupervisor {
         // Lock order: shared_policy -> audit_events -> auto_promotions. Never acquire these locks in reverse order.
         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
+        #[cfg(test)]
         auto_promotions: Arc<Mutex<Vec<OutputPromotionRecord>>>,
         shared_policy: Arc<RwLock<ProtectedExecPolicy>>,
+        #[cfg(test)]
         listener_fd: RawFd,
     }
 
@@ -111,10 +115,12 @@ mod linux {
             }
         }
 
+        #[cfg(test)]
         pub fn listener_fd(&self) -> RawFd {
             self.listener_fd
         }
 
+        #[cfg(test)]
         pub fn automatic_promotions(&self) -> Vec<OutputPromotionRecord> {
             match self.auto_promotions.lock() {
                 Ok(promotions) => promotions.clone(),
@@ -122,6 +128,7 @@ mod linux {
             }
         }
 
+        #[cfg(test)]
         pub fn register_planned_produced_roots(
             &self,
             roots: &[PlannedProducedExecutableRoot],
@@ -130,11 +137,13 @@ mod linux {
             policy.register_planned_produced_roots(roots)
         }
 
+        #[cfg(test)]
         pub fn begin_producer_action(&self, producer_action_id: &str) -> Result<(), ProtectedExecError> {
             let mut policy = self.shared_policy.write().map_err(|_| ProtectedExecError::PolicyLockPoisoned)?;
             policy.begin_producer_action(producer_action_id)
         }
 
+        #[cfg(test)]
         pub fn end_producer_action(&self, producer_action_id: &str) -> Result<(), ProtectedExecError> {
             let mut policy = self.shared_policy.write().map_err(|_| ProtectedExecError::PolicyLockPoisoned)?;
             policy.end_producer_action(producer_action_id)
@@ -219,6 +228,7 @@ mod linux {
         )))
     }
 
+    #[cfg(test)]
     pub fn install_current_thread_diagnostic_exec_observer(
         allowed_paths: BTreeSet<PathBuf>,
     ) -> Result<DiagnosticExecObserver, ProtectedSeccompError> {
@@ -229,12 +239,10 @@ mod linux {
         let listener_fd = install_exec_filter()?;
         let audit_events = Arc::new(Mutex::new(Vec::new()));
         spawn_diagnostic_observer_thread(listener_fd, allowed_paths, audit_events.clone())?;
-        Ok(DiagnosticExecObserver {
-            audit_events,
-            listener_fd,
-        })
+        Ok(DiagnosticExecObserver { audit_events })
     }
 
+    #[cfg(test)]
     fn validate_diagnostic_paths(allowed_paths: &BTreeSet<PathBuf>) -> Result<(), ProtectedSeccompError> {
         if allowed_paths.is_empty() || allowed_paths.len() > DIAGNOSTIC_EXEC_PATH_COUNT_MAX {
             return Err(ProtectedSeccompError::Install(format!(
@@ -265,8 +273,10 @@ mod linux {
         spawn_supervisor_thread(listener_fd, shared_policy.clone(), audit_events.clone(), auto_promotions.clone())?;
         Ok(ProtectedSeccompSupervisor {
             audit_events,
+            #[cfg(test)]
             auto_promotions,
             shared_policy,
+            #[cfg(test)]
             listener_fd,
         })
     }
@@ -425,6 +435,7 @@ mod linux {
         None
     }
 
+    #[cfg(test)]
     fn spawn_diagnostic_observer_thread(
         listener_fd: RawFd,
         allowed_paths: BTreeSet<PathBuf>,
@@ -437,6 +448,7 @@ mod linux {
             .map_err(|err| ProtectedSeccompError::Supervisor(format!("spawning diagnostic observer thread: {err}")))
     }
 
+    #[cfg(test)]
     fn diagnostic_observer_loop(
         listener_fd: RawFd,
         allowed_paths: BTreeSet<PathBuf>,
@@ -567,6 +579,7 @@ mod linux {
         resolved_host_path: PathBuf,
     }
 
+    #[cfg(test)]
     fn classify_diagnostic_notification(
         listener_fd: RawFd,
         allowed_paths: &BTreeSet<PathBuf>,
@@ -587,6 +600,7 @@ mod linux {
         }
     }
 
+    #[cfg(test)]
     fn diagnostic_tracee_context(pid: u32) -> String {
         match std::fs::read_link(format!("/proc/{pid}/exe")) {
             Ok(path) => format!("tracee-image={}", path.display()),
@@ -594,6 +608,7 @@ mod linux {
         }
     }
 
+    #[cfg(test)]
     fn classify_diagnostic_path(
         allowed_paths: &BTreeSet<PathBuf>,
         pid: u32,
@@ -643,6 +658,7 @@ mod linux {
         }
     }
 
+    #[cfg(test)]
     fn diagnostic_path_allowed(allowed_paths: &BTreeSet<PathBuf>, target: &ExecTarget) -> bool {
         let tracee_allowed = allowed_paths.contains(&target.tracee_path);
         let resolved_allowed = allowed_paths.contains(&target.resolved_host_path);

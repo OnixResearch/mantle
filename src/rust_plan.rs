@@ -9485,8 +9485,10 @@ fn replace_profile_codegen_args_with_settings(args: &mut [String], settings: &Ca
     debug_assert!(!args.is_empty());
     debug_assert!(!settings.opt_level.is_empty());
     let replacements = profile_codegen_args(settings);
+    let (replacement_pairs, remainder) = replacements.as_chunks::<RUSTC_CODEGEN_ARGUMENT_PAIR_WIDTH>();
+    debug_assert!(remainder.is_empty());
     let mut replaced_count = 0usize;
-    for replacement in replacements.chunks_exact(RUSTC_CODEGEN_ARGUMENT_PAIR_WIDTH) {
+    for replacement in replacement_pairs {
         debug_assert_eq!(replacement[0], RUSTC_CODEGEN_OPTION_FLAG);
         let key = replacement[1].split_once('=').expect("profile codegen argument has a key").0;
         for arg in args.iter_mut() {

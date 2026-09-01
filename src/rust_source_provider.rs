@@ -178,6 +178,8 @@ const RUSTC_SOURCE_CARGO_CHECKSUM_BYTES_MAX: usize = 1_048_576;
 const RUSTC_SOURCE_OPENSSL_READ_CHUNK_BYTES: usize = 65_536;
 const RUSTC_SOURCE_OPENSSL_READ_ITERATIONS_MAX: usize =
     RUSTC_SOURCE_OPENSSL_CONFIG_BYTES_MAX / RUSTC_SOURCE_OPENSSL_READ_CHUNK_BYTES + 2;
+const _: () = assert!(RUSTC_SOURCE_CARGO_CHECKSUM_BYTES_MAX < RUSTC_SOURCE_OPENSSL_CONFIG_BYTES_MAX);
+const _: () = assert!(RUSTC_SOURCE_OPENSSL_READ_ITERATIONS_MAX > 1);
 const RUSTC_SOURCE_CARGO_CHECKSUM_MEMBER: &str = "src/lib.rs";
 const RUSTC_SOURCE_CARGO_CHECKSUM_ARGUMENT_COUNT: usize = 4;
 const SHA256_DIGEST_HEX_LENGTH: usize = 64;
@@ -2984,8 +2986,6 @@ fn push_rustc_source_openssl_no_asm_patch(script: &mut String) {
 }
 
 fn push_rustc_source_cargo_checksum_normalization(script: &mut String) {
-    debug_assert!(RUSTC_SOURCE_CARGO_CHECKSUM_BYTES_MAX < RUSTC_SOURCE_OPENSSL_CONFIG_BYTES_MAX);
-    debug_assert!(RUSTC_SOURCE_OPENSSL_READ_ITERATIONS_MAX > 1);
     let normalizer = rustc_source_cargo_checksum_normalizer_python();
     script.push_str("    openssl_src_root=${openssl_src_config%/src/lib.rs}\n");
     script.push_str("    openssl_checksum_config=\"$openssl_src_root/.cargo-checksum.json\"\n");

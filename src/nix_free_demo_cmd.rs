@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
+use clap::Args;
 use clap::Subcommand;
 use serde::Serialize;
 
@@ -54,59 +55,62 @@ pub(crate) enum NixFreeDemoAction {
     },
 
     /// Generate a self-contained Nix-free demo bundle from explicit evidence inputs
-    Generate {
-        /// Output directory to create or reuse if empty
-        #[arg(long)]
-        out: PathBuf,
+    Generate(Box<NixFreeDemoGenerateArgs>),
+}
 
-        /// Proof status, for example `success` or `blocked`
-        #[arg(long = "proof-status")]
-        proof_status: String,
+#[derive(Args, Debug, Clone)]
+pub(crate) struct NixFreeDemoGenerateArgs {
+    /// Output directory to create or reuse if empty
+    #[arg(long)]
+    out: PathBuf,
 
-        /// Source-root identity recorded in the generated summary
-        #[arg(long = "source-root-identity")]
-        source_root_identity: String,
+    /// Proof status, for example `success` or `blocked`
+    #[arg(long = "proof-status")]
+    proof_status: String,
 
-        /// BLAKE3 digest of the toolchain policy
-        #[arg(long = "toolchain-policy-digest-blake3")]
-        toolchain_policy_digest_blake3: String,
+    /// Source-root identity recorded in the generated summary
+    #[arg(long = "source-root-identity")]
+    source_root_identity: String,
 
-        /// Optional stage1 Mantle binary BLAKE3 digest
-        #[arg(long = "stage1-binary-blake3")]
-        stage1_binary_blake3: Option<String>,
+    /// BLAKE3 digest of the toolchain policy
+    #[arg(long = "toolchain-policy-digest-blake3")]
+    toolchain_policy_digest_blake3: String,
 
-        /// Optional stage2 Mantle binary BLAKE3 digest
-        #[arg(long = "stage2-binary-blake3")]
-        stage2_binary_blake3: Option<String>,
+    /// Optional stage1 Mantle binary BLAKE3 digest
+    #[arg(long = "stage1-binary-blake3")]
+    stage1_binary_blake3: Option<String>,
 
-        /// Guard evidence as `guard:status:diagnostic`; repeat for each guard
-        #[arg(long = "guard")]
-        guards: Vec<String>,
+    /// Optional stage2 Mantle binary BLAKE3 digest
+    #[arg(long = "stage2-binary-blake3")]
+    stage2_binary_blake3: Option<String>,
 
-        /// Transcript file to copy into the bundle; repeat for each transcript
-        #[arg(long = "transcript")]
-        transcripts: Vec<PathBuf>,
+    /// Guard evidence as `guard:status:diagnostic`; repeat for each guard
+    #[arg(long = "guard")]
+    guards: Vec<String>,
 
-        /// Receipt digest as `name:blake3`; repeat for each receipt
-        #[arg(long = "receipt-digest")]
-        receipt_digests: Vec<String>,
+    /// Transcript file to copy into the bundle; repeat for each transcript
+    #[arg(long = "transcript")]
+    transcripts: Vec<PathBuf>,
 
-        /// Artifact digest as `name:blake3`; repeat for each artifact
-        #[arg(long = "artifact-digest")]
-        artifact_digests: Vec<String>,
+    /// Receipt digest as `name:blake3`; repeat for each receipt
+    #[arg(long = "receipt-digest")]
+    receipt_digests: Vec<String>,
 
-        /// Replay hint to include in the summary; repeat for each hint
-        #[arg(long = "replay-hint")]
-        replay_hints: Vec<String>,
+    /// Artifact digest as `name:blake3`; repeat for each artifact
+    #[arg(long = "artifact-digest")]
+    artifact_digests: Vec<String>,
 
-        /// Explicit non-claim text; repeat for each non-claim
-        #[arg(long = "non-claim")]
-        non_claims: Vec<String>,
+    /// Replay hint to include in the summary; repeat for each hint
+    #[arg(long = "replay-hint")]
+    replay_hints: Vec<String>,
 
-        /// Mark the generated evidence as synthetic or fixture-derived
-        #[arg(long)]
-        synthetic: bool,
-    },
+    /// Explicit non-claim text; repeat for each non-claim
+    #[arg(long = "non-claim")]
+    non_claims: Vec<String>,
+
+    /// Mark the generated evidence as synthetic or fixture-derived
+    #[arg(long)]
+    synthetic: bool,
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -162,28 +166,14 @@ pub(crate) fn cmd_nix_free_demo(action: NixFreeDemoAction, json: bool) -> Result
     match action {
         NixFreeDemoAction::Validate { summary } => run_validate(&summary, json),
         NixFreeDemoAction::Readme { summary } => run_readme(&summary, json),
-        NixFreeDemoAction::Generate {
-            out,
-            proof_status,
-            source_root_identity,
-            toolchain_policy_digest_blake3,
-            stage1_binary_blake3,
-            stage2_binary_blake3,
-            guards,
-            transcripts,
-            receipt_digests,
-            artifact_digests,
-            replay_hints,
-            non_claims,
-            synthetic,
-        } => run_generate(
-            GenerateOptions {
-                out: &out,
+        NixFreeDemoAction::Generate(arguments) => {
+            let NixFreeDemoGenerateArgs {
+                out,
                 proof_status,
-                stage1_binary_blake3,
-                stage2_binary_blake3,
                 source_root_identity,
                 toolchain_policy_digest_blake3,
+                stage1_binary_blake3,
+                stage2_binary_blake3,
                 guards,
                 transcripts,
                 receipt_digests,
@@ -191,9 +181,26 @@ pub(crate) fn cmd_nix_free_demo(action: NixFreeDemoAction, json: bool) -> Result
                 replay_hints,
                 non_claims,
                 synthetic,
-            },
-            json,
-        ),
+            } = *arguments;
+            run_generate(
+                GenerateOptions {
+                    out: &out,
+                    proof_status,
+                    stage1_binary_blake3,
+                    stage2_binary_blake3,
+                    source_root_identity,
+                    toolchain_policy_digest_blake3,
+                    guards,
+                    transcripts,
+                    receipt_digests,
+                    artifact_digests,
+                    replay_hints,
+                    non_claims,
+                    synthetic,
+                },
+                json,
+            )
+        }
     }
 }
 

@@ -74,16 +74,13 @@ mod mantlepkgs_version_cmd;
 mod native_toolchain_closure;
 mod nickel_export;
 mod nickel_export_core_adapter;
+mod nix_derivation_adapter;
 // Nix evidence keeps compatibility-only typed proofs available even when a selected command does
 // not consume them.
 #[allow(dead_code, clippy::type_complexity)]
 mod nix_evidence_core;
 #[allow(dead_code)]
 mod nix_free_demo_bundle;
-// Demo command variants retain complete validation inputs so clap and JSON compatibility stay
-// stable.
-#[allow(clippy::large_enum_variant)]
-mod nix_derivation_adapter;
 mod nix_free_demo_cmd;
 mod nix_producer;
 mod nix_producer_shell;

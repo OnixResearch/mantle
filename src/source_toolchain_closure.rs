@@ -618,25 +618,23 @@ fn validate_relocated_toolchain_closure_inner(
     }
     let mut rust_sysroot_used = false;
     for (origin_member, relocated_member) in origin.members.iter().zip(&relocated.members) {
-        if is_host_rust_sysroot(origin_member) {
-            if let Some(observation) = rust_sysroot {
-                require_relocated_rust_sysroot_member(
-                    origin_member,
-                    relocated_member,
-                    &origin_roots,
-                    &relocated_roots,
-                    observation,
-                )?;
-                rust_sysroot_used = true;
-                continue;
-            }
+        if is_host_rust_sysroot(origin_member)
+            && let Some(observation) = rust_sysroot
+        {
+            require_relocated_rust_sysroot_member(
+                origin_member,
+                relocated_member,
+                &origin_roots,
+                &relocated_roots,
+                observation,
+            )?;
+            rust_sysroot_used = true;
+            continue;
         }
         require_relocated_member(origin_member, relocated_member, &origin_roots, &relocated_roots)?;
     }
-    if rust_sysroot.is_some() {
-        if !rust_sysroot_used {
-            return Err(relocation_error("bound Rust sysroot relocation did not match the host sysroot member"));
-        }
+    if rust_sysroot.is_some() && !rust_sysroot_used {
+        return Err(relocation_error("bound Rust sysroot relocation did not match the host sysroot member"));
     }
     let origin_validation = validation_from_normalized_manifest(&origin)?;
     let relocated_validation = validation_from_normalized_manifest(&relocated)?;

@@ -1685,6 +1685,7 @@ fn prepare_fixed_point_output_dir(bundle_dir: &Path) -> Result<(), RunError> {
     fs::create_dir_all(bundle_dir).map_err(|err| internal(format!("create {}: {err}", bundle_dir.display())))
 }
 
+#[cfg(test)]
 fn prepare_rustc_compatibility(
     bundle_dir: &Path,
     requested: &Path,
@@ -3520,6 +3521,7 @@ fn effective_source_built_toolchain_closure(
         .unwrap_or_else(|| toolchain_closure.status.clone())
 }
 
+#[cfg(test)]
 fn enforce_receipt_bound_toolchain(
     rustc: &Path,
     toolchain_closure: &LoadedToolchainClosure,
@@ -3678,10 +3680,12 @@ fn declared_file_members(
         .collect()
 }
 
+#[cfg(test)]
 fn execution_path_env(cargo_path_dir: &Path, toolchain_closure: &LoadedToolchainClosure) -> Result<OsString, RunError> {
     execution_path_env_with_shell(cargo_path_dir, toolchain_closure, Path::new("/bin/sh"))
 }
 
+#[cfg(test)]
 fn execution_path_env_with_shell(
     cargo_path_dir: &Path,
     toolchain_closure: &LoadedToolchainClosure,
@@ -3816,6 +3820,7 @@ fn bound_rust_host_tool_aliases(
     Ok(aliases)
 }
 
+#[cfg(test)]
 fn write_toolchain_path_aliases(
     guard_path_dir: &Path,
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
@@ -3823,6 +3828,7 @@ fn write_toolchain_path_aliases(
     write_toolchain_path_aliases_with_shell(guard_path_dir, manifest, Path::new("/bin/sh"))
 }
 
+#[cfg(test)]
 fn write_toolchain_path_aliases_with_shell(
     guard_path_dir: &Path,
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
