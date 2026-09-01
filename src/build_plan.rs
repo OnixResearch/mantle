@@ -1012,7 +1012,7 @@ mod tests {
 
     const TEST_SANDBOX_SHELL_DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const DEPENDENCY_CHAIN_ACTION_COUNT_MIN: u32 = 2;
-    const PRESERVED_NATIVE_REPORT_ROOT: &str = "cairn/changes/prove-source-built-mantle-fixed-point/evidence/action-trust-architecture-search-2026-08-23/preserved-native-reports";
+    const PRESERVED_NATIVE_REPORT_ROOT: &str = ".cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/action-trust-architecture-search-2026-08-23/preserved-native-reports";
     const PRESERVED_NATIVE_REPORTS: &[(&str, &str)] = &[
         ("full-source-native-provider", "bootstrap/seed-full-toolchain.ncl"),
         ("make", "bootstrap/make-4.4.1-gcc10.ncl"),
@@ -1095,7 +1095,7 @@ mod tests {
         )
         .unwrap();
         let report: serde_json::Value = serde_json::from_str(include_str!(
-            "../cairn/changes/prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/provider-checkpoint-origin/native-provider.json"
+            "../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/provider-checkpoint-origin/native-provider.json"
         ))
         .unwrap();
         let observed = report["scheduler_priority_decisions"]

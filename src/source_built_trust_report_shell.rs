@@ -432,18 +432,18 @@ mod tests {
         let fixture = tempfile::tempdir().unwrap();
         fs::write(
             fixture.path().join(PLAN_FILE),
-            include_bytes!("../cairn/changes/prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/source-built-fixed-point-plan.json"),
+            include_bytes!("../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/source-built-fixed-point-plan.json"),
         )
         .unwrap();
         fs::write(
             fixture.path().join(STAGE_EVIDENCE_FILE),
-            include_bytes!("../cairn/changes/prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/source-built-stage-evidence.json"),
+            include_bytes!("../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/source-built-stage-evidence.json"),
         )
         .unwrap();
         let bundle_digest =
             crate::source_built_fixed_point_receipt::proof_bundle_digest_for_test(fixture.path()).unwrap();
         let mut receipt: serde_json::Value = serde_json::from_slice(include_bytes!(
-            "../cairn/changes/prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/deterministic-build-proof.json"
+            "../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/deterministic-build-proof.json"
         ))
         .unwrap();
         receipt[EXTENSION_FIELD]["final_proof_bundle_digest_blake3"] = serde_json::Value::String(bundle_digest);

@@ -1,0 +1,417 @@
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Checking bzip2-sys v0.1.13+1.0.8
+    Checking lzma-sys v0.1.20
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/fuse-backend-rs)
+   Compiling nix-compat v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/nix-compat)
+    Checking crunch-attestation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-attestation-core)
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/nix-compat-derive)
+   Compiling snix-castore v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/snix-castore)
+    Checking snix-tracing v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/snix-tracing)
+   Compiling snix-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/snix-build)
+   Compiling snix-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/snix-store)
+    Checking crunch-action-result-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-action-result-core)
+    Checking crunch-composition-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-composition-core)
+    Checking crunch-repair-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-repair-core)
+    Checking crunch-overlay-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-overlay-core)
+    Checking crunch-gc-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-gc-core)
+    Checking crunch-rust-cache-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-rust-cache-core)
+    Checking crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-eval)
+    Checking crunch-evaluation-stream-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-evaluation-stream-core)
+    Checking crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-wasm-component-core)
+    Checking crunch-shell-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-shell-core)
+    Checking crunch-delta-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-delta-core)
+    Checking crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-release-core)
+    Checking crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-eval-budget-core)
+    Checking mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/mantlepkgs-core)
+    Checking crunch-bootstrap-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-bootstrap-core)
+    Checking bzip2 v0.5.2
+    Checking mantle-portable-client-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/mantle-portable-client-core)
+    Checking crunch-hardware-simulation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-hardware-simulation-core)
+    Checking crunch-kernelscript-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-kernelscript-core)
+    Checking crunch-shell v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-shell)
+    Checking xz2 v0.1.7
+    Checking async-compression v0.4.19
+    Checking crunch-attestation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-attestation)
+    Checking crunch-project-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-project-core)
+    Checking crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-hardware-simulation)
+    Checking crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-wasm-component)
+    Checking crunch-nar v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-nar)
+    Checking crunch-glue v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-glue)
+    Checking crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-project)
+    Checking crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-store)
+    Checking crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-build)
+    Checking crunch-rust-cache v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-rust-cache)
+    Checking crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-delta)
+    Checking crunch-rustc-wrapper v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-rustc-wrapper)
+    Checking crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-pipeline)
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline)
+error: function `prepare_rustc_compatibility` is never used
+    --> src/cargo_free_self_build.rs:1688:4
+     |
+1688 | fn prepare_rustc_compatibility(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `-D dead-code` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[expect(dead_code)]` or `#[allow(dead_code)]`
+
+error: function `enforce_receipt_bound_toolchain` is never used
+    --> src/cargo_free_self_build.rs:3523:4
+     |
+3523 | fn enforce_receipt_bound_toolchain(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `execution_path_env` is never used
+    --> src/cargo_free_self_build.rs:3681:4
+     |
+3681 | fn execution_path_env(cargo_path_dir: &Path, toolchain_closure: &LoadedToolchainClosure) -> Result<OsString, RunError> {
+     |    ^^^^^^^^^^^^^^^^^^
+
+error: function `execution_path_env_with_shell` is never used
+    --> src/cargo_free_self_build.rs:3685:4
+     |
+3685 | fn execution_path_env_with_shell(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `write_toolchain_path_aliases` is never used
+    --> src/cargo_free_self_build.rs:3819:4
+     |
+3819 | fn write_toolchain_path_aliases(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `write_toolchain_path_aliases_with_shell` is never used
+    --> src/cargo_free_self_build.rs:3826:4
+     |
+3826 | fn write_toolchain_path_aliases_with_shell(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: constant `DIAGNOSTIC_EXEC_PATH_COUNT_MAX` is never used
+  --> src/protected_exec_seccomp.rs:41:11
+   |
+41 |     const DIAGNOSTIC_EXEC_PATH_COUNT_MAX: usize = 256;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: constant `DIAGNOSTIC_EXEC_EVENT_COUNT_MAX` is never used
+  --> src/protected_exec_seccomp.rs:42:11
+   |
+42 |     const DIAGNOSTIC_EXEC_EVENT_COUNT_MAX: usize = 131_072;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: constant `PHASE_DIAGNOSTIC` is never used
+  --> src/protected_exec_seccomp.rs:53:11
+   |
+53 |     const PHASE_DIAGNOSTIC: &str = "diagnostic";
+   |           ^^^^^^^^^^^^^^^^
+
+error: struct `DiagnosticExecObserver` is never constructed
+  --> src/protected_exec_seccomp.rs:75:16
+   |
+75 |     pub struct DiagnosticExecObserver {
+   |                ^^^^^^^^^^^^^^^^^^^^^^
+
+error: methods `audit_events`, `listener_fd`, and `wait_for_audit_quiescence` are never used
+  --> src/protected_exec_seccomp.rs:81:16
+   |
+80 |     impl DiagnosticExecObserver {
+   |     --------------------------- methods in this implementation
+81 |         pub fn audit_events(&self) -> Vec<ProtectedSeccompAuditEvent> {
+   |                ^^^^^^^^^^^^
+...
+88 |         pub fn listener_fd(&self) -> RawFd {
+   |                ^^^^^^^^^^^
+...
+92 |         pub fn wait_for_audit_quiescence(&self) -> Result<usize, ProtectedSeccompError> {
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: fields `auto_promotions` and `listener_fd` are never read
+   --> src/protected_exec_seccomp.rs:101:9
+    |
+ 98 |     pub struct ProtectedSeccompSupervisor {
+    |                -------------------------- fields in this struct
+...
+101 |         auto_promotions: Arc<Mutex<Vec<OutputPromotionRecord>>>,
+    |         ^^^^^^^^^^^^^^^
+102 |         shared_policy: Arc<RwLock<ProtectedExecPolicy>>,
+103 |         listener_fd: RawFd,
+    |         ^^^^^^^^^^^
+    |
+    = note: `ProtectedSeccompSupervisor` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+error: methods `listener_fd`, `automatic_promotions`, `register_planned_produced_roots`, `begin_producer_action`, and `end_producer_action` are never used
+   --> src/protected_exec_seccomp.rs:114:16
+    |
+106 |     impl ProtectedSeccompSupervisor {
+    |     ------------------------------- methods in this implementation
+...
+114 |         pub fn listener_fd(&self) -> RawFd {
+    |                ^^^^^^^^^^^
+...
+118 |         pub fn automatic_promotions(&self) -> Vec<OutputPromotionRecord> {
+    |                ^^^^^^^^^^^^^^^^^^^^
+...
+125 |         pub fn register_planned_produced_roots(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+133 |         pub fn begin_producer_action(&self, producer_action_id: &str) -> Result<(), ProtectedExecError> {
+    |                ^^^^^^^^^^^^^^^^^^^^^
+...
+138 |         pub fn end_producer_action(&self, producer_action_id: &str) -> Result<(), ProtectedExecError> {
+    |                ^^^^^^^^^^^^^^^^^^^
+
+error: function `install_current_thread_diagnostic_exec_observer` is never used
+   --> src/protected_exec_seccomp.rs:222:12
+    |
+222 |     pub fn install_current_thread_diagnostic_exec_observer(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `validate_diagnostic_paths` is never used
+   --> src/protected_exec_seccomp.rs:238:8
+    |
+238 |     fn validate_diagnostic_paths(allowed_paths: &BTreeSet<PathBuf>) -> Result<(), ProtectedSeccompError> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `spawn_diagnostic_observer_thread` is never used
+   --> src/protected_exec_seccomp.rs:428:8
+    |
+428 |     fn spawn_diagnostic_observer_thread(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `diagnostic_observer_loop` is never used
+   --> src/protected_exec_seccomp.rs:440:8
+    |
+440 |     fn diagnostic_observer_loop(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `classify_diagnostic_notification` is never used
+   --> src/protected_exec_seccomp.rs:570:8
+    |
+570 |     fn classify_diagnostic_notification(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `diagnostic_tracee_context` is never used
+   --> src/protected_exec_seccomp.rs:590:8
+    |
+590 |     fn diagnostic_tracee_context(pid: u32) -> String {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `classify_diagnostic_path` is never used
+   --> src/protected_exec_seccomp.rs:597:8
+    |
+597 |     fn classify_diagnostic_path(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `diagnostic_path_allowed` is never used
+   --> src/protected_exec_seccomp.rs:646:8
+    |
+646 |     fn diagnostic_path_allowed(allowed_paths: &BTreeSet<PathBuf>, target: &ExecTarget) -> bool {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+
+error: method `as_str` is never used
+  --> src/remote_nominal.rs:55:20
+   |
+50 |         impl $name {
+   |         ---------- method in this implementation
+...
+55 |             pub fn as_str(&self) -> &str {
+   |                    ^^^^^^
+...
+62 | remote_id!(RemoteRequestId);
+   | --------------------------- in this macro invocation
+   |
+   = note: this error originates in the macro `remote_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: method `as_str` is never used
+  --> src/remote_nominal.rs:55:20
+   |
+50 |         impl $name {
+   |         ---------- method in this implementation
+...
+55 |             pub fn as_str(&self) -> &str {
+   |                    ^^^^^^
+...
+63 | remote_id!(RemoteProtocolSessionId);
+   | ----------------------------------- in this macro invocation
+   |
+   = note: this error originates in the macro `remote_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: variant `IncompleteReconciliation` is never constructed
+   --> src/source_built_rust_action_plan.rs:216:5
+    |
+213 | pub(crate) enum RustChildActionPlanErrorKind {
+    |                 ---------------------------- variant in this enum
+...
+216 |     IncompleteReconciliation,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `RustChildActionPlanErrorKind` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+error: function `reconcile_rust_child_actions` is never used
+   --> src/source_built_rust_action_plan.rs:883:15
+    |
+883 | pub(crate) fn reconcile_rust_child_actions(
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: function `rust_unit_action_inputs_from_graph` is never used
+    --> src/source_built_rust_action_plan.rs:1155:15
+     |
+1155 | pub(crate) fn rust_unit_action_inputs_from_graph(
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: large size difference between variants
+   --> src/nix_free_demo_cmd.rs:43:1
+    |
+ 43 | /   pub(crate) enum NixFreeDemoAction {
+ 44 | |       /// Validate a Nix-free demo bundle machine summary JSON file
+ 45 | | /     Validate {
+ 46 | | |         /// Path to `mantle-nix-free-demo-summary-v1` JSON
+ 47 | | |         summary: PathBuf,
+ 48 | | |     },
+    | | |_____- the second-largest variant contains at least 24 bytes
+...   |
+ 57 | | /     Generate {
+ 58 | | |         /// Output directory to create or reuse if empty
+ 59 | | |         #[arg(long)]
+ 60 | | |         out: PathBuf,
+...   | |
+108 | | |         synthetic: bool,
+109 | | |     },
+    | | |_____- the largest variant contains at least 289 bytes
+110 | |   }
+    | |___^ the entire enum is at least 296 bytes
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#large_enum_variant
+    = note: `-D clippy::large-enum-variant` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::large_enum_variant)]`
+help: consider boxing the large fields or introducing indirection in some other way to reduce the total size of the enum
+    |
+ 96 ~         artifact_digests: Box<Vec<String>>,
+ 97 |
+ 98 |         /// Replay hint to include in the summary; repeat for each hint
+ 99 |         #[arg(long = "replay-hint")]
+100 ~         replay_hints: Box<Vec<String>>,
+101 |
+102 |         /// Explicit non-claim text; repeat for each non-claim
+103 |         #[arg(long = "non-claim")]
+104 ~         non_claims: Box<Vec<String>>,
+    |
+
+error: using `chunks_exact` with a constant chunk size
+    --> src/rust_plan.rs:9489:37
+     |
+9489 |     for replacement in replacements.chunks_exact(RUSTC_CODEGEN_ARGUMENT_PAIR_WIDTH) {
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using `as_chunks` instead: `as_chunks::<RUSTC_CODEGEN_ARGUMENT_PAIR_WIDTH>().0`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#chunks_exact_to_as_chunks
+     = note: `-D clippy::chunks-exact-to-as-chunks` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::chunks_exact_to_as_chunks)]`
+
+error: this assertion has a constant value
+    --> src/rust_source_provider.rs:2987:5
+     |
+2987 |     debug_assert!(RUSTC_SOURCE_CARGO_CHECKSUM_BYTES_MAX < RUSTC_SOURCE_OPENSSL_CONFIG_BYTES_MAX);
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: consider moving this into a const block: `const { assert!(..) }`
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#assertions_on_constants
+     = note: `-D clippy::assertions-on-constants` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::assertions_on_constants)]`
+
+error: this assertion has a constant value
+    --> src/rust_source_provider.rs:2988:5
+     |
+2988 |     debug_assert!(RUSTC_SOURCE_OPENSSL_READ_ITERATIONS_MAX > 1);
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: consider moving this into a const block: `const { assert!(..) }`
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#assertions_on_constants
+
+error: this `if` statement can be collapsed
+    --> src/source_built_rust_action_plan.rs:1374:5
+     |
+1374 | /     if let Some(exact) = producer_index.target_lib_by_exact_name.get(&exact_key) {
+1375 | |         if !exact.is_empty() {
+1376 | |             return exact.clone();
+1377 | |         }
+1378 | |     }
+     | |_____^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#collapsible_if
+     = note: `-D clippy::collapsible-if` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::collapsible_if)]`
+help: collapse nested if block
+     |
+1374 ~     if let Some(exact) = producer_index.target_lib_by_exact_name.get(&exact_key)
+1375 ~         && !exact.is_empty() {
+1376 |             return exact.clone();
+1377 ~         }
+     |
+
+error: this `if` statement can be collapsed
+   --> src/source_toolchain_closure.rs:621:9
+    |
+621 | /         if is_host_rust_sysroot(origin_member) {
+622 | |             if let Some(observation) = rust_sysroot {
+623 | |                 require_relocated_rust_sysroot_member(
+624 | |                     origin_member,
+...   |
+633 | |         }
+    | |_________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#collapsible_if
+help: collapse nested if block
+    |
+621 ~         if is_host_rust_sysroot(origin_member)
+622 ~             && let Some(observation) = rust_sysroot {
+623 |                 require_relocated_rust_sysroot_member(
+...
+631 |                 continue;
+632 ~             }
+    |
+
+error: this `if` statement can be collapsed
+   --> src/source_toolchain_closure.rs:636:5
+    |
+636 | /     if rust_sysroot.is_some() {
+637 | |         if !rust_sysroot_used {
+638 | |             return Err(relocation_error("bound Rust sysroot relocation did not match the host sysroot member"));
+639 | |         }
+640 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#collapsible_if
+help: collapse nested if block
+    |
+636 ~     if rust_sysroot.is_some()
+637 ~         && !rust_sysroot_used {
+638 |             return Err(relocation_error("bound Rust sysroot relocation did not match the host sysroot member"));
+639 ~         }
+    |
+
+error: could not compile `mantle` (bin "mantle") due to 33 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: field `listener_fd` is never read
+  --> src/protected_exec_seccomp.rs:77:9
+   |
+75 |     pub struct DiagnosticExecObserver {
+   |                ---------------------- field in this struct
+76 |         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
+77 |         listener_fd: RawFd,
+   |         ^^^^^^^^^^^
+   |
+   = note: `DiagnosticExecObserver` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+   = note: `-D dead-code` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[expect(dead_code)]` or `#[allow(dead_code)]`
+
+error: method `listener_fd` is never used
+  --> src/protected_exec_seccomp.rs:88:16
+   |
+80 |     impl DiagnosticExecObserver {
+   |     --------------------------- method in this implementation
+...
+88 |         pub fn listener_fd(&self) -> RawFd {
+   |                ^^^^^^^^^^^
+
+error: could not compile `mantle` (bin "mantle" test) due to 9 previous errors
+error: could not compile `mantle` (bin "crunch" test) due to 9 previous errors

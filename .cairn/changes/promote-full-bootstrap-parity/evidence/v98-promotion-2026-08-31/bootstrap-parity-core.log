@@ -1,0 +1,126 @@
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: field `listener_fd` is never read
+  --> src/protected_exec_seccomp.rs:77:9
+   |
+75 |     pub struct DiagnosticExecObserver {
+   |                ---------------------- field in this struct
+76 |         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
+77 |         listener_fd: RawFd,
+   |         ^^^^^^^^^^^
+   |
+   = note: `DiagnosticExecObserver` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `listener_fd` is never used
+  --> src/protected_exec_seccomp.rs:88:16
+   |
+80 |     impl DiagnosticExecObserver {
+   |     --------------------------- method in this implementation
+...
+88 |         pub fn listener_fd(&self) -> RawFd {
+   |                ^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle" test) generated 2 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 13`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 91 tests
+test bootstrap_parity::tests::axis_summary_reports_blocking_rows ... ok
+test bootstrap_parity::tests::binutils_tcc_real_derivation_reports_independently_receipted_completion ... ok
+test bootstrap_parity::tests::binutils_tcc_transcript_rejects_host_fallback ... ok
+test bootstrap_parity::tests::binutils_tcc_valid_transcript_satisfies_evidence_check_but_not_full_parity ... ok
+test bootstrap_parity::tests::binutils_tcc_without_transcript_remains_partial ... ok
+test bootstrap_parity::tests::dash_compound_path_rejects_stub ... ok
+test bootstrap_parity::tests::full_musl_binutils_provider_contract_binutils_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::full_musl_binutils_provider_contract_matching_receipt_reports_partial ... ok
+test bootstrap_parity::tests::full_musl_binutils_provider_contract_missing_receipt_reports_partial_with_failure ... ok
+test bootstrap_parity::tests::full_musl_binutils_provider_contract_musl_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::full_musl_binutils_real_derivations_report_provider_contract_backed_partial ... ok
+test bootstrap_parity::tests::gcc10_provider_contract_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc10_provider_contract_matching_receipt_reports_partial ... ok
+test bootstrap_parity::tests::gcc10_provider_contract_missing_receipt_reports_partial_with_failure ... ok
+test bootstrap_parity::tests::gcc10_real_derivation_reports_provider_contract_backed_partial ... ok
+test bootstrap_parity::tests::gcc40_canonical_root_selects_regenerated_cxx_stage ... ok
+test bootstrap_parity::tests::gcc40_final_stage_has_bounded_positive_and_negative_matrix ... ok
+test bootstrap_parity::tests::gcc40_native_boundary_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_boundary_missing_receipt_stays_placeholder_with_failure ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_arithmetic_receipt_digest_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_arithmetic_receipt_forbidden_delegation_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_arithmetic_receipt_missing_function_call_regression_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_arithmetic_receipt_missing_local_vars_regression_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_arithmetic_receipt_missing_logical_regression_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_arithmetic_receipt_missing_pointer_deref_marker_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_arithmetic_receipt_stale_schema_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_build_frontier_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_build_frontier_missing_fields_fail_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_build_frontier_parity_overclaim_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_build_frontier_receipt_missing_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_source_frontier_diagnostic_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_source_frontier_observed_result_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_source_frontier_probe_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_source_frontier_schema_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_source_frontier_stale_fdopen_frontier_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_demangle_receipt_digest_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_demangle_receipt_full_parity_overclaim_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_demangle_receipt_missing_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_demangle_receipt_unsupported_schema_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_demangle_receipt_unsupported_shape_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_frontier_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_frontier_missing_generator_blocker_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_generator_receipt_digest_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_generator_receipt_missing_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_generator_receipt_unsupported_schema_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_generator_receipt_unsupported_selected_generator_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_placeholder_inventory_drift_stays_placeholder_with_failure ... ok
+test bootstrap_parity::tests::gcc40_placeholder_inventory_matching_receipt_reports_partial ... ok
+test bootstrap_parity::tests::gcc40_placeholder_inventory_missing_receipt_stays_placeholder_with_failure ... ok
+test bootstrap_parity::tests::gcc40_real_derivation_reports_independently_receipted_completion ... ok
+test bootstrap_parity::tests::gcc47_cxx_provider_contract_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc47_cxx_provider_contract_matching_receipt_reports_partial ... ok
+test bootstrap_parity::tests::gcc47_cxx_provider_contract_missing_receipt_reports_partial_with_failure ... ok
+test bootstrap_parity::tests::gcc47_real_derivation_reports_cxx_contract_backed_partial ... ok
+test bootstrap_parity::tests::heredoc_delimiter_rejects_stub ... ok
+test bootstrap_parity::tests::heredoc_terminator_on_own_line_rejected ... ok
+test bootstrap_parity::tests::marker_is_standalone_accepts_comment_marker ... ok
+test bootstrap_parity::tests::marker_is_standalone_accepts_escaped_quote ... ok
+test bootstrap_parity::tests::marker_is_standalone_accepts_standalone_word ... ok
+test bootstrap_parity::tests::marker_is_standalone_rejects_plural_word ... ok
+test bootstrap_parity::tests::marker_is_standalone_rejects_substring_in_path ... ok
+test bootstrap_parity::tests::missing_derivation_becomes_not_started ... ok
+test bootstrap_parity::tests::placeholder_marker_blocks_parity ... ok
+test bootstrap_parity::tests::seed_full_legacy_metadata_blocks_guix_row ... ok
+test bootstrap_parity::tests::seed_full_source_root_contract_completes_guix_row ... ok
+test bootstrap_parity::tests::self_build_provider_kind_linkage_rejects_mismatched_kind ... ok
+test bootstrap_parity::tests::self_build_provider_kind_linkage_rejects_unknown_kind ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_ineligible_verify_receipt ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_malformed_digest_linkage ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_missing_genuine_rebuild_authority ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_missing_sandbox_evidence ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_provider_mismatch ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_reused_roots ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_unsupported_sandbox_profile ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_unsupported_workflow ... ok
+test bootstrap_parity::tests::self_build_v98_evidence_completes_full_source_parity_row ... ok
+test bootstrap_parity::tests::self_build_valid_real_proof_descriptor_is_evidence_backed_partial ... ok
+test bootstrap_parity::tests::self_build_without_provider_kind_linkage_receipt_is_blocked ... ok
+test bootstrap_parity::tests::stagex_lineage_complete_receipt_is_complete ... ok
+test bootstrap_parity::tests::stagex_lineage_real_receipt_reports_evidence_backed_completion ... ok
+test bootstrap_parity::tests::stagex_lineage_receipt_rejects_fallback_events ... ok
+test bootstrap_parity::tests::stagex_lineage_receipt_rejects_malformed_digest ... ok
+test bootstrap_parity::tests::stagex_lineage_receipt_rejects_missing_non_claims ... ok
+test bootstrap_parity::tests::stagex_lineage_receipt_rejects_source_root_provider ... ok
+test bootstrap_parity::tests::stagex_lineage_receipt_rejects_stale_payload_digest ... ok
+test bootstrap_parity::tests::stagex_lineage_scaffold_receipt_is_rejected ... ok
+test bootstrap_parity::tests::stagex_lineage_seed_provider_remains_separate_blocker ... ok
+test bootstrap_parity::tests::stagex_lineage_without_receipt_remains_blocked ... ok
+test bootstrap_parity::tests::tar_tcc_heredoc_delimiter_and_terminator_rejected ... ok
+test bootstrap_parity::tests::tcc_placeholder_comment_is_false_positive ... ok
+test bootstrap_parity::tests::tinycc_mes_stub_path_is_false_positive ... ok
+
+test result: ok. 91 passed; 0 failed; 0 ignored; 0 measured; 2459 filtered out; finished in 0.24s
+

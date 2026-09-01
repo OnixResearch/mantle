@@ -1,0 +1,1 @@
+cargo -q -Zscript scripts/check-source-built-parity-promotion.rs --self-test

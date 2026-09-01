@@ -1,52 +1,72 @@
 {
   "schema": "mantle-real-self-build-proof-parity-evidence-v1",
-  "release_id": "real-self-build-parity-evidence-20260515",
-  "selected_provider_kind": "source-root",
-  "source_blake3": "5726507ba23d79f1f63a931db51b4abe884c461e6c333ff3536ac5397525a077",
-  "vendor_blake3": "3b0b4811287809f637af07da85c326a0c8243134324bde883a9bab28c744d6c4",
+  "release_id": "source-built-fixed-point-v98-20260831",
+  "selected_provider_kind": "full-source",
+  "source_blake3": "15b71ba2760c5cac25739ff0aca03026af8fa77b275d2656dc363e0e69976d1e",
+  "vendor_blake3": "666a7f2433ef9f896409e79a23dfafd619ca7204c9fabcd739f2cebb086c5379",
   "provider_kind_linkage": {
     "receipt_path": "bootstrap/evidence/crunch-self-build-provider-kind-linkage.json",
-    "selected_provider_kind": "source-root"
+    "selected_provider_kind": "full-source"
+  },
+  "bound_evidence": {
+    "deterministic_proof": {
+      "path": ".cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v98-ptrace-request-abi-2026-08-31/deterministic-build-proof.json",
+      "blake3": "dabb7fae2b1f9de161ffa08b6237af460f82485c89bde039586c81efc1ab0e4b"
+    },
+    "action_plan": {
+      "path": ".cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v98-ptrace-request-abi-2026-08-31/root-action-trust-plan.json",
+      "blake3": "2fbd10e2374f8d2342962f0e3f447de20b8368b081dc3436e11ef0dc87fa25ce"
+    },
+    "action_reconciliation": {
+      "path": ".cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v98-ptrace-request-abi-2026-08-31/root-action-trust-reconciliation.json",
+      "blake3": "e134a481118373526cf3dfdbd97fc00d3b6c2d7a8e3fef6073a50e341545f10f"
+    },
+    "trust_report": {
+      "path": ".cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v98-ptrace-request-abi-2026-08-31/v98-bootstrap-trust-report.json",
+      "blake3": "d48728409158ee368923e3bd59934518cfb90a018482b177f34b73d7bf36bfcc"
+    }
   },
   "deterministic_proof": {
-    "workflow": "mantle-deterministic-proof-receipt-v1",
+    "workflow": "mantle-deterministic-proof-receipt-v2",
     "verdict": "self-rebuild-match",
-    "selected_provider_kind": "source-root",
-    "digest_blake3": "18f46fddb28c67b651de96cbbcdd618757ca3192dfb72f4490e767dde441a996",
-    "source_blake3": "5726507ba23d79f1f63a931db51b4abe884c461e6c333ff3536ac5397525a077",
-    "vendor_blake3": "3b0b4811287809f637af07da85c326a0c8243134324bde883a9bab28c744d6c4",
+    "genuine_rebuild_authority": true,
+    "rebuild_descriptor_blake3": "82fc1f8eb5fa87e5c116a60e6dca58a9baa14a5c44fb7910dc9ddb241b4066dc",
+    "rebuild_authority_plan_blake3": "c907b0bc6c1d79d6af3b06839768c433aa7f42836a5f55219b067369c5781a88",
+    "selected_provider_kind": "full-source",
+    "digest_blake3": "a6f5e378a74d8e2e3f148b7f59744d3ad0b307e2cda2cbbc5515a3b89b956a33",
+    "source_blake3": "15b71ba2760c5cac25739ff0aca03026af8fa77b275d2656dc363e0e69976d1e",
+    "vendor_blake3": "666a7f2433ef9f896409e79a23dfafd619ca7204c9fabcd739f2cebb086c5379",
     "clean_rebuild_roots": [
-      "target/release-evidence/real-self-build-parity-evidence-proof/run-000/outputs",
-      "target/release-evidence/real-self-build-parity-evidence-proof/run-001/outputs"
+      "proof://cargo-free-fixed-point/stage1",
+      "proof://cargo-free-fixed-point/stage2"
     ],
     "artifact_digests_blake3": [
-      "34e22574e06ec7390ef847c68b606dba12aa5c25895da47fc954f68866d47123"
+      "7d166e10df71f46a4031a63abf05fc735e7663183998b311bc4aa2ead9408c9c"
     ]
   },
   "sandbox_evidence": {
-    "profile_identity": "mantle-proof-sandbox-v1:4e532c24cc0ec8b014a49d78ecaa6f32c2a3598beb0c0fba21be54f65f66f2cf",
-    "digest_blake3": "03eb0f56ad633ee180aa8c944cebcfda643042c5b0d84eb3cddc6fe29d734f10"
+    "profile_identity": "mantle-proof-sandbox-v1:source-built-fixed-point-v98",
+    "digest_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d"
   },
   "verify_receipt": {
-    "digest_blake3": "61a07d0b5660d8a0c89de0968f1942d0b9c4202b5e058167603da781579cde2e",
+    "digest_blake3": "d48728409158ee368923e3bd59934518cfb90a018482b177f34b73d7bf36bfcc",
     "deterministic_release_status": "eligible",
-    "proof_digest_blake3": "18f46fddb28c67b651de96cbbcdd618757ca3192dfb72f4490e767dde441a996",
-    "sandbox_evidence_digest_blake3": "03eb0f56ad633ee180aa8c944cebcfda643042c5b0d84eb3cddc6fe29d734f10"
+    "proof_digest_blake3": "a6f5e378a74d8e2e3f148b7f59744d3ad0b307e2cda2cbbc5515a3b89b956a33",
+    "sandbox_evidence_digest_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d"
   },
   "summary": {
-    "release_id": "real-self-build-parity-evidence-20260515",
-    "selected_provider_kind": "source-root",
-    "json_digest_blake3": "1111111111111111111111111111111111111111111111111111111111111111",
-    "markdown_digest_blake3": "2222222222222222222222222222222222222222222222222222222222222222",
+    "release_id": "source-built-fixed-point-v98-20260831",
+    "selected_provider_kind": "full-source",
+    "json_digest_blake3": "d48728409158ee368923e3bd59934518cfb90a018482b177f34b73d7bf36bfcc",
+    "markdown_digest_blake3": "d99b6df0c87dab86538b1dbf5237386013c349288a1eca870f67374867b9f255",
     "verdict": "self-rebuild-match",
     "verify_status": "eligible",
-    "proof_digest_blake3": "18f46fddb28c67b651de96cbbcdd618757ca3192dfb72f4490e767dde441a996",
-    "sandbox_evidence_digest_blake3": "03eb0f56ad633ee180aa8c944cebcfda643042c5b0d84eb3cddc6fe29d734f10",
-    "bounded_claim": "This artifact rebuilt twice from the recorded inputs under the recorded mantle-proof-sandbox-v1 profile and the BLAKE3 digest sets matched.",
+    "proof_digest_blake3": "a6f5e378a74d8e2e3f148b7f59744d3ad0b307e2cda2cbbc5515a3b89b956a33",
+    "sandbox_evidence_digest_blake3": "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+    "bounded_claim": "Mantle was rebuilt twice under the same authenticated source-built closure and produced exact content with complete local root action trust.",
     "non_claims": [
-      "full bootstrap reproducibility",
-      "absence of all environmental influence",
-      "parity with every upstream bootstrap lineage"
+      "This evidence does not prove compiler or verifier soundness.",
+      "This evidence does not prove full bootstrap reproducibility beyond the recorded V98 workflow."
     ]
   }
 }

@@ -477,8 +477,19 @@ ambient compiler discovery.
 | Can the claim be published? | Bootstrap parity and Cairn gates |
 
 This methodology proves bounded bootstrap facts for the recorded seed, source,
-tools, platform, and policy. It does not prove compiler correctness, semantic
-correctness, kernel correctness, or universal reproducibility.
+tools, platform, and policy. The promoted V98 parity path additionally requires
+a matching two-stage Mantle binary plus complete local reconciliation of 1,914
+actions and 478,870 events. Validate it with:
+
+```bash
+mantle --json bootstrap parity-report \
+  --require live-bootstrap --require guix --require stagex
+cargo -Zscript scripts/check-source-built-parity-promotion.rs --self-test
+```
+
+These results do not prove compiler correctness, semantic correctness, seed or
+kernel correctness, independent rebuild agreement, or universal
+reproducibility.
 
 Self-hosting preflight and proof modes:
 

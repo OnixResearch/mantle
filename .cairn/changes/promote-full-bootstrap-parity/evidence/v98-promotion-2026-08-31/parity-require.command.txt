@@ -1,0 +1,1 @@
+/home/brittonr/.cargo-target/debug/crunch --json bootstrap parity-report --require live-bootstrap --require guix --require stagex

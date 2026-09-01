@@ -1,0 +1,40 @@
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline)
+warning: field `listener_fd` is never read
+  --> src/protected_exec_seccomp.rs:77:9
+   |
+75 |     pub struct DiagnosticExecObserver {
+   |                ---------------------- field in this struct
+76 |         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
+77 |         listener_fd: RawFd,
+   |         ^^^^^^^^^^^
+   |
+   = note: `DiagnosticExecObserver` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `listener_fd` is never used
+  --> src/protected_exec_seccomp.rs:88:16
+   |
+80 |     impl DiagnosticExecObserver {
+   |     --------------------------- method in this implementation
+...
+88 |         pub fn listener_fd(&self) -> RawFd {
+   |                ^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle" test) generated 2 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 57.22s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 13`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 4 tests
+test source_built_parity_promotion::tests::complete_promotion_links_exact_local_action_evidence ... ok
+test source_built_parity_promotion::tests::promotion_rejects_unknown_event_and_plan_digest_drift ... ok
+test source_built_parity_promotion_shell::tests::bound_evidence_paths_accept_safe_relative_files ... ok
+test source_built_parity_promotion_shell::tests::bound_evidence_paths_reject_absolute_and_parent_components ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 2546 filtered out; finished in 0.00s
+

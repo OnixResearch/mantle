@@ -1,0 +1,1 @@
+cargo test -p mantle --bin mantle source_built_parity_promotion -- --test-threads=1

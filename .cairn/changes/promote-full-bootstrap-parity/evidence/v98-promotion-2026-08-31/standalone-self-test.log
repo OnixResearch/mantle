@@ -1,0 +1,4 @@
+source-built parity promotion self-test: PASS
+  positive actions: 1914
+  positive events: 478870
+  negative cases: digest-tamper,path-escape

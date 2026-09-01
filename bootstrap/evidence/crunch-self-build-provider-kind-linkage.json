@@ -1,15 +1,15 @@
 {
   "schema": "mantle-self-build-provider-kind-linkage-v1",
   "derivation": "bootstrap/crunch.ncl",
-  "status": "provider-kind-linkage-only",
+  "status": "complete-v2-linkage",
   "proof_identity": {
-    "selected_provider_kind": "source-root"
+    "selected_provider_kind": "full-source"
   },
   "proof_linkage": {
-    "selected_provider_kind": "source-root"
+    "selected_provider_kind": "full-source"
   },
   "prerequisites": {
-    "provider_kind": "source-root"
+    "provider_kind": "full-source"
   },
-  "notes": "Checked receipt for parity provider-kind linkage only; this does not prove full mantle self-build, stage1/stage2 identity, or StageX lineage."
+  "notes": "V98 binds the same full-source provider kind across proof identity, proof linkage, and prerequisites. This linkage is necessary but not sufficient without the bound deterministic receipt and complete root action trust evidence."
 }

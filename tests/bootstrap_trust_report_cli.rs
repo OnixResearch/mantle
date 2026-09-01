@@ -14,8 +14,7 @@ const EXECUTED_STAGE_COUNT: u64 = 2;
 const RESTORED_STAGE_COUNT: u64 = 4;
 const HEX_DIGITS_PER_BYTE: usize = 2;
 const BUNDLE_DIGEST_DOMAIN: &[u8] = b"mantle-source-built-fixed-point-proof-bundle-v2\0";
-const V48_EVIDENCE: &str =
-    "cairn/changes/prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23";
+const V48_EVIDENCE: &str = ".cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23";
 
 fn mantle() -> Command {
     Command::cargo_bin("mantle").unwrap()

@@ -30,3 +30,4 @@ d70e4c2ad1cd22823457dcc414b48d7e0d98c4e5792a6f3e97f3593747cc49dd  ./gate-proposa
 9ef0c118193a78b479ca4ac8690f6ad7d502b914414ab645182859f80aed2f66  ./source-mismatch-post-refresh.stderr
 fa5c3f07d6e571f02d6f56b14b0f4b915cee6267c81d3194892142a5f3579f99  ./source-mismatch-post-refresh.tsv
 bb15233dde9fbe17b1c7985988553733e32f6b08a9b8cf895d3bb8abd4b6f18c  ./summary.md
+f76e7a0be3bf4f87b038751679101e4c7f6292e5303e9e15ea77b670f559fd45  ./v98-promotion-input-digests.txt

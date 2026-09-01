@@ -182,6 +182,8 @@ mod source_built_fixed_point_checkpoint_shell;
 mod source_built_fixed_point_dev_cache;
 mod source_built_fixed_point_receipt;
 mod source_built_fixed_point_shell;
+mod source_built_parity_promotion;
+mod source_built_parity_promotion_shell;
 mod source_built_root_action_trust;
 mod source_built_rust_action_plan;
 #[cfg(target_os = "linux")]

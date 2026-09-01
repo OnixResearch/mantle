@@ -1150,12 +1150,27 @@ for an explicit universe. Provider fixed-point release artifacts are admitted
 only when the bundled provider proof verifier is valid and its stage digest
 matches the release artifact; invalid or incomplete provider proof material
 stays blocker-producing evidence. The helper output alone is not an eligible
-report; the evaluator remains the gate. `bootstrap parity-report` also consumes the checked-in compact
-descriptor at
+report; the evaluator remains the gate.
+
+`bootstrap parity-report` consumes the checked-in compatibility descriptor at
 `bootstrap/evidence/real-self-build-proof-parity.json` for the
-`crunch.self-build` row; that descriptor surfaces the bounded proof digest and
-provider kind, but the row remains partial and still blocks Guix/StageX parity
-until the separate source-root/lineage blockers are closed.
+`crunch.self-build` row. The descriptor binds the archived V98 deterministic
+receipt, root action plan, reconciliation, and complete trust report by BLAKE3.
+The validator recomputes those file identities, source and provider linkage,
+stage equality, adapter sums, and 1,914-action/478,870-event local coverage.
+Run the same core through the standalone checker:
+
+```bash
+cargo -Zscript scripts/check-source-built-parity-promotion.rs --self-test
+cargo -Zscript scripts/check-source-built-parity-promotion.rs
+```
+
+When every native row and the V98 binding validate, `--require live-bootstrap
+--require guix --require stagex` passes. This is a bounded promotion over the
+recorded source, lineage, providers, V98 platform, and action evidence. It does
+not prove compiler or verifier soundness, seed correctness, kernel isolation,
+independent rebuild agreement, universal release reproducibility, deployment
+success, or full Cargo compatibility.
 
 ## Sign and verify decentralized release material
 

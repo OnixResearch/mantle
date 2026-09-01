@@ -1584,7 +1584,7 @@ mod tests {
     #[test]
     fn deterministic_receipt_accepts_aggregate_source_closure_and_rejects_leaf_only_descriptor() {
         let plan: SourceBuiltFixedPointPlan = serde_json::from_str(include_str!(
-            "../cairn/changes/prove-source-built-mantle-fixed-point/evidence/v47-source-closure-binding-repair-2026-08-23/source-built-fixed-point-plan.json"
+            "../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v47-source-closure-binding-repair-2026-08-23/source-built-fixed-point-plan.json"
         ))
         .unwrap();
         let fixed_point = FixedPointObservation {
@@ -1620,7 +1620,7 @@ mod tests {
 
     fn v48_extension() -> SourceBuiltReceiptExtension {
         let value: serde_json::Value = serde_json::from_str(include_str!(
-            "../cairn/changes/prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/deterministic-build-proof.json"
+            "../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/deterministic-build-proof.json"
         ))
         .unwrap();
         let extension: SourceBuiltReceiptExtension =
