@@ -1,0 +1,499 @@
+{
+  "schema": "crunch-bootstrap-parity-gap-report-v1",
+  "axes": [
+    {
+      "axis": "live-bootstrap",
+      "complete": false,
+      "blocking_rows": [
+        "gcc.4.0",
+        "gcc.4.7",
+        "full-musl-binutils"
+      ]
+    },
+    {
+      "axis": "guix",
+      "complete": false,
+      "blocking_rows": [
+        "gcc.4.0",
+        "gcc.4.7",
+        "full-musl-binutils",
+        "crunch.self-build"
+      ]
+    },
+    {
+      "axis": "stagex",
+      "complete": false,
+      "blocking_rows": [
+        "crunch.self-build"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "id": "seed.hex0",
+      "title": "Audited hex0 seed",
+      "axes": [
+        "live-bootstrap",
+        "guix",
+        "stagex"
+      ],
+      "lineage": "stagex",
+      "derivation": "stage0-posix.ncl",
+      "status": "complete",
+      "provider_kind": "stagex-lineage",
+      "graph_evidence": "stage0-posix derivation present",
+      "semantic_evidence": "seed size/source audit required",
+      "proof_evidence": "stagex lineage digest required",
+      "notes": "root trust is environmental until audited-seed proof is bound"
+    },
+    {
+      "id": "stage0.transition-tools",
+      "title": "M0/M1/hex2/kaem transition tools",
+      "axes": [
+        "live-bootstrap",
+        "guix",
+        "stagex"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "stage0-posix.ncl",
+      "status": "complete",
+      "provider_kind": "stagex-lineage",
+      "graph_evidence": "stage0-posix derivation present",
+      "semantic_evidence": "stage0 toolchain smoke required",
+      "proof_evidence": "stage graph digest required",
+      "notes": "covers stage0-posix handoff rather than host compiler trust"
+    },
+    {
+      "id": "mes",
+      "title": "Mes bootstrap",
+      "axes": [
+        "live-bootstrap",
+        "guix",
+        "stagex"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "mes.ncl",
+      "status": "complete",
+      "provider_kind": "stagex-lineage",
+      "graph_evidence": "mes derivation present",
+      "semantic_evidence": "mes runtime smoke required",
+      "proof_evidence": "source transcript required",
+      "notes": ""
+    },
+    {
+      "id": "tinycc.mes",
+      "title": "TinyCC Mes-linked handoff",
+      "axes": [
+        "live-bootstrap",
+        "guix",
+        "stagex"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "tinycc-mes.ncl",
+      "status": "complete",
+      "provider_kind": "stagex-lineage",
+      "graph_evidence": "tinycc-mes derivation present",
+      "semantic_evidence": "version/object smoke required",
+      "proof_evidence": "source transcript required",
+      "notes": "Mes runtime defects remain important gap-report details"
+    },
+    {
+      "id": "tinycc.0.9.27",
+      "title": "TinyCC 0.9.27 handoff",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "tinycc.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "tinycc derivation present",
+      "semantic_evidence": "compile/link smoke required",
+      "proof_evidence": "source transcript required",
+      "notes": ""
+    },
+    {
+      "id": "tcc-musl-prep",
+      "title": "TCC musl preparation",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "tcc-musl-prep.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "tcc-musl-prep derivation present",
+      "semantic_evidence": "runtime validation required",
+      "proof_evidence": "source transcript required",
+      "notes": ""
+    },
+    {
+      "id": "musl.tcc",
+      "title": "musl 1.1.24 via TCC",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "musl-1.1.24-tcc.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "musl-tcc derivation present",
+      "semantic_evidence": "libc startup smoke required",
+      "proof_evidence": "source transcript required",
+      "notes": ""
+    },
+    {
+      "id": "tcc-musl",
+      "title": "TCC on musl",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "tcc-musl.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "tcc-musl derivation present",
+      "semantic_evidence": "runtime validation required",
+      "proof_evidence": "source transcript required",
+      "notes": ""
+    },
+    {
+      "id": "make.3.82",
+      "title": "GNU Make 3.82",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "make-tcc.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "make-tcc derivation present",
+      "semantic_evidence": "real recipe smoke required",
+      "proof_evidence": "source transcript required",
+      "notes": ""
+    },
+    {
+      "id": "patch.2.5.9",
+      "title": "patch 2.5.9",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "patch-tcc.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "patch-tcc derivation present",
+      "semantic_evidence": "runtime validation required",
+      "proof_evidence": "source transcript required",
+      "notes": ""
+    },
+    {
+      "id": "grep.2.4",
+      "title": "grep 2.4",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "grep-2.4-musl.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "grep derivation present",
+      "semantic_evidence": "runtime validation required",
+      "proof_evidence": "source transcript required",
+      "notes": ""
+    },
+    {
+      "id": "sed.4.0.9",
+      "title": "sed 4.0.9",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "sed-4.0.9-musl.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "sed derivation present",
+      "semantic_evidence": "runtime validation required",
+      "proof_evidence": "source transcript required",
+      "notes": ""
+    },
+    {
+      "id": "archive-tools",
+      "title": "bzip2/gzip/tar archive tools",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "tar-tcc.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "tar plus bzip2/gzip derivations present",
+      "semantic_evidence": "archive round-trip smokes required",
+      "proof_evidence": "source transcript required",
+      "notes": "gap report also checks bzip2/gzip rows through explicit derivations"
+    },
+    {
+      "id": "coreutils.5",
+      "title": "coreutils 5.0",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "coreutils-5.0-musl.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "coreutils 5.0 derivation present",
+      "semantic_evidence": "runtime validation required",
+      "proof_evidence": "source transcript required",
+      "notes": ""
+    },
+    {
+      "id": "coreutils.6",
+      "title": "coreutils 6.10",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "coreutils-6.10-musl.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "coreutils 6.10 derivation present",
+      "semantic_evidence": "runtime validation required",
+      "proof_evidence": "source transcript required",
+      "notes": ""
+    },
+    {
+      "id": "parser-generators",
+      "title": "bison/flex/oyacc parser generators",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "bison-3.4.1-musl.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "bison plus flex/oyacc derivations present",
+      "semantic_evidence": "generator smoke required",
+      "proof_evidence": "source transcript required",
+      "notes": "gap report also requires flex and oyacc derivations in repository"
+    },
+    {
+      "id": "autotools",
+      "title": "m4/libtool/autoconf/automake ladder",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "autoconf-2.69.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "autotools terminal derivation present",
+      "semantic_evidence": "configure-generation smokes required",
+      "proof_evidence": "source transcript required",
+      "notes": "intermediate autoconf/automake versions remain part of map"
+    },
+    {
+      "id": "perl.ladder",
+      "title": "Perl ladder",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "perl-5.6.2-musl.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "Perl terminal derivation present",
+      "semantic_evidence": "Perl smoke required",
+      "proof_evidence": "source transcript required",
+      "notes": "Perl 5.000 through 5.6.2 are mapped"
+    },
+    {
+      "id": "math-libs",
+      "title": "GMP/MPFR/MPC",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "mpc-1.2.1.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "MPC terminal derivation present",
+      "semantic_evidence": "library link smokes required",
+      "proof_evidence": "source transcript required",
+      "notes": "MPC upstream heading mismatch remains documented"
+    },
+    {
+      "id": "binutils.tcc",
+      "title": "binutils TCC early-native row",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "binutils-tcc.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "source-built binutils derivation and independently bound output attestation present",
+      "semantic_evidence": "assembler/linker/archive/ranlib/nm/objcopy/object-format/relocation positive and malformed-input matrices passed",
+      "proof_evidence": "BLAKE3-bound early-native binutils row receipt with current source, predecessor, generated-source, output, trust, and fallback facts required",
+      "notes": "completion is bounded to bootstrap/evidence/early-native-binutils-row-v2.json and does not claim general assembler/linker correctness"
+    },
+    {
+      "id": "gcc.4.0",
+      "title": "GCC 4.0 early-native row",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "gcc-4.0.ncl",
+      "status": "partial",
+      "provider_kind": "unknown",
+      "graph_evidence": "canonical regenerated GCC 4.0 C/C++ root and independently bound output attestation present",
+      "semantic_evidence": "C/C++ drivers, cc1/cc1plus, generators, demangler, libgcc, exception runtime, relocation, and malformed-source matrices passed",
+      "proof_evidence": "BLAKE3-bound GCC 4.0 row receipt with current source, predecessor, generated-source, output, trust, and fallback facts required",
+      "notes": "completion is bounded to bootstrap/evidence/early-native-gcc40-row-v2.json and does not claim general compiler correctness; evidence check failed: source record BLAKE3 is `b301fb271cccfda7c3168ad4352f41c911c00518abe65bee7b605ff2d161fd84`, expected `b2ab77bf4e04a1ec53dc38855382f8fca9eb8d7e0de43e1209f47be06a38954f`"
+    },
+    {
+      "id": "gcc.4.7",
+      "title": "GCC 4.7",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "gcc-4.7.ncl",
+      "status": "partial",
+      "provider_kind": "unknown",
+      "graph_evidence": "regenerated GCC 4.7 derivation and independently bound output/predecessor attestations present",
+      "semantic_evidence": "C/C++11, compiler-internal, static runtime, relocation, malformed-source, and fallback matrices passed",
+      "proof_evidence": "stage-local BLAKE3 receipt over current sources, generated artifacts, immediate predecessors, output, trust, and rejection facts required",
+      "notes": "completion is bounded to bootstrap/evidence/final-native-gcc47-row-v1.json and does not claim general compiler correctness; evidence check failed: source record BLAKE3 is `6c053d3c24c39f659d04307e7c66433de970a227ec1d2c7e8171920781ca98d2`, expected `a89b8c74a7f7bcb46cfcb5750514dbb56cf696d1fada7325125b6fdb12472587`"
+    },
+    {
+      "id": "gcc.10",
+      "title": "GCC 10",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "live-bootstrap",
+      "derivation": "gcc-10.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "regenerated GCC 10 derivation and independently bound GCC 4.7/source/output attestations present",
+      "semantic_evidence": "C/C++17, compiler-internal, static runtime, relocation, malformed-source, and fallback matrices passed",
+      "proof_evidence": "stage-local BLAKE3 receipt over current sources, generated artifacts, GCC 4.7 lineage, output, trust, and rejection facts required",
+      "notes": "completion is bounded to bootstrap/evidence/final-native-gcc10-row-v1.json and does not claim general compiler correctness"
+    },
+    {
+      "id": "full-musl-binutils",
+      "title": "Full musl/binutils handoff",
+      "axes": [
+        "live-bootstrap",
+        "guix"
+      ],
+      "lineage": "guix",
+      "derivation": "binutils-full.ncl",
+      "status": "partial",
+      "provider_kind": "unknown",
+      "graph_evidence": "final GCC 10, musl 1.2.5, and binutils 2.41 stage-local artifacts and attestations present",
+      "semantic_evidence": "static/shared compiler and libc runtimes plus complete binutils, relocation, copied-tree, and rejection matrices passed",
+      "proof_evidence": "composed BLAKE3 receipt over final GCC, libc/CRT/interpreter, binutils, trust, closure, relocation, and fallback facts required",
+      "notes": "completion is bounded to bootstrap/evidence/final-native-musl-binutils-row-v1.json and does not claim provider admission or whole-toolchain correctness; evidence check failed: source record BLAKE3 is `a7af2d3324177576d7463ecc288b0e680eefaeae97910ec1609add17e90164e3`, expected `052af1e98a411e5eba9d8e4633c85f7c8d7817fa6111a397d4dc688fa97d1c71`"
+    },
+    {
+      "id": "seed-full",
+      "title": "Normalized full source seed provider",
+      "axes": [
+        "guix"
+      ],
+      "lineage": "guix",
+      "derivation": "seed-full.ncl",
+      "status": "complete",
+      "provider_kind": "source-root",
+      "graph_evidence": "selected seed-full derivation present",
+      "semantic_evidence": "runtime-admitted full-source provider contract present",
+      "proof_evidence": "authenticated source closure and fixed-point report preserved separately",
+      "notes": "full-source provider contract evidence satisfies this Guix row; it does not satisfy StageX lineage evidence"
+    },
+    {
+      "id": "seed-full.stagex-lineage",
+      "title": "StageX lineage normalized seed provider",
+      "axes": [
+        "stagex"
+      ],
+      "lineage": "stagex",
+      "derivation": null,
+      "status": "complete",
+      "provider_kind": "stagex-lineage",
+      "graph_evidence": "protected StageX transition and normalized provider publication are bound",
+      "semantic_evidence": "complete four-role provider contract and relocated runtime validation required",
+      "proof_evidence": "lineage, plan, audit, provider, stage-report, and final-bundle BLAKE3 identities required",
+      "notes": "Guix source-root evidence does not satisfy this StageX row; completion is bounded to the checked intermediate TinyCC/native-musl/binutils receipt and does not claim final GCC admission"
+    },
+    {
+      "id": "selftest",
+      "title": "Bootstrap selftest",
+      "axes": [
+        "guix",
+        "stagex"
+      ],
+      "lineage": "crunch",
+      "derivation": "selftest.ncl",
+      "status": "complete",
+      "provider_kind": "stagex-lineage",
+      "graph_evidence": "selftest derivation present",
+      "semantic_evidence": "bootstrap selftest transcript required",
+      "proof_evidence": "proof bundle digest required",
+      "notes": ""
+    },
+    {
+      "id": "integration-test",
+      "title": "Bootstrap integration test",
+      "axes": [
+        "guix",
+        "stagex"
+      ],
+      "lineage": "crunch",
+      "derivation": "integration-test.ncl",
+      "status": "complete",
+      "provider_kind": "stagex-lineage",
+      "graph_evidence": "integration-test derivation present",
+      "semantic_evidence": "integration transcript required",
+      "proof_evidence": "proof bundle digest required",
+      "notes": ""
+    },
+    {
+      "id": "crunch.self-build",
+      "title": "Crunch self-build proof",
+      "axes": [
+        "guix",
+        "stagex"
+      ],
+      "lineage": "crunch",
+      "derivation": "crunch.ncl",
+      "status": "blocked",
+      "provider_kind": "unknown",
+      "graph_evidence": "crunch derivation present",
+      "semantic_evidence": "stage1/stage2 binary comparison required",
+      "proof_evidence": "full proof bundle required",
+      "notes": "release evidence must bind selected provider kind; checked receipt at bootstrap/evidence/crunch-self-build-provider-kind-linkage.json validates proof_identity/proof_linkage/prerequisites provider-kind equality but does not prove full self-build; could not inspect /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/bootstrap/crunch.ncl; evidence check failed: real self-build proof parity receipt `workflow` is `mantle-deterministic-proof-receipt-v1`, expected `mantle-deterministic-proof-receipt-v2`"
+    }
+  ]
+}

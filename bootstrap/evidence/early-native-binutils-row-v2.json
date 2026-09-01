@@ -10,7 +10,7 @@
     {"path":"bootstrap/gawk-3.0.4-musl.ncl","blake3":"1d35ef5716aea8d04a916ec05d3b4345256d4c4313205fd360b119aebb54b637"},
     {"path":"bootstrap/m4-1.4.7-musl.ncl","blake3":"39671a43fce58c3cae66c38810b1912b27a29f7a5c134c84acf03b678af22e74"},
     {"path":"bootstrap/musl-1.1.24-native.ncl","blake3":"0f86c28c5a4f7290002200871edede784e79566b4f02c9ebb1f22b654c1e6c1c"},
-    {"path":"bootstrap/tcc-musl-native.ncl","blake3":"513db983943a9c1d2037694310a133b073abd2820ce26b50c68bc2516d81f959"},
+    {"path":"bootstrap/tcc-musl-native.ncl","blake3":"f90eef8c64b3331d2d8f5b11a3dbd06ed518e68fc7efb3b0e109d49171fcf414"},
     {"path":"bootstrap/tcc-musl-v2.ncl","blake3":"c82e4b5c375d3f9ba767c916ad4dba18e995d239755ea492ae94a007d2f49190"}
   ],
   "predecessors": [

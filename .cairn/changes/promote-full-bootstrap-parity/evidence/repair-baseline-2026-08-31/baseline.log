@@ -1,0 +1,315 @@
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/fuse-backend-rs)
+   Compiling nix-compat v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/nix-compat)
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-attestation-core)
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/nix-compat-derive)
+   Compiling snix-castore v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/snix-castore)
+   Compiling snix-tracing v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/snix-tracing)
+   Compiling snix-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/snix-build)
+   Compiling snix-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/snix-store)
+   Compiling crunch-action-result-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-action-result-core)
+   Compiling crunch-repair-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-repair-core)
+   Compiling crunch-composition-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-composition-core)
+   Compiling crunch-overlay-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-overlay-core)
+   Compiling crunch-gc-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-gc-core)
+   Compiling crunch-rust-cache-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-rust-cache-core)
+   Compiling crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-eval)
+   Compiling crunch-evaluation-stream-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-evaluation-stream-core)
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-wasm-component-core)
+   Compiling crunch-shell-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-shell-core)
+   Compiling crunch-delta-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-delta-core)
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-release-core)
+   Compiling crunch-bootstrap-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-bootstrap-core)
+   Compiling mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/mantlepkgs-core)
+   Compiling crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-eval-budget-core)
+   Compiling crunch-shell v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-shell)
+   Compiling mantle-portable-client-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/mantle-portable-client-core)
+   Compiling crunch-hardware-simulation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-hardware-simulation-core)
+   Compiling crunch-kernelscript-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-kernelscript-core)
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-attestation)
+   Compiling crunch-project-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-project-core)
+   Compiling crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-hardware-simulation)
+   Compiling crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-wasm-component)
+   Compiling crunch-nar v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-nar)
+   Compiling crunch-glue v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-glue)
+   Compiling crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-project)
+   Compiling crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-store)
+   Compiling crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-build)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-rustc-wrapper)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline)
+warning: function `prepare_rustc_compatibility` is never used
+    --> src/cargo_free_self_build.rs:1688:4
+     |
+1688 | fn prepare_rustc_compatibility(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `enforce_receipt_bound_toolchain` is never used
+    --> src/cargo_free_self_build.rs:3523:4
+     |
+3523 | fn enforce_receipt_bound_toolchain(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `execution_path_env` is never used
+    --> src/cargo_free_self_build.rs:3681:4
+     |
+3681 | fn execution_path_env(cargo_path_dir: &Path, toolchain_closure: &LoadedToolchainClosure) -> Result<OsString, RunError> {
+     |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `execution_path_env_with_shell` is never used
+    --> src/cargo_free_self_build.rs:3685:4
+     |
+3685 | fn execution_path_env_with_shell(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `write_toolchain_path_aliases` is never used
+    --> src/cargo_free_self_build.rs:3819:4
+     |
+3819 | fn write_toolchain_path_aliases(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `write_toolchain_path_aliases_with_shell` is never used
+    --> src/cargo_free_self_build.rs:3826:4
+     |
+3826 | fn write_toolchain_path_aliases_with_shell(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DIAGNOSTIC_EXEC_PATH_COUNT_MAX` is never used
+  --> src/protected_exec_seccomp.rs:41:11
+   |
+41 |     const DIAGNOSTIC_EXEC_PATH_COUNT_MAX: usize = 256;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DIAGNOSTIC_EXEC_EVENT_COUNT_MAX` is never used
+  --> src/protected_exec_seccomp.rs:42:11
+   |
+42 |     const DIAGNOSTIC_EXEC_EVENT_COUNT_MAX: usize = 131_072;
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `PHASE_DIAGNOSTIC` is never used
+  --> src/protected_exec_seccomp.rs:53:11
+   |
+53 |     const PHASE_DIAGNOSTIC: &str = "diagnostic";
+   |           ^^^^^^^^^^^^^^^^
+
+warning: struct `DiagnosticExecObserver` is never constructed
+  --> src/protected_exec_seccomp.rs:75:16
+   |
+75 |     pub struct DiagnosticExecObserver {
+   |                ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `audit_events`, `listener_fd`, and `wait_for_audit_quiescence` are never used
+  --> src/protected_exec_seccomp.rs:81:16
+   |
+80 |     impl DiagnosticExecObserver {
+   |     --------------------------- methods in this implementation
+81 |         pub fn audit_events(&self) -> Vec<ProtectedSeccompAuditEvent> {
+   |                ^^^^^^^^^^^^
+...
+88 |         pub fn listener_fd(&self) -> RawFd {
+   |                ^^^^^^^^^^^
+...
+92 |         pub fn wait_for_audit_quiescence(&self) -> Result<usize, ProtectedSeccompError> {
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: fields `auto_promotions` and `listener_fd` are never read
+   --> src/protected_exec_seccomp.rs:101:9
+    |
+ 98 |     pub struct ProtectedSeccompSupervisor {
+    |                -------------------------- fields in this struct
+...
+101 |         auto_promotions: Arc<Mutex<Vec<OutputPromotionRecord>>>,
+    |         ^^^^^^^^^^^^^^^
+102 |         shared_policy: Arc<RwLock<ProtectedExecPolicy>>,
+103 |         listener_fd: RawFd,
+    |         ^^^^^^^^^^^
+    |
+    = note: `ProtectedSeccompSupervisor` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: methods `listener_fd`, `automatic_promotions`, `register_planned_produced_roots`, `begin_producer_action`, and `end_producer_action` are never used
+   --> src/protected_exec_seccomp.rs:114:16
+    |
+106 |     impl ProtectedSeccompSupervisor {
+    |     ------------------------------- methods in this implementation
+...
+114 |         pub fn listener_fd(&self) -> RawFd {
+    |                ^^^^^^^^^^^
+...
+118 |         pub fn automatic_promotions(&self) -> Vec<OutputPromotionRecord> {
+    |                ^^^^^^^^^^^^^^^^^^^^
+...
+125 |         pub fn register_planned_produced_roots(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+133 |         pub fn begin_producer_action(&self, producer_action_id: &str) -> Result<(), ProtectedExecError> {
+    |                ^^^^^^^^^^^^^^^^^^^^^
+...
+138 |         pub fn end_producer_action(&self, producer_action_id: &str) -> Result<(), ProtectedExecError> {
+    |                ^^^^^^^^^^^^^^^^^^^
+
+warning: function `install_current_thread_diagnostic_exec_observer` is never used
+   --> src/protected_exec_seccomp.rs:222:12
+    |
+222 |     pub fn install_current_thread_diagnostic_exec_observer(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `validate_diagnostic_paths` is never used
+   --> src/protected_exec_seccomp.rs:238:8
+    |
+238 |     fn validate_diagnostic_paths(allowed_paths: &BTreeSet<PathBuf>) -> Result<(), ProtectedSeccompError> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `spawn_diagnostic_observer_thread` is never used
+   --> src/protected_exec_seccomp.rs:428:8
+    |
+428 |     fn spawn_diagnostic_observer_thread(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `diagnostic_observer_loop` is never used
+   --> src/protected_exec_seccomp.rs:440:8
+    |
+440 |     fn diagnostic_observer_loop(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `classify_diagnostic_notification` is never used
+   --> src/protected_exec_seccomp.rs:570:8
+    |
+570 |     fn classify_diagnostic_notification(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `diagnostic_tracee_context` is never used
+   --> src/protected_exec_seccomp.rs:590:8
+    |
+590 |     fn diagnostic_tracee_context(pid: u32) -> String {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `classify_diagnostic_path` is never used
+   --> src/protected_exec_seccomp.rs:597:8
+    |
+597 |     fn classify_diagnostic_path(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `diagnostic_path_allowed` is never used
+   --> src/protected_exec_seccomp.rs:646:8
+    |
+646 |     fn diagnostic_path_allowed(allowed_paths: &BTreeSet<PathBuf>, target: &ExecTarget) -> bool {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: method `as_str` is never used
+  --> src/remote_nominal.rs:55:20
+   |
+50 |         impl $name {
+   |         ---------- method in this implementation
+...
+55 |             pub fn as_str(&self) -> &str {
+   |                    ^^^^^^
+...
+62 | remote_id!(RemoteRequestId);
+   | --------------------------- in this macro invocation
+   |
+   = note: this warning originates in the macro `remote_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: method `as_str` is never used
+  --> src/remote_nominal.rs:55:20
+   |
+50 |         impl $name {
+   |         ---------- method in this implementation
+...
+55 |             pub fn as_str(&self) -> &str {
+   |                    ^^^^^^
+...
+63 | remote_id!(RemoteProtocolSessionId);
+   | ----------------------------------- in this macro invocation
+   |
+   = note: this warning originates in the macro `remote_id` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: variant `IncompleteReconciliation` is never constructed
+   --> src/source_built_rust_action_plan.rs:216:5
+    |
+213 | pub(crate) enum RustChildActionPlanErrorKind {
+    |                 ---------------------------- variant in this enum
+...
+216 |     IncompleteReconciliation,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `RustChildActionPlanErrorKind` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `reconcile_rust_child_actions` is never used
+   --> src/source_built_rust_action_plan.rs:883:15
+    |
+883 | pub(crate) fn reconcile_rust_child_actions(
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `rust_unit_action_inputs_from_graph` is never used
+    --> src/source_built_rust_action_plan.rs:1155:15
+     |
+1155 | pub(crate) fn rust_unit_action_inputs_from_graph(
+     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle") generated 26 warnings
+warning: `mantle` (bin "crunch") generated 26 warnings (26 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 20s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 13`
+     Running tests/bootstrap_parity_cli.rs (/home/brittonr/.cargo-target/debug/deps/bootstrap_parity_cli-1e49175c04a1c905)
+
+running 19 tests
+test bootstrap_parity_report_require_fails_closed_on_gaps ... ok
+test bootstrap_parity_report_stagex_requires_lineage_seed_provider ... ok
+test bootstrap_parity_report_emits_json_gap_report ... ok
+test bootstrap_parity_report_rejects_malformed_row_receipt ... ok
+
+thread 'bootstrap_parity_report_rejects_missing_final_runtime_member' (781736) panicked at tests/bootstrap_parity_cli.rs:318:5:
+assertion failed: row["notes"].as_str().unwrap().contains("observed fallback scan")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test bootstrap_parity_report_rejects_state_pinned_final_source ... ok
+test bootstrap_parity_report_rejects_missing_final_runtime_member ... FAILED
+test bootstrap_parity_report_rejects_cross_row_final_receipt_substitution ... ok
+test bootstrap_parity_report_rejects_corrupt_predecessor_attestation ... ok
+test bootstrap_parity_report_requires_binutils_row_receipt_for_live_bootstrap_and_guix ... ok
+test bootstrap_parity_report_rejects_wrapper_delegation_marker ... ok
+
+thread 'bootstrap_parity_report_rejects_untrusted_acceptance_fingerprint' (781741) panicked at tests/bootstrap_parity_cli.rs:264:5:
+assertion failed: row["notes"].as_str().unwrap().contains("runtime trust fingerprint")
+test bootstrap_parity_report_rejects_missing_output_artifact_evidence ... ok
+test bootstrap_parity_report_rejects_stale_row_source_digest ... ok
+test bootstrap_parity_report_rejects_cross_row_receipt_substitution ... ok
+
+thread 'bootstrap_parity_report_rejects_stale_generated_artifact_status' (781738) panicked at tests/bootstrap_parity_cli.rs:277:5:
+assertion failed: row["notes"].as_str().unwrap().contains("generated_artifacts.status")
+test bootstrap_parity_report_rejects_untrusted_acceptance_fingerprint ... FAILED
+test bootstrap_parity_report_rejects_forbidden_host_tool_discovery ... ok
+test bootstrap_parity_report_rejects_stale_generated_artifact_status ... FAILED
+
+thread 'bootstrap_parity_report_accepts_independently_receipted_final_native_rows' (781728) panicked at tests/bootstrap_parity_cli.rs:436:9:
+assertion `left == right` failed: row gcc.4.7 did not complete
+  left: String("partial")
+ right: "complete"
+test bootstrap_parity_report_rejects_legacy_self_build_proof_without_unblocking_axes ... ok
+test bootstrap_parity_report_accepts_independently_receipted_final_native_rows ... FAILED
+
+thread 'bootstrap_parity_report_accepts_independently_receipted_early_native_rows' (781727) panicked at tests/bootstrap_parity_cli.rs:155:5:
+assertion `left == right` failed
+  left: String("partial")
+ right: "complete"
+test bootstrap_parity_report_accepts_independently_receipted_early_native_rows ... FAILED
+
+failures:
+
+failures:
+    bootstrap_parity_report_accepts_independently_receipted_early_native_rows
+    bootstrap_parity_report_accepts_independently_receipted_final_native_rows
+    bootstrap_parity_report_rejects_missing_final_runtime_member
+    bootstrap_parity_report_rejects_stale_generated_artifact_status
+    bootstrap_parity_report_rejects_untrusted_acceptance_fingerprint
+
+test result: FAILED. 14 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+error: test failed, to rerun pass `-p mantle --test bootstrap_parity_cli`

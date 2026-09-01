@@ -1,0 +1,1 @@
+cargo test -p mantle --test bootstrap_parity_cli -- --nocapture
