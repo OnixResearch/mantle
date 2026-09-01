@@ -45,3 +45,12 @@ returned the same output path:
 The wasm-component toolchain also passed `--rebuild`. Its output includes the
 pinned Octet package and profile checks. No source revision, lockfile, Rust
 version, target, package command, or feature selection changed.
+
+## Later full-check blocker: durable publication freshness
+
+The next local full-check failure was
+`checks.x86_64-linux.durable-file-publication-adoption`. Its accepted Nickel
+receipt still named older `Cargo.toml`, `Cargo.lock`, `flake.nix`, and
+`flake.lock` BLAKE3 identities. The Nickel source, generated JSON, receipt
+BLAKE3, and pure validator now bind the current files. Positive and negative
+Nickel tests pass, and the focused Nix check passes.
