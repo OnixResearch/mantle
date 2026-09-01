@@ -1,0 +1,95 @@
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/prove-source-built-mantle-fixed-point/specs/bootstrap-inventory/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/prove-source-built-mantle-fixed-point/specs/bootstrap-inventory/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "prove-source-built-mantle-fixed-point",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "4c32804db9c0d3309e48dd7148eb9f3d3e23f5cd4b0110d83a6fddd7d3046f09",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+    "receipt_hash": "6767ed8b14dd8f3564cacd001ffaea47a8049f223b6d42df429717fe3476d2f6",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/prove-source-built-mantle-fixed-point/specs/bootstrap-inventory/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "335244419b23255ab67e02ed77a0ef5d96e860e6a459edccaf8808b30ee36366",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "96f276871bad3c29ba2e15712b7969bfa45e2eba80fad44c9aef677f13771192",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "4a13c696502e05af6a5e0ab23ea047fc93411b16674dcf923765b2b1d4776c60",
+        "destination": ".cairn/specs/bootstrap-inventory/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "31fca952187341f16fffa3c42a05431867473dc5cb6121a6b97faf3d7fecd0f0",
+        "operations": [
+          {
+            "block_hash": "7155f0e0e74fe79dbaeee2c2481eadf9009d1e8d8c9c4c7765a66e1107e34cad",
+            "heading": "### Requirement: Source-built Mantle fixed-point proof",
+            "kind": "added",
+            "requirement_id": "bootstrap_inventory.source_built_mantle_fixed_point"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "bootstrap_inventory.source_built_mantle_fixed_point",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/prove-source-built-mantle-fixed-point/specs/bootstrap-inventory/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "31fca952187341f16fffa3c42a05431867473dc5cb6121a6b97faf3d7fecd0f0",
+          "exists": true,
+          "path": "./.cairn/specs/bootstrap-inventory/spec.md"
+        }
+      ],
+      "manifest_hash": "c15e02e36ec9cf47037728629c2bb79818cfe8675d97adeb64d47a7481bdd355"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "96f276871bad3c29ba2e15712b7969bfa45e2eba80fad44c9aef677f13771192",
+          "exists": true,
+          "path": "./.cairn/specs/bootstrap-inventory/spec.md"
+        }
+      ],
+      "manifest_hash": "14852035ce348b20b98511061a8df83d43e6fd3affd1af1da2892d24b8e8571c"
+    },
+    "kind": "sync",
+    "manifest_hash": "9e1c0a1a3cfa696f7a2feb7d191ff0400ee10f8b7473868fbdf0c29a03e4c9d2"
+  },
+  "plan_hash": "09ff07487dab519266b01a23377aa5a744d12406a8812d159bb8dec77725e70a",
+  "policy": "mantle-default",
+  "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+  "reasons": [],
+  "receipt_hash": "8178ff077540745fbc0e2c96c9e79d45b6f2e7227249182c7e6ed4939d72f2ca"
+}

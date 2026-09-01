@@ -39,11 +39,15 @@ let Strictness = std.contract.from_predicate (fun value =>
 ) in
 
 let MarkerToken = std.contract.from_predicate (fun value =>
-  std.is_string value && std.string.is_match "^\\[(parallel|serial|depends:[^\\]]+)\\]$" value
+  std.is_string value && std.string.is_match "^\\[(parallel|serial|depends:[^\\]]+|task:[^\\]]+|after:[^\\]]+)\\]$" value
 ) in
 
 let MarkerKind = std.contract.from_predicate (fun value =>
-  std.is_string value && (value == "literal" || value == "depends-prefix")
+  std.is_string value
+  && (value == "literal"
+    || value == "depends-prefix"
+    || value == "task-id-prefix"
+    || value == "task-predecessor-prefix")
 ) in
 
 let Severity = std.contract.from_predicate (fun value =>
@@ -84,6 +88,14 @@ let TraceabilityEvidenceSourceKind = std.contract.from_predicate (fun value =>
 
 let TraceabilityMarkerVerb = std.contract.from_predicate (fun value =>
   std.is_string value && (value == "impl" || value == "verify" || value == "depends" || value == "related")
+) in
+
+let TraceabilityAssuranceLevel = std.contract.from_predicate (fun value =>
+  std.is_string value && value == "declared"
+) in
+
+let TraceabilityAnchorKind = std.contract.from_predicate (fun value =>
+  std.is_string value && value == "exact_marker_bytes"
 ) in
 
 let TraceabilityExtension = std.contract.from_predicate (fun value =>
@@ -273,6 +285,8 @@ let NominalIdentityOctetMode = std.contract.from_predicate (fun value =>
     requirement_sources | NonEmptyArray | Array TraceabilityRequirementSource,
     evidence_sources | NonEmptyArray | Array TraceabilityEvidenceSource,
     marker_verbs | NonEmptyArray | Array TraceabilityMarkerVerb,
+    assurance_level | TraceabilityAssuranceLevel,
+    anchor_kind | TraceabilityAnchorKind,
   },
 
   TraceabilityPolicy = {

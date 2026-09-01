@@ -1,4 +1,0 @@
-format=mantle-source-bundle-v1 store_prefix=/mantle/store records=47 payload_bytes=285740854 readiness=Ready
-current_missing_record=fixed-url-82f9536a4fee1d373564718adcdd825712ef0cb0b8bee13b09beb69d7c2b37a3
-current_missing_name=patch-2.5.9-src
-current_missing_url=https://ftpmirror.gnu.org/patch/patch-2.5.9.tar.gz

@@ -1,6 +1,0 @@
-{
-  "schema": "mantle-source-built-fixed-point-attempt-v1",
-  "status": "failed",
-  "plan_digest_blake3": "2fe276789f2a96e7e4d3e30746699c7eb003ebdeb33dec71105481c343e71210",
-  "blocker": "error: unsafe source symlink target '/home/brittonr/.cargo-target/mantle-source-built-fixed-point-runs-v2/.native-digest-observation-v2-20260731.source-built-fixed-point-staging-1897153/native-store/ki5gkg5d6si77dl5k4mav4s6x9s8l25r-mantle-stagex-transition/binutils-stage/runtime/stagex-configure-utility'"
-}

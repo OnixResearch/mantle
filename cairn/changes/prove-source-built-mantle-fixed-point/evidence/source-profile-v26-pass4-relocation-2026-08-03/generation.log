@@ -1,8 +1,0 @@
-Task 7524
-Status: success
-Command scope: source bundle bootstrap-profile --mode source-built-fixed-point
-Base profile: /home/brittonr/.cargo-target/mantle-source-built-fixed-point-profile-v25-exact-union-20260803.json
-Output profile: /home/brittonr/.cargo-target/mantle-source-built-fixed-point-profile-v26-pass4-relocation-20260803.json
-Observed output:
-  format=mantle-bootstrap-source-profile-v1 mode=source-built-fixed-point records=60 manifest_blake3=1a7e3fcce3b1d00956d78845fdc6ae3fe41e6799c806b426ad0a489c6b29381d provider_kind=stagex-lineage
-  non_claim=bootstrap source profile proves source/input availability and identity only

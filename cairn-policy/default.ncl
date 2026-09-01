@@ -476,6 +476,8 @@ let PolicyFieldSetDigest = "2d86abb8cbcb43323f4bdf81870ee963fcdc34ef5bf815eabc5b
       { id = "parallel", token = "[parallel]", kind = "literal" },
       { id = "serial", token = "[serial]", kind = "literal" },
       { id = "depends", token = "[depends:<task-or-id>]", kind = "depends-prefix" },
+      { id = "task", token = "[task:<id>]", kind = "task-id-prefix" },
+      { id = "after", token = "[after:<task-id>]", kind = "task-predecessor-prefix" },
     ],
   },
 
@@ -553,6 +555,8 @@ let PolicyFieldSetDigest = "2d86abb8cbcb43323f4bdf81870ee963fcdc34ef5bf815eabc5b
           { root = "tools/release_provenance_tracey_refs.rs", source_kind = "rust_source", extensions = ["rs"] },
         ],
         marker_verbs = ["impl", "verify", "depends", "related"],
+        assurance_level = "declared",
+        anchor_kind = "exact_marker_bytes",
       },
       {
         id = "cairn-default",
@@ -563,6 +567,8 @@ let PolicyFieldSetDigest = "2d86abb8cbcb43323f4bdf81870ee963fcdc34ef5bf815eabc5b
           { root = "tools/release_provenance_tracey_refs.rs", source_kind = "rust_source", extensions = ["rs"] },
         ],
         marker_verbs = ["impl", "verify", "depends", "related"],
+        assurance_level = "declared",
+        anchor_kind = "exact_marker_bytes",
       },
       {
         id = "immutable-release-pointer",
@@ -573,6 +579,8 @@ let PolicyFieldSetDigest = "2d86abb8cbcb43323f4bdf81870ee963fcdc34ef5bf815eabc5b
           { root = "tools/immutable_release_pointer_tracey_refs.rs", source_kind = "rust_source", extensions = ["rs"] },
         ],
         marker_verbs = ["impl", "verify", "depends", "related"],
+        assurance_level = "declared",
+        anchor_kind = "exact_marker_bytes",
       },
       {
         id = "content-bound-release-requirements",
@@ -583,6 +591,8 @@ let PolicyFieldSetDigest = "2d86abb8cbcb43323f4bdf81870ee963fcdc34ef5bf815eabc5b
           { root = "tools/content_bound_release_requirement_tracey_refs.rs", source_kind = "rust_source", extensions = ["rs"] },
         ],
         marker_verbs = ["impl", "verify", "depends", "related"],
+        assurance_level = "declared",
+        anchor_kind = "exact_marker_bytes",
       },
       {
         id = "remote-build-drain",
@@ -600,6 +610,8 @@ let PolicyFieldSetDigest = "2d86abb8cbcb43323f4bdf81870ee963fcdc34ef5bf815eabc5b
           { root = "tools/remote_build_drain_tracey_refs.rs", source_kind = "rust_source", extensions = ["rs"] },
         ],
         marker_verbs = ["impl", "verify", "depends", "related"],
+        assurance_level = "declared",
+        anchor_kind = "exact_marker_bytes",
       },
     ],
   },

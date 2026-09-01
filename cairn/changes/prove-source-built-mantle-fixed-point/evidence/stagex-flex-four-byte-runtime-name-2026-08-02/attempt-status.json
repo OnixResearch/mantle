@@ -1,6 +1,0 @@
-{
-  "schema": "mantle-source-built-fixed-point-attempt-v1",
-  "status": "failed",
-  "plan_digest_blake3": "71662325a323b3531741ca4e62535d8c2fe1697e2d3684241a3c372187b7ee81",
-  "blocker": "error: build failed\nsource-built fixed-point blocked: StageX transition failed: StageX protected execution failed: GNU Flex materialization failed: canonicalizing Flex runtime section: Flex ELF runtime section name has 4 bytes; expected 3"
-}

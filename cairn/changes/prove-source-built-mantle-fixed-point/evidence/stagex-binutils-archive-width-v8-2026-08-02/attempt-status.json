@@ -1,6 +1,0 @@
-{
-  "schema": "mantle-source-built-fixed-point-attempt-v1",
-  "status": "failed",
-  "plan_digest_blake3": "20904a95ef4ef5518f88500ad6d1e45b54cb82c5253b92ca0653bfd800a078f0",
-  "blocker": "error: build failed\nsource-built fixed-point blocked: StageX transition failed: StageX protected execution failed: GNU binutils materialization failed: binutils component libiberty digest mismatch: expected d19e0d15373a237fe94b0d915f3edba43182343739da15f837c1a9a1ea426236, observed 95d3c19f37fad94cc60eb4d39186a37fa80bb09eb1a00439bc0d4972aae5469f"
-}

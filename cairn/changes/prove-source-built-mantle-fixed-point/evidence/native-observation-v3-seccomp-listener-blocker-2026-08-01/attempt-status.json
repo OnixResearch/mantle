@@ -1,6 +1,0 @@
-{
-  "schema": "mantle-source-built-fixed-point-attempt-v1",
-  "status": "failed",
-  "plan_digest_blake3": "94b6ab8a63eaca19c27b124fb0ca9814e5b39837574edb52cea16828e7fb6063",
-  "blocker": "error: build failed\nsource-built fixed-point proof failed closed: error: build failed\nsource-built fixed-point blocked: StageX provider publication failed: StageX provider runtime validation failed: installing provider validation supervisor: installing protected exec supervisor failed: SECCOMP_SET_MODE_FILTER: Device or resource busy (os error 16)"
-}

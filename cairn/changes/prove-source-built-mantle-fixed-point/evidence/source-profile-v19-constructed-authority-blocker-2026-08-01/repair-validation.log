@@ -1,9 +1,0 @@
-pueue task 7107
-
-test result: ok. 34 passed; 0 failed; 1 ignored; 0 measured; 1967 filtered out; finished in 0.15s
-
-pueue task 7110
-
-source-bundle test module: passed
-first-party binary clippy with -D warnings: passed
-focused git diff --check: passed
