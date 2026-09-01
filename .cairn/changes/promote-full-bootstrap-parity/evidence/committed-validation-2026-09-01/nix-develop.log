@@ -1,0 +1,866 @@
+copying path '/nix/store/hhccdmpa2bhqbagn2zgmgrwjbcdinn55-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/1pzq6dhayzd6kgyhjwqr1bwq468z36vp0al101havv6d0pw1fa40.nar?hash=hhccdmpa2bhqbagn2zgmgrwjbcdinn55' does not exist in binary cache 'http://100.100.103.95:5000'
+copying path '/nix/store/6n2my46jcc8pr3hc74gir5h83gy4671g-cargo-package-camino-1.2.2' from 'http://100.100.103.95:5000'...
+copying path '/nix/store/f4qmxvxln6jlqfrhr3qiyvrwvqyv14sd-cargo-package-cargo-platform-0.3.2' from 'http://100.100.103.95:5000'...
+copying path '/nix/store/ifj8hw7bx9fnmqc0vkgnriwdm0gkwz8i-cargo-package-openssl-sys-0.9.111' from 'http://100.100.103.95:5000'...
+copying path '/nix/store/38d653gxni6pwygalzwvj22zx8wjryjb-cargo-package-vcpkg-0.2.15' from 'http://100.100.103.95:5000'...
+copying path '/nix/store/q9y0zwqnwvnv10j6blwn87z3i11y4x8a-cargo-package-zerovec-0.11.5' from 'http://100.100.103.95:5000'...
+copying path '/nix/store/s3cx3fn5z0z9bs93lxf59x5wnkzn9alp-cargo-package-zmij-1.0.16' from 'http://100.100.103.95:5000'...
+copying path '/nix/store/a35lk41lyzxkv27ly0ilzbq8rshyd2h1-cargo-package-windows-targets-0.53.5' from 'http://100.100.103.95:5000'...
+building '/nix/store/lplifaf32na1qx6yj436b68qhbbwx85r-cargo-git-https-github.com-trailofbits-dylint-0e0a71eefe6f01563d11acc6e1d7af1d505934a9.drv'...
+warning: file 'nar/12jf3rbgl8xkgw6mw00lncrhnq5sqpsxdv3wqjxbbxnhjvihr1j9.nar?hash=6n2my46jcc8pr3hc74gir5h83gy4671g' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: file 'nar/11rj7gc7f0v7aj14kfhzls1xwcpdwqfj2wzrqmcc0h2d7bdhnky9.nar?hash=f4qmxvxln6jlqfrhr3qiyvrwvqyv14sd' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: file 'nar/1pj56qx31k4lmj0ssl7micikm558w0gvsm6549q6jsvpwxvdcn5m.nar?hash=ifj8hw7bx9fnmqc0vkgnriwdm0gkwz8i' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: file 'nar/12n9j6wf17rngs4csfm2y6gfhfa949d7pxnymlwarbaznvyaz1i0.nar?hash=38d653gxni6pwygalzwvj22zx8wjryjb' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: file 'nar/02s4c1hjnndicrg2y9rx982w3y749pkg1i9bq6gr3rc9nw64kz39.nar?hash=a35lk41lyzxkv27ly0ilzbq8rshyd2h1' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: file 'nar/06fp3v2ggkgcscrk17pyrd7w730dscl28k2lyhrw30gzv3n303xv.nar?hash=q9y0zwqnwvnv10j6blwn87z3i11y4x8a' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: file 'nar/0m0ifkjs4rndj7glw0x54linld358wja4vsgqcsgkzhx93nvra45.nar?hash=s3cx3fn5z0z9bs93lxf59x5wnkzn9alp' does not exist in binary cache 'http://100.100.103.95:5000'
+building '/nix/store/dl2260rx69g5mbxkql891k87dfqki3qp-cargo-package-camino-1.2.2.drv'...
+building '/nix/store/p6p59j7w06wn9hpwqphfx2wxlz1357al-cargo-package-cargo-platform-0.3.2.drv'...
+building '/nix/store/w2441zshipdl8lamwibn63dkza891w6j-cargo-package-openssl-sys-0.9.111.drv'...
+building '/nix/store/67lqjzglaj8lb5mdssl03bh583ghjzdd-cargo-git-ssh-git-github.com-OnixResearch-valence.git-1f4f6fe903a34c22d2cda53cd534ce58bbf84147.drv'...
+building '/nix/store/kcddhgd4w00cvf50jyqnjhhayci0khhy-source.drv'...
+building '/nix/store/rqbrk7yxpljmx0pyi90ways4vxivwqn6-vendor-registry.drv'...
+building '/nix/store/2svfxwvz5y57pmvlmsmsmggl31km2w94-cargo-package-zmij-1.0.16.drv'...
+building '/nix/store/mbz6wdp61wgmph3brkkafkns0fr7z6qg-cargo-package-windows-targets-0.53.5.drv'...
+building '/nix/store/gzwaayd4f4hiwnd7q75q4ga99s7jgj6x-cargo-package-zerovec-0.11.5.drv'...
+building '/nix/store/fnhfspa9r71nr3mqk1h4gc12pjldibvp-cargo-package-vcpkg-0.2.15.drv'...
+building '/nix/store/37f1c2xrylv8a3kzzc8hjs1w49j9n2jp-linkLockedDeps.drv'...
+building '/nix/store/6w2cj9rk1jkfbcrh703h5dddgjlg3zwq-vendor-cargo-deps.drv'...
+building '/nix/store/6r46k6caknjsqwbdwbm6k6c15d63wc6k-vendor-registry.drv'...
+building '/nix/store/kmdk1m26yv5ark1zkfhv0qkvbkv2x0kw-octet-deps-0.1.0.drv'...
+building '/nix/store/73s8g7n83sxrfa69hdnag6p8lh23la05-vendor-cargo-deps.drv'...
+building '/nix/store/2m307icqp7865ajpckk50ir1f7q3a3n9-dylint-driver-5.0.0.drv'...
+building '/nix/store/cxqwb5p4wcyqxqcr8n3ij7jpwsy21kcg-linkLockedDeps.drv'...
+building '/nix/store/ad4ckb3sy1jjm8rpaj9n1cf6s3llanyr-vendor-cargo-deps.drv'...
+building '/nix/store/j87qrwfzafc7v7j21z1rb12wc76iyiy1-tigerstyle-deps-0.1.0.drv'...
+building '/nix/store/hgdjy1ppapy162vxbvvakdic5vfyh631-cargo-octet-0.1.0.drv'...
+building '/nix/store/r828qh6m5chvka2d7fl2zv1hz4s8gwpn-octet-0.1.0.drv'...
+building '/nix/store/0jndlaqmrv4pkycyknbpvj405kgz6s1q-cargo-tigerstyle-0.1.0.drv'...
+building '/nix/store/if6i0vs9h31k6ka20myaznpdh09adcbi-tigerstyle-0.1.0.drv'...
+building '/nix/store/1h0kddkn33p4dyrkjnbzsp3ihl49gk77-tigerstyle-ui-library.drv'...
+building '/nix/store/d8smv7g4fiv26dr9zha2yg9z2g4n5qzp-cargo-tigerstyle-0.1.0.drv'...
+building '/nix/store/wp51zb243ajmicrb7hhfqzy5rdv7250f-octet-ui-library.drv'...
+building '/nix/store/qz9jg163892lfkixcgxljbnma45nq2ry-cargo-octet-0.1.0.drv'...
+building '/nix/store/skwkzzc8khiw49fjp2l73d5m4x4m88y6-mantle-wasm-component-toolchain-v1.drv'...
+building '/nix/store/6zaqvxrfxxgx6xnk4dak0mmwi32ma347-nix-shell-env.drv'...
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling cfg-if v1.0.4
+   Compiling serde_core v1.0.228
+   Compiling libc v0.2.186
+   Compiling serde v1.0.228
+   Compiling memchr v2.8.0
+   Compiling version_check v0.9.5
+   Compiling smallvec v1.15.1
+   Compiling typenum v1.20.1
+   Compiling subtle v2.6.1
+   Compiling parking_lot_core v0.9.12
+   Compiling regex-syntax v0.8.10
+   Compiling scopeguard v1.2.0
+   Compiling const-oid v0.9.6
+   Compiling itoa v1.0.18
+   Compiling shlex v1.3.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling lock_api v0.4.14
+   Compiling crossbeam-utils v0.8.21
+   Compiling equivalent v1.0.2
+   Compiling once_cell v1.21.4
+   Compiling bitflags v2.11.0
+   Compiling thiserror v2.0.18
+   Compiling allocator-api2 v0.2.21
+   Compiling generic-array v0.14.7
+   Compiling stable_deref_trait v1.2.1
+   Compiling foldhash v0.2.0
+   Compiling same-file v1.0.6
+   Compiling fastrand v2.4.1
+   Compiling cpufeatures v0.2.17
+   Compiling rustix v1.1.4
+   Compiling crc32fast v1.5.0
+   Compiling linux-raw-sys v0.12.1
+   Compiling log v0.4.29
+   Compiling aho-corasick v1.1.4
+   Compiling walkdir v2.5.0
+   Compiling arrayvec v0.7.6
+   Compiling zmij v1.0.21
+   Compiling tinyvec_macros v0.1.1
+   Compiling serde_json v1.0.149
+   Compiling hashbrown v0.16.1
+   Compiling gix-trace v0.1.18
+   Compiling pin-project-lite v0.2.17
+   Compiling tinyvec v1.11.0
+   Compiling futures-core v0.3.32
+   Compiling fnv v1.0.7
+   Compiling crossbeam-epoch v0.9.20
+   Compiling zeroize v1.8.2
+   Compiling rayon-core v1.13.0
+   Compiling human_format v1.2.1
+   Compiling bytesize v2.3.1
+   Compiling zlib-rs v0.6.3
+   Compiling winnow v0.7.15
+   Compiling arrayref v0.3.9
+   Compiling syn v2.0.117
+   Compiling unicode-normalization v0.1.25
+   Compiling crossbeam-channel v0.5.15
+   Compiling constant_time_eq v0.3.1
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling jobserver v0.1.34
+   Compiling byteorder v1.5.0
+   Compiling getrandom v0.4.2
+   Compiling heapless v0.8.0
+   Compiling rand_core v0.10.0
+   Compiling futures-sink v0.3.32
+   Compiling digest v0.10.7
+   Compiling futures-io v0.3.32
+   Compiling slab v0.4.12
+   Compiling hash32 v0.3.1
+   Compiling cc v1.2.59
+   Compiling regex-automata v0.4.14
+   Compiling futures-channel v0.3.32
+   Compiling crossbeam-deque v0.8.6
+   Compiling rustversion v1.0.22
+   Compiling strsim v0.11.1
+   Compiling futures-task v0.3.32
+   Compiling jiff v0.2.23
+   Compiling sha1 v0.10.6
+   Compiling libm v0.2.16
+   Compiling foldhash v0.1.5
+   Compiling tracing-core v0.1.36
+   Compiling fs_extra v1.3.0
+   Compiling hashbrown v0.15.5
+   Compiling dunce v1.0.5
+   Compiling sha1-checked v0.10.0
+   Compiling errno v0.3.14
+   Compiling mio v1.2.0
+   Compiling getrandom v0.2.17
+   Compiling socket2 v0.6.3
+   Compiling faster-hex v0.10.0
+   Compiling parking_lot v0.12.5
+   Compiling signal-hook-registry v1.4.8
+   Compiling indexmap v2.13.1
+   Compiling percent-encoding v2.3.2
+   Compiling either v1.15.0
+   Compiling cmake v0.1.58
+   Compiling autocfg v1.5.0
+   Compiling semver v1.0.28
+   Compiling aws-lc-rs v1.16.2
+   Compiling memmap2 v0.9.10
+   Compiling prodash v31.0.0
+   Compiling rustls-pki-types v1.14.0
+   Compiling unicode-xid v0.2.6
+   Compiling unicode-width v0.2.2
+   Compiling writeable v0.6.3
+   Compiling blake3 v1.8.2
+   Compiling aws-lc-sys v0.39.1
+   Compiling ring v0.17.14
+   Compiling rustc_version v0.4.1
+   Compiling base64 v0.22.1
+   Compiling litemap v0.8.2
+   Compiling encoding_rs v0.8.35
+   Compiling untrusted v0.9.0
+   Compiling icu_properties_data v2.2.0
+   Compiling utf8_iter v1.0.4
+   Compiling icu_normalizer_data v2.2.0
+   Compiling ident_case v1.0.1
+   Compiling httparse v1.10.1
+   Compiling pkg-config v0.3.32
+   Compiling tempfile v3.27.0
+   Compiling ipnet v2.12.0
+   Compiling rustls v0.23.37
+   Compiling signal-hook v0.4.4
+   Compiling num-traits v0.2.19
+   Compiling nonempty v0.12.0
+   Compiling static_assertions v1.1.0
+   Compiling try-lock v0.2.5
+   Compiling hashbrown v0.14.5
+   Compiling atomic-waker v1.1.2
+   Compiling ryu v1.0.23
+   Compiling tower-service v0.3.3
+   Compiling form_urlencoded v1.2.2
+   Compiling rand_core v0.6.4
+   Compiling cfg_aliases v0.2.1
+   Compiling want v0.3.1
+   Compiling unicode-segmentation v1.13.2
+   Compiling sha2 v0.10.9
+   Compiling sync_wrapper v1.0.2
+   Compiling openssl-probe v0.2.1
+   Compiling tower-layer v0.3.3
+   Compiling data-encoding v2.10.0
+   Compiling iri-string v0.7.12
+   Compiling colorchoice v1.0.5
+   Compiling spin v0.9.9
+   Compiling adler2 v2.0.1
+   Compiling rustls-native-certs v0.8.3
+   Compiling simd-adler32 v0.3.9
+   Compiling mime v0.3.17
+   Compiling dashmap v6.1.0
+   Compiling unicode-bom v2.0.3
+   Compiling anstyle v1.0.14
+   Compiling signature v2.2.0
+   Compiling filetime v0.2.27
+   Compiling lazy_static v1.5.0
+   Compiling miniz_oxide v0.8.9
+   Compiling convert_case v0.10.0
+   Compiling heck v0.5.0
+   Compiling utf8parse v0.2.2
+   Compiling regex v1.12.3
+   Compiling kstring v2.0.2
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling curve25519-dalek v4.1.3
+   Compiling thread_local v1.1.9
+   Compiling anstyle-query v1.1.5
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling synstructure v0.13.2
+   Compiling darling_core v0.23.0
+   Compiling anstyle-parse v1.0.0
+   Compiling winnow v1.0.1
+   Compiling portable-atomic v1.13.1
+   Compiling shell-words v1.1.1
+   Compiling libmimalloc-sys v0.1.44
+   Compiling anyhow v1.0.102
+   Compiling clap_lex v1.1.0
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling darling_core v0.20.11
+   Compiling anstream v1.0.0
+   Compiling ed25519 v2.2.3
+   Compiling bzip2-sys v0.1.13+1.0.8
+   Compiling lzma-sys v0.1.20
+   Compiling memoffset v0.6.5
+   Compiling vte v0.15.0
+   Compiling typeid v1.0.3
+   Compiling zstd-safe v7.2.4
+   Compiling clap_builder v4.6.0
+   Compiling rustix v0.38.44
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling tokio-macros v2.7.0
+   Compiling zerofrom-derive v0.1.7
+   Compiling futures-macro v0.3.32
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling displaydoc v0.2.5
+   Compiling tracing-attributes v0.1.31
+   Compiling derive_more-impl v2.1.1
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling clap_derive v4.6.0
+   Compiling async-trait v0.1.89
+   Compiling futures-util v0.3.32
+   Compiling zerofrom v0.1.7
+   Compiling yoke v0.8.2
+   Compiling toml_edit v0.25.10+spec-1.1.0
+   Compiling darling_macro v0.23.0
+   Compiling zerovec v0.11.6
+   Compiling tracing v0.1.44
+   Compiling zerotrie v0.2.4
+   Compiling darling_macro v0.20.11
+   Compiling vt100 v0.16.2
+   Compiling pin-project-internal v1.1.11
+   Compiling darling v0.23.0
+   Compiling sharded-slab v0.1.7
+   Compiling derive_more v2.1.1
+   Compiling proc-macro-crate v3.5.0
+   Compiling serde_with_macros v3.18.0
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling n0-future v0.3.2
+   Compiling ed25519-dalek v2.2.0
+   Compiling clap v4.6.0
+   Compiling nix v0.31.3
+   Compiling icu_locale_core v2.2.0
+   Compiling icu_collections v2.2.0
+   Compiling matchers v0.2.0
+   Compiling xattr v1.6.1
+   Compiling console v0.16.3
+   Compiling arc-swap v1.9.1
+   Compiling tracing-log v0.2.0
+   Compiling linux-raw-sys v0.4.15
+   Compiling diatomic-waker v0.2.3
+   Compiling bitflags v1.3.2
+   Compiling spin v0.10.0
+   Compiling siphasher v1.0.2
+   Compiling nu-ansi-term v0.50.3
+   Compiling cordyceps v0.3.4
+   Compiling erased-serde v0.4.10
+   Compiling parking v2.2.1
+   Compiling serde_with v3.18.0
+   Compiling unit-prefix v0.5.2
+   Compiling zerocopy v0.8.48
+   Compiling thiserror v1.0.69
+   Compiling cpufeatures v0.3.0
+   Compiling phf_shared v0.11.3
+   Compiling futures-lite v2.6.1
+   Compiling indicatif v0.18.4
+   Compiling tracing-subscriber v0.3.23
+   Compiling futures-executor v0.3.32
+   Compiling futures-buffered v0.2.13
+   Compiling chacha20 v0.10.0
+   Compiling bytes v1.11.1
+   Compiling bstr v1.12.1
+   Compiling icu_provider v2.2.0
+   Compiling pin-project v1.1.11
+   Compiling num_enum_derive v0.7.6
+   Compiling darling v0.20.11
+   Compiling futures v0.3.32
+   Compiling mimalloc v0.1.48
+   Compiling thiserror-impl v1.0.69
+   Compiling async-stream-impl v0.3.6
+   Compiling n0-error-macros v0.1.3
+   Compiling icu_normalizer v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling spez v0.1.2
+   Compiling flate2 v1.1.9
+   Compiling tokio v1.51.0
+   Compiling http v1.4.0
+   Compiling gix-validate v0.11.0
+   Compiling gix-utils v0.3.1
+   Compiling gix-error v0.2.1
+   Compiling gix-packetline v0.21.2
+   Compiling gix-sec v0.13.2
+   Compiling gix-path v0.11.2
+   Compiling md-5 v0.10.6
+   Compiling nibble_vec v0.1.0
+   Compiling keccak v0.1.6
+   Compiling bit-vec v0.8.0
+   Compiling bytemuck v1.25.0
+   Compiling nix-compat v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/nix-compat)
+   Compiling gix-date v0.15.1
+   Compiling gix-chunk v0.7.0
+   Compiling gix-quote v0.7.0
+   Compiling fixedbitset v0.5.7
+   Compiling term v1.2.1
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/fuse-backend-rs)
+   Compiling matchit v0.8.4
+   Compiling new_debug_unreachable v1.0.6
+   Compiling gix-features v0.46.2
+   Compiling http-body v1.0.1
+   Compiling idna_adapter v1.2.1
+   Compiling gix-command v0.8.0
+   Compiling gix-config-value v0.17.1
+   Compiling precomputed-hash v0.1.1
+   Compiling redb v3.1.3
+   Compiling gix-actor v0.40.0
+   Compiling iana-time-zone v0.1.65
+   Compiling endian-type v0.1.2
+   Compiling ascii-canvas v4.0.0
+   Compiling idna v1.1.0
+   Compiling http-body-util v0.1.3
+   Compiling petgraph v0.7.1
+   Compiling ena v0.14.4
+   Compiling string_cache v0.8.9
+   Compiling gix-hash v0.23.0
+   Compiling gix-fs v0.19.2
+   Compiling gix-glob v0.24.0
+   Compiling radix_trie v0.2.1
+   Compiling chrono v0.4.44
+   Compiling safe_arch v0.7.4
+   Compiling bit-set v0.8.0
+   Compiling sha3 v0.10.8
+   Compiling n0-error v0.1.3
+   Compiling tracing-indicatif v0.3.14
+   Compiling gix-bitmap v0.3.0
+   Compiling num_enum v0.7.6
+   Compiling async-stream v0.3.6
+   Compiling url v2.5.8
+   Compiling gix-hashtable v0.13.0
+   Compiling gix-tempfile v21.0.2
+   Compiling gix-commitgraph v0.35.0
+   Compiling gix-attributes v0.31.0
+   Compiling nix v0.24.3
+   Compiling derive_builder_core v0.20.2
+   Compiling rand v0.10.1
+   Compiling quick-xml v0.40.1
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-attestation-core)
+   Compiling gix-object v0.58.0
+   Compiling serde_urlencoded v0.7.1
+   Compiling gix-lock v21.0.2
+   Compiling bzip2 v0.5.2
+   Compiling vmm-sys-util v0.11.2
+   Compiling lalrpop-util v0.22.2
+   Compiling clap-verbosity-flag v3.0.4
+   Compiling cobs v0.3.0
+   Compiling irpc-derive v0.10.0
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/nix-compat-derive)
+   Compiling itertools v0.14.0
+   Compiling itertools v0.15.0
+   Compiling caps v0.5.6
+   Compiling mio v0.8.11
+   Compiling num_cpus v1.17.0
+   Compiling vm-memory v0.10.0
+   Compiling proc-macro-error-attr2 v2.0.0
+   Compiling nom v8.0.0
+   Compiling gix-revwalk v0.29.0
+   Compiling malachite-nz v0.6.1
+   Compiling fixedbitset v0.4.2
+   Compiling rustc-hash v2.1.2
+   Compiling snix-castore v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/snix-castore)
+   Compiling humantime v2.3.0
+   Compiling gix-traverse v0.55.0
+   Compiling pico-args v0.5.0
+   Compiling proc-macro-error2 v2.0.1
+   Compiling threadpool v1.8.1
+   Compiling petgraph v0.6.5
+   Compiling gix-ref v0.61.0
+   Compiling gix-filter v0.28.0
+   Compiling postcard v1.1.3
+   Compiling tokio-util v0.7.18
+   Compiling tower v0.5.3
+   Compiling tokio-stream v0.1.18
+   Compiling xz2 v0.1.7
+   Compiling gix-index v0.49.0
+   Compiling lalrpop v0.22.2
+   Compiling malachite-base v0.6.1
+   Compiling derive_builder_macro v0.20.2
+   Compiling serde_tagged v0.3.0
+   Compiling wide v0.7.33
+   Compiling gix-ignore v0.19.1
+   Compiling serde_qs v0.12.0
+   Compiling tower-http v0.6.8
+   Compiling fastcdc v3.2.1
+   Compiling astral-tokio-tar v0.6.3
+   Compiling h2 v0.4.13
+   Compiling auto_impl v1.3.0
+   Compiling nix v0.29.0
+   Compiling logos-codegen v0.15.1
+   Compiling serde_bytes v0.11.19
+   Compiling proc-macro2-diagnostics v0.10.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling yansi v1.0.1
+   Compiling wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+   Compiling gix-worktree v0.50.0
+   Compiling derive_builder v0.20.2
+   Compiling getset v0.1.6
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-attestation)
+   Compiling gix-pathspec v0.16.1
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling strum_macros v0.26.4
+   Compiling typed-builder-macro v0.22.0
+   Compiling uuid v1.23.0
+   Compiling toml_datetime v0.7.5+spec-1.1.0
+   Compiling strum v0.26.3
+   Compiling snix-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/snix-build)
+   Compiling irpc v0.13.0
+   Compiling toml_writer v1.1.1+spec-1.1.0
+   Compiling snix-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/snix-store)
+   Compiling beef v0.5.2
+   Compiling gix-url v0.35.2
+   Compiling tar v0.4.45
+   Compiling nix-archive v0.1.0
+   Compiling itertools v0.12.1
+   Compiling lru v0.16.4
+   Compiling bitmaps v3.2.1
+   Compiling base64ct v1.8.3
+   Compiling zstd v0.13.3
+   Compiling io-lifetimes v2.0.4
+   Compiling termcolor v1.4.1
+   Compiling heck v0.4.1
+   Compiling count-write v0.1.0
+   Compiling typed-builder v0.22.0
+   Compiling io-lifetimes v3.0.1
+   Compiling imbl-sized-chunks v0.1.3
+   Compiling pem-rfc7468 v0.7.0
+   Compiling ouroboros_macro v0.18.5
+   Compiling hyper v1.9.0
+   Compiling async-compression v0.4.19
+   Compiling oci-spec v0.7.1
+   Compiling codespan-reporting v0.13.1
+   Compiling crunch-action-result-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-action-result-core)
+   Compiling rand_chacha v0.3.1
+   Compiling crunch-nar v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-nar)
+   Compiling gix-revision v0.43.0
+   Compiling gix-prompt v0.14.1
+   Compiling crunch-composition-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-composition-core)
+   Compiling crunch-overlay-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-overlay-core)
+   Compiling crunch-gc-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-gc-core)
+   Compiling crunch-repair-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-repair-core)
+   Compiling imara-diff v0.1.8
+   Compiling hashlink v0.10.0
+   Compiling logos-derive v0.15.1
+   Compiling imara-diff v0.2.0
+   Compiling serde_spanned v1.1.1
+   Compiling fs2 v0.4.3
+   Compiling typed-arena v2.0.2
+   Compiling hyper-util v0.1.20
+   Compiling getrandom v0.3.4
+   Compiling arrayvec v0.5.2
+   Compiling aliasable v0.1.3
+   Compiling arraydeque v0.5.1
+   Compiling paste v1.0.15
+   Compiling io-extras v0.19.0
+   Compiling signal-hook v0.3.18
+   Compiling object v0.37.3
+   Compiling gix-diff v0.61.0
+   Compiling ouroboros v0.18.5
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling saphyr-parser v0.0.6
+   Compiling pretty v0.12.5
+   Compiling logos v0.15.1
+   Compiling gix-credentials v0.37.1
+   Compiling gix-refspec v0.39.0
+   Compiling codespan v0.13.1
+   Compiling rand v0.8.6
+   Compiling nickel-lang-vector v0.1.0
+   Compiling der v0.7.10
+   Compiling toml_edit v0.23.10+spec-1.0.0
+   Compiling gix-discover v0.49.0
+   Compiling clru v0.6.3
+   Compiling uluru v3.1.0
+   Compiling vte v0.14.1
+   Compiling bumpalo v3.20.2
+   Compiling unsafe-libyaml v0.2.11
+   Compiling cap-primitives v4.0.2
+   Compiling gimli v0.32.3
+   Compiling simple-counter v0.1.0
+   Compiling gix-pack v0.68.0
+   Compiling strip-ansi-escapes v0.2.1
+   Compiling gix-dir v0.23.0
+   Compiling fs-set-times v0.20.3
+   Compiling gix-config v0.54.0
+   Compiling gix-worktree-stream v0.30.0
+   Compiling gix-negotiate v0.29.0
+   Compiling gix-shallow v0.10.0
+   Compiling maybe-async v0.2.10
+   Compiling spki v0.7.3
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling num-integer v0.1.46
+   Compiling rustix-linux-procfs v0.1.1
+   Compiling io-close v0.3.7
+   Compiling sha-1 v0.10.1
+   Compiling json_scanner v0.1.0
+   Compiling ambient-authority v0.0.2
+   Compiling maybe-owned v0.3.4
+   Compiling litrs v1.0.0
+   Compiling indoc v2.0.7
+   Compiling crc-catalog v2.4.0
+   Compiling num-bigint-dig v0.8.6
+   Compiling rustc-demangle v0.1.28
+   Compiling owo-colors v4.3.0
+   Compiling linkme-impl v0.3.37
+   Compiling cap-std v4.0.2
+   Compiling gix-worktree-state v0.28.0
+   Compiling num-iter v0.1.46
+   Compiling crc v3.4.0
+   Compiling gix-odb v0.78.0
+   Compiling document-features v0.2.12
+   Compiling gix-submodule v0.28.0
+   Compiling pkcs8 v0.10.2
+   Compiling gix-archive v0.30.0
+   Compiling gix-status v0.28.0
+   Compiling signal-hook-mio v0.2.5
+   Compiling rand_core v0.9.5
+   Compiling gix-blame v0.11.0
+   Compiling gix-mailmap v0.32.0
+   Compiling ureq-proto v0.6.0
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling webpki-roots v1.0.6
+   Compiling syn v3.0.3
+   Compiling addr2line v0.25.1
+   Compiling is_ci v1.2.0
+   Compiling utf8-zero v0.8.1
+   Compiling toml_write v0.1.2
+   Compiling nickel-lang-parser v0.1.1
+   Compiling nickel-lang-core v0.16.1
+   Compiling cap-fs-ext v4.0.2
+   Compiling linkme v0.3.37
+   Compiling unicode-linebreak v0.1.5
+   Compiling twox-hash v2.1.2
+   Compiling supports-color v3.0.2
+   Compiling crossterm v0.29.0
+   Compiling rand_chacha v0.9.0
+   Compiling pkcs1 v0.7.5
+   Compiling toml_edit v0.22.27
+   Compiling ruzstd v0.8.2
+   Compiling lzma-rs v0.3.0
+   Compiling textwrap v0.16.2
+   Compiling artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling gethostname v0.5.0
+   Compiling crunch-rust-cache-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-rust-cache-core)
+   Compiling miette-derive v7.6.0
+   Compiling fuzzy-matcher v0.3.7
+   Compiling terminal_size v0.4.4
+   Compiling bzip2-rs v0.1.2
+   Compiling unicode-width v0.1.14
+   Compiling supports-hyperlinks v3.2.0
+   Compiling dyn-clone v1.0.20
+   Compiling supports-unicode v3.0.0
+   Compiling predicates-core v1.0.10
+   Compiling bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+   Compiling rand v0.9.3
+   Compiling backtrace v0.3.76
+   Compiling inquire v0.9.4
+   Compiling crunch-glue v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-glue)
+   Compiling crunch-project-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-project-core)
+   Compiling crunch-shell-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-shell-core)
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-wasm-component-core)
+   Compiling secrecy v0.10.3
+   Compiling float-cmp v0.10.0
+   Compiling crunch-evaluation-stream-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-evaluation-stream-core)
+   Compiling etcetera v0.11.0
+   Compiling rsa v0.9.10
+   Compiling dotenvy v0.15.7
+   Compiling difflib v0.4.0
+   Compiling termtree v0.5.1
+   Compiling malachite-q v0.6.1
+   Compiling backtrace-ext v0.2.1
+   Compiling colored v3.1.1
+   Compiling crunch-delta-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-delta-core)
+   Compiling assert_cmd v2.2.0
+   Compiling normalize-line-endings v0.3.0
+   Compiling detect-coding-agent v0.1.0
+   Compiling miette v7.6.0
+   Compiling toml v0.8.23
+   Compiling crunch-shell v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-shell)
+   Compiling predicates v3.1.4
+   Compiling predicates-tree v1.0.13
+   Compiling bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-release-core)
+   Compiling chapter-tgz v0.1.0
+   Compiling crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-eval-budget-core)
+   Compiling crunch-bootstrap-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-bootstrap-core)
+   Compiling nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+   Compiling crunch-hardware-simulation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-hardware-simulation-core)
+   Compiling mantle-portable-client-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/mantle-portable-client-core)
+   Compiling mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/mantlepkgs-core)
+   Compiling malachite-float v0.6.1
+   Compiling nix-derivation v0.1.0
+   Compiling durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+   Compiling wait-timeout v0.2.1
+   Compiling secretspec v0.17.0
+   Compiling diff v0.1.13
+   Compiling crunch-kernelscript-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-kernelscript-core)
+   Compiling transactional-reconciliation-core v0.1.0 (https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9#606489b5)
+   Compiling pretty_assertions v1.4.1
+   Compiling malachite v0.6.1
+   Compiling crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-wasm-component)
+   Compiling crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-hardware-simulation)
+   Compiling crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-project)
+   Compiling rustls-webpki v0.103.13
+   Compiling tokio-rustls v0.26.4
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling ureq v3.3.0
+   Compiling hyper-rustls v0.27.7
+   Compiling reqwest v0.13.2
+   Compiling reqwest-middleware v0.5.1
+   Compiling object_store v0.14.0
+   Compiling gix-transport v0.55.1
+   Compiling reqwest-tracing v0.6.0
+   Compiling gix-protocol v0.59.0
+   Compiling snix-tracing v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/vendor/snix-tracing)
+   Compiling gix v0.81.0
+   Compiling crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-store)
+   Compiling crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-build)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-rustc-wrapper)
+   Compiling nickel-lang v2.0.0
+   Compiling crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-eval)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 06s
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-89263e91c19d52cc)
+
+running 91 tests
+test bootstrap_parity::tests::axis_summary_reports_blocking_rows ... ok
+test bootstrap_parity::tests::binutils_tcc_real_derivation_reports_independently_receipted_completion ... ok
+test bootstrap_parity::tests::binutils_tcc_transcript_rejects_host_fallback ... ok
+test bootstrap_parity::tests::binutils_tcc_valid_transcript_satisfies_evidence_check_but_not_full_parity ... ok
+test bootstrap_parity::tests::binutils_tcc_without_transcript_remains_partial ... ok
+test bootstrap_parity::tests::dash_compound_path_rejects_stub ... ok
+test bootstrap_parity::tests::full_musl_binutils_provider_contract_binutils_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::full_musl_binutils_provider_contract_matching_receipt_reports_partial ... ok
+test bootstrap_parity::tests::full_musl_binutils_provider_contract_missing_receipt_reports_partial_with_failure ... ok
+test bootstrap_parity::tests::full_musl_binutils_provider_contract_musl_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::full_musl_binutils_real_derivations_report_provider_contract_backed_partial ... ok
+test bootstrap_parity::tests::gcc10_provider_contract_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc10_provider_contract_matching_receipt_reports_partial ... ok
+test bootstrap_parity::tests::gcc10_provider_contract_missing_receipt_reports_partial_with_failure ... ok
+test bootstrap_parity::tests::gcc10_real_derivation_reports_provider_contract_backed_partial ... ok
+test bootstrap_parity::tests::gcc40_canonical_root_selects_regenerated_cxx_stage ... ok
+test bootstrap_parity::tests::gcc40_final_stage_has_bounded_positive_and_negative_matrix ... ok
+test bootstrap_parity::tests::gcc40_native_boundary_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_boundary_missing_receipt_stays_placeholder_with_failure ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_arithmetic_receipt_digest_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_arithmetic_receipt_forbidden_delegation_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_arithmetic_receipt_missing_function_call_regression_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_arithmetic_receipt_missing_local_vars_regression_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_arithmetic_receipt_missing_logical_regression_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_arithmetic_receipt_missing_pointer_deref_marker_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_arithmetic_receipt_stale_schema_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_build_frontier_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_build_frontier_missing_fields_fail_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_build_frontier_parity_overclaim_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_build_frontier_receipt_missing_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_source_frontier_diagnostic_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_source_frontier_observed_result_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_source_frontier_probe_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_source_frontier_schema_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_cc1_source_frontier_stale_fdopen_frontier_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_demangle_receipt_digest_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_demangle_receipt_full_parity_overclaim_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_demangle_receipt_missing_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_demangle_receipt_unsupported_schema_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_demangle_receipt_unsupported_shape_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_frontier_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_frontier_missing_generator_blocker_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_generator_receipt_digest_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_generator_receipt_missing_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_generator_receipt_unsupported_schema_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_native_generator_receipt_unsupported_selected_generator_fails_closed ... ok
+test bootstrap_parity::tests::gcc40_placeholder_inventory_drift_stays_placeholder_with_failure ... ok
+test bootstrap_parity::tests::gcc40_placeholder_inventory_matching_receipt_reports_partial ... ok
+test bootstrap_parity::tests::gcc40_placeholder_inventory_missing_receipt_stays_placeholder_with_failure ... ok
+test bootstrap_parity::tests::gcc40_real_derivation_reports_independently_receipted_completion ... ok
+test bootstrap_parity::tests::gcc47_cxx_provider_contract_marker_drift_fails_closed ... ok
+test bootstrap_parity::tests::gcc47_cxx_provider_contract_matching_receipt_reports_partial ... ok
+test bootstrap_parity::tests::gcc47_cxx_provider_contract_missing_receipt_reports_partial_with_failure ... ok
+test bootstrap_parity::tests::gcc47_real_derivation_reports_cxx_contract_backed_partial ... ok
+test bootstrap_parity::tests::heredoc_delimiter_rejects_stub ... ok
+test bootstrap_parity::tests::heredoc_terminator_on_own_line_rejected ... ok
+test bootstrap_parity::tests::marker_is_standalone_accepts_comment_marker ... ok
+test bootstrap_parity::tests::marker_is_standalone_accepts_escaped_quote ... ok
+test bootstrap_parity::tests::marker_is_standalone_accepts_standalone_word ... ok
+test bootstrap_parity::tests::marker_is_standalone_rejects_plural_word ... ok
+test bootstrap_parity::tests::marker_is_standalone_rejects_substring_in_path ... ok
+test bootstrap_parity::tests::missing_derivation_becomes_not_started ... ok
+test bootstrap_parity::tests::placeholder_marker_blocks_parity ... ok
+test bootstrap_parity::tests::seed_full_legacy_metadata_blocks_guix_row ... ok
+test bootstrap_parity::tests::seed_full_source_root_contract_completes_guix_row ... ok
+test bootstrap_parity::tests::self_build_provider_kind_linkage_rejects_mismatched_kind ... ok
+test bootstrap_parity::tests::self_build_provider_kind_linkage_rejects_unknown_kind ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_ineligible_verify_receipt ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_malformed_digest_linkage ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_missing_genuine_rebuild_authority ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_missing_sandbox_evidence ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_provider_mismatch ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_reused_roots ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_unsupported_sandbox_profile ... ok
+test bootstrap_parity::tests::self_build_real_proof_descriptor_rejects_unsupported_workflow ... ok
+test bootstrap_parity::tests::self_build_v98_evidence_completes_full_source_parity_row ... ok
+test bootstrap_parity::tests::self_build_valid_real_proof_descriptor_is_evidence_backed_partial ... ok
+test bootstrap_parity::tests::self_build_without_provider_kind_linkage_receipt_is_blocked ... ok
+test bootstrap_parity::tests::stagex_lineage_complete_receipt_is_complete ... ok
+test bootstrap_parity::tests::stagex_lineage_real_receipt_reports_evidence_backed_completion ... ok
+test bootstrap_parity::tests::stagex_lineage_receipt_rejects_fallback_events ... ok
+test bootstrap_parity::tests::stagex_lineage_receipt_rejects_malformed_digest ... ok
+test bootstrap_parity::tests::stagex_lineage_receipt_rejects_missing_non_claims ... ok
+test bootstrap_parity::tests::stagex_lineage_receipt_rejects_source_root_provider ... ok
+test bootstrap_parity::tests::stagex_lineage_receipt_rejects_stale_payload_digest ... ok
+test bootstrap_parity::tests::stagex_lineage_scaffold_receipt_is_rejected ... ok
+test bootstrap_parity::tests::stagex_lineage_seed_provider_remains_separate_blocker ... ok
+test bootstrap_parity::tests::stagex_lineage_without_receipt_remains_blocked ... ok
+test bootstrap_parity::tests::tar_tcc_heredoc_delimiter_and_terminator_rejected ... ok
+test bootstrap_parity::tests::tcc_placeholder_comment_is_false_positive ... ok
+test bootstrap_parity::tests::tinycc_mes_stub_path_is_false_positive ... ok
+
+test result: ok. 91 passed; 0 failed; 0 ignored; 0 measured; 2460 filtered out; finished in 0.31s
+
+copying path '/nix/store/hhccdmpa2bhqbagn2zgmgrwjbcdinn55-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/1pzq6dhayzd6kgyhjwqr1bwq468z36vp0al101havv6d0pw1fa40.nar?hash=hhccdmpa2bhqbagn2zgmgrwjbcdinn55' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 52.84s
+     Running tests/bootstrap_parity_cli.rs (/home/brittonr/.cargo-target/debug/deps/bootstrap_parity_cli-24aeebcf5d04862b)
+
+running 19 tests
+test bootstrap_parity_report_accepts_bound_v98_self_build_evidence ... ok
+test bootstrap_parity_report_accepts_independently_receipted_early_native_rows ... ok
+test bootstrap_parity_report_accepts_independently_receipted_final_native_rows ... ok
+test bootstrap_parity_report_emits_json_gap_report ... ok
+test bootstrap_parity_report_rejects_corrupt_predecessor_attestation ... ok
+test bootstrap_parity_report_rejects_cross_row_final_receipt_substitution ... ok
+test bootstrap_parity_report_rejects_cross_row_receipt_substitution ... ok
+test bootstrap_parity_report_rejects_forbidden_host_tool_discovery ... ok
+test bootstrap_parity_report_rejects_malformed_row_receipt ... ok
+test bootstrap_parity_report_rejects_missing_final_runtime_member ... ok
+test bootstrap_parity_report_rejects_missing_output_artifact_evidence ... ok
+test bootstrap_parity_report_rejects_stale_generated_artifact_status ... ok
+test bootstrap_parity_report_rejects_stale_row_source_digest ... ok
+test bootstrap_parity_report_rejects_state_pinned_final_source ... ok
+test bootstrap_parity_report_rejects_untrusted_acceptance_fingerprint ... ok
+test bootstrap_parity_report_rejects_wrapper_delegation_marker ... ok
+test bootstrap_parity_report_require_fails_closed_on_gaps ... ok
+test bootstrap_parity_report_requires_binutils_row_receipt_for_live_bootstrap_and_guix ... ok
+test bootstrap_parity_report_stagex_requires_lineage_seed_provider ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/benchmark_compare.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/benchmark_eval_backends.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/benchmark_eval_smoke.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/benchmark_lazy_eval.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/benchmark_scheduler_priority.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/benchmark_suite.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/distributed_eval_assess.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/hardware_simulation_plan.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/picolibc_compare.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/projects/delta-substitution/demo.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/projects/release-witness-handoff/demo.rs"
+[example (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/projects/shared-action-result-roundtrip/publish.rs"
+[lib (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/src/lib.rs"
+[bin (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/src/main.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/attest_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/audit_support.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/benchmark_harness.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/bootstrap_eval.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/bootstrap_parity_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/bootstrap_trust_report_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/bootstrap_validate_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/cargo_free_self_build_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/cargo_import_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/composition_root_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/evaluator_budget_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/example_projects.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/examples_build.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/examples_eval.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/examples_inventory.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/examples_workflow_gallery.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/foreign_import_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/freshness_offline_rail.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/identity_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/integration.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/integration_build.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/kernel_bundle_oci_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/kernel_bundle_oci_registry_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/kernelscript_experiment.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/lock_importer_offline_rail.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/machine_schema_contracts.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/nix_free_demo_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/offline_build_runbook_docs.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/offline_cargo_project.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/operator_diagnostics.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/pin_import_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/project_build_smoke.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/project_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/project_refresh_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/release_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/remote_credentials_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/remote_rail_offline_rail.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/remote_stdio_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/remote_transfer_production.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/removed_system_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/retention_offline_rail.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/rust_compatibility_rail.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/rust_plan_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/scheduling_policy.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/self_hosting.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/smoke.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/source_bundle_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/source_bundle_hydration_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/stdlib_tests.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/store_archive_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/store_gc_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/transactional_reconciliation_pilot.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/transcript_cli.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/trust_policy_offline_rail.rs"
+[test (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/wasm_component_cli.rs"
+[bin (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tools/generate_operator_command_contract.rs"
+[bin (2024)] "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tools/generate_portable_platform_profiles.rs"
+rustfmt --edition 2024 --check /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/benchmark_compare.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/benchmark_eval_backends.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/benchmark_eval_smoke.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/benchmark_lazy_eval.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/benchmark_scheduler_priority.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/benchmark_suite.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/distributed_eval_assess.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/hardware_simulation_plan.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/picolibc_compare.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/projects/delta-substitution/demo.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/projects/release-witness-handoff/demo.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/examples/projects/shared-action-result-roundtrip/publish.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/src/lib.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/src/main.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/attest_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/audit_support.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/benchmark_harness.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/bootstrap_eval.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/bootstrap_parity_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/bootstrap_trust_report_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/bootstrap_validate_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/cargo_free_self_build_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/cargo_import_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/composition_root_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/evaluator_budget_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/example_projects.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/examples_build.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/examples_eval.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/examples_inventory.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/examples_workflow_gallery.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/foreign_import_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/freshness_offline_rail.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/identity_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/integration.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/integration_build.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/kernel_bundle_oci_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/kernel_bundle_oci_registry_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/kernelscript_experiment.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/lock_importer_offline_rail.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/machine_schema_contracts.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/nix_free_demo_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/offline_build_runbook_docs.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/offline_cargo_project.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/operator_diagnostics.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/pin_import_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/project_build_smoke.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/project_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/project_refresh_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/release_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/remote_credentials_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/remote_rail_offline_rail.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/remote_stdio_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/remote_transfer_production.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/removed_system_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/retention_offline_rail.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/rust_compatibility_rail.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/rust_plan_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/scheduling_policy.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/self_hosting.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/smoke.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/source_bundle_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/source_bundle_hydration_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/stdlib_tests.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/store_archive_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/store_gc_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/transactional_reconciliation_pilot.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/transcript_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/trust_policy_offline_rail.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tests/wasm_component_cli.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tools/generate_operator_command_contract.rs /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-bootstrap-parity-baseline/tools/generate_portable_platform_profiles.rs

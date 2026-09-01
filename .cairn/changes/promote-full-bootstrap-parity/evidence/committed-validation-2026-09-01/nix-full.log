@@ -1,0 +1,406 @@
+evaluating flake...
+checking flake output 'packages'...
+checking derivation packages.x86_64-linux.wasi-virt...
+copying path '/nix/store/hhccdmpa2bhqbagn2zgmgrwjbcdinn55-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/1pzq6dhayzd6kgyhjwqr1bwq468z36vp0al101havv6d0pw1fa40.nar?hash=hhccdmpa2bhqbagn2zgmgrwjbcdinn55' does not exist in binary cache 'http://100.100.103.95:5000'
+derivation evaluated to /nix/store/cacsszdc86gnw4lccv1kiwip8dljz8r9-wasi-virt-0.2.0.drv
+checking derivation packages.x86_64-linux.default...
+derivation evaluated to /nix/store/2v92jqpqdv9d2yc1hjwbsbhzmr8xqfz2-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.crunch...
+derivation evaluated to /nix/store/2v92jqpqdv9d2yc1hjwbsbhzmr8xqfz2-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.ast-grep-toolchain...
+derivation evaluated to /nix/store/hwz43xm09gs5v38a4pfyc2dhs5n9h1pj-mantle-ast-grep-toolchain-0.42.1.drv
+checking derivation packages.x86_64-linux.ast-grep-package-identity...
+derivation evaluated to /nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain...
+derivation evaluated to /nix/store/skwkzzc8khiw49fjp2l73d5m4x4m88y6-mantle-wasm-component-toolchain-v1.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-identity...
+derivation evaluated to /nix/store/nrf64w472p89kb8q03zw8wf5hx0198c0-mantle-wasm-component-toolchain-identity.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-compatibility...
+derivation evaluated to /nix/store/lax220sgd6bf2raarrl38cg9clbdgspm-mantle-wasm-component-toolchain-compatibility.drv
+checking derivation packages.x86_64-linux.mantle-transcript-quality...
+derivation evaluated to /nix/store/5z81igh12fqml5byqa4vrgjvy9ccfmq8-mantle-transcript-quality-nextest-0.1.0.drv
+checking derivation packages.x86_64-linux.release-nix-witness-quality...
+derivation evaluated to /nix/store/bg8x2yiczfvwcv8dlx2w4njrwcsx0z6m-crunch-release-nix-witness-quality-nextest-0.1.0.drv
+checking derivation packages.x86_64-linux.check-store-retention-policy...
+derivation evaluated to /nix/store/5xc5yw2mnizcln8b4f52fmgxb861s4z7-check-store-retention-policy.drv
+checking derivation packages.x86_64-linux.check-store-overlay-policy...
+derivation evaluated to /nix/store/358z0ygz6qib9gpgs79sp2llm0d3q2ls-check-store-overlay-policy.drv
+checking derivation packages.x86_64-linux.oci-distribution-registry...
+derivation evaluated to /nix/store/7h1b5w2s2gqhb0dgmiydw4xcl2blxnnv-distribution-3.1.0.drv
+checking derivation packages.x86_64-linux.rustc-wrapper...
+derivation evaluated to /nix/store/bgnfhn2cg8v1vig8nr3aivbwq1biwv9i-mantle-rustc-wrapper-0.1.0.drv
+checking derivation packages.x86_64-linux.kernelscript-compiler...
+derivation evaluated to /nix/store/z1dps3ryzhmn8iyx6jnpfyxfqlnzqpzq-ocaml5.2.1-kernelscript-0.1.2.drv
+checking derivation packages.x86_64-linux.kernelscript-core-adapter...
+derivation evaluated to /nix/store/bq7wwp4m88sjpb3fn23faz0vfsgjhq54-crunch-kernelscript-adapter-0.1.0.drv
+checking derivation packages.x86_64-linux.kernelscript-production...
+derivation evaluated to /nix/store/51gam1p1s60gsyrvndfglazfa3dc6f1v-mantle-kernelscript-production-artifacts.drv
+checking derivation packages.x86_64-linux.kernelscript-production-cohort...
+derivation evaluated to /nix/store/072jhfwkvj6wffd93jmg95c5sbn42nrc-mantle-kernelscript-production-cohort.drv
+checking derivation packages.x86_64-linux.kernelscript-production-shell...
+derivation evaluated to /nix/store/dpm730vg7jaaafkpv827c0g2sjnxfx7h-mantle-kernelscript-production.drv
+checking derivation packages.x86_64-linux.kernelscript-production-runtime-check...
+derivation evaluated to /nix/store/d01r2wxiivmqb4hjd9prhh594xgyrj12-vm-test-run-mantle-kernelscript-production-runtime.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-bundle...
+derivation evaluated to /nix/store/l6r3ig41jrdqfivsvnl88z0w7gq1kfj0-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-bundler...
+derivation evaluated to /nix/store/ipyyk9zxh3kbvk9c1znx79jcdrrvvg38-mantle-spacewasm-reference-bundler-0.1.0.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-evidence...
+derivation evaluated to /nix/store/y3py5q02d27fq2nywdidz9zj3vcfz3zm-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-evidence.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-rust-toolchain...
+derivation evaluated to /nix/store/ib3maa2zj4d9ikmlx4x15xaiz9vxh55r-rust-minimal-1.91.1.drv
+checking flake output 'apps'...
+checking app 'apps.x86_64-linux.tigerstyle'...
+warning: app 'apps.x86_64-linux.tigerstyle' lacks attribute 'meta'
+checking flake output 'checks'...
+checking derivation checks.x86_64-linux.tigerstyle...
+derivation evaluated to /nix/store/jwiv6w4gdafdzigk35kdd25zi3l4ki3d-tigerstyle-consumer-check.drv
+checking derivation checks.x86_64-linux.crunch...
+derivation evaluated to /nix/store/2v92jqpqdv9d2yc1hjwbsbhzmr8xqfz2-mantle-0.1.0.drv
+checking derivation checks.x86_64-linux.ast-grep-package-identity...
+derivation evaluated to /nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv
+checking derivation checks.x86_64-linux.wasm-component-toolchain-identity...
+derivation evaluated to /nix/store/nrf64w472p89kb8q03zw8wf5hx0198c0-mantle-wasm-component-toolchain-identity.drv
+checking derivation checks.x86_64-linux.wasm-component-toolchain-compatibility...
+derivation evaluated to /nix/store/lax220sgd6bf2raarrl38cg9clbdgspm-mantle-wasm-component-toolchain-compatibility.drv
+checking derivation checks.x86_64-linux.mantle-transcript-quality...
+derivation evaluated to /nix/store/5z81igh12fqml5byqa4vrgjvy9ccfmq8-mantle-transcript-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.release-nix-witness-quality...
+derivation evaluated to /nix/store/bg8x2yiczfvwcv8dlx2w4njrwcsx0z6m-crunch-release-nix-witness-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.kernelscript-production...
+derivation evaluated to /nix/store/9dn3kbklvh5sqkmrlapzw5fri6aqzx8x-mantle-kernelscript-production-structural-check.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-bundle...
+derivation evaluated to /nix/store/l6r3ig41jrdqfivsvnl88z0w7gq1kfj0-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv
+checking derivation checks.x86_64-linux.bounded-tree-source-admission...
+derivation evaluated to /nix/store/jlhzd4c3569j42drxjxk4r7dmsgwppjn-mantle-bounded-tree-source-admission.drv
+checking derivation checks.x86_64-linux.transactional-reconciliation-source-admission...
+derivation evaluated to /nix/store/sw07pzw921r5nn981wb02c51waiqsi04-mantle-transactional-reconciliation-source-admission.drv
+checking derivation checks.x86_64-linux.bootstrap-blocker-inventory...
+derivation evaluated to /nix/store/6mb1ql04622yxwwazp8yahazaa9r4nz8-bootstrap-blocker-inventory.drv
+checking derivation checks.x86_64-linux.nickel-export-core-pin...
+derivation evaluated to /nix/store/snbhixgjq8pplpyh7xh66n19j84qyqx3-mantle-nickel-export-core-pin.drv
+checking derivation checks.x86_64-linux.content-bound-requirement-source-closure...
+derivation evaluated to /nix/store/0zrxcc05r9gnyfayxjs8fs3h3jj0xlxy-mantle-content-bound-requirement-source-closure.drv
+checking derivation checks.x86_64-linux.content-bound-requirement-evidence...
+derivation evaluated to /nix/store/f6s8mdwf0jx72v5bsvibwlyz5fm7m211-mantle-content-bound-requirement-evidence.drv
+checking derivation checks.x86_64-linux.store-retention-policy...
+derivation evaluated to /nix/store/avfd7qwnqvmf2idd96ajww7p67xiisym-mantle-store-retention-policy.drv
+checking derivation checks.x86_64-linux.store-overlay-policy...
+derivation evaluated to /nix/store/xqz5df4p4ngz9c6xxmpvy8rd1ivq1wya-mantle-store-overlay-policy.drv
+checking derivation checks.x86_64-linux.release-determinism-quality...
+derivation evaluated to /nix/store/wbh1pfy1hzqwv1pmmyyhh3iz45h0c3q8-crunch-release-determinism-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.artifact-auth-radicle-cutover...
+derivation evaluated to /nix/store/gjdd21vb7sww10bnd9yj63pj3j8jiry1-mantle-artifact-auth-radicle-cutover.drv
+checking derivation checks.x86_64-linux.durable-file-publication-adoption...
+derivation evaluated to /nix/store/6xz3yhzndmysqd4mmmywmkcx5bllrwal-mantle-durable-file-publication-adoption.drv
+checking derivation checks.x86_64-linux.mantle-build-contract...
+derivation evaluated to /nix/store/rvy450p4bs1aswn2ahanpdldqhpwrkj0-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract-wasm...
+derivation evaluated to /nix/store/1pm8kwnnbmrds6x2x734ljan7n8i7ljh-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract-nickel...
+derivation evaluated to /nix/store/shd2z3481jhgcp6va1vhkdvsvq9zvwiq-mantle-build-contract-nickel.drv
+checking derivation checks.x86_64-linux.nextest...
+derivation evaluated to /nix/store/7pqagagg916cnp3y74v02mpzjam95nzs-mantle-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.clippy...
+derivation evaluated to /nix/store/2m6631dhn306120aj035ahkmj2b2ca98-mantle-clippy-0.1.0.drv
+checking derivation checks.x86_64-linux.fmt...
+derivation evaluated to /nix/store/z1w3mlcz1f6gppbgc3wxmzlhhgkyq2m4-mantle-fmt-0.1.0.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-profile...
+derivation evaluated to /nix/store/n9c40y8a14cabyv75rpssccf8a9k7sxr-spacewasm-reference-profile-export.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-host-library...
+derivation evaluated to /nix/store/j6r8vlls8h06h61gq52fgcg1b7593bib-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-host-library.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-wasm-library...
+derivation evaluated to /nix/store/f7ghaq9l9f7jfvkipzq3mfqzpj716riv-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-wasm-library.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-host-runner...
+derivation evaluated to /nix/store/xv1a7k2m125vv3003ii3gf2ymwygly2x-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-diagnostic-runner.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-upstream-unit-tests...
+derivation evaluated to /nix/store/pqdh5xf8y0k76h7pjvaskxbq289crkwg-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-unit-tests.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-spectest-address...
+derivation evaluated to /nix/store/b5pnd8m8xmnfgfgdxchr639gvgcl7yp9-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-spectest-address.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-fixtures...
+derivation evaluated to /nix/store/77xymn526iq43h5ggnckzw6id3znjk5x-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-fixture-report.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-negative...
+derivation evaluated to /nix/store/5r89n7f0qdvyp4335j6jaanx1y3vcmc1-mantle-spacewasm-reference-negative-check.drv
+checking flake output 'devShells'...
+checking derivation devShells.x86_64-linux.default...
+derivation evaluated to /nix/store/36ihw433z62fxfz0c70fwpabxspk9861-nix-shell.drv
+running 655 flake checks...
+building '/nix/store/30jw172bffw4y6rnqlg9lc2719klx55k-linkLockedDeps.drv'...
+building '/nix/store/d99pmj2d3crnxhn0pxm5rbdxdgxnfcvc-linkLockedDeps.drv'...
+building '/nix/store/6mb1ql04622yxwwazp8yahazaa9r4nz8-bootstrap-blocker-inventory.drv'...
+building '/nix/store/0zr7isla2x25wqh1j1n9jzbrirrwziqc-cargo-git-https-github.com-OnixResearch-nickel-export-257fafc1c746f1faf156207043a4c826bfb16d49.drv'...
+building '/nix/store/mbji4fy74wl5cg5qdmagfamys8vplhb2-cargo-git-https-github.com-OnixResearch-nickel-export-257fafc1c746f1faf156207043a4c826bfb16d49.drv'...
+building '/nix/store/2s94phmwhwal44fqy6vgkkpnkzh6cxz8-cargo-git-https-github.com-tvlfyi-wu-manber.git-0d5b22bea136659f7de60b102a7030e0daaa503d.drv'...
+cargo-git-https-github.com-OnixResearch-nickel-export> Running phase: unpackPhase
+cargo-git-https-github.com-OnixResearch-nickel-export> unpacking source archive /nix/store/z6bdn54cvi2r7rgmb827m2a6s295dkqs-source
+cargo-git-https-github.com-OnixResearch-nickel-export> source root is source
+cargo-git-https-github.com-OnixResearch-nickel-export> Running phase: patchPhase
+cargo-git-https-github.com-OnixResearch-nickel-export> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-git-https-github.com-OnixResearch-nickel-export> Running phase: installPhase
+cargo-git-https-github.com-OnixResearch-nickel-export> Running phase: unpackPhase
+cargo-git-https-github.com-OnixResearch-nickel-export> unpacking source archive /nix/store/z6bdn54cvi2r7rgmb827m2a6s295dkqs-source
+cargo-git-https-github.com-OnixResearch-nickel-export> source root is source
+cargo-git-https-github.com-OnixResearch-nickel-export> Running phase: patchPhase
+cargo-git-https-github.com-OnixResearch-nickel-export> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-git-https-github.com-OnixResearch-nickel-export> Running phase: installPhase
+cargo-git-https-github.com-tvlfyi-wu-manber.git> Running phase: unpackPhase
+cargo-git-https-github.com-tvlfyi-wu-manber.git> unpacking source archive /nix/store/4akyp2kr7b8idvr6bybhw9zq1cq4mh9c-source
+cargo-git-https-github.com-tvlfyi-wu-manber.git> source root is source
+cargo-git-https-github.com-tvlfyi-wu-manber.git> Running phase: patchPhase
+cargo-git-https-github.com-tvlfyi-wu-manber.git> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-git-https-github.com-tvlfyi-wu-manber.git> Running phase: installPhase
+cargo-git-https-github.com-tvlfyi-wu-manber.git> warning: manifest has no description, license, license-file, documentation, homepage or repository
+cargo-git-https-github.com-tvlfyi-wu-manber.git>   |
+cargo-git-https-github.com-tvlfyi-wu-manber.git>   = note: see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
+building '/nix/store/vxamn5nz0hc16cyc1alzlmhz4qrng8yp-cargo-package-gix-hash-0.23.0.drv'...
+building '/nix/store/i3abd0v5s8n04rrnlqrm0w3gk088xqjn-cargo-package-gix-features-0.46.2.drv'...
+building '/nix/store/r170956mg5g6nlyv5sa8sqqg16zn5c91-cargo-package-gix-negotiate-0.29.0.drv'...
+cargo-package-gix-hash> Running phase: unpackPhase
+cargo-package-gix-hash> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/verify.rs"
+cargo-package-gix-hash> Running phase: patchPhase
+cargo-package-gix-hash> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-hash> Running phase: installPhase
+cargo-package-gix-features> Running phase: unpackPhase
+cargo-package-gix-negotiate> Running phase: unpackPhase
+cargo-package-gix-features> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/zlib/stream/mod.rs"
+cargo-package-gix-features> Running phase: patchPhase
+cargo-package-gix-negotiate> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/skipping.rs"
+cargo-package-gix-features> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-negotiate> Running phase: patchPhase
+cargo-package-gix-features> Running phase: installPhase
+cargo-package-gix-negotiate> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-negotiate> Running phase: installPhase
+building '/nix/store/b5f7vnq90894jhz11syd5gkjj30ikii1-cargo-package-gix-transport-0.55.1.drv'...
+cargo-package-gix-transport> Running phase: unpackPhase
+cargo-package-gix-transport> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/lib.rs"
+cargo-package-gix-transport> Running phase: patchPhase
+building '/nix/store/vnym005awqspxj9230h998p6jm79bgxk-cargo-package-fragile-2.1.0.drv'...
+building '/nix/store/7dalkqkbd6sm0h5iqg9rim0km15ajjia-cargo-package-gix-date-0.15.1.drv'...
+cargo-package-gix-transport> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-transport> Running phase: installPhase
+building '/nix/store/bzn0h4vcyk273yqk4ch7nsny2c3qs98g-cargo-package-gix-lock-21.0.2.drv'...
+cargo-package-fragile> Running phase: unpackPhase
+cargo-package-fragile> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/thread_id.rs"
+cargo-package-fragile> Running phase: patchPhase
+cargo-package-fragile> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-fragile> Running phase: installPhase
+cargo-package-gix-date> Running phase: unpackPhase
+cargo-package-gix-date> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/time/write.rs"
+cargo-package-gix-date> Running phase: patchPhase
+cargo-package-gix-date> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-date> Running phase: installPhase
+cargo-package-gix-lock> Running phase: unpackPhase
+building '/nix/store/2myv1m8sdlskl1n5p7ih29bfknjs6hbz-cargo-package-mach2-0.4.3.drv'...
+cargo-package-gix-lock> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/lib.rs"
+cargo-package-gix-lock> Running phase: patchPhase
+cargo-package-gix-lock> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-lock> Running phase: installPhase
+building '/nix/store/ic1bcv5i7fr1mqq477vdd3ck59jjlx56-cargo-package-gix-submodule-0.28.0.drv'...
+cargo-package-mach2> Running phase: unpackPhase
+building '/nix/store/lb1gqqcnsw25gix31m92mkby5g635bhb-cargo-package-gix-diff-0.61.0.drv'...
+cargo-package-gix-submodule> Running phase: unpackPhase
+cargo-package-mach2> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/vm_types.rs"
+cargo-package-mach2> Running phase: patchPhase
+cargo-package-mach2> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-mach2> Running phase: installPhase
+cargo-package-gix-submodule> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/lib.rs"
+cargo-package-gix-submodule> Running phase: patchPhase
+cargo-package-gix-submodule> Running phase: updateAutotoolsGnuConfigScriptsPhase
+building '/nix/store/6ymaqkgiicsz64w4h04rc29fg5ybjy32-cargo-package-gix-shallow-0.10.0.drv'...
+cargo-package-gix-diff> Running phase: unpackPhase
+cargo-package-gix-diff> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/tree_with_rewrites/mod.rs"
+cargo-package-gix-diff> Running phase: patchPhase
+cargo-package-gix-diff> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-submodule> Running phase: installPhase
+building '/nix/store/jvhjg290b3fs05rh76yp6rrbcnn9x0vk-cargo-package-gix-actor-0.40.0.drv'...
+cargo-package-gix-diff> Running phase: installPhase
+cargo-package-gix-shallow> Running phase: unpackPhase
+cargo-package-gix-shallow> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/lib.rs"
+cargo-package-gix-shallow> Running phase: patchPhase
+building '/nix/store/9bbqfqj8i41s587brsp97vs5cnzqhd83-cargo-package-gix-revwalk-0.29.0.drv'...
+cargo-package-gix-actor> Running phase: unpackPhase
+cargo-package-gix-actor> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/signature/mod.rs"
+cargo-package-gix-actor> Running phase: patchPhase
+cargo-package-gix-actor> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-actor> Running phase: installPhase
+cargo-package-gix-shallow> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-shallow> Running phase: installPhase
+building '/nix/store/iz915vr2ixanvxqlvcil9m3wmrz50f0p-cargo-package-gix-trace-0.1.18.drv'...
+cargo-package-gix-revwalk> Running phase: unpackPhase
+building '/nix/store/nwa8yy5ndz3rxjl991ksm3prpjy3hcq7-cargo-package-gix-url-0.35.2.drv'...
+cargo-package-gix-revwalk> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/queue.rs"
+cargo-package-gix-revwalk> Running phase: patchPhase
+cargo-package-gix-revwalk> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-revwalk> Running phase: installPhase
+cargo-package-gix-trace> Running phase: unpackPhase
+building '/nix/store/q61iqm1nhsfdh6aafs8ccv8cp76p5f32-cargo-package-gix-pack-0.68.0.drv'...
+cargo-package-gix-trace> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/lib.rs"
+cargo-package-gix-trace> Running phase: patchPhase
+cargo-package-gix-trace> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-trace> Running phase: installPhase
+cargo-package-gix-url> Running phase: unpackPhase
+cargo-package-gix-url> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/simple_url.rs"
+building '/nix/store/hjyv96naa8gk8yllajfrxy742rri54sv-cargo-package-gix-packetline-0.21.2.drv'...
+cargo-package-gix-pack> Running phase: unpackPhase
+cargo-package-gix-pack> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/verify.rs"
+cargo-package-gix-url> Running phase: patchPhase
+cargo-package-gix-url> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-url> Running phase: installPhase
+building '/nix/store/ww63zv012pdmn2j3ihfx70g5snzcays4-cargo-package-gix-config-0.54.0.drv'...
+cargo-package-gix-pack> Running phase: patchPhase
+cargo-package-gix-pack> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-pack> Running phase: installPhase
+cargo-package-gix-packetline> Running phase: unpackPhase
+building '/nix/store/nz4mrcx1lwsib1yqawl934nbjlq13yrw-cargo-package-gix-validate-0.11.0.drv'...
+cargo-package-gix-config> Running phase: unpackPhase
+cargo-package-gix-config> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/value/normalize.rs"
+cargo-package-gix-packetline> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/read.rs"
+cargo-package-gix-packetline> Running phase: patchPhase
+cargo-package-gix-packetline> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-packetline> Running phase: installPhase
+building '/nix/store/943maaw9wwdckq14q78lj9b28c0acsrx-cargo-package-gix-discover-0.49.0.drv'...
+cargo-package-gix-config> Running phase: patchPhase
+cargo-package-gix-config> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-config> Running phase: installPhase
+cargo-package-gix-validate> Running phase: unpackPhase
+cargo-package-gix-validate> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/tag.rs"
+building '/nix/store/13b4njfxqlfd94i7948jbk2cpsfjwzwv-cargo-package-gix-fs-0.19.2.drv'...
+cargo-package-gix-discover> Running phase: unpackPhase
+cargo-package-gix-discover> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/upwards/util.rs"
+cargo-package-gix-discover> Running phase: patchPhase
+cargo-package-gix-discover> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-discover> Running phase: installPhase
+cargo-package-gix-validate> Running phase: patchPhase
+cargo-package-gix-validate> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-validate> Running phase: installPhase
+building '/nix/store/3cpmcddmqj7qfixaa45p3lb250xv0hp8-cargo-package-gix-sec-0.13.2.drv'...
+bootstrap-blocker-inventory> gcc40 configure preprocess bridge: PASS (classes=3, source_spellings=2, source_bytes_max=65536, invocation_count_max=4096)
+cargo-package-gix-fs> Running phase: unpackPhase
+cargo-package-gix-fs> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/symlink.rs"
+cargo-package-gix-fs> Running phase: patchPhase
+building '/nix/store/x338v3jjlay3imjc36xk21xnwj96qjdp-cargo-package-gix-status-0.28.0.drv'...
+cargo-package-gix-fs> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-fs> Running phase: installPhase
+cargo-package-gix-sec> Running phase: unpackPhase
+cargo-package-gix-sec> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/trust.rs"
+building '/nix/store/2zg9xm0vvqik0f0qwygvbbqqqi1yjl54-cargo-package-gix-prompt-0.14.1.drv'...
+cargo-package-gix-sec> Running phase: patchPhase
+cargo-package-gix-sec> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-sec> Running phase: installPhase
+cargo-package-gix-status> Running phase: unpackPhase
+cargo-package-gix-status> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/stack.rs"
+building '/nix/store/vm9dbg0kqwh5iwma1bl09a2938cvvjg8-cargo-package-gix-ignore-0.19.1.drv'...
+cargo-package-gix-prompt> Running phase: unpackPhase
+cargo-package-gix-prompt> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/unix.rs"
+cargo-package-gix-prompt> Running phase: patchPhase
+cargo-package-gix-prompt> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-prompt> Running phase: installPhase
+cargo-package-gix-status> Running phase: patchPhase
+cargo-package-gix-status> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-status> Running phase: installPhase
+building '/nix/store/zhqrhzx75mspzml3yyyzvr7iz8xxrizz-cargo-package-fuzzy-matcher-0.3.7.drv'...
+cargo-package-gix-ignore> Running phase: unpackPhase
+building '/nix/store/8m601vnph471ck9az7ixbxnp6ms9h3z4-cargo-package-gix-tempfile-21.0.2.drv'...
+cargo-package-fuzzy-matcher> Running phase: unpackPhase
+cargo-package-gix-ignore> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/search.rs"
+cargo-package-gix-ignore> Running phase: patchPhase
+cargo-package-gix-ignore> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-ignore> Running phase: installPhase
+cargo-package-fuzzy-matcher> setting SOURCE_DATE_EPOCH to timestamp 1601795851 of file "./crate/Cargo.toml"
+cargo-package-fuzzy-matcher> Running phase: patchPhase
+cargo-package-fuzzy-matcher> Running phase: updateAutotoolsGnuConfigScriptsPhase
+building '/nix/store/rkfglwshw9wklx2v1lmvxbv57gi5kn1k-cargo-package-gix-mailmap-0.32.0.drv'...
+cargo-package-fuzzy-matcher> Running phase: installPhase
+cargo-package-gix-tempfile> Running phase: unpackPhase
+cargo-package-gix-tempfile> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/signal.rs"
+cargo-package-gix-tempfile> Running phase: patchPhase
+cargo-package-gix-tempfile> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-tempfile> Running phase: installPhase
+building '/nix/store/7mjppka4vz2i601vl44jdgsfmrk39r50-cargo-package-gix-dir-0.23.0.drv'...
+cargo-package-gix-mailmap> Running phase: unpackPhase
+cargo-package-gix-mailmap> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/snapshot/util.rs"
+cargo-package-gix-mailmap> Running phase: patchPhase
+building '/nix/store/g59vsys1l77svip0b516a1yaiglwk4ax-cargo-package-gimli-0.31.1.drv'...
+cargo-package-gix-dir> Running phase: unpackPhase
+cargo-package-gix-dir> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/tests/walk_utils/mod.rs"
+cargo-package-gix-dir> Running phase: patchPhase
+cargo-package-gix-dir> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-dir> Running phase: installPhase
+cargo-package-gix-mailmap> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-mailmap> Running phase: installPhase
+building '/nix/store/ma6wd0jyvjb0mf7qvz89wnax2v19l2w8-cargo-package-gix-worktree-state-0.28.0.drv'...
+cargo-package-gimli> Running phase: unpackPhase
+building '/nix/store/zfdx233m156scwd2x6vwsj39maclzkgr-cargo-package-gix-path-0.11.2.drv'...
+cargo-package-gimli> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/write/writer.rs"
+cargo-package-gimli> Running phase: patchPhase
+cargo-package-gimli> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gimli> Running phase: installPhase
+cargo-package-gix-worktree-state> Running phase: unpackPhase
+cargo-package-gix-worktree-state> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/lib.rs"
+cargo-package-gix-worktree-state> Running phase: patchPhase
+building '/nix/store/0w5ypqvmf5i683y7cn1qkj43gdsav6z2-cargo-package-gix-utils-0.3.1.drv'...
+cargo-package-gix-path> Running phase: unpackPhase
+cargo-package-gix-path> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/util.rs"
+cargo-package-gix-path> Running phase: patchPhase
+cargo-package-gix-path> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-path> Running phase: installPhase
+cargo-package-gix-worktree-state> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-worktree-state> Running phase: installPhase
+building '/nix/store/5hgnjsl9l1fx3x2s7k72hnzxsghhqms7-cargo-package-gix-merge-0.14.0.drv'...
+cargo-package-gix-utils> Running phase: unpackPhase
+cargo-package-gix-utils> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/str.rs"
+cargo-package-gix-utils> Running phase: patchPhase
+building '/nix/store/k7rqdj00ja3as4s613ddzzp02bzpffsi-cargo-package-gix-traverse-0.55.0.drv'...
+cargo-package-gix-merge> Running phase: unpackPhase
+cargo-package-gix-merge> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/tests/merge/tree/mod.rs"
+cargo-package-gix-merge> Running phase: patchPhase
+cargo-package-gix-utils> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-utils> Running phase: installPhase
+building '/nix/store/qh64f68rvaxlq0x9y8kza8fzpkf6l4m8-cargo-package-gix-config-value-0.17.1.drv'...
+cargo-package-gix-merge> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-merge> Running phase: installPhase
+cargo-package-gix-traverse> Running phase: unpackPhase
+building '/nix/store/gw0x31qmpakxmavjnfblmpa2pirrd3lz-cargo-package-gix-quote-0.7.0.drv'...
+cargo-package-gix-config-value> Running phase: unpackPhase
+cargo-package-gix-config-value> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/types.rs"
+cargo-package-gix-config-value> Running phase: patchPhase
+cargo-package-gix-config-value> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-config-value> Running phase: installPhase
+cargo-package-gix-traverse> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/tree/recorder.rs"
+cargo-package-gix-traverse> Running phase: patchPhase
+cargo-package-gix-traverse> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-traverse> Running phase: installPhase
+building '/nix/store/ms8k55nw0k313k7jl6qh3vqzclcmmpsc-cargo-package-gix-revision-0.43.0.drv'...
+cargo-package-gix-quote> Running phase: unpackPhase
+cargo-package-gix-quote> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/single.rs"
+cargo-package-gix-quote> Running phase: patchPhase
+cargo-package-gix-quote> Running phase: updateAutotoolsGnuConfigScriptsPhase
+building '/nix/store/k3y05zsb645hcxrq2jinzkhbjh2ybfcr-cargo-package-gix-commitgraph-0.35.0.drv'...
+cargo-package-gix-quote> Running phase: installPhase
+cargo-package-gix-revision> Running phase: unpackPhase
+building '/nix/store/xv2yv0k1jfllhf3qr36g52y0s7ilhpf4-cargo-package-gix-error-0.2.1.drv'...
+cargo-package-gix-revision> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/spec/parse/mod.rs"
+cargo-package-gix-revision> Running phase: patchPhase
+cargo-package-gix-revision> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-revision> Running phase: installPhase
+cargo-package-gix-commitgraph> Running phase: unpackPhase
+cargo-package-gix-commitgraph> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/verify.rs"
+cargo-package-gix-commitgraph> Running phase: patchPhase
+building '/nix/store/1sq0yj5cm7jlgdyjkwakjmf3wkc1sil4-cargo-package-gix-ref-0.61.0.drv'...
+bootstrap-blocker-inventory> bootstrap blocker inventory: 115 findings across 3 classes, 355 evidence-backed suppressions, 0 promotion claims, enforce=true
+bootstrap-blocker-inventory> FAIL: bootstrap blocker inventory is not clean; expected 0 findings and 0 promotion claims
+cargo-package-gix-commitgraph> Running phase: updateAutotoolsGnuConfigScriptsPhase
+cargo-package-gix-commitgraph> Running phase: installPhase
+cargo-package-gix-error> Running phase: unpackPhase
+cargo-package-gix-error> setting SOURCE_DATE_EPOCH to timestamp 1153704088 of file "./crate/src/lib.rs"
+error: failed to build attribute 'checks.x86_64-linux.bootstrap-blocker-inventory', build of '/nix/store/6mb1ql04622yxwwazp8yahazaa9r4nz8-bootstrap-blocker-inventory.drv^*' failed: Cannot build '/nix/store/6mb1ql04622yxwwazp8yahazaa9r4nz8-bootstrap-blocker-inventory.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/1pl6haq2pv0vdwr594r4k7klrmzk9pzb-bootstrap-blocker-inventory
+       Last 3 log lines:
+       > gcc40 configure preprocess bridge: PASS (classes=3, source_spellings=2, source_bytes_max=65536, invocation_count_max=4096)
+       > bootstrap blocker inventory: 115 findings across 3 classes, 355 evidence-backed suppressions, 0 promotion claims, enforce=true
+       > FAIL: bootstrap blocker inventory is not clean; expected 0 findings and 0 promotion claims
+       For full logs, run:
+         nix log /nix/store/6mb1ql04622yxwwazp8yahazaa9r4nz8-bootstrap-blocker-inventory.drv
