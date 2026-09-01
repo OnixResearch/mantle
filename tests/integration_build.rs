@@ -447,7 +447,7 @@ fn end_to_end_overlay_build_reads_base_only_input_without_backfill() {
         use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 
         const SOURCE_PATH_DIGEST_BYTE: u8 = 41;
-        const BASE_LAYER_INDEX: usize = 1;
+        const BASE_LAYER_INDEX: u32 = 1;
         let store_dir = "/nix/store";
         let base_state = tempfile::tempdir().unwrap();
         let base_output = tempfile::tempdir().unwrap();
