@@ -1,0 +1,55 @@
+{
+  "schema": "mantle-bootstrap-trust-report-v1",
+  "status": "complete",
+  "fixed_point_verified": true,
+  "root_action_trust_complete": true,
+  "bounded_claim": "source-built Mantle fixed point with complete local root action trust",
+  "proof": {
+    "workflow_version": "mantle-deterministic-proof-receipt-v2",
+    "verdict": "self-rebuild-match",
+    "receipt_digest_blake3": "a6f5e378a74d8e2e3f148b7f59744d3ad0b307e2cda2cbbc5515a3b89b956a33",
+    "plan_digest_blake3": "d693f50f0edbe0d455f07c2496faade74c84f9d73e9f277cb0f6e115af7a4d86",
+    "source_authority_digest_blake3": "15b71ba2760c5cac25739ff0aca03026af8fa77b275d2656dc363e0e69976d1e",
+    "proof_bundle_digest_blake3": "2e26da74bbd60b7e562890cb9bc578418ad036eb18b3cfd816d7d31ba97ce1f8",
+    "provider_kind": "full-source",
+    "hermeticity_mode": "strict",
+    "substitution_count": 0
+  },
+  "stages": {
+    "planned": 6,
+    "observed": 6,
+    "executed": 2,
+    "restored_checkpoint": 4,
+    "authority_violations": 0,
+    "fallback_events": 0
+  },
+  "action_trust": {
+    "status": "complete",
+    "plan_path": "root-action-trust-plan.json",
+    "plan_digest_blake3": "2fbd10e2374f8d2342962f0e3f447de20b8368b081dc3436e11ef0dc87fa25ce",
+    "reconciliation_path": "root-action-trust-reconciliation.json",
+    "reconciliation_digest_blake3": "e134a481118373526cf3dfdbd97fc00d3b6c2d7a8e3fef6073a50e341545f10f",
+    "adapter_count": 5,
+    "planned_actions": 1914,
+    "matched_actions": 1914,
+    "observed_events": 478870,
+    "matched_events": 478870,
+    "unknown_events": 0,
+    "missing_actions": 0,
+    "authority_violations": 0,
+    "fallback_events": 0,
+    "remote_events": 0,
+    "cache_only_completions": 0,
+    "local_only": true
+  },
+  "blockers": [],
+  "non_claims": [
+    "compiler-correctness",
+    "seed-correctness",
+    "kernel-isolation",
+    "independent-rebuild-agreement",
+    "bit-for-bit-release-reproducibility",
+    "deployment-success",
+    "full-cargo-compatibility"
+  ]
+}

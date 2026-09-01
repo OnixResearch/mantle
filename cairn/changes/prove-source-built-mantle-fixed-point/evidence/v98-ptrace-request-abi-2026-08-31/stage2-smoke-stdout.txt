@@ -1,0 +1,55 @@
+Mantle build system on the Nix store protocol
+
+Usage: mantle [OPTIONS] <COMMAND>
+
+Commands:
+  build             Evaluate and build derivation(s)
+  wasm-component    Build a portable WebAssembly component through the pinned production cohort
+  doctor            Run no-mutate operator preflight checks for a workflow profile
+  import            Import external project metadata into Mantle-owned build files
+  filegen           Plan or explicitly apply project-declared generated files
+  graph             Show a semantic build graph rooted at an output/proof/source identity or alias
+  why               Explain why an output/proof identity exists from semantic graph records
+  dependents        List graph dependents of an identity or alias
+  refactor          Plan, check, or apply structured refactor/migration sessions
+  transcript        Execute Markdown Mantle transcripts with isolated store/state defaults
+  stage0-inventory  Generate a host-tool-free stage0 inventory from explicit seed paths
+  nix-free-demo     Validate or render the bounded Nix-free fixed-point demo bundle profile
+  foreign-import    Validate and plan from lowered foreign derivation import artifacts
+  mantlepkgs        Generate, verify, plan, and build locked Mantlepkgs catalogs
+  eval              Evaluate a .ncl file and print the derivation JSON (no build)
+  export            Export declared Nickel data to a deterministic external JSON payload and receipt
+  bootstrap         Generate bootstrap seeds or validate bootstrap runtime evidence
+  log               Show a stored build log
+  store             Inspect the store's PathInfo database
+  source            Plan, export, import, list, and verify source/input bundles
+  receipt           Export, list, verify, and import portable receipt bundles
+  remote            Remote builder access, ticket, and server commands
+  artifact          Frontend-neutral admitted artifact commands
+  attest            Attestation inspection and verification commands
+  release           Create or verify a release evidence bundle
+  init              Initialize a new Mantle project (manifest, lockfile, .mantle/)
+  check             Validate project manifest, lockfile, and generated inputs
+  show              Show resolved input state from the lockfile
+  refresh           Refresh selected or all project inputs
+  list-stale        List inputs that would change on refresh (read-only)
+  upgrade           Migrate project files to the current schema version
+  self-build        Build Mantle from its own source (self-hosting)
+  rust-cache        Operate the daemon-backed Rust compiler cache
+  rust-plan         Capture Cargo oracle metadata and unit graph as a normalized Rust package plan receipt
+  shell             Enter a development shell from the compatibility-named crunch.ncl devShells
+  develop           Alias for `shell` (deprecated, use `crunch shell`)
+  run               Build and run an executable from a project package or .ncl file
+  help              Print this message or the help of the given subcommand(s)
+
+Options:
+  -v, --verbose                      Enable verbose logging
+      --log-level <LOG_LEVEL>        Log level (trace, debug, info, warn, error)
+      --json                         Emit errors as JSON objects for tooling integration
+      --store <STORE>                Where to export final build outputs on disk. Intermediate deps stay in castore. Source inputs always come from /nix/store. If not writable, builds still succeed (outputs in castore) [default: /nix/store]
+      --store-prefix <STORE_PREFIX>  Logical store path prefix for derivation hashes. All output paths and ATerm hashes are computed against this prefix. Default: /mantle/store. Use --nix-compat for /nix/store [default: /mantle/store]
+      --nix-compat                   Shorthand for --store-prefix=/nix/store. For interop testing with Nix-computed derivations
+      --state-dir <STATE_DIR>        State directory for pathinfo.redb, blobs, and logs. Default: legacy $CRUNCH_STATE_DIR or $XDG_STATE_HOME/crunch or ~/.local/state/crunch. Use --state-dir for an explicit Mantle path
+      --base-store <BASE_STORES>     Ordered list of read-only base store state directories for overlay composition. Declared in priority order (base A before base B)
+  -h, --help                         Print help
+  -V, --version                      Print version

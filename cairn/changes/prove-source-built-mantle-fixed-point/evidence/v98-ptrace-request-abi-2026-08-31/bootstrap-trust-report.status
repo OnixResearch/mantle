@@ -1,0 +1,3 @@
+exit_code=1
+report=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-fixed-point-v98-ptrace-request-abi-20260831/bootstrap-trust-report.json
+stderr=/home/brittonr/mantle-runs/receipt-fix-v31/source-built-fixed-point-v98-ptrace-request-abi-20260831/bootstrap-trust-report.stderr

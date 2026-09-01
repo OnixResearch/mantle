@@ -1,0 +1,17 @@
+{
+  "schema": "mantle-root-action-reconciliation-v1",
+  "action_plan_digest_blake3": "2fbd10e2374f8d2342962f0e3f447de20b8368b081dc3436e11ef0dc87fa25ce",
+  "planned_action_count": 1914,
+  "matched_action_count": 1914,
+  "observed_event_count": 478870,
+  "matched_event_count": 478870,
+  "unknown_event_count": 0,
+  "missing_action_count": 0,
+  "authority_violation_count": 0,
+  "fallback_event_count": 0,
+  "remote_event_count": 0,
+  "cache_only_completion_count": 0,
+  "local_only": true,
+  "blockers": [],
+  "reconciliation_digest_blake3": "d632591dcace43e2f3a7a31b91c29ecd81177242f80771cd93180728f2b7d514"
+}

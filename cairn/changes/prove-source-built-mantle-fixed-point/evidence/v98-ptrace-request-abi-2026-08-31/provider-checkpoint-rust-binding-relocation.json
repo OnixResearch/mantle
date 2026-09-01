@@ -1,0 +1,19 @@
+{
+  "host_tool_count": 5,
+  "native_artifact_count": 47,
+  "non_claim": "binding relocation changes only checkpoint-origin absolute authority paths and does not repeat provider execution",
+  "origin_binding": {
+    "digest_blake3": "9684d1753f538e769b945275eb619893f80a9135e7d20b0854bcbe6557fd3ee9",
+    "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v98-ptrace-request-abi-20260831.source-built-fixed-point-staging-3680890/provider-checkpoint-origin/full-source-rust-binding.json"
+  },
+  "relocated_binding": {
+    "digest_blake3": "36ddd3caa7c7819035c2b0cc418d06faad3709a96b61d8bf4d947253c2516122",
+    "path": "/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v98-ptrace-request-abi-20260831.source-built-fixed-point-staging-3680890/rust-provider/share/mantle-rust-provider/receipts/full-source-binding.json"
+  },
+  "rust_artifact_count": 6,
+  "rust_sysroot": {
+    "origin_digest_blake3": "69740316b19be878af5b1788afa0181891489bf303e7b8791f92115aed1be96e",
+    "relocated_digest_blake3": "0e07353baa305b85ba1384a23cfacc4fb452665a8274410dd01de22886916c13"
+  },
+  "schema": "mantle-source-built-checkpoint-rust-binding-relocation-v1"
+}

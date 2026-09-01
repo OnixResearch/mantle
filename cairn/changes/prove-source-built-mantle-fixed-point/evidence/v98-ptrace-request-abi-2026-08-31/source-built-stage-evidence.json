@@ -1,0 +1,134 @@
+[
+  {
+    "stage_id": "stagex-transition",
+    "output_role": "stagex-transition",
+    "status": "complete",
+    "execution_origin": "restored-checkpoint",
+    "checkpoint_digest_blake3": "c9918c0ede2fd774f5348a775981838c5590903ce6ba6a691317a766a052b3eb",
+    "original_execution_evidence_digest_blake3": "90c9c1ed253e7379cd682b7afa05ef139e1e839caba89505ae1a096a7a2ada47",
+    "orchestrator": "host-mantle",
+    "executable_identity": "blake3:06aebf46a90b565bf616c546d40ddf96bf0f7a8fcefd3dd6b98691344e4c9e0d",
+    "transcript_path": "stagex-transition-execution/transition-report.json",
+    "transcript_digest_blake3": "1a44ff466f5fe69c1f4e8f37cda16bd18bb01278548a1230687d18600c669106",
+    "audit_paths": [
+      "stagex-transition-execution/protected-exec-audit.json"
+    ],
+    "audit_digests_blake3": [
+      "653c5fef604d958260a47fb0c1b215d214c5aa7448d34a5e29b447ef478cd49f"
+    ],
+    "output_path": "stagex-transition-execution",
+    "output_digest_blake3": "91b89607c0b816bf89ab5e37fb5a6e93e2374e70fde1a24b8fc2d38b09246f66",
+    "authority_violations": [],
+    "fallback_events": []
+  },
+  {
+    "stage_id": "stagex-provider-publication",
+    "output_role": "stagex-provider",
+    "status": "complete",
+    "execution_origin": "restored-checkpoint",
+    "checkpoint_digest_blake3": "c9918c0ede2fd774f5348a775981838c5590903ce6ba6a691317a766a052b3eb",
+    "original_execution_evidence_digest_blake3": "e4a91b65fc8f91eec5dbe911b401034c75aecd21a8234c74423d27decc0da32d",
+    "orchestrator": "host-mantle",
+    "executable_identity": "blake3:06aebf46a90b565bf616c546d40ddf96bf0f7a8fcefd3dd6b98691344e4c9e0d",
+    "transcript_path": "native-store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider/share/crunch-bootstrap/stagex-lineage-receipt.json",
+    "transcript_digest_blake3": "3d421b5cc6c136d5ee910d5b6b2d60402828770dd672f7e000dcb5554e82107e",
+    "audit_paths": [
+      "native-store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider/share/crunch-bootstrap/stagex-provider-validation.json"
+    ],
+    "audit_digests_blake3": [
+      "678e45f816f53a263f754ad86d5246b4675875af54110ba5e761ab082224a335"
+    ],
+    "output_path": "native-store/snzd91n8dv6l21xa89vml67229n9svkg-mantle-stagex-intermediate-provider",
+    "output_digest_blake3": "250fd6c09b72e1b00e639ba9e27d113afdffd6d4ca11198276786a12198bf97d",
+    "authority_violations": [],
+    "fallback_events": []
+  },
+  {
+    "stage_id": "full-source-native-provider",
+    "output_role": "full-source-native-provider",
+    "status": "complete",
+    "execution_origin": "restored-checkpoint",
+    "checkpoint_digest_blake3": "c9918c0ede2fd774f5348a775981838c5590903ce6ba6a691317a766a052b3eb",
+    "original_execution_evidence_digest_blake3": "2bcf0dd1b2e5db2a5d0f97272e598b7ba10424eb44cf97c2aefc1eb5029168b3",
+    "orchestrator": "host-mantle",
+    "executable_identity": "blake3:06aebf46a90b565bf616c546d40ddf96bf0f7a8fcefd3dd6b98691344e4c9e0d",
+    "transcript_path": "transcripts/native-provider.checkpoint-restored.txt",
+    "transcript_digest_blake3": "549f9cb027a0f8c391ac1d1342f5d4542b34a945c383fb0fc44e5c6e0f8ce050",
+    "audit_paths": [
+      "full-source-provider-admission.json"
+    ],
+    "audit_digests_blake3": [
+      "5694a2b759075d7404f198192ed9d5cb353f96f661d8d17d64ef6cc0f033fdbc"
+    ],
+    "output_path": "native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain",
+    "output_digest_blake3": "63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9",
+    "authority_violations": [],
+    "fallback_events": []
+  },
+  {
+    "stage_id": "full-source-rust-provider",
+    "output_role": "full-source-rust-provider",
+    "status": "complete",
+    "execution_origin": "restored-checkpoint",
+    "checkpoint_digest_blake3": "c9918c0ede2fd774f5348a775981838c5590903ce6ba6a691317a766a052b3eb",
+    "original_execution_evidence_digest_blake3": "2ea9d56d17e54227e7d1e6bcf9c1f7a8d154b7b45dc9d370bf63164ca6897308",
+    "orchestrator": "host-mantle",
+    "executable_identity": "blake3:06aebf46a90b565bf616c546d40ddf96bf0f7a8fcefd3dd6b98691344e4c9e0d",
+    "transcript_path": "rust-provider/share/mantle-rust-provider/receipts/build.json",
+    "transcript_digest_blake3": "e39c1a89a2c3c357c2f4d26e8b2fe458085ddf9f3007aaebdf6318b05012de15",
+    "audit_paths": [
+      "rust-provider/share/mantle-rust-provider/receipts/full-source-binding.json"
+    ],
+    "audit_digests_blake3": [
+      "36ddd3caa7c7819035c2b0cc418d06faad3709a96b61d8bf4d947253c2516122"
+    ],
+    "output_path": "rust-provider",
+    "output_digest_blake3": "0ee00a74b966c70a8c53a2a9b74f046a5835e123672875113dc72d59f9f1818c",
+    "authority_violations": [],
+    "fallback_events": []
+  },
+  {
+    "stage_id": "mantle-stage1",
+    "output_role": "mantle-stage1",
+    "status": "complete",
+    "execution_origin": "executed",
+    "orchestrator": "host-mantle",
+    "executable_identity": "blake3:fc8954789b9c63e3fa820aefeb882158d4abec75acf339d8b62fe005f5104b61",
+    "transcript_path": "cargo-free-fixed-point/stage1/receipt.json",
+    "transcript_digest_blake3": "8640ca00ca8104ca1df501cc863a26017df3b361e1bf87c23419be4ad037649a",
+    "audit_paths": [
+      "cargo-free-fixed-point/stage1/stderr.txt",
+      "source-built-toolchain-closure.json"
+    ],
+    "audit_digests_blake3": [
+      "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "98044e066de0956e882f1c283685ccfa6b35c2723771928e853989299646fa98"
+    ],
+    "output_path": "cargo-free-fixed-point/stage1/mantle",
+    "output_digest_blake3": "7d166e10df71f46a4031a63abf05fc735e7663183998b311bc4aa2ead9408c9c",
+    "authority_violations": [],
+    "fallback_events": []
+  },
+  {
+    "stage_id": "mantle-stage2",
+    "output_role": "mantle-stage2",
+    "status": "complete",
+    "execution_origin": "executed",
+    "orchestrator": "stage1-mantle",
+    "executable_identity": "blake3:7d166e10df71f46a4031a63abf05fc735e7663183998b311bc4aa2ead9408c9c",
+    "transcript_path": "cargo-free-fixed-point/stage2/receipt.json",
+    "transcript_digest_blake3": "288eaf925f08d27ed6de843ca9dd24c5baf1d71cce2a12002ea83eef25aad52a",
+    "audit_paths": [
+      "cargo-free-fixed-point/stage2/stderr.txt",
+      "source-built-toolchain-closure.json"
+    ],
+    "audit_digests_blake3": [
+      "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "98044e066de0956e882f1c283685ccfa6b35c2723771928e853989299646fa98"
+    ],
+    "output_path": "cargo-free-fixed-point/stage2/mantle",
+    "output_digest_blake3": "7d166e10df71f46a4031a63abf05fc735e7663183998b311bc4aa2ead9408c9c",
+    "authority_violations": [],
+    "fallback_events": []
+  }
+]

@@ -1,0 +1,82 @@
+{
+  "schema": "mantle-root-action-trust-plan-v1",
+  "proof_plan_digest_blake3": "d693f50f0edbe0d455f07c2496faade74c84f9d73e9f277cb0f6e115af7a4d86",
+  "adapter_count": 5,
+  "action_count": 1914,
+  "adapters": [
+    {
+      "adapter_id": "native-provider",
+      "plan_path": "provider-checkpoint-origin/native-provider-action-plan.json",
+      "plan_file_digest_blake3": "d8cd5562f5b8e20edf6b73f1bdfde6f3f3093e67b342af89d86531c555d0e9f8",
+      "plan_semantic_digest_blake3": "1a42b89e995b3cb48eda11245b2fdb96a0dcf522fb2b0a17d7818047c3f42229",
+      "reconciliation_path": "provider-checkpoint-origin/native-provider-action-reconciliation.json",
+      "reconciliation_file_digest_blake3": "030ed3061a8e79ac3b56c0e1dc0360e70ef4d941c948fb8339f89e12457051a7",
+      "reconciliation_semantic_digest_blake3": "14e7beebaae1b3cbfc6a09e32a056cd0b1cd76eeec54c112bc0d80ad05858438",
+      "planned_action_count": 88,
+      "matched_action_count": 88,
+      "observed_event_count": 568,
+      "matched_event_count": 568,
+      "local_only": true
+    },
+    {
+      "adapter_id": "rust-provider",
+      "plan_path": "rust-provider/share/mantle-rust-provider/action-trust/rust-provider-action-plan.json",
+      "plan_file_digest_blake3": "502d61aaee68866a92826b2fd892fdcbfc3d8c1809ff843238378eaa7d7866dd",
+      "plan_semantic_digest_blake3": "129d9a8d320e4c21471f563ad1fa3fd9ec7cf58a7aafd76f21a51b9880d2d585",
+      "reconciliation_path": "rust-provider/share/mantle-rust-provider/action-trust/rust-provider-action-reconciliation.json",
+      "reconciliation_file_digest_blake3": "b4fa6707b282f50d004504d5ade360ab3fb3010781026fdd2774fbe136e2b256",
+      "reconciliation_semantic_digest_blake3": "d24cc96e2761bd4395ef515fe8b9976a012115865c9fceb44e5a3de6600375f9",
+      "planned_action_count": 5,
+      "matched_action_count": 5,
+      "observed_event_count": 391207,
+      "matched_event_count": 391207,
+      "local_only": true
+    },
+    {
+      "adapter_id": "rust-units-stage1",
+      "plan_path": "cargo-free-fixed-point/stage1/rust-child-actions/plan.json",
+      "plan_file_digest_blake3": "fcaba1fadc506209f7c511d4ce7863c39941ec1981861f370e2f32da73f81d32",
+      "plan_semantic_digest_blake3": "60d7c9e97f80edcd110725e2100a3ddf40abbc027173075c4aeb9e3ea704abf5",
+      "reconciliation_path": "cargo-free-fixed-point/stage1/rust-child-actions/reconciliation.json",
+      "reconciliation_file_digest_blake3": "3521a0a40a8136203ad96c59baf627de7a3fe04cdeea5bf4ceda8121c60a42da",
+      "reconciliation_semantic_digest_blake3": "5ac6f35276a20f125a8354be6936d5706d16d24f2cb551581e60915df87483c5",
+      "planned_action_count": 862,
+      "matched_action_count": 862,
+      "observed_event_count": 5273,
+      "matched_event_count": 5273,
+      "local_only": true
+    },
+    {
+      "adapter_id": "rust-units-stage2",
+      "plan_path": "cargo-free-fixed-point/stage2/rust-child-actions/plan.json",
+      "plan_file_digest_blake3": "4b29357ee6d9342e227b22e4433167ace23f76cb6b49414ee1793b647ff7898e",
+      "plan_semantic_digest_blake3": "ab2f6bd135f0f578a433b10945df6b03457a74d089450b1f449483d989d57fdd",
+      "reconciliation_path": "cargo-free-fixed-point/stage2/rust-child-actions/reconciliation.json",
+      "reconciliation_file_digest_blake3": "48ff4064148f8a2e527d492391e3d66f953ce93f76ab621a0c35b859f4b4e4ba",
+      "reconciliation_semantic_digest_blake3": "e7aecde7ceb704d9489ef680d46f7b47b5af18dc78a88bcd57c206d6f5e5301e",
+      "planned_action_count": 862,
+      "matched_action_count": 862,
+      "observed_event_count": 5273,
+      "matched_event_count": 5273,
+      "local_only": true
+    },
+    {
+      "adapter_id": "stagex",
+      "plan_path": "stagex-transition-execution/transition-plan.json",
+      "plan_file_digest_blake3": "a2cc6155d8fd20c9f6e4409dda11a9517b5a07d83074b0130cd9b072ce07f7af",
+      "plan_semantic_digest_blake3": "7cb11e86053496968852ffa9e66eb15107907685f696160b208a7e637e376280",
+      "reconciliation_path": "stagex-transition-execution/protected-exec-audit.json",
+      "reconciliation_file_digest_blake3": "653c5fef604d958260a47fb0c1b215d214c5aa7448d34a5e29b447ef478cd49f",
+      "reconciliation_semantic_digest_blake3": "653c5fef604d958260a47fb0c1b215d214c5aa7448d34a5e29b447ef478cd49f",
+      "planned_action_count": 97,
+      "matched_action_count": 97,
+      "observed_event_count": 76549,
+      "matched_event_count": 76549,
+      "local_only": true
+    }
+  ],
+  "local_only": true,
+  "cache_only_completion_allowed": false,
+  "blockers": [],
+  "plan_digest_blake3": "8264ed63486246418078d6384b62d7a7ca0ccbbcb6eb19992d564972c3191d13"
+}
