@@ -28,5 +28,5 @@ requires zero findings there and in the repository derivation.
 - **Decision:** accept the store repair. Preserve the 19 `crunch-build` and one
   `crunch-rustc-wrapper` findings as the next separate change.
 - **Owner:** `repair-crunch-store-tigerstyle`.
-- **Next action:** complete Cairn validation, sync and archive this bounded
-  change, then integrate it without altering the later blocker.
+- **Next action:** commit the synchronized archive, push the verified branch,
+  and integrate it without altering the later blocker.
