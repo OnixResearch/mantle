@@ -6,7 +6,7 @@
 - **Inspected evidence:** zero pipeline findings, 59 passing post-change tests, strict Clippy, caller checks, Nix evaluation, and the 36-finding later inventory.
 - **Decision:** accept the bounded repair. Preserve the root-library findings as the next independent Tiger Style boundary.
 - **Owner:** `repair-crunch-pipeline-tigerstyle`.
-- **Next action:** validate and archive the accepted repair, then push and integrate it without modifying either later boundary.
+- **Next action:** commit the synchronized archive, push the verified branch, and integrate it without modifying either later boundary.
 
 ## Required evidence
 
