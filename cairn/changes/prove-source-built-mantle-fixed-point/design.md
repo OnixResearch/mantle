@@ -94,8 +94,16 @@ After both fixed-point stages, Mantle validates and composes five adapters: Stag
 - Leviathan cannot currently authenticate to GitHub, so the operator must transfer a fresh source tree and retain exact post-transfer parity evidence.
 - The Leviathan route name cannot grant proof authority. Host preflight must record the observed system, architecture, kernel, resource bounds, and explicit sandbox tools.
 - Native-provider and Rust-unit adapters can expose incomplete action descriptions. The proof must stop instead of emitting a partial report.
-- Native derivation planning now covers 88 unique actions and 568 bounded scheduler observations across the provider and host-tool roots. Rust provider and Rust-unit child process interception remains unfinished.
+- Native derivation planning covers the provider and host-tool roots. V98 completed Rust-provider and Rust-unit child-process interception. The final root reconciliation matched 1,914 actions and 478,870 events with no findings.
 - Generated build scripts require producer-linked authority and a digest observation before execution.
 - The complete action list and observations can be large, so schemas and event counts need explicit limits.
 - Stage1 may expose native-topology behavior not covered by prior one-shot proofs.
 - Matching binaries prove a bounded fixed point, not compiler correctness or independent reproducibility.
+
+## Outcome evidence
+
+V98 validated this design on Leviathan. Both promoted stages produced BLAKE3
+`7d166e10df71f46a4031a63abf05fc735e7663183998b311bc4aa2ead9408c9c`.
+The v2 receipt, durable proof-bundle digest, provider linkage, staged action
+plans, raw audits, reconciliations, and independent `complete` trust report are
+preserved under `evidence/v98-ptrace-request-abi-2026-08-31/`.

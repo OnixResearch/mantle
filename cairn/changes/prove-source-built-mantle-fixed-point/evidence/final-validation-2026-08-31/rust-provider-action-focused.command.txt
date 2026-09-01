@@ -1,0 +1,1 @@
+cargo test -p mantle --bin mantle source_built_rust_provider_action -- --test-threads=1

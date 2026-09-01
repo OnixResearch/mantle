@@ -25,3 +25,12 @@ The current six-stage plan names broad proof stages but does not provide one pre
 
 - **Files**: bootstrap functional core, self-build/Cargo-free orchestration, source-bundle profiles, deterministic proof/release evidence, parity inputs, proof scripts/tests, documentation, and lifecycle evidence.
 - **Testing**: Add pure proof-plan and action-trust tests. Add negative authority, execution, fallback, and tamper cases. Record Leviathan preflight and source-transfer parity. Run the real proof, v2 receipt verification, release verification, and Cairn gates.
+
+## Outcome
+
+V98 completed the promoted proof on Leviathan from source commit
+`af4b2d147d3b9fd0c216d3b1f6d11da1e043b810`. Stage1 and stage2 produced the
+same BLAKE3 binary identity. The final root reconciliation matched all 1,914
+actions and 478,870 local events with no findings. The independently rerun
+bootstrap trust report returned `complete` with no blockers. Evidence is under
+`evidence/v98-ptrace-request-abi-2026-08-31/`.

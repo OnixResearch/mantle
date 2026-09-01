@@ -1,0 +1,1 @@
+cargo -q -Zscript scripts/check-machine-schema-contracts.rs self-test

@@ -1,0 +1,1 @@
+cargo test -p mantle --bin mantle protected_exec_ptrace -- --test-threads=1

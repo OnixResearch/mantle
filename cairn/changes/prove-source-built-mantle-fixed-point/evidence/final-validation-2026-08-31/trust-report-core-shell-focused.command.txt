@@ -1,0 +1,1 @@
+cargo test -p mantle --bin mantle source_built_trust_report -- --test-threads=1

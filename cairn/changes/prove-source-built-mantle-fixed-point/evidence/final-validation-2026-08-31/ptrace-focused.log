@@ -1,0 +1,47 @@
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/source-built-receipt-finalization/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+warning: field `listener_fd` is never read
+  --> src/protected_exec_seccomp.rs:77:9
+   |
+75 |     pub struct DiagnosticExecObserver {
+   |                ---------------------- field in this struct
+76 |         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
+77 |         listener_fd: RawFd,
+   |         ^^^^^^^^^^^
+   |
+   = note: `DiagnosticExecObserver` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `listener_fd` is never used
+  --> src/protected_exec_seccomp.rs:88:16
+   |
+80 |     impl DiagnosticExecObserver {
+   |     --------------------------- method in this implementation
+...
+88 |         pub fn listener_fd(&self) -> RawFd {
+   |                ^^^^^^^^^^^
+
+warning: `mantle` (bin "mantle" test) generated 2 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 13`
+     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/mantle-c4cda174cbbb31df)
+
+running 12 tests
+test protected_exec_ptrace::linux::tests::ptrace_register_and_memory_failures_are_explicit ... ok
+test protected_exec_ptrace::linux::tests::ptrace_supervisor_allows_declared_exec_and_records_exact_bytes ... ok
+test protected_exec_ptrace::linux::tests::ptrace_supervisor_auto_attaches_descendant_and_forwards_sigchld ... ok
+test protected_exec_ptrace::linux::tests::ptrace_supervisor_denies_digest_mismatch_before_exec ... ok
+test protected_exec_ptrace::linux::tests::ptrace_supervisor_fails_closed_when_exec_bytes_disappear ... ok
+test protected_exec_ptrace::linux::tests::ptrace_supervisor_handles_concurrent_declared_execs ... ok
+test protected_exec_ptrace::linux::tests::ptrace_supervisor_handles_sequential_roots_after_quiescence ... ok
+test protected_exec_ptrace::linux::tests::ptrace_supervisor_output_captures_bytes_without_command_wait ... ok
+test protected_exec_ptrace::linux::tests::seccomp_event_stops_are_recognized_and_signal_stops_are_distinct ... ok
+test protected_exec_ptrace::linux::tests::seize_acknowledgment_rejects_wrong_token_and_closed_pipe ... ok
+test protected_exec_ptrace::linux::tests::trace_filter_traces_only_exec_syscalls_on_supported_arch ... ok
+test protected_exec_ptrace::linux::tests::unsupported_architecture_is_rejected_before_filtering ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 2534 filtered out; finished in 19.84s
+
