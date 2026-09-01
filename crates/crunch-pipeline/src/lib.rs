@@ -4,6 +4,7 @@
 // r[impl foreign_derivation_import.realization_receipt]
 // r[impl foreign_derivation_import.cache_only_runtime_closure]
 // r[impl foreign_derivation_import.live_nixpkgs_realization_proof]
+// r[impl build_correctness.pipeline_tiger_conformance]
 
 mod derivation_file;
 mod evaluation_stream;
@@ -223,7 +224,7 @@ pub async fn evaluate_derivations_eager(
         stream_tx: None,
         worker_control: EvalWorkerControl::default(),
     });
-    let collection = collect_eager_evaluation_messages(rx, config.store_dir);
+    let collection = collect_eager_evaluation_messages(rx, config.store_dir, expected_root_count);
     let (evaluation, collected) = tokio::join!(evaluation, collection);
     let evaluation = evaluation?;
     let mut collected = collected?;
@@ -248,10 +249,16 @@ pub async fn evaluate_derivations_eager(
 async fn collect_eager_evaluation_messages(
     mut rx: mpsc::Receiver<EvalMessage>,
     store_dir: &str,
+    root_count_max: usize,
 ) -> Result<EagerDerivationEvaluation, Error> {
-    let mut roots = Vec::new();
+    let mut roots = Vec::with_capacity(root_count_max);
     let mut entries = BTreeMap::new();
     while let Some(message) = rx.recv().await {
+        if roots.len() >= root_count_max {
+            return Err(Error::Eval(format!(
+                "eager derivation evaluation exceeded its admitted root count {root_count_max}"
+            )));
+        }
         roots.push(EagerDerivationRoot {
             label: message.label,
             drv_path: message.drv_path,
@@ -264,6 +271,7 @@ async fn collect_eager_evaluation_messages(
         }
     }
     let entries = entries.into_values().collect::<Vec<_>>();
+    debug_assert!(roots.len() <= root_count_max);
     debug_assert!(entries.is_empty() || entries.len() >= roots.len());
     Ok(EagerDerivationEvaluation { roots, entries })
 }
@@ -465,14 +473,14 @@ async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, E
         eval_stream,
         pipeline_evidence,
     );
-    register_managed_generation(
-        config.root_registration.as_ref(),
-        config.root_retention_source,
-        &root_registry,
-        &result.outcomes,
-        &source_generation_paths,
-        result.failed.is_empty(),
-    )
+    register_managed_generation(ManagedGenerationRequest {
+        base_registration: config.root_registration.as_ref(),
+        root_retention_source: config.root_retention_source,
+        root_registry: &root_registry,
+        outcomes: &result.outcomes,
+        source_paths: &source_generation_paths,
+        is_source_generation_included: result.failed.is_empty(),
+    })
     .await?;
     Ok(result)
 }
@@ -495,47 +503,50 @@ pub async fn build_registered_derivations(
         }
         if request.cache_only {
             let bundle = create_cache_only_observer(config, store)?;
-            return run_registered_builder(
-                config,
-                bundle.builder,
-                known_paths,
-                request,
-                bundle.output_lookup,
-                bundle.root_registry,
-                bundle.workspace_evidence_sink,
-            )
-            .await;
+            return run_registered_builder(config, bundle, known_paths, request).await;
         }
         let bundle = create_pipeline_builder_with_source_policy(config, store, request.source_policy)?;
-        run_registered_builder(
-            config,
-            bundle.builder,
-            known_paths,
-            request,
-            bundle.output_lookup,
-            bundle.root_registry,
-            bundle.workspace_evidence_sink,
-        )
-        .await
+        run_registered_builder(config, bundle, known_paths, request).await
     }
 }
 
 #[cfg(target_os = "linux")]
-async fn register_managed_generation(
-    base_registration: Option<&crunch_store::RootRegistration>,
+type ManagedRootRegistration = (StorePath<String>, GcRootSource, crunch_store::RootRegistration);
+
+#[cfg(target_os = "linux")]
+struct ManagedGenerationRequest<'a> {
+    base_registration: Option<&'a crunch_store::RootRegistration>,
     root_retention_source: Option<GcRootSource>,
-    root_registry: &crunch_store::RootRegistry,
-    outcomes: &[BuildOutcome],
-    source_paths: &[nix_compat::store_path::StorePath<String>],
-    include_source_generation: bool,
-) -> Result<(), Error> {
-    let Some(base_registration) = base_registration else {
-        return Ok(());
+    root_registry: &'a crunch_store::RootRegistry,
+    outcomes: &'a [BuildOutcome],
+    source_paths: &'a [StorePath<String>],
+    is_source_generation_included: bool,
+}
+
+#[cfg(target_os = "linux")]
+fn plan_managed_generation(
+    request: &ManagedGenerationRequest<'_>,
+    base_registration: &crunch_store::RootRegistration,
+) -> Result<Vec<ManagedRootRegistration>, Error> {
+    let output_count = request
+        .outcomes
+        .iter()
+        .try_fold(0usize, |count, outcome| count.checked_add(outcome.outputs.len()))
+        .ok_or_else(|| Error::Build("managed output count exceeds the platform limit".to_string()))?;
+    let is_source_generation_planned = request.is_source_generation_included
+        && base_registration.class == crunch_store::GcRootClass::ProjectOutputGeneration;
+    let source_count = if is_source_generation_planned {
+        request.source_paths.len()
+    } else {
+        0
     };
-    let local_source = root_retention_source.unwrap_or(GcRootSource::Build);
+    let registration_count_max = output_count
+        .checked_add(source_count)
+        .ok_or_else(|| Error::Build("managed registration count exceeds the platform limit".to_string()))?;
+    let local_source = request.root_retention_source.unwrap_or(GcRootSource::Build);
     let mut seen_paths = BTreeSet::new();
-    let mut registrations = Vec::new();
-    for outcome in outcomes {
+    let mut registrations = Vec::with_capacity(registration_count_max);
+    for outcome in request.outcomes {
         for (output_name, path_info) in &outcome.outputs {
             if !seen_paths.insert(path_info.store_path.clone()) {
                 continue;
@@ -548,8 +559,8 @@ async fn register_managed_generation(
             registrations.push((path_info.store_path.clone(), source, base_registration.clone()));
         }
     }
-    if include_source_generation && base_registration.class == crunch_store::GcRootClass::ProjectOutputGeneration {
-        for source_path in source_paths {
+    if is_source_generation_planned {
+        for source_path in request.source_paths {
             if !seen_paths.insert(source_path.clone()) {
                 continue;
             }
@@ -560,7 +571,19 @@ async fn register_managed_generation(
             registrations.push((source_path.clone(), GcRootSource::Source, source_registration));
         }
     }
-    root_registry
+    assert_eq!(seen_paths.len(), registrations.len());
+    assert!(registrations.len() <= registration_count_max);
+    Ok(registrations)
+}
+
+#[cfg(target_os = "linux")]
+async fn register_managed_generation(request: ManagedGenerationRequest<'_>) -> Result<(), Error> {
+    let Some(base_registration) = request.base_registration else {
+        return Ok(());
+    };
+    let registrations = plan_managed_generation(&request, base_registration)?;
+    request
+        .root_registry
         .register_managed_batch(registrations)
         .await
         .map_err(|error| Error::Build(format!("committing managed root generation: {error}")))?;
@@ -570,13 +593,16 @@ async fn register_managed_generation(
 #[cfg(target_os = "linux")]
 async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'static>(
     config: &BuildConfig,
-    mut builder: Builder<S>,
+    bundle: PipelineBuilderBundle<S>,
     known_paths: &mut DerivationRegistry,
     request: RegisteredBuildRequest<'_>,
-    output_lookup: crunch_store::OutputLookup,
-    root_registry: crunch_store::RootRegistry,
-    workspace_evidence_sink: crunch_build::WorkspaceReportCollector,
 ) -> Result<RegisteredBuildResult, Error> {
+    let PipelineBuilderBundle {
+        mut builder,
+        output_lookup,
+        root_registry,
+        workspace_evidence_sink,
+    } = bundle;
     let mut worker_result = builder
         .build_all_report(request.roots, known_paths, config.max_jobs)
         .await
@@ -603,14 +629,14 @@ async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'sta
             });
         }
     }
-    register_managed_generation(
-        config.root_registration.as_ref(),
-        config.root_retention_source,
-        &root_registry,
-        &worker_result.outcomes,
-        &source_generation_paths,
-        worker_result.failed.is_empty(),
-    )
+    register_managed_generation(ManagedGenerationRequest {
+        base_registration: config.root_registration.as_ref(),
+        root_retention_source: config.root_retention_source,
+        root_registry: &root_registry,
+        outcomes: &worker_result.outcomes,
+        source_paths: &source_generation_paths,
+        is_source_generation_included: worker_result.failed.is_empty(),
+    })
     .await?;
     for retained_output in request.retained_outputs {
         root_registry
@@ -639,20 +665,38 @@ fn create_cache_only_observer(
     config: &BuildConfig,
     store: crunch_store::StoreHandle,
 ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
-    let crunch_store::PipelineStoreParts {
-        build_store,
-        action_results,
-        build_service_store,
-        output_lookup,
-        root_registry,
-    } = store.into_pipeline_store_parts();
-    let service = FetchBuildService::new(build_service_store).with_source_policy(FetchSourcePolicy::RequireOverride);
+    Ok(create_cache_only_bundle(config, store.into_pipeline_store_parts()))
+}
+
+#[cfg(target_os = "linux")]
+fn create_cache_only_bundle(
+    config: &BuildConfig,
+    parts: crunch_store::PipelineStoreParts,
+) -> PipelineBuilderBundle<FetchBuildService> {
+    let service =
+        FetchBuildService::new(parts.build_service_store).with_source_policy(FetchSourcePolicy::RequireOverride);
     let workspace_evidence_sink = empty_workspace_report_collector();
+    let store_parts = crunch_store::BuilderStoreParts {
+        build_store: parts.build_store,
+        action_results: parts.action_results,
+    };
+    let builder = create_cache_only_builder(config, store_parts, service);
+    PipelineBuilderBundle {
+        builder,
+        output_lookup: parts.output_lookup,
+        root_registry: parts.root_registry,
+        workspace_evidence_sink,
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn create_cache_only_builder(
+    config: &BuildConfig,
+    store_parts: crunch_store::BuilderStoreParts,
+    service: FetchBuildService,
+) -> Builder<FetchBuildService> {
     let mut builder = Builder::from_store_parts(
-        crunch_store::BuilderStoreParts {
-            build_store,
-            action_results,
-        },
+        store_parts,
         service,
         config.keypair.clone(),
         config.trusted_keys.clone(),
@@ -660,12 +704,7 @@ fn create_cache_only_observer(
         config.verbose,
     );
     builder.set_hermeticity_mode(HermeticityMode::Strict);
-    Ok(PipelineBuilderBundle {
-        builder,
-        output_lookup,
-        root_registry,
-        workspace_evidence_sink,
-    })
+    builder
 }
 
 #[cfg(target_os = "linux")]
@@ -964,19 +1003,30 @@ fn convert_root_drv_paths(
 
 fn normalize_failed_goal_keys(failed: &mut [FailedGoal], store_dir: &str) {
     for failed_goal in failed {
-        failed_goal.drv_key = normalized_failed_drv_key(&failed_goal.drv_key, store_dir);
-        failed_goal.origin_drv_key = normalized_failed_drv_key(&failed_goal.origin_drv_key, store_dir);
+        failed_goal.drv_key = normalized_failed_drv_key(FailedGoalKeyInput {
+            failed_key: &failed_goal.drv_key,
+            logical_store_prefix: store_dir,
+        });
+        failed_goal.origin_drv_key = normalized_failed_drv_key(FailedGoalKeyInput {
+            failed_key: &failed_goal.origin_drv_key,
+            logical_store_prefix: store_dir,
+        });
     }
 }
 
-fn normalized_failed_drv_key(drv_key: &str, store_dir: &str) -> String {
-    if parse_drv_key(store_dir, drv_key).is_some() {
-        return drv_key.to_string();
+struct FailedGoalKeyInput<'a> {
+    failed_key: &'a str,
+    logical_store_prefix: &'a str,
+}
+
+fn normalized_failed_drv_key(input: FailedGoalKeyInput<'_>) -> String {
+    if parse_drv_key(input.logical_store_prefix, input.failed_key).is_some() {
+        return input.failed_key.to_string();
     }
-    let Ok(drv_path) = StorePath::from_absolute_path(drv_key.as_bytes()) else {
-        return drv_key.to_string();
+    let Ok(drv_path) = StorePath::from_absolute_path(input.failed_key.as_bytes()) else {
+        return input.failed_key.to_string();
     };
-    drv_key_for(store_dir, &drv_path)
+    drv_key_for(input.logical_store_prefix, &drv_path)
 }
 
 fn collect_fod_mismatches(failed: &[FailedGoal]) -> Vec<FodMismatch> {
@@ -1327,6 +1377,27 @@ mod tests {
         assert!(message.contains("discovered 0 actions"), "{message}");
     }
 
+    #[tokio::test]
+    async fn eager_message_collection_rejects_root_count_overflow() {
+        let (tx, rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
+        tx.send(EvalMessage {
+            label: "unexpected-root".to_string(),
+            drv_path: managed_test_path("unexpected.drv", MANAGED_TEST_DRV_DIGEST_BYTE),
+            new_entries: Vec::new(),
+        })
+        .await
+        .unwrap();
+        drop(tx);
+
+        let error = match collect_eager_evaluation_messages(rx, MANAGED_TEST_STORE_PREFIX, 0).await {
+            Ok(_) => panic!("a message beyond the admitted root count must fail"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(error, Error::Eval(_)));
+        assert!(error.to_string().contains("exceeded its admitted root count 0"));
+    }
+
     #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn managed_generation_defers_sources_until_success_then_commits_output_and_source() {
@@ -1351,35 +1422,38 @@ mod tests {
         let root_registry = store.into_pipeline_store_parts().root_registry;
         let outcome = BuildOutcome {
             drv_path: managed_test_path("managed.drv", MANAGED_TEST_DRV_DIGEST_BYTE),
-            outputs: BTreeMap::from([("out".to_string(), output_path_info)]),
+            outputs: BTreeMap::from([
+                ("duplicate".to_string(), output_path_info.clone()),
+                ("out".to_string(), output_path_info),
+            ]),
             substitutions: BTreeMap::new(),
             cached: false,
             log: None,
         };
         let registration = managed_test_registration();
 
-        register_managed_generation(
-            Some(&registration),
-            Some(GcRootSource::Build),
-            &root_registry,
-            std::slice::from_ref(&outcome),
-            std::slice::from_ref(&source_path),
-            false,
-        )
+        register_managed_generation(ManagedGenerationRequest {
+            base_registration: Some(&registration),
+            root_retention_source: Some(GcRootSource::Build),
+            root_registry: &root_registry,
+            outcomes: std::slice::from_ref(&outcome),
+            source_paths: std::slice::from_ref(&source_path),
+            is_source_generation_included: false,
+        })
         .await
         .expect("failed pipeline keeps source generation deferred");
         let incomplete_roots = root_registry.list().expect("list incomplete generation roots");
         assert_eq!(incomplete_roots.len(), 1);
         assert_eq!(incomplete_roots[0].root_class, crunch_store::GcRootClass::ProjectOutputGeneration);
 
-        register_managed_generation(
-            Some(&registration),
-            Some(GcRootSource::Build),
-            &root_registry,
-            std::slice::from_ref(&outcome),
-            std::slice::from_ref(&source_path),
-            true,
-        )
+        register_managed_generation(ManagedGenerationRequest {
+            base_registration: Some(&registration),
+            root_retention_source: Some(GcRootSource::Build),
+            root_registry: &root_registry,
+            outcomes: std::slice::from_ref(&outcome),
+            source_paths: std::slice::from_ref(&source_path),
+            is_source_generation_included: true,
+        })
         .await
         .expect("successful pipeline commits output and source generation");
         let complete_roots = root_registry.list().expect("list complete generation roots");

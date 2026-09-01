@@ -3,10 +3,10 @@
 ## Outcome checkpoint
 
 - **Question:** Can the eight pipeline findings close without changing evaluation, build, root, cache, evidence, or key semantics?
-- **Inspected evidence:** the focused finding transcript, 58 passing pre-change tests, relevant source paths, and the accepted build-layer boundary evidence.
-- **Decision:** use bounded functional planning, existing bundle ownership, named private requests, and capability-aligned decomposition.
+- **Inspected evidence:** zero pipeline findings, 59 passing post-change tests, strict Clippy, caller checks, Nix evaluation, and the 36-finding later inventory.
+- **Decision:** accept the bounded repair. Preserve the root-library findings as the next independent Tiger Style boundary.
 - **Owner:** `repair-crunch-pipeline-tigerstyle`.
-- **Next action:** implement the bounded repair, run focused checks, and preserve the next exact repository blocker.
+- **Next action:** commit the implementation, run both full checks, and complete lifecycle validation without modifying the later boundary.
 
 ## Required evidence
 

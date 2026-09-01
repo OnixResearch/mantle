@@ -113,3 +113,4 @@ compatibility surface, crate name, or historical decision.
 | [0104](0104-vendor-spacewasm-with-crane.md) | Vendor SpaceWasm with Crane | Accepted |
 | [0105](0105-repair-store-structure-without-changing-authority.md) | Repair store structure without changing authority | Accepted |
 | [0106](0106-make-build-boundary-admission-fallible-and-explicit.md) | Make build boundary admission fallible and explicit | Accepted |
+| [0107](0107-bound-pipeline-growth-before-root-effects.md) | Bound pipeline growth before root effects | Accepted |

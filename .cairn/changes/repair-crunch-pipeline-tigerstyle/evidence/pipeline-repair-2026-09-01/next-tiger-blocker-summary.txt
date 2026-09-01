@@ -1,0 +1,19 @@
+36 later findings across five Mantle root-library files
+
+17 src/operator_contract.rs
+8 src/protected_exec_seccomp.rs
+7 src/protected_exec.rs
+3 src/errors.rs
+1 src/bootstrap.rs
+
+11 assertion-density
+6 implicit-default
+5 bool-naming
+3 ambiguous-params
+3 panic-in-production
+2 function-length
+2 extreme-sentinel
+1 compound-condition
+1 unchecked-arithmetic
+1 portable-api
+1 discarded-result
