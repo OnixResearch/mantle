@@ -13,7 +13,7 @@ timeout budget, and a positive static-link smoke stage.
 
 ## Current focused result
 
-The enforced checker reports zero findings, 470 evidence-backed
+The enforced checker reports zero findings, 472 evidence-backed
 classifications, and zero promotion claims. A temporary byte append to
 `bootstrap/stagex-transition-lineage.ncl` made enforcement fail. The test then
 restored the original BLAKE3 identity.
@@ -28,7 +28,8 @@ restored the original BLAKE3 identity.
 - **Decision:** accept exact proof-bound and explicit structural classification;
   keep all other marker text actionable.
 - **Owner:** `close-full-check-blockers`.
-- **Next action:** run full local-builder and ordinary Nix checks.
+- **Next action:** sync and archive the bounded repair with the store blocker
+  preserved for a separate change.
 
 ## Fixed-output and transport results
 
@@ -90,3 +91,28 @@ location-backed findings across 13 files:
 This is the next repository-wide blocker. It is not hidden, baselined, allowed,
 or downgraded. The accepted parity claim remains independent from this source
 quality debt.
+
+## Final command outcomes
+
+The following committed-source checks pass:
+
+- blocker inventory enforcement and self-tests;
+- proof-file tamper and missing-`b3sum` negative cases;
+- focused tests for nine repaired core packages;
+- focused and root-package Clippy with `-D warnings` and no new allowance;
+- root and repaired-package formatting;
+- bootstrap inventory, SpaceWasm rebuild, wasm-component/Octet rebuild, and
+  durable-publication Nix checks;
+- `nix flake check --no-build -L`;
+- Cairn validation, Tracey 155/155, and proposal/design/tasks gates.
+
+Both local-builder and ordinary full flake checks stop at the same
+`checks.x86_64-linux.tigerstyle` store debt. Neither run reports the earlier
+SpaceWasm or Octet fixed-output mismatch.
+
+## Non-claims
+
+This change does not claim that full `nix flake check -L` passes. It does not
+claim `crunch-store` Tiger conformance, compiler correctness, seed correctness,
+release reproducibility, deployment success, or wider parity than V98 already
+proved.

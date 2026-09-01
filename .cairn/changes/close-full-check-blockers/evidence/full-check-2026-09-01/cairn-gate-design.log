@@ -1,0 +1,67 @@
+{
+  "change": "close-full-check-blockers",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "b516296f727349e43c7c15a352620ad05b5c750e6a88a564470501c63db977e5",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+  "probe_evidence": null,
+  "receipt_hash": "1da0e9a22e59d546231f9b52d3d7a56c078d5935eed7a36acde726d511729f06",
+  "stage": "design",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/close-full-check-blockers/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 31,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/close-full-check-blockers/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 24,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/close-full-check-blockers/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 4,
+      "substantive_lines": 17,
+      "substantive_requirement_blocks": 1,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    }
+  ],
+  "task_ordering": null,
+  "valid": true,
+  "verdict": "PASS"
+}

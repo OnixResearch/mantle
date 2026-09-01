@@ -1,0 +1,7 @@
+this derivation will be built:
+  /nix/store/q1jpkdj8489jw25rp10fjx8z82lsm80d-mantle-durable-file-publication-adoption.drv
+building '/nix/store/q1jpkdj8489jw25rp10fjx8z82lsm80d-mantle-durable-file-publication-adoption.drv'...
+error: Cannot build '/nix/store/q1jpkdj8489jw25rp10fjx8z82lsm80d-mantle-durable-file-publication-adoption.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/4yjj1rcpwq20zcl1hzwfv1zp8wp1jsh4-mantle-durable-file-publication-adoption

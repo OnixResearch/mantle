@@ -1,0 +1,14 @@
+30 crates/crunch-store/src/provenance.rs
+26 crates/crunch-store/src/roots.rs
+21 crates/crunch-store/src/nario.rs
+15 crates/crunch-store/src/overlay.rs
+15 crates/crunch-store/src/gc.rs
+12 crates/crunch-store/src/pull.rs
+8 crates/crunch-store/src/http_closure.rs
+6 crates/crunch-store/src/composition.rs
+2 crates/crunch-store/src/retention.rs
+1 crates/crunch-store/src/query.rs
+1 crates/crunch-store/src/layer.rs
+1 crates/crunch-store/src/handle.rs
+1 crates/crunch-store/src/capability.rs
+location_findings=139

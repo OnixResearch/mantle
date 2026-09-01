@@ -1,0 +1,1 @@
+./scripts/check-bootstrap-blocker-inventory.sh --self-test --json evidence/full-check-2026-09-01/inventory.json --markdown evidence/full-check-2026-09-01/inventory.md

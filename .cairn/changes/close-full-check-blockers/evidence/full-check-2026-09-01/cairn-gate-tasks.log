@@ -1,0 +1,92 @@
+{
+  "change": "close-full-check-blockers",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "9d5bdf3df883b23ba4262204d70a6c09eedb12e9ef6a1fd49821ca89a8953ed5",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+  "probe_evidence": {
+    "declarations_present": false,
+    "probes": []
+  },
+  "receipt_hash": "79e7f4090bf9f73c203c49ebd8f976887bcb281b5ded24a453a278ab5713cc2a",
+  "stage": "tasks",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/close-full-check-blockers/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 31,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/close-full-check-blockers/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 24,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/close-full-check-blockers/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 4,
+      "substantive_lines": 17,
+      "substantive_requirement_blocks": 1,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 10,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/close-full-check-blockers/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 15,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 10,
+      "task_done": 9,
+      "task_in_progress": 0,
+      "task_todo": 1
+    }
+  ],
+  "task_ordering": {
+    "active": false,
+    "edges": [],
+    "issues": [],
+    "nodes": [],
+    "order": [],
+    "ready_tasks": [],
+    "valid": true
+  },
+  "valid": true,
+  "verdict": "PASS"
+}
