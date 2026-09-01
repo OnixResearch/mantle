@@ -1,12 +1,12 @@
-36b22a23cea39fc27db6c70347cbe33e89957f5f2831be5fe6cffac12ef87bb7  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-gate-design.log
+6bb15d1dd093a8c7eae9c8ab71951046f9ef21bc6baae8bf79b264d4e703029b  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-gate-design.log
 148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-gate-design.status
-54112083fb573087671b78b8d409286fc25dceb7df0ca4f2ef67f1f66b6f5275  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-gate-proposal.log
+68695372cf300c246d4c9a56eb32963742ec5e5d5e40c2b322bf1ac70c23830d  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-gate-proposal.log
 148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-gate-proposal.status
-a781dbfcdfa93ec3deabcf90e4c753f9501c344d9bf1a000b26cd7aa26f47dff  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-gate-tasks.log
+ad67d955e12ddf04ecb4f2192f4c41922ea4b30afd697d02c32c412f2bbfeb32  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-gate-tasks.log
 148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-gate-tasks.status
 7dfcebb7a5640af2401e8f38a8f687c553326a9f11b82d6d49bf8459d58ffc54  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-tracey.log
 148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-tracey.status
-bf5fa4ae8c9dfac646f013b19418d47badb5a6eecfa396ce833f5410dd3c625a  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-validate.log
+6e79748566fd5ae1c7d75bf9fb3fac6f8fde3f6b531f9f3d1ebfb28755fcf774  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-validate.log
 148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-validate.status
 6f89bf645d48bda7e593f94bb3e46e66bf3c7ae5648b0f5f272bbf6725d5cc98  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/clippy.log
 148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/clippy.status
@@ -22,6 +22,7 @@ c7709b9885112ff800715fb479260ff09d8f74ad8ddf1eea46486e3f578cfce3  .cairn/changes
 148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/formatting.status
 af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/git-diff-check.log
 148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/git-diff-check.status
+68c470a2578f3c59326ca6125ed7d7b972c1a9e30d8366334fffb1697d75b60c  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/git-status-before-archive.log
 c64c97ea4073fc4321b4376d7d0b50c5f44d02a7efc35015911addbe5d4c6553  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/inventory-baseline.json
 e245b964d30f5f064f32b86b46983c55e7ad2d508485ab13a7b1c5e2828a9f8b  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/inventory-baseline.md
 7fec5748d93cac962eec620575a7787a00c67298149278da06ee68ab744fbb4a  .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/inventory.command.txt

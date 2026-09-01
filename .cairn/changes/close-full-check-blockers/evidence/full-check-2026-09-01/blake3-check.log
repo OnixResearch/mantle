@@ -22,6 +22,7 @@
 .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/formatting.status: OK
 .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/git-diff-check.log: OK
 .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/git-diff-check.status: OK
+.cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/git-status-before-archive.log: OK
 .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/inventory-baseline.json: OK
 .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/inventory-baseline.md: OK
 .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/inventory.command.txt: OK

@@ -9,7 +9,7 @@
     "probe": 0,
     "property": 0
   },
-  "input_hash": "9d5bdf3df883b23ba4262204d70a6c09eedb12e9ef6a1fd49821ca89a8953ed5",
+  "input_hash": "f534f1057a048e37994a7bc306cecad704f1df52e92d87a9c288abd75638cf9a",
   "issues": [],
   "layout": "cairn",
   "policy": "mantle-default",
@@ -18,7 +18,7 @@
     "declarations_present": false,
     "probes": []
   },
-  "receipt_hash": "79e7f4090bf9f73c203c49ebd8f976887bcb281b5ded24a453a278ab5713cc2a",
+  "receipt_hash": "04962d0391c3aba6256c42a5220240d5e4a2de4b7bddced6c9ef8b7de7b3ec96",
   "stage": "tasks",
   "substance": [
     {
@@ -70,12 +70,12 @@
       "path": "./.cairn/changes/close-full-check-blockers/tasks.md",
       "requirement_blocks": 0,
       "scenario_blocks": 0,
-      "substantive_lines": 15,
+      "substantive_lines": 16,
       "substantive_requirement_blocks": 0,
       "substantive_tasks": 10,
-      "task_done": 9,
+      "task_done": 10,
       "task_in_progress": 0,
-      "task_todo": 1
+      "task_todo": 0
     }
   ],
   "task_ordering": {

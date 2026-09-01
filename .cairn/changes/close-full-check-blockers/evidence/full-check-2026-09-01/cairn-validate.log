@@ -810,12 +810,12 @@
       "path": "./.cairn/changes/close-full-check-blockers/tasks.md",
       "requirement_blocks": 0,
       "scenario_blocks": 0,
-      "substantive_lines": 14,
+      "substantive_lines": 16,
       "substantive_requirement_blocks": 0,
       "substantive_tasks": 10,
-      "task_done": 8,
+      "task_done": 10,
       "task_in_progress": 0,
-      "task_todo": 2
+      "task_todo": 0
     },
     {
       "checkbox_tasks": 0,
