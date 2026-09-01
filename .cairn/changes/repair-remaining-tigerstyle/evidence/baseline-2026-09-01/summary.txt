@@ -1,0 +1,7 @@
+36 root-library findings across five files
+
+17 src/operator_contract.rs
+8 src/protected_exec_seccomp.rs
+7 src/protected_exec.rs
+3 src/errors.rs
+1 src/bootstrap.rs

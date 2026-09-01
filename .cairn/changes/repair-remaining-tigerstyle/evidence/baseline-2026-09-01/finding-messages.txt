@@ -1,0 +1,36 @@
+tigerstyle-consumer-check> error: function `fetch_raw_seed` is 84 lines (limit: 70)
+tigerstyle-consumer-check> error: function `validate_inventory` has 0 assertion(s) in 24 lines (need 2+)
+tigerstyle-consumer-check> error: function `validate_platform_profiles` has 0 assertion(s) in 36 lines (need 2+)
+tigerstyle-consumer-check> error: function `validate_surface` has 0 assertion(s) in 42 lines (need 2+)
+tigerstyle-consumer-check> error: function `validate_surface_text_fields` has 0 assertion(s) in 24 lines (need 2+)
+tigerstyle-consumer-check> error: function `build_command_catalog` has 0 assertion(s) in 45 lines (need 2+)
+tigerstyle-consumer-check> error: function `classify_remediation` is 151 lines (limit: 70)
+tigerstyle-consumer-check> error: function `classify_remediation` has 0 assertion(s) in 151 lines (need 2+)
+tigerstyle-consumer-check> error: condition has 3 boolean operators
+tigerstyle-consumer-check> error: function `validate_promotion_source_ids` has 0 assertion(s) in 34 lines (need 2+)
+tigerstyle-consumer-check> error: function `reap_adopted_exec_descendants` has 1 assertion(s) in 35 lines (need 2+)
+tigerstyle-consumer-check> error: function `wait_for_audit_quiescence` has 1 assertion(s) in 25 lines (need 2+)
+tigerstyle-consumer-check> error: function `read_tracee_memory` has 0 assertion(s) in 21 lines (need 2+)
+tigerstyle-consumer-check> error: function `send_response` has 0 assertion(s) in 25 lines (need 2+)
+tigerstyle-consumer-check> error: `.expect()` in production code will panic on failure
+tigerstyle-consumer-check> error: `.expect()` in production code will panic on failure
+tigerstyle-consumer-check> error: `.expect()` in production code will panic on failure
+tigerstyle-consumer-check> error: implicit default on external type — construct with explicit values
+tigerstyle-consumer-check> error: implicit default on external type — construct with explicit values
+tigerstyle-consumer-check> error: implicit default on external type — construct with explicit values
+tigerstyle-consumer-check> error: implicit default on external type — construct with explicit values
+tigerstyle-consumer-check> error: implicit default on external type — construct with explicit values
+tigerstyle-consumer-check> error: implicit default on external type — construct with explicit values
+tigerstyle-consumer-check> error: boolean binding `blocker_required` should have a predicate prefix
+tigerstyle-consumer-check> error: 2 consecutive `&str` parameters are easy to swap by accident
+tigerstyle-consumer-check> error: 2 consecutive `&str` parameters are easy to swap by accident
+tigerstyle-consumer-check> error: 2 consecutive `&str` parameters are easy to swap by accident
+tigerstyle-consumer-check> error: extreme sentinel fallback masks absence or failure
+tigerstyle-consumer-check> error: extreme sentinel fallback masks absence or failure
+tigerstyle-consumer-check> error: unprotected unsigned addition may overflow
+tigerstyle-consumer-check> error: boolean binding `producer_allowed` should have a predicate prefix
+tigerstyle-consumer-check> error: boolean binding `path_valid` should have a predicate prefix
+tigerstyle-consumer-check> error: `usize` in public API — use `u32` or `u64` for cross-platform consistency
+tigerstyle-consumer-check> error: `Result` value silently discarded with `let _ = ...`
+tigerstyle-consumer-check> error: boolean binding `retryable` should have a predicate prefix
+tigerstyle-consumer-check> error: boolean binding `retries_remain` should have a predicate prefix
