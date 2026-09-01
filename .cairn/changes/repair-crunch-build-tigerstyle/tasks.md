@@ -22,5 +22,7 @@
 
 - [x] [serial] V1 [covers=build_correctness.tiger_conformance] [evidence=evidence/validation.md] Run `nix develop -c cargo test -p crunch-build -p crunch-rustc-wrapper --lib --tests` before and after core changes, with positive and negative coverage. r[build_correctness.tiger_conformance]
   - Evidence: the baseline passes 702 tests. The post-change run passes 704 tests, including two new CA rejection cases.
-- [ ] [serial] V2 [covers=build_correctness.tiger_conformance] [evidence=evidence/validation.md] Run `nix run .#tigerstyle -- check -- -p crunch-build -p crunch-rustc-wrapper`, repository Tiger Style, strict Clippy, formatting, and diff checks without allowances. r[build_correctness.tiger_conformance]
-- [ ] [serial] V3 [covers=build_correctness.tiger_conformance] [evidence=evidence/validation.md] Run local and ordinary full flake checks, preserve any later exact blocker, then validate, sync, archive, commit, push, and integrate. r[build_correctness.tiger_conformance]
+- [x] [serial] V2 [covers=build_correctness.tiger_conformance] [evidence=evidence/validation.md] Run `nix run .#tigerstyle -- check -- -p crunch-build -p crunch-rustc-wrapper`, repository Tiger Style, strict Clippy, formatting, and diff checks without allowances. r[build_correctness.tiger_conformance]
+  - Evidence: both Tiger transcripts contain zero build or wrapper finding and reach eight `crunch-pipeline` findings. Strict Clippy, formatting, caller checks, Nix evaluation, and suppression scans pass.
+- [x] [serial] V3 [covers=build_correctness.tiger_conformance] [evidence=evidence/validation.md] Run local and ordinary full flake checks, preserve any later exact blocker, then validate, sync, archive, commit, push, and integrate. r[build_correctness.tiger_conformance]
+  - Evidence: neither full check reports a build or wrapper finding. Ordinary preserves eight pipeline findings; local preserves six missing filtered-source diagnostics over five tracked V47/V48 files.

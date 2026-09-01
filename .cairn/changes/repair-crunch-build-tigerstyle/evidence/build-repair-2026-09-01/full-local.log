@@ -1,0 +1,680 @@
+evaluating flake...
+checking flake output 'packages'...
+checking derivation packages.x86_64-linux.wasi-virt...
+copying path '/nix/store/hhccdmpa2bhqbagn2zgmgrwjbcdinn55-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/1pzq6dhayzd6kgyhjwqr1bwq468z36vp0al101havv6d0pw1fa40.nar?hash=hhccdmpa2bhqbagn2zgmgrwjbcdinn55' does not exist in binary cache 'http://100.100.103.95:5000'
+waiting for another Nix process to finish fetching input 'github:ipetkov/crane/6c23998526351a53ce734f0ac84940da988ccef1?narHash=sha256-gCgX%2BAXN7K1gAIEqcLcZHxmC%2BQoZcwn9m6Z9r2Az%2BN8%3D'...
+derivation evaluated to /nix/store/cacsszdc86gnw4lccv1kiwip8dljz8r9-wasi-virt-0.2.0.drv
+checking derivation packages.x86_64-linux.default...
+waiting for another Nix process to finish fetching input 'git+https://github.com/trailofbits/dylint?rev=0e0a71eefe6f01563d11acc6e1d7af1d505934a9&submodules=1'...
+waiting for another Nix process to finish fetching input 'git+https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49&submodules=1'...
+derivation evaluated to /nix/store/1y3xw1p0j29ym6hra9vlz16v3m9fz0db-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.crunch...
+derivation evaluated to /nix/store/1y3xw1p0j29ym6hra9vlz16v3m9fz0db-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.ast-grep-toolchain...
+derivation evaluated to /nix/store/hwz43xm09gs5v38a4pfyc2dhs5n9h1pj-mantle-ast-grep-toolchain-0.42.1.drv
+checking derivation packages.x86_64-linux.ast-grep-package-identity...
+derivation evaluated to /nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain...
+derivation evaluated to /nix/store/skwkzzc8khiw49fjp2l73d5m4x4m88y6-mantle-wasm-component-toolchain-v1.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-identity...
+derivation evaluated to /nix/store/nrf64w472p89kb8q03zw8wf5hx0198c0-mantle-wasm-component-toolchain-identity.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-compatibility...
+derivation evaluated to /nix/store/lax220sgd6bf2raarrl38cg9clbdgspm-mantle-wasm-component-toolchain-compatibility.drv
+checking derivation packages.x86_64-linux.mantle-transcript-quality...
+waiting for another Nix process to finish fetching input 'git+https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9&submodules=1'...
+waiting for another Nix process to finish fetching input 'git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1&submodules=1'...
+waiting for another Nix process to finish fetching input 'git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1&submodules=1'...
+derivation evaluated to /nix/store/rrv022086r32pqjy1wfr53f5wr43f2rr-mantle-transcript-quality-nextest-0.1.0.drv
+checking derivation packages.x86_64-linux.release-nix-witness-quality...
+derivation evaluated to /nix/store/fk2afdp0y0hjz04iq2bxkgwhi12wfca4-crunch-release-nix-witness-quality-nextest-0.1.0.drv
+checking derivation packages.x86_64-linux.check-store-retention-policy...
+derivation evaluated to /nix/store/5xc5yw2mnizcln8b4f52fmgxb861s4z7-check-store-retention-policy.drv
+checking derivation packages.x86_64-linux.check-store-overlay-policy...
+derivation evaluated to /nix/store/358z0ygz6qib9gpgs79sp2llm0d3q2ls-check-store-overlay-policy.drv
+checking derivation packages.x86_64-linux.oci-distribution-registry...
+derivation evaluated to /nix/store/7h1b5w2s2gqhb0dgmiydw4xcl2blxnnv-distribution-3.1.0.drv
+checking derivation packages.x86_64-linux.rustc-wrapper...
+derivation evaluated to /nix/store/bbi686m97d46wcm316f9a98clhn4zm3m-mantle-rustc-wrapper-0.1.0.drv
+checking derivation packages.x86_64-linux.kernelscript-compiler...
+derivation evaluated to /nix/store/z1dps3ryzhmn8iyx6jnpfyxfqlnzqpzq-ocaml5.2.1-kernelscript-0.1.2.drv
+checking derivation packages.x86_64-linux.kernelscript-core-adapter...
+derivation evaluated to /nix/store/v1nkhnsyy5gcl73ifswcl5fyqdw4iqvl-crunch-kernelscript-adapter-0.1.0.drv
+checking derivation packages.x86_64-linux.kernelscript-production...
+derivation evaluated to /nix/store/ajcxvd7rpss8k4zibnk0j2i65l2zshzc-mantle-kernelscript-production-artifacts.drv
+checking derivation packages.x86_64-linux.kernelscript-production-cohort...
+derivation evaluated to /nix/store/11x49yvpqz7imz20k4s5cra42xba44zg-mantle-kernelscript-production-cohort.drv
+checking derivation packages.x86_64-linux.kernelscript-production-shell...
+derivation evaluated to /nix/store/39j7jwv9jlmqb5j66zg3pxsh0ii8hlx0-mantle-kernelscript-production.drv
+checking derivation packages.x86_64-linux.kernelscript-production-runtime-check...
+derivation evaluated to /nix/store/9zyqjbca3j5cq8rl4l6373qhqzhih9r8-vm-test-run-mantle-kernelscript-production-runtime.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-bundle...
+derivation evaluated to /nix/store/58mdyyk7wnymnnd7bzfakqrpi0b1ny59-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-bundler...
+derivation evaluated to /nix/store/5zy41qxrhp4yi8s31fnvbvw1s3aibcpw-mantle-spacewasm-reference-bundler-0.1.0.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-evidence...
+derivation evaluated to /nix/store/imiig80j09fxg2nv2qkyrw4zzmazj9j9-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-evidence.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-rust-toolchain...
+derivation evaluated to /nix/store/ib3maa2zj4d9ikmlx4x15xaiz9vxh55r-rust-minimal-1.91.1.drv
+checking flake output 'apps'...
+checking app 'apps.x86_64-linux.tigerstyle'...
+warning: app 'apps.x86_64-linux.tigerstyle' lacks attribute 'meta'
+checking flake output 'checks'...
+checking derivation checks.x86_64-linux.tigerstyle...
+derivation evaluated to /nix/store/xjb2fhhzcd3vpsk5a5s0v233fhwx8q9f-tigerstyle-consumer-check.drv
+checking derivation checks.x86_64-linux.crunch...
+derivation evaluated to /nix/store/1y3xw1p0j29ym6hra9vlz16v3m9fz0db-mantle-0.1.0.drv
+checking derivation checks.x86_64-linux.ast-grep-package-identity...
+derivation evaluated to /nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv
+checking derivation checks.x86_64-linux.wasm-component-toolchain-identity...
+derivation evaluated to /nix/store/nrf64w472p89kb8q03zw8wf5hx0198c0-mantle-wasm-component-toolchain-identity.drv
+checking derivation checks.x86_64-linux.wasm-component-toolchain-compatibility...
+derivation evaluated to /nix/store/lax220sgd6bf2raarrl38cg9clbdgspm-mantle-wasm-component-toolchain-compatibility.drv
+checking derivation checks.x86_64-linux.mantle-transcript-quality...
+derivation evaluated to /nix/store/rrv022086r32pqjy1wfr53f5wr43f2rr-mantle-transcript-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.release-nix-witness-quality...
+derivation evaluated to /nix/store/fk2afdp0y0hjz04iq2bxkgwhi12wfca4-crunch-release-nix-witness-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.kernelscript-production...
+derivation evaluated to /nix/store/gfzfbvxz26pw9h3a25lk01dr0y6m04v1-mantle-kernelscript-production-structural-check.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-bundle...
+derivation evaluated to /nix/store/58mdyyk7wnymnnd7bzfakqrpi0b1ny59-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv
+checking derivation checks.x86_64-linux.bounded-tree-source-admission...
+derivation evaluated to /nix/store/n6cx3ah2k34654m12135c46yd3z8a595-mantle-bounded-tree-source-admission.drv
+checking derivation checks.x86_64-linux.transactional-reconciliation-source-admission...
+derivation evaluated to /nix/store/xqw83kzlgmiimyzfixyqgdzgnf6xkfdw-mantle-transactional-reconciliation-source-admission.drv
+checking derivation checks.x86_64-linux.bootstrap-blocker-inventory...
+derivation evaluated to /nix/store/a6dfz4w186bccikbcw60ajn7svsir5ri-bootstrap-blocker-inventory.drv
+checking derivation checks.x86_64-linux.nickel-export-core-pin...
+derivation evaluated to /nix/store/2p6b6gqm8pszxvsyvdfj7753y8vd2ynx-mantle-nickel-export-core-pin.drv
+checking derivation checks.x86_64-linux.content-bound-requirement-source-closure...
+derivation evaluated to /nix/store/w2hmv3a3vkig7m2jfpcvz7ib5vy36i4j-mantle-content-bound-requirement-source-closure.drv
+checking derivation checks.x86_64-linux.content-bound-requirement-evidence...
+derivation evaluated to /nix/store/da60fdi536hlxa5r0mml1ar4q67j37wl-mantle-content-bound-requirement-evidence.drv
+checking derivation checks.x86_64-linux.store-retention-policy...
+derivation evaluated to /nix/store/m66llczbdr3lyrij36fli4hlmlywp713-mantle-store-retention-policy.drv
+checking derivation checks.x86_64-linux.store-overlay-policy...
+derivation evaluated to /nix/store/p43shwnkr4hvqcbnaf1mpi1k66c0v2fl-mantle-store-overlay-policy.drv
+checking derivation checks.x86_64-linux.release-determinism-quality...
+derivation evaluated to /nix/store/cjd44b0qkw4v3lf3xlqdkf2m684vv2bh-crunch-release-determinism-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.artifact-auth-radicle-cutover...
+derivation evaluated to /nix/store/w3dd01vfs0zqx0igbfzli1cmkqs570gk-mantle-artifact-auth-radicle-cutover.drv
+checking derivation checks.x86_64-linux.durable-file-publication-adoption...
+derivation evaluated to /nix/store/klwj6nchfsxj3k79f2g8kyckdyb9rhp3-mantle-durable-file-publication-adoption.drv
+checking derivation checks.x86_64-linux.mantle-build-contract...
+derivation evaluated to /nix/store/ahp34hgfdmlnkxpvinhlgqpqj7frj66c-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract-wasm...
+derivation evaluated to /nix/store/336ydk6bd9b6pk57a0qyz5n3l1kgw6aa-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract-nickel...
+derivation evaluated to /nix/store/v3vvp9f005g2y6x1v0wwkhw3s4gfrscp-mantle-build-contract-nickel.drv
+checking derivation checks.x86_64-linux.nextest...
+derivation evaluated to /nix/store/wy7d7dy5mpk558gpmn8v3i14544g582b-mantle-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.clippy...
+derivation evaluated to /nix/store/44sfr6zjalx0abw81bd0b4ln1psj67yr-mantle-clippy-0.1.0.drv
+checking derivation checks.x86_64-linux.fmt...
+derivation evaluated to /nix/store/qqp6wwbm8q0ypgk24vp6r4hjaf9wcn8l-mantle-fmt-0.1.0.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-profile...
+derivation evaluated to /nix/store/l7afrlfqdkbk2kr6cc4b3cz71mfvyqgr-spacewasm-reference-profile-export.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-host-library...
+derivation evaluated to /nix/store/w4jrclscwbypndanjqk3q80n0ms9vmq7-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-host-library.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-wasm-library...
+derivation evaluated to /nix/store/55qq4aiiy3kl1vn7m0m6bhbwkrj8viin-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-wasm-library.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-host-runner...
+derivation evaluated to /nix/store/nhq1j51vr6f2c3hyizpym9gqv7kdlyhg-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-diagnostic-runner.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-upstream-unit-tests...
+derivation evaluated to /nix/store/d32qk66pm2qmpp0dbjqsyv9v0qcyrn63-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-unit-tests.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-spectest-address...
+derivation evaluated to /nix/store/idj54q1da8w21x0c59p8ay7vxnh2gin6-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-spectest-address.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-fixtures...
+derivation evaluated to /nix/store/1i1y5ni7ivf7bnhdb2z8i0kpsbkl0x2j-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-fixture-report.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-negative...
+derivation evaluated to /nix/store/6p0ana9vradxplf1as1rb12n67am2gdr-mantle-spacewasm-reference-negative-check.drv
+checking flake output 'devShells'...
+checking derivation devShells.x86_64-linux.default...
+waiting for another Nix process to finish fetching input 'git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be&submodules=1'...
+derivation evaluated to /nix/store/36ihw433z62fxfz0c70fwpabxspk9861-nix-shell.drv
+running 24 flake checks...
+building '/nix/store/v1nkhnsyy5gcl73ifswcl5fyqdw4iqvl-crunch-kernelscript-adapter-0.1.0.drv'...
+building '/nix/store/cjd44b0qkw4v3lf3xlqdkf2m684vv2bh-crunch-release-determinism-quality-nextest-0.1.0.drv'...
+building '/nix/store/fk2afdp0y0hjz04iq2bxkgwhi12wfca4-crunch-release-nix-witness-quality-nextest-0.1.0.drv'...
+building '/nix/store/1y3xw1p0j29ym6hra9vlz16v3m9fz0db-mantle-0.1.0.drv'...
+crunch-kernelscript-adapter> Running phase: unpackPhase
+crunch-kernelscript-adapter> unpacking source archive /nix/store/vdp4n1gfpry4gfnfqzab7vjqq4nxzd2f-source
+crunch-release-determinism-quality-nextest> Running phase: unpackPhase
+crunch-release-determinism-quality-nextest> unpacking source archive /nix/store/vdp4n1gfpry4gfnfqzab7vjqq4nxzd2f-source
+crunch-release-nix-witness-quality-nextest> Running phase: unpackPhase
+crunch-release-nix-witness-quality-nextest> unpacking source archive /nix/store/vdp4n1gfpry4gfnfqzab7vjqq4nxzd2f-source
+mantle> Running phase: unpackPhase
+mantle> unpacking source archive /nix/store/vdp4n1gfpry4gfnfqzab7vjqq4nxzd2f-source
+crunch-kernelscript-adapter> source root is source
+crunch-release-determinism-quality-nextest> source root is source
+crunch-release-nix-witness-quality-nextest> source root is source
+mantle> source root is source
+crunch-kernelscript-adapter> Running phase: patchPhase
+crunch-release-determinism-quality-nextest> Running phase: patchPhase
+crunch-kernelscript-adapter> Executing configureCargoCommonVars
+crunch-release-determinism-quality-nextest> Executing configureCargoCommonVars
+crunch-kernelscript-adapter> decompressing cargo artifacts from /nix/store/1s2zqd32p6kphd7dxf7iqf919jd8gsfm-mantle-deps-0.1.0/target.tar.zst to target
+crunch-release-determinism-quality-nextest> decompressing cargo artifacts from /nix/store/1s2zqd32p6kphd7dxf7iqf919jd8gsfm-mantle-deps-0.1.0/target.tar.zst to target
+crunch-release-nix-witness-quality-nextest> Running phase: patchPhase
+crunch-release-nix-witness-quality-nextest> Executing configureCargoCommonVars
+crunch-release-nix-witness-quality-nextest> decompressing cargo artifacts from /nix/store/1s2zqd32p6kphd7dxf7iqf919jd8gsfm-mantle-deps-0.1.0/target.tar.zst to target
+mantle> Running phase: patchPhase
+mantle> Executing configureCargoCommonVars
+mantle> decompressing cargo artifacts from /nix/store/1s2zqd32p6kphd7dxf7iqf919jd8gsfm-mantle-deps-0.1.0/target.tar.zst to target
+crunch-kernelscript-adapter> Running phase: updateAutotoolsGnuConfigScriptsPhase
+crunch-release-determinism-quality-nextest> Running phase: updateAutotoolsGnuConfigScriptsPhase
+crunch-release-nix-witness-quality-nextest> Running phase: updateAutotoolsGnuConfigScriptsPhase
+crunch-kernelscript-adapter> Running phase: configurePhase
+crunch-kernelscript-adapter> will append /build/source/.cargo-home/config.toml with contents of /nix/store/bwpb9h9679vkjx0pff5nq1rr36niq82d-vendor-cargo-deps/config.toml
+crunch-kernelscript-adapter> default configurePhase, nothing to do
+crunch-kernelscript-adapter> Running phase: buildPhase
+crunch-kernelscript-adapter> +++ command cargo --version
+mantle> Running phase: updateAutotoolsGnuConfigScriptsPhase
+crunch-kernelscript-adapter> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+crunch-kernelscript-adapter> +++ command cargo build --release --message-format json-render-diagnostics --locked -p crunch-kernelscript-adapter --bin mantle-kernelscript-core-adapter
+crunch-kernelscript-adapter> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+crunch-kernelscript-adapter>   * `bin` target `crunch`
+crunch-kernelscript-adapter>   * `bin` target `mantle`
+crunch-release-determinism-quality-nextest> Running phase: configurePhase
+crunch-release-determinism-quality-nextest> will append /build/source/.cargo-home/config.toml with contents of /nix/store/bwpb9h9679vkjx0pff5nq1rr36niq82d-vendor-cargo-deps/config.toml
+crunch-release-determinism-quality-nextest> default configurePhase, nothing to do
+crunch-release-determinism-quality-nextest> Running phase: buildPhase
+crunch-release-determinism-quality-nextest> +++ command cargo --version
+crunch-release-determinism-quality-nextest> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+crunch-release-determinism-quality-nextest> +++ command cargo nextest --version
+crunch-release-nix-witness-quality-nextest> Running phase: configurePhase
+crunch-release-nix-witness-quality-nextest> will append /build/source/.cargo-home/config.toml with contents of /nix/store/bwpb9h9679vkjx0pff5nq1rr36niq82d-vendor-cargo-deps/config.toml
+crunch-release-nix-witness-quality-nextest> default configurePhase, nothing to do
+crunch-release-nix-witness-quality-nextest> Running phase: buildPhase
+crunch-release-nix-witness-quality-nextest> +++ command cargo --version
+crunch-release-nix-witness-quality-nextest> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+crunch-release-nix-witness-quality-nextest> +++ command cargo nextest --version
+crunch-release-determinism-quality-nextest> cargo-nextest 0.9.132
+crunch-release-determinism-quality-nextest> release: 0.9.132
+crunch-release-determinism-quality-nextest> host: x86_64-unknown-linux-gnu
+crunch-release-determinism-quality-nextest> Running phase: checkPhase
+crunch-release-determinism-quality-nextest> +++ command cargo nextest run --cargo-profile release --test release_cli release_reproduce_generated_two_clean_store_proof_verifies_deterministic_release
+crunch-release-nix-witness-quality-nextest> cargo-nextest 0.9.132
+crunch-release-nix-witness-quality-nextest> release: 0.9.132
+crunch-release-nix-witness-quality-nextest> host: x86_64-unknown-linux-gnu
+crunch-release-nix-witness-quality-nextest> Running phase: checkPhase
+crunch-release-nix-witness-quality-nextest> +++ command cargo nextest run --cargo-profile release --test release_cli release_nix_witness
+mantle> Running phase: configurePhase
+mantle> will append /build/source/.cargo-home/config.toml with contents of /nix/store/bwpb9h9679vkjx0pff5nq1rr36niq82d-vendor-cargo-deps/config.toml
+mantle> default configurePhase, nothing to do
+mantle> Running phase: buildPhase
+mantle> +++ command cargo --version
+mantle> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle> +++ command cargo build --release --message-format json-render-diagnostics --locked
+mantle> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+mantle>   * `bin` target `crunch`
+mantle>   * `bin` target `mantle`
+crunch-kernelscript-adapter>    Compiling proc-macro2 v1.0.106
+crunch-kernelscript-adapter>    Compiling quote v1.0.45
+crunch-kernelscript-adapter>    Compiling cc v1.2.59
+crunch-kernelscript-adapter>    Compiling serde_json v1.0.149
+crunch-kernelscript-adapter>    Compiling memchr v2.8.0
+crunch-kernelscript-adapter>    Compiling libc v0.2.186
+crunch-kernelscript-adapter>    Compiling digest v0.10.7
+crunch-release-determinism-quality-nextest> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+crunch-release-determinism-quality-nextest>   * `bin` target `crunch`
+crunch-release-determinism-quality-nextest>   * `bin` target `mantle`
+crunch-release-nix-witness-quality-nextest> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+crunch-release-nix-witness-quality-nextest>   * `bin` target `crunch`
+crunch-release-nix-witness-quality-nextest>   * `bin` target `mantle`
+crunch-kernelscript-adapter>    Compiling sha2 v0.10.9
+mantle>    Compiling fuse-backend-rs v0.12.0 (/build/source/vendor/fuse-backend-rs)
+mantle>    Compiling nix-compat v0.1.0 (/build/source/vendor/nix-compat)
+mantle>    Compiling crunch-attestation-core v0.1.0 (/build/source/crates/crunch-attestation-core)
+mantle>    Compiling nix-compat-derive v0.1.0 (/build/source/vendor/nix-compat-derive)
+mantle>    Compiling snix-castore v0.1.0 (/build/source/vendor/snix-castore)
+crunch-release-determinism-quality-nextest>    Compiling nix-compat v0.1.0 (/build/source/vendor/nix-compat)
+crunch-release-determinism-quality-nextest>    Compiling fuse-backend-rs v0.12.0 (/build/source/vendor/fuse-backend-rs)
+crunch-release-determinism-quality-nextest>    Compiling crunch-attestation-core v0.1.0 (/build/source/crates/crunch-attestation-core)
+crunch-release-determinism-quality-nextest>    Compiling nix-compat-derive v0.1.0 (/build/source/vendor/nix-compat-derive)
+crunch-release-nix-witness-quality-nextest>    Compiling fuse-backend-rs v0.12.0 (/build/source/vendor/fuse-backend-rs)
+crunch-release-nix-witness-quality-nextest>    Compiling nix-compat v0.1.0 (/build/source/vendor/nix-compat)
+mantle>    Compiling snix-tracing v0.1.0 (/build/source/vendor/snix-tracing)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-attestation-core v0.1.0 (/build/source/crates/crunch-attestation-core)
+crunch-release-nix-witness-quality-nextest>    Compiling nix-compat-derive v0.1.0 (/build/source/vendor/nix-compat-derive)
+crunch-kernelscript-adapter>    Compiling syn v2.0.117
+crunch-kernelscript-adapter>    Compiling blake3 v1.8.2
+crunch-release-determinism-quality-nextest>    Compiling snix-castore v0.1.0 (/build/source/vendor/snix-castore)
+crunch-release-nix-witness-quality-nextest>    Compiling snix-castore v0.1.0 (/build/source/vendor/snix-castore)
+crunch-release-determinism-quality-nextest>    Compiling snix-tracing v0.1.0 (/build/source/vendor/snix-tracing)
+crunch-release-nix-witness-quality-nextest>    Compiling snix-tracing v0.1.0 (/build/source/vendor/snix-tracing)
+crunch-kernelscript-adapter>    Compiling serde_derive v1.0.228
+crunch-kernelscript-adapter>    Compiling serde v1.0.228
+crunch-kernelscript-adapter>    Compiling crunch-kernelscript-core v0.1.0 (/build/source/crates/crunch-kernelscript-core)
+mantle>    Compiling crunch-attestation v0.1.0 (/build/source/crates/crunch-attestation)
+crunch-release-determinism-quality-nextest>    Compiling crunch-attestation v0.1.0 (/build/source/crates/crunch-attestation)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-attestation v0.1.0 (/build/source/crates/crunch-attestation)
+crunch-kernelscript-adapter>    Compiling crunch-kernelscript-adapter v0.1.0 (/build/source/crates/crunch-kernelscript-adapter)
+mantle>    Compiling snix-store v0.1.0 (/build/source/vendor/snix-store)
+mantle>    Compiling snix-build v0.1.0 (/build/source/vendor/snix-build)
+mantle>    Compiling crunch-nar v0.1.0 (/build/source/crates/crunch-nar)
+crunch-release-determinism-quality-nextest>    Compiling snix-build v0.1.0 (/build/source/vendor/snix-build)
+crunch-release-nix-witness-quality-nextest>    Compiling snix-build v0.1.0 (/build/source/vendor/snix-build)
+crunch-release-determinism-quality-nextest>    Compiling snix-store v0.1.0 (/build/source/vendor/snix-store)
+crunch-release-nix-witness-quality-nextest>    Compiling snix-store v0.1.0 (/build/source/vendor/snix-store)
+crunch-release-determinism-quality-nextest>    Compiling crunch-nar v0.1.0 (/build/source/crates/crunch-nar)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-nar v0.1.0 (/build/source/crates/crunch-nar)
+crunch-release-determinism-quality-nextest>    Compiling crunch-action-result-core v0.1.0 (/build/source/crates/crunch-action-result-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-composition-core v0.1.0 (/build/source/crates/crunch-composition-core)
+mantle>    Compiling crunch-action-result-core v0.1.0 (/build/source/crates/crunch-action-result-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-action-result-core v0.1.0 (/build/source/crates/crunch-action-result-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-overlay-core v0.1.0 (/build/source/crates/crunch-overlay-core)
+crunch-kernelscript-adapter>     Finished `release` profile [optimized] target(s) in 13.99s
+crunch-kernelscript-adapter> searching for bins/libs to install from cargo build log at cargoBuildLogxjPM.json
+crunch-kernelscript-adapter> installing /build/source/target/release/mantle-kernelscript-core-adapter in postBuildInstallFromCargoBuildLogOutTemp93w/bin
+crunch-kernelscript-adapter> searching for bins/libs complete
+crunch-kernelscript-adapter> Running phase: installPhase
+crunch-kernelscript-adapter> actually installing contents of postBuildInstallFromCargoBuildLogOutTemp93w to /nix/store/dhrfv5fhcpz6l24qkjwya5awqgq3cqa1-crunch-kernelscript-adapter-0.1.0
+crunch-kernelscript-adapter> stripping references to Rust toolchain
+crunch-kernelscript-adapter> Rust toolchain at: /nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08
+crunch-kernelscript-adapter> stripping Rust toolchain references done
+crunch-kernelscript-adapter> stripping references to cargoVendorDir from:
+crunch-kernelscript-adapter> /nix/store/dhrfv5fhcpz6l24qkjwya5awqgq3cqa1-crunch-kernelscript-adapter-0.1.0/bin/mantle-kernelscript-core-adapter
+crunch-kernelscript-adapter> stripping references done
+crunch-kernelscript-adapter> Running phase: fixupPhase
+crunch-kernelscript-adapter> shrinking RPATHs of ELF executables and libraries in /nix/store/dhrfv5fhcpz6l24qkjwya5awqgq3cqa1-crunch-kernelscript-adapter-0.1.0
+crunch-kernelscript-adapter> shrinking /nix/store/dhrfv5fhcpz6l24qkjwya5awqgq3cqa1-crunch-kernelscript-adapter-0.1.0/bin/mantle-kernelscript-core-adapter
+crunch-kernelscript-adapter> checking for references to /build/ in /nix/store/dhrfv5fhcpz6l24qkjwya5awqgq3cqa1-crunch-kernelscript-adapter-0.1.0...
+crunch-kernelscript-adapter> patching script interpreter paths in /nix/store/dhrfv5fhcpz6l24qkjwya5awqgq3cqa1-crunch-kernelscript-adapter-0.1.0
+crunch-kernelscript-adapter> stripping (with command strip and flags -S -p) in  /nix/store/dhrfv5fhcpz6l24qkjwya5awqgq3cqa1-crunch-kernelscript-adapter-0.1.0/bin
+building '/nix/store/39j7jwv9jlmqb5j66zg3pxsh0ii8hlx0-mantle-kernelscript-production.drv'...
+crunch-release-determinism-quality-nextest>    Compiling crunch-gc-core v0.1.0 (/build/source/crates/crunch-gc-core)
+building '/nix/store/ajcxvd7rpss8k4zibnk0j2i65l2zshzc-mantle-kernelscript-production-artifacts.drv'...
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> 🔥 KernelScript Compiler
+mantle-kernelscript-production-artifacts> ========================
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> 📁 Source: probe_do_exit.ks
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 1: Parsing
+mantle-kernelscript-production-artifacts> ✅ Successfully parsed 2 declarations
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 1.5: Import Resolution
+mantle-kernelscript-production-artifacts> ✅ Resolved 0 imports
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 1.6: Include Processing
+mantle-kernelscript-production-artifacts> ✅ Processed 0 includes, expanded to 2 declarations
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 2: Symbol Analysis
+mantle-kernelscript-production-artifacts> 🔧 Kernel types handled by include system - no BTF injection needed
+mantle-kernelscript-production-artifacts> ✅ Symbol table created successfully with BTF types
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 3: Multi-Program Analysis
+mantle-kernelscript-production-artifacts> 📋 Found 0 config declarations
+mantle-kernelscript-production-artifacts> Phase 4: Type Checking
+mantle-kernelscript-production-artifacts> ✅ Type checking completed with multi-program annotations
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 4.5: Safety Analysis
+mantle-kernelscript-production-artifacts> ✅ Safety analysis passed - probe_do_exit stack usage: 12/512 bytes
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 5: IR Optimization
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> 🚀 Advanced Multi-Program IR Optimization
+mantle-kernelscript-production-artifacts> ==========================================
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Step 1: Generating baseline IR...
+mantle-kernelscript-production-artifacts> Step 1.5: Validating function signatures...
+mantle-kernelscript-production-artifacts>   ✅ Entry function 'do_exit' signature validated
+mantle-kernelscript-production-artifacts> Step 2: Analyzing optimization opportunities...
+mantle-kernelscript-production-artifacts> Found 0 optimization strategies:
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Step 3: Applying optimizations...
+mantle-kernelscript-production-artifacts> Step 4: Cross-program validation...
+mantle-kernelscript-production-artifacts>   ✓ Validating map access patterns...
+mantle-kernelscript-production-artifacts>   ✓ Checking resource constraints...
+mantle-kernelscript-production-artifacts>   ✓ Verifying program dependencies...
+mantle-kernelscript-production-artifacts>   ✅ All cross-program constraints validated
+mantle-kernelscript-production-artifacts> Step 5: Resource planning and validation...
+mantle-kernelscript-production-artifacts>   📊 Resource Plan:
+mantle-kernelscript-production-artifacts>      • Programs: 1
+mantle-kernelscript-production-artifacts>      • Global maps: 0
+mantle-kernelscript-production-artifacts>      • Est. instructions: 1000
+mantle-kernelscript-production-artifacts>      • Est. stack usage: 512 bytes
+mantle-kernelscript-production-artifacts>      • Est. memory usage: 0 bytes
+mantle-kernelscript-production-artifacts>      • Verifier compatible: ✅ Yes
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> ✅ Advanced Multi-Program IR Optimization completed successfully!
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 6: Code Generation
+mantle-kernelscript-production-artifacts> ✅ Generated IR-based userspace program: generated/probe_do_exit.c
+mantle-kernelscript-production-artifacts> ℹ️ No kfuncs detected, kernel module not generated
+mantle-kernelscript-production-artifacts> 📄 Generated Makefile: generated/Makefile
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> ✨ Compilation completed successfully!
+mantle-kernelscript-production-artifacts> 📁 Output directory: generated/
+mantle-kernelscript-production-artifacts> 🔨 To build: cd generated && make
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> 🔥 KernelScript Compiler
+mantle-kernelscript-production-artifacts> ========================
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> 📁 Source: private_kfunc.ks
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 1: Parsing
+mantle-kernelscript-production-artifacts> ✅ Successfully parsed 5 declarations
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 1.5: Import Resolution
+mantle-kernelscript-production-artifacts> ✅ Resolved 0 imports
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 1.6: Include Processing
+mantle-kernelscript-production-artifacts> ✅ Processed 1 includes, expanded to 6 declarations
+mantle-kernelscript-production-artifacts>    📄 Header: xdp.kh
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 2: Symbol Analysis
+mantle-kernelscript-production-artifacts> 🔧 Kernel types handled by include system - no BTF injection needed
+mantle-kernelscript-production-artifacts> ✅ Symbol table created successfully with BTF types
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 3: Multi-Program Analysis
+mantle-kernelscript-production-artifacts> 📋 Found 0 config declarations
+mantle-kernelscript-production-artifacts> Phase 4: Type Checking
+mantle-kernelscript-production-artifacts> ✅ Type checking completed with multi-program annotations
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 4.5: Safety Analysis
+mantle-kernelscript-production-artifacts> ✅ Safety analysis passed - private_kfunc stack usage: 16/512 bytes
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 5: IR Optimization
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> 🚀 Advanced Multi-Program IR Optimization
+mantle-kernelscript-production-artifacts> ==========================================
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Step 1: Generating baseline IR...
+mantle-kernelscript-production-artifacts> Step 1.5: Validating function signatures...
+mantle-kernelscript-production-artifacts>   ✅ Entry function 'xdp_main' signature validated
+mantle-kernelscript-production-artifacts> Step 2: Analyzing optimization opportunities...
+mantle-kernelscript-production-artifacts> Found 0 optimization strategies:
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Step 3: Applying optimizations...
+mantle-kernelscript-production-artifacts> Step 4: Cross-program validation...
+mantle-kernelscript-production-artifacts>   ✓ Validating map access patterns...
+mantle-kernelscript-production-artifacts>   ✓ Checking resource constraints...
+mantle-kernelscript-production-artifacts>   ✓ Verifying program dependencies...
+mantle-kernelscript-production-artifacts>   ✅ All cross-program constraints validated
+mantle-kernelscript-production-artifacts> Step 5: Resource planning and validation...
+mantle-kernelscript-production-artifacts>   📊 Resource Plan:
+mantle-kernelscript-production-artifacts>      • Programs: 1
+mantle-kernelscript-production-artifacts>      • Global maps: 0
+mantle-kernelscript-production-artifacts>      • Est. instructions: 1000
+mantle-kernelscript-production-artifacts>      • Est. stack usage: 512 bytes
+mantle-kernelscript-production-artifacts>      • Est. memory usage: 0 bytes
+mantle-kernelscript-production-artifacts>      • Verifier compatible: ✅ Yes
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> ✅ Advanced Multi-Program IR Optimization completed successfully!
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> Phase 6: Code Generation
+mantle-kernelscript-production-artifacts> ✅ Generated IR-based userspace program: generated/private_kfunc.c
+mantle-kernelscript-production-artifacts> ✅ Generated kernel module: generated/private_kfunc.mod.c
+mantle-kernelscript-production-artifacts> 📄 Generated Makefile: generated/Makefile
+mantle-kernelscript-production-artifacts> 📄 Generated Kbuild: generated/Kbuild
+mantle-kernelscript-production-artifacts> 
+mantle-kernelscript-production-artifacts> ✨ Compilation completed successfully!
+mantle-kernelscript-production-artifacts> 📁 Output directory: generated/
+mantle-kernelscript-production-artifacts> 🔨 To build: cd generated && make
+mantle>    Compiling crunch-overlay-core v0.1.0 (/build/source/crates/crunch-overlay-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-repair-core v0.1.0 (/build/source/crates/crunch-repair-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-gc-core v0.1.0 (/build/source/crates/crunch-gc-core)
+mantle-kernelscript-production-artifacts> /build/tmp/mantle-kernelscript-production/probe/generated/probe_do_exit.ebpf.c:9:5: warning: unused parameter 'ctx' [-Wunused-parameter]
+mantle-kernelscript-production-artifacts>     9 | int BPF_PROG(do_exit, __s64 code)
+mantle-kernelscript-production-artifacts>       |     ^
+mantle-kernelscript-production-artifacts> /nix/store/0y6byys2fd1xzq66vld217g7y69kvqa1-libbpf-1.6.3/include/bpf/bpf_tracing.h:684:32: note: expanded from macro 'BPF_PROG'
+mantle-kernelscript-production-artifacts>   684 | ____##name(unsigned long long *ctx, ##args)
+mantle-kernelscript-production-artifacts>       |                                ^
+mantle-kernelscript-production-artifacts> 1 warning generated.
+mantle>    Compiling crunch-composition-core v0.1.0 (/build/source/crates/crunch-composition-core)
+mantle-kernelscript-production-artifacts> /build/tmp/mantle-kernelscript-production/kfunc/generated/private_kfunc.ebpf.c:45:41: warning: unused parameter 'ctx' [-Wunused-parameter]
+mantle-kernelscript-production-artifacts>    45 | enum xdp_action xdp_main(struct xdp_md* ctx) {
+mantle-kernelscript-production-artifacts>       |                                         ^
+mantle-kernelscript-production-artifacts> 1 warning generated.
+mantle-kernelscript-production-artifacts> /build/tmp/mantle-kernelscript-production/kfunc/generated/private_kfunc.c:83:12: warning: 'ensure_kfunc_dependencies_loaded' defined but not used [-Wunused-function]
+mantle-kernelscript-production-artifacts>    83 | static int ensure_kfunc_dependencies_loaded(const char *program_name) {
+mantle-kernelscript-production-artifacts>       |            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+mantle-kernelscript-production-artifacts> make: Entering directory '/build/tmp/mantle-kernelscript-production/kernel-build'
+mantle-kernelscript-production-artifacts> make[1]: Entering directory '/build/tmp/mantle-kernelscript-production/kfunc/generated'
+mantle-kernelscript-production-artifacts>   CC [M]  private_kfunc.mod.o
+mantle-kernelscript-production-artifacts>   MODPOST Module.symvers
+mantle>    Compiling crunch-gc-core v0.1.0 (/build/source/crates/crunch-gc-core)
+mantle-kernelscript-production-artifacts>   CC [M]  private_kfunc.mod.o
+crunch-release-determinism-quality-nextest>    Compiling crunch-repair-core v0.1.0 (/build/source/crates/crunch-repair-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-store v0.1.0 (/build/source/crates/crunch-store)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-composition-core v0.1.0 (/build/source/crates/crunch-composition-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-overlay-core v0.1.0 (/build/source/crates/crunch-overlay-core)
+mantle-kernelscript-production-artifacts>   CC [M]  private_kfunc.mod.mod.o
+mantle>    Compiling crunch-repair-core v0.1.0 (/build/source/crates/crunch-repair-core)
+mantle>    Compiling crunch-store v0.1.0 (/build/source/crates/crunch-store)
+mantle-kernelscript-production-artifacts>   CC [M]  .module-common.o
+mantle-kernelscript-production-artifacts>   LD [M]  private_kfunc.mod.ko
+mantle-kernelscript-production-artifacts>   BTF [M] private_kfunc.mod.ko
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-store v0.1.0 (/build/source/crates/crunch-store)
+mantle-kernelscript-production-artifacts> make[1]: Leaving directory '/build/tmp/mantle-kernelscript-production/kfunc/generated'
+mantle-kernelscript-production-artifacts> make: Leaving directory '/build/tmp/mantle-kernelscript-production/kernel-build'
+crunch-release-determinism-quality-nextest>    Compiling crunch-rust-cache-core v0.1.0 (/build/source/crates/crunch-rust-cache-core)
+building '/nix/store/gfzfbvxz26pw9h3a25lk01dr0y6m04v1-mantle-kernelscript-production-structural-check.drv'...
+mantle>    Compiling crunch-rust-cache-core v0.1.0 (/build/source/crates/crunch-rust-cache-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-rust-cache-core v0.1.0 (/build/source/crates/crunch-rust-cache-core)
+mantle>    Compiling crunch-build v0.1.0 (/build/source/crates/crunch-build)
+crunch-release-determinism-quality-nextest>    Compiling crunch-build v0.1.0 (/build/source/crates/crunch-build)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-build v0.1.0 (/build/source/crates/crunch-build)
+mantle>    Compiling crunch-rust-cache v0.1.0 (/build/source/crates/crunch-rust-cache)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-rust-cache v0.1.0 (/build/source/crates/crunch-rust-cache)
+crunch-release-determinism-quality-nextest>    Compiling crunch-rust-cache v0.1.0 (/build/source/crates/crunch-rust-cache)
+mantle>    Compiling crunch-eval v0.1.0 (/build/source/crates/crunch-eval)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-eval v0.1.0 (/build/source/crates/crunch-eval)
+crunch-release-determinism-quality-nextest>    Compiling crunch-eval v0.1.0 (/build/source/crates/crunch-eval)
+mantle>    Compiling crunch-glue v0.1.0 (/build/source/crates/crunch-glue)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-glue v0.1.0 (/build/source/crates/crunch-glue)
+crunch-release-determinism-quality-nextest>    Compiling crunch-glue v0.1.0 (/build/source/crates/crunch-glue)
+mantle>    Compiling crunch-project-core v0.1.0 (/build/source/crates/crunch-project-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-project-core v0.1.0 (/build/source/crates/crunch-project-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-project-core v0.1.0 (/build/source/crates/crunch-project-core)
+mantle>    Compiling crunch-wasm-component-core v0.1.0 (/build/source/crates/crunch-wasm-component-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-evaluation-stream-core v0.1.0 (/build/source/crates/crunch-evaluation-stream-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-wasm-component-core v0.1.0 (/build/source/crates/crunch-wasm-component-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-wasm-component-core v0.1.0 (/build/source/crates/crunch-wasm-component-core)
+mantle>    Compiling crunch-evaluation-stream-core v0.1.0 (/build/source/crates/crunch-evaluation-stream-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-shell-core v0.1.0 (/build/source/crates/crunch-shell-core)
+mantle>    Compiling crunch-shell-core v0.1.0 (/build/source/crates/crunch-shell-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-evaluation-stream-core v0.1.0 (/build/source/crates/crunch-evaluation-stream-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-shell-core v0.1.0 (/build/source/crates/crunch-shell-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-delta-core v0.1.0 (/build/source/crates/crunch-delta-core)
+mantle>    Compiling crunch-delta-core v0.1.0 (/build/source/crates/crunch-delta-core)
+mantle>    Compiling crunch-delta v0.1.0 (/build/source/crates/crunch-delta)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-delta-core v0.1.0 (/build/source/crates/crunch-delta-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-delta v0.1.0 (/build/source/crates/crunch-delta)
+mantle>    Compiling crunch-wasm-component v0.1.0 (/build/source/crates/crunch-wasm-component)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-delta v0.1.0 (/build/source/crates/crunch-delta)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-wasm-component v0.1.0 (/build/source/crates/crunch-wasm-component)
+crunch-release-determinism-quality-nextest>    Compiling crunch-wasm-component v0.1.0 (/build/source/crates/crunch-wasm-component)
+mantle>    Compiling crunch-shell v0.1.0 (/build/source/crates/crunch-shell)
+building '/nix/store/wy7d7dy5mpk558gpmn8v3i14544g582b-mantle-nextest-0.1.0.drv'...
+mantle-nextest> Running phase: unpackPhase
+mantle-nextest> unpacking source archive /nix/store/vdp4n1gfpry4gfnfqzab7vjqq4nxzd2f-source
+mantle>    Compiling crunch-pipeline v0.1.0 (/build/source/crates/crunch-pipeline)
+mantle-nextest> source root is source
+crunch-release-determinism-quality-nextest>    Compiling crunch-shell v0.1.0 (/build/source/crates/crunch-shell)
+mantle-nextest> Running phase: patchPhase
+mantle-nextest> Executing configureCargoCommonVars
+mantle-nextest> decompressing cargo artifacts from /nix/store/1s2zqd32p6kphd7dxf7iqf919jd8gsfm-mantle-deps-0.1.0/target.tar.zst to target
+crunch-release-determinism-quality-nextest>    Compiling crunch-pipeline v0.1.0 (/build/source/crates/crunch-pipeline)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-shell v0.1.0 (/build/source/crates/crunch-shell)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-pipeline v0.1.0 (/build/source/crates/crunch-pipeline)
+mantle>    Compiling crunch-project v0.1.0 (/build/source/crates/crunch-project)
+crunch-release-determinism-quality-nextest>    Compiling crunch-project v0.1.0 (/build/source/crates/crunch-project)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-project v0.1.0 (/build/source/crates/crunch-project)
+mantle-nextest> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-nextest> Running phase: configurePhase
+mantle-nextest> will append /build/source/.cargo-home/config.toml with contents of /nix/store/bwpb9h9679vkjx0pff5nq1rr36niq82d-vendor-cargo-deps/config.toml
+mantle-nextest> default configurePhase, nothing to do
+mantle-nextest> Running phase: buildPhase
+mantle-nextest> +++ command cargo --version
+mantle-nextest> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-nextest> +++ command cargo nextest --version
+mantle-nextest> cargo-nextest 0.9.132
+mantle-nextest> release: 0.9.132
+mantle-nextest> host: x86_64-unknown-linux-gnu
+mantle-nextest> Running phase: checkPhase
+mantle-nextest> +++ command cargo nextest run --cargo-profile release
+mantle>    Compiling crunch-rustc-wrapper v0.1.0 (/build/source/crates/crunch-rustc-wrapper)
+crunch-release-determinism-quality-nextest>    Compiling crunch-rustc-wrapper v0.1.0 (/build/source/crates/crunch-rustc-wrapper)
+mantle-nextest> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+mantle-nextest>   * `bin` target `crunch`
+mantle-nextest>   * `bin` target `mantle`
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-rustc-wrapper v0.1.0 (/build/source/crates/crunch-rustc-wrapper)
+mantle-nextest>    Compiling fuse-backend-rs v0.12.0 (/build/source/vendor/fuse-backend-rs)
+mantle-nextest>    Compiling nix-compat v0.1.0 (/build/source/vendor/nix-compat)
+mantle-nextest>    Compiling crunch-attestation-core v0.1.0 (/build/source/crates/crunch-attestation-core)
+mantle-nextest>    Compiling nix-compat-derive v0.1.0 (/build/source/vendor/nix-compat-derive)
+mantle-nextest>    Compiling snix-castore v0.1.0 (/build/source/vendor/snix-castore)
+mantle-nextest>    Compiling snix-tracing v0.1.0 (/build/source/vendor/snix-tracing)
+mantle-nextest>    Compiling crunch-attestation v0.1.0 (/build/source/crates/crunch-attestation)
+mantle-nextest>    Compiling snix-build v0.1.0 (/build/source/vendor/snix-build)
+mantle-nextest>    Compiling snix-store v0.1.0 (/build/source/vendor/snix-store)
+mantle-nextest>    Compiling crunch-nar v0.1.0 (/build/source/crates/crunch-nar)
+mantle-nextest>    Compiling crunch-action-result-core v0.1.0 (/build/source/crates/crunch-action-result-core)
+mantle>    Compiling crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)
+mantle>    Compiling crunch-eval-budget-core v0.1.0 (/build/source/crates/crunch-eval-budget-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-eval-budget-core v0.1.0 (/build/source/crates/crunch-eval-budget-core)
+mantle>    Compiling crunch-bootstrap-core v0.1.0 (/build/source/crates/crunch-bootstrap-core)
+crunch-release-nix-witness-quality-nextest>    Compiling mantlepkgs-core v0.1.0 (/build/source/crates/mantlepkgs-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-eval-budget-core v0.1.0 (/build/source/crates/crunch-eval-budget-core)
+mantle-nextest>    Compiling crunch-overlay-core v0.1.0 (/build/source/crates/crunch-overlay-core)
+mantle-nextest>    Compiling crunch-repair-core v0.1.0 (/build/source/crates/crunch-repair-core)
+mantle-nextest>    Compiling crunch-gc-core v0.1.0 (/build/source/crates/crunch-gc-core)
+crunch-release-determinism-quality-nextest>    Compiling mantlepkgs-core v0.1.0 (/build/source/crates/mantlepkgs-core)
+mantle-nextest>    Compiling crunch-composition-core v0.1.0 (/build/source/crates/crunch-composition-core)
+mantle-nextest>    Compiling crunch-store v0.1.0 (/build/source/crates/crunch-store)
+mantle>    Compiling mantlepkgs-core v0.1.0 (/build/source/crates/mantlepkgs-core)
+mantle-nextest>    Compiling crunch-rust-cache-core v0.1.0 (/build/source/crates/crunch-rust-cache-core)
+mantle>    Compiling mantle-portable-client-core v0.1.0 (/build/source/crates/mantle-portable-client-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-bootstrap-core v0.1.0 (/build/source/crates/crunch-bootstrap-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-bootstrap-core v0.1.0 (/build/source/crates/crunch-bootstrap-core)
+mantle-nextest>    Compiling crunch-build v0.1.0 (/build/source/crates/crunch-build)
+mantle-nextest>    Compiling crunch-rust-cache v0.1.0 (/build/source/crates/crunch-rust-cache)
+mantle-nextest>    Compiling crunch-eval v0.1.0 (/build/source/crates/crunch-eval)
+crunch-release-determinism-quality-nextest>    Compiling mantle-portable-client-core v0.1.0 (/build/source/crates/mantle-portable-client-core)
+mantle>    Compiling mantle v0.1.0 (/build/source)
+crunch-release-determinism-quality-nextest>    Compiling mantle v0.1.0 (/build/source)
+crunch-release-nix-witness-quality-nextest>    Compiling mantle-portable-client-core v0.1.0 (/build/source/crates/mantle-portable-client-core)
+crunch-release-nix-witness-quality-nextest>    Compiling mantle v0.1.0 (/build/source)
+mantle-nextest>    Compiling crunch-glue v0.1.0 (/build/source/crates/crunch-glue)
+crunch-release-determinism-quality-nextest>    Compiling crunch-hardware-simulation-core v0.1.0 (/build/source/crates/crunch-hardware-simulation-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-hardware-simulation-core v0.1.0 (/build/source/crates/crunch-hardware-simulation-core)
+mantle-nextest>    Compiling crunch-project-core v0.1.0 (/build/source/crates/crunch-project-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-hardware-simulation v0.1.0 (/build/source/crates/crunch-hardware-simulation)
+crunch-release-determinism-quality-nextest>    Compiling crunch-hardware-simulation v0.1.0 (/build/source/crates/crunch-hardware-simulation)
+crunch-release-determinism-quality-nextest>    Compiling crunch-kernelscript-core v0.1.0 (/build/source/crates/crunch-kernelscript-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-kernelscript-core v0.1.0 (/build/source/crates/crunch-kernelscript-core)
+mantle-nextest>    Compiling crunch-evaluation-stream-core v0.1.0 (/build/source/crates/crunch-evaluation-stream-core)
+mantle-nextest>    Compiling crunch-wasm-component-core v0.1.0 (/build/source/crates/crunch-wasm-component-core)
+mantle-nextest>    Compiling crunch-shell-core v0.1.0 (/build/source/crates/crunch-shell-core)
+mantle-nextest>    Compiling crunch-delta-core v0.1.0 (/build/source/crates/crunch-delta-core)
+mantle-nextest>    Compiling crunch-delta v0.1.0 (/build/source/crates/crunch-delta)
+mantle-nextest>    Compiling crunch-wasm-component v0.1.0 (/build/source/crates/crunch-wasm-component)
+mantle-nextest>    Compiling crunch-shell v0.1.0 (/build/source/crates/crunch-shell)
+mantle-nextest>    Compiling crunch-pipeline v0.1.0 (/build/source/crates/crunch-pipeline)
+mantle-nextest>    Compiling crunch-project v0.1.0 (/build/source/crates/crunch-project)
+mantle-nextest>    Compiling crunch-rustc-wrapper v0.1.0 (/build/source/crates/crunch-rustc-wrapper)
+mantle-nextest>    Compiling crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)
+mantle-nextest>    Compiling mantlepkgs-core v0.1.0 (/build/source/crates/mantlepkgs-core)
+mantle-nextest>    Compiling crunch-bootstrap-core v0.1.0 (/build/source/crates/crunch-bootstrap-core)
+mantle-nextest>    Compiling crunch-eval-budget-core v0.1.0 (/build/source/crates/crunch-eval-budget-core)
+mantle-nextest>    Compiling mantle-portable-client-core v0.1.0 (/build/source/crates/mantle-portable-client-core)
+mantle-nextest>    Compiling mantle v0.1.0 (/build/source)
+mantle-nextest>    Compiling crunch-hardware-simulation-core v0.1.0 (/build/source/crates/crunch-hardware-simulation-core)
+mantle-nextest>    Compiling crunch-hardware-simulation v0.1.0 (/build/source/crates/crunch-hardware-simulation)
+mantle-nextest>    Compiling crunch-kernelscript-core v0.1.0 (/build/source/crates/crunch-kernelscript-core)
+mantle-nextest> error: couldn't read `src/../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/provider-checkpoint-origin/native-provider.json`: No such file or directory (os error 2)
+mantle-nextest>     --> src/build_plan.rs:1099:62
+mantle-nextest>      |
+mantle-nextest> 1099 |   ...   let report: serde_json::Value = serde_json::from_str(include_str!(
+mantle-nextest>      |  ____________________________________________________________^
+mantle-nextest> 1100 | | ...       "../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-...
+mantle-nextest> 1101 | | ...   ))
+mantle-nextest>      | |_______^
+mantle-nextest> 
+mantle-nextest> error: couldn't read `src/../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v47-source-closure-binding-repair-2026-08-23/source-built-fixed-point-plan.json`: No such file or directory (os error 2)
+mantle-nextest>     --> src/source_built_fixed_point_receipt.rs:1586:68
+mantle-nextest>      |
+mantle-nextest> 1586 |   ...   let plan: SourceBuiltFixedPointPlan = serde_json::from_str(include_str!(
+mantle-nextest>      |  __________________________________________________________________^
+mantle-nextest> 1587 | | ...       "../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v47-source-closure-binding-repair-2026-08...
+mantle-nextest> 1588 | | ...   ))
+mantle-nextest>      | |_______^
+mantle-nextest> 
+mantle-nextest> error: couldn't read `src/../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/deterministic-build-proof.json`: No such file or directory (os error 2)
+mantle-nextest>     --> src/source_built_fixed_point_receipt.rs:1622:61
+mantle-nextest>      |
+mantle-nextest> 1622 |   ...   let value: serde_json::Value = serde_json::from_str(include_str!(
+mantle-nextest>      |  ___________________________________________________________^
+mantle-nextest> 1623 | | ...       "../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-...
+mantle-nextest> 1624 | | ...   ))
+mantle-nextest>      | |_______^
+mantle-nextest> 
+mantle-nextest> error: couldn't read `src/../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/source-built-fixed-point-plan.json`: No such file or directory (os error 2)
+mantle-nextest>    --> src/source_built_trust_report_shell.rs:435:13
+mantle-nextest>     |
+mantle-nextest> 435 | ...   include_bytes!("../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/source-built-fixed-point-plan.json"),
+mantle-nextest>     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+mantle-nextest> 
+mantle-nextest> error: couldn't read `src/../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/source-built-stage-evidence.json`: No such file or directory (os error 2)
+mantle-nextest>    --> src/source_built_trust_report_shell.rs:440:13
+mantle-nextest>     |
+mantle-nextest> 440 | ...   include_bytes!("../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/source-built-stage-evidence.json"),
+mantle-nextest>     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+mantle-nextest> 
+mantle-nextest> error: couldn't read `src/../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/deterministic-build-proof.json`: No such file or directory (os error 2)
+mantle-nextest>    --> src/source_built_trust_report_shell.rs:445:69
+mantle-nextest>     |
+mantle-nextest> 445 |   ...   let mut receipt: serde_json::Value = serde_json::from_slice(include_bytes!(
+mantle-nextest>     |  ___________________________________________________________________^
+mantle-nextest> 446 | | ...       "../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-2...
+mantle-nextest> 447 | | ...   ))
+mantle-nextest>     | |_______^
+mantle-nextest> 
+mantle-nextest> error: could not compile `mantle` (bin "mantle" test) due to 6 previous errors
+mantle-nextest> warning: build failed, waiting for other jobs to finish...
+mantle-nextest> error: command `/nix/store/yszhq4kdrwh5w8rpzg3apzf522jpk10r-cargo-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/cargo test --no-run --message-format json-render-diagnostics --profile release` exited with code 101
+warning: killing stray builder process 2513850 ()...
+error (ignored): deleting cgroup "/sys/fs/cgroup/system.slice/nix-daemon.service/nix-build-uid-872611840": Device or resource busy
+warning: killing stray builder process 2513847 ()...
+warning: killing stray builder process 2514055 ()...
+error (ignored): deleting cgroup "/sys/fs/cgroup/system.slice/nix-daemon.service/nix-build-uid-872546304": Device or resource busy
+warning: killing stray builder process 2513840 ()...
+warning: killing stray builder process 2514051 ()...
+error (ignored): deleting cgroup "/sys/fs/cgroup/system.slice/nix-daemon.service/nix-build-uid-872480768": Device or resource busy
+error: failed to build attribute 'checks.x86_64-linux.nextest', build of '/nix/store/wy7d7dy5mpk558gpmn8v3i14544g582b-mantle-nextest-0.1.0.drv^*' failed: Cannot build '/nix/store/wy7d7dy5mpk558gpmn8v3i14544g582b-mantle-nextest-0.1.0.drv'.
+       Reason: builder failed with exit code 101.
+       Output paths:
+         /nix/store/4dinrsk5vyqbwm3wpnjnkls7gv9yp86j-mantle-nextest-0.1.0
+       Last 25 log lines:
+       >
+       > error: couldn't read `src/../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/source-built-fixed-point-plan.json`: No such file or directory (os error 2)
+       >    --> src/source_built_trust_report_shell.rs:435:13
+       >     |
+       > 435 | ...   include_bytes!("../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/source-built-fixed-point-plan.json"),
+       >     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       >
+       > error: couldn't read `src/../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/source-built-stage-evidence.json`: No such file or directory (os error 2)
+       >    --> src/source_built_trust_report_shell.rs:440:13
+       >     |
+       > 440 | ...   include_bytes!("../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/source-built-stage-evidence.json"),
+       >     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       >
+       > error: couldn't read `src/../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/deterministic-build-proof.json`: No such file or directory (os error 2)
+       >    --> src/source_built_trust_report_shell.rs:445:69
+       >     |
+       > 445 |   ...   let mut receipt: serde_json::Value = serde_json::from_slice(include_bytes!(
+       >     |  ___________________________________________________________________^
+       > 446 | | ...       "../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-2...
+       > 447 | | ...   ))
+       >     | |_______^
+       >
+       > error: could not compile `mantle` (bin "mantle" test) due to 6 previous errors
+       > warning: build failed, waiting for other jobs to finish...
+       > error: command `/nix/store/yszhq4kdrwh5w8rpzg3apzf522jpk10r-cargo-1.96.0-nightly-2026-04-08-x86_64-unknown-linux-gnu/bin/cargo test --no-run --message-format json-render-diagnostics --profile release` exited with code 101
+       For full logs, run:
+         nix log /nix/store/wy7d7dy5mpk558gpmn8v3i14544g582b-mantle-nextest-0.1.0.drv
