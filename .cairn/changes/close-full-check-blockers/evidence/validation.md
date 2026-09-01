@@ -54,3 +54,13 @@ receipt still named older `Cargo.toml`, `Cargo.lock`, `flake.nix`, and
 `flake.lock` BLAKE3 identities. The Nickel source, generated JSON, receipt
 BLAKE3, and pure validator now bind the current files. Positive and negative
 Nickel tests pass, and the focused Nix check passes.
+
+## Later full-check blocker: GC and overlay Tiger Style
+
+The strict Tiger gate then found assertion-density, quantity-name, predicate,
+bounded-growth, and ambiguous-parameter issues in `crunch-gc-core` and
+`crunch-overlay-core`. The repair adds post-validation invariants, one explicit
+rank-map bound, unit/predicate names, and a byte-increment newtype. It adds no
+lint allowance. Both pre-change baselines passed. After the repair, all 23 GC
+core tests, all eight overlay core tests, and focused Clippy pass. The Tiger
+gate reports no remaining finding in either crate and advances to later cores.

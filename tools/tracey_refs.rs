@@ -528,6 +528,18 @@
 // external-evidence handoff without witness quorum, and all-axis CLI tests.
 // Runtime adoption evidence remains owned by the active checkpoint change.
 
+// Full-check blocker closure bridge.
+//
+// r[impl bootstrap_inventory.full_check_blocker_closure]
+// Implemented by exact V98 file identities and structural near-miss rules in
+// `scripts/check-bootstrap-blocker-inventory.rs`, explicit BLAKE3 tool binding
+// in its shell, and Crane-backed SpaceWasm vendoring in the Nix composition.
+//
+// r[verify bootstrap_inventory.full_check_blocker_closure]
+// Verified by clean enforcement, changed-file and missing-tool failures,
+// positive-bridge and observed-timeout near misses, repeated SpaceWasm builds,
+// the Octet-bearing component toolchain rebuild, and full Nix checks.
+
 // r[impl gcc40_bridge.configure_preprocess_confinement]
 // Implemented by the runtime authority, canonical-source, output, byte, class,
 // count, and audit guards in `bootstrap/gcc-4.0-native.ncl`.

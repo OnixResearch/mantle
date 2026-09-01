@@ -330,7 +330,7 @@ pub fn aggregate_usage(
     objects.sort_by(|left, right| left.object_id.cmp(&right.object_id));
     validate_objects(&mut objects, &decisions_by_path)?;
 
-    let mut report = UsageReport {
+    let mut usage_summary = UsageReport {
         observed_bytes: 0,
         retained_bytes: 0,
         reclaimable_bytes: 0,
@@ -341,11 +341,11 @@ pub fn aggregate_usage(
         roots: Vec::new(),
     };
     for object in &objects {
-        accumulate_usage_object(&mut report, &mut root_usage, &decisions_by_path, object)?;
+        accumulate_usage_object(&mut usage_summary, &mut root_usage, &decisions_by_path, object)?;
     }
-    report.roots = root_usage.into_values().collect();
-    debug_assert_eq!(report.roots.len(), decisions.len());
-    Ok(report)
+    usage_summary.roots = root_usage.into_values().collect();
+    debug_assert_eq!(usage_summary.roots.len(), decisions.len());
+    Ok(usage_summary)
 }
 
 fn validate_policy(policy: &RetentionPolicy) -> Result<(), RetentionError> {
@@ -371,6 +371,8 @@ fn validate_policy(policy: &RetentionPolicy) -> Result<(), RetentionError> {
             return Err(RetentionError::InvalidOwnerRule { class });
         }
     }
+    debug_assert!(policy.max_roots <= MAX_RETENTION_ROOTS);
+    debug_assert!(RootClass::ALL.iter().all(|class| policy.eligible_owner_scopes.contains_key(class)));
     Ok(())
 }
 
@@ -386,11 +388,11 @@ fn normalize_roots(
             });
         }
         let owner_kind = root.owner_scope.split_once(':').map_or(root.owner_scope.as_str(), |(kind, _)| kind);
-        let owner_is_eligible = policy
+        let is_owner_eligible = policy
             .eligible_owner_scopes
             .get(&root.class)
             .is_some_and(|scopes| scopes.iter().any(|scope| scope == owner_kind));
-        if !owner_is_eligible {
+        if !is_owner_eligible {
             return Err(RetentionError::IneligibleOwner {
                 path_id: root.path_id.clone(),
                 class: root.class,
@@ -412,6 +414,8 @@ fn normalize_roots(
             });
         }
     }
+    debug_assert!(roots.len() <= policy.max_roots);
+    debug_assert!(roots.windows(2).all(|pair| pair[0].path_id < pair[1].path_id));
     Ok(roots)
 }
 
@@ -448,10 +452,16 @@ fn generation_ranks(roots: &[RetentionRoot]) -> Result<BTreeMap<String, usize>, 
             if previous_generation.is_some_and(|previous| previous != *generation) {
                 current_rank = current_rank.checked_add(1).ok_or(RetentionError::IdentityEncodingOverflow)?;
             }
+            if ranks.len() >= roots.len() {
+                return Err(RetentionError::IdentityEncodingOverflow);
+            }
+            debug_assert!(!ranks.contains_key(path_id));
             ranks.insert(path_id.clone(), current_rank);
             previous_generation = Some(*generation);
         }
     }
+    debug_assert!(ranks.len() <= roots.len());
+    debug_assert!(ranks.keys().all(|path_id| roots.iter().any(|root| &root.path_id == path_id)));
     Ok(ranks)
 }
 
@@ -487,13 +497,16 @@ fn decide_root(
         disposition = RetentionDisposition::Remove;
         reason = RetentionReason::ExplicitRemoval;
     }
-    Ok(RetentionDecision {
+    let decision = RetentionDecision {
         path_id: root.path_id.clone(),
         class: root.class,
         owner_scope: root.owner_scope.clone(),
         disposition,
         reason,
-    })
+    };
+    debug_assert_eq!(decision.class, root.class);
+    debug_assert_eq!(decision.owner_scope, root.owner_scope);
+    Ok(decision)
 }
 
 fn generation_decision(
@@ -520,6 +533,8 @@ fn lease_decision(
     current_unix_s: i64,
     root: &RetentionRoot,
 ) -> Result<(RetentionDisposition, RetentionReason), RetentionError> {
+    debug_assert_eq!(root.class, RootClass::ActiveShellLease);
+    debug_assert!(policy.max_lease_seconds > 0);
     let Some(lease) = &root.lease else {
         return Err(RetentionError::MissingLease {
             path_id: root.path_id.clone(),
@@ -532,16 +547,16 @@ fn lease_decision(
             last_observed_unix_s: lease.last_observed_unix_s,
         });
     }
-    let lease_duration_is_unsafe = lease
+    let is_lease_window_unsafe = lease
         .expires_unix_s
         .checked_sub(lease.last_observed_unix_s)
-        .and_then(|duration| u64::try_from(duration).ok())
-        .is_none_or(|duration| duration > policy.max_lease_seconds);
-    let is_unsafe = lease.lease_id.is_empty()
+        .and_then(|duration_seconds| u64::try_from(duration_seconds).ok())
+        .is_none_or(|duration_seconds| duration_seconds > policy.max_lease_seconds);
+    let is_lease_unsafe = lease.lease_id.is_empty()
         || lease.expires_unix_s < root.created_unix_s
         || lease.renewal_count > policy.max_lease_renewals
-        || lease_duration_is_unsafe;
-    if is_unsafe {
+        || is_lease_window_unsafe;
+    if is_lease_unsafe {
         return Ok((RetentionDisposition::Quarantine, RetentionReason::ShellLeaseUnsafe));
     }
     if current_unix_s <= lease.expires_unix_s {
@@ -556,6 +571,8 @@ fn retention_plan_id(
     roots: &[RetentionRoot],
     decisions: &[RetentionDecision],
 ) -> Result<RetentionPlanId, RetentionError> {
+    debug_assert_eq!(roots.len(), decisions.len());
+    debug_assert!(roots.windows(2).all(|pair| pair[0].path_id < pair[1].path_id));
     let mut hasher = blake3::Hasher::new();
     hasher.update(RETENTION_PLAN_DOMAIN);
     hash_string(&mut hasher, &policy.policy_id)?;
@@ -594,6 +611,8 @@ fn retention_plan_id(
 }
 
 fn hash_root(hasher: &mut blake3::Hasher, root: &RetentionRoot) -> Result<(), RetentionError> {
+    debug_assert!(!root.path_id.is_empty());
+    debug_assert!(!root.policy_id.is_empty());
     hash_string(hasher, &root.path_id)?;
     hash_string(hasher, root.class.as_str())?;
     hash_string(hasher, &root.owner_scope)?;
@@ -691,6 +710,8 @@ fn validate_objects(
     objects: &mut [UsageObjectObservation],
     decisions: &BTreeMap<&str, &RetentionDecision>,
 ) -> Result<(), UsageError> {
+    debug_assert!(objects.len() <= MAX_USAGE_OBJECTS);
+    debug_assert!(objects.windows(2).all(|pair| pair[0].object_id <= pair[1].object_id));
     for pair in objects.windows(2) {
         if pair[0].object_id == pair[1].object_id {
             return Err(UsageError::DuplicateObject {
@@ -698,7 +719,7 @@ fn validate_objects(
             });
         }
     }
-    for object in objects {
+    for object in objects.iter_mut() {
         if object.object_id.is_empty() {
             return Err(UsageError::InvalidObjectId);
         }
@@ -725,17 +746,22 @@ fn validate_objects(
             }
         }
     }
+    debug_assert!(objects.iter().all(|object| object.retaining_root_ids.len() <= MAX_USAGE_ROOTS_PER_OBJECT));
+    debug_assert!(objects.iter().all(|object| object.retaining_root_ids.windows(2).all(|pair| pair[0] < pair[1])));
     Ok(())
 }
 
 fn accumulate_usage_object(
-    report: &mut UsageReport,
+    usage_summary: &mut UsageReport,
     root_usage: &mut BTreeMap<&str, RootUsage>,
     decisions: &BTreeMap<&str, &RetentionDecision>,
     object: &UsageObjectObservation,
 ) -> Result<(), UsageError> {
+    debug_assert!(!object.object_id.is_empty());
+    debug_assert!(object.retaining_root_ids.len() <= MAX_USAGE_ROOTS_PER_OBJECT);
     let Some(bytes) = object.bytes else {
-        report.unknown_object_count = report.unknown_object_count.checked_add(1).ok_or(UsageError::ByteOverflow)?;
+        usage_summary.unknown_object_count =
+            usage_summary.unknown_object_count.checked_add(1).ok_or(UsageError::ByteOverflow)?;
         for root_id in &object.retaining_root_ids {
             let usage = root_usage.get_mut(root_id.as_str()).ok_or_else(|| UsageError::UnknownRoot {
                 object_id: object.object_id.clone(),
@@ -745,25 +771,36 @@ fn accumulate_usage_object(
         }
         return Ok(());
     };
-    report.observed_bytes = checked_add(report.observed_bytes, bytes)?;
+    usage_summary.observed_bytes = checked_add_bytes(usage_summary.observed_bytes, UsageByteIncrement(bytes))?;
     let class = usage_class(decisions, &object.retaining_root_ids)?;
     match class {
-        UsageClass::Retained => report.retained_bytes = checked_add(report.retained_bytes, bytes)?,
-        UsageClass::Reclaimable => report.reclaimable_bytes = checked_add(report.reclaimable_bytes, bytes)?,
-        UsageClass::Quarantined => report.quarantined_bytes = checked_add(report.quarantined_bytes, bytes)?,
-        UsageClass::Unclassified => report.unclassified_bytes = checked_add(report.unclassified_bytes, bytes)?,
+        UsageClass::Retained => {
+            usage_summary.retained_bytes = checked_add_bytes(usage_summary.retained_bytes, UsageByteIncrement(bytes))?;
+        }
+        UsageClass::Reclaimable => {
+            usage_summary.reclaimable_bytes =
+                checked_add_bytes(usage_summary.reclaimable_bytes, UsageByteIncrement(bytes))?;
+        }
+        UsageClass::Quarantined => {
+            usage_summary.quarantined_bytes =
+                checked_add_bytes(usage_summary.quarantined_bytes, UsageByteIncrement(bytes))?;
+        }
+        UsageClass::Unclassified => {
+            usage_summary.unclassified_bytes =
+                checked_add_bytes(usage_summary.unclassified_bytes, UsageByteIncrement(bytes))?;
+        }
     }
     if object.retaining_root_ids.len() > 1 {
-        report.shared_bytes = checked_add(report.shared_bytes, bytes)?;
+        usage_summary.shared_bytes = checked_add_bytes(usage_summary.shared_bytes, UsageByteIncrement(bytes))?;
     }
     for root_id in &object.retaining_root_ids {
         let usage = root_usage.get_mut(root_id.as_str()).ok_or_else(|| UsageError::UnknownRoot {
             object_id: object.object_id.clone(),
             root_id: root_id.clone(),
         })?;
-        usage.inclusive_bytes = checked_add(usage.inclusive_bytes, bytes)?;
+        usage.inclusive_bytes = checked_add_bytes(usage.inclusive_bytes, UsageByteIncrement(bytes))?;
         if object.retaining_root_ids.len() == 1 {
-            usage.unique_bytes = checked_add(usage.unique_bytes, bytes)?;
+            usage.unique_bytes = checked_add_bytes(usage.unique_bytes, UsageByteIncrement(bytes))?;
         }
     }
     Ok(())
@@ -778,6 +815,8 @@ enum UsageClass {
 }
 
 fn usage_class(decisions: &BTreeMap<&str, &RetentionDecision>, root_ids: &[String]) -> Result<UsageClass, UsageError> {
+    debug_assert!(root_ids.len() <= MAX_USAGE_ROOTS_PER_OBJECT);
+    debug_assert!(root_ids.windows(2).all(|pair| pair[0] < pair[1]));
     if root_ids.is_empty() {
         return Ok(UsageClass::Reclaimable);
     }
@@ -801,8 +840,11 @@ fn usage_class(decisions: &BTreeMap<&str, &RetentionDecision>, root_ids: &[Strin
     Ok(UsageClass::Reclaimable)
 }
 
-fn checked_add(left: u64, right: u64) -> Result<u64, UsageError> {
-    left.checked_add(right).ok_or(UsageError::ByteOverflow)
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct UsageByteIncrement(u64);
+
+fn checked_add_bytes(current_bytes: u64, increment: UsageByteIncrement) -> Result<u64, UsageError> {
+    current_bytes.checked_add(increment.0).ok_or(UsageError::ByteOverflow)
 }
 
 #[cfg(test)]

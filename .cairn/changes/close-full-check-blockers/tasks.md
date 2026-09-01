@@ -9,6 +9,8 @@
 
 - [x] [serial] I5 [covers=bootstrap_inventory.full_check_blocker_closure] Rebuild SpaceWasm and the wasm-component toolchain locally, then repair only independently confirmed immutable hashes. r[bootstrap_inventory.full_check_blocker_closure]
   - Evidence: Crane vendoring removed the blocked API transport without changing the SpaceWasm revision, lock, toolchain, targets, or features. Fresh and `--rebuild` bundle runs pass. The wasm-component toolchain `--rebuild`, including pinned Octet, also passes.
+- [x] [serial] I6 [covers=bootstrap_inventory.full_check_blocker_closure] Repair strict Tiger Style findings in the GC-retention and overlay-composition cores without lint allowances. r[bootstrap_inventory.full_check_blocker_closure]
+  - Evidence: pre-change and post-change tests pass for both crates; focused Clippy passes; the Tiger gate advances beyond both cores with no remaining finding in either crate.
 
 ## Phase 3: Verification
 

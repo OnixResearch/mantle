@@ -220,6 +220,8 @@ pub fn plan_overlay(
 
 // r[impl store_lifecycle.overlay_base_generation]
 pub fn revalidate_overlay(expected: &OverlayPlan, observed: &OverlayPlan) -> Result<(), OverlayError> {
+    debug_assert!(expected.descriptors.len() <= MAX_BASE_LAYERS);
+    debug_assert!(observed.descriptors.len() <= MAX_BASE_LAYERS);
     if expected.policy_id != observed.policy_id || expected.logical_prefix != observed.logical_prefix {
         return Err(OverlayError::CompositionDrift);
     }
@@ -249,13 +251,13 @@ fn validate_policy(policy: &OverlayPolicy) -> Result<(), OverlayError> {
     if policy.trust_policy_id.is_empty() {
         return Err(OverlayError::EmptyTrustPolicyId);
     }
-    let bounds_are_valid = policy.max_base_layers > 0
+    let has_valid_bounds = policy.max_base_layers > 0
         && policy.max_base_layers <= MAX_BASE_LAYERS
         && policy.max_generation_members > 0
         && policy.max_generation_members <= MAX_GENERATION_MEMBERS
         && policy.max_generation_bytes > 0
         && policy.max_generation_bytes <= MAX_GENERATION_BYTES;
-    if !bounds_are_valid {
+    if !has_valid_bounds {
         return Err(OverlayError::InvalidPolicyBound);
     }
     let schemas = policy.allowed_state_schemas.iter().map(String::as_str).collect::<BTreeSet<_>>();
@@ -265,11 +267,13 @@ fn validate_policy(policy: &OverlayPolicy) -> Result<(), OverlayError> {
     {
         return Err(OverlayError::InvalidAllowedStateSchemas);
     }
+    debug_assert!(policy.max_base_layers <= MAX_BASE_LAYERS);
+    debug_assert_eq!(schemas.len(), policy.allowed_state_schemas.len());
     Ok(())
 }
 
 fn validate_logical_prefix(logical_prefix: &str) -> Result<(), OverlayError> {
-    let valid = logical_prefix.starts_with('/')
+    let is_valid = logical_prefix.starts_with('/')
         && logical_prefix.len() > 1
         && logical_prefix.len() <= MAX_IDENTITY_BYTES
         && !logical_prefix.ends_with('/')
@@ -278,7 +282,7 @@ fn validate_logical_prefix(logical_prefix: &str) -> Result<(), OverlayError> {
             .split('/')
             .skip(1)
             .all(|segment| !segment.is_empty() && segment != "." && segment != "..");
-    if !valid {
+    if !is_valid {
         return Err(OverlayError::InvalidLogicalPrefix {
             logical_prefix: String::from(logical_prefix),
         });
@@ -344,7 +348,10 @@ fn validate_observation(
             declaration_index: expected_index,
         });
     }
-    validate_generation_members(policy, observation)
+    validate_generation_members(policy, observation)?;
+    debug_assert!(observation.declaration_index < policy.max_base_layers);
+    debug_assert!(valid_identity(&observation.declaration_identity));
+    Ok(())
 }
 
 fn validate_generation_members(policy: &OverlayPolicy, observation: &BaseObservation) -> Result<(), OverlayError> {
@@ -386,6 +393,8 @@ fn validate_generation_members(policy: &OverlayPolicy, observation: &BaseObserva
             });
         }
     }
+    debug_assert_eq!(paths.len(), observation.members.len());
+    debug_assert!(observed_bytes <= policy.max_generation_bytes);
     Ok(())
 }
 
@@ -409,7 +418,7 @@ fn descriptor_for_observation(mut observation: BaseObservation) -> Result<BaseDe
     })?;
     let generation_identity = generation_identity(&observation)?;
     let descriptor_identity = descriptor_identity(&observation, generation_identity)?;
-    Ok(BaseDescriptor {
+    let descriptor = BaseDescriptor {
         declaration_index: observation.declaration_index,
         declaration_identity: observation.declaration_identity,
         logical_prefix: observation.logical_prefix,
@@ -420,7 +429,10 @@ fn descriptor_for_observation(mut observation: BaseObservation) -> Result<BaseDe
         descriptor_identity,
         observed_member_count: observation.members.len(),
         observed_bytes,
-    })
+    };
+    debug_assert!(descriptor.observed_member_count <= MAX_GENERATION_MEMBERS);
+    debug_assert!(descriptor.observed_bytes <= MAX_GENERATION_BYTES);
+    Ok(descriptor)
 }
 
 fn generation_identity(observation: &BaseObservation) -> Result<OverlayIdentity, OverlayError> {
