@@ -64,3 +64,29 @@ rank-map bound, unit/predicate names, and a byte-increment newtype. It adds no
 lint allowance. Both pre-change baselines passed. After the repair, all 23 GC
 core tests, all eight overlay core tests, and focused Clippy pass. The Tiger
 gate reports no remaining finding in either crate and advances to later cores.
+
+## Strict gate progression
+
+Later focused baselines also passed for composition, evaluator budgets, release,
+portable clients, Mantlepkgs versions, build contracts, and filesystem NAR
+observation. Their repairs use named request records, checked arithmetic,
+post-validation invariants, bounded collections, fixed-width public frame
+lengths, and smaller functions. No lint allowance was added. Post-change tests,
+focused Clippy, root-package Clippy, and formatting pass.
+
+The strict gate now reaches `crunch-store`. The preserved run contains 139
+location-backed findings across 13 files:
+
+- `provenance.rs`: 30;
+- `roots.rs`: 26;
+- `nario.rs`: 21;
+- `overlay.rs` and `gc.rs`: 15 each;
+- `pull.rs`: 12;
+- `http_closure.rs`: eight;
+- `composition.rs`: six;
+- six remaining findings across `retention.rs`, `query.rs`, `layer.rs`,
+  `handle.rs`, and `capability.rs`.
+
+This is the next repository-wide blocker. It is not hidden, baselined, allowed,
+or downgraded. The accepted parity claim remains independent from this source
+quality debt.

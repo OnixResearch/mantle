@@ -57,7 +57,7 @@ pub struct CastoreRootRef {
 pub struct CompositionBinding {
     pub root: CastoreRootRef,
     pub mount: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "no_label", skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
 }
 
@@ -74,7 +74,7 @@ pub struct CompositionPlan {
     pub schema: String,
     pub merge_policy_version: u32,
     pub bindings: Vec<CompositionBinding>,
-    #[serde(default)]
+    #[serde(default = "no_collision_decisions")]
     pub collision_decisions: Vec<CollisionDecision>,
 }
 
@@ -158,9 +158,9 @@ pub enum MergeOutcomeKind {
 pub struct MergeOutcome {
     pub path: String,
     pub kind: MergeOutcomeKind,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "no_winner_binding_ref", skip_serializing_if = "Option::is_none")]
     pub winner_binding_ref: Option<String>,
-    #[serde(default)]
+    #[serde(default = "no_displaced_binding_refs")]
     pub displaced_binding_refs: Vec<String>,
 }
 
@@ -262,6 +262,22 @@ struct Contribution {
     node: SnapshotNode,
 }
 
+fn no_label() -> Option<String> {
+    None
+}
+
+fn no_collision_decisions() -> Vec<CollisionDecision> {
+    Vec::new()
+}
+
+fn no_winner_binding_ref() -> Option<String> {
+    None
+}
+
+fn no_displaced_binding_refs() -> Vec<String> {
+    Vec::new()
+}
+
 pub fn prepare_composition(request: &CompositionRequest) -> Result<PreparedComposition, CompositionError> {
     validate_policy(&request.realization_policy)?;
     if request.plan.schema != PLAN_SCHEMA {
@@ -300,14 +316,19 @@ pub fn prepare_composition(request: &CompositionRequest) -> Result<PreparedCompo
 
     let plan_ref = hash_plan(request.plan.merge_policy_version, &bindings, &decisions)?;
     let realization_policy_ref = hash_policy(&request.realization_policy)?;
-    Ok(PreparedComposition {
+    let prepared = PreparedComposition {
         plan_ref,
         realization_policy_ref,
         merge_policy_version: request.plan.merge_policy_version,
         bindings,
         collision_decisions: decisions,
         realization_policy: request.realization_policy.clone(),
-    })
+    };
+    debug_assert!(!prepared.bindings.is_empty());
+    debug_assert!(
+        u32::try_from(prepared.bindings.len()).is_ok_and(|count| count <= request.realization_policy.max_bindings)
+    );
+    Ok(prepared)
 }
 
 pub fn plan_composition(
@@ -318,7 +339,11 @@ pub fn plan_composition(
     let mut usage = LimitUsage {
         bindings: count_u32(prepared.bindings.len(), "bindings")?,
         collision_decisions: count_u32(prepared.collision_decisions.len(), "collision-decisions")?,
-        ..LimitUsage::default()
+        entries: 0,
+        depth: 0,
+        path_bytes: 0,
+        largest_file_bytes: 0,
+        total_file_bytes: 0,
     };
     let mut contributions = Vec::with_capacity(prepared.bindings.len());
     for binding in &prepared.bindings {
@@ -350,11 +375,14 @@ pub fn plan_composition(
         }
     }
     outcomes.sort_by(|left, right| left.path.cmp(&right.path));
-    Ok(CompositionOutcome {
+    let outcome = CompositionOutcome {
         root,
         merge_outcomes: outcomes,
         limit_usage: usage,
-    })
+    };
+    debug_assert_eq!(outcome.limit_usage.bindings, count_u32(prepared.bindings.len(), "bindings")?);
+    debug_assert!(outcome.limit_usage.entries <= prepared.realization_policy.max_entries);
+    Ok(outcome)
 }
 
 pub fn finalize_receipt(
@@ -366,7 +394,7 @@ pub fn finalize_receipt(
     let mut input_roots = prepared.bindings.iter().map(|binding| binding.root.clone()).collect::<Vec<_>>();
     input_roots.sort();
     input_roots.dedup();
-    let unsupported_metadata_classes = vec_of_strings(&[
+    let non_claim_labels = vec_of_strings(&[
         "ownership",
         "acl",
         "capability",
@@ -374,8 +402,8 @@ pub fn finalize_receipt(
         "hard-link",
         "device-node",
     ]);
-    let receipt_ref = hash_receipt(prepared, outcome, &input_roots, &resulting_root, &unsupported_metadata_classes)?;
-    Ok(RealizationReceipt {
+    let receipt_ref = hash_receipt(prepared, outcome, &input_roots, &resulting_root, &non_claim_labels)?;
+    let receipt = RealizationReceipt {
         schema: RECEIPT_SCHEMA.to_string(),
         receipt_ref,
         plan_ref: prepared.plan_ref.clone(),
@@ -385,23 +413,26 @@ pub fn finalize_receipt(
         merge_outcomes: outcome.merge_outcomes.clone(),
         limit_usage: outcome.limit_usage.clone(),
         resulting_root,
-        unsupported_metadata_classes,
+        unsupported_metadata_classes: non_claim_labels,
         non_claim: NON_CLAIM.to_string(),
-    })
+    };
+    debug_assert_eq!(receipt.plan_ref, prepared.plan_ref);
+    debug_assert!(!receipt.unsupported_metadata_classes.is_empty());
+    Ok(receipt)
 }
 
 fn validate_policy(policy: &RealizationPolicy) -> Result<(), CompositionError> {
     if policy.schema != POLICY_SCHEMA {
         return Err(CompositionError::InvalidPolicySchema);
     }
-    let limits = [
+    let required_u32_bounds = [
         (policy.max_bindings, "bindings"),
         (policy.max_collision_decisions, "collision-decisions"),
         (policy.max_entries, "entries"),
         (policy.max_depth, "depth"),
         (policy.max_path_bytes, "path-bytes"),
     ];
-    for (value, name) in limits {
+    for (value, name) in required_u32_bounds {
         if value == 0 {
             return Err(CompositionError::LimitInvalid(name));
         }
@@ -412,14 +443,14 @@ fn validate_policy(policy: &RealizationPolicy) -> Result<(), CompositionError> {
     if policy.max_total_file_bytes == 0 {
         return Err(CompositionError::LimitInvalid("total-file-bytes"));
     }
-    let bounded_limits = [
+    let absolute_u32_bounds = [
         (policy.max_bindings, ABSOLUTE_BINDINGS_MAX, "bindings"),
         (policy.max_collision_decisions, ABSOLUTE_COLLISION_DECISIONS_MAX, "collision-decisions"),
         (policy.max_entries, ABSOLUTE_ENTRIES_MAX, "entries"),
         (policy.max_depth, ABSOLUTE_DEPTH_MAX, "depth"),
         (policy.max_path_bytes, ABSOLUTE_PATH_BYTES_MAX, "path-bytes"),
     ];
-    for (value, absolute_max, name) in bounded_limits {
+    for (value, absolute_max, name) in absolute_u32_bounds {
         if value > absolute_max {
             return Err(CompositionError::LimitExceeded(name));
         }
@@ -430,6 +461,8 @@ fn validate_policy(policy: &RealizationPolicy) -> Result<(), CompositionError> {
     if policy.max_total_file_bytes > ABSOLUTE_TOTAL_FILE_BYTES_MAX {
         return Err(CompositionError::LimitExceeded("total-file-bytes"));
     }
+    debug_assert!(policy.max_bindings <= ABSOLUTE_BINDINGS_MAX);
+    debug_assert!(policy.max_total_file_bytes <= ABSOLUTE_TOTAL_FILE_BYTES_MAX);
     Ok(())
 }
 
@@ -456,7 +489,7 @@ fn normalize_decision(
     let path = normalize_path(&decision.path, true)
         .map_err(|_| CompositionError::InvalidCollisionPath(decision.path.clone()))?;
     check_path_bound(&path, policy.max_path_bytes, "path-bytes")?;
-    if !is_ref(&decision.winner_binding_ref, BINDING_REF_PREFIX) {
+    if !is_binding_ref(&decision.winner_binding_ref) {
         return Err(CompositionError::InvalidBindingRef);
     }
     Ok(CollisionDecision {
@@ -469,24 +502,28 @@ fn normalize_path(path: &str, is_root_allowed: bool) -> Result<String, ()> {
     if path.is_empty() {
         return if is_root_allowed { Ok(String::new()) } else { Err(()) };
     }
-    if path.starts_with(PATH_SEPARATOR)
-        || path.starts_with(WINDOWS_SEPARATOR)
-        || path.ends_with(PATH_SEPARATOR)
-        || path.contains(WINDOWS_SEPARATOR)
-        || path.contains("//")
-    {
+    if path.starts_with(PATH_SEPARATOR) || path.starts_with(WINDOWS_SEPARATOR) {
+        return Err(());
+    }
+    if path.ends_with(PATH_SEPARATOR) || path.contains(WINDOWS_SEPARATOR) {
+        return Err(());
+    }
+    if path.contains("//") {
         return Err(());
     }
     if path.as_bytes().get(1).copied() == Some(WINDOWS_DRIVE_SEPARATOR as u8) {
         return Err(());
     }
-    let mut normalized = Vec::new();
+    let component_count = path.split(PATH_SEPARATOR).count();
+    let mut normalized = Vec::with_capacity(component_count);
     for component in path.split(PATH_SEPARATOR) {
         if component.is_empty() || component == CURRENT_COMPONENT || component == PARENT_COMPONENT {
             return Err(());
         }
         normalized.push(component);
     }
+    debug_assert_eq!(normalized.len(), component_count);
+    debug_assert!(normalized.iter().all(|component| !component.is_empty()));
     Ok(normalized.join("/"))
 }
 
@@ -538,6 +575,8 @@ fn index_snapshots(
             return Err(CompositionError::MissingSnapshot(root.digest_blake3));
         }
     }
+    debug_assert_eq!(indexed.len(), prepared.bindings.len());
+    debug_assert!(indexed.keys().all(|root| prepared.bindings.iter().any(|binding| &binding.root == root)));
     Ok(indexed)
 }
 
@@ -557,7 +596,7 @@ fn validate_snapshot(
         return Err(CompositionError::LimitExceeded("path-bytes"));
     }
     match node {
-        SnapshotNode::Directory { entries } => validate_directory(entries, path, depth, policy, usage),
+        SnapshotNode::Directory { entries } => validate_directory(entries, path, depth, policy, usage)?,
         SnapshotNode::File {
             digest_blake3,
             size_bytes,
@@ -575,15 +614,16 @@ fn validate_snapshot(
             if usage.total_file_bytes > policy.max_total_file_bytes {
                 return Err(CompositionError::LimitExceeded("total-file-bytes"));
             }
-            Ok(())
         }
         SnapshotNode::Symlink { .. } => {
             if !policy.allow_symlinks {
                 return Err(CompositionError::SymlinkRejected(path.to_string()));
             }
-            Ok(())
         }
     }
+    debug_assert!(usage.depth <= policy.max_depth);
+    debug_assert!(usage.path_bytes <= policy.max_path_bytes);
+    Ok(())
 }
 
 fn validate_directory(
@@ -596,19 +636,30 @@ fn validate_directory(
     let mut names = BTreeSet::new();
     for entry in entries {
         if normalize_path(&entry.name, false).is_err() || entry.name.contains(PATH_SEPARATOR) {
-            return Err(CompositionError::InvalidEntryName(join_path(path, &entry.name)));
+            return Err(CompositionError::InvalidEntryName(join_path(PathJoin {
+                parent: path,
+                child: &entry.name,
+            })));
         }
         if !names.insert(entry.name.clone()) {
-            return Err(CompositionError::DuplicateEntry(join_path(path, &entry.name)));
+            return Err(CompositionError::DuplicateEntry(join_path(PathJoin {
+                parent: path,
+                child: &entry.name,
+            })));
         }
         usage.entries = usage.entries.checked_add(1).ok_or(CompositionError::IntegerOverflow("entries"))?;
         if usage.entries > policy.max_entries {
             return Err(CompositionError::LimitExceeded("entries"));
         }
-        let child_path = join_path(path, &entry.name);
+        let child_path = join_path(PathJoin {
+            parent: path,
+            child: &entry.name,
+        });
         let child_depth = depth.checked_add(1).ok_or(CompositionError::IntegerOverflow("depth"))?;
         validate_snapshot(&entry.node, &child_path, child_depth, policy, usage)?;
     }
+    debug_assert_eq!(names.len(), entries.len());
+    debug_assert!(usage.entries <= policy.max_entries);
     Ok(())
 }
 
@@ -660,6 +711,8 @@ fn merge_directories(
     used_decisions: &mut BTreeSet<String>,
     outcomes: &mut Vec<MergeOutcome>,
 ) -> Result<SnapshotNode, CompositionError> {
+    debug_assert!(!contributions.is_empty());
+    debug_assert!(contributions.iter().all(|item| matches!(item.node, SnapshotNode::Directory { .. })));
     let contributor_count = contributions.len();
     let mut children = BTreeMap::<String, Vec<Contribution>>::new();
     for contribution in contributions {
@@ -675,7 +728,10 @@ fn merge_directories(
     }
     let mut entries = Vec::with_capacity(children.len());
     for (name, child_contributions) in children {
-        let child_path = join_path(path, &name);
+        let child_path = join_path(PathJoin {
+            parent: path,
+            child: &name,
+        });
         entries.push(SnapshotEntry {
             name,
             node: merge_contributions(&child_path, child_contributions, decisions, used_decisions, outcomes)?,
@@ -699,6 +755,8 @@ fn resolve_collision(
     used_decisions: &mut BTreeSet<String>,
     outcomes: &mut Vec<MergeOutcome>,
 ) -> Result<SnapshotNode, CompositionError> {
+    debug_assert!(!contributions.is_empty());
+    debug_assert!(contributions.iter().any(|item| !matches!(item.node, SnapshotNode::Directory { .. })));
     let winner_ref = decisions.get(path).ok_or_else(|| CompositionError::UnresolvedCollision(path.to_string()))?;
     let winner = contributions
         .iter()
@@ -772,6 +830,8 @@ fn hash_receipt(
     result: &CastoreRootRef,
     unsupported: &[String],
 ) -> Result<String, CompositionError> {
+    debug_assert!(input_roots.windows(2).all(|pair| pair[0] < pair[1]));
+    debug_assert!(!unsupported.is_empty());
     let mut hasher = blake3::Hasher::new();
     hash_bytes(&mut hasher, RECEIPT_DOMAIN)?;
     hash_bytes(&mut hasher, prepared.plan_ref.as_bytes())?;
@@ -864,18 +924,23 @@ fn count_u32(value: usize, field: &'static str) -> Result<u32, CompositionError>
     u32::try_from(value).map_err(|_| CompositionError::IntegerOverflow(field))
 }
 
-fn is_ref(value: &str, prefix: &str) -> bool {
-    value.strip_prefix(prefix).is_some_and(|digest| {
+fn is_binding_ref(value: &str) -> bool {
+    value.strip_prefix(BINDING_REF_PREFIX).is_some_and(|digest| {
         digest.len() == BLAKE3_HEX_CHARS
             && digest.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
     })
 }
 
-fn join_path(parent: &str, child: &str) -> String {
-    if parent.is_empty() {
-        child.to_string()
+struct PathJoin<'a> {
+    parent: &'a str,
+    child: &'a str,
+}
+
+fn join_path(parts: PathJoin<'_>) -> String {
+    if parts.parent.is_empty() {
+        parts.child.to_string()
     } else {
-        format!("{parent}/{child}")
+        format!("{}/{}", parts.parent, parts.child)
     }
 }
 
