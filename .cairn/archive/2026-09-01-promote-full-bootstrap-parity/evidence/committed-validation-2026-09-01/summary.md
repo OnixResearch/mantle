@@ -4,7 +4,8 @@
 
 The promotion implementation remains valid from committed source. Cairn
 validation, Tracey coverage, and all three gates pass with every task checked.
-The focused Nix-shell tests and formatting check also pass.
+The focused Nix-shell tests and formatting check also pass. Post-archive Cairn
+validation and Tracey coverage also pass after the accepted delta is synced.
 
 ## Passing checks
 
@@ -56,8 +57,8 @@ promotion-specific checks remain valid and complete.
 - **Decision:** accept the promotion evidence and preserve the unrelated
   bootstrap inventory as a bounded repository-wide blocker.
 - **Owner:** `promote-full-bootstrap-parity`.
-- **Next action:** sync the accepted delta, archive the change, rerun
-  post-archive validation, and record the final repository status.
+- **Next action:** commit the synchronized archive, push the verified branch,
+  and integrate it into `origin/main`.
 
 ## Non-claims
 
