@@ -10,6 +10,7 @@ use std::env;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Command;
 use std::process::ExitCode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -94,6 +95,84 @@ const FULL_SOURCE_PROOF_MANIFEST_BLAKE3: &str = "edfe4135f4573f680dfcfcd87ea6fe5
 const FULL_SOURCE_OVERRIDE_COUNT: &str = "61";
 const BLAKE3_HEX_BYTES: usize = 64;
 const FIXED_POINT_STAGE_COUNT: usize = 2;
+
+const V98_SOURCE_COMMIT: &str = "af4b2d147d3b9fd0c216d3b1f6d11da1e043b810";
+const V98_SOURCE_BLAKE3: &str = "15b71ba2760c5cac25739ff0aca03026af8fa77b275d2656dc363e0e69976d1e";
+const V98_MANIFEST_PATH: &str = "bootstrap/evidence/full-bootstrap-parity-v98/manifest.json";
+const V98_MANIFEST_BLAKE3: &str = "fcf550d8a44b369f2d5a0b834859249bf0dd92346205ca31277058f593cb75c7";
+const V98_VERIFICATION_PATH: &str = "bootstrap/evidence/full-bootstrap-parity-v98/verification.json";
+const V98_VERIFICATION_BLAKE3: &str = "09a258e1c9fd3ec05d9a74a73c5444322cb80a80c5746b90276059fae8aa912e";
+const V98_VERIFICATION_IDENTITY_BLAKE3: &str = "de1b3f03c62b3cf90b5c33f964efdb72a9b0165537beadbf0880f3469cb6c538";
+const V98_PARITY_PATH: &str = "bootstrap/evidence/real-self-build-proof-parity.json";
+const V98_PARITY_BLAKE3: &str = "4a4f55d6a6a5103fb1a0ca1df1bfac9171a0d9166cf2bd0611646127ee2102be";
+const V98_STAGE_X_LINEAGE_BLAKE3: &str = "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d";
+const V98_STAGE_X_RECEIPT_BLAKE3: &str = "7d07ca06898807a29422f5da0a0ad9827f780f3568f31984151f568bb48bb003";
+const V98_PLANNED_ACTION_COUNT: &str = "1914";
+const V98_OBSERVED_EVENT_COUNT: &str = "478870";
+const SELF_TEST_TIMEOUT_SECONDS: &str = "600";
+const B3SUM_ENV: &str = "MANTLE_BOOTSTRAP_BLOCKER_B3SUM";
+
+#[derive(Debug, Clone, Copy)]
+struct ProofBoundFile {
+    path: &'static str,
+    blake3: &'static str,
+    classes: &'static [&'static str],
+}
+
+const V98_PROOF_BOUND_FILES: &[ProofBoundFile] = &[
+    ProofBoundFile {
+        path: "bootstrap/stagex-transition-lineage.json",
+        blake3: V98_STAGE_X_LINEAGE_BLAKE3,
+        classes: &["bridge-output", "compiler-runtime-crash-boundary"],
+    },
+    ProofBoundFile {
+        path: "bootstrap/stagex-transition-lineage.ncl",
+        blake3: "41bb377345f8868766a39f926a29e345c9dc9970e72e6147336583a5846b2309",
+        classes: &["bridge-output", "compiler-runtime-crash-boundary"],
+    },
+    ProofBoundFile {
+        path: "bootstrap/tcc-musl-prep.ncl",
+        blake3: "88f0a242b6e53d3618383af6d9fce83bbacaa4cf4f2403bba56baf9651901b4e",
+        classes: &[
+            "bridge-output",
+            "compiler-runtime-crash-boundary",
+            "placeholder-deferred",
+        ],
+    },
+    ProofBoundFile {
+        path: "bootstrap/tcc-musl.ncl",
+        blake3: "8692c674f19ec7dcf7643365a984dbac570418dbb81989874f078792dd2668c4",
+        classes: &[
+            "bridge-output",
+            "compiler-runtime-crash-boundary",
+            "placeholder-deferred",
+        ],
+    },
+    ProofBoundFile {
+        path: "bootstrap/tcc-musl-v2.ncl",
+        blake3: "c82e4b5c375d3f9ba767c916ad4dba18e995d239755ea492ae94a007d2f49190",
+        classes: &[
+            "bridge-output",
+            "compiler-runtime-crash-boundary",
+            "placeholder-deferred",
+        ],
+    },
+    ProofBoundFile {
+        path: "bootstrap/evidence/tcc-musl-handoff-bridge-boundaries.json",
+        blake3: "0cd6f9d88e48c96cf9373ce332ac84219b3e8a73831eee98d847d2417a4fe79f",
+        classes: &["bridge-output"],
+    },
+    ProofBoundFile {
+        path: "bootstrap/evidence/gcc-4.0-native-cc1-build-frontier.json",
+        blake3: "c8d990431d6748e095821ff766e7ba9559a88e0d996021fd9797ad1728b0de9e",
+        classes: &["bridge-output", "compiler-runtime-crash-boundary"],
+    },
+    ProofBoundFile {
+        path: "bootstrap/evidence/stagex-lineage-provider-receipt.json",
+        blake3: V98_STAGE_X_RECEIPT_BLAKE3,
+        classes: &["bridge-output"],
+    },
+];
 
 const PROMOTION_CLAIM_NEEDLES: &[&str] = &[
     "full-source bootstrap status: promoted",
@@ -937,6 +1016,94 @@ fn run_self_tests() -> Result<(), String> {
         return Err("self-test accepted an unknown bridge after full-source proof".to_string());
     }
 
+    let v98_evidence = EvidenceState {
+        full_bootstrap_parity_v98_checked: true,
+        ..EvidenceState::default()
+    };
+    for proof_file in V98_PROOF_BOUND_FILES {
+        for class_id in proof_file.classes {
+            let Some(marker) = MARKERS.iter().copied().find(|marker| marker.id == *class_id) else {
+                return Err(format!("self-test proof-bound marker class is unknown: {class_id}"));
+            };
+            if source_marker_suppression_reason(Path::new(proof_file.path), marker, marker.needles[0], &v98_evidence)
+                .is_none()
+            {
+                return Err(format!("self-test expected V98 proof-bound classification: {}", proof_file.path));
+            }
+            if source_marker_suppression_reason(
+                Path::new(proof_file.path),
+                marker,
+                marker.needles[0],
+                &EvidenceState::default(),
+            )
+            .is_some()
+            {
+                return Err(format!("self-test accepted proof-bound classification without V98: {}", proof_file.path));
+            }
+        }
+    }
+    if source_marker_suppression_reason(
+        Path::new("bootstrap/unclassified-stagex-bridge.ncl"),
+        MARKERS[0],
+        "bridge output",
+        &v98_evidence,
+    )
+    .is_some()
+    {
+        return Err("self-test accepted an unknown marker through V98 classification".to_string());
+    }
+    if source_marker_suppression_reason(
+        Path::new("bootstrap/evidence/stagex-lineage-provider-receipt.json"),
+        MARKERS[4],
+        "placeholder",
+        &v98_evidence,
+    )
+    .is_some()
+    {
+        return Err("self-test accepted a marker class outside the V98 file contract".to_string());
+    }
+    if structural_non_blocker_reason(
+        Path::new("bootstrap/evidence/row.json"),
+        MARKERS[0],
+        "\"configure_bridge_compiler_use\": false",
+    )
+    .is_none()
+    {
+        return Err("self-test expected negative bridge-use fact classification".to_string());
+    }
+    if structural_non_blocker_reason(
+        Path::new("bootstrap/evidence/row.json"),
+        MARKERS[0],
+        "\"configure_bridge_compiler_use\": true",
+    )
+    .is_some()
+    {
+        return Err("self-test hid positive bridge use as a negative fact".to_string());
+    }
+    let timeout_control = format!("MAKE_TIMEOUT_SECONDS={SELF_TEST_TIMEOUT_SECONDS}");
+    if structural_non_blocker_reason(Path::new("bootstrap/binutils-tcc.ncl"), MARKERS[1], &timeout_control).is_none() {
+        return Err("self-test expected bounded timeout control classification".to_string());
+    }
+    if structural_non_blocker_reason(
+        Path::new("bootstrap/binutils-tcc.ncl"),
+        MARKERS[1],
+        "echo 'ERROR: build timeout' >&2",
+    )
+    .is_some()
+    {
+        return Err("self-test hid an observed timeout diagnostic".to_string());
+    }
+    if !expected_blake3_matches(V98_MANIFEST_BLAKE3, Some(V98_MANIFEST_BLAKE3)) {
+        return Err("self-test rejected an exact proof-bound BLAKE3 identity".to_string());
+    }
+    let wrong_blake3 = "0".repeat(BLAKE3_HEX_BYTES);
+    if expected_blake3_matches(V98_MANIFEST_BLAKE3, Some(&wrong_blake3)) {
+        return Err("self-test accepted a changed proof-bound BLAKE3 identity".to_string());
+    }
+    if expected_blake3_matches(V98_MANIFEST_BLAKE3, None) {
+        return Err("self-test accepted a missing proof-bound BLAKE3 identity".to_string());
+    }
+
     Ok(())
 }
 
@@ -961,6 +1128,7 @@ struct EvidenceState {
     diagnostic_derivation_boundary_inventory_checked: bool,
     gcc40_native_cc1_build_frontier_checked: bool,
     full_source_provider_fixed_point_checked: bool,
+    full_bootstrap_parity_v98_checked: bool,
 }
 
 impl EvidenceState {
@@ -985,6 +1153,7 @@ impl EvidenceState {
             tinycc_0927_mes_handoff_boundary_checked: checked_tinycc_0927_mes_handoff_boundary(),
             diagnostic_derivation_boundary_inventory_checked: checked_diagnostic_derivation_boundary_inventory(),
             full_source_provider_fixed_point_checked: checked_full_source_provider_fixed_point(),
+            full_bootstrap_parity_v98_checked: checked_full_bootstrap_parity_v98(),
         }
     }
 }
@@ -1118,6 +1287,89 @@ fn is_lower_hex_byte(byte: u8) -> bool {
         return true;
     }
     (b'a'..=b'f').contains(&byte)
+}
+
+fn checked_full_bootstrap_parity_v98() -> bool {
+    if !checked_v98_receipt_content() {
+        return false;
+    }
+    if !expected_blake3_matches(V98_MANIFEST_BLAKE3, measured_blake3(V98_MANIFEST_PATH).as_deref()) {
+        return false;
+    }
+    if !expected_blake3_matches(V98_VERIFICATION_BLAKE3, measured_blake3(V98_VERIFICATION_PATH).as_deref()) {
+        return false;
+    }
+    if !expected_blake3_matches(V98_PARITY_BLAKE3, measured_blake3(V98_PARITY_PATH).as_deref()) {
+        return false;
+    }
+    V98_PROOF_BOUND_FILES
+        .iter()
+        .all(|proof_file| expected_blake3_matches(proof_file.blake3, measured_blake3(proof_file.path).as_deref()))
+}
+
+fn checked_v98_receipt_content() -> bool {
+    let Some(_manifest) = checked_evidence_file(V98_MANIFEST_PATH, &[
+        "\"schema\": \"mantle-full-bootstrap-parity-bundle-v1\"",
+        &format!("\"source_commit\": \"{V98_SOURCE_COMMIT}\""),
+        &format!("\"source_blake3\": \"{V98_SOURCE_BLAKE3}\""),
+        "\"selected_provider_kind\": \"full-source\"",
+        "\"source_path\": \"bootstrap/evidence/stagex-lineage-provider-receipt.json\"",
+        &format!("\"content_blake3\": \"{V98_STAGE_X_RECEIPT_BLAKE3}\""),
+    ]) else {
+        return false;
+    };
+    let Some(_verification) = checked_evidence_file(V98_VERIFICATION_PATH, &[
+        "\"schema\": \"mantle-full-bootstrap-parity-verification-v1\"",
+        "\"status\": \"complete\"",
+        &format!("\"source_commit\": \"{V98_SOURCE_COMMIT}\""),
+        &format!("\"source_blake3\": \"{V98_SOURCE_BLAKE3}\""),
+        &format!("\"planned_actions\": {V98_PLANNED_ACTION_COUNT}"),
+        &format!("\"matched_actions\": {V98_PLANNED_ACTION_COUNT}"),
+        &format!("\"observed_events\": {V98_OBSERVED_EVENT_COUNT}"),
+        &format!("\"matched_events\": {V98_OBSERVED_EVENT_COUNT}"),
+        "\"local_only\": true",
+        "\"blockers\": []",
+        &format!("\"verification_identity_blake3\": \"{V98_VERIFICATION_IDENTITY_BLAKE3}\""),
+    ]) else {
+        return false;
+    };
+    checked_evidence_file(V98_PARITY_PATH, &[
+        "\"schema\": \"mantle-real-self-build-proof-parity-evidence-v1\"",
+        "\"selected_provider_kind\": \"full-source\"",
+        &format!("\"source_blake3\": \"{V98_SOURCE_BLAKE3}\""),
+        &format!("\"blake3\": \"{V98_MANIFEST_BLAKE3}\""),
+        &format!("\"blake3\": \"{V98_VERIFICATION_BLAKE3}\""),
+        &format!("\"verification_identity_blake3\": \"{V98_VERIFICATION_IDENTITY_BLAKE3}\""),
+        &format!("\"digest_blake3\": \"{V98_STAGE_X_LINEAGE_BLAKE3}\""),
+        "\"verdict\": \"self-rebuild-match\"",
+    ])
+    .is_some()
+}
+
+fn measured_blake3(path: &str) -> Option<String> {
+    if path.is_empty() {
+        return None;
+    }
+    let b3sum = env::var_os(B3SUM_ENV)?;
+    if !Path::new(&b3sum).is_absolute() {
+        return None;
+    }
+    let output = Command::new(b3sum).arg("--no-names").arg(path).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let digest = std::str::from_utf8(&output.stdout).ok()?.trim();
+    if !is_blake3_hex(digest) {
+        return None;
+    }
+    Some(digest.to_string())
+}
+
+fn expected_blake3_matches(expected: &str, measured: Option<&str>) -> bool {
+    if !is_blake3_hex(expected) {
+        return false;
+    }
+    measured == Some(expected)
 }
 
 fn checked_binutils_tcc_tool_smoke() -> bool {
@@ -1531,6 +1783,22 @@ fn source_marker_suppression_reason(
 ) -> Option<&'static str> {
     let path_s = path.to_string_lossy();
     let lower_line = source_line.to_lowercase();
+    if let Some(reason) = structural_non_blocker_reason(path, marker, source_line) {
+        return Some(reason);
+    }
+    if evidence.full_bootstrap_parity_v98_checked {
+        for proof_file in V98_PROOF_BOUND_FILES {
+            if path_s.as_ref() != proof_file.path {
+                continue;
+            }
+            if !proof_file.classes.contains(&marker.id) {
+                continue;
+            }
+            return Some(
+                "independent V98 verification binds this exact file digest as accepted proof or superseded boundary metadata",
+            );
+        }
+    }
     if marker.id == "compiler-runtime-crash-boundary"
         && matches!(
             path_s.as_ref(),
@@ -1575,6 +1843,62 @@ fn source_marker_suppression_reason(
         return Some(
             "full-source admission and fixed-point evidence bound this marker to a pre-admission predecessor, not the selected provider output",
         );
+    }
+    None
+}
+
+fn structural_non_blocker_reason(path: &Path, marker: MarkerClass, source_line: &str) -> Option<&'static str> {
+    let path_s = path.to_string_lossy();
+    let lower_line = source_line.to_lowercase();
+    if marker.id == "bridge-output"
+        && [
+            "\"configure_bridge_compiler_use\": false",
+            "\"configure_bridge_compiler_use\":false",
+            "configure-bridge-compiler-use-scan-clean",
+            "\"awk_macro_bridge\": false",
+            "bison_bridge_lval = false",
+            "bison_bridge_lloc = false",
+        ]
+        .iter()
+        .any(|negative_fact| lower_line.contains(negative_fact))
+    {
+        return Some("negative bridge-use fact proves that the named bridge did not participate");
+    }
+    if marker.id == "bridge-output"
+        && path_s.ends_with("bootstrap/m4-1.4.7-musl.ncl")
+        && lower_line.contains("macro bridge, or ambient tool discovery participates in the provider")
+    {
+        return Some("line continues the preceding no-participation statement for the provider");
+    }
+    if marker.id != "compiler-runtime-crash-boundary" {
+        return None;
+    }
+    if [
+        "tool_probe_timeout_seconds=",
+        "config_sub_timeout_seconds=",
+        "configure_timeout_seconds=",
+        "make_timeout_seconds=",
+        "timeout_exit_status=",
+    ]
+    .iter()
+    .any(|control| lower_line.contains(control))
+    {
+        return Some("named timeout constant bounds execution and is not an observed timeout");
+    }
+    if lower_line.contains("\"$bb\" timeout \"$")
+        || lower_line.contains("\"$busybox/bin/timeout\" \"$tool_probe_timeout_seconds\"")
+        || lower_line.contains("if test \"$rejection_status\" -eq \"$timeout_exit_status\"")
+    {
+        return Some("bounded timeout command or timeout-rejection branch is control logic, not a crash observation");
+    }
+    if lower_line.contains("for applet in") && lower_line.contains(" timeout ") {
+        return Some("bounded tool inventory names the timeout applet without reporting a timeout");
+    }
+    if lower_line.contains("negative:") && lower_line.contains("without retained output or timeout") {
+        return Some("negative-test summary records successful rejection without a timeout");
+    }
+    if lower_line.contains("native musl compile and static link smoke") {
+        return Some("positive smoke-stage name is not a static-link failure boundary");
     }
     None
 }

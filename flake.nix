@@ -89,6 +89,7 @@
           if system == "x86_64-linux" then
             import ./nix/spacewasm-reference.nix {
               inherit pkgs;
+              craneLib = componentCraneLib;
               packageRoot = ./packages/spacewasm-reference;
               coreCrate = ./crates/crunch-spacewasm-core;
               shellCrate = ./crates/crunch-spacewasm;
@@ -1060,6 +1061,7 @@
           pkgs.runCommand "bootstrap-blocker-inventory"
             {
               nativeBuildInputs = nativeBuildInputs ++ [
+                pkgs.b3sum
                 pkgs.bash
                 pkgs.coreutils
                 rustToolchain
