@@ -513,6 +513,19 @@
 // Positive and adversarial tests cover stage-specific lookup, dev rejection,
 // payload mutation, partial candidates, atomic idempotent publication,
 // fresh-root restore, legacy-attempt recipe projection, and receipt origins.
+
+// Full-bootstrap parity promotion bridge.
+//
+// r[impl bootstrap_inventory.full_bootstrap_parity_promotion]
+// Implemented by the independent evidence collector in `src/bootstrap_parity.rs`,
+// the pure V98 linkage core in `src/source_built_parity_promotion.rs`, the
+// bounded shell in `src/source_built_parity_promotion_shell.rs`, and the
+// separately implemented exporter and verifier under `scripts/`.
+//
+// r[verify bootstrap_inventory.full_bootstrap_parity_promotion]
+// Verified by five native row domains, five action adapters, 1,914 matched
+// actions, 478,870 matched events, 31 negative standalone cases, release
+// external-evidence handoff without witness quorum, and all-axis CLI tests.
 // Runtime adoption evidence remains owned by the active checkpoint change.
 
 // r[impl gcc40_bridge.configure_preprocess_confinement]
