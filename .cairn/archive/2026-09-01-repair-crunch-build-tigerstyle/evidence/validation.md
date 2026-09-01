@@ -14,7 +14,7 @@
 - **Inspected evidence:** zero build or wrapper findings, 704 passing post-change tests, strict first-party Clippy, caller checks, formatting, both full-check transcripts, and the suppression scan.
 - **Decision:** accept the bounded repair. Preserve eight pipeline findings and the independent filtered Nix-source failure as later blockers.
 - **Owner:** `repair-crunch-build-tigerstyle`.
-- **Next action:** validate, archive, push, and integrate this change without modifying either later blocker.
+- **Next action:** commit the synchronized archive, push the verified branch, and integrate it without modifying either later blocker.
 
 ## Required evidence
 
