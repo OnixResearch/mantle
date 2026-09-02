@@ -1,0 +1,1327 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: adopt-nickel-1-17-cohort",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort"
+    }
+  ],
+  "blocked": false,
+  "change": "adopt-nickel-1-17-cohort",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "4c32804db9c0d3309e48dd7148eb9f3d3e23f5cd4b0110d83a6fddd7d3046f09",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+    "receipt_hash": "6767ed8b14dd8f3564cacd001ffaea47a8049f223b6d42df429717fe3476d2f6",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "ae05a8a072197be2af6f01a8215a3a10d2034a40a275db32fd1d64caa63f1378",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "9246c2c785859d00e31fb0266c85e5b8e3cfc772e5c4a9185fe95e3611419dde",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/design.md"
+        },
+        {
+          "content_hash": "7cc251457af5e5ace1732808bff72632b31843d6d574819b9e7cd1c3c00b709e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/baseline-2026-09-01/crunch-eval.command.txt"
+        },
+        {
+          "content_hash": "478dec4e48050dc2e2ab567022f62ec214c52f77ed619e0414263652a573b68d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/baseline-2026-09-01/crunch-eval.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/baseline-2026-09-01/crunch-eval.status"
+        },
+        {
+          "content_hash": "65e6645ad39e93c75c4b4604c17cde12f40040cbbd97c2b689bb0769376675db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/baseline-2026-09-01/nickel-configs.command.txt"
+        },
+        {
+          "content_hash": "a4d4573acdf6c2323f4630d640cc009769654639ccc6555a30869ffafa367606",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/baseline-2026-09-01/nickel-configs.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/baseline-2026-09-01/nickel-configs.status"
+        },
+        {
+          "content_hash": "2f833058e31bbb2c1ae305c040616ba5d1f7979873d6aa7810c2bb31df256d68",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/blake3-check.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/blake3-check.status"
+        },
+        {
+          "content_hash": "c5c3e78515f1a2349f9f7ba6105b6538ff16c5ddc4a726c9760df5a0c7f6f888",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/blake3-manifest.txt"
+        },
+        {
+          "content_hash": "2f2a4cf0b1f074cc77681459184b6a558d43955c89e0cc22a3caf1fa182f2ec5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/cohort-self-test.log"
+        },
+        {
+          "content_hash": "286e9abf8b01fa5ece4548998afe2c3672e7c4d505cf070f19f4e582dbde70b2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/actual.sorted.json"
+        },
+        {
+          "content_hash": "65d8bb650bb63070ada33a906cf1584d75727e59ce8a7ef2b6d52a8a829e0a0a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/cohort-check-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/cohort-checks-final.status"
+        },
+        {
+          "content_hash": "2f2a4cf0b1f074cc77681459184b6a558d43955c89e0cc22a3caf1fa182f2ec5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/cohort-self-test-final.log"
+        },
+        {
+          "content_hash": "65d8bb650bb63070ada33a906cf1584d75727e59ce8a7ef2b6d52a8a829e0a0a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/cohort-vendor-final.log"
+        },
+        {
+          "content_hash": "5ca19161a27cdd5cf9c978af055b735bb71d3a0570aa48d62096b790ad90df33",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/crunch-eval-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/crunch-eval-final.status"
+        },
+        {
+          "content_hash": "7cc251457af5e5ace1732808bff72632b31843d6d574819b9e7cd1c3c00b709e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/crunch-eval-first.command.txt"
+        },
+        {
+          "content_hash": "6a91c85007824e7bd728a2c6a5db0f69d10e38d852afdd4d586f2fa7fed50c07",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/crunch-eval-first.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/crunch-eval-first.status"
+        },
+        {
+          "content_hash": "599793e1f9e060ab6246a2bccfa35e6be16f0bd9fdb4bfbb7a51e899d2a7f3d4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/evaluator-compat.command.txt"
+        },
+        {
+          "content_hash": "36992d63728db6d685b034f2a6d7a116d9e461395102eda79bba593acac570bb",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/evaluator-compat.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/evaluator-compat.status"
+        },
+        {
+          "content_hash": "286e9abf8b01fa5ece4548998afe2c3672e7c4d505cf070f19f4e582dbde70b2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/expected.sorted.json"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-cli-final.status"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-cohort-diff.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-cohort-diff.status"
+        },
+        {
+          "content_hash": "286e9abf8b01fa5ece4548998afe2c3672e7c4d505cf070f19f4e582dbde70b2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-cohort-export.json"
+        },
+        {
+          "content_hash": "d9e2b0ef46fb9c32064b8caa12e3b281c7cd99613f9553faf3f03c6891619aad",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-cohort-export.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-cohort-export.status"
+        },
+        {
+          "content_hash": "a6044e835ac697b234e08328d7f092f536866efd1b497f2830999a4e25dca488",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-configs-final.log"
+        },
+        {
+          "content_hash": "65e6645ad39e93c75c4b4604c17cde12f40040cbbd97c2b689bb0769376675db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-configs.command.txt"
+        },
+        {
+          "content_hash": "6b881177030e69d7168f8f1568e1ef717c01a2b563388bd0fbb25930a3450ce7",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-configs.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-configs.status"
+        },
+        {
+          "content_hash": "ef64dcf0e27e959e7e58e2b243c76ffaa8190c09493aba567217d09583c9f421",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-version-final.log"
+        },
+        {
+          "content_hash": "aaf5f0822688bb29aa18added35abfcaa2eb62e19667e607448307d7de33abd3",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-version.command.txt"
+        },
+        {
+          "content_hash": "ef64dcf0e27e959e7e58e2b243c76ffaa8190c09493aba567217d09583c9f421",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-version.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-version.status"
+        },
+        {
+          "content_hash": "1ebcfdf415053c4af00aee1bc11cb7a32c5ed344579dc2d40aa682ed787b960a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nix-nickel-cohort.command.txt"
+        },
+        {
+          "content_hash": "25987feae6effde2859926a90b58446e4517d8c844577a9dfb01570bf698b7ae",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nix-nickel-cohort.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nix-nickel-cohort.status"
+        },
+        {
+          "content_hash": "e65866665cbf4623c76c3deb150fe485091d6b0725eeb7d393b73b7cda773820",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/nickel-cargo-update.log"
+        },
+        {
+          "content_hash": "4b54320e34aad1d7067abb53d77301f9cba902bb4eb6d23d8cb69c2d06757c5f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/nickel-flake-lock.log"
+        },
+        {
+          "content_hash": "98ad154c7fc2f07ec7382139d8e523ea2c99a2299a269dc1b1a94b0faba65f68",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-design-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-design-final.status"
+        },
+        {
+          "content_hash": "98ad154c7fc2f07ec7382139d8e523ea2c99a2299a269dc1b1a94b0faba65f68",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-design.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-design.status"
+        },
+        {
+          "content_hash": "6b838ee1202e34b4153df9119399afd9e641027d1651c30be4e15c094fef1a85",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-proposal-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-proposal-final.status"
+        },
+        {
+          "content_hash": "6b838ee1202e34b4153df9119399afd9e641027d1651c30be4e15c094fef1a85",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-proposal.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-proposal.status"
+        },
+        {
+          "content_hash": "e9018e7ad1f4c43783c76acbfbee6bee7d0af37e5df1f2f5310e9b97fde69afa",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-tasks-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-tasks-final.status"
+        },
+        {
+          "content_hash": "e9018e7ad1f4c43783c76acbfbee6bee7d0af37e5df1f2f5310e9b97fde69afa",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-tasks.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-tasks.status"
+        },
+        {
+          "content_hash": "7dfcebb7a5640af2401e8f38a8f687c553326a9f11b82d6d49bf8459d58ffc54",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-tracey-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-tracey-final.status"
+        },
+        {
+          "content_hash": "7dfcebb7a5640af2401e8f38a8f687c553326a9f11b82d6d49bf8459d58ffc54",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-tracey.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-tracey.status"
+        },
+        {
+          "content_hash": "720a706bf4f1543e7637d7add05b193ada60d9aa4b871e59374f40f9ca1f45e2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-validate-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-validate-final.status"
+        },
+        {
+          "content_hash": "720a706bf4f1543e7637d7add05b193ada60d9aa4b871e59374f40f9ca1f45e2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-validate.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-validate.status"
+        },
+        {
+          "content_hash": "cc60bb1596a44c72b95faff7c8ae2bdd554830bf5df0f7b0dd5980ea724bbd4a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cargo-deny-final.command.txt"
+        },
+        {
+          "content_hash": "5c5fbea9d48ea894017e8fb984e19a4dcff0e7171fe65254efd1263cf6eef255",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cargo-deny-final.log"
+        },
+        {
+          "content_hash": "f0718563343edaa617589b837628f2757685c5094a71edb5d59cbe75254a31d9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cargo-deny.command.txt"
+        },
+        {
+          "content_hash": "79a51a243014225e1c7fc4d7685e496155cff44b260b1290719023e5ace29d76",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cargo-deny.log"
+        },
+        {
+          "content_hash": "33f0e983773cbeb2ae1a7b8fc6616562891ab1779b78b1d5c2b1fb53f55e2727",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/clippy.command.txt"
+        },
+        {
+          "content_hash": "82bf6f4f38f791debf2d0d548fdb66f2ac61887e94fb099dc886dad5804da148",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/clippy.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/clippy.status"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/diff-check-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/diff-check-final.status"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/diff-check.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/diff-check.status"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/durable-publication-refresh.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/durable-publication-refresh.status"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format-final.status"
+        },
+        {
+          "content_hash": "954a5e77a5cc30a8be8e7a1db4ac4ce3cb96e6e6810b6fcd582cdb75203f4799",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format.command.txt"
+        },
+        {
+          "content_hash": "d9e2b0ef46fb9c32064b8caa12e3b281c7cd99613f9553faf3f03c6891619aad",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format.status"
+        },
+        {
+          "content_hash": "3fde2cf1c4e5167a1220ff7507b6b76bae59c94b376f533b1277d0386f9825a1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final-blocker.txt"
+        },
+        {
+          "content_hash": "af5f7560f12a869379ef2179ea0cace467ae6b6bd9e10d98bb401df92040167e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final.command.txt"
+        },
+        {
+          "content_hash": "6508e357b4abe2744fee8189d2bdc7bd5ad24f7218667f98a341257a7b7690f6",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final.status"
+        },
+        {
+          "content_hash": "2a02b8479568984a52d3633699ace62fa72c3dd74f9f15ae7964fc25c77c7761",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-first.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-first.status"
+        },
+        {
+          "content_hash": "acb7f765a770e43bf65dcf3fe4220a91fdb9c64757ee2aca9655a41d91109b54",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-nickel-cohort-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-nickel-cohort-final.status"
+        },
+        {
+          "content_hash": "97f8267fe042f01b9749d744d681f92c5c3ad2c57d159c730da0c7be140a282e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-nickel-cohort-latest.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-nickel-cohort-latest.status"
+        },
+        {
+          "content_hash": "ee04363d155f100e45c7b0479e6b9eec70c3e7232a66429039db2140d25dab90",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-no-build.command.txt"
+        },
+        {
+          "content_hash": "663dea4f97229a801af87d26cf0a818743a4bd69e6032f473533c148110716a7",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-no-build.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-no-build.status"
+        },
+        {
+          "content_hash": "2e00de6b57599c5b990f07a9908da0bac369ec7c1dd1a4630c579641106fbdf7",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/paste-tree.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/paste-tree.status"
+        },
+        {
+          "content_hash": "f6ce75891edeae4f51c29d596772c300dbed48ad0d421ee9a9b7836e7185f158",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/pipeline.command.txt"
+        },
+        {
+          "content_hash": "b0f3095f398f8c7ee608dfb65f2d7d9736a635b177564557b0ffead2b4cf91c9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/pipeline.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/pipeline.status"
+        },
+        {
+          "content_hash": "d9e2b0ef46fb9c32064b8caa12e3b281c7cd99613f9553faf3f03c6891619aad",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/script-format-apply.log"
+        },
+        {
+          "content_hash": "d9e2b0ef46fb9c32064b8caa12e3b281c7cd99613f9553faf3f03c6891619aad",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/script-format-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/script-format-final.status"
+        },
+        {
+          "content_hash": "64ef4e859effb7eb4fda34aa2ef295d91225faeef9865b8cdaf53256b47cc9fa",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/script-format.log"
+        },
+        {
+          "content_hash": "c1e533258e9c647c683b277b70d90a8edcdc2b017e7b5120dddbd58db493a3c6",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/status-before-implementation-commit.log"
+        },
+        {
+          "content_hash": "d6be8eff09da67ec9be88ab86e9e45003dc5dca5f3b35d2f04c56987d9c45af3",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/tigerstyle.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/tigerstyle.status"
+        },
+        {
+          "content_hash": "2fa574748b6b86150ecf5350580ca442737273694329a7f9c7c518571336b6e9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/validation.md"
+        },
+        {
+          "content_hash": "1c852d7f2c26117e750f77601003329424e32fa53e4876825f13b22c37011477",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/cargo-vendor-config.out"
+        },
+        {
+          "content_hash": "a3c2ea429062a59c8d56e17c564f131beb0a601e39449079c0cd8fb28866255f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/cargo-vendor.command.txt"
+        },
+        {
+          "content_hash": "e96fd4be1c970ed74fe80b50d169ff9ac0ce87bbf6553de11e78ee6d676bb983",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/cargo-vendor.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/cargo-vendor.status"
+        },
+        {
+          "content_hash": "65d8bb650bb63070ada33a906cf1584d75727e59ce8a7ef2b6d52a8a829e0a0a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/cohort-require-vendor.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/cohort-require-vendor.status"
+        },
+        {
+          "content_hash": "fe7284f506093ba7c728680966791fb0aa1e05de4b5f0fedeef3e9bb5f1c0a1b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/importer-execute.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/importer-execute.status"
+        },
+        {
+          "content_hash": "65d8bb650bb63070ada33a906cf1584d75727e59ce8a7ef2b6d52a8a829e0a0a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/importer-result-check.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/importer-result-check.status"
+        },
+        {
+          "content_hash": "91b1f38abe4e1067268d6d1e3419b3c299552537cb5b0ee6de4e158a74ead83b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/importer-self-test.log"
+        },
+        {
+          "content_hash": "50e8e1ddf071547e24880907315027300d6497211b66490d20a7be8c600c60a2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/offline-metadata.command.txt"
+        },
+        {
+          "content_hash": "5e34210680e25350efdb8c943fefdf3036bd53fce0b3f05e63380dd2cbfa58d1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/offline-metadata.json"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/offline-metadata.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/offline-metadata.status"
+        },
+        {
+          "content_hash": "3bb017c80eccd961c234f7e8decf880de91242558e35c057b12af57ee541c2de",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/vendor-manifest.log"
+        },
+        {
+          "content_hash": "1dc0592452dce577f5b6417851c79fd0faf4a36dfe21d44108e39073ef5b523e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/proposal.md"
+        },
+        {
+          "content_hash": "f532e987e16a009f0df78b5879c52c5487715b2d00f29fb44fd7560f643dab8b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/specs/nickel-toolchain/spec.md"
+        },
+        {
+          "content_hash": "a48a41f4f93d1f5633925a4b4733ed184453ffd9817fe1e9aafe720a0254f54e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-01-adopt-nickel-1-17-cohort/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort"
+        }
+      ],
+      "manifest_hash": "cc23894b5cf8edf4cbd1b75b1538dde9d29a49e7cb24cadd37bd9bd7218a31bb"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "9246c2c785859d00e31fb0266c85e5b8e3cfc772e5c4a9185fe95e3611419dde",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/design.md"
+        },
+        {
+          "content_hash": "7cc251457af5e5ace1732808bff72632b31843d6d574819b9e7cd1c3c00b709e",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/baseline-2026-09-01/crunch-eval.command.txt"
+        },
+        {
+          "content_hash": "478dec4e48050dc2e2ab567022f62ec214c52f77ed619e0414263652a573b68d",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/baseline-2026-09-01/crunch-eval.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/baseline-2026-09-01/crunch-eval.status"
+        },
+        {
+          "content_hash": "65e6645ad39e93c75c4b4604c17cde12f40040cbbd97c2b689bb0769376675db",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/baseline-2026-09-01/nickel-configs.command.txt"
+        },
+        {
+          "content_hash": "a4d4573acdf6c2323f4630d640cc009769654639ccc6555a30869ffafa367606",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/baseline-2026-09-01/nickel-configs.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/baseline-2026-09-01/nickel-configs.status"
+        },
+        {
+          "content_hash": "2f833058e31bbb2c1ae305c040616ba5d1f7979873d6aa7810c2bb31df256d68",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/blake3-check.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/blake3-check.status"
+        },
+        {
+          "content_hash": "c5c3e78515f1a2349f9f7ba6105b6538ff16c5ddc4a726c9760df5a0c7f6f888",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/blake3-manifest.txt"
+        },
+        {
+          "content_hash": "2f2a4cf0b1f074cc77681459184b6a558d43955c89e0cc22a3caf1fa182f2ec5",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/cohort-self-test.log"
+        },
+        {
+          "content_hash": "286e9abf8b01fa5ece4548998afe2c3672e7c4d505cf070f19f4e582dbde70b2",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/actual.sorted.json"
+        },
+        {
+          "content_hash": "65d8bb650bb63070ada33a906cf1584d75727e59ce8a7ef2b6d52a8a829e0a0a",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/cohort-check-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/cohort-checks-final.status"
+        },
+        {
+          "content_hash": "2f2a4cf0b1f074cc77681459184b6a558d43955c89e0cc22a3caf1fa182f2ec5",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/cohort-self-test-final.log"
+        },
+        {
+          "content_hash": "65d8bb650bb63070ada33a906cf1584d75727e59ce8a7ef2b6d52a8a829e0a0a",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/cohort-vendor-final.log"
+        },
+        {
+          "content_hash": "5ca19161a27cdd5cf9c978af055b735bb71d3a0570aa48d62096b790ad90df33",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/crunch-eval-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/crunch-eval-final.status"
+        },
+        {
+          "content_hash": "7cc251457af5e5ace1732808bff72632b31843d6d574819b9e7cd1c3c00b709e",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/crunch-eval-first.command.txt"
+        },
+        {
+          "content_hash": "6a91c85007824e7bd728a2c6a5db0f69d10e38d852afdd4d586f2fa7fed50c07",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/crunch-eval-first.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/crunch-eval-first.status"
+        },
+        {
+          "content_hash": "599793e1f9e060ab6246a2bccfa35e6be16f0bd9fdb4bfbb7a51e899d2a7f3d4",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/evaluator-compat.command.txt"
+        },
+        {
+          "content_hash": "36992d63728db6d685b034f2a6d7a116d9e461395102eda79bba593acac570bb",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/evaluator-compat.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/evaluator-compat.status"
+        },
+        {
+          "content_hash": "286e9abf8b01fa5ece4548998afe2c3672e7c4d505cf070f19f4e582dbde70b2",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/expected.sorted.json"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-cli-final.status"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-cohort-diff.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-cohort-diff.status"
+        },
+        {
+          "content_hash": "286e9abf8b01fa5ece4548998afe2c3672e7c4d505cf070f19f4e582dbde70b2",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-cohort-export.json"
+        },
+        {
+          "content_hash": "d9e2b0ef46fb9c32064b8caa12e3b281c7cd99613f9553faf3f03c6891619aad",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-cohort-export.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-cohort-export.status"
+        },
+        {
+          "content_hash": "a6044e835ac697b234e08328d7f092f536866efd1b497f2830999a4e25dca488",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-configs-final.log"
+        },
+        {
+          "content_hash": "65e6645ad39e93c75c4b4604c17cde12f40040cbbd97c2b689bb0769376675db",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-configs.command.txt"
+        },
+        {
+          "content_hash": "6b881177030e69d7168f8f1568e1ef717c01a2b563388bd0fbb25930a3450ce7",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-configs.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-configs.status"
+        },
+        {
+          "content_hash": "ef64dcf0e27e959e7e58e2b243c76ffaa8190c09493aba567217d09583c9f421",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-version-final.log"
+        },
+        {
+          "content_hash": "aaf5f0822688bb29aa18added35abfcaa2eb62e19667e607448307d7de33abd3",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-version.command.txt"
+        },
+        {
+          "content_hash": "ef64dcf0e27e959e7e58e2b243c76ffaa8190c09493aba567217d09583c9f421",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-version.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nickel-version.status"
+        },
+        {
+          "content_hash": "1ebcfdf415053c4af00aee1bc11cb7a32c5ed344579dc2d40aa682ed787b960a",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nix-nickel-cohort.command.txt"
+        },
+        {
+          "content_hash": "25987feae6effde2859926a90b58446e4517d8c844577a9dfb01570bf698b7ae",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nix-nickel-cohort.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/implementation-2026-09-01/nix-nickel-cohort.status"
+        },
+        {
+          "content_hash": "e65866665cbf4623c76c3deb150fe485091d6b0725eeb7d393b73b7cda773820",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/nickel-cargo-update.log"
+        },
+        {
+          "content_hash": "4b54320e34aad1d7067abb53d77301f9cba902bb4eb6d23d8cb69c2d06757c5f",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/nickel-flake-lock.log"
+        },
+        {
+          "content_hash": "98ad154c7fc2f07ec7382139d8e523ea2c99a2299a269dc1b1a94b0faba65f68",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-design-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-design-final.status"
+        },
+        {
+          "content_hash": "98ad154c7fc2f07ec7382139d8e523ea2c99a2299a269dc1b1a94b0faba65f68",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-design.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-design.status"
+        },
+        {
+          "content_hash": "6b838ee1202e34b4153df9119399afd9e641027d1651c30be4e15c094fef1a85",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-proposal-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-proposal-final.status"
+        },
+        {
+          "content_hash": "6b838ee1202e34b4153df9119399afd9e641027d1651c30be4e15c094fef1a85",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-proposal.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-proposal.status"
+        },
+        {
+          "content_hash": "e9018e7ad1f4c43783c76acbfbee6bee7d0af37e5df1f2f5310e9b97fde69afa",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-tasks-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-tasks-final.status"
+        },
+        {
+          "content_hash": "e9018e7ad1f4c43783c76acbfbee6bee7d0af37e5df1f2f5310e9b97fde69afa",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-tasks.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-gate-tasks.status"
+        },
+        {
+          "content_hash": "7dfcebb7a5640af2401e8f38a8f687c553326a9f11b82d6d49bf8459d58ffc54",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-tracey-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-tracey-final.status"
+        },
+        {
+          "content_hash": "7dfcebb7a5640af2401e8f38a8f687c553326a9f11b82d6d49bf8459d58ffc54",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-tracey.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-tracey.status"
+        },
+        {
+          "content_hash": "720a706bf4f1543e7637d7add05b193ada60d9aa4b871e59374f40f9ca1f45e2",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-validate-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-validate-final.status"
+        },
+        {
+          "content_hash": "720a706bf4f1543e7637d7add05b193ada60d9aa4b871e59374f40f9ca1f45e2",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-validate.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cairn-validate.status"
+        },
+        {
+          "content_hash": "cc60bb1596a44c72b95faff7c8ae2bdd554830bf5df0f7b0dd5980ea724bbd4a",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cargo-deny-final.command.txt"
+        },
+        {
+          "content_hash": "5c5fbea9d48ea894017e8fb984e19a4dcff0e7171fe65254efd1263cf6eef255",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cargo-deny-final.log"
+        },
+        {
+          "content_hash": "f0718563343edaa617589b837628f2757685c5094a71edb5d59cbe75254a31d9",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cargo-deny.command.txt"
+        },
+        {
+          "content_hash": "79a51a243014225e1c7fc4d7685e496155cff44b260b1290719023e5ace29d76",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/cargo-deny.log"
+        },
+        {
+          "content_hash": "33f0e983773cbeb2ae1a7b8fc6616562891ab1779b78b1d5c2b1fb53f55e2727",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/clippy.command.txt"
+        },
+        {
+          "content_hash": "82bf6f4f38f791debf2d0d548fdb66f2ac61887e94fb099dc886dad5804da148",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/clippy.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/clippy.status"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/diff-check-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/diff-check-final.status"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/diff-check.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/diff-check.status"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/durable-publication-refresh.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/durable-publication-refresh.status"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format-final.status"
+        },
+        {
+          "content_hash": "954a5e77a5cc30a8be8e7a1db4ac4ce3cb96e6e6810b6fcd582cdb75203f4799",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format.command.txt"
+        },
+        {
+          "content_hash": "d9e2b0ef46fb9c32064b8caa12e3b281c7cd99613f9553faf3f03c6891619aad",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format.status"
+        },
+        {
+          "content_hash": "3fde2cf1c4e5167a1220ff7507b6b76bae59c94b376f533b1277d0386f9825a1",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final-blocker.txt"
+        },
+        {
+          "content_hash": "af5f7560f12a869379ef2179ea0cace467ae6b6bd9e10d98bb401df92040167e",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final.command.txt"
+        },
+        {
+          "content_hash": "6508e357b4abe2744fee8189d2bdc7bd5ad24f7218667f98a341257a7b7690f6",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final.status"
+        },
+        {
+          "content_hash": "2a02b8479568984a52d3633699ace62fa72c3dd74f9f15ae7964fc25c77c7761",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-first.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-first.status"
+        },
+        {
+          "content_hash": "acb7f765a770e43bf65dcf3fe4220a91fdb9c64757ee2aca9655a41d91109b54",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-nickel-cohort-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-nickel-cohort-final.status"
+        },
+        {
+          "content_hash": "97f8267fe042f01b9749d744d681f92c5c3ad2c57d159c730da0c7be140a282e",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-nickel-cohort-latest.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-nickel-cohort-latest.status"
+        },
+        {
+          "content_hash": "ee04363d155f100e45c7b0479e6b9eec70c3e7232a66429039db2140d25dab90",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-no-build.command.txt"
+        },
+        {
+          "content_hash": "663dea4f97229a801af87d26cf0a818743a4bd69e6032f473533c148110716a7",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-no-build.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-no-build.status"
+        },
+        {
+          "content_hash": "2e00de6b57599c5b990f07a9908da0bac369ec7c1dd1a4630c579641106fbdf7",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/paste-tree.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/paste-tree.status"
+        },
+        {
+          "content_hash": "f6ce75891edeae4f51c29d596772c300dbed48ad0d421ee9a9b7836e7185f158",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/pipeline.command.txt"
+        },
+        {
+          "content_hash": "b0f3095f398f8c7ee608dfb65f2d7d9736a635b177564557b0ffead2b4cf91c9",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/pipeline.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/pipeline.status"
+        },
+        {
+          "content_hash": "d9e2b0ef46fb9c32064b8caa12e3b281c7cd99613f9553faf3f03c6891619aad",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/script-format-apply.log"
+        },
+        {
+          "content_hash": "d9e2b0ef46fb9c32064b8caa12e3b281c7cd99613f9553faf3f03c6891619aad",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/script-format-final.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/script-format-final.status"
+        },
+        {
+          "content_hash": "64ef4e859effb7eb4fda34aa2ef295d91225faeef9865b8cdaf53256b47cc9fa",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/script-format.log"
+        },
+        {
+          "content_hash": "c1e533258e9c647c683b277b70d90a8edcdc2b017e7b5120dddbd58db493a3c6",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/status-before-implementation-commit.log"
+        },
+        {
+          "content_hash": "d6be8eff09da67ec9be88ab86e9e45003dc5dca5f3b35d2f04c56987d9c45af3",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/tigerstyle.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/tigerstyle.status"
+        },
+        {
+          "content_hash": "2fa574748b6b86150ecf5350580ca442737273694329a7f9c7c518571336b6e9",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation.md"
+        },
+        {
+          "content_hash": "1c852d7f2c26117e750f77601003329424e32fa53e4876825f13b22c37011477",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/cargo-vendor-config.out"
+        },
+        {
+          "content_hash": "a3c2ea429062a59c8d56e17c564f131beb0a601e39449079c0cd8fb28866255f",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/cargo-vendor.command.txt"
+        },
+        {
+          "content_hash": "e96fd4be1c970ed74fe80b50d169ff9ac0ce87bbf6553de11e78ee6d676bb983",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/cargo-vendor.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/cargo-vendor.status"
+        },
+        {
+          "content_hash": "65d8bb650bb63070ada33a906cf1584d75727e59ce8a7ef2b6d52a8a829e0a0a",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/cohort-require-vendor.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/cohort-require-vendor.status"
+        },
+        {
+          "content_hash": "fe7284f506093ba7c728680966791fb0aa1e05de4b5f0fedeef3e9bb5f1c0a1b",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/importer-execute.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/importer-execute.status"
+        },
+        {
+          "content_hash": "65d8bb650bb63070ada33a906cf1584d75727e59ce8a7ef2b6d52a8a829e0a0a",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/importer-result-check.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/importer-result-check.status"
+        },
+        {
+          "content_hash": "91b1f38abe4e1067268d6d1e3419b3c299552537cb5b0ee6de4e158a74ead83b",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/importer-self-test.log"
+        },
+        {
+          "content_hash": "50e8e1ddf071547e24880907315027300d6497211b66490d20a7be8c600c60a2",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/offline-metadata.command.txt"
+        },
+        {
+          "content_hash": "5e34210680e25350efdb8c943fefdf3036bd53fce0b3f05e63380dd2cbfa58d1",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/offline-metadata.json"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/offline-metadata.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/offline-metadata.status"
+        },
+        {
+          "content_hash": "3bb017c80eccd961c234f7e8decf880de91242558e35c057b12af57ee541c2de",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/vendor-manifest.log"
+        },
+        {
+          "content_hash": "1dc0592452dce577f5b6417851c79fd0faf4a36dfe21d44108e39073ef5b523e",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/proposal.md"
+        },
+        {
+          "content_hash": "f532e987e16a009f0df78b5879c52c5487715b2d00f29fb44fd7560f643dab8b",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/specs/nickel-toolchain/spec.md"
+        },
+        {
+          "content_hash": "a48a41f4f93d1f5633925a4b4733ed184453ffd9817fe1e9aafe720a0254f54e",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-nickel-1-17-cohort/tasks.md"
+        }
+      ],
+      "manifest_hash": "2199c2181fa52927bbae341998a0517b8620a24d6edbc2a8888194abfe9c04ff"
+    },
+    "kind": "archive",
+    "manifest_hash": "0f0fe0403f8c5f4f50488e8447b33dcabacb40522c955a61568f0e08354a50e9"
+  },
+  "plan_hash": "a381cda6dad641db95becd1eb3ab11c9ac8d83cc6b31af6fb8e84c4f5ac17229",
+  "policy": "mantle-default",
+  "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+  "reasons": [],
+  "receipt_hash": "41a09f027cb0004194c2232e239d2591aeb6289829ae0601bf690f969c76f7d9"
+}

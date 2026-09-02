@@ -1,0 +1,127 @@
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/adopt-nickel-1-17-cohort/specs/nickel-toolchain/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/adopt-nickel-1-17-cohort/specs/nickel-toolchain/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "adopt-nickel-1-17-cohort",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "4c32804db9c0d3309e48dd7148eb9f3d3e23f5cd4b0110d83a6fddd7d3046f09",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+    "receipt_hash": "6767ed8b14dd8f3564cacd001ffaea47a8049f223b6d42df429717fe3476d2f6",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/adopt-nickel-1-17-cohort/specs/nickel-toolchain/spec.md"
+  ],
+  "dry_run": true,
+  "input_hash": "ec076c5410137c28e8b5837515c1f98987f5997160e730628afbb9c3c316611f",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": false,
+        "accepted_before_hash": "c728d86326af904619622a52beab6d03adbaaf217714d7a5f39bbbb78723eb2a",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "f532e987e16a009f0df78b5879c52c5487715b2d00f29fb44fd7560f643dab8b",
+        "destination": ".cairn/specs/nickel-toolchain/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "7d0db3d678c3e85c9543829d18f7d94ac5a9576637556503b6e1e3a05ae46515",
+        "operations": [
+          {
+            "block_hash": "a8c20c9829e19a415caf5bc9c6d25080a06a353145954fcb0add8d4ae1c4c850",
+            "heading": "### Requirement: Mantle pins the complete Nickel 1.17 cohort",
+            "kind": "added",
+            "requirement_id": "mantle.nickel_toolchain.cohort"
+          },
+          {
+            "block_hash": "3cb716750a16d4074513e9ce811082598e2945a8729bf785c18b18539f14f240",
+            "heading": "### Requirement: Vendored Nickel source has exact provenance",
+            "kind": "added",
+            "requirement_id": "mantle.nickel_toolchain.vendor"
+          },
+          {
+            "block_hash": "0b3db3f419e49261b32417243b0502b66b8d320b2716a1d937628dc01880f135",
+            "heading": "### Requirement: Evaluation compatibility remains fail-closed",
+            "kind": "added",
+            "requirement_id": "mantle.nickel_toolchain.compatibility"
+          },
+          {
+            "block_hash": "b05443d5e1d7a87810c32bfd70e53e5692174831d6ed0ed36fb32d71b2f9def9",
+            "heading": "### Requirement: Nickel API changes remain in the adapter",
+            "kind": "added",
+            "requirement_id": "mantle.nickel_toolchain.boundary"
+          },
+          {
+            "block_hash": "0ac73ae3a05bf266e7fb6cc60333214bd376ec99a61d1f54d7269248683aa2ba",
+            "heading": "### Requirement: Evidence binds the evaluator cohort",
+            "kind": "added",
+            "requirement_id": "mantle.nickel_toolchain.evidence"
+          },
+          {
+            "block_hash": "485fe02f193124125e49e1f8bcf281f80adcc7d398651bc25b7a31d294b2cc72",
+            "heading": "### Requirement: The repository validation rail passes",
+            "kind": "added",
+            "requirement_id": "mantle.nickel_toolchain.validation"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "mantle.nickel_toolchain.cohort",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.nickel_toolchain.vendor",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.nickel_toolchain.compatibility",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.nickel_toolchain.boundary",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.nickel_toolchain.evidence",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.nickel_toolchain.validation",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/adopt-nickel-1-17-cohort/specs/nickel-toolchain/spec.md"
+      }
+    ]
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "plan_hash": "e257db181edcf0015cdb50ad58960fed2effc2630bf4d321a425f7f106040aac",
+  "policy": "mantle-default",
+  "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+  "reasons": [],
+  "receipt_hash": "9ac234044df8bf5f473508c18e2b0d3f8e6cd015118bcff3c53f66a80ae74a87"
+}
