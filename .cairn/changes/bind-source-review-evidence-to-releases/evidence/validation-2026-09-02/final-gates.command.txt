@@ -1,0 +1,9 @@
+nix develop -c cargo fmt --check -p mantle -v
+nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs
+CARGO_TARGET_DIR=/tmp/mantle-source-review-clippy-target nix develop -c ./scripts/check-first-party-clippy.sh
+nix build path:/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-bind-source-review-evidence#checks.x86_64-linux.tigerstyle --no-link -L --builders ''
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- tracey coverage --root .
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate proposal bind-source-review-evidence-to-releases --root .
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design bind-source-review-evidence-to-releases --root .
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks bind-source-review-evidence-to-releases --root .

@@ -9,13 +9,13 @@
     "probe": 0,
     "property": 0
   },
-  "input_hash": "86bbd759e0dad761cee88ee0fa53fbad387bf2e442c2f7f2cd288c9f2230084b",
+  "input_hash": "451dfc1dfcb39e2866f72710bcff3c5dadeba42c101c36c182f0c75380168841",
   "issues": [],
   "layout": "cairn",
   "policy": "mantle-default",
   "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
   "probe_evidence": null,
-  "receipt_hash": "5bbf78327ed95107a64cc7ad2af153551db61c80d63e833e308587af62057cd9",
+  "receipt_hash": "7fad7fb9e7eb8dacecad06823e1d4411d803654ba3466eb3f4ecfb365f4bb602",
   "stage": "design",
   "substance": [
     {
