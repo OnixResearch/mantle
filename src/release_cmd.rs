@@ -278,6 +278,7 @@ fn release_create_command(action: crate::ReleaseAction) -> Result<ReleaseCreateC
         git_source_ref,
         git_source_tag,
         cairn_handoff,
+        source_review_attachment,
         external_evidence,
         external_evidence_role,
         external_evidence_schema,
@@ -310,6 +311,7 @@ fn release_create_command(action: crate::ReleaseAction) -> Result<ReleaseCreateC
         git_source_ref,
         git_source_tag,
         cairn_handoff,
+        source_review_attachment,
         external_evidence,
         external_evidence_role,
         external_evidence_schema,
@@ -339,6 +341,7 @@ struct ReleaseCreateCommand {
     git_source_ref: Option<String>,
     git_source_tag: Option<String>,
     cairn_handoff: Option<PathBuf>,
+    source_review_attachment: Option<PathBuf>,
     external_evidence: Vec<PathBuf>,
     external_evidence_role: Vec<String>,
     external_evidence_schema: Vec<String>,
@@ -427,6 +430,9 @@ fn prepare_release_create(
         stack_provenance,
         content_bound_requirement,
         cairn_handoff_descriptor_path: command.cairn_handoff.map(|path| resolve_input_path(current_dir, path)),
+        source_review_attachment_path: command
+            .source_review_attachment
+            .map(|path| resolve_input_path(current_dir, path)),
     };
     Ok(PreparedReleaseCreate {
         request,
@@ -714,6 +720,7 @@ struct ReleaseVerifyRequest {
     release_profile: String,
     stack_provenance_mode: String,
     requirement_coverage_mode: String,
+    source_review_inputs: crate::source_review_release::SourceReviewVerifyInputs,
 }
 
 #[derive(Debug)]
@@ -728,6 +735,7 @@ struct ReleaseVerifyEvaluation {
     stack_provenance_result: crunch_release_core::StackProvenanceReleaseVerification,
     content_bound_requirement_result: crunch_release_core::ContentBoundRequirementVerificationV1,
     cairn_handoff_result: crunch_release_core::CairnHandoffReleaseVerification,
+    source_review_result: crunch_release_core::SourceReviewVerification,
     stagex_result: Option<crunch_bootstrap_core::StagexNoQuorumResult>,
     decision: ReleaseVerificationDecision,
 }
@@ -746,6 +754,15 @@ fn release_verify_request(action: crate::ReleaseAction, current_dir: &Path) -> R
         release_profile,
         stack_provenance,
         requirement_coverage,
+        source_review,
+        reviewed_source,
+        review_preset,
+        review_threshold,
+        trusted_reviewer,
+        revoked_reviewer,
+        review_author_key,
+        review_claim_root,
+        review_producer_id,
     } = action
     else {
         return Err(RunError::Internal("expected release verify action".to_string()));
@@ -766,6 +783,23 @@ fn release_verify_request(action: crate::ReleaseAction, current_dir: &Path) -> R
         release_profile,
         stack_provenance_mode: stack_provenance,
         requirement_coverage_mode: requirement_coverage,
+        source_review_inputs: crate::source_review_release::SourceReviewVerifyInputs {
+            mode: reviewed_source,
+            preset: review_preset,
+            threshold: review_threshold,
+            trusted_reviewers: trusted_reviewer
+                .iter()
+                .map(|value| crate::source_review_release::parse_reviewer_arg(value))
+                .collect::<Result<Vec<_>, _>>()?,
+            revoked_reviewers: revoked_reviewer
+                .iter()
+                .map(|value| crate::source_review_release::parse_reviewer_arg(value))
+                .collect::<Result<Vec<_>, _>>()?,
+            author_key_base64: review_author_key,
+            claim_root_blake3: review_claim_root,
+            producer_id: review_producer_id,
+            attachment_override: source_review.map(|path| resolve_input_path(current_dir, path)),
+        },
     })
 }
 
@@ -817,6 +851,14 @@ fn evaluate_release_verification(request: ReleaseVerifyRequest) -> Result<Releas
         &cairn_binding,
         is_onix_release,
     );
+    let source_review_policy =
+        crate::source_review_release::build_reviewed_source_policy(&request.source_review_inputs)?;
+    let source_review_result = crate::source_review_release::evaluate_source_review_release(
+        &resolved_bundle_dir,
+        &manifest,
+        &request.source_review_inputs,
+        &source_review_policy,
+    )?;
     let stagex_result = selected_stagex_result(
         request.require_stagex_no_quorum,
         &manifest,
@@ -833,6 +875,7 @@ fn evaluate_release_verification(request: ReleaseVerifyRequest) -> Result<Releas
         stack_provenance_result: &stack_provenance_result,
         content_bound_requirement_result: &content_bound_requirement_result,
         cairn_handoff_result: &cairn_handoff_result,
+        source_review_result: &source_review_result,
         stagex_result: stagex_result.as_ref(),
     });
 
@@ -847,6 +890,7 @@ fn evaluate_release_verification(request: ReleaseVerifyRequest) -> Result<Releas
         stack_provenance_result,
         content_bound_requirement_result,
         cairn_handoff_result,
+        source_review_result,
         stagex_result,
         decision,
     })
@@ -871,6 +915,7 @@ struct ReleaseVerifyDecisionInput<'a> {
     stack_provenance_result: &'a crunch_release_core::StackProvenanceReleaseVerification,
     content_bound_requirement_result: &'a crunch_release_core::ContentBoundRequirementVerificationV1,
     cairn_handoff_result: &'a crunch_release_core::CairnHandoffReleaseVerification,
+    source_review_result: &'a crunch_release_core::SourceReviewVerification,
     stagex_result: Option<&'a crunch_bootstrap_core::StagexNoQuorumResult>,
 }
 
@@ -898,6 +943,7 @@ fn aggregate_release_verify_decision(input: ReleaseVerifyDecisionInput<'_>) -> R
         stagex_no_quorum: stagex_fact(input.stagex_result),
         function_address: ReleaseVerificationFact::not_evaluated(),
         cairn_handoff: cairn_handoff_fact(input.cairn_handoff_result),
+        source_review: source_review_fact(input.source_review_result),
     };
     let requirements = release_verification_requirements(&input);
     aggregate_release_verification(facts, requirements)
@@ -925,6 +971,10 @@ fn release_verification_requirements(input: &ReleaseVerifyDecisionInput<'_>) -> 
         function_address: ReleaseVerificationRequirement::NotSelected,
         cairn_handoff: selected_or_advisory(
             input.request.release_profile == crunch_release_core::RELEASE_PROFILE_ONIX_STACK,
+        ),
+        source_review: selected_or_advisory(
+            input.request.source_review_inputs.mode == crunch_release_core::SOURCE_REVIEW_MODE_REQUIRED
+                || !input.source_review_result.valid,
         ),
     }
 }
@@ -1027,6 +1077,26 @@ fn cairn_handoff_fact(result: &crunch_release_core::CairnHandoffReleaseVerificat
     }
     ReleaseVerificationFact::rejected(required_policy_diagnostics(
         Some(format!("Cairn handoff evidence status is {}", result.disposition)),
+        &result.diagnostics,
+    ))
+}
+
+fn source_review_fact(result: &crunch_release_core::SourceReviewVerification) -> ReleaseVerificationFact {
+    if result.valid && result.status == crunch_release_core::SOURCE_REVIEW_STATUS_SATISFIED {
+        return ReleaseVerificationFact::satisfied();
+    }
+    if result.valid && result.status == crunch_release_core::SOURCE_REVIEW_STATUS_NOT_REQUIRED {
+        return ReleaseVerificationFact::absent(Vec::new());
+    }
+    if result.valid && result.status == crunch_release_core::SOURCE_REVIEW_STATUS_VERIFIED_OPTIONAL {
+        return ReleaseVerificationFact::satisfied();
+    }
+    ReleaseVerificationFact::rejected(required_policy_diagnostics(
+        Some(format!(
+            "source review evidence status is {}{}",
+            result.status,
+            result.reason_code.as_deref().map(|code| format!(" ({code})")).unwrap_or_default()
+        )),
         &result.diagnostics,
     ))
 }
@@ -1451,6 +1521,7 @@ fn render_release_verify_json(evaluation: &ReleaseVerifyEvaluation) -> Result<St
         "stack_provenance": evaluation.stack_provenance_result,
         "content_bound_requirements": evaluation.content_bound_requirement_result,
         "cairn_handoff": evaluation.cairn_handoff_result,
+        "source_review": evaluation.source_review_result,
         "global_reproducibility": global_reproducibility_not_evaluated_json(),
     });
     if let Some(result) = &evaluation.stagex_result {
@@ -1488,6 +1559,7 @@ fn append_release_verify_human(output: &mut String, evaluation: &ReleaseVerifyEv
     append_stack_provenance_summary(output, &evaluation.stack_provenance_result)?;
     append_content_bound_requirement_summary(output, &evaluation.content_bound_requirement_result)?;
     append_cairn_handoff_summary(output, &evaluation.cairn_handoff_result)?;
+    append_source_review_summary(output, &evaluation.source_review_result)?;
     append_global_reproducibility_summary(output)?;
     append_stagex_summary(output, evaluation.stagex_result.as_ref())?;
     append_release_verification_checks(output, &evaluation.decision)?;
@@ -1581,6 +1653,28 @@ fn append_cairn_handoff_summary(
     }
     for diagnostic in &result.diagnostics {
         writeln!(output, "  Cairn handoff blocker: {diagnostic}")?;
+    }
+    Ok(())
+}
+
+fn append_source_review_summary(
+    output: &mut String,
+    result: &crunch_release_core::SourceReviewVerification,
+) -> std::fmt::Result {
+    writeln!(output, "source review: {}", result.status)?;
+    writeln!(output, "source review required: {}", result.required)?;
+    if let Some(reason) = &result.reason_code {
+        writeln!(output, "source review reason: {reason}")?;
+    }
+    if let Some(attachment) = &result.attachment_blake3 {
+        writeln!(output, "source review attachment: {attachment}")?;
+    }
+    writeln!(output, "source review policy: {}", result.policy_blake3)?;
+    for key in &result.counted_reviewer_key_blake3 {
+        writeln!(output, "source review counted key: {key}")?;
+    }
+    for diagnostic in &result.diagnostics {
+        writeln!(output, "  source review diagnostic: {diagnostic}")?;
     }
     Ok(())
 }
@@ -2589,6 +2683,7 @@ mod tests {
             stack_provenance: None,
             opaque_evidence_sidecar_bindings: vec![],
             cairn_handoff_validation: None,
+            source_review_attachment: None,
             function_address_evidence: None,
             proof_linkage: crunch_release_core::ReleaseProofLinkage {
                 release_id: "test-release".to_string(),
@@ -2674,6 +2769,7 @@ mod tests {
             stack_provenance: None,
             opaque_evidence_sidecar_bindings: vec![],
             cairn_handoff_validation: None,
+            source_review_attachment: None,
             function_address_evidence: None,
             proof_linkage: crunch_release_core::ReleaseProofLinkage {
                 release_id: "test-release".to_string(),
@@ -2726,6 +2822,7 @@ mod tests {
             release_profile: release_profile.to_string(),
             stack_provenance_mode: crunch_release_core::STACK_PROVENANCE_MODE_OPTIONAL.to_string(),
             requirement_coverage_mode: requirement_coverage_mode.to_string(),
+            source_review_inputs: crate::source_review_release::SourceReviewVerifyInputs::default(),
         };
         let deterministic_result = DeterministicReleaseVerifyResult::absent(Vec::new());
         let provider_fixed_point_result =
@@ -2747,6 +2844,21 @@ mod tests {
             &cairn_binding,
             release_profile == crunch_release_core::RELEASE_PROFILE_ONIX_STACK,
         );
+        let source_review_policy = crate::source_review_release::build_reviewed_source_policy(
+            &crate::source_review_release::SourceReviewVerifyInputs::default(),
+        )
+        .expect("default optional review policy");
+        let source_review_result = crunch_release_core::evaluate_source_review_release_evidence(
+            &crunch_release_core::SourceReviewVerificationInput {
+                mode: crunch_release_core::SourceReviewMode::Optional,
+                policy: &source_review_policy,
+                expected_source_archive_digest_blake3: manifest.source_archive.digest_blake3.clone(),
+                expected_claim_root_blake3: String::new(),
+                expected_source_revision: None,
+                attachment: None,
+                cryptographic_observations: Vec::new(),
+            },
+        );
         let decision = aggregate_release_verify_decision(ReleaseVerifyDecisionInput {
             request: &request,
             manifest: &manifest,
@@ -2757,6 +2869,7 @@ mod tests {
             stack_provenance_result: &stack_provenance_result,
             content_bound_requirement_result: &content_bound_requirement_result,
             cairn_handoff_result: &cairn_handoff_result,
+            source_review_result: &source_review_result,
             stagex_result: None,
         });
         ReleaseVerifyEvaluation {
@@ -2770,6 +2883,7 @@ mod tests {
             stack_provenance_result,
             content_bound_requirement_result,
             cairn_handoff_result,
+            source_review_result,
             stagex_result: None,
             decision,
         }
@@ -2847,6 +2961,7 @@ mod tests {
             release_profile: crunch_release_core::RELEASE_PROFILE_ONIX_STACK.to_string(),
             stack_provenance_mode: crunch_release_core::STACK_PROVENANCE_MODE_OPTIONAL.to_string(),
             requirement_coverage_mode: crunch_release_core::CONTENT_BOUND_REQUIREMENT_MODE_OPTIONAL.to_string(),
+            source_review_inputs: crate::source_review_release::SourceReviewVerifyInputs::default(),
         };
         let deterministic_result = DeterministicReleaseVerifyResult {
             status: "eligible",
@@ -2865,6 +2980,7 @@ mod tests {
             crunch_release_core::CONTENT_BOUND_REQUIREMENT_MODE_OPTIONAL,
         );
         let cairn_result = satisfied_cairn_handoff_result();
+        let source_review_result = satisfied_source_review_result();
         let decision = aggregate_release_verify_decision(ReleaseVerifyDecisionInput {
             request: &request,
             manifest: &manifest,
@@ -2875,6 +2991,7 @@ mod tests {
             stack_provenance_result: &stack_result,
             content_bound_requirement_result: &content_bound_result,
             cairn_handoff_result: &cairn_result,
+            source_review_result: &source_review_result,
             stagex_result: None,
         });
 
@@ -2911,6 +3028,21 @@ mod tests {
             receipt_blake3: None,
             authentication_status: Some(crunch_release_core::CAIRN_HANDOFF_AUTHENTICATION_STATUS.to_string()),
             boundary: crunch_release_core::CAIRN_HANDOFF_BOUNDARY.to_string(),
+            diagnostics: Vec::new(),
+        }
+    }
+
+    fn satisfied_source_review_result() -> crunch_release_core::SourceReviewVerification {
+        crunch_release_core::SourceReviewVerification {
+            required: false,
+            valid: true,
+            status: crunch_release_core::SOURCE_REVIEW_STATUS_NOT_REQUIRED.to_string(),
+            reason_code: None,
+            attachment_blake3: None,
+            policy_blake3: String::new(),
+            counted_reviewer_key_blake3: Vec::new(),
+            boundary: crunch_release_core::SOURCE_REVIEW_BOUNDARY.to_string(),
+            non_claims: Vec::new(),
             diagnostics: Vec::new(),
         }
     }

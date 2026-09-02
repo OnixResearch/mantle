@@ -2805,6 +2805,7 @@ mod tests {
             stack_provenance: None,
             opaque_evidence_sidecar_bindings: vec![],
             cairn_handoff_validation: None,
+            source_review_attachment: None,
             function_address_evidence: None,
             proof_linkage: crate::release_evidence::ReleaseProofLinkage {
                 release_id: "test-release".to_string(),

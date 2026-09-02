@@ -1,0 +1,170 @@
+{
+  "cases": [
+    {
+      "artifact": {},
+      "expected_path": "/schema",
+      "id": "missing-schema-field",
+      "issue_class": "schema"
+    },
+    {
+      "artifact": {
+        "attachment_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "approvals": [],
+        "non_claims": [
+          "not source correctness"
+        ],
+        "producer_disposition": "approved",
+        "producer_obligation_id": "cairn-verification-obligation",
+        "schema": "mantle.source-review.attachment.v0",
+        "subject": {
+          "claim_root_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "review_policy_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "source_archive_digest_blake3": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "valence_evidence_blake3": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "expected_path": "/schema",
+      "id": "unsupported-schema-version",
+      "issue_class": "version"
+    },
+    {
+      "artifact": {
+        "attachment_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "approvals": [],
+        "non_claims": [
+          "not source correctness"
+        ],
+        "producer_disposition": "approved",
+        "producer_obligation_id": "cairn-verification-obligation",
+        "schema": "mantle.source-review.attachment.v1",
+        "valence_evidence_blake3": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "expected_path": "/subject",
+      "id": "missing-subject",
+      "issue_class": "schema"
+    },
+    {
+      "artifact": {
+        "attachment_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "non_claims": [
+          "not source correctness"
+        ],
+        "producer_disposition": "approved",
+        "producer_obligation_id": "cairn-verification-obligation",
+        "schema": "mantle.source-review.attachment.v1",
+        "subject": {
+          "claim_root_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "review_policy_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "source_archive_digest_blake3": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "valence_evidence_blake3": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "expected_path": "/approvals",
+      "id": "missing-approvals",
+      "issue_class": "schema"
+    },
+    {
+      "artifact": {
+        "attachment_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "approvals": [],
+        "non_claims": [
+          "not source correctness"
+        ],
+        "producer_disposition": "approved",
+        "producer_obligation_id": "cairn-verification-obligation",
+        "schema": "mantle.source-review.attachment.v1",
+        "subject": {
+          "claim_root_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "review_policy_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "source_archive_digest_blake3": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "valence_evidence_blake3": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "expected_path": "/approvals",
+      "id": "empty-approvals",
+      "issue_class": "bounds"
+    },
+    {
+      "artifact": {
+        "attachment_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "approvals": [
+          {
+            "disposition": "maybe",
+            "generation": 1,
+            "public_key_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+            "reviewer_label": "reviewer-a",
+            "signature_hex": "22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+            "statement_domain": "mantle.release.source-review.v1"
+          }
+        ],
+        "non_claims": [
+          "not source correctness"
+        ],
+        "producer_disposition": "approved",
+        "producer_obligation_id": "cairn-verification-obligation",
+        "schema": "mantle.source-review.attachment.v1",
+        "subject": {
+          "claim_root_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "review_policy_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "source_archive_digest_blake3": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "valence_evidence_blake3": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "expected_path": "/approvals/0/disposition",
+      "id": "unsupported-disposition",
+      "issue_class": "enum"
+    },
+    {
+      "artifact": {
+        "approvals": [],
+        "non_claims": [
+          "not source correctness"
+        ],
+        "producer_disposition": "approved",
+        "producer_obligation_id": "cairn-verification-obligation",
+        "schema": "mantle.source-review.attachment.v1",
+        "subject": {
+          "claim_root_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "review_policy_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "source_archive_digest_blake3": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "valence_evidence_blake3": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "expected_path": "/attachment_blake3",
+      "id": "missing-attachment-identity",
+      "issue_class": "schema"
+    },
+    {
+      "artifact": {
+        "attachment_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "approvals": [
+          {
+            "disposition": "approved",
+            "generation": 1,
+            "public_key_hex": "1111111111111111111111111111111111111111111111111111111111111111",
+            "reviewer_label": "reviewer-a",
+            "signature_hex": "22222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+            "statement_domain": "mantle.release.source-review.v1"
+          }
+        ],
+        "extra_field": "not-part-of-contract",
+        "non_claims": [
+          "not source correctness"
+        ],
+        "producer_disposition": "approved",
+        "producer_obligation_id": "cairn-verification-obligation",
+        "schema": "mantle.source-review.attachment.v1",
+        "subject": {
+          "claim_root_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "review_policy_digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "source_archive_digest_blake3": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "valence_evidence_blake3": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "expected_path": "/extra_field",
+      "id": "additional-property-rejected",
+      "issue_class": "unknown-field"
+    }
+  ],
+  "surface_id": "release.source-review-attachment"
+}

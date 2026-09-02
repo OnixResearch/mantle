@@ -448,6 +448,8 @@ pub struct ReleaseEvidenceManifest {
     #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub cairn_handoff_validation: Option<crate::CairnReleaseEvidenceValidationReceipt>,
     #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
+    pub source_review_attachment: Option<crate::SourceReviewReleaseEvidence>,
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub function_address_evidence: Option<FunctionAddressReleaseEvidence>,
     pub proof_linkage: ReleaseProofLinkage,
     #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
@@ -510,6 +512,21 @@ fn validate_release_evidence_manifest(manifest: &ReleaseEvidenceManifest) -> Res
     validate_opaque_evidence_sidecar_bindings(manifest)?;
     validate_function_address_manifest_evidence(manifest)?;
     validate_cairn_handoff_manifest(manifest)?;
+    validate_source_review_manifest_evidence(manifest)?;
+    Ok(())
+}
+
+fn validate_source_review_manifest_evidence(manifest: &ReleaseEvidenceManifest) -> Result<(), ReleaseEvidenceError> {
+    let Some(record) = manifest.source_review_attachment.as_ref() else {
+        return Ok(());
+    };
+    validate_bundled_artifact(&record.attachment, "source_review_attachment.attachment")?;
+    if !record.attachment.relative_path.starts_with("source-review/") {
+        return Err(validation_error(
+            "release evidence source_review_attachment.attachment.relative_path must start with 'source-review/'"
+                .to_string(),
+        ));
+    }
     Ok(())
 }
 
@@ -3123,6 +3140,7 @@ mod tests {
             stack_provenance: None,
             opaque_evidence_sidecar_bindings: vec![],
             cairn_handoff_validation: None,
+            source_review_attachment: None,
             function_address_evidence: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),

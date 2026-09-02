@@ -1660,6 +1660,7 @@ dependencies = [
 name = "crunch-release-core"
 version = "0.1.0"
 dependencies = [
+ "artifact-auth-core",
  "blake3",
  "bounded-tree-core",
  "pretty_assertions",
@@ -4805,6 +4806,8 @@ dependencies = [
 name = "mantle"
 version = "0.1.0"
 dependencies = [
+ "artifact-auth-core",
+ "artifact-auth-ed25519",
  "assert_cmd",
  "base64",
  "blake3",

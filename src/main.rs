@@ -189,6 +189,7 @@ mod source_built_rust_provider_action;
 mod source_built_trust_report;
 mod source_built_trust_report_shell;
 mod source_bundle;
+mod source_review_release;
 mod source_root_capability;
 mod source_root_provider;
 mod source_toolchain_closure;
@@ -1725,6 +1726,11 @@ pub enum ReleaseAction {
         #[arg(long = "cairn-handoff")]
         cairn_handoff: Option<PathBuf>,
 
+        /// Source-review attachment JSON produced by an admitted external reviewer; bundled
+        /// without modifying its external authority fields
+        #[arg(long = "source-review-attachment")]
+        source_review_attachment: Option<PathBuf>,
+
         /// External evidence sidecar file to bundle opaquely (repeat with matching
         /// role/schema/scope)
         #[arg(long = "external-evidence")]
@@ -1825,6 +1831,42 @@ pub enum ReleaseAction {
         /// Content-bound requirement coverage policy for this verification
         #[arg(long = "requirement-coverage", value_parser = ["optional", "required"], default_value = "optional")]
         requirement_coverage: String,
+
+        /// Source-review attachment JSON overriding the bundled member for this verification
+        #[arg(long = "source-review")]
+        source_review: Option<PathBuf>,
+
+        /// Source-review policy mode; `required` selects an explicit reviewed-source policy
+        #[arg(long = "reviewed-source", value_parser = ["optional", "required"], default_value = "optional")]
+        reviewed_source: String,
+
+        /// Named reviewed-source preset defining the distinct reviewer threshold
+        #[arg(long = "review-preset")]
+        review_preset: Option<String>,
+
+        /// Explicit distinct reviewer threshold when no preset is selected
+        #[arg(long = "review-threshold")]
+        review_threshold: Option<u16>,
+
+        /// Trusted reviewer public key as label:base64 (repeatable)
+        #[arg(long = "trusted-reviewer")]
+        trusted_reviewer: Vec<String>,
+
+        /// Revoked reviewer public key as label:base64 (repeatable)
+        #[arg(long = "revoked-reviewer")]
+        revoked_reviewer: Vec<String>,
+
+        /// Change-author public key (base64) excluded from approval counting
+        #[arg(long = "review-author-key")]
+        review_author_key: Option<String>,
+
+        /// Current Cairn claim root BLAKE3 the review must bind
+        #[arg(long = "review-claim-root")]
+        review_claim_root: Option<String>,
+
+        /// Producer identity review statements must carry
+        #[arg(long = "review-producer-id")]
+        review_producer_id: Option<String>,
     },
     /// Pack, inspect, or unpack an opt-in chaptered release transport
     Transport {

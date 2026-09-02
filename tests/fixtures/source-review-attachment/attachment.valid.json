@@ -1,0 +1,38 @@
+{
+  "schema": "mantle.source-review.attachment.v1",
+  "subject": {
+    "source_archive_digest_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "claim_root_blake3": "5f2a18b1d3e74c96af0bb32e1079a3b8dd15492c6a7d40f31c91f4b0e6d8a1c2",
+    "review_policy_digest_blake3": "ce0357be46df7acff31a144920218a18013309ed15896c996ae693f5dd7f7999"
+  },
+  "producer_obligation_id": "cairn-verification-obligation",
+  "producer_disposition": "approved",
+  "valence_evidence_blake3": "7c4d29e0ab63f185d3b9c7a2e80416fd5b3c2ea9d7f081c4a6b5e9d2f7c80a13",
+  "approvals": [
+    {
+      "statement_domain": "mantle.release.source-review.v1",
+      "reviewer_label": "reviewer-a",
+      "public_key_hex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "signature_hex": "488b8797fd51047ab95d6064a72ccb68782e1031999812ecf400b1dbb2495f851d21d1f07bc5dba0e839745f185b044bc4db00415bc4edb2b89997fb78b49201",
+      "disposition": "approved",
+      "generation": 1
+    },
+    {
+      "statement_domain": "mantle.release.source-review.v1",
+      "reviewer_label": "reviewer-b",
+      "public_key_hex": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+      "signature_hex": "5b6494640657015ee669d98a32ee2231438b619dcfafdcd4e7dfa33bc94bcab482207cf244d71534ebb606615512c9ce9557ef50985d91ee1d1e36a6374f8701",
+      "disposition": "approved",
+      "generation": 1
+    }
+  ],
+  "non_claims": [
+    "not source correctness",
+    "not review completeness",
+    "not reviewer competence",
+    "not build-witness quorum",
+    "not release eligibility",
+    "not pull-request approval"
+  ],
+  "attachment_blake3": "5e52e47a983d1d84b2af2cef17b2e003c7d57490fd275f5c0da05bf164cefa8b"
+}

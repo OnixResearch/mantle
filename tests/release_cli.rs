@@ -7658,3 +7658,689 @@ type ReleaseEvidenceManifest = crunch_release_core::ReleaseEvidenceManifest;
 fn release_manifest_schema_constant_matches_fixture_expectation() {
     assert_eq!(RELEASE_EVIDENCE_SCHEMA, "mantle-release-evidence-v1");
 }
+
+mod source_review_fixtures {
+    use ed25519_dalek::Signer;
+
+    use super::*;
+
+    const REVIEWER_SEED_A: u8 = 1;
+    const REVIEWER_SEED_B: u8 = 2;
+    const AUTHOR_SEED: u8 = 3;
+    const OUTSIDER_SEED: u8 = 4;
+    const CLAIM_ROOT_FIXTURE: &str = "5f2a18b1d3e74c96af0bb32e1079a3b8dd15492c6a7d40f31c91f4b0e6d8a1c2";
+    const VALENCE_FIXTURE: &str = "7c4d29e0ab63f185d3b9c7a2e80416fd5b3c2ea9d7f081c4a6b5e9d2f7c80a13";
+    const REVIEWER_A_LABEL: &str = "reviewer-a";
+    const REVIEWER_B_LABEL: &str = "reviewer-b";
+    const PRODUCER_ID: &str = "cairn-verification-obligation";
+
+    struct ApprovalSpec {
+        seed: u8,
+        label: &'static str,
+        disposition: &'static str,
+        witness_domain: bool,
+    }
+
+    fn approval(seed: u8, label: &'static str) -> ApprovalSpec {
+        ApprovalSpec {
+            seed,
+            label,
+            disposition: crunch_release_core::SOURCE_REVIEW_DISPOSITION_APPROVED,
+            witness_domain: false,
+        }
+    }
+
+    fn review_signing_key(seed: u8) -> ed25519_dalek::SigningKey {
+        ed25519_dalek::SigningKey::from_bytes(&[seed; 32])
+    }
+
+    fn key_hex(seed: u8) -> String {
+        let key = review_signing_key(seed);
+        hex_encode_lower(key.verifying_key().as_bytes())
+    }
+
+    fn key_b64(seed: u8) -> String {
+        BASE64_STANDARD.encode(review_signing_key(seed).verifying_key().as_bytes())
+    }
+
+    fn hex_encode_lower(bytes: &[u8]) -> String {
+        let mut output = String::with_capacity(bytes.len() * 2);
+        for byte in bytes {
+            output.push(char::from_digit((byte >> 4) as u32, 16).expect("high nibble"));
+            output.push(char::from_digit((byte & 0x0f) as u32, 16).expect("low nibble"));
+        }
+        output
+    }
+
+    fn stagex_policy_with_author_exclusion() -> crunch_release_core::ReviewedSourcePolicy {
+        let mut policy = stagex_policy();
+        policy.excluded_author_public_key_hex = Some(key_hex(AUTHOR_SEED));
+        crunch_release_core::validate_reviewed_source_policy(&policy).expect("valid exclusion policy");
+        policy
+    }
+
+    fn stagex_policy() -> crunch_release_core::ReviewedSourcePolicy {
+        let reviewers = vec![
+            crunch_release_core::TrustedReviewerKey {
+                producer_id: PRODUCER_ID.to_string(),
+                label: REVIEWER_A_LABEL.to_string(),
+                public_key_hex: key_hex(REVIEWER_SEED_A),
+                currentness: crunch_release_core::ReviewerCurrentness::Current,
+            },
+            crunch_release_core::TrustedReviewerKey {
+                producer_id: PRODUCER_ID.to_string(),
+                label: REVIEWER_B_LABEL.to_string(),
+                public_key_hex: key_hex(REVIEWER_SEED_B),
+                currentness: crunch_release_core::ReviewerCurrentness::Current,
+            },
+        ];
+        let policy = crunch_release_core::ReviewedSourcePolicy {
+            schema: crunch_release_core::REVIEWED_SOURCE_POLICY_SCHEMA.to_string(),
+            preset: Some(crunch_release_core::REVIEWED_SOURCE_PRESET_STAGEX_TWO_REVIEWER.to_string()),
+            required_distinct_reviewers: crunch_release_core::STAGEX_TWO_REVIEWER_THRESHOLD,
+            reviewers,
+            excluded_author_public_key_hex: None,
+        };
+        crunch_release_core::validate_reviewed_source_policy(&policy).expect("valid fixture policy");
+        policy
+    }
+
+    fn build_attachment(
+        source_digest: &str,
+        policy_digest: &str,
+        approvals: &[ApprovalSpec],
+    ) -> crunch_release_core::SourceReviewAttachment {
+        let mut statement_rows = Vec::new();
+        for spec in approvals {
+            let key = review_signing_key(spec.seed);
+            let mut approval = crunch_release_core::SourceReviewApprovalStatement {
+                statement_domain: if spec.witness_domain {
+                    crunch_release_core::BUILD_WITNESS_STATEMENT_DOMAIN.to_string()
+                } else {
+                    crunch_release_core::SOURCE_REVIEW_STATEMENT_DOMAIN.to_string()
+                },
+                reviewer_label: spec.label.to_string(),
+                public_key_hex: hex_encode_lower(key.verifying_key().as_bytes()),
+                signature_hex: String::new(),
+                disposition: spec.disposition.to_string(),
+                generation: crunch_release_core::REVIEWER_KEY_GENERATION,
+            };
+            let draft = crunch_release_core::SourceReviewAttachment {
+                schema: crunch_release_core::SOURCE_REVIEW_ATTACHMENT_SCHEMA.to_string(),
+                subject: crunch_release_core::SourceReviewSubjectLink {
+                    source_archive_digest_blake3: source_digest.to_string(),
+                    source_revision: None,
+                    claim_root_blake3: CLAIM_ROOT_FIXTURE.to_string(),
+                    review_policy_digest_blake3: policy_digest.to_string(),
+                },
+                producer_obligation_id: PRODUCER_ID.to_string(),
+                producer_disposition: "approved".to_string(),
+                valence_evidence_blake3: VALENCE_FIXTURE.to_string(),
+                approvals: vec![],
+                non_claims: vec![
+                    crunch_release_core::SOURCE_REVIEW_NON_CLAIM_SOURCE_CORRECTNESS.to_string(),
+                    crunch_release_core::SOURCE_REVIEW_NON_CLAIM_REVIEW_COMPLETENESS.to_string(),
+                    crunch_release_core::SOURCE_REVIEW_NON_CLAIM_REVIEWER_COMPETENCE.to_string(),
+                    crunch_release_core::SOURCE_REVIEW_NON_CLAIM_BUILD_WITNESS_QUORUM.to_string(),
+                    crunch_release_core::SOURCE_REVIEW_NON_CLAIM_RELEASE_ELIGIBILITY.to_string(),
+                    crunch_release_core::SOURCE_REVIEW_NON_CLAIM_PULL_REQUEST_APPROVAL.to_string(),
+                ],
+                attachment_blake3: String::new(),
+            };
+            let statement =
+                crunch_release_core::map_source_review_statement(&draft, &approval).expect("mapped statement");
+            let canonical = artifact_auth_core::canonical_statement_bytes(&statement).expect("canonical bytes");
+            let signature = key.sign(&canonical);
+            approval.signature_hex = hex_encode_lower(&signature.to_bytes());
+            statement_rows.push(approval);
+        }
+        let mut attachment = crunch_release_core::SourceReviewAttachment {
+            approvals: statement_rows,
+            ..draft_with_subject(source_digest, policy_digest)
+        };
+        attachment.attachment_blake3 = crunch_release_core::source_review_attachment_identity(&attachment);
+        crunch_release_core::validate_source_review_attachment_structure(&attachment)
+            .expect("structurally valid fixture attachment");
+        attachment
+    }
+
+    fn draft_with_subject(source_digest: &str, policy_digest: &str) -> crunch_release_core::SourceReviewAttachment {
+        crunch_release_core::SourceReviewAttachment {
+            schema: crunch_release_core::SOURCE_REVIEW_ATTACHMENT_SCHEMA.to_string(),
+            subject: crunch_release_core::SourceReviewSubjectLink {
+                source_archive_digest_blake3: source_digest.to_string(),
+                source_revision: None,
+                claim_root_blake3: CLAIM_ROOT_FIXTURE.to_string(),
+                review_policy_digest_blake3: policy_digest.to_string(),
+            },
+            producer_obligation_id: PRODUCER_ID.to_string(),
+            producer_disposition: "approved".to_string(),
+            valence_evidence_blake3: VALENCE_FIXTURE.to_string(),
+            approvals: vec![],
+            non_claims: vec![
+                crunch_release_core::SOURCE_REVIEW_NON_CLAIM_SOURCE_CORRECTNESS.to_string(),
+                crunch_release_core::SOURCE_REVIEW_NON_CLAIM_REVIEW_COMPLETENESS.to_string(),
+                crunch_release_core::SOURCE_REVIEW_NON_CLAIM_REVIEWER_COMPETENCE.to_string(),
+                crunch_release_core::SOURCE_REVIEW_NON_CLAIM_BUILD_WITNESS_QUORUM.to_string(),
+                crunch_release_core::SOURCE_REVIEW_NON_CLAIM_RELEASE_ELIGIBILITY.to_string(),
+                crunch_release_core::SOURCE_REVIEW_NON_CLAIM_PULL_REQUEST_APPROVAL.to_string(),
+            ],
+            attachment_blake3: String::new(),
+        }
+    }
+
+    fn write_attachment(
+        temp: &TempDir,
+        name: &str,
+        source_digest: &str,
+        policy_digest: &str,
+        approvals: &[ApprovalSpec],
+    ) -> PathBuf {
+        let attachment = build_attachment(source_digest, policy_digest, approvals);
+        let path = temp.path().join(name);
+        let bytes = serde_json::to_vec_pretty(&attachment).unwrap();
+        std::fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    fn policy_digest_for_cli() -> String {
+        crunch_release_core::reviewed_source_policy_identity(&stagex_policy()).unwrap()
+    }
+
+    fn required_review_args(command: &mut Command) {
+        command
+            .arg("--reviewed-source")
+            .arg("required")
+            .arg("--review-preset")
+            .arg("stagex-two-reviewer")
+            .arg("--trusted-reviewer")
+            .arg(format!("{REVIEWER_A_LABEL}:{}", key_b64(REVIEWER_SEED_A)))
+            .arg("--trusted-reviewer")
+            .arg(format!("{REVIEWER_B_LABEL}:{}", key_b64(REVIEWER_SEED_B)))
+            .arg("--review-claim-root")
+            .arg(CLAIM_ROOT_FIXTURE);
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_generic_verify_reports_not_required() {
+        let (_temp, bundle_dir, _manifest) = make_valid_bundle();
+        let output = crunch().arg("--json").arg("release").arg("verify").arg(&bundle_dir).output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["source_review"]["status"], "not-required");
+        assert_eq!(report["source_review"]["valid"], true);
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_required_policy_is_satisfied_with_two_distinct_reviewers() {
+        let (temp, bundle_dir, manifest) = make_valid_bundle();
+        let attachment_path = write_attachment(
+            &temp,
+            "review.json",
+            &manifest.source_archive.digest_blake3,
+            &policy_digest_for_cli(),
+            &[
+                approval(REVIEWER_SEED_A, REVIEWER_A_LABEL),
+                approval(REVIEWER_SEED_B, REVIEWER_B_LABEL),
+            ],
+        );
+        let mut command = crunch();
+        command.current_dir(temp.path()).arg("--json").arg("release").arg("verify").arg(&bundle_dir);
+        required_review_args(&mut command);
+        command.arg("--source-review").arg(&attachment_path);
+        let output = command.output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["source_review"]["status"], "satisfied");
+        assert_eq!(report["source_review"]["valid"], true);
+        assert_eq!(report["source_review"]["counted_reviewer_key_blake3"].as_array().unwrap().len(), 2);
+        assert_eq!(report["valid"], true);
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_create_bundles_attachment_and_optional_verify_reports_verified_optional() {
+        let temp = tempfile::tempdir().unwrap();
+        create_minimal_release_repo(temp.path());
+        let binary_path = temp.path().join("mantle-bin");
+        write_file(&binary_path, b"crunch-binary");
+        let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let proof_dir = temp.path().join("proof-input");
+        write_full_proof_bundle(&proof_dir, &stage2_digest, &inventory_digest);
+
+        let probe_dir = temp.path().join("bundle-probe");
+        crunch()
+            .current_dir(temp.path())
+            .arg("release")
+            .arg("create")
+            .arg("--release-id")
+            .arg("mantle-review-probe")
+            .arg("--bundle-dir")
+            .arg(&probe_dir)
+            .arg("--binary")
+            .arg(&binary_path)
+            .arg("--proof-bundle")
+            .arg(&proof_dir)
+            .assert()
+            .success();
+        let probe_manifest: ReleaseEvidenceManifest =
+            serde_json::from_slice(&std::fs::read(probe_dir.join("manifest.json")).unwrap()).unwrap();
+        let attachment_path = write_attachment(
+            &temp,
+            "review.json",
+            &probe_manifest.source_archive.digest_blake3,
+            &policy_digest_for_cli(),
+            &[
+                approval(REVIEWER_SEED_A, REVIEWER_A_LABEL),
+                approval(REVIEWER_SEED_B, REVIEWER_B_LABEL),
+            ],
+        );
+
+        let bundle_dir = temp.path().join("bundle-reviewed");
+        crunch()
+            .current_dir(temp.path())
+            .arg("release")
+            .arg("create")
+            .arg("--release-id")
+            .arg("mantle-review-probe")
+            .arg("--bundle-dir")
+            .arg(&bundle_dir)
+            .arg("--binary")
+            .arg(&binary_path)
+            .arg("--proof-bundle")
+            .arg(&proof_dir)
+            .arg("--source-review-attachment")
+            .arg(&attachment_path)
+            .assert()
+            .success();
+        let manifest: ReleaseEvidenceManifest =
+            serde_json::from_slice(&std::fs::read(bundle_dir.join("manifest.json")).unwrap()).unwrap();
+        let record = manifest.source_review_attachment.as_ref().expect("bundled review attachment");
+        assert_eq!(
+            record.attachment.relative_path,
+            crunch_release_core::RELEASED_SOURCE_REVIEW_ATTACHMENT_RELATIVE_PATH
+        );
+        assert!(bundle_dir.join(&record.attachment.relative_path).is_file());
+
+        let mut command = crunch();
+        command.current_dir(temp.path()).arg("--json").arg("release").arg("verify").arg(&bundle_dir);
+        command
+            .arg("--review-preset")
+            .arg("stagex-two-reviewer")
+            .arg("--trusted-reviewer")
+            .arg(format!("{REVIEWER_A_LABEL}:{}", key_b64(REVIEWER_SEED_A)))
+            .arg("--trusted-reviewer")
+            .arg(format!("{REVIEWER_B_LABEL}:{}", key_b64(REVIEWER_SEED_B)))
+            .arg("--review-claim-root")
+            .arg(CLAIM_ROOT_FIXTURE);
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["source_review"]["status"], "verified-optional");
+        assert_eq!(report["source_review"]["required"], false);
+        assert_eq!(report["valid"], true);
+    }
+
+    fn verify_required_fails_with_reason(
+        temp: &TempDir,
+        bundle_dir: &Path,
+        attachment_path: &Path,
+        expected_reason: &str,
+    ) {
+        let mut command = crunch();
+        command.current_dir(temp.path()).arg("--json").arg("release").arg("verify").arg(bundle_dir);
+        required_review_args(&mut command);
+        command.arg("--source-review").arg(attachment_path);
+        let output = command.output().unwrap();
+        assert!(!output.status.success(), "verify must fail for reason {expected_reason}");
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["source_review"]["valid"], false);
+        assert_eq!(report["source_review"]["status"], "failed");
+        assert_eq!(report["source_review"]["reason_code"], expected_reason);
+        assert_eq!(report["valid"], false);
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_wrong_source_digest_fails_stale_subject() {
+        let (temp, bundle_dir, _manifest) = make_valid_bundle();
+        let attachment_path =
+            write_attachment(&temp, "review-wrong-source.json", &"e".repeat(64), &policy_digest_for_cli(), &[
+                approval(REVIEWER_SEED_A, REVIEWER_A_LABEL),
+                approval(REVIEWER_SEED_B, REVIEWER_B_LABEL),
+            ]);
+        verify_required_fails_with_reason(&temp, &bundle_dir, &attachment_path, "stale-source-subject");
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_stale_claim_root_fails() {
+        let (temp, bundle_dir, manifest) = make_valid_bundle();
+        let attachment_path = write_attachment(
+            &temp,
+            "review-stale-root.json",
+            &manifest.source_archive.digest_blake3,
+            &policy_digest_for_cli(),
+            &[
+                approval(REVIEWER_SEED_A, REVIEWER_A_LABEL),
+                approval(REVIEWER_SEED_B, REVIEWER_B_LABEL),
+            ],
+        );
+        let mut command = crunch();
+        command.current_dir(temp.path()).arg("--json").arg("release").arg("verify").arg(&bundle_dir);
+        command
+            .arg("--reviewed-source")
+            .arg("required")
+            .arg("--review-preset")
+            .arg("stagex-two-reviewer")
+            .arg("--trusted-reviewer")
+            .arg(format!("{REVIEWER_A_LABEL}:{}", key_b64(REVIEWER_SEED_A)))
+            .arg("--trusted-reviewer")
+            .arg(format!("{REVIEWER_B_LABEL}:{}", key_b64(REVIEWER_SEED_B)))
+            .arg("--review-claim-root")
+            .arg("f".repeat(64))
+            .arg("--source-review")
+            .arg(&attachment_path);
+        let output = command.output().unwrap();
+        assert!(!output.status.success());
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["source_review"]["reason_code"], "stale-claim-root");
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_insufficient_distinct_approvals_fail() {
+        let (temp, bundle_dir, manifest) = make_valid_bundle();
+        let attachment_path = write_attachment(
+            &temp,
+            "review-one-approval.json",
+            &manifest.source_archive.digest_blake3,
+            &policy_digest_for_cli(),
+            &[approval(REVIEWER_SEED_A, REVIEWER_A_LABEL)],
+        );
+        verify_required_fails_with_reason(&temp, &bundle_dir, &attachment_path, "insufficient-approvals");
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_build_witness_domain_cannot_satisfy_review_policy() {
+        let (temp, bundle_dir, manifest) = make_valid_bundle();
+        let witness = ApprovalSpec {
+            seed: REVIEWER_SEED_B,
+            label: REVIEWER_B_LABEL,
+            disposition: crunch_release_core::SOURCE_REVIEW_DISPOSITION_APPROVED,
+            witness_domain: true,
+        };
+        let attachment_path = write_attachment(
+            &temp,
+            "review-witness-domain.json",
+            &manifest.source_archive.digest_blake3,
+            &policy_digest_for_cli(),
+            &[approval(REVIEWER_SEED_A, REVIEWER_A_LABEL), witness],
+        );
+        verify_required_fails_with_reason(&temp, &bundle_dir, &attachment_path, "role-confusion");
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_invalid_signature_fails() {
+        let (temp, bundle_dir, manifest) = make_valid_bundle();
+        let mut attachment = build_attachment(&manifest.source_archive.digest_blake3, &policy_digest_for_cli(), &[
+            approval(REVIEWER_SEED_A, REVIEWER_A_LABEL),
+            approval(REVIEWER_SEED_B, REVIEWER_B_LABEL),
+        ]);
+        attachment.approvals[1].signature_hex = "0".repeat(128);
+        attachment.attachment_blake3 = crunch_release_core::source_review_attachment_identity(&attachment);
+        let attachment_path = temp.path().join("review-bad-signature.json");
+        std::fs::write(&attachment_path, serde_json::to_vec_pretty(&attachment).unwrap()).unwrap();
+        verify_required_fails_with_reason(&temp, &bundle_dir, &attachment_path, "signature-invalid");
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_excluded_author_does_not_inflate_count() {
+        let (temp, bundle_dir, manifest) = make_valid_bundle();
+        let policy = stagex_policy_with_author_exclusion();
+        let policy_digest = crunch_release_core::reviewed_source_policy_identity(&policy).unwrap();
+        let attachment = build_attachment(&manifest.source_archive.digest_blake3, &policy_digest, &[
+            approval(AUTHOR_SEED, "change-author"),
+            approval(REVIEWER_SEED_A, REVIEWER_A_LABEL),
+        ]);
+        let attachment_path = temp.path().join("review-author.json");
+        std::fs::write(&attachment_path, serde_json::to_vec_pretty(&attachment).unwrap()).unwrap();
+        let mut command = crunch();
+        command.current_dir(temp.path()).arg("--json").arg("release").arg("verify").arg(&bundle_dir);
+        required_review_args(&mut command);
+        command
+            .arg("--review-author-key")
+            .arg(key_b64(AUTHOR_SEED))
+            .arg("--source-review")
+            .arg(&attachment_path);
+        let output = command.output().unwrap();
+        assert!(!output.status.success());
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["source_review"]["reason_code"], "insufficient-approvals");
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_needs_revision_disposition_fails() {
+        let (temp, bundle_dir, manifest) = make_valid_bundle();
+        let attachment_path = write_attachment(
+            &temp,
+            "review-needs-revision.json",
+            &manifest.source_archive.digest_blake3,
+            &policy_digest_for_cli(),
+            &[approval(REVIEWER_SEED_A, REVIEWER_A_LABEL), ApprovalSpec {
+                seed: REVIEWER_SEED_B,
+                label: REVIEWER_B_LABEL,
+                disposition: crunch_release_core::SOURCE_REVIEW_DISPOSITION_NEEDS_REVISION,
+                witness_domain: false,
+            }],
+        );
+        verify_required_fails_with_reason(&temp, &bundle_dir, &attachment_path, "needs-revision");
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_unknown_reviewer_key_fails() {
+        let (temp, bundle_dir, manifest) = make_valid_bundle();
+        let attachment_path = write_attachment(
+            &temp,
+            "review-outsider.json",
+            &manifest.source_archive.digest_blake3,
+            &policy_digest_for_cli(),
+            &[
+                approval(REVIEWER_SEED_A, REVIEWER_A_LABEL),
+                approval(OUTSIDER_SEED, "outsider"),
+            ],
+        );
+        verify_required_fails_with_reason(&temp, &bundle_dir, &attachment_path, "unknown-reviewer-key");
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_policy_digest_mismatch_fails() {
+        let (temp, bundle_dir, manifest) = make_valid_bundle();
+        let attachment_path = write_attachment(
+            &temp,
+            "review-other-policy.json",
+            &manifest.source_archive.digest_blake3,
+            &"9".repeat(64),
+            &[
+                approval(REVIEWER_SEED_A, REVIEWER_A_LABEL),
+                approval(REVIEWER_SEED_B, REVIEWER_B_LABEL),
+            ],
+        );
+        verify_required_fails_with_reason(&temp, &bundle_dir, &attachment_path, "policy-mismatch");
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_tampered_attachment_identity_fails() {
+        let (temp, bundle_dir, manifest) = make_valid_bundle();
+        let mut attachment = build_attachment(&manifest.source_archive.digest_blake3, &policy_digest_for_cli(), &[
+            approval(REVIEWER_SEED_A, REVIEWER_A_LABEL),
+            approval(REVIEWER_SEED_B, REVIEWER_B_LABEL),
+        ]);
+        attachment.producer_disposition = "approved-by-producer-tamper".to_string();
+        let attachment_path = temp.path().join("review-tampered-identity.json");
+        std::fs::write(&attachment_path, serde_json::to_vec_pretty(&attachment).unwrap()).unwrap();
+        verify_required_fails_with_reason(&temp, &bundle_dir, &attachment_path, "tampered-attachment-identity");
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_duplicate_key_under_two_labels_does_not_inflate() {
+        let (temp, bundle_dir, manifest) = make_valid_bundle();
+        let attachment_path = write_attachment(
+            &temp,
+            "review-duplicate-key.json",
+            &manifest.source_archive.digest_blake3,
+            &policy_digest_for_cli(),
+            &[approval(REVIEWER_SEED_A, REVIEWER_A_LABEL), ApprovalSpec {
+                seed: REVIEWER_SEED_A,
+                label: "reviewer-a-alias",
+                disposition: crunch_release_core::SOURCE_REVIEW_DISPOSITION_APPROVED,
+                witness_domain: false,
+            }],
+        );
+        verify_required_fails_with_reason(&temp, &bundle_dir, &attachment_path, "insufficient-approvals");
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_bundled_attachment_without_authority_fails_closed() {
+        let temp = tempfile::tempdir().unwrap();
+        create_minimal_release_repo(temp.path());
+        let binary_path = temp.path().join("mantle-bin");
+        write_file(&binary_path, b"crunch-binary");
+        let stage2_digest = blake3::hash(b"crunch-binary").to_hex().to_string();
+        let inventory_digest = blake3::hash(b"inventory").to_hex().to_string();
+        let proof_dir = temp.path().join("proof-input");
+        write_full_proof_bundle(&proof_dir, &stage2_digest, &inventory_digest);
+        let probe_dir = temp.path().join("bundle-probe");
+        crunch()
+            .current_dir(temp.path())
+            .arg("release")
+            .arg("create")
+            .arg("--release-id")
+            .arg("mantle-review-probe")
+            .arg("--bundle-dir")
+            .arg(&probe_dir)
+            .arg("--binary")
+            .arg(&binary_path)
+            .arg("--proof-bundle")
+            .arg(&proof_dir)
+            .assert()
+            .success();
+        let probe_manifest: ReleaseEvidenceManifest =
+            serde_json::from_slice(&std::fs::read(probe_dir.join("manifest.json")).unwrap()).unwrap();
+        let attachment_path = write_attachment(
+            &temp,
+            "review.json",
+            &probe_manifest.source_archive.digest_blake3,
+            &policy_digest_for_cli(),
+            &[
+                approval(REVIEWER_SEED_A, REVIEWER_A_LABEL),
+                approval(REVIEWER_SEED_B, REVIEWER_B_LABEL),
+            ],
+        );
+        let bundle_dir = temp.path().join("bundle-reviewed");
+        crunch()
+            .current_dir(temp.path())
+            .arg("release")
+            .arg("create")
+            .arg("--release-id")
+            .arg("mantle-review-probe")
+            .arg("--bundle-dir")
+            .arg(&bundle_dir)
+            .arg("--binary")
+            .arg(&binary_path)
+            .arg("--proof-bundle")
+            .arg(&proof_dir)
+            .arg("--source-review-attachment")
+            .arg(&attachment_path)
+            .assert()
+            .success();
+        crunch()
+            .current_dir(temp.path())
+            .arg("release")
+            .arg("verify")
+            .arg(&bundle_dir)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "the release carries source-review evidence; pass --trusted-reviewer keys",
+            ));
+    }
+
+    // r[verify verification_evidence.release_source_review_evidence]
+    #[test]
+    fn source_review_tampered_bundled_attachment_fails_bundle_verification() {
+        let (temp, _first_bundle_dir, manifest) = make_valid_bundle();
+        let attachment_path = write_attachment(
+            &temp,
+            "review.json",
+            &manifest.source_archive.digest_blake3,
+            &policy_digest_for_cli(),
+            &[
+                approval(REVIEWER_SEED_A, REVIEWER_A_LABEL),
+                approval(REVIEWER_SEED_B, REVIEWER_B_LABEL),
+            ],
+        );
+        // Bundle the attachment through a second create in the same fixture repo.
+        let binary_path = temp.path().join("mantle-bin");
+        let proof_dir = temp.path().join("proof-input");
+        let reviewed_dir = temp.path().join("bundle-reviewed");
+        crunch()
+            .current_dir(temp.path())
+            .arg("release")
+            .arg("create")
+            .arg("--release-id")
+            .arg(manifest.release_id.as_str())
+            .arg("--bundle-dir")
+            .arg(&reviewed_dir)
+            .arg("--binary")
+            .arg(&binary_path)
+            .arg("--proof-bundle")
+            .arg(&proof_dir)
+            .arg("--source-review-attachment")
+            .arg(&attachment_path)
+            .assert()
+            .success();
+        let member = reviewed_dir.join(crunch_release_core::RELEASED_SOURCE_REVIEW_ATTACHMENT_RELATIVE_PATH);
+        write_file(&member, b"tampered-attachment");
+        crunch()
+            .current_dir(temp.path())
+            .arg("release")
+            .arg("verify")
+            .arg(&reviewed_dir)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("digest mismatch"));
+    }
+
+    /// Writes the machine-contract positive fixture. Run once with:
+    /// `cargo test -p mantle --test release_cli write_source_review_machine_fixture -- --ignored`
+    #[test]
+    #[ignore = "fixture writer; run explicitly to refresh tests/fixtures/source-review-attachment"]
+    fn write_source_review_machine_fixture() {
+        let attachment = build_attachment(&"a".repeat(64), &policy_digest_for_cli(), &[
+            approval(REVIEWER_SEED_A, REVIEWER_A_LABEL),
+            approval(REVIEWER_SEED_B, REVIEWER_B_LABEL),
+        ]);
+        let destination =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/source-review-attachment/attachment.valid.json");
+        std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
+        std::fs::write(&destination, serde_json::to_vec_pretty(&attachment).unwrap()).unwrap();
+    }
+}

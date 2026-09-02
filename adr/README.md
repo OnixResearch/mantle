@@ -117,3 +117,4 @@ compatibility surface, crate name, or historical decision.
 | [0108](0108-close-repository-tigerstyle-without-widening-authority.md) | Close repository Tiger Style without widening authority | Accepted |
 | [0109](0109-bind-nickel-embedded-cli-and-vendor-as-one-cohort.md) | Bind Nickel embedded, CLI, and vendor inputs as one cohort | Accepted |
 | [0110](0110-complete-store-authority-with-role-capabilities.md) | Complete store authority with role capabilities | Accepted |
+| [0111](0111-bind-source-review-evidence-through-artifact-auth.md) | Bind source-review evidence to releases through Artifact Auth | Accepted |

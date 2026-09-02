@@ -1,0 +1,416 @@
+{
+  "change_issues": [],
+  "changes": 0,
+  "cross_repo_dependencies": [],
+  "cross_repo_evidence_issues": [],
+  "findings": [],
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "resolution": {
+    "diagnostics": [],
+    "locator_consulted": false,
+    "registry_lookup": "local_locator_only",
+    "selected": {
+      "project_identity": null,
+      "root": ".",
+      "source": "explicit_root",
+      "store_id": null,
+      "store_identity": null
+    },
+    "valid": true
+  },
+  "spec_findings": [],
+  "spec_issues": [],
+  "spec_substance": [
+    {
+      "path": "./.cairn/specs/adr-radicle-cob/spec.md",
+      "requirement_blocks": 11,
+      "scenario_blocks": 26,
+      "substantive_requirement_blocks": 11
+    },
+    {
+      "path": "./.cairn/specs/agent-completion/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 23,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/specs/agent-guidance-context/spec.md",
+      "requirement_blocks": 13,
+      "scenario_blocks": 25,
+      "substantive_requirement_blocks": 13
+    },
+    {
+      "path": "./.cairn/specs/ai-spec-drafts/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 11,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./.cairn/specs/artifact-auth-repository/spec.md",
+      "requirement_blocks": 10,
+      "scenario_blocks": 20,
+      "substantive_requirement_blocks": 10
+    },
+    {
+      "path": "./.cairn/specs/artifact-workflow-contract/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 17,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./.cairn/specs/ast-grep-lifecycle-gate/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 6,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/bounded-tree-adoption/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./.cairn/specs/change-dependency-graph/spec.md",
+      "requirement_blocks": 25,
+      "scenario_blocks": 58,
+      "substantive_requirement_blocks": 25
+    },
+    {
+      "path": "./.cairn/specs/cli-machine-contract/spec.md",
+      "requirement_blocks": 11,
+      "scenario_blocks": 20,
+      "substantive_requirement_blocks": 11
+    },
+    {
+      "path": "./.cairn/specs/cli-maintainability/spec.md",
+      "requirement_blocks": 56,
+      "scenario_blocks": 112,
+      "substantive_requirement_blocks": 56
+    },
+    {
+      "path": "./.cairn/specs/cob-interoperability-fixtures/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 9,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/collaboration-backend-agnostic/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 10,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/collaboration-conflict-resolution/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 11,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/collaboration-sync/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 1,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./.cairn/specs/collaboration-update/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 9,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/specs/determinism/spec.md",
+      "requirement_blocks": 13,
+      "scenario_blocks": 48,
+      "substantive_requirement_blocks": 13
+    },
+    {
+      "path": "./.cairn/specs/developer-experience/spec.md",
+      "requirement_blocks": 34,
+      "scenario_blocks": 44,
+      "substantive_requirement_blocks": 34
+    },
+    {
+      "path": "./.cairn/specs/developer-loop-profiles/spec.md",
+      "requirement_blocks": 10,
+      "scenario_blocks": 15,
+      "substantive_requirement_blocks": 10
+    },
+    {
+      "path": "./.cairn/specs/document-collaboration/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/ears-vocabulary/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 6,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./.cairn/specs/electrical-circuit-primitive-receipts/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 9,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/electrical-circuit-primitives/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 7,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/specs/gate-interchange/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 11,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/generated-agent-workflows/spec.md",
+      "requirement_blocks": 12,
+      "scenario_blocks": 23,
+      "substantive_requirement_blocks": 12
+    },
+    {
+      "path": "./.cairn/specs/global-registry/spec.md",
+      "requirement_blocks": 14,
+      "scenario_blocks": 34,
+      "substantive_requirement_blocks": 14
+    },
+    {
+      "path": "./.cairn/specs/hash-algorithm-policy/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 5,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./.cairn/specs/ironspec-supersession/spec.md",
+      "requirement_blocks": 127,
+      "scenario_blocks": 290,
+      "substantive_requirement_blocks": 127
+    },
+    {
+      "path": "./.cairn/specs/kani-receipt-gates/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 11,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./.cairn/specs/lifecycle-directory/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 13,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./.cairn/specs/lifecycle-orchestration/spec.md",
+      "requirement_blocks": 12,
+      "scenario_blocks": 29,
+      "substantive_requirement_blocks": 12
+    },
+    {
+      "path": "./.cairn/specs/lifecycle-stores/spec.md",
+      "requirement_blocks": 14,
+      "scenario_blocks": 31,
+      "substantive_requirement_blocks": 14
+    },
+    {
+      "path": "./.cairn/specs/lifecycle-validation/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./.cairn/specs/lifecycle-views/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./.cairn/specs/lifecycle-workflow-profiles/spec.md",
+      "requirement_blocks": 11,
+      "scenario_blocks": 20,
+      "substantive_requirement_blocks": 11
+    },
+    {
+      "path": "./.cairn/specs/mcp-drain/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 4,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./.cairn/specs/nickel-export-infrastructure/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 12,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/nickel-toolchain/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 6,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/specs/nominal-evidence-identities/spec.md",
+      "requirement_blocks": 11,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 11
+    },
+    {
+      "path": "./.cairn/specs/policy-exception-radicle-cob/spec.md",
+      "requirement_blocks": 12,
+      "scenario_blocks": 31,
+      "substantive_requirement_blocks": 12
+    },
+    {
+      "path": "./.cairn/specs/policy-schema-compatibility/spec.md",
+      "requirement_blocks": 3,
+      "scenario_blocks": 5,
+      "substantive_requirement_blocks": 3
+    },
+    {
+      "path": "./.cairn/specs/preserves-evidence-ingest/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 5,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./.cairn/specs/probe-execution-boundary/spec.md",
+      "requirement_blocks": 12,
+      "scenario_blocks": 28,
+      "substantive_requirement_blocks": 12
+    },
+    {
+      "path": "./.cairn/specs/radicle-change-cob/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/specs/radicle-cob-only/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 19,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/specs/radicle-import-cli/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 1,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./.cairn/specs/radicle-status-checkout-cli/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 2,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./.cairn/specs/radicle-two-peer-convergence/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 1,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./.cairn/specs/release-decision-radicle-cob/spec.md",
+      "requirement_blocks": 13,
+      "scenario_blocks": 31,
+      "substantive_requirement_blocks": 13
+    },
+    {
+      "path": "./.cairn/specs/release-evidence/spec.md",
+      "requirement_blocks": 56,
+      "scenario_blocks": 84,
+      "substantive_requirement_blocks": 56
+    },
+    {
+      "path": "./.cairn/specs/requirement-id-registry/spec.md",
+      "requirement_blocks": 12,
+      "scenario_blocks": 18,
+      "substantive_requirement_blocks": 12
+    },
+    {
+      "path": "./.cairn/specs/rfd-radicle-cob/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 18,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/specs/runtime-evidence/spec.md",
+      "requirement_blocks": 13,
+      "scenario_blocks": 25,
+      "substantive_requirement_blocks": 13
+    },
+    {
+      "path": "./.cairn/specs/semantic-review/spec.md",
+      "requirement_blocks": 19,
+      "scenario_blocks": 44,
+      "substantive_requirement_blocks": 19
+    },
+    {
+      "path": "./.cairn/specs/stack-provenance-gates/spec.md",
+      "requirement_blocks": 42,
+      "scenario_blocks": 62,
+      "substantive_requirement_blocks": 42
+    },
+    {
+      "path": "./.cairn/specs/structured-lifecycle/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 20,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/sync-archive/spec.md",
+      "requirement_blocks": 23,
+      "scenario_blocks": 52,
+      "substantive_requirement_blocks": 23
+    },
+    {
+      "path": "./.cairn/specs/task-ordering/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 12,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/test-harness/spec.md",
+      "requirement_blocks": 13,
+      "scenario_blocks": 29,
+      "substantive_requirement_blocks": 13
+    },
+    {
+      "path": "./.cairn/specs/toolchain-profile-matrix/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 5,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./.cairn/specs/trace-index/spec.md",
+      "requirement_blocks": 18,
+      "scenario_blocks": 32,
+      "substantive_requirement_blocks": 18
+    },
+    {
+      "path": "./.cairn/specs/verification-obligation-radicle-cob/spec.md",
+      "requirement_blocks": 10,
+      "scenario_blocks": 23,
+      "substantive_requirement_blocks": 10
+    },
+    {
+      "path": "./.cairn/specs/verification-role/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 6,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./.cairn/specs/workflow-collaboration/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 19,
+      "substantive_requirement_blocks": 8
+    }
+  ],
+  "specs_validated": 64,
+  "substance": [],
+  "substance_findings": [],
+  "substance_issues": [],
+  "valid": true
+}

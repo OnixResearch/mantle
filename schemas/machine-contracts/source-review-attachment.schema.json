@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/source-review-attachment-v1",
+  "x-mantle-rust-owner": "crates/crunch-release-core/src/source_review.rs::SourceReviewAttachment",
+  "$defs": {
+    "subject_link": {
+      "type": "object",
+      "required": [
+        "source_archive_digest_blake3",
+        "claim_root_blake3",
+        "review_policy_digest_blake3"
+      ],
+      "properties": {
+        "source_archive_digest_blake3": {
+          "type": "string",
+          "x-mantle-semantic": "blake3"
+        },
+        "source_revision": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 256,
+          "x-mantle-bound-name": {
+            "minLength": "MIN_SOURCE_REVIEW_TEXT_BYTES",
+            "maxLength": "MAX_SOURCE_REVIEW_TEXT_BYTES"
+          },
+          "x-mantle-length-unit": "utf8-bytes",
+          "x-mantle-semantic": "redaction-safe"
+        },
+        "claim_root_blake3": {
+          "type": "string",
+          "x-mantle-semantic": "blake3"
+        },
+        "review_policy_digest_blake3": {
+          "type": "string",
+          "x-mantle-semantic": "blake3"
+        }
+      },
+      "additionalProperties": false
+    },
+    "approval": {
+      "type": "object",
+      "required": [
+        "statement_domain",
+        "reviewer_label",
+        "public_key_hex",
+        "signature_hex",
+        "disposition",
+        "generation"
+      ],
+      "properties": {
+        "statement_domain": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "x-mantle-bound-name": {
+            "minLength": "MIN_SOURCE_REVIEW_TEXT_BYTES",
+            "maxLength": "MAX_SOURCE_REVIEW_TEXT_BYTES"
+          },
+          "x-mantle-length-unit": "utf8-bytes",
+          "x-mantle-semantic": "redaction-safe"
+        },
+        "reviewer_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "x-mantle-bound-name": {
+            "minLength": "MIN_SOURCE_REVIEW_TEXT_BYTES",
+            "maxLength": "MAX_SOURCE_REVIEW_TEXT_BYTES"
+          },
+          "x-mantle-length-unit": "utf8-bytes",
+          "x-mantle-semantic": "redaction-safe"
+        },
+        "public_key_hex": {
+          "type": "string",
+          "x-mantle-semantic": "redaction-safe"
+        },
+        "signature_hex": {
+          "type": "string",
+          "x-mantle-semantic": "redaction-safe"
+        },
+        "disposition": {
+          "type": "string",
+          "enum": ["approved", "needs-revision"]
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "x-mantle-bound-name": {
+            "minimum": "REVIEWER_KEY_GENERATION"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": [
+    "schema",
+    "subject",
+    "producer_obligation_id",
+    "producer_disposition",
+    "valence_evidence_blake3",
+    "approvals",
+    "non_claims",
+    "attachment_blake3"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "mantle.source-review.attachment.v1",
+      "x-mantle-issue-class": "version"
+    },
+    "subject": {
+      "$ref": "#/$defs/subject_link"
+    },
+    "producer_obligation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "x-mantle-bound-name": {
+        "minLength": "MIN_SOURCE_REVIEW_TEXT_BYTES",
+        "maxLength": "MAX_SOURCE_REVIEW_TEXT_BYTES"
+      },
+      "x-mantle-length-unit": "utf8-bytes",
+      "x-mantle-semantic": "redaction-safe"
+    },
+    "producer_disposition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "x-mantle-bound-name": {
+        "minLength": "MIN_SOURCE_REVIEW_TEXT_BYTES",
+        "maxLength": "MAX_SOURCE_REVIEW_TEXT_BYTES"
+      },
+      "x-mantle-length-unit": "utf8-bytes",
+      "x-mantle-semantic": "redaction-safe"
+    },
+    "valence_evidence_blake3": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "approvals": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "x-mantle-bound-name": {
+        "minItems": "MIN_SOURCE_REVIEW_STATEMENTS_COUNT",
+        "maxItems": "MAX_SOURCE_REVIEW_STATEMENTS_COUNT"
+      },
+      "items": {
+        "$ref": "#/$defs/approval"
+      }
+    },
+    "non_claims": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "x-mantle-bound-name": {
+        "minItems": "MIN_SOURCE_REVIEW_NON_CLAIMS_COUNT",
+        "maxItems": "MAX_SOURCE_REVIEW_NON_CLAIMS_COUNT"
+      },
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256,
+        "x-mantle-bound-name": {
+          "minLength": "MIN_SOURCE_REVIEW_TEXT_BYTES",
+          "maxLength": "MAX_SOURCE_REVIEW_TEXT_BYTES"
+        },
+        "x-mantle-length-unit": "utf8-bytes",
+        "x-mantle-semantic": "redaction-safe"
+      }
+    },
+    "attachment_blake3": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    }
+  },
+  "additionalProperties": false
+}

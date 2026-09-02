@@ -1,0 +1,1 @@
+nix develop -c cargo fmt --check -p mantle -v

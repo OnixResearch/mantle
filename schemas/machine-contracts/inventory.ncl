@@ -79,10 +79,69 @@ let Registry = {
     "oci.registry-push-report",
     "oci.registry-pull-report",
     "release.function-address-binding",
+    "release.source-review-attachment",
     "mantlepkgs.package-impact-report",
     "mantlepkgs.update-plan"
   ],
   "surfaces"= [
+    {
+      "id"= "release.source-review-attachment",
+      "class"= "contracted",
+      "rust_owner"= "crates/crunch-release-core/src/source_review.rs::SourceReviewAttachment",
+      "producer"= {
+        "command_or_api"= "external Cairn/Valence producers; consumed by mantle release create --source-review-attachment and release verify --source-review",
+        "marker"= "release.source-review-attachment",
+        "source_paths"= [
+          "crates/crunch-release-core/src/source_review.rs",
+          "src/source_review_release.rs"
+        ]
+      },
+      "consumers"= [
+        "Mantle release verification",
+        "review automation"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/source-review-attachment.schema.json",
+        "generated_contract"= "schemas/machine-contracts/source-review-attachment.contract.ncl",
+        "positive_fixtures"= [
+          "tests/fixtures/source-review-attachment/attachment.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/source-review-attachment.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle.source-review.attachment.v1",
+        "supported"= [
+          "mantle.source-review.attachment.v1"
+        ],
+        "unknown_version_behavior"= "reject before source-review verification or reviewed-source policy evaluation",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs",
+        "cargo test -p crunch-release-core source_review"
+      ],
+      "fixture_coverage"= [
+        "schema",
+        "version",
+        "enum",
+        "bounds",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds schema, generated contract, shared prelude, fixtures, producer source, and consumer policy",
+      "freshness"= {
+        "schema_blake3"= "8881f2fbc89fa7d46fe00bb92ad4389b85643b6e033d126a911573df2183c4fc",
+        "contract_blake3"= "bd5e73c8be1d9348c4d6e9a2ad9049a71d3f9c976ecadc746e28dda9b4edb6ff",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "8c0fbeb7501409d9d871f79578e693670b262a87e13a7f95bd3eb0eea79b4c54",
+        "producer_identity_blake3"= "817e496cfcb7f4d5094068427930f129866535da728610c2564291d003f0db80",
+        "consumer_policy_blake3"= "7fa65ad759e4eee6d33ff8ec0f84d1fe1ac3915b9d94e40e1c87ca19c0d20103"
+      },
+      "non_claims"= [
+        "attachment admission does not prove source correctness, review completeness, reviewer competence, build-witness quorum, or release eligibility"
+      ],
+      "rationale"= "Stable external review attachment consumed by release verification and reviewed-source policy."
+    },
     {
       "id"= "operator-diagnostics.doctor-report",
       "class"= "contracted",
@@ -198,7 +257,7 @@ let Registry = {
         "contract_blake3"= "440f27f17e164a74c1c7983ace734f7cd26298c910d36c8d0cdf3059786bb3c4",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "335d0fb384cefd4fb92e0894a7a3346265730cfec73cf4ca91a8d1e4423e57d0",
-        "producer_identity_blake3"= "4d5ee78ebc73f30447edd8e95a4e7024e26df416d1bfd4cddea8deec4779c9d5",
+        "producer_identity_blake3"= "ee342ea93bf8f868c2377853fee7ff6011bbebfda0a9ab14b90306a8e5c237df",
         "consumer_policy_blake3"= "d4d7d58e21738c707f6071b435807382c28939a76da4cbb88e9c32c6b80af72b"
       },
       "non_claims"= [
@@ -252,7 +311,7 @@ let Registry = {
         "contract_blake3"= "16ccc6644e6a2b74b1b4db20014818bb73028343e9c3da8a92a0711ed520d434",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "576b0cc4dbed5d3c850a408c032411c180e9a0446507ec333606c25c4b15f719",
-        "producer_identity_blake3"= "2d5a4aadd8a58ba3ca3a64d9d2eab906b8bb4b5d7414dbed7a59dcde693cb1f9",
+        "producer_identity_blake3"= "82ea38f01375bc313bb11ebd490a7b6131e6157c133fd97f1fafea97a237641d",
         "consumer_policy_blake3"= "d9c1ccf9e8d250b9ce0b12e6b0b73a2e13db503096b5d725ac3a16e9d65061ed"
       },
       "non_claims"= [
@@ -360,7 +419,7 @@ let Registry = {
         "contract_blake3"= "5b922a6b7066bce68131419ccfb95619022698e170375d2669c21d9408165129",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "f8efd884abc9b6beffd9527db139ab53356b198331c91adb4b41259ca6684c88",
-        "producer_identity_blake3"= "b208d5dd7091adca9625a69ecd03862270de12cd8c89762e4c57bba40652a755",
+        "producer_identity_blake3"= "2933ecd451aaa0d83acdb2668a01e46045cc15d7fe5ac033527c0ca0cf3dc508",
         "consumer_policy_blake3"= "499fa604950b42de900457a05728162a807c3d38acaa39f691602bcf30d5ef06"
       },
       "non_claims"= [
@@ -414,7 +473,7 @@ let Registry = {
         "contract_blake3"= "ebdd22a938ddc93c38f7fd0d27594be7456374e379227206e7a357fe46d4a00d",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "a9cd57d937da9107de66d87888629c51f19a07dc585beda5192baa817bf77ec9",
-        "producer_identity_blake3"= "348a932b56b43f83970b37545b51f3b10de25740e79abb150b58b0dc9b329b93",
+        "producer_identity_blake3"= "ee9f5da4f9027026164073273ff3572789838917322a914100bdd0784836eff1",
         "consumer_policy_blake3"= "c8b7b1c63ebb54254bf7cce2d855df6a7e48601089a7102d3698e757827e974e"
       },
       "non_claims"= [
@@ -467,7 +526,7 @@ let Registry = {
         "contract_blake3"= "acef59d7e93e39b8b3be1d791e5a3615cec92dbae6735153b0fc1aa9147be32e",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "6788977d15737936e07f67f8cc3ee1c5fd7acbe275762801e54e680681de19d2",
-        "producer_identity_blake3"= "0c8f1425eaaa9b96104f1203588974326f7b48825d572552d4e0fe0f009e7f9f",
+        "producer_identity_blake3"= "1a99f4f76441eb434d779d3fbde604392e737873450df8b08e6db1959c24bc82",
         "consumer_policy_blake3"= "15cedc21de51570e0fa4d214d357f33de4adafa7d8674274eec0285d6f18d7fd"
       },
       "non_claims"= [
@@ -686,7 +745,7 @@ let Registry = {
         "contract_blake3"= "dca78b427a831e803eac4c9d94f2f209ad93cedf041941e2cd688cf1ac8c34f2",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "18dbdaece5c99497cbd663230682e0b5bce9bf0fcb22a0e2a0664377c445ff0f",
-        "producer_identity_blake3"= "73708d68a5f3b9c18d555ae984c7cffce4c815d4fbb4d7e27ea871000ae84116",
+        "producer_identity_blake3"= "cd67b384e9acb8125bdde0fe1149ba6c0296190091d72b6149b24eb9a246b6ca",
         "consumer_policy_blake3"= "aa2b9979ef6f03d98bbe0861e19fd9ab0c88af64d6b803fce04789e58904e123"
       },
       "non_claims"= [
@@ -963,7 +1022,7 @@ let Registry = {
         "contract_blake3"= "45a5be6ff94dc2b3fe1ae248e6074bce475bdcc72cf42951d6b8d89936fd5431",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "67d9e9232706f73f157c68abea93383ffa5af8ef83a924ecc2fb8fadce10a357",
-        "producer_identity_blake3"= "d47e15722e63e6aa9ba5c3d617d61f55577a259329725d4ab753d80732034e24",
+        "producer_identity_blake3"= "5b13b275eaf4d012f96f4994d44d161ebd376c4139ae45910277eaea692cad38",
         "consumer_policy_blake3"= "fce9cfc511ed3931f6804f5e99cd0ae3d6d325a2a6e47899b8f027ccaa6787ec"
       },
       "non_claims"= [
@@ -1156,7 +1215,7 @@ let Registry = {
         "contract_blake3"= "d158d85e21edcccbf6d6ae7bc6d3d59aea4acb8f1dc8a52438be38567d4c50f2",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "230228d02be1df38f427caa0f6ca4cd7c1ec8666c2350508d409aef177ccd494",
-        "producer_identity_blake3"= "05dbaa33a986b71bd570bb1880ba739a89b048491d9e5a653cf6045c772f805a",
+        "producer_identity_blake3"= "7781f8fba9a749178d7e4134b4acbe4365cc0c0149ba1e75f4addc21f3053b8a",
         "consumer_policy_blake3"= "c81ddbc9befcf012a5b42b3f44c2f17fe44f890ce0dfcc228b2cfefd5eb30dd4"
       },
       "non_claims"= [
@@ -1217,7 +1276,7 @@ let Registry = {
         "contract_blake3"= "723027e965189230cabb05b8ba069effec984e9bd527625a4320c8bd3cbe1af3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "9acb57b93f3b9150f79d59ff8a46ca3b5c2e5b98e83320b0308d57334a13d4a3",
-        "producer_identity_blake3"= "bf3fa46d0c533a616e1e1adafbd142d659894095ad4b165f731a9ca1eb6906df",
+        "producer_identity_blake3"= "829bc491d41dae7da4cc7d86a919198f66d7421da3a30415d43833fca53156fc",
         "consumer_policy_blake3"= "e81324a18c19a70aaa2bec634d4a0b7dccceede6f048bbd332b432a9938adefe"
       },
       "non_claims"= [
@@ -1280,7 +1339,7 @@ let Registry = {
         "contract_blake3"= "ca290b374f6b2987e6bd56f541a4ac2539df2fcc55878eb9572e25734783f16f",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "3d447dccbcf05cc8bdf1875896266084327a7ae352416e319d7408125dd9cd41",
-        "producer_identity_blake3"= "048377c50f92972935a1babb3769fac66d826226db648d764834a3487ab22e4b",
+        "producer_identity_blake3"= "3811492d59f709d8733ea4faec739115f87d50d436558eb0679119dfd619a02a",
         "consumer_policy_blake3"= "f1fe25ad7bf31510a0d970cabe8f0eea37b17342b7743bcd39c3858a4e5adb0a"
       },
       "non_claims"= [
@@ -1879,7 +1938,8 @@ let Registry = {
           "src/cairn_release_handoff.rs",
           "src/release_publication.rs",
           "src/content_bound_requirement_evidence.rs",
-          "src/release_chapter_transport.rs"
+          "src/release_chapter_transport.rs",
+          "src/source_review_release.rs"
         ]
       },
       "consumers"= [
