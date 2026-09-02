@@ -5162,7 +5162,7 @@ mod tests {
         let reaped_count = crate::protected_exec_seccomp::reap_adopted_exec_descendants().unwrap();
         let quiescent_event_count = observer.wait_for_audit_quiescence().unwrap();
         let events = observer.audit_events();
-        assert_eq!(quiescent_event_count, events.len());
+        assert_eq!(usize::try_from(quiescent_event_count).unwrap(), events.len());
         let execution_error = outcome.as_ref().err().map(ToString::to_string);
         let report = binutils_exec_observation_report(&events, execution_error).unwrap();
         let report_path = PathBuf::from(

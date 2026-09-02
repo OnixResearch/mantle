@@ -91,7 +91,7 @@ mod linux {
             }
         }
 
-        pub fn wait_for_audit_quiescence(&self) -> Result<usize, ProtectedSeccompError> {
+        pub fn wait_for_audit_quiescence(&self) -> Result<u32, ProtectedSeccompError> {
             wait_for_audit_quiescence(&self.audit_events)
         }
     }
@@ -149,7 +149,7 @@ mod linux {
             policy.end_producer_action(producer_action_id)
         }
 
-        pub fn wait_for_audit_quiescence(&self) -> Result<usize, ProtectedSeccompError> {
+        pub fn wait_for_audit_quiescence(&self) -> Result<u32, ProtectedSeccompError> {
             wait_for_audit_quiescence(&self.audit_events)
         }
 
@@ -190,6 +190,7 @@ mod linux {
             }
             if error.raw_os_error() == Some(libc::ECHILD) {
                 assert!(reaped_count < u32::MAX);
+                assert!(reaped_count <= ADOPTED_DESCENDANT_REAP_POLL_COUNT_MAX);
                 return Ok(reaped_count);
             }
             return Err(ProtectedSeccompError::Supervisor(format!("reaping adopted StageX descendant: {error}")));
@@ -202,7 +203,7 @@ mod linux {
 
     fn wait_for_audit_quiescence(
         audit_events: &Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
-    ) -> Result<usize, ProtectedSeccompError> {
+    ) -> Result<u32, ProtectedSeccompError> {
         let mut previous_count = usize::MAX;
         let mut stable_poll_count = 0_u32;
         for _ in 0..AUDIT_QUIESCENCE_POLL_COUNT_MAX {
@@ -217,8 +218,17 @@ mod linux {
                 stable_poll_count = 0;
             }
             if stable_poll_count >= AUDIT_QUIESCENCE_STABLE_POLL_COUNT {
-                assert!(count <= PROTECTED_EXEC_EVENT_COUNT_MAX);
-                return Ok(count);
+                if count > PROTECTED_EXEC_EVENT_COUNT_MAX {
+                    return Err(ProtectedSeccompError::Supervisor(format!(
+                        "StageX exec audit count {count} exceeds {PROTECTED_EXEC_EVENT_COUNT_MAX}"
+                    )));
+                }
+                let event_count_u32 = u32::try_from(count).map_err(|_| {
+                    ProtectedSeccompError::Supervisor(format!("StageX exec audit count exceeds u32: {count}"))
+                })?;
+                debug_assert!(stable_poll_count >= AUDIT_QUIESCENCE_STABLE_POLL_COUNT);
+                debug_assert_eq!(usize::try_from(event_count_u32).ok(), Some(count));
+                return Ok(event_count_u32);
             }
             thread::sleep(std::time::Duration::from_millis(AUDIT_QUIESCENCE_POLL_INTERVAL_MS));
         }
@@ -524,7 +534,9 @@ mod linux {
                 return;
             }
             if event_limit_reached(&audit_events, PROTECTED_EXEC_EVENT_COUNT_MAX) {
-                let _ = send_response(listener_fd, notif.id, false);
+                if send_response(listener_fd, notif.id, false).is_err() {
+                    return;
+                }
                 continue;
             }
             let decision = match shared_policy.write() {
@@ -918,6 +930,14 @@ mod linux {
     }
 
     fn read_tracee_memory(pid: u32, address: u64, buffer: &mut [u8]) -> Result<usize, String> {
+        if pid == 0 {
+            return Err("target pid must be positive".to_string());
+        }
+        if buffer.is_empty() {
+            return Err("target memory buffer must not be empty".to_string());
+        }
+        debug_assert!(pid > 0);
+        debug_assert!(!buffer.is_empty());
         let process_id = libc::pid_t::try_from(pid).map_err(|_| format!("target pid exceeds pid_t: {pid}"))?;
         let local = libc::iovec {
             iov_base: buffer.as_mut_ptr().cast::<libc::c_void>(),
@@ -955,8 +975,12 @@ mod linux {
         if allowed {
             response.flags = u32::try_from(libc::SECCOMP_USER_NOTIF_FLAG_CONTINUE)
                 .map_err(|_| "seccomp continue flag exceeds u32".to_string())?;
+            debug_assert_eq!(response.error, 0);
+            debug_assert_ne!(response.flags, 0);
         } else {
             response.error = -libc::EACCES;
+            debug_assert_eq!(response.flags, 0);
+            debug_assert!(response.error < 0);
         }
         for attempt in 0..SEND_RESPONSE_EINTR_RETRY_COUNT_MAX {
             #[allow(clippy::unnecessary_cast)]
@@ -965,9 +989,9 @@ mod linux {
                 return Ok(());
             }
             let error = io::Error::last_os_error();
-            let retryable = error.raw_os_error() == Some(libc::EINTR);
-            let retries_remain = attempt.saturating_add(1) < SEND_RESPONSE_EINTR_RETRY_COUNT_MAX;
-            if retryable && retries_remain {
+            let is_retryable = error.raw_os_error() == Some(libc::EINTR);
+            let has_retries_remaining = attempt.saturating_add(1) < SEND_RESPONSE_EINTR_RETRY_COUNT_MAX;
+            if is_retryable && has_retries_remaining {
                 continue;
             }
             return Err(format!("SECCOMP_IOCTL_NOTIF_SEND: {error}"));

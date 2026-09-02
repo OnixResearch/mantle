@@ -164,7 +164,7 @@ impl fmt::Display for SeedClosureRisk {
 }
 
 type ExecutableVariantsByPath = BTreeMap<PathBuf, BTreeMap<String, ExecutableSeedEntry>>;
-const PLANNED_PRODUCED_ROOT_COUNT_MAX: usize = 256;
+const PLANNED_PRODUCED_ROOT_COUNT_MAX: u32 = 256;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectedExecPolicy {
@@ -568,7 +568,7 @@ impl ProtectedExecPolicy {
 
     fn executable_entry_count(&self) -> usize {
         let count = self.executables_by_path.values().map(BTreeMap::len).sum::<usize>();
-        assert!(count <= usize::try_from(MAX_SEED_EXECUTABLES).unwrap_or(usize::MAX));
+        assert!(u32::try_from(count).is_ok_and(|value| value <= MAX_SEED_EXECUTABLES));
         assert!(count >= self.executables_by_path.len());
         count
     }
@@ -604,11 +604,17 @@ impl ProtectedExecPolicy {
                 requested: "register-produced-roots".to_string(),
             });
         }
+        let root_count_max = usize::try_from(PLANNED_PRODUCED_ROOT_COUNT_MAX).map_err(|_| {
+            ProtectedExecError::InventoryCollectionLimitExceeded {
+                collection: "planned produced roots",
+                limit: PLANNED_PRODUCED_ROOT_COUNT_MAX,
+            }
+        })?;
         let existing = self.produced_roots_by_action.values().flatten().cloned().collect::<Vec<_>>();
-        if existing.len().saturating_add(roots.len()) > PLANNED_PRODUCED_ROOT_COUNT_MAX {
+        if existing.len().saturating_add(roots.len()) > root_count_max {
             return Err(ProtectedExecError::InventoryCollectionLimitExceeded {
                 collection: "planned produced roots",
-                limit: u32::try_from(PLANNED_PRODUCED_ROOT_COUNT_MAX).unwrap_or(u32::MAX),
+                limit: PLANNED_PRODUCED_ROOT_COUNT_MAX,
             });
         }
         let mut combined = existing;
@@ -622,7 +628,7 @@ impl ProtectedExecPolicy {
         for action_roots in self.produced_roots_by_action.values_mut() {
             action_roots.sort_by(|left, right| left.root.cmp(&right.root));
         }
-        assert!(self.produced_roots_by_action.values().flatten().count() <= PLANNED_PRODUCED_ROOT_COUNT_MAX);
+        assert!(self.produced_roots_by_action.values().flatten().count() <= root_count_max);
         assert!(self.active_producer_action_id.is_none());
         Ok(())
     }
@@ -725,7 +731,8 @@ impl ProtectedExecPolicy {
         self.produced_promotion_counts.insert(key, next_count);
         let decision = self.decide_exec(request)?;
         assert!(decision.allowed);
-        assert_eq!(next_count, count + 1);
+        assert!(next_count > count);
+        assert_eq!(next_count.saturating_sub(count), 1);
         Ok(ProtectedExecClassification {
             decision,
             promotion: Some(promotion),
@@ -738,25 +745,26 @@ impl ProtectedExecPolicy {
         root: &PlannedProducedExecutableRoot,
         existing: &[PlannedProducedExecutableRoot],
     ) -> Result<(), ProtectedExecError> {
-        let producer_allowed = self
+        let is_producer_allowed = self
             .allowed_promotion_source_ids
             .as_ref()
             .is_some_and(|allowed| allowed.contains(&root.producer_action_id));
-        let path_valid = root.root.is_absolute()
+        if !is_producer_allowed {
+            return Err(invalid_produced_root(root));
+        }
+        let is_path_valid = root.root.is_absolute()
             && root
                 .root
                 .components()
                 .all(|component| matches!(component, std::path::Component::RootDir | std::path::Component::Normal(_)));
-        if !producer_allowed
-            || !path_valid
-            || root.promotion_count_max == 0
-            || !is_valid_hex_digest(&root.output_identity_blake3, BLAKE3_HEX_LEN)
-        {
-            return Err(ProtectedExecError::InvalidProducedOutputRoot {
-                producer_action_id: root.producer_action_id.clone(),
-                path: root.root.clone(),
-                reason: "producer, path, output identity, or promotion bound is invalid".to_string(),
-            });
+        if !is_path_valid {
+            return Err(invalid_produced_root(root));
+        }
+        if root.promotion_count_max == 0 {
+            return Err(invalid_produced_root(root));
+        }
+        if !is_valid_hex_digest(&root.output_identity_blake3, BLAKE3_HEX_LEN) {
+            return Err(invalid_produced_root(root));
         }
         if let Some(overlap) = existing
             .iter()
@@ -995,7 +1003,17 @@ fn validate_promotion_source_ids(source_ids: &[String]) -> Result<BTreeSet<Strin
             });
         }
     }
+    debug_assert!(!unique.is_empty());
+    debug_assert_eq!(unique.len(), source_ids.len());
     Ok(unique)
+}
+
+fn invalid_produced_root(root: &PlannedProducedExecutableRoot) -> ProtectedExecError {
+    ProtectedExecError::InvalidProducedOutputRoot {
+        producer_action_id: root.producer_action_id.clone(),
+        path: root.root.clone(),
+        reason: "producer, path, output identity, or promotion bound is invalid".to_string(),
+    }
 }
 
 fn validate_required_roles(

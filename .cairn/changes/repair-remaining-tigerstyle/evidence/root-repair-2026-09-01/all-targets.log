@@ -1,0 +1,5 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-root-tigerstyle/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-root-tigerstyle/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/repair-root-tigerstyle)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 35.31s

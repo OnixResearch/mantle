@@ -26,9 +26,11 @@ Split remediation classification into ordered policy-family helpers. Evaluate
 those helpers in the existing source order and return the first match.
 
 Use checked conversions and fixed-width public counts at protected-execution
-boundaries. Decompose admission predicates without widening them. Treat kernel
-response, tracee-memory, and descendant-reaping failures as explicit fail-closed
-results. Do not discard a failed deny response.
+boundaries. The public audit-quiescence result changes from `usize` to `u32`;
+all repository callers use checked conversion where they need an index width.
+Decompose admission predicates without widening them. Treat kernel response,
+tracee-memory, and descendant-reaping failures as explicit fail-closed results.
+Do not discard a failed deny response.
 
 Split bootstrap fetching at the existing service-construction, request,
 ingest, and export phases. Replace production serialization panics with explicit
@@ -44,6 +46,7 @@ findings across all first-party targets.
 - Remediation priority and output fields remain stable.
 - Protected execution keeps exact authority and observable kernel failures.
 - Public counters are portable and reject overflow instead of truncating.
+- Downstream source that names the former `usize` result must migrate to `u32`.
 - Bootstrap and error-rendering success bytes remain stable.
 - A green package check alone cannot complete this repair.
 - This decision does not prove compiler correctness, sandbox correctness,

@@ -97,16 +97,19 @@ impl RunError {
                 .replace('\t', "\\t");
             return format!(r#"{{"error":"{}","code":{},"kind":"{}"}}"#, escaped, code, self.kind());
         };
-        let remediation_json = render_remediation_json(&record).expect("remediation record must serialize");
-        let remediation_value: serde_json::Value =
-            serde_json::from_str(&remediation_json).expect("rendered remediation must be valid JSON");
+        let Some(remediation_value) = remediation_json_value(&record) else {
+            return serialization_failure_envelope(code, self.kind());
+        };
         let value = serde_json::json!({
             "error": self.message(),
             "code": code,
             "kind": self.kind(),
             "remediation": remediation_value,
         });
-        serde_json::to_string(&value).expect("error envelope must serialize")
+        match serde_json::to_string(&value) {
+            Ok(encoded) => encoded,
+            Err(_) => serialization_failure_envelope(code, self.kind()),
+        }
     }
 
     fn remediation(&self) -> Option<RemediationRecord> {
@@ -120,6 +123,17 @@ impl RunError {
             remote_route_eligible: false,
         })
     }
+}
+
+fn remediation_json_value(record: &RemediationRecord) -> Option<serde_json::Value> {
+    let encoded = render_remediation_json(record).ok()?;
+    serde_json::from_str(&encoded).ok()
+}
+
+fn serialization_failure_envelope(code: u8, kind: &str) -> String {
+    debug_assert!(!kind.is_empty());
+    debug_assert!(kind.chars().all(|value| value.is_ascii_lowercase()));
+    format!(r#"{{"error":"error envelope serialization failed","code":{code},"kind":"{kind}"}}"#)
 }
 
 impl fmt::Display for RunError {
@@ -200,6 +214,35 @@ mod tests {
         let e = RunError::Eval("bad type".into());
         let j = e.format_json();
         assert_eq!(j, r#"{"error":"bad type","code":2,"kind":"eval"}"#);
+    }
+
+    #[test]
+    fn json_format_includes_structured_remediation_without_panicking() {
+        let error = RunError::Build("source input not found".into());
+
+        let encoded = error.format_json();
+        let value: serde_json::Value = serde_json::from_str(&encoded).unwrap();
+
+        assert_eq!(value["kind"], "build");
+        assert_eq!(value["remediation"]["code"], "mantle.source.missing-input");
+    }
+
+    #[test]
+    fn remediation_json_preserves_legacy_composition_bytes() {
+        let error = RunError::Build("source input not found".into());
+        let record = error.remediation().unwrap();
+        let remediation_json = crate::operator_contract::render_remediation_json(&record).unwrap();
+        let remediation_value: serde_json::Value = serde_json::from_str(&remediation_json).unwrap();
+        let legacy_value = serde_json::json!({
+            "error": error.message(),
+            "code": 1,
+            "kind": error.kind(),
+            "remediation": remediation_value,
+        });
+        let legacy_encoded = serde_json::to_string(&legacy_value).unwrap();
+
+        assert_eq!(error.format_json(), legacy_encoded);
+        assert!(legacy_encoded.contains("mantle.source.missing-input"));
     }
 
     #[test]

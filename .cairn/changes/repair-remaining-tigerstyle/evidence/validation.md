@@ -1,7 +1,7 @@
 # Validation checkpoint
 
 - **Question:** Can Mantle clear every remaining Tiger Style finding without changing compatibility, authority, effect order, or fail-closed behavior?
-- **Inspected evidence:** The fresh complete gate reports 36 root-library findings across five files. The pre-change root-library suite passes 184 tests.
-- **Decision:** Define a complete repository closure change. Structural repairs are accepted only with preserved positive and negative behavior and a zero-exit complete Tiger Style gate.
+- **Inspected evidence:** The complete configured gate moved from 36 findings to zero. Root tests pass 188 cases, and 62 protected-execution tests pass serially. Strict Clippy, formatting, all-target compilation, and Nix evaluation pass.
+- **Decision:** Accept the structural repair for full-check and lifecycle validation. The public audit count uses the checker-required fixed-width `u32` boundary with checked caller conversion.
 - **Owner:** Mantle build and protected-execution maintainers.
-- **Next action:** finish the fresh baseline, implement each policy family, and repeat the complete gate until it reports no findings.
+- **Next action:** commit the implementation, run both full flake checks, preserve independent blockers, and complete lifecycle validation.

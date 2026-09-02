@@ -2,14 +2,14 @@
 
 ### Requirement: Repository maintains complete Tiger Style conformance
 
-r[build_correctness.repository_tiger_conformance] Mantle MUST keep all first-party Rust targets within the complete pinned Tiger Style policy without lint allowances, warning budgets, finding baselines, target-scope reductions, or weaker full-check enforcement, while preserving operator wire compatibility, remediation order, bootstrap identity, protected-execution authority, supervision behavior, audit identity, error-envelope compatibility, and public APIs.
+r[build_correctness.repository_tiger_conformance] Mantle MUST keep the complete configured first-party Rust library scope within the pinned Tiger Style policy without lint allowances, warning budgets, finding baselines, target-scope reductions, or weaker full-check enforcement, while preserving operator wire compatibility, remediation order, bootstrap identity, protected-execution authority, supervision behavior, audit identity, error-envelope compatibility, and public behavior except the checker-required fixed-width audit-count normalization.
 
-#### Scenario: complete repository check accepts all targets
+#### Scenario: complete repository check accepts all configured libraries
 
 GIVEN all previously exposed package and root-library findings have structural repairs
 WHEN `nix build .#checks.x86_64-linux.tigerstyle --no-link -L --builders ''` runs
 THEN it MUST exit successfully with zero Tiger Style findings
-AND the result MUST cover the complete pinned first-party target scope.
+AND the result MUST cover every package in `workspace.metadata.tigerstyle.default_scope` with the configured `--lib` target policy.
 
 #### Scenario: optional operator fields are absent
 
@@ -30,6 +30,7 @@ AND the safe subject, retry command, documentation reference, and matched patter
 GIVEN protected execution encounters count overflow, invalid source authority, response failure, unreadable tracee memory, or descendant timeout
 WHEN Mantle handles that condition
 THEN it MUST reject or report the condition through the existing typed fail-closed boundary
+AND its public audit count MUST use `u32` with checked caller conversion
 AND it MUST NOT widen executable authority, truncate counts, discard an error, or continue an unapproved execution.
 
 #### Scenario: serialization fails during error rendering

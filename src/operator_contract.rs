@@ -20,6 +20,10 @@ pub const SAFE_SUBJECT_BYTES_MAX: usize = 128;
 pub const PLATFORM_PROFILE_COUNT_MAX: usize = 128;
 const ALLOWED_EXIT_CLASSES: &[&str] = &["policy-rejection", "success", "usage"];
 
+fn empty_strings() -> Vec<String> {
+    Vec::new()
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SurfaceKind {
@@ -69,19 +73,19 @@ pub enum CompatibilityState {
 pub struct OperatorSurface {
     pub kind: SurfaceKind,
     pub canonical: String,
-    #[serde(default)]
+    #[serde(default = "empty_strings")]
     pub compatibility_spellings: Vec<String>,
     pub owner: String,
     pub role: String,
-    #[serde(default)]
+    #[serde(default = "empty_strings")]
     pub supported_operations: Vec<String>,
     pub support_tier: SupportTier,
     pub mutation: MutationClass,
     pub network: NetworkClass,
     pub compatibility_state: CompatibilityState,
-    #[serde(default)]
+    #[serde(default = "empty_strings")]
     pub flags: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "empty_strings")]
     pub exit_classes: Vec<String>,
     pub machine_schema: Option<String>,
     pub migration_reference: Option<String>,
@@ -118,9 +122,9 @@ pub struct OperatorInventory {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CommandDescriptor {
     pub path: String,
-    #[serde(default)]
+    #[serde(default = "empty_strings")]
     pub aliases: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "empty_strings")]
     pub flags: Vec<String>,
     pub help: String,
     pub supports_json: bool,
@@ -162,6 +166,22 @@ impl std::fmt::Display for ContractError {
 
 impl std::error::Error for ContractError {}
 
+struct TextValidation<'a> {
+    field: &'static str,
+    value: &'a str,
+}
+
+struct SortedUniqueValidation<'a> {
+    class: &'static str,
+    canonical: &'a str,
+    values: &'a [String],
+}
+
+struct SpellingRegistration<'a> {
+    spelling: &'a str,
+    canonical: &'a str,
+}
+
 pub fn validate_inventory(inventory: &OperatorInventory) -> Result<(), ContractError> {
     if inventory.schema != OPERATOR_INVENTORY_SCHEMA {
         return Err(ContractError::new("unknown-schema", inventory.schema.clone()));
@@ -177,13 +197,22 @@ pub fn validate_inventory(inventory: &OperatorInventory) -> Result<(), ContractE
     }
 
     validate_platform_profiles(&inventory.platform_profiles)?;
+    debug_assert_eq!(inventory.schema, OPERATOR_INVENTORY_SCHEMA);
+    debug_assert!(!inventory.surfaces.is_empty());
+    debug_assert!(inventory.surfaces.len() <= COMMAND_SURFACE_COUNT_MAX);
 
     let mut spellings = BTreeMap::<String, String>::new();
     for surface in &inventory.surfaces {
         validate_surface(surface)?;
-        insert_spelling(&mut spellings, &surface.canonical, &surface.canonical)?;
+        insert_spelling(&mut spellings, SpellingRegistration {
+            spelling: &surface.canonical,
+            canonical: &surface.canonical,
+        })?;
         for spelling in &surface.compatibility_spellings {
-            insert_spelling(&mut spellings, spelling, &surface.canonical)?;
+            insert_spelling(&mut spellings, SpellingRegistration {
+                spelling,
+                canonical: &surface.canonical,
+            })?;
         }
     }
     Ok(())
@@ -203,9 +232,15 @@ fn validate_platform_profiles(profiles: &[PlatformProfile]) -> Result<(), Contra
     if profiles.len() > PLATFORM_PROFILE_COUNT_MAX {
         return Err(ContractError::new("platform-profile-limit", profiles.len().to_string()));
     }
+    debug_assert_eq!(profiles.len(), mantle_portable_client_core::ROOT_COMMAND_COUNT);
+    debug_assert!(profiles.len() <= PLATFORM_PROFILE_COUNT_MAX);
+
     let mut roots = BTreeMap::<String, ()>::new();
     for profile in profiles {
-        validate_text("platform-command-root", &profile.command_root)?;
+        validate_text(TextValidation {
+            field: "platform-command-root",
+            value: &profile.command_root,
+        })?;
         if roots.insert(profile.command_root.clone(), ()).is_some() {
             return Err(ContractError::new("duplicate-platform-profile", profile.command_root.clone()));
         }
@@ -215,21 +250,39 @@ fn validate_platform_profiles(profiles: &[PlatformProfile]) -> Result<(), Contra
         if profile.role != core_profile.role || profile.effects != core_profile.effects {
             return Err(ContractError::new("platform-profile-drift", profile.command_root.clone()));
         }
-        let blocker_required = matches!(profile.darwin_support, DarwinSupport::Mixed | DarwinSupport::Unsupported);
-        if blocker_required != profile.blocker.as_deref().is_some_and(|value| !value.is_empty()) {
+        let is_blocker_required = matches!(profile.darwin_support, DarwinSupport::Mixed | DarwinSupport::Unsupported);
+        if is_blocker_required != profile.blocker.as_deref().is_some_and(|value| !value.is_empty()) {
             return Err(ContractError::new("platform-blocker-drift", profile.command_root.clone()));
         }
         if let Some(blocker) = &profile.blocker {
-            validate_text("platform-blocker", blocker)?;
+            validate_text(TextValidation {
+                field: "platform-blocker",
+                value: blocker,
+            })?;
         }
     }
+    debug_assert_eq!(roots.len(), profiles.len());
+    Ok(())
+}
+
+fn validate_surface_identity(surface: &OperatorSurface) -> Result<(), ContractError> {
+    validate_text(TextValidation {
+        field: "canonical",
+        value: &surface.canonical,
+    })?;
+    validate_text(TextValidation {
+        field: "owner",
+        value: &surface.owner,
+    })?;
+    validate_text(TextValidation {
+        field: "role",
+        value: &surface.role,
+    })?;
     Ok(())
 }
 
 fn validate_surface(surface: &OperatorSurface) -> Result<(), ContractError> {
-    validate_text("canonical", &surface.canonical)?;
-    validate_text("owner", &surface.owner)?;
-    validate_text("role", &surface.role)?;
+    validate_surface_identity(surface)?;
     if surface.compatibility_spellings.len() > COMPATIBILITY_SPELLING_COUNT_MAX {
         return Err(ContractError::new("compatibility-limit", surface.canonical.clone()));
     }
@@ -256,11 +309,37 @@ fn validate_surface(surface: &OperatorSurface) -> Result<(), ContractError> {
             return Err(ContractError::new("missing-removal-gate", surface.canonical.clone()));
         }
     }
+    debug_assert!(!surface.supported_operations.is_empty());
+    debug_assert!(surface.compatibility_spellings.len() <= COMPATIBILITY_SPELLING_COUNT_MAX);
+    debug_assert!(surface.supported_operations.len() <= SUPPORTED_OPERATION_COUNT_MAX);
+    debug_assert!(surface.flags.len() <= COMMAND_FLAG_COUNT_MAX);
+    debug_assert!(surface.exit_classes.len() <= EXIT_CLASS_COUNT_MAX);
+
     validate_surface_text_fields(surface)?;
-    validate_sorted_unique("compatibility-spelling", &surface.canonical, &surface.compatibility_spellings)?;
-    validate_sorted_unique("supported-operation", &surface.canonical, &surface.supported_operations)?;
-    validate_sorted_unique("flag", &surface.canonical, &surface.flags)?;
-    validate_sorted_unique("exit-class", &surface.canonical, &surface.exit_classes)?;
+    for validation in [
+        SortedUniqueValidation {
+            class: "compatibility-spelling",
+            canonical: &surface.canonical,
+            values: &surface.compatibility_spellings,
+        },
+        SortedUniqueValidation {
+            class: "supported-operation",
+            canonical: &surface.canonical,
+            values: &surface.supported_operations,
+        },
+        SortedUniqueValidation {
+            class: "flag",
+            canonical: &surface.canonical,
+            values: &surface.flags,
+        },
+        SortedUniqueValidation {
+            class: "exit-class",
+            canonical: &surface.canonical,
+            values: &surface.exit_classes,
+        },
+    ] {
+        validate_sorted_unique(validation)?;
+    }
     for exit_class in &surface.exit_classes {
         if !ALLOWED_EXIT_CLASSES.contains(&exit_class.as_str()) {
             return Err(ContractError::new("unknown-exit-class", exit_class.clone()));
@@ -270,17 +349,18 @@ fn validate_surface(surface: &OperatorSurface) -> Result<(), ContractError> {
 }
 
 fn validate_surface_text_fields(surface: &OperatorSurface) -> Result<(), ContractError> {
-    for spelling in &surface.compatibility_spellings {
-        validate_text("compatibility-spelling", spelling)?;
-    }
-    for operation in &surface.supported_operations {
-        validate_text("supported-operation", operation)?;
-    }
-    for flag in &surface.flags {
-        validate_text("flag", flag)?;
-    }
-    for exit_class in &surface.exit_classes {
-        validate_text("exit-class", exit_class)?;
+    debug_assert!(!surface.supported_operations.is_empty());
+    debug_assert!(surface.compatibility_spellings.len() <= COMPATIBILITY_SPELLING_COUNT_MAX);
+    debug_assert!(surface.supported_operations.len() <= SUPPORTED_OPERATION_COUNT_MAX);
+    for (field, values) in [
+        ("compatibility-spelling", surface.compatibility_spellings.as_slice()),
+        ("supported-operation", surface.supported_operations.as_slice()),
+        ("flag", surface.flags.as_slice()),
+        ("exit-class", surface.exit_classes.as_slice()),
+    ] {
+        for value in values {
+            validate_text(TextValidation { field, value })?;
+        }
     }
     for (field, value) in [
         ("machine-schema", surface.machine_schema.as_deref()),
@@ -288,29 +368,29 @@ fn validate_surface_text_fields(surface: &OperatorSurface) -> Result<(), Contrac
         ("removal-gate", surface.removal_gate.as_deref()),
     ] {
         if let Some(value) = value {
-            validate_text(field, value)?;
+            validate_text(TextValidation { field, value })?;
         }
     }
     Ok(())
 }
 
-fn validate_text(field: &'static str, value: &str) -> Result<(), ContractError> {
-    if value.trim().is_empty() {
-        return Err(ContractError::new("empty-field", field));
+fn validate_text(validation: TextValidation<'_>) -> Result<(), ContractError> {
+    if validation.value.trim().is_empty() {
+        return Err(ContractError::new("empty-field", validation.field));
     }
-    if value.len() > OPERATOR_TEXT_BYTES_MAX {
-        return Err(ContractError::new("field-limit", field));
+    if validation.value.len() > OPERATOR_TEXT_BYTES_MAX {
+        return Err(ContractError::new("field-limit", validation.field));
     }
-    if value.chars().any(char::is_control) {
-        return Err(ContractError::new("control-character", field));
+    if validation.value.chars().any(char::is_control) {
+        return Err(ContractError::new("control-character", validation.field));
     }
     Ok(())
 }
 
-fn validate_sorted_unique(class: &'static str, canonical: &str, values: &[String]) -> Result<(), ContractError> {
-    for pair in values.windows(2) {
+fn validate_sorted_unique(validation: SortedUniqueValidation<'_>) -> Result<(), ContractError> {
+    for pair in validation.values.windows(2) {
         if pair[0] >= pair[1] {
-            return Err(ContractError::new(class, canonical.to_string()));
+            return Err(ContractError::new(validation.class, validation.canonical.to_string()));
         }
     }
     Ok(())
@@ -318,14 +398,16 @@ fn validate_sorted_unique(class: &'static str, canonical: &str, values: &[String
 
 fn insert_spelling(
     spellings: &mut BTreeMap<String, String>,
-    spelling: &str,
-    canonical: &str,
+    registration: SpellingRegistration<'_>,
 ) -> Result<(), ContractError> {
-    validate_text("spelling", spelling)?;
-    if let Some(first_owner) = spellings.insert(spelling.to_string(), canonical.to_string()) {
+    validate_text(TextValidation {
+        field: "spelling",
+        value: registration.spelling,
+    })?;
+    if let Some(first_owner) = spellings.insert(registration.spelling.to_string(), registration.canonical.to_string()) {
         return Err(ContractError::new(
             "duplicate-spelling",
-            format!("{spelling} belongs to {first_owner} and {canonical}"),
+            format!("{} belongs to {first_owner} and {}", registration.spelling, registration.canonical),
         ));
     }
     Ok(())
@@ -342,6 +424,8 @@ pub fn build_command_catalog(
     if descriptors.len() > COMMAND_SURFACE_COUNT_MAX {
         return Err(ContractError::new("command-graph-limit", descriptors.len().to_string()));
     }
+    debug_assert!(!descriptors.is_empty());
+    debug_assert!(descriptors.len() <= COMMAND_SURFACE_COUNT_MAX);
 
     let command_policies = command_policy_map(inventory)?;
     let mut normalized_descriptors = descriptors.to_vec();
@@ -400,8 +484,14 @@ fn command_policy_map(inventory: &OperatorInventory) -> Result<BTreeMap<String, 
 }
 
 fn normalize_descriptor(descriptor: &mut CommandDescriptor) -> Result<(), ContractError> {
-    validate_text("command-path", &descriptor.path)?;
-    validate_text("command-help", &descriptor.help)?;
+    validate_text(TextValidation {
+        field: "command-path",
+        value: &descriptor.path,
+    })?;
+    validate_text(TextValidation {
+        field: "command-help",
+        value: &descriptor.help,
+    })?;
     descriptor.aliases.sort();
     descriptor.aliases.dedup();
     descriptor.flags.sort();
@@ -412,6 +502,8 @@ fn normalize_descriptor(descriptor: &mut CommandDescriptor) -> Result<(), Contra
     if descriptor.flags.len() > COMMAND_FLAG_COUNT_MAX {
         return Err(ContractError::new("flag-limit", descriptor.path.clone()));
     }
+    debug_assert!(descriptor.aliases.windows(2).all(|pair| pair[0] < pair[1]));
+    debug_assert!(descriptor.flags.windows(2).all(|pair| pair[0] < pair[1]));
     Ok(())
 }
 
@@ -555,14 +647,40 @@ pub struct RemediationRecord {
     pub next_actions: Vec<RemediationAction>,
 }
 
+struct RemediationContext<'a> {
+    kind: &'a str,
+    message_lower: String,
+    safe_subject: String,
+    remote_route_eligible: bool,
+}
+
 pub fn classify_remediation(facts: FailureFacts<'_>) -> Option<RemediationRecord> {
-    let message_lower = facts.message.to_ascii_lowercase();
-    let safe_subject = safe_subject(facts.safe_subject);
-    if message_lower.contains("source input not found") || message_lower.contains("sourcenotfound") {
+    let context = RemediationContext {
+        kind: facts.kind,
+        message_lower: facts.message.to_ascii_lowercase(),
+        safe_subject: safe_subject(facts.safe_subject),
+        remote_route_eligible: facts.remote_route_eligible,
+    };
+    if let Some(record) = classify_source_boundary(&context) {
+        return Some(record);
+    }
+    if let Some(record) = classify_build_boundary(&context) {
+        return Some(record);
+    }
+    if let Some(record) = classify_store_boundary(&context) {
+        return Some(record);
+    }
+    classify_exit_or_internal_boundary(&context)
+}
+
+fn classify_source_boundary(context: &RemediationContext<'_>) -> Option<RemediationRecord> {
+    debug_assert!(!context.safe_subject.is_empty());
+    debug_assert!(context.safe_subject.len() <= SAFE_SUBJECT_BYTES_MAX);
+    if context.message_lower.contains("source input not found") || context.message_lower.contains("sourcenotfound") {
         return Some(remediation(
             "mantle.source.missing-input",
             DiagnosticPhase::Source,
-            safe_subject,
+            context.safe_subject.clone(),
             "A declared source input is not available in current source or store state.",
             action(
                 "mantle source bundle plan --build-root <root.ncl>",
@@ -573,11 +691,11 @@ pub fn classify_remediation(facts: FailureFacts<'_>) -> Option<RemediationRecord
             ),
         ));
     }
-    if message_lower.contains("bwrap") && message_lower.contains("can't") {
+    if context.message_lower.contains("bwrap") && context.message_lower.contains("can't") {
         return Some(remediation(
             "mantle.build.namespace-unavailable",
             DiagnosticPhase::Preflight,
-            safe_subject,
+            context.safe_subject.clone(),
             "Bubblewrap could not create the required user namespace.",
             action(
                 "mantle doctor --profile build",
@@ -588,11 +706,11 @@ pub fn classify_remediation(facts: FailureFacts<'_>) -> Option<RemediationRecord
             ),
         ));
     }
-    if message_lower.contains("fod hash mismatch") {
+    if context.message_lower.contains("fod hash mismatch") {
         return Some(remediation(
             "mantle.build.fixed-output-hash-mismatch",
             DiagnosticPhase::Build,
-            safe_subject,
+            context.safe_subject.clone(),
             "The fixed-output result does not match the declared hash.",
             action(
                 "mantle build --fix <root.ncl>",
@@ -603,11 +721,17 @@ pub fn classify_remediation(facts: FailureFacts<'_>) -> Option<RemediationRecord
             ),
         ));
     }
-    if message_lower.contains("output not produced by build") {
+    None
+}
+
+fn classify_build_boundary(context: &RemediationContext<'_>) -> Option<RemediationRecord> {
+    debug_assert!(!context.safe_subject.is_empty());
+    debug_assert!(context.safe_subject.len() <= SAFE_SUBJECT_BYTES_MAX);
+    if context.message_lower.contains("output not produced by build") {
         return Some(remediation(
             "mantle.build.output-missing",
             DiagnosticPhase::Build,
-            safe_subject,
+            context.safe_subject.clone(),
             "The builder did not produce every declared output.",
             action(
                 "mantle log <derivation>",
@@ -618,8 +742,10 @@ pub fn classify_remediation(facts: FailureFacts<'_>) -> Option<RemediationRecord
             ),
         ));
     }
-    if message_lower.contains("only supported on linux") || message_lower.contains("builds are not supported") {
-        let selected_action = if facts.remote_route_eligible {
+    if context.message_lower.contains("only supported on linux")
+        || context.message_lower.contains("builds are not supported")
+    {
+        let selected_action = if context.remote_route_eligible {
             action(
                 "mantle build --builder <builder-id> --ticket-fd <fd> <root.ncl>",
                 MutationClass::StoreState,
@@ -639,16 +765,22 @@ pub fn classify_remediation(facts: FailureFacts<'_>) -> Option<RemediationRecord
         return Some(remediation(
             "mantle.build.unsupported-platform",
             DiagnosticPhase::Preflight,
-            safe_subject,
+            context.safe_subject.clone(),
             "The selected local realization route is unsupported on this host.",
             selected_action,
         ));
     }
-    if message_lower.contains("store directory") && message_lower.contains("does not exist") {
+    None
+}
+
+fn classify_store_boundary(context: &RemediationContext<'_>) -> Option<RemediationRecord> {
+    debug_assert!(!context.safe_subject.is_empty());
+    debug_assert!(context.safe_subject.len() <= SAFE_SUBJECT_BYTES_MAX);
+    if context.message_lower.contains("store directory") && context.message_lower.contains("does not exist") {
         return Some(remediation(
             "mantle.store.missing-directory",
             DiagnosticPhase::Store,
-            safe_subject,
+            context.safe_subject.clone(),
             "The selected physical store directory does not exist.",
             action(
                 "mantle doctor --profile build",
@@ -659,11 +791,11 @@ pub fn classify_remediation(facts: FailureFacts<'_>) -> Option<RemediationRecord
             ),
         ));
     }
-    if message_lower.contains("failed to run nix") || message_lower.contains("failed to resolve") {
+    if context.message_lower.contains("failed to run nix") || context.message_lower.contains("failed to resolve") {
         return Some(remediation(
             "mantle.source.resolution-unavailable",
             DiagnosticPhase::Source,
-            safe_subject,
+            context.safe_subject.clone(),
             "The selected source resolution path is unavailable.",
             action(
                 "mantle bootstrap --fetch",
@@ -674,11 +806,17 @@ pub fn classify_remediation(facts: FailureFacts<'_>) -> Option<RemediationRecord
             ),
         ));
     }
-    if message_lower.contains("nonzero exit code") {
+    None
+}
+
+fn classify_exit_or_internal_boundary(context: &RemediationContext<'_>) -> Option<RemediationRecord> {
+    debug_assert!(!context.safe_subject.is_empty());
+    debug_assert!(context.safe_subject.len() <= SAFE_SUBJECT_BYTES_MAX);
+    if context.message_lower.contains("nonzero exit code") {
         return Some(remediation(
             "mantle.build.nonzero-exit",
             DiagnosticPhase::Build,
-            safe_subject,
+            context.safe_subject.clone(),
             "The builder exited with a nonzero status.",
             action(
                 "mantle log <derivation>",
@@ -689,11 +827,11 @@ pub fn classify_remediation(facts: FailureFacts<'_>) -> Option<RemediationRecord
             ),
         ));
     }
-    if facts.kind == "internal" && message_lower.contains("stdlib") {
+    if context.kind == "internal" && context.message_lower.contains("stdlib") {
         return Some(remediation(
             "mantle.internal.stdlib-unavailable",
             DiagnosticPhase::Internal,
-            safe_subject,
+            context.safe_subject.clone(),
             "Mantle could not locate its standard library.",
             action(
                 "mantle doctor --profile build",
@@ -944,6 +1082,34 @@ mod tests {
     }
 
     #[test]
+    fn legacy_omitted_collections_decode_to_explicit_empty_values() {
+        let surface_json = r#"{
+            "kind":"identifier",
+            "canonical":"legacy-id",
+            "owner":"mantle-cli",
+            "role":"compatibility-id",
+            "support_tier":"compatibility",
+            "mutation":"none",
+            "network":"none",
+            "compatibility_state":"historical-only",
+            "machine_schema":null,
+            "migration_reference":"docs/mantle-naming.md",
+            "removal_gate":"reviewed consumer migration"
+        }"#;
+        let descriptor_json = r#"{"path":"doctor","help":"Run checks","supports_json":false}"#;
+
+        let surface: OperatorSurface = serde_json::from_str(surface_json).unwrap();
+        let descriptor: CommandDescriptor = serde_json::from_str(descriptor_json).unwrap();
+
+        assert!(surface.compatibility_spellings.is_empty());
+        assert!(surface.supported_operations.is_empty());
+        assert!(surface.flags.is_empty());
+        assert!(surface.exit_classes.is_empty());
+        assert!(descriptor.aliases.is_empty());
+        assert!(descriptor.flags.is_empty());
+    }
+
+    #[test]
     fn inventory_decode_rejects_unknown_support_state() {
         let malformed = r#"{
             "schema":"mantle-operator-surface-inventory-v1",
@@ -1152,6 +1318,20 @@ mod tests {
             assert!(record.next_actions[0].command.starts_with("mantle "));
             assert!(!record.next_actions[0].command.contains("crunch"));
         }
+    }
+
+    #[test]
+    fn remediation_classifier_preserves_first_match_priority() {
+        let record = classify_remediation(FailureFacts {
+            kind: "internal",
+            message: "source input not found after nonzero exit code and stdlib failure",
+            safe_subject: Some("root"),
+            remote_route_eligible: false,
+        })
+        .unwrap();
+
+        assert_eq!(record.code, "mantle.source.missing-input");
+        assert_eq!(record.phase, DiagnosticPhase::Source);
     }
 
     #[test]

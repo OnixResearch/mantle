@@ -8,7 +8,9 @@ Mantle must clear every remaining Tiger Style finding without allowances,
 warning budgets, finding baselines, reduced targets, or weaker enforcement. The
 repair must preserve operator-contract wire compatibility, remediation order,
 bootstrap fetch meaning, protected-execution authority, fail-closed supervision,
-audit identity, error-envelope compatibility, and public APIs.
+audit identity, error-envelope compatibility, and public behavior. The one
+checker-required public count normalization must use `u32` and checked caller
+conversion instead of retaining platform-dependent `usize`.
 
 ## What Changes
 

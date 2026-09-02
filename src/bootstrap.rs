@@ -806,9 +806,46 @@ struct FetchRawSeedRequest<'a> {
     source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
 }
 
-async fn fetch_raw_seed(request: FetchRawSeedRequest<'_>) -> Result<String, RunError> {
+async fn raw_seed_store_parts(
+    state_dir: &Path,
+    store_dir: &Path,
+) -> Result<crunch_store::PipelineStoreParts, RunError> {
+    use snix_castore::blobservice::ObjectStoreBlobService;
     use snix_castore::directoryservice::RedbDirectoryService;
     use snix_castore::directoryservice::RedbDirectoryServiceConfig;
+
+    debug_assert!(state_dir.is_absolute());
+    debug_assert!(store_dir.is_absolute());
+    let blob_dir = state_dir.join("blobs");
+    std::fs::create_dir_all(&blob_dir).map_err(|e| RunError::Internal(format!("creating blob dir: {e}")))?;
+    let blob_service = std::sync::Arc::new(
+        ObjectStoreBlobService::new_local(&blob_dir).map_err(|e| RunError::Internal(format!("blob service: {e}")))?,
+    );
+    let directory_service = RedbDirectoryService::new_temporary("bootstrap".to_string(), RedbDirectoryServiceConfig {
+        path: None,
+        read_only: false,
+        cache_size: None,
+    })
+    .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
+    let pathinfo_service = open_bootstrap_pathinfo(state_dir).await?;
+    let store = crunch_store::StoreHandle::from_services_with_store_dir(
+        crunch_store::StoreHandleServices {
+            blob_service: blob_service as std::sync::Arc<dyn snix_castore::blobservice::BlobService>,
+            directory_service: std::sync::Arc::new(directory_service)
+                as std::sync::Arc<dyn snix_castore::directoryservice::DirectoryService>,
+            pathinfo_service: std::sync::Arc::new(pathinfo_service)
+                as std::sync::Arc<dyn snix_store::pathinfoservice::PathInfoService>,
+            remote_pathinfo: None,
+            state_dir: state_dir.to_path_buf(),
+            output_dir_str: store_dir.to_string_lossy().into_owned(),
+            publishers: Vec::new(),
+        },
+        LOGICAL_STORE_DIR.to_string(),
+    );
+    Ok(store.into_pipeline_store_parts())
+}
+
+async fn fetch_raw_seed(request: FetchRawSeedRequest<'_>) -> Result<String, RunError> {
     debug_assert!(request.store_dir.is_absolute());
     debug_assert!(!request.display_prefix.is_empty());
 
@@ -818,49 +855,18 @@ async fn fetch_raw_seed(request: FetchRawSeedRequest<'_>) -> Result<String, RunE
     std::fs::create_dir_all(&state_dir)
         .map_err(|e| RunError::Internal(format!("creating state dir {}: {e}", state_dir.display())))?;
 
-    let blob_service = {
-        use snix_castore::blobservice::ObjectStoreBlobService;
-        let blob_dir = state_dir.join("blobs");
-        std::fs::create_dir_all(&blob_dir).map_err(|e| RunError::Internal(format!("creating blob dir: {e}")))?;
-        std::sync::Arc::new(
-            ObjectStoreBlobService::new_local(&blob_dir)
-                .map_err(|e| RunError::Internal(format!("blob service: {e}")))?,
-        )
-    };
-    let directory_service = RedbDirectoryService::new_temporary("bootstrap".to_string(), RedbDirectoryServiceConfig {
-        path: None,
-        read_only: false,
-        cache_size: None,
-    })
-    .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
-
-    let pathinfo_service = open_bootstrap_pathinfo(&state_dir).await?;
     let source_policy = if request.source_fetch_overrides.is_empty() {
         crunch_build::FetchSourcePolicy::AllowNetwork
     } else {
         crunch_build::FetchSourcePolicy::RequireOverride
     };
-    let store = crunch_store::StoreHandle::from_services_with_store_dir(
-        crunch_store::StoreHandleServices {
-            blob_service: blob_service as std::sync::Arc<dyn snix_castore::blobservice::BlobService>,
-            directory_service: std::sync::Arc::new(directory_service)
-                as std::sync::Arc<dyn snix_castore::directoryservice::DirectoryService>,
-            pathinfo_service: std::sync::Arc::new(pathinfo_service)
-                as std::sync::Arc<dyn snix_store::pathinfoservice::PathInfoService>,
-            remote_pathinfo: None,
-            state_dir,
-            output_dir_str: request.store_dir.to_string_lossy().into_owned(),
-            publishers: Vec::new(),
-        },
-        LOGICAL_STORE_DIR.to_string(),
-    );
     let crunch_store::PipelineStoreParts {
         build_store,
         action_results,
         build_service_store,
         output_lookup: _output_lookup,
         root_registry: _root_registry,
-    } = store.into_pipeline_store_parts();
+    } = raw_seed_store_parts(&state_dir, request.store_dir).await?;
     let fetch_service = crunch_build::FetchBuildService::new(build_service_store)
         .with_source_overrides(request.source_fetch_overrides)
         .with_source_policy(source_policy);

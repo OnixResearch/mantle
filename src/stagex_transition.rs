@@ -1594,12 +1594,20 @@ pub(crate) fn materialize_protected_transition(
         .wait_for_audit_quiescence()
         .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
     let protected_exec_events = supervisor.audit_events();
-    let binutils_event_count = binutils_runtime.as_ref().map(|_| {
-        quiescent_event_count
+    let binutils_event_count = if binutils_runtime.is_some() {
+        let event_count_u32 = quiescent_event_count
             .checked_sub(binutils_event_start)
-            .expect("binutils audit end follows its start")
-    });
-    if protected_exec_events.len() != quiescent_event_count {
+            .ok_or_else(|| StagexTransitionError::Audit("binutils audit end precedes its start".to_string()))?;
+        Some(
+            usize::try_from(event_count_u32)
+                .map_err(|_| StagexTransitionError::Audit("binutils audit count exceeds usize".to_string()))?,
+        )
+    } else {
+        None
+    };
+    let recorded_event_count = u32::try_from(protected_exec_events.len())
+        .map_err(|_| StagexTransitionError::Audit("protected exec audit count exceeds u32".to_string()))?;
+    if recorded_event_count != quiescent_event_count {
         return Err(StagexTransitionError::Audit("protected exec audit changed after quiescence".to_string()));
     }
     write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;

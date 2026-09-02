@@ -25,7 +25,8 @@ must not change those authority or compatibility boundaries.
   replaced fail-closed behavior.
 - **Audit risks:** legacy operator JSON rejection, remediation priority drift,
   changed protected root admission, response errors lost from audit evidence,
-  public count truncation, bootstrap output drift, or new panic paths.
+  public count truncation, unchecked public count migration, bootstrap output
+  drift, or new panic paths.
 - **Budget:** current repository and pinned Tiger input only; at most fifteen
   complete Tiger rounds; no new dependency or runtime authority.
 - **Allowed outcomes:** zero repository findings, an exact tool or infrastructure
@@ -107,9 +108,11 @@ Tiger Style command exits successfully.
 
 **Choice:** reject any cleanup that changes accepted operator data, remediation
 priority, bootstrap identity, protected executable authority, supervision
-failures, audit fields, or public behavior.
+failures, audit fields, or public behavior. Normalize only the reported audit
+count from `usize` to `u32`, and use checked conversion at existing callers.
 
-**Rationale:** lint cleanup does not authorize semantic migration.
+**Rationale:** lint cleanup does not authorize semantic migration. The pinned
+portable-API rule does require one explicit fixed-width boundary migration.
 
 ### Decision: test protected supervision serially
 
