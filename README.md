@@ -564,6 +564,7 @@ Useful documentation:
 - [Operator proof guide](docs/operator-proof-guide.md)
 - [Machine artifact contracts](docs/machine-artifact-contracts.md)
 - [Build correctness primitives](docs/build-correctness-primitives.md)
+- [Nickel evaluator cohort](docs/nickel-evaluator-cohort.md)
 - [Remote credential operations](docs/remote-credentials.md)
 - [Portable remote client](docs/portable-remote-client.md)
 - [Mantle naming rules](docs/mantle-naming.md)

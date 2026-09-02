@@ -1,0 +1,1 @@
+CARGO_HOME=<empty> CARGO_NET_OFFLINE=true cargo metadata --offline --locked --format-version 1 --config .cargo/vendor-config.toml

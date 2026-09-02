@@ -29,7 +29,7 @@ pub mod stdlib;
 /// Stable identity for the linked evaluator family.
 pub const EVALUATOR_ID: &str = "nickel-lang";
 /// Cargo-selected Nickel evaluator version.
-pub const EVALUATOR_VERSION: &str = "2.0.0";
+pub const EVALUATOR_VERSION: &str = "2.2.0";
 
 /// Conservative failure scope visible at the evaluator adapter boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -754,6 +754,19 @@ let Derivation = import "derivation.ncl" in
     }
 
     // ── Phase 4: Error paths ───────────────────────────────────
+
+    #[test]
+    fn evaluator_cohort_identity_is_current() {
+        assert_eq!(EVALUATOR_ID, "nickel-lang");
+        assert_eq!(EVALUATOR_VERSION, "2.2.0");
+    }
+
+    #[test]
+    fn eval_missing_import_returns_eval_without_effects() {
+        let result = evaluate_str(r#"import "missing-cohort-fixture.ncl""#, &[]);
+        let error = result.err().expect("missing import must fail");
+        assert!(matches!(error, Error::Eval(_)), "expected Eval, got: {error}");
+    }
 
     #[test]
     fn eval_str_syntax_error_returns_eval() {

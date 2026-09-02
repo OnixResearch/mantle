@@ -115,3 +115,4 @@ compatibility surface, crate name, or historical decision.
 | [0106](0106-make-build-boundary-admission-fallible-and-explicit.md) | Make build boundary admission fallible and explicit | Accepted |
 | [0107](0107-bound-pipeline-growth-before-root-effects.md) | Bound pipeline growth before root effects | Accepted |
 | [0108](0108-close-repository-tigerstyle-without-widening-authority.md) | Close repository Tiger Style without widening authority | Accepted |
+| [0109](0109-bind-nickel-embedded-cli-and-vendor-as-one-cohort.md) | Bind Nickel embedded, CLI, and vendor inputs as one cohort | Accepted |

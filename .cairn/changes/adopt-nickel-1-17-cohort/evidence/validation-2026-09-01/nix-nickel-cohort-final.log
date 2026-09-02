@@ -1,0 +1,71 @@
+copying path '/nix/store/hhccdmpa2bhqbagn2zgmgrwjbcdinn55-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/1pzq6dhayzd6kgyhjwqr1bwq468z36vp0al101havv6d0pw1fa40.nar?hash=hhccdmpa2bhqbagn2zgmgrwjbcdinn55' does not exist in binary cache 'http://100.100.103.95:5000'
+this derivation will be built:
+  /nix/store/2564jh5i0g1jvfwdmk9kqsdx8nx4gdnq-mantle-nickel-cohort-check-0.1.0.drv
+building '/nix/store/2564jh5i0g1jvfwdmk9kqsdx8nx4gdnq-mantle-nickel-cohort-check-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+copying 1 paths...
+copying path '/nix/store/4p0lzncn6qpzsijbkpax55l2wx1n5wb2-source' to 'ssh-ng://root@aspen1.local'...
+building '/nix/store/2564jh5i0g1jvfwdmk9kqsdx8nx4gdnq-mantle-nickel-cohort-check-0.1.0.drv'...
+mantle-nickel-cohort-check> cargoArtifacts not set, will not reuse any cargo artifacts
+mantle-nickel-cohort-check> Running phase: unpackPhase
+mantle-nickel-cohort-check> unpacking source archive /nix/store/4p0lzncn6qpzsijbkpax55l2wx1n5wb2-source
+mantle-nickel-cohort-check> source root is source
+mantle-nickel-cohort-check> Running phase: patchPhase
+mantle-nickel-cohort-check> Executing configureCargoCommonVars
+mantle-nickel-cohort-check> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-nickel-cohort-check> Running phase: configurePhase
+mantle-nickel-cohort-check> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-nickel-cohort-check> default configurePhase, nothing to do
+mantle-nickel-cohort-check> Running phase: buildPhase
+mantle-nickel-cohort-check> +++ command cargo --version
+mantle-nickel-cohort-check> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-nickel-cohort-check> +++ command cargo -Zscript --offline scripts/refresh-nickel-cohort.rs --self-test
+mantle-nickel-cohort-check>    Compiling refresh-nickel-cohort v0.0.0 (/build/source/scripts/refresh-nickel-cohort.rs)
+mantle-nickel-cohort-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.26s
+mantle-nickel-cohort-check>      Running `.cargo-home/build/7f/86568e07d79b60/target/debug/refresh-nickel-cohort --self-test`
+mantle-nickel-cohort-check> Nickel cohort importer positive and negative self-tests passed
+mantle-nickel-cohort-check> +++ command cargo -Zscript --offline scripts/check-nickel-cohort.rs --self-test
+mantle-nickel-cohort-check>      Locking 34 packages to latest Rust 1.96.0-nightly compatible versions
+mantle-nickel-cohort-check>    Compiling serde_core v1.0.228
+mantle-nickel-cohort-check>    Compiling proc-macro2 v1.0.106
+mantle-nickel-cohort-check>    Compiling quote v1.0.45
+mantle-nickel-cohort-check>    Compiling unicode-ident v1.0.24
+mantle-nickel-cohort-check>    Compiling find-msvc-tools v0.1.9
+mantle-nickel-cohort-check>    Compiling shlex v1.3.0
+mantle-nickel-cohort-check>    Compiling zmij v1.0.21
+mantle-nickel-cohort-check>    Compiling winnow v1.0.1
+mantle-nickel-cohort-check>    Compiling serde v1.0.228
+mantle-nickel-cohort-check>    Compiling serde_json v1.0.149
+mantle-nickel-cohort-check>    Compiling constant_time_eq v0.3.1
+mantle-nickel-cohort-check>    Compiling arrayvec v0.7.6
+mantle-nickel-cohort-check>    Compiling winnow v0.7.15
+mantle-nickel-cohort-check>    Compiling itoa v1.0.18
+mantle-nickel-cohort-check>    Compiling cfg-if v1.0.4
+mantle-nickel-cohort-check>    Compiling toml_writer v1.1.1+spec-1.1.0
+mantle-nickel-cohort-check>    Compiling same-file v1.0.6
+mantle-nickel-cohort-check>    Compiling arrayref v0.3.9
+mantle-nickel-cohort-check>    Compiling memchr v2.8.0
+mantle-nickel-cohort-check>    Compiling walkdir v2.5.0
+mantle-nickel-cohort-check>    Compiling cc v1.2.59
+mantle-nickel-cohort-check>    Compiling toml_parser v1.1.2+spec-1.1.0
+mantle-nickel-cohort-check>    Compiling syn v2.0.117
+mantle-nickel-cohort-check>    Compiling blake3 v1.8.2
+mantle-nickel-cohort-check>    Compiling toml_datetime v0.7.5+spec-1.1.0
+mantle-nickel-cohort-check>    Compiling serde_spanned v1.1.1
+mantle-nickel-cohort-check>    Compiling serde_derive v1.0.228
+mantle-nickel-cohort-check>    Compiling toml v0.9.12+spec-1.1.0
+mantle-nickel-cohort-check>    Compiling check-nickel-cohort v0.0.0 (/build/source/scripts/check-nickel-cohort.rs)
+mantle-nickel-cohort-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.85s
+mantle-nickel-cohort-check>      Running `.cargo-home/build/3d/80d33d8c1ef78b/target/debug/check-nickel-cohort --self-test`
+mantle-nickel-cohort-check> Nickel cohort positive and negative self-tests passed
+mantle-nickel-cohort-check> +++ command cargo -Zscript --offline scripts/check-nickel-cohort.rs --root .
+mantle-nickel-cohort-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+mantle-nickel-cohort-check>      Running `.cargo-home/build/3d/80d33d8c1ef78b/target/debug/check-nickel-cohort --root .`
+mantle-nickel-cohort-check> Nickel cohort verified: cli=1.17.0 embedded=2.2.0/0.18.0 revision=1320a983e6c3d1e2fb53dd2464b084b4903b1426
+mantle-nickel-cohort-check> Running phase: installPhase
+mantle-nickel-cohort-check> Running phase: fixupPhase
+mantle-nickel-cohort-check> shrinking RPATHs of ELF executables and libraries in /nix/store/y4ldz1abnwffni88mnfxnqw3d7jld6rv-mantle-nickel-cohort-check-0.1.0
+mantle-nickel-cohort-check> checking for references to /build/ in /nix/store/y4ldz1abnwffni88mnfxnqw3d7jld6rv-mantle-nickel-cohort-check-0.1.0...
+mantle-nickel-cohort-check> patching script interpreter paths in /nix/store/y4ldz1abnwffni88mnfxnqw3d7jld6rv-mantle-nickel-cohort-check-0.1.0
+copying 1 paths...
+copying path '/nix/store/y4ldz1abnwffni88mnfxnqw3d7jld6rv-mantle-nickel-cohort-check-0.1.0' from 'ssh-ng://root@aspen1.local'...

@@ -1145,3 +1145,25 @@
 // rail scans `tools/` and not the package root. Evidence: positive and
 // negative probe transcripts, the deterministic report, inventory, oracle
 // checkpoint, and ADR 0078 under the active change `explore-distributed-evaluation`.
+
+// Nickel 1.17 evaluator cohort bridge.
+//
+// r[impl mantle.nickel_toolchain.cohort]
+// r[impl mantle.nickel_toolchain.vendor]
+// r[impl mantle.nickel_toolchain.compatibility]
+// r[impl mantle.nickel_toolchain.boundary]
+// r[impl mantle.nickel_toolchain.evidence]
+// r[impl mantle.nickel_toolchain.validation]
+// Exact Cargo and Nix pins, the typed cohort contract, the importer, the
+// BLAKE3 vendor manifest, and the boundary checker live in `flake.nix`,
+// `config/nickel-cohort.ncl`, `scripts/`, and `bootstrap/evidence/`.
+//
+// r[verify mantle.nickel_toolchain.cohort]
+// r[verify mantle.nickel_toolchain.vendor]
+// r[verify mantle.nickel_toolchain.compatibility]
+// r[verify mantle.nickel_toolchain.boundary]
+// r[verify mantle.nickel_toolchain.evidence]
+// r[verify mantle.nickel_toolchain.validation]
+// Positive and negative evaluator, budget, import, contract, deserialization,
+// vendor, stale-evidence, boundary, formatting, Clippy, Nix, and lifecycle
+// checks are preserved in the active change evidence.

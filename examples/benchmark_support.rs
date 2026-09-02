@@ -2317,7 +2317,7 @@ mod tests {
             host_class: "linux-x86_64".to_string(),
             target: "linux-x86_64".to_string(),
             evaluator_id: "nickel-lang".to_string(),
-            evaluator_version: "2.0.0".to_string(),
+            evaluator_version: "2.2.0".to_string(),
             toolchain_id: "fixture-toolchain".to_string(),
             policy_ref: "fixture-policy".to_string(),
             fixture_set_id: "fixture-set".to_string(),

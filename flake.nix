@@ -21,6 +21,13 @@
       url = "github:bytecodealliance/wasi-virt/19b174a3244f81ed9b91e067b6901f71665316a8";
       flake = false;
     };
+    nickelCohort = {
+      url = "github:nickel-lang/nickel/1320a983e6c3d1e2fb53dd2464b084b4903b1426";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.crane.follows = "crane";
+      inputs.rust-overlay.follows = "rust-overlay";
+      inputs.flake-utils.follows = "flake-utils";
+    };
     nickelExportCore = {
       url = "github:OnixResearch/nickel-export/257fafc1c746f1faf156207043a4c826bfb16d49";
       flake = false;
@@ -59,6 +66,7 @@
       flake-utils,
       tigerstyle,
       wasi-virt,
+      nickelCohort,
       nickelExportCore,
       artifactAuthSource,
       durablePublicationSource,
@@ -102,6 +110,15 @@
         componentRustToolchain = pkgs.rust-bin.stable.${componentRustVersion}.default.override {
           targets = [ "wasm32-wasip2" ];
         };
+        nickelCohortRevision = "1320a983e6c3d1e2fb53dd2464b084b4903b1426";
+        nickelCohortManifest = builtins.fromTOML (builtins.readFile (nickelCohort + "/Cargo.toml"));
+        nickelCli =
+          assert pkgs.lib.assertMsg (
+            nickelCohort.rev == nickelCohortRevision
+            && nickelCohortManifest.workspace.package.version == "1.17.0"
+            && nickelCohortManifest.workspace.package.rust-version == "1.89"
+          ) "Mantle Nickel CLI cohort revision, version, or Rust requirement drifted";
+          nickelCohort.packages.${system}.default;
 
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
         componentCraneLib = (crane.mkLib pkgs).overrideToolchain componentRustToolchain;
@@ -293,6 +310,7 @@
             (craneLib.filterCargoSources path type)
             || pathString == toString ./README.md
             || pathString == toString ./flake.nix
+            || pathString == toString ./flake.lock
             || pkgs.lib.hasPrefix "${toString ./.github/workflows}/" pathString
             || pkgs.lib.hasPrefix "${toString ./lib}/" pathString
             || pkgs.lib.hasPrefix "${toString ./bootstrap}/" pathString
@@ -317,6 +335,7 @@
             || pkgs.lib.hasPrefix "${toString ./packages/kernelscript-experiment}/" pathString
             || pathString == toString ./nix/kernelscript-experiment.nix
             || pkgs.lib.hasPrefix "${toString ./docs}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./evidence/source}/" pathString
             || pkgs.lib.hasPrefix "${toString ./scripts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./openspec}/" pathString
           );
@@ -856,7 +875,7 @@
             pkgs.coreutils
             pkgs.diffutils
             pkgs.gnugrep
-            pkgs.nickel
+            nickelCli
           ];
           text = ''
             set -eu
@@ -899,7 +918,7 @@
             pkgs.coreutils
             pkgs.diffutils
             pkgs.gnugrep
-            pkgs.nickel
+            nickelCli
           ];
           text = ''
             set -eu
@@ -942,7 +961,7 @@
           runtimeInputs = [
             pkgs.coreutils
             pkgs.diffutils
-            pkgs.nickel
+            nickelCli
           ];
           text = ''
             set -eu
@@ -1000,6 +1019,34 @@
               echo "setid execution profile fixture unexpectedly passed" >&2
               exit 1
             fi
+          '';
+        };
+
+        nickelCohortCheck = craneLib.mkCargoDerivation {
+          pname = "mantle-nickel-cohort-check";
+          inherit src cargoVendorDir;
+          cargoArtifacts = null;
+          nativeBuildInputs = nativeBuildInputs ++ [
+            rustToolchain
+            nickelCli
+            pkgs.diffutils
+            pkgs.jq
+          ];
+          buildPhaseCargoCommand = ''
+            cargo -Zscript --offline scripts/refresh-nickel-cohort.rs --self-test
+            cargo -Zscript --offline scripts/check-nickel-cohort.rs --self-test
+            cargo -Zscript --offline scripts/check-nickel-cohort.rs --root .
+            nickel typecheck config/nickel-cohort.ncl
+            nickel export --format json config/nickel-cohort.ncl > "$TMPDIR/nickel-cohort.json"
+            jq --sort-keys . "$TMPDIR/nickel-cohort.json" > "$TMPDIR/actual.sorted.json"
+            jq --sort-keys . config/generated/nickel-cohort.json > "$TMPDIR/expected.sorted.json"
+            diff -u "$TMPDIR/expected.sorted.json" "$TMPDIR/actual.sorted.json"
+          '';
+          doInstallCargoArtifacts = false;
+          installPhaseCommand = ''
+            mkdir -p "$out"
+            cp config/generated/nickel-cohort.json "$out/cohort.json"
+            cp bootstrap/evidence/nickel-1.17-vendor-manifest.json "$out/vendor-manifest.json"
           '';
         };
 
@@ -1093,7 +1140,7 @@
               nativeBuildInputs = [
                 pkgs.diffutils
                 pkgs.jq
-                pkgs.nickel
+                nickelCli
                 rustToolchain
               ];
             }
@@ -1182,7 +1229,7 @@
                 pkgs.b3sum
                 pkgs.diffutils
                 pkgs.jq
-                pkgs.nickel
+                nickelCli
               ];
               src = self;
             }
@@ -1214,12 +1261,14 @@
           crunch = crunch;
           ast-grep-toolchain = astGrepToolchain;
           ast-grep-package-identity = astGrepPackageIdentity;
+          nickel = nickelCli;
           wasi-virt = wasiVirt;
           wasm-component-toolchain = wasmComponentToolchain;
           wasm-component-toolchain-identity = wasmComponentToolchainIdentity;
           wasm-component-toolchain-compatibility = wasmComponentToolchainCompatibility;
           mantle-transcript-quality = mantleTranscriptQuality;
           release-nix-witness-quality = releaseNixWitnessQuality;
+          check-nickel-configs = checkNickelConfigs;
           check-store-retention-policy = checkStoreRetentionPolicy;
           check-store-overlay-policy = checkStoreOverlayPolicy;
         }
@@ -1291,6 +1340,7 @@
           wasm-component-toolchain-compatibility = wasmComponentToolchainCompatibility;
           mantle-transcript-quality = mantleTranscriptQuality;
           bootstrap-blocker-inventory = bootstrapBlockerInventory;
+          nickel-cohort = nickelCohortCheck;
           nickel-export-core-pin = nickelExportCorePin;
           content-bound-requirement-source-closure = contentBoundRequirementSourceClosure;
           content-bound-requirement-evidence = contentBoundRequirementEvidence;
@@ -1330,7 +1380,7 @@
                 nativeBuildInputs = [
                   pkgs.b3sum
                   pkgs.jq
-                  pkgs.nickel
+                  nickelCli
                   pkgs.nix
                   pkgs.ripgrep
                 ];
@@ -1445,7 +1495,7 @@
                 nativeBuildInputs = [
                   pkgs.b3sum
                   pkgs.jq
-                  pkgs.nickel
+                  nickelCli
                   pkgs.ripgrep
                 ];
                 src = self;
@@ -1542,7 +1592,7 @@
           mantle-build-contract-nickel =
             pkgs.runCommand "mantle-build-contract-nickel"
               {
-                nativeBuildInputs = [ pkgs.nickel ];
+                nativeBuildInputs = [ nickelCli ];
               }
               ''
                 for fixture in ${self}/fixtures/mantle-build-contract/positive/*.ncl; do
@@ -1632,10 +1682,10 @@
               cargo-deny
               cargo-nextest
               cargo-watch
-              nickel
               rust-analyzer
             ]
             ++ [
+              nickelCli
               astGrepToolchain
               cairn.packages.${system}.default
               checkNickelConfigs

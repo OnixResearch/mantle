@@ -1,0 +1,22 @@
+warning: '--update-input' is a deprecated alias for 'flake update' and will be removed in a future version.
+warning: updating lock file "/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-adopt-nickel-1-17-cohort/flake.lock":
+• Added input 'nickelCohort':
+    'github:nickel-lang/nickel/1320a98?narHash=sha256-D%2BOI00Ouwm0v65igIYSCGPXKCl6/SZsOyz1wFM1VAF4%3D' (2026-06-09)
+• Added input 'nickelCohort/crane':
+    follows 'crane'
+• Added input 'nickelCohort/flake-utils':
+    follows 'flake-utils'
+• Added input 'nickelCohort/nixpkgs':
+    follows 'nixpkgs'
+• Added input 'nickelCohort/pre-commit-hooks':
+    'github:cachix/git-hooks.nix/f092770?narHash=sha256-6MkqajPICgugsuZ92OMoQcgSHnD6sJHwk8AxvMcIgTE%3D' (2026-01-01)
+• Added input 'nickelCohort/pre-commit-hooks/flake-compat':
+    'github:NixOS/flake-compat/5edf11c?narHash=sha256-vNpUSpF5Nuw8xvDLj2KCwwksIbjua2LZCqhV1LNRDns%3D' (2025-12-29)
+• Added input 'nickelCohort/pre-commit-hooks/gitignore':
+    'github:hercules-ci/gitignore.nix/637db32?narHash=sha256-HG2cCnktfHsKV0s4XW83gU3F57gaTljL9KNSuG6bnQs%3D' (2024-02-28)
+• Added input 'nickelCohort/pre-commit-hooks/gitignore/nixpkgs':
+    follows 'nickelCohort/pre-commit-hooks/nixpkgs'
+• Added input 'nickelCohort/pre-commit-hooks/nixpkgs':
+    follows 'nickelCohort/nixpkgs'
+• Added input 'nickelCohort/rust-overlay':
+    follows 'rust-overlay'

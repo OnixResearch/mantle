@@ -1,0 +1,1 @@
+nix build .#checks.x86_64-linux.nickel-cohort --no-link -L

@@ -1,0 +1,2 @@
+error (ignored): SQLite database '/home/brittonr/.cache/nix/eval-cache-v6/2e58b6984ebf912ffb584355265d157d801ff7836224df3d1b877cfd338effd9.sqlite' is busy
+error: flake 'git+file:///home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-adopt-nickel-1-17-cohort' does not provide attribute 'apps.x86_64-linux.check-nickel-configs', 'packages.x86_64-linux.check-nickel-configs', 'legacyPackages.x86_64-linux.check-nickel-configs' or 'check-nickel-configs'
