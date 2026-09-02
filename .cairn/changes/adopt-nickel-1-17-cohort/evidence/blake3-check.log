@@ -69,11 +69,15 @@
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/diff-check-final.status: OK
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/diff-check.log: OK
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/diff-check.status: OK
+.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/durable-publication-refresh.log: OK
+.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/durable-publication-refresh.status: OK
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format.command.txt: OK
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format-final.log: OK
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format-final.status: OK
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format.log: OK
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format.status: OK
+.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-first.log: OK
+.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-first.status: OK
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-nickel-cohort-final.log: OK
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-nickel-cohort-final.status: OK
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-nickel-cohort-latest.log: OK
