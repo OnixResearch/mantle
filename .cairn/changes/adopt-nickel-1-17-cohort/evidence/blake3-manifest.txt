@@ -76,6 +76,10 @@ af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262  .cairn/changes
 148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369  .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format-final.status
 d9e2b0ef46fb9c32064b8caa12e3b281c7cd99613f9553faf3f03c6891619aad  .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format.log
 148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369  .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format.status
+3fde2cf1c4e5167a1220ff7507b6b76bae59c94b376f533b1277d0386f9825a1  .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final-blocker.txt
+af5f7560f12a869379ef2179ea0cace467ae6b6bd9e10d98bb401df92040167e  .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final.command.txt
+6508e357b4abe2744fee8189d2bdc7bd5ad24f7218667f98a341257a7b7690f6  .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final.log
+50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9  .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final.status
 2a02b8479568984a52d3633699ace62fa72c3dd74f9f15ae7964fc25c77c7761  .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-first.log
 50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9  .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-first.status
 acb7f765a770e43bf65dcf3fe4220a91fdb9c64757ee2aca9655a41d91109b54  .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-nickel-cohort-final.log
@@ -97,7 +101,7 @@ d9e2b0ef46fb9c32064b8caa12e3b281c7cd99613f9553faf3f03c6891619aad  .cairn/changes
 c1e533258e9c647c683b277b70d90a8edcdc2b017e7b5120dddbd58db493a3c6  .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/status-before-implementation-commit.log
 d6be8eff09da67ec9be88ab86e9e45003dc5dca5f3b35d2f04c56987d9c45af3  .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/tigerstyle.log
 148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369  .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/tigerstyle.status
-5ceb42cafe9c7eabbe3d21ce13ab5646ce7b2d91cb46932fdd4405b2aede8bec  .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation.md
+2fa574748b6b86150ecf5350580ca442737273694329a7f9c7c518571336b6e9  .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation.md
 a3c2ea429062a59c8d56e17c564f131beb0a601e39449079c0cd8fb28866255f  .cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/cargo-vendor.command.txt
 1c852d7f2c26117e750f77601003329424e32fa53e4876825f13b22c37011477  .cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/cargo-vendor-config.out
 e96fd4be1c970ed74fe80b50d169ff9ac0ce87bbf6553de11e78ee6d676bb983  .cairn/changes/adopt-nickel-1-17-cohort/evidence/vendor-refresh-2026-09-01/cargo-vendor.log

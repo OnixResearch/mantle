@@ -76,6 +76,10 @@
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format-final.status: OK
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format.log: OK
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/format.status: OK
+.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final-blocker.txt: OK
+.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final.command.txt: OK
+.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final.log: OK
+.cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-final.status: OK
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-first.log: OK
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/full-first.status: OK
 .cairn/changes/adopt-nickel-1-17-cohort/evidence/validation-2026-09-01/nix-nickel-cohort-final.log: OK
