@@ -588,7 +588,7 @@ fn assert_hardware_resource_projection(allocation: &ExternalBatchOperationRespon
 
 async fn admit_hardware_action(
     state: &mut RemoteCoordinatorState,
-    store: &mut crunch_store::StoreHandle,
+    store: &mut crunch_store::BuildStore,
     case: &HardwareActionCase,
     assigned: &AssignedHardwareAction,
     dispatcher: &ConfiguredExternalBatchDispatcher<'_>,

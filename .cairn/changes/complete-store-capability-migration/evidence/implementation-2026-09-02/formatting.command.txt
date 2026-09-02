@@ -1,0 +1,1 @@
+nix develop -c cargo fmt -p crunch-store -p crunch-build -p crunch-pipeline -p crunch-rust-cache -p crunch-delta -p mantle -- --check

@@ -5660,7 +5660,7 @@ struct RemoteFailureReplayExecutionInput<'a> {
 }
 
 struct RemoteFailureReplayRuntime {
-    store: crunch_store::StoreHandle,
+    store: crunch_store::BuildStore,
     coordinator: remote_build::RemoteCoordinatorState,
     dispatch: remote_build::RemoteClientDispatchPlan,
     attempt: remote_build::RemoteProductionAttemptBinding,
@@ -5691,10 +5691,10 @@ async fn run_remote_failure_debug_replay_async(
 
 async fn open_remote_failure_replay_store(
     input: &RemoteFailureReplayExecutionInput<'_>,
-) -> Result<crunch_store::StoreHandle, RunError> {
+) -> Result<crunch_store::BuildStore, RunError> {
     debug_assert!(input.store_prefix.starts_with('/'));
     debug_assert!(!input.state_dir.as_os_str().is_empty());
-    crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+    crunch_store::BuildStore::open(crunch_store::StoreConfig {
         state_dir: input.state_dir.to_path_buf(),
         output_dir: input.output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),
@@ -5747,7 +5747,7 @@ async fn prepare_remote_failure_replay_runtime(
     }
     let replay_request = dispatch.client.request.clone();
     if let Err(error) = remote_build::prepare_remote_production_input_transfer(
-        &store,
+        store.transfer_store(),
         &mut dispatch.command,
         &replay_request,
         input.state_dir,
@@ -6274,7 +6274,7 @@ struct RemoteDispatchPreparationInput<'a> {
 struct RemoteDispatchExecutionInput<'a> {
     selection: &'a RemoteBuildSelection,
     state_dir: &'a Path,
-    store: &'a mut crunch_store::StoreHandle,
+    store: &'a mut crunch_store::BuildStore,
     coordinator: &'a mut remote_build::RemoteCoordinatorState,
     prepared: &'a mut PreparedRemoteDispatch,
 }
@@ -6335,8 +6335,8 @@ async fn open_remote_dispatch_store(
     output_dir: &Path,
     state_dir: &Path,
     store_prefix: &str,
-) -> Result<crunch_store::StoreHandle, RunError> {
-    crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+) -> Result<crunch_store::BuildStore, RunError> {
+    crunch_store::BuildStore::open(crunch_store::StoreConfig {
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),
@@ -6475,7 +6475,7 @@ async fn execute_remote_dispatch(
     debug_assert_eq!(input.prepared.request.request_id, input.prepared.plan.client.request.request_id);
     debug_assert!(!input.prepared.plan.client.trusted_output_keys.is_empty());
     remote_build::prepare_remote_production_input_transfer(
-        input.store,
+        input.store.transfer_store(),
         &mut input.prepared.plan.command,
         &input.prepared.request,
         input.state_dir,

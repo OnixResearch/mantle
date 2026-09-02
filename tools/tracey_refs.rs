@@ -745,6 +745,18 @@
 // `EvalBackend`, `EvalRequest`, and Cranelift request handling stay private to
 // `crunch-eval`; existing public helper signatures remain interpreter-shaped.
 
+// Store capability migration bridge.
+//
+// r[impl store_authority.complete_capability_migration]
+// `crates/crunch-store/src/capability.rs` owns role-specific store capabilities,
+// `crates/crunch-store/src/publisher.rs` owns publication plans and observations,
+// and runtime callers receive those bounded values instead of raw services.
+//
+// r[verify store_authority.complete_capability_migration]
+// The deterministic architecture script, compile-fail examples, focused store,
+// pipeline, cache, delta, remote-transfer, Clippy, Tiger Style, and Nix checks
+// provide positive and negative acceptance evidence.
+//
 // Tracey coverage readiness bridge.
 //
 // r[impl verification_evidence.tracey_coverage_readiness]

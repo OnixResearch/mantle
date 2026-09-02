@@ -1,0 +1,39 @@
+{
+  "change": "complete-store-capability-migration",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "d4758fd716a4799bc949d8dd21e4dc1b8f4c217ca5113091faf1b92583813d67",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+  "probe_evidence": null,
+  "receipt_hash": "d7de3028d82f635c2e92092c754d7392c663d4df3c467a752170e6c88b8c8850",
+  "stage": "proposal",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/complete-store-capability-migration/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 22,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    }
+  ],
+  "task_ordering": null,
+  "valid": true,
+  "verdict": "PASS"
+}

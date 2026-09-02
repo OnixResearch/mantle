@@ -20,7 +20,7 @@ use crunch_pipeline::BuildConfig;
 use crunch_pipeline::RegisteredBuildRequest;
 use crunch_pipeline::RegisteredOutputExpectation;
 use crunch_pipeline::SchedulingPolicy;
-use crunch_store::StoreHandle;
+use crunch_store::ForeignRealizationStore;
 use crunch_store::VerifiedSourceIngestRequest;
 use data_encoding::HEXLOWER;
 use nix_compat::derivation::Derivation;
@@ -162,7 +162,7 @@ pub(crate) async fn realize_foreign_plan(
         Vec::new()
     };
     let retained_outputs = selected_root_output_paths(request.plan, request.selected_root_node_ids)?;
-    let mut store = StoreHandle::open(crunch_store::StoreConfig {
+    let mut store = ForeignRealizationStore::open(crunch_store::StoreConfig {
         state_dir: request.state_dir.to_path_buf(),
         output_dir: request.output_dir.to_path_buf(),
         remote_cache_urls: cache_urls.clone(),
@@ -201,7 +201,7 @@ pub(crate) async fn realize_foreign_plan(
         )
         .await?;
         drop(store);
-        store = StoreHandle::open(crunch_store::StoreConfig {
+        store = ForeignRealizationStore::open(crunch_store::StoreConfig {
             state_dir: request.state_dir.to_path_buf(),
             output_dir: request.output_dir.to_path_buf(),
             remote_cache_urls: Vec::new(),
@@ -292,16 +292,20 @@ pub(crate) async fn realize_foreign_plan(
         source_fetch_overrides,
         remote_enabled: false,
     };
-    let build_result =
-        crunch_pipeline::build_registered_derivations(&build_config, store, &mut registry, RegisteredBuildRequest {
+    let build_result = crunch_pipeline::build_registered_derivations(
+        &build_config,
+        store.into_pipeline_store_parts(),
+        &mut registry,
+        RegisteredBuildRequest {
             roots: &roots,
             expected_outputs: &expected_outputs,
             retained_outputs: &retained_outputs,
             source_policy,
             cache_only,
-        })
-        .await
-        .map_err(|error| RunError::Internal(format!("realizing foreign derivation graph: {error}")))?;
+        },
+    )
+    .await
+    .map_err(|error| RunError::Internal(format!("realizing foreign derivation graph: {error}")))?;
     build_foreign_realization_receipt(ForeignReceiptInput {
         plan: request.plan,
         source_bundle_manifest_blake3: request.expected_source_bundle_blake3,
@@ -396,7 +400,7 @@ fn cache_only_observer_derivation(derivation: &Derivation) -> Derivation {
 }
 
 async fn hydrate_cache_only_runtime_closure(
-    store: &mut StoreHandle,
+    store: &mut ForeignRealizationStore,
     roots: &[StorePath<String>],
     plan: &ForeignExecutablePlan,
     policy: &ForeignCacheClosurePolicy,
@@ -431,25 +435,25 @@ async fn hydrate_cache_only_runtime_closure(
         trust_unsigned: false,
         trusted_public_keys: trusted_keys.to_vec(),
     };
-    let report = crunch_store::import_http_cache_closure_with_validator(
-        store,
-        &cache_url,
-        root,
-        &pull_options,
-        crunch_store::HttpClosureImportValidation {
-            limits,
-            validate_plan: |closure_plan: &crunch_store::HttpClosurePlan| {
-                validate_prepared_cache_closure(
-                    closure_plan,
-                    &root.to_string(),
-                    &plan.target_store_prefix,
-                    &permitted_paths,
-                )
+    let report = store
+        .import_http_cache_closure_with_validator(
+            &cache_url,
+            root,
+            &pull_options,
+            crunch_store::HttpClosureImportValidation {
+                limits,
+                validate_plan: |closure_plan: &crunch_store::HttpClosurePlan| {
+                    validate_prepared_cache_closure(
+                        closure_plan,
+                        &root.to_string(),
+                        &plan.target_store_prefix,
+                        &permitted_paths,
+                    )
+                },
             },
-        },
-    )
-    .await
-    .map_err(|error| RunError::Internal(format!("hydrating preflighted foreign cache closure: {error}")))?;
+        )
+        .await
+        .map_err(|error| RunError::Internal(format!("hydrating preflighted foreign cache closure: {error}")))?;
     if !report.root_admitted {
         return Err(RunError::Internal("foreign cache closure root was not admitted after hydration".to_string()));
     }

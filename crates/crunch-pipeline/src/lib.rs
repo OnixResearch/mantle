@@ -131,6 +131,7 @@ pub struct PipelineResult {
     pub network_policy_reports: Vec<BuildNetworkPolicyReport>,
     pub workspace_reports: Vec<crunch_build::WorkspaceExecutionReport>,
     pub action_result_reports: Vec<crunch_build::ActionResultRuntimeReport>,
+    pub publication_observations: Vec<crunch_store::PublicationObservation>,
     pub native_dynamic_plans: Vec<NativeDynamicPlanReport>,
     pub priority_decisions: Vec<PriorityDecisionEvidence>,
     pub overlay_report: Option<crunch_store::StoreOverlayReport>,
@@ -169,6 +170,7 @@ pub struct RegisteredBuildResult {
     pub network_policy_reports: Vec<BuildNetworkPolicyReport>,
     pub workspace_reports: Vec<crunch_build::WorkspaceExecutionReport>,
     pub action_result_reports: Vec<crunch_build::ActionResultRuntimeReport>,
+    pub publication_observations: Vec<crunch_store::PublicationObservation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -336,7 +338,7 @@ async fn build_with_stream_sender(
         .map_err(map_eval_error)?;
 
     let store = if config.base_state_dirs.is_empty() {
-        match crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        match crunch_store::open_pipeline_store_parts(crunch_store::StoreConfig {
             state_dir: config.state_dir.clone(),
             output_dir: config.output_dir.clone(),
             remote_cache_urls: config.substituter_urls.clone(),
@@ -355,7 +357,7 @@ async fn build_with_stream_sender(
             Err(e) => return Err(Error::Internal(format!("opening store: {e}"))),
         }
     } else {
-        match crunch_store::StoreHandle::open_overlay(crunch_store::StoreConfig {
+        match crunch_store::open_overlay_pipeline_store_parts(crunch_store::StoreConfig {
             state_dir: config.state_dir.clone(),
             output_dir: config.output_dir.clone(),
             remote_cache_urls: config.substituter_urls.clone(),
@@ -375,7 +377,7 @@ async fn build_with_stream_sender(
         }
     };
     let mut hermeticity_audit_events = mode_audit_events(config.hermeticity_mode);
-    hermeticity_audit_events.extend(map_store_audit_events(store.startup_audit_events()));
+    hermeticity_audit_events.extend(map_store_audit_events(store.build_store.startup_audit_events()));
 
     #[cfg(target_os = "linux")]
     {
@@ -408,7 +410,7 @@ struct PipelineBuilderBundle<S> {
 #[cfg(target_os = "linux")]
 struct LinuxBuildRequest<'a> {
     config: &'a BuildConfig,
-    store: crunch_store::StoreHandle,
+    store: crunch_store::PipelineStoreParts,
     session: crunch_eval::session::EvaluationSession,
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
     cancellation: EvaluationCancellation,
@@ -463,6 +465,7 @@ async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, E
         network_policy_rows: builder.take_network_policy_reports(),
         workspace_rows: workspace_evidence_sink.take(),
         action_result_rows: builder.take_action_result_reports(),
+        publication_observations: builder.take_publication_observations(),
         overlay_report: overlay_evidence,
         store_layer_selections,
     };
@@ -487,7 +490,7 @@ async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, E
 
 pub async fn build_registered_derivations(
     config: &BuildConfig,
-    store: crunch_store::StoreHandle,
+    store: crunch_store::PipelineStoreParts,
     known_paths: &mut DerivationRegistry,
     request: RegisteredBuildRequest<'_>,
 ) -> Result<RegisteredBuildResult, Error> {
@@ -657,15 +660,16 @@ async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'sta
         network_policy_reports: builder.take_network_policy_reports(),
         workspace_reports: workspace_evidence_sink.take(),
         action_result_reports: builder.take_action_result_reports(),
+        publication_observations: builder.take_publication_observations(),
     })
 }
 
 #[cfg(target_os = "linux")]
 fn create_cache_only_observer(
     config: &BuildConfig,
-    store: crunch_store::StoreHandle,
+    store: crunch_store::PipelineStoreParts,
 ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
-    Ok(create_cache_only_bundle(config, store.into_pipeline_store_parts()))
+    Ok(create_cache_only_bundle(config, store))
 }
 
 #[cfg(target_os = "linux")]
@@ -710,7 +714,7 @@ fn create_cache_only_builder(
 #[cfg(target_os = "linux")]
 fn create_pipeline_builder(
     config: &BuildConfig,
-    store: crunch_store::StoreHandle,
+    store: crunch_store::PipelineStoreParts,
 ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
     let source_policy = if config.source_fetch_overrides.is_empty() {
         FetchSourcePolicy::AllowNetwork
@@ -723,7 +727,7 @@ fn create_pipeline_builder(
 #[cfg(target_os = "linux")]
 fn create_pipeline_builder_with_source_policy(
     config: &BuildConfig,
-    store: crunch_store::StoreHandle,
+    store: crunch_store::PipelineStoreParts,
     source_policy: FetchSourcePolicy,
 ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
     debug_assert!(!config.store_dir.is_empty(), "store prefix must not be empty");
@@ -735,7 +739,7 @@ fn create_pipeline_builder_with_source_policy(
         build_service_store,
         output_lookup,
         root_registry,
-    } = store.into_pipeline_store_parts();
+    } = store;
     let state_dir = build_store.state_dir().to_path_buf();
     let workdir = std::env::temp_dir().join("crunch-builds");
     std::fs::create_dir_all(&workdir).map_err(|error| Error::Internal(format!("create workdir: {error}")))?;
@@ -795,6 +799,7 @@ struct PipelineRunEvidence {
     network_policy_rows: Vec<BuildNetworkPolicyReport>,
     workspace_rows: Vec<crunch_build::WorkspaceExecutionReport>,
     action_result_rows: Vec<crunch_build::ActionResultRuntimeReport>,
+    publication_observations: Vec<crunch_store::PublicationObservation>,
     overlay_report: Option<crunch_store::StoreOverlayReport>,
     store_layer_selections: Vec<crunch_store::layer::StoreLayerSelection>,
 }
@@ -855,6 +860,7 @@ fn finish_pipeline_result(
         network_policy_reports: evidence.network_policy_rows,
         workspace_reports: evidence.workspace_rows,
         action_result_reports: evidence.action_result_rows,
+        publication_observations: evidence.publication_observations,
         native_dynamic_plans: worker_result.native_dynamic_plans,
         priority_decisions: worker_result.priority_decisions,
         overlay_report: evidence.overlay_report,
@@ -980,6 +986,7 @@ fn build_preflight_failure(
         network_policy_reports: Vec::new(),
         workspace_reports: Vec::new(),
         action_result_reports: Vec::new(),
+        publication_observations: Vec::new(),
         native_dynamic_plans: Vec::new(),
         priority_decisions: Vec::new(),
         overlay_report: None,

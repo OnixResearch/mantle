@@ -1,0 +1,1 @@
+nix develop -c cargo check --workspace --all-targets

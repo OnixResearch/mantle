@@ -331,7 +331,7 @@ fn adopt_verified_local_provider_path_with_mode(
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|error| admission_error(format!("creating provider adoption runtime: {error}")))?;
     runtime.block_on(async {
-        let mut store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        let mut store = crunch_store::SourceStore::open(crunch_store::StoreConfig {
             state_dir: state_dir.to_path_buf(),
             output_dir: output_dir.to_path_buf(),
             remote_cache_urls: Vec::new(),
@@ -342,7 +342,8 @@ fn adopt_verified_local_provider_path_with_mode(
         .await
         .map_err(|error| admission_error(format!("opening provider adoption store: {error}")))?;
         store
-            .adopt_verified_local_output(&logical_store_path, "out", &keypair.signing_key, None)
+            .admission()
+            .adopt_local_output(&logical_store_path, "out", &keypair.signing_key, None)
             .await
             .map_err(|error| admission_error(format!("adopting admitted provider: {error}")))?;
         Ok::<(), RunError>(())

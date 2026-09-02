@@ -1582,7 +1582,7 @@ fn adopt_cached_provider_subtrees(
 }
 
 /// Register an on-disk provider subtree with the content-addressed store service
-/// (`StoreHandle::adopt_verified_local_output`), matching how the cold path adopts
+/// (through `SourceStore` admission), matching how the cold path adopts
 /// freshly constructed transition/provider paths. Returns the logical store path.
 fn register_adopted_provider(
     physical_path: &Path,

@@ -994,7 +994,7 @@ struct NarioSourceStaging {
     root: tempfile::TempDir,
     output_dir: PathBuf,
     runtime: tokio::runtime::Runtime,
-    store: crunch_store::StoreHandle,
+    store: crunch_store::StoreAdministration,
 }
 
 fn prepare_nario_sources(
@@ -1061,7 +1061,7 @@ fn open_nario_source_staging() -> Result<NarioSourceStaging, RunError> {
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|error| RunError::Internal(format!("creating Nario source runtime: {error}")))?;
     let store = runtime
-        .block_on(crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        .block_on(crunch_store::StoreAdministration::open(crunch_store::StoreConfig {
             state_dir,
             output_dir: output_dir.clone(),
             remote_cache_urls: Vec::new(),
@@ -1094,10 +1094,8 @@ fn import_nario_source_archives(
         let file = std::fs::File::open(archive_path)
             .map_err(|error| RunError::Internal(format!("opening Nario source {}: {error}", archive_path.display())))?;
         let mut reader = tokio::io::BufReader::new(tokio::fs::File::from_std(file));
-        let report = staging
-            .runtime
-            .block_on(crunch_store::import_nario_v2(&staging.store, &mut reader, &options))
-            .map_err(|error| {
+        let report =
+            staging.runtime.block_on(staging.store.import_nario_v2(&mut reader, &options)).map_err(|error| {
                 RunError::Internal(format!("importing Nario source {}: {error}", archive_path.display()))
             })?;
         archives.push(NarioSourceArchiveEvidence {

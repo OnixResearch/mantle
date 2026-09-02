@@ -2539,10 +2539,10 @@ async fn execute_remote_local_build_linux(
         .map_err(|err| format!("remote-local-executor-mutation-lock: {err}"))?;
     let (drv_path, mut known_paths) = local_derivation_registry(request, plan)?;
     let workspace_lease = acquire_remote_execution_workspace(executor, request, &drv_path, &mut known_paths)?;
-    let store = crunch_store::StoreHandle::open(remote_local_store_config(executor))
+    let store = crunch_store::BuildStore::open(remote_local_store_config(executor))
         .await
         .map_err(|err| format!("remote-local-executor-open-store: {err}"))?;
-    materialize_remote_input_upload(&store, request, input_upload).await?;
+    materialize_remote_input_upload(store.transfer_store(), request, input_upload).await?;
     let workdir = std::env::temp_dir().join(REMOTE_LOCAL_BUILD_WORKDIR_NAME);
     std::fs::create_dir_all(&workdir).map_err(|err| format!("remote-local-executor-workdir: {err}"))?;
     let failure_workspace_root = remote_failure_workspace_root(executor, request)?;
@@ -3127,7 +3127,7 @@ pub fn set_remote_diagnostic_trace_context(
 }
 
 pub async fn prepare_remote_production_input_transfer(
-    store: &crunch_store::StoreHandle,
+    store: crunch_store::TransferStore<'_>,
     command: &mut RemoteStdioCommand,
     request: &ConcreteBuildRequest,
     source_state_dir: &Path,
@@ -3185,7 +3185,7 @@ pub async fn prepare_remote_production_input_transfer(
 }
 
 struct RemoteInputNarPrepareContext<'a> {
-    store: &'a crunch_store::StoreHandle,
+    store: crunch_store::TransferStore<'a>,
     request: &'a ConcreteBuildRequest,
     source_state_dir: &'a Path,
     spool_dir: &'a Path,
@@ -3218,14 +3218,11 @@ async fn prepare_remote_input_nar_artifact(
         }
         Err(reason) => return Err(reason),
     };
-    let node = snix_castore::import::fs::ingest_path::<_, _, _, &[u8]>(
-        context.store.blob_service(),
-        context.store.directory_service(),
-        &host_path,
-        None,
-    )
-    .await
-    .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
+    let node = context
+        .store
+        .ingest_host_path(&host_path)
+        .await
+        .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
     let artifact = crate::remote_transfer::prepare_nar_node_transfer_artifact(
         context.store,
         &node,
@@ -3285,7 +3282,7 @@ fn remote_input_requested_content_digest(request: &ConcreteBuildRequest) -> Resu
 }
 
 pub async fn populate_remote_input_upload_artifacts_from_store(
-    store: &crunch_store::StoreHandle,
+    store: crunch_store::TransferStore<'_>,
     command: &mut RemoteStdioCommand,
     request: &ConcreteBuildRequest,
 ) -> Result<(), String> {
@@ -3294,7 +3291,7 @@ pub async fn populate_remote_input_upload_artifacts_from_store(
 }
 
 pub async fn populate_remote_input_upload_artifacts_from_store_or_source_state(
-    store: &crunch_store::StoreHandle,
+    store: crunch_store::TransferStore<'_>,
     command: &mut RemoteStdioCommand,
     request: &ConcreteBuildRequest,
     source_state_dir: &Path,
@@ -3335,14 +3332,14 @@ fn attach_remote_input_upload_artifacts(
 }
 
 pub async fn plan_remote_input_upload_artifacts_from_store(
-    store: &crunch_store::StoreHandle,
+    store: crunch_store::TransferStore<'_>,
     request: &ConcreteBuildRequest,
 ) -> Result<Vec<RemoteInputUploadArtifact>, String> {
     plan_remote_input_upload_artifacts(store, request, None).await
 }
 
 pub async fn plan_remote_input_upload_artifacts_from_store_or_source_state(
-    store: &crunch_store::StoreHandle,
+    store: crunch_store::TransferStore<'_>,
     request: &ConcreteBuildRequest,
     source_state_dir: &Path,
 ) -> Result<Vec<RemoteInputUploadArtifact>, String> {
@@ -3350,7 +3347,7 @@ pub async fn plan_remote_input_upload_artifacts_from_store_or_source_state(
 }
 
 async fn plan_remote_input_upload_artifacts(
-    store: &crunch_store::StoreHandle,
+    store: crunch_store::TransferStore<'_>,
     request: &ConcreteBuildRequest,
     source_state_dir: Option<&Path>,
 ) -> Result<Vec<RemoteInputUploadArtifact>, String> {
@@ -3743,7 +3740,7 @@ pub fn validate_remote_source_upload_record(
 }
 
 fn remote_input_ref_host_path(
-    store: &crunch_store::StoreHandle,
+    store: crunch_store::TransferStore<'_>,
     store_prefix: &str,
     input_ref: impl AsRef<str>,
 ) -> Result<PathBuf, String> {
@@ -3761,7 +3758,7 @@ fn remote_input_ref_host_path(
 }
 
 async fn render_remote_input_nar_payload_for_ref(
-    store: &crunch_store::StoreHandle,
+    store: crunch_store::TransferStore<'_>,
     request: &ConcreteBuildRequest,
     input_ref: &str,
     source_state_dir: Option<&Path>,
@@ -3776,7 +3773,7 @@ async fn render_remote_input_nar_payload_for_ref(
 }
 
 async fn render_remote_input_nar_payload_from_source_state(
-    store: &crunch_store::StoreHandle,
+    store: crunch_store::TransferStore<'_>,
     request: &ConcreteBuildRequest,
     input_ref: &str,
     source_state_dir: Option<&Path>,
@@ -3800,17 +3797,13 @@ async fn render_remote_input_nar_payload_from_source_state(
 }
 
 async fn render_remote_input_nar_payload(
-    store: &crunch_store::StoreHandle,
+    store: crunch_store::TransferStore<'_>,
     host_path: &Path,
 ) -> Result<Vec<u8>, String> {
-    let node = snix_castore::import::fs::ingest_path::<_, _, _, &[u8]>(
-        store.blob_service(),
-        store.directory_service(),
-        host_path,
-        None,
-    )
-    .await
-    .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
+    let node = store
+        .ingest_host_path(host_path)
+        .await
+        .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
     let mut writer = BoundedAsyncVecWriter::new(MAX_REMOTE_INLINE_NAR_PAYLOAD_BYTES);
     store
         .render_nar(&node, &mut writer)
@@ -3820,7 +3813,7 @@ async fn render_remote_input_nar_payload(
 }
 
 async fn materialize_remote_input_upload(
-    store: &crunch_store::StoreHandle,
+    store: crunch_store::TransferStore<'_>,
     request: &ConcreteBuildRequest,
     upload: &RemoteInputUpload,
 ) -> Result<(), String> {
@@ -3849,24 +3842,24 @@ async fn materialize_remote_input_upload(
 }
 
 async fn materialize_remote_input_artifact(
-    store: &crunch_store::StoreHandle,
+    store: crunch_store::TransferStore<'_>,
     store_prefix: &str,
     artifact: &RemoteInputUploadArtifact,
 ) -> Result<(), String> {
     let store_path = parse_remote_output_store_path(&artifact.input_ref, store_prefix)?;
     let mut reader = std::io::Cursor::new(artifact.payload.as_slice());
-    let (node, _nar_sha256, nar_size) =
-        snix_store::nar::ingest_nar_and_hash(store.blob_service(), store.directory_service(), &mut reader, &None)
-            .await
-            .map_err(|err| format!("remote-input-nar-ingest-failed: {err}"))?;
-    if nar_size != artifact.size_bytes {
+    let observation = store
+        .ingest_nar_and_hash(&mut reader)
+        .await
+        .map_err(|err| format!("remote-input-nar-ingest-failed: {err}"))?;
+    if observation.nar_size_bytes != artifact.size_bytes {
         return Err("remote-input-nar-size-mismatch".to_string());
     }
-    export_remote_input_node(store, &store_path, &node).await
+    export_remote_input_node(store, &store_path, &observation.node).await
 }
 
 async fn materialize_streamed_remote_inputs(
-    store: &crunch_store::StoreHandle,
+    store: crunch_store::TransferStore<'_>,
     request: &ConcreteBuildRequest,
     manifest: &crunch_build::distributed::CanonicalRemoteTransferManifest,
     receiver_root: &Path,
@@ -3899,22 +3892,22 @@ async fn materialize_streamed_remote_inputs(
         let reader = crate::remote_transfer::open_remote_transfer_received_artifact(receiver_root, &artifact_id)
             .map_err(|err| format!("remote-streamed-input-open-failed: {err}"))?;
         let mut reader = tokio::fs::File::from_std(reader);
-        let (node, nar_sha256, nar_size) =
-            snix_store::nar::ingest_nar_and_hash(store.blob_service(), store.directory_service(), &mut reader, &None)
-                .await
-                .map_err(|err| format!("remote-streamed-input-nar-ingest-failed: {err}"))?;
-        if nar_size != descriptor.size_bytes {
+        let observation = store
+            .ingest_nar_and_hash(&mut reader)
+            .await
+            .map_err(|err| format!("remote-streamed-input-nar-ingest-failed: {err}"))?;
+        if observation.nar_size_bytes != descriptor.size_bytes {
             return Err("remote-streamed-input-nar-size-mismatch".to_string());
         }
         if descriptor
             .nar_sha256_hex
             .as_deref()
-            .is_some_and(|expected| expected != data_encoding::HEXLOWER.encode(&nar_sha256))
+            .is_some_and(|expected| expected != data_encoding::HEXLOWER.encode(&observation.nar_sha256))
         {
             return Err("remote-streamed-input-nar-sha256-mismatch".to_string());
         }
         let store_path = parse_remote_output_store_path(input_ref, &request.store_prefix)?;
-        export_remote_input_node(store, &store_path, &node).await?;
+        export_remote_input_node(store, &store_path, &observation.node).await?;
     }
     assert_eq!(expected_ids.len(), request.input_refs.len());
     assert!(manifest.total_bytes <= request.transfer_policy.unwrap_or_default().total_bytes_max);
@@ -3922,17 +3915,14 @@ async fn materialize_streamed_remote_inputs(
 }
 
 async fn export_remote_input_node(
-    store: &crunch_store::StoreHandle,
+    store: crunch_store::TransferStore<'_>,
     store_path: &StorePath<String>,
     node: &snix_castore::Node,
 ) -> Result<(), String> {
-    let host_path = store_path.to_absolute_path_with_prefix(store.output_dir_str());
-    if !Path::new(&host_path).exists() {
-        crunch_store::export_castore_to_disk(node, &host_path, &store.blob_service(), &store.directory_service())
-            .await
-            .map_err(|err| format!("remote-input-export-failed: {err}"))?;
-    }
-    Ok(())
+    store
+        .export_node(store_path, node)
+        .await
+        .map_err(|err| format!("remote-input-export-failed: {err}"))
 }
 
 struct PreparedRemoteProductionOutput {
@@ -3962,7 +3952,7 @@ async fn prepare_remote_production_output(
             policy,
         )?;
         let nar = crate::remote_transfer::prepare_nar_transfer_artifact(
-            &store,
+            store.transfer_store(),
             path_info,
             remote_output_nar_artifact_id(&output.name, &output.logical_path)?,
             &spool_dir,
@@ -4004,8 +3994,8 @@ async fn prepare_remote_production_output(
 
 async fn open_remote_local_executor_store(
     executor: &RemoteLocalBuildExecutor,
-) -> Result<crunch_store::StoreHandle, String> {
-    crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+) -> Result<crunch_store::BuildStore, String> {
+    crunch_store::BuildStore::open(crunch_store::StoreConfig {
         state_dir: executor.state_dir.clone(),
         output_dir: executor.output_dir.clone(),
         remote_cache_urls: Vec::new(),
@@ -10700,7 +10690,7 @@ pub fn plan_remote_output_import_actions(
 }
 
 pub async fn import_admitted_remote_outputs(
-    store: &mut crunch_store::StoreHandle,
+    store: &mut crunch_store::BuildStore,
     request: &ConcreteBuildRequest,
     admission: &RemoteOutputAdmissionReport,
     is_root: bool,
@@ -10714,7 +10704,7 @@ pub async fn import_admitted_remote_outputs(
 }
 
 struct AdmittedRemoteStdioOutputImportInput<'a> {
-    store: &'a mut crunch_store::StoreHandle,
+    store: &'a mut crunch_store::BuildStore,
     request: &'a ConcreteBuildRequest,
     admission: &'a RemoteOutputAdmissionReport,
     transcript: &'a RemoteStdioTranscript,
@@ -10726,7 +10716,7 @@ type RemoteOutputImportFuture<'a> =
     Pin<Box<dyn std::future::Future<Output = Result<RemoteOutputImportReport, String>> + 'a>>;
 
 pub const IMPORT_ADMITTED_REMOTE_STDIO_OUTPUTS: for<'a> fn(
-    &'a mut crunch_store::StoreHandle,
+    &'a mut crunch_store::BuildStore,
     &'a ConcreteBuildRequest,
     &'a RemoteOutputAdmissionReport,
     &'a RemoteStdioTranscript,
@@ -10789,7 +10779,7 @@ async fn import_admitted_remote_stdio_outputs_core(
 }
 
 async fn persist_remote_output_actions(
-    store: &mut crunch_store::StoreHandle,
+    store: &mut crunch_store::BuildStore,
     admission: &RemoteOutputAdmissionReport,
     actions: Vec<RemoteOutputImportAction>,
     is_root: bool,
@@ -11040,58 +11030,47 @@ fn remote_transfer_mode_to_store_mode(mode: RemoteTransferMode) -> crunch_store:
 }
 
 async fn ingest_remote_output_nar_payload(
-    store: &crunch_store::StoreHandle,
+    store: &crunch_store::BuildStore,
     action: &RemoteOutputImportAction,
 ) -> Result<(), String> {
     if action.nar_payload.is_some() && action.nar_path.is_some() {
         return Err("remote-output-nar-source-ambiguous".to_string());
     }
+    let transfer_store = store.transfer_store();
     let result = if let Some(payload) = &action.nar_payload {
         let mut reader = std::io::Cursor::new(payload.as_slice());
-        snix_store::nar::ingest_nar_and_hash(
-            store.blob_service(),
-            store.directory_service(),
-            &mut reader,
-            &action.path_info.ca,
-        )
-        .await
+        transfer_store.ingest_nar_and_hash_with_ca(&mut reader, &action.path_info.ca).await
     } else if let Some(path) = &action.nar_path {
         let reader = crate::remote_transfer::open_remote_transfer_authority_file(path)
             .map_err(|err| format!("remote-output-streamed-nar-open-failed: {err}"))?;
         let mut reader = tokio::fs::File::from_std(reader);
-        snix_store::nar::ingest_nar_and_hash(
-            store.blob_service(),
-            store.directory_service(),
-            &mut reader,
-            &action.path_info.ca,
-        )
-        .await
+        transfer_store.ingest_nar_and_hash_with_ca(&mut reader, &action.path_info.ca).await
     } else {
         return Ok(());
     };
-    let (node, nar_sha256, nar_size) = result.map_err(|err| format!("remote-output-nar-ingest-failed: {err}"))?;
-    if node != action.final_node {
+    let observation = result.map_err(|err| format!("remote-output-nar-ingest-failed: {err}"))?;
+    if observation.node != action.final_node {
         return Err("remote-output-nar-node-mismatch".to_string());
     }
-    if nar_sha256 != action.path_info.nar_sha256 {
+    if observation.nar_sha256 != action.path_info.nar_sha256 {
         return Err("remote-output-nar-sha256-mismatch".to_string());
     }
-    if nar_size != action.path_info.nar_size {
+    if observation.nar_size_bytes != action.path_info.nar_size {
         return Err("remote-output-nar-size-mismatch".to_string());
     }
-    debug_assert_eq!(node, action.final_node);
-    debug_assert_eq!(nar_size, action.path_info.nar_size);
+    debug_assert_eq!(observation.node, action.final_node);
+    debug_assert_eq!(observation.nar_size_bytes, action.path_info.nar_size);
     Ok(())
 }
 
 async fn persist_remote_output_action(
-    store: &mut crunch_store::StoreHandle,
+    store: &mut crunch_store::BuildStore,
     action: &RemoteOutputImportAction,
     is_root: bool,
     root_source: Option<crunch_store::GcRootSource>,
 ) -> Result<PathInfo, String> {
     ingest_remote_output_nar_payload(store, action).await?;
-    store
+    let admitted = store
         .persist_and_export_signed_output(crunch_store::PersistOutputRequest {
             output_name: &action.output_name,
             output_path: &action.store_path,
@@ -11102,11 +11081,27 @@ async fn persist_remote_output_action(
             root_source,
         })
         .await
-        .map_err(|err| format!("remote-output-persist-failed: {err}"))
+        .map_err(|err| format!("remote-output-persist-failed: {err}"))?;
+    let observations = store
+        .publication_execution()
+        .execute(&admitted.publication_plan, &admitted.path_info)
+        .await
+        .map_err(|err| format!("remote-output-publication-plan-failed: {err}"))?;
+    for observation in observations {
+        if observation.disposition == crunch_store::PublicationDisposition::Failed {
+            tracing::warn!(
+                path = %observation.logical_path,
+                publisher_index = observation.publisher_index,
+                error = observation.error.as_deref().unwrap_or("publisher failure"),
+                "remote output publication failed after local admission"
+            );
+        }
+    }
+    Ok(admitted.path_info)
 }
 
 fn imported_remote_output_report(
-    store: &crunch_store::StoreHandle,
+    store: &crunch_store::BuildStore,
     action: &RemoteOutputImportAction,
     stored: &PathInfo,
 ) -> RemoteImportedOutput {
@@ -12689,9 +12684,12 @@ fn receive_remote_production_input_transfer(
         report: runtime_transfer_receipt.clone(),
     })?;
     let store = input.runtime.block_on(open_remote_local_executor_store(context.executor))?;
-    input
-        .runtime
-        .block_on(materialize_streamed_remote_inputs(&store, &opening.request, &canonical, &receiver_root))?;
+    input.runtime.block_on(materialize_streamed_remote_inputs(
+        store.transfer_store(),
+        &opening.request,
+        &canonical,
+        &receiver_root,
+    ))?;
     debug_assert!(runtime_transfer_receipt.transferred_bytes <= input.max_upload_bytes);
     debug_assert!(canonical.total_bytes <= input.max_upload_bytes);
     Ok(runtime_transfer_receipt.transferred_bytes)
@@ -15091,7 +15089,7 @@ mod tests {
             production_transfer: None,
         };
 
-        populate_remote_input_upload_artifacts_from_store(&client_store, &mut command, &client.request)
+        populate_remote_input_upload_artifacts_from_store(client_store.transfer_store(), &mut command, &client.request)
             .await
             .expect("source input artifact is attached");
         let upload = command
@@ -15102,7 +15100,7 @@ mod tests {
                 _ => None,
             })
             .expect("input upload frame present");
-        materialize_remote_input_upload(&remote_store, &client.request, &upload)
+        materialize_remote_input_upload(remote_store.transfer_store(), &client.request, &upload)
             .await
             .expect("source input artifact materializes");
         let remote_source_path = source_store_path.to_absolute_path_with_prefix(remote_store.output_dir_str());
@@ -15146,7 +15144,7 @@ mod tests {
         };
 
         populate_remote_input_upload_artifacts_from_store_or_source_state(
-            &client_store,
+            client_store.transfer_store(),
             &mut command,
             &client.request,
             state_temp.path(),
@@ -15161,7 +15159,7 @@ mod tests {
                 _ => None,
             })
             .expect("input upload frame present");
-        materialize_remote_input_upload(&remote_store, &client.request, &upload)
+        materialize_remote_input_upload(remote_store.transfer_store(), &client.request, &upload)
             .await
             .expect("source-state source input artifact materializes");
         let remote_source_path = source_store_path.to_absolute_path_with_prefix(remote_store.output_dir_str());
@@ -15306,7 +15304,7 @@ mod tests {
         let mut client = fixture_loopback_client(vec![source_ref.clone()], vec!["builder-key".to_string()]);
         client.request.input_refs = vec![source_ref.clone()];
         client.request.source_input_refs = vec![source_ref];
-        let err = plan_remote_input_upload_artifacts_from_store(&client_store, &client.request)
+        let err = plan_remote_input_upload_artifacts_from_store(client_store.transfer_store(), &client.request)
             .await
             .expect_err("missing source state fails closed");
 
@@ -15335,7 +15333,7 @@ mod tests {
             timeout_secs: DEFAULT_REMOTE_STDIO_TIMEOUT_SECS,
             production_transfer: None,
         };
-        populate_remote_input_upload_artifacts_from_store(&client_store, &mut command, &client.request)
+        populate_remote_input_upload_artifacts_from_store(client_store.transfer_store(), &mut command, &client.request)
             .await
             .expect("source input artifact is attached");
         let mut upload = command
@@ -15348,7 +15346,7 @@ mod tests {
             .expect("input upload frame present");
         upload.artifacts[0].payload[0] = CORRUPTED_TRANSFER_PAYLOAD_BYTE;
 
-        let err = materialize_remote_input_upload(&remote_store, &client.request, &upload)
+        let err = materialize_remote_input_upload(remote_store.transfer_store(), &client.request, &upload)
             .await
             .expect_err("tampered source input artifact fails");
         assert_eq!(err, "input-upload-artifact-digest-mismatch");
@@ -15524,7 +15522,7 @@ mod tests {
         )
         .await
         .expect("remote output imports durably");
-        let stored_pathinfo = store.pathinfo_service().get(*store_path.digest()).await.unwrap().unwrap();
+        let stored_pathinfo = store.path_info(&store_path).await.unwrap().unwrap();
         let stored_attestation = store.get_artifact_attestation(&store_path).await.unwrap().unwrap();
         let substitution = store.take_output_substitution_report(&store_path).expect("substitution report");
         let exported_path = store_path.to_absolute_path_with_prefix(store.output_dir_str());
@@ -17493,8 +17491,8 @@ mod tests {
         }
     }
 
-    async fn remote_import_store(root: &std::path::Path) -> crunch_store::StoreHandle {
-        crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+    async fn remote_import_store(root: &std::path::Path) -> crunch_store::BuildStore {
+        crunch_store::BuildStore::open(crunch_store::StoreConfig {
             state_dir: root.join("state"),
             output_dir: root.join("store"),
             remote_cache_urls: Vec::new(),

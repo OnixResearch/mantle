@@ -1050,6 +1050,22 @@
           '';
         };
 
+        storeCapabilityArchitectureCheck = craneLib.mkCargoDerivation {
+          pname = "mantle-store-capability-architecture-check";
+          inherit src cargoVendorDir;
+          cargoArtifacts = null;
+          nativeBuildInputs = nativeBuildInputs ++ [ rustToolchain ];
+          buildPhaseCargoCommand = ''
+            cargo -Zscript --offline scripts/check-store-capability-architecture.rs --self-test
+            cargo -Zscript --offline scripts/check-store-capability-architecture.rs --root .
+          '';
+          doInstallCargoArtifacts = false;
+          installPhaseCommand = ''
+            mkdir -p "$out"
+            printf '%s\n' 'external_runtime_findings=0' > "$out/report.txt"
+          '';
+        };
+
         tigerstyleRunner = pkgs.writeShellApplication {
           name = "crunch-tigerstyle";
           runtimeInputs = nativeBuildInputs ++ [
@@ -1342,6 +1358,7 @@
           bootstrap-blocker-inventory = bootstrapBlockerInventory;
           nickel-cohort = nickelCohortCheck;
           nickel-export-core-pin = nickelExportCorePin;
+          store-capability-architecture = storeCapabilityArchitectureCheck;
           content-bound-requirement-source-closure = contentBoundRequirementSourceClosure;
           content-bound-requirement-evidence = contentBoundRequirementEvidence;
           store-retention-policy =

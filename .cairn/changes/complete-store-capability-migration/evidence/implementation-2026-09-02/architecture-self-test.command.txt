@@ -1,0 +1,1 @@
+nix develop -c cargo -Zscript scripts/check-store-capability-architecture.rs --self-test

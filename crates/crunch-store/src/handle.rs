@@ -1297,6 +1297,10 @@ impl StoreHandle {
         std::mem::replace(&mut self.action_result_stores, ActionResultStoreSet::new(false))
     }
 
+    pub(crate) fn publishers(&self) -> &[Arc<dyn Publisher>] {
+        &self.publishers
+    }
+
     pub fn list_retained_roots(&self) -> Result<Vec<GcRootRecord>, Error> {
         roots::list_roots(&self.state_dir)
     }
@@ -3002,7 +3006,7 @@ impl StoreHandle {
         .await
     }
 
-    /// Persist a signed PathInfo and export it to disk when needed.
+    /// Persist and admit a signed PathInfo without executing publishers.
     ///
     /// StoreHandle refuses to persist unsigned PathInfos. That keeps the
     /// "always sign before persist" invariant at the storage boundary,
@@ -3044,19 +3048,6 @@ impl StoreHandle {
             && let Some(source) = req.root_source
         {
             self.register_retained_root(req.output_path, source).await?;
-        }
-
-        // Run output publication adapters after successful admission.
-        // Errors are diagnostic warnings, not build failures.
-        // r[impl remote_builds.production_verified_publication]
-        for publisher in &self.publishers {
-            if let Err(err) = publisher.publish(&req.path_info).await {
-                tracing::warn!(
-                    path = %req.output_path,
-                    err = %err,
-                    "output publication failed (admitted anyway)"
-                );
-            }
         }
 
         Ok(req.path_info)
@@ -4976,8 +4967,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn persistent_output_calls_configured_publisher() {
-        // V9: a configured publisher is called after successful output admission.
+    async fn persistent_output_defers_configured_publisher_until_plan_execution() {
+        // Local admission must return before the application shell executes publication.
         // r[verify remote_builds.production_verified_publication]
         use std::sync::Arc;
 
@@ -5004,8 +4995,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(publisher.call_count(), 1, "publisher should be called once");
-        assert!(publisher.calls()[0].contains("published-output"), "publisher should receive the output path");
+        assert_eq!(publisher.call_count(), 0, "local admission must not execute publishers");
+        assert!(publisher.calls().is_empty(), "publisher calls require an explicit effect plan");
     }
 
     #[tokio::test]

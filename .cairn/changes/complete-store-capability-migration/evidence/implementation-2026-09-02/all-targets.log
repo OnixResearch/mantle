@@ -1,0 +1,15 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-complete-store-capability-migration/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-complete-store-capability-migration/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Blocking waiting for file lock on build directory
+    Checking crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-complete-store-capability-migration/crates/crunch-store)
+    Checking crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-complete-store-capability-migration/crates/crunch-eval)
+    Checking crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-complete-store-capability-migration/crates/crunch-project)
+    Checking crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-complete-store-capability-migration/crates/crunch-hardware-simulation)
+    Checking crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-complete-store-capability-migration/crates/crunch-delta)
+    Checking crunch-rust-cache v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-complete-store-capability-migration/crates/crunch-rust-cache)
+    Checking crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-complete-store-capability-migration/crates/crunch-build)
+    Checking crunch-rustc-wrapper v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-complete-store-capability-migration/crates/crunch-rustc-wrapper)
+    Checking crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-complete-store-capability-migration/crates/crunch-pipeline)
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-complete-store-capability-migration)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 03s

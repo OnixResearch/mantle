@@ -98,12 +98,12 @@ let receipt | AdoptionReceipt = {
   },
   cargo = {
     manifest_blake3 = "2da0308eca14ac453eda8193af08389f2eb531cb47ce2df36175de015f501543",
-    lock_blake3 = "b2750874a05c85b253c34ba37147a77653da3a72db67c85dafd8fc0555cd386f",
+    lock_blake3 = "7be2f92120be2edd80b805a6e7162d589fbc7a1929f3e6ee2dedd9ca451f0529",
     lock_source = "git+%{source_url}?rev=%{revision}#%{revision}",
     package = "durable-file-publication",
   },
   nix = {
-    flake_blake3 = "f7d767427155f25b2b3a58bdd3dadd37a228dcff87323dbffdc8afca849547d6",
+    flake_blake3 = "b75b50a0cf650d3d30d15148cf2abd2295621e36e1eba8ff7e7bafa183a3f25a",
     lock_blake3 = "9ce3960a702c3aaacf8010cb24a23d5c7646536445144e3cc64137d6cfb76bd3",
     locked_url = source_url,
     original_url = source_url,

@@ -12,7 +12,138 @@ use std::fmt;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
+use serde::Deserialize;
+use serde::Serialize;
 use snix_store::path_info::PathInfo;
+
+const PUBLICATION_PLAN_SCHEMA: &str = "mantle-output-publication-plan-v1";
+const PUBLICATION_EFFECT_DOMAIN: &str = "mantle-output-publication-effect-v1";
+const PUBLICATION_PLAN_DOMAIN: &str = "mantle-output-publication-plan-identity-v1";
+const MAX_OUTPUT_PUBLISHERS: u32 = 1_024;
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PublicationEffect {
+    pub effect_id_blake3: String,
+    pub publisher_index: u32,
+    pub logical_path: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PublicationEffectPlan {
+    pub schema: String,
+    pub plan_blake3: String,
+    pub logical_path: String,
+    pub effects: Vec<PublicationEffect>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdmittedOutput {
+    pub path_info: PathInfo,
+    pub publication_plan: PublicationEffectPlan,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PublicationDisposition {
+    Succeeded,
+    Failed,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PublicationObservation {
+    pub effect_id_blake3: String,
+    pub publisher_index: u32,
+    pub logical_path: String,
+    pub disposition: PublicationDisposition,
+    pub error: Option<String>,
+}
+
+pub(crate) fn plan_publication(path_info: &PathInfo, publisher_count: u32) -> Result<PublicationEffectPlan, String> {
+    if publisher_count > MAX_OUTPUT_PUBLISHERS {
+        return Err(format!("publisher count exceeds {MAX_OUTPUT_PUBLISHERS}"));
+    }
+    let logical_path = path_info.store_path.to_string();
+    let effects_len = usize::try_from(publisher_count).map_err(|_| "publisher count does not fit usize".to_string())?;
+    let mut effects = Vec::with_capacity(effects_len);
+    for publisher_index in 0..publisher_count {
+        effects.push(PublicationEffect {
+            effect_id_blake3: publication_effect_identity(&logical_path, publisher_index),
+            publisher_index,
+            logical_path: logical_path.clone(),
+        });
+    }
+    debug_assert!(publisher_count <= MAX_OUTPUT_PUBLISHERS);
+    debug_assert_eq!(effects.len(), effects_len);
+    let plan_blake3 = publication_plan_identity(&logical_path, &effects)?;
+    Ok(PublicationEffectPlan {
+        schema: PUBLICATION_PLAN_SCHEMA.to_string(),
+        plan_blake3,
+        logical_path,
+        effects,
+    })
+}
+
+pub(crate) fn validate_publication_plan(
+    plan: &PublicationEffectPlan,
+    path_info: &PathInfo,
+    publisher_count: usize,
+) -> Result<(), String> {
+    if plan.schema != PUBLICATION_PLAN_SCHEMA || plan.logical_path != path_info.store_path.to_string() {
+        return Err("publication plan identity mismatch".to_string());
+    }
+    let planned_publisher_count = u32::try_from(plan.effects.len())
+        .map_err(|_| "publication plan publisher count does not fit u32".to_string())?;
+    let configured_publisher_count =
+        u32::try_from(publisher_count).map_err(|_| "configured publisher count does not fit u32".to_string())?;
+    if planned_publisher_count != configured_publisher_count || planned_publisher_count > MAX_OUTPUT_PUBLISHERS {
+        return Err("publication plan publisher count mismatch".to_string());
+    }
+    if plan.plan_blake3 != publication_plan_identity(&plan.logical_path, &plan.effects)? {
+        return Err("publication plan BLAKE3 mismatch".to_string());
+    }
+    debug_assert!(planned_publisher_count <= MAX_OUTPUT_PUBLISHERS);
+    debug_assert_eq!(planned_publisher_count, configured_publisher_count);
+    for (expected_index, effect) in plan.effects.iter().enumerate() {
+        let expected_index =
+            u32::try_from(expected_index).map_err(|_| "publication plan index does not fit u32".to_string())?;
+        if effect.publisher_index != expected_index
+            || effect.logical_path != plan.logical_path
+            || effect.effect_id_blake3 != publication_effect_identity(&plan.logical_path, expected_index)
+        {
+            return Err("publication effect identity mismatch".to_string());
+        }
+    }
+    Ok(())
+}
+
+fn publication_plan_identity(logical_path: &str, effects: &[PublicationEffect]) -> Result<String, String> {
+    let mut hasher = blake3::Hasher::new();
+    hash_framed(&mut hasher, PUBLICATION_PLAN_DOMAIN.as_bytes())?;
+    hash_framed(&mut hasher, logical_path.as_bytes())?;
+    for effect in effects {
+        hash_framed(&mut hasher, effect.effect_id_blake3.as_bytes())?;
+        hasher.update(&effect.publisher_index.to_le_bytes());
+    }
+    Ok(hasher.finalize().to_hex().to_string())
+}
+
+fn publication_effect_identity(logical_path: &str, publisher_index: u32) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(PUBLICATION_EFFECT_DOMAIN.as_bytes());
+    hasher.update(logical_path.as_bytes());
+    hasher.update(&publisher_index.to_le_bytes());
+    hasher.finalize().to_hex().to_string()
+}
+
+fn hash_framed(hasher: &mut blake3::Hasher, bytes: &[u8]) -> Result<(), String> {
+    let length_bytes = u64::try_from(bytes.len()).map_err(|_| "publication identity frame length does not fit u64")?;
+    hasher.update(&length_bytes.to_le_bytes());
+    hasher.update(bytes);
+    Ok(())
+}
 
 /// A publisher exports an admitted build output to an external cache or
 /// artifact store.

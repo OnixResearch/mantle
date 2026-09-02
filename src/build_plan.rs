@@ -642,7 +642,7 @@ impl PlanStore {
             None
         };
         let planning_state_dir = ephemeral_state.as_ref().map_or(state_dir, tempfile::TempDir::path);
-        let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
+        let parts = crunch_store::open_planning_store_parts(crunch_store::StoreConfig {
             state_dir: planning_state_dir.to_path_buf(),
             output_dir: output_dir.to_path_buf(),
             remote_cache_urls: substituter_urls.to_vec(),
@@ -652,7 +652,6 @@ impl PlanStore {
         })
         .await
         .map_err(|error| RunError::Internal(format!("opening composed planning store: {error}")))?;
-        let parts = store.into_pipeline_store_parts();
         Ok(Self {
             store_dir: store_dir.to_string(),
             output_lookup: parts.output_lookup,
