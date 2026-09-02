@@ -134,7 +134,7 @@ let Registry = {
         "contract_blake3"= "bd5e73c8be1d9348c4d6e9a2ad9049a71d3f9c976ecadc746e28dda9b4edb6ff",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "8c0fbeb7501409d9d871f79578e693670b262a87e13a7f95bd3eb0eea79b4c54",
-        "producer_identity_blake3"= "817e496cfcb7f4d5094068427930f129866535da728610c2564291d003f0db80",
+        "producer_identity_blake3"= "fff6ab6538fd1a03611c0d730bce630898fd60912daef3d6079784ff7852bc62",
         "consumer_policy_blake3"= "7fa65ad759e4eee6d33ff8ec0f84d1fe1ac3915b9d94e40e1c87ca19c0d20103"
       },
       "non_claims"= [

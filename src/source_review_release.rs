@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use crunch_release_core::RELEASED_SOURCE_REVIEW_ATTACHMENT_RELATIVE_PATH;
 use crunch_release_core::REVIEWED_SOURCE_PRESET_STAGEX_TWO_REVIEWER;
 use crunch_release_core::ReviewedSourcePolicy;
+use crunch_release_core::SOURCE_REVIEW_MODE_OPTIONAL;
 use crunch_release_core::STAGEX_TWO_REVIEWER_THRESHOLD;
 use crunch_release_core::SourceReviewAttachment;
 use crunch_release_core::SourceReviewMode;
@@ -41,7 +42,7 @@ pub struct ReviewerKeyArg {
 }
 
 /// Operator inputs for one release verification's source-review policy.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceReviewVerifyInputs {
     pub mode: String,
     pub preset: Option<String>,
@@ -52,6 +53,22 @@ pub struct SourceReviewVerifyInputs {
     pub claim_root_blake3: Option<String>,
     pub producer_id: Option<String>,
     pub attachment_override: Option<PathBuf>,
+}
+
+impl Default for SourceReviewVerifyInputs {
+    fn default() -> Self {
+        Self {
+            mode: SOURCE_REVIEW_MODE_OPTIONAL.to_string(),
+            preset: None,
+            threshold: None,
+            trusted_reviewers: Vec::new(),
+            revoked_reviewers: Vec::new(),
+            author_key_base64: None,
+            claim_root_blake3: None,
+            producer_id: None,
+            attachment_override: None,
+        }
+    }
 }
 
 /// Parse one `label:base64` reviewer argument.
@@ -367,6 +384,13 @@ mod tests {
     }
 
     #[test]
+    fn verification_inputs_default_to_optional_review() {
+        let inputs = SourceReviewVerifyInputs::default();
+        assert_eq!(inputs.mode, SOURCE_REVIEW_MODE_OPTIONAL);
+        assert!(inputs.preset.is_none());
+    }
+
+    #[test]
     fn reviewer_arg_requires_label_and_key() {
         assert!(parse_reviewer_arg("nolabelkey").is_err());
         assert!(parse_reviewer_arg(":key").is_err());
@@ -393,17 +417,31 @@ mod tests {
 
     #[test]
     fn preset_policy_uses_two_reviewer_threshold() {
-        let key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+        let first_key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+        let second_key = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
         let inputs = SourceReviewVerifyInputs {
             mode: "required".to_string(),
             preset: Some(REVIEWED_SOURCE_PRESET_STAGEX_TWO_REVIEWER.to_string()),
             threshold: None,
-            trusted_reviewers: vec![reviewer_arg("a", key), reviewer_arg("b", key)],
+            trusted_reviewers: vec![reviewer_arg("a", first_key), reviewer_arg("b", second_key)],
             ..SourceReviewVerifyInputs::default()
         };
         let policy = build_reviewed_source_policy(&inputs).expect("valid policy");
         assert_eq!(policy.required_distinct_reviewers, STAGEX_TWO_REVIEWER_THRESHOLD);
         assert!(policy.preset.is_some());
+    }
+
+    #[test]
+    fn preset_policy_rejects_duplicate_reviewer_key() {
+        let key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+        let inputs = SourceReviewVerifyInputs {
+            mode: "required".to_string(),
+            preset: Some(REVIEWED_SOURCE_PRESET_STAGEX_TWO_REVIEWER.to_string()),
+            trusted_reviewers: vec![reviewer_arg("a", key), reviewer_arg("b", key)],
+            ..SourceReviewVerifyInputs::default()
+        };
+        assert!(build_reviewed_source_policy(&inputs).is_err());
+        assert_eq!(inputs.trusted_reviewers.len(), usize::from(STAGEX_TWO_REVIEWER_THRESHOLD));
     }
 
     #[test]
