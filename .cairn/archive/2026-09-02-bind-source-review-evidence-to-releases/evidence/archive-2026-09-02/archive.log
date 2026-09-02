@@ -1,0 +1,997 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: bind-source-review-evidence-to-releases",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases"
+    }
+  ],
+  "blocked": false,
+  "change": "bind-source-review-evidence-to-releases",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "4c32804db9c0d3309e48dd7148eb9f3d3e23f5cd4b0110d83a6fddd7d3046f09",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+    "receipt_hash": "6767ed8b14dd8f3564cacd001ffaea47a8049f223b6d42df429717fe3476d2f6",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "cc68c111930455b2ed265c909d8233f828066bc4e890827f2a1fbf933d8c9537",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "f4e849afda3601b78959f0059acb012e29fca7f4b35d4de4750578d0a30fdb28",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/design.md"
+        },
+        {
+          "content_hash": "9a2f3751a94d3031c94c873d7ffb6b22b7dc367141365064aecf69cb16ccacdb",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/baseline-cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "747e7f9c71ba4588eb37d483edbf0c7dc183e1c4e237d25b744983e4a07ef89a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/baseline-cairn-validate.log"
+        },
+        {
+          "content_hash": "048bb5dcaac30902eb398713a4c1455e81fc8a023d7ec479ddc5c0ceeb5424c1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/baseline-release-attestation.command.txt"
+        },
+        {
+          "content_hash": "e4c56733f718da98aa3de7f2de4fb386dc3c5735461b07f208d8ad8dd3e7e831",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/baseline-release-attestation.log"
+        },
+        {
+          "content_hash": "d20d365b2ca672b0a8663d8aeeeaab0ae157710e0e7062d783ac66f39f194396",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/baseline-release-cli.command.txt"
+        },
+        {
+          "content_hash": "176b113958a424b158d8e5947cbc5780b7181b62d1369bc46710498e1ac00279",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/baseline-release-cli.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/baseline-release-cli.status"
+        },
+        {
+          "content_hash": "648c4c8a582c2d57877e01248e4db8cec26149fac5345aaf3a39450869f73105",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/baseline-release-core.command.txt"
+        },
+        {
+          "content_hash": "b15bd43c6b5d0dd29fed9efcf291041cdc030ebad47ddfed4840baea31108e57",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/baseline-release-core.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/baseline-release-core.status"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/baseline-status"
+        },
+        {
+          "content_hash": "4336bce86e92c7d94a9ecf4f03bf0dfd937e742bb1564e06659d8803343ae640",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/baseline.md"
+        },
+        {
+          "content_hash": "af45aa776138f4c48f0c48bfb04f790baa8b4de33473b3f01e49398c1f0fea46",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/accepted-source-commit.txt"
+        },
+        {
+          "content_hash": "a9109d02c4bf6750f0006353bc0bb5dc861ca517cb456e3eacbd9e748d314797",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/cairn-sync-dry-run.command.txt"
+        },
+        {
+          "content_hash": "e0afe9d32d1b22b40db234900408d42845a894c4be00bc070bcf6db055c60117",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/cairn-sync-dry-run.log"
+        },
+        {
+          "content_hash": "9d76b5e243687618982345e31481bc292764a9903c0095709d223a8b2211a11b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/cairn-sync-execute.command.txt"
+        },
+        {
+          "content_hash": "0405e0a0da5dc350b150a1c525a3209c7eae68b7c3f6ee433abbcc4d745944c4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/cairn-sync-execute.log"
+        },
+        {
+          "content_hash": "faffce4cf46040f19c18f8c3130161cf95e9d57855018f5bce2c24e3fce1da59",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/durable-publication-repair.md"
+        },
+        {
+          "content_hash": "dda4874f864dc0b7bfb698014d04d3520d9271e6d3ccd28ec0b0a73154dd9d54",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/durable-publication.command.txt"
+        },
+        {
+          "content_hash": "b5b0951e2d595562a5204f2fb2997eb5a674a39beab6a84095004ebf564bc875",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/durable-publication.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/durable-publication.status"
+        },
+        {
+          "content_hash": "af5f7560f12a869379ef2179ea0cace467ae6b6bd9e10d98bb401df92040167e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-initial.command.txt"
+        },
+        {
+          "content_hash": "1dbfc089684f59d60cede468cb6dea1edc0725af9e0866f4bc6e0f3d4dcc1333",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-initial.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-initial.status"
+        },
+        {
+          "content_hash": "82418ff2b33a2d9a82d9df493b4fd15dd87f8e57a5ab638a0c39b230ada29e77",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-local-initial.command.txt"
+        },
+        {
+          "content_hash": "e1b586b0db8fc6f26eaa0d1b68070aecf11ceb0dca00ace600c53123d0f49ec2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-local-initial.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-local-initial.status"
+        },
+        {
+          "content_hash": "04892c78dc3e6549c06180a4f7e7a43ce3ed111a06d56aff9fc9d08e870de395",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-local-missing-source-closure.command.txt"
+        },
+        {
+          "content_hash": "5b95e9e05dbf27c7ea129895295452feaedfb69efd4664ba54b641311ad1064a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-local-missing-source-closure.log"
+        },
+        {
+          "content_hash": "489af2bcfd221cfcb7aa5a210824086cd7ef94bcb25d894612f6e6ff2b41edf1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-local-missing-source-closure.status"
+        },
+        {
+          "content_hash": "f50a54d280a9e30069af06d4379d09a4e89c256f12874d93cb9bc37e20d59e49",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-source-mutation.log"
+        },
+        {
+          "content_hash": "489af2bcfd221cfcb7aa5a210824086cd7ef94bcb25d894612f6e6ff2b41edf1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-source-mutation.status"
+        },
+        {
+          "content_hash": "af5f7560f12a869379ef2179ea0cace467ae6b6bd9e10d98bb401df92040167e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full.command.txt"
+        },
+        {
+          "content_hash": "70a82977a71253c28f8532a7ba2c0a380512c02bfdb122c83d45139aea76a566",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full.status"
+        },
+        {
+          "content_hash": "bc85586507db0c5c8d017351c1315365ba81f66bb42ecd525e4aae6fe515f4b3",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-nextest-after-source-closure.command.txt"
+        },
+        {
+          "content_hash": "3689e07fa28a679baba63ee4bf2d7a66d7702b39f7bdc55d1ed9dad3ac0fb494",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-nextest-after-source-closure.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-nextest-after-source-closure.status"
+        },
+        {
+          "content_hash": "ee04363d155f100e45c7b0479e6b9eec70c3e7232a66429039db2140d25dab90",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-no-build-initial.command.txt"
+        },
+        {
+          "content_hash": "2379bb6342b143f94e5ba6b7a093e481ce5b3ac381be278b55e3f807ba89f178",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-no-build-initial.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-no-build-initial.status"
+        },
+        {
+          "content_hash": "ee04363d155f100e45c7b0479e6b9eec70c3e7232a66429039db2140d25dab90",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-no-build.command.txt"
+        },
+        {
+          "content_hash": "198105bf7c516739a9f914bcf68cbd947dd691853e1f604c2b24c69bc2f8e866",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-no-build.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-no-build.status"
+        },
+        {
+          "content_hash": "a639e87c7a202f5e6522ffd2bcc9ccee1ac0fbdb89c436382a8b4a8361b5d008",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-source-closure-repair.md"
+        },
+        {
+          "content_hash": "5358481bd59d41fc4be72025cc17425721e2b34ab9a8d0de95e016b0ee74cef6",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/pre-source-closure-commit.txt"
+        },
+        {
+          "content_hash": "5f015864ce4a2296a1d852ffb6b7f95fe35a10c1ab4319176d368e3f19708101",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/source-commit.txt"
+        },
+        {
+          "content_hash": "8c3055b92e54c2e81eed6e48d4dbe891a3cca6c8adac50743f990a014c228796",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "302c74c0046423b7cb4df5d16eadb398074ec288b774dcc1728bb691a902b6d0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/external-contracts.md"
+        },
+        {
+          "content_hash": "4f44710f58b27f62b699957baa4416490687dad21a22f9f58d19ff52aa003373",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/machine-contract-baseline.command.txt"
+        },
+        {
+          "content_hash": "dff978cc40c1fa45eb2031ffe4ec5466d8254ba580ba40c5bf741c8651dae598",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/machine-contract-baseline.log"
+        },
+        {
+          "content_hash": "4f44710f58b27f62b699957baa4416490687dad21a22f9f58d19ff52aa003373",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/machine-contract-check.command.txt"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/machine-contract-check.log"
+        },
+        {
+          "content_hash": "a63399df803564198da5657aa7fe8167fa4bcd9daf3748655b5e04f6caea9def",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/scaffold-validation.md"
+        },
+        {
+          "content_hash": "db7eb3623870a593899b6a844cf368bb5a7c5f50b80ac0ce3f381615da7a2b90",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-gate-design.command.txt"
+        },
+        {
+          "content_hash": "2980f1963ee8bf7ec1ecb3341df844c877645f6bd3362af7ce1672e4d71be955",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-gate-design.log"
+        },
+        {
+          "content_hash": "c186cd22317bd7fbb3298991156a3885e0e53ece4f61b7cc374d30050551fd30",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-gate-proposal.command.txt"
+        },
+        {
+          "content_hash": "3d7c08c1f8ad6cc7f39247ef30a8f932c7d3710a3590f311f228270a3b7dc69d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-gate-proposal.log"
+        },
+        {
+          "content_hash": "a98ce8752fabb21f0c2af8619fc09eb3d48ae722faa03cc625845d854694a913",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-gate-tasks.command.txt"
+        },
+        {
+          "content_hash": "2e0d069aa266dbafe28515ea204f8f65475ea369cbae683eb3fed0bd7bf3460f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-gate-tasks.log"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "eb7cc262b7f9ee979b3e0f452ebb58626141b1a273f3648c8f5d2aececa488c1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-validate.log"
+        },
+        {
+          "content_hash": "d6449a2633fc7ffdba3cab7ffd6e21ffda6469ab311c53c72bfe0a89b18e9d57",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/clippy-after-default.log"
+        },
+        {
+          "content_hash": "cacc0182919542bec819eed03e4f0f03c3a0f8a2649d74d84da43658002174ef",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/clippy.command.txt"
+        },
+        {
+          "content_hash": "a0f4f2be391e2bf6825cb11107c92fff990178fd60008c2b7c6b95336677751f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/clippy.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/clippy.status"
+        },
+        {
+          "content_hash": "e7939eee72af0e2f8012a9121213d9b2f0e0166eaeb3f1887a6c5e9e0d429357",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/default-release-cli.log"
+        },
+        {
+          "content_hash": "c41c60b86e97d48002f2a6c2b03340e6718d2371ab9577d77c1d6b621edf0306",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/default-release-command-tests.log"
+        },
+        {
+          "content_hash": "b122cea54ee7c3c932cf06ebcc798c543698b2f3f4ceac92b9264a0966109be3",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/default-source-review-tests.log"
+        },
+        {
+          "content_hash": "51ab7c3c9da6b804a19876193fa68fc764be1b6d5fd7b55a61926cb44ee4223f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/final-gates.command.txt"
+        },
+        {
+          "content_hash": "b6d06fbd3a7a5c92d325365c9f82b12eb6c3e59bf5b1a9bb6b3574157f64c39b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/formatting.command.txt"
+        },
+        {
+          "content_hash": "72fd2ecae49edb6089c8af528008a8291264cb700ba9ff1276dfc8f691c1a55b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/formatting.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/formatting.status"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/machine-contract-after-default.log"
+        },
+        {
+          "content_hash": "614b2f479d61102180b565fa143579df2f9eb4fc849c29d55ee25cd055475d3a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/machine-contract-generate-after-default.log"
+        },
+        {
+          "content_hash": "614b2f479d61102180b565fa143579df2f9eb4fc849c29d55ee25cd055475d3a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/machine-contract-generate.log"
+        },
+        {
+          "content_hash": "4f44710f58b27f62b699957baa4416490687dad21a22f9f58d19ff52aa003373",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/machine-contract.command.txt"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/machine-contract.log"
+        },
+        {
+          "content_hash": "d20d365b2ca672b0a8663d8aeeeaab0ae157710e0e7062d783ac66f39f194396",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/release-cli.command.txt"
+        },
+        {
+          "content_hash": "8ddae0da0da63778129c5528ab93bfc930939b6ae33c99110138f76011dc92e9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/release-cli.log"
+        },
+        {
+          "content_hash": "648c4c8a582c2d57877e01248e4db8cec26149fac5345aaf3a39450869f73105",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/release-core.command.txt"
+        },
+        {
+          "content_hash": "5e10cd881cfddf1b218c3e0673723bc8116dd201e3ada60bf0e7962d5bdd7b1e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/release-core.log"
+        },
+        {
+          "content_hash": "0f32e86e655cd88e75cf353048ce5bfe05dd0cabc21e25b3f775deeb3bf640ba",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/tests.status"
+        },
+        {
+          "content_hash": "bb9c2291280d0afa4c981d8c5e4d7086aead5c4d2457cd4d8cdc00d5d0403fc5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/tigerstyle-after-default.log"
+        },
+        {
+          "content_hash": "74d44fc4f02bd168adaafbbda0ce05849423c1506a50ce78c84da951bd36d15c",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/tigerstyle.command.txt"
+        },
+        {
+          "content_hash": "e010c65ec5d629b08b1406fe1329bbcac1777ec78c4d0914205670f90076a9c5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/tigerstyle.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/tigerstyle.status"
+        },
+        {
+          "content_hash": "03fde0d018eaff87b28be3705bd2855e34888a342dab946ea63ebb20e08139c2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/tracey.command.txt"
+        },
+        {
+          "content_hash": "7dfcebb7a5640af2401e8f38a8f687c553326a9f11b82d6d49bf8459d58ffc54",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/tracey.log"
+        },
+        {
+          "content_hash": "bd351b6031d3b5c1838aaaca8d9e22bfff377be6edc419dbc4d04327ededfe95",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/proposal.md"
+        },
+        {
+          "content_hash": "ad77d5eb791bd2bf67b4485661c63711fe09cbcf796b2c24c5aeeb835409039a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/specs/verification-evidence/spec.md"
+        },
+        {
+          "content_hash": "3fff1274f4abf2f4b35bf001b6b99fdb8e1e7c8d2fb5449f8b19308b5f9bbc5c",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-02-bind-source-review-evidence-to-releases/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases"
+        }
+      ],
+      "manifest_hash": "513d2d574fb7cad2b6d53df83005401bcf292bc7b7845ed52b322f715b8ba2d8"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "f4e849afda3601b78959f0059acb012e29fca7f4b35d4de4750578d0a30fdb28",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/design.md"
+        },
+        {
+          "content_hash": "9a2f3751a94d3031c94c873d7ffb6b22b7dc367141365064aecf69cb16ccacdb",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/baseline-cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "747e7f9c71ba4588eb37d483edbf0c7dc183e1c4e237d25b744983e4a07ef89a",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/baseline-cairn-validate.log"
+        },
+        {
+          "content_hash": "048bb5dcaac30902eb398713a4c1455e81fc8a023d7ec479ddc5c0ceeb5424c1",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/baseline-release-attestation.command.txt"
+        },
+        {
+          "content_hash": "e4c56733f718da98aa3de7f2de4fb386dc3c5735461b07f208d8ad8dd3e7e831",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/baseline-release-attestation.log"
+        },
+        {
+          "content_hash": "d20d365b2ca672b0a8663d8aeeeaab0ae157710e0e7062d783ac66f39f194396",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/baseline-release-cli.command.txt"
+        },
+        {
+          "content_hash": "176b113958a424b158d8e5947cbc5780b7181b62d1369bc46710498e1ac00279",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/baseline-release-cli.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/baseline-release-cli.status"
+        },
+        {
+          "content_hash": "648c4c8a582c2d57877e01248e4db8cec26149fac5345aaf3a39450869f73105",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/baseline-release-core.command.txt"
+        },
+        {
+          "content_hash": "b15bd43c6b5d0dd29fed9efcf291041cdc030ebad47ddfed4840baea31108e57",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/baseline-release-core.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/baseline-release-core.status"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/baseline-status"
+        },
+        {
+          "content_hash": "4336bce86e92c7d94a9ecf4f03bf0dfd937e742bb1564e06659d8803343ae640",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/baseline.md"
+        },
+        {
+          "content_hash": "af45aa776138f4c48f0c48bfb04f790baa8b4de33473b3f01e49398c1f0fea46",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/accepted-source-commit.txt"
+        },
+        {
+          "content_hash": "a9109d02c4bf6750f0006353bc0bb5dc861ca517cb456e3eacbd9e748d314797",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/cairn-sync-dry-run.command.txt"
+        },
+        {
+          "content_hash": "e0afe9d32d1b22b40db234900408d42845a894c4be00bc070bcf6db055c60117",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/cairn-sync-dry-run.log"
+        },
+        {
+          "content_hash": "9d76b5e243687618982345e31481bc292764a9903c0095709d223a8b2211a11b",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/cairn-sync-execute.command.txt"
+        },
+        {
+          "content_hash": "0405e0a0da5dc350b150a1c525a3209c7eae68b7c3f6ee433abbcc4d745944c4",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/cairn-sync-execute.log"
+        },
+        {
+          "content_hash": "faffce4cf46040f19c18f8c3130161cf95e9d57855018f5bce2c24e3fce1da59",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/durable-publication-repair.md"
+        },
+        {
+          "content_hash": "dda4874f864dc0b7bfb698014d04d3520d9271e6d3ccd28ec0b0a73154dd9d54",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/durable-publication.command.txt"
+        },
+        {
+          "content_hash": "b5b0951e2d595562a5204f2fb2997eb5a674a39beab6a84095004ebf564bc875",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/durable-publication.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/durable-publication.status"
+        },
+        {
+          "content_hash": "af5f7560f12a869379ef2179ea0cace467ae6b6bd9e10d98bb401df92040167e",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-initial.command.txt"
+        },
+        {
+          "content_hash": "1dbfc089684f59d60cede468cb6dea1edc0725af9e0866f4bc6e0f3d4dcc1333",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-initial.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-initial.status"
+        },
+        {
+          "content_hash": "82418ff2b33a2d9a82d9df493b4fd15dd87f8e57a5ab638a0c39b230ada29e77",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-local-initial.command.txt"
+        },
+        {
+          "content_hash": "e1b586b0db8fc6f26eaa0d1b68070aecf11ceb0dca00ace600c53123d0f49ec2",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-local-initial.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-local-initial.status"
+        },
+        {
+          "content_hash": "04892c78dc3e6549c06180a4f7e7a43ce3ed111a06d56aff9fc9d08e870de395",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-local-missing-source-closure.command.txt"
+        },
+        {
+          "content_hash": "5b95e9e05dbf27c7ea129895295452feaedfb69efd4664ba54b641311ad1064a",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-local-missing-source-closure.log"
+        },
+        {
+          "content_hash": "489af2bcfd221cfcb7aa5a210824086cd7ef94bcb25d894612f6e6ff2b41edf1",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-local-missing-source-closure.status"
+        },
+        {
+          "content_hash": "f50a54d280a9e30069af06d4379d09a4e89c256f12874d93cb9bc37e20d59e49",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-source-mutation.log"
+        },
+        {
+          "content_hash": "489af2bcfd221cfcb7aa5a210824086cd7ef94bcb25d894612f6e6ff2b41edf1",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full-source-mutation.status"
+        },
+        {
+          "content_hash": "af5f7560f12a869379ef2179ea0cace467ae6b6bd9e10d98bb401df92040167e",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full.command.txt"
+        },
+        {
+          "content_hash": "70a82977a71253c28f8532a7ba2c0a380512c02bfdb122c83d45139aea76a566",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-full.status"
+        },
+        {
+          "content_hash": "bc85586507db0c5c8d017351c1315365ba81f66bb42ecd525e4aae6fe515f4b3",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-nextest-after-source-closure.command.txt"
+        },
+        {
+          "content_hash": "3689e07fa28a679baba63ee4bf2d7a66d7702b39f7bdc55d1ed9dad3ac0fb494",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-nextest-after-source-closure.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-nextest-after-source-closure.status"
+        },
+        {
+          "content_hash": "ee04363d155f100e45c7b0479e6b9eec70c3e7232a66429039db2140d25dab90",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-no-build-initial.command.txt"
+        },
+        {
+          "content_hash": "2379bb6342b143f94e5ba6b7a093e481ce5b3ac381be278b55e3f807ba89f178",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-no-build-initial.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-no-build-initial.status"
+        },
+        {
+          "content_hash": "ee04363d155f100e45c7b0479e6b9eec70c3e7232a66429039db2140d25dab90",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-no-build.command.txt"
+        },
+        {
+          "content_hash": "198105bf7c516739a9f914bcf68cbd947dd691853e1f604c2b24c69bc2f8e866",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-no-build.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-no-build.status"
+        },
+        {
+          "content_hash": "a639e87c7a202f5e6522ffd2bcc9ccee1ac0fbdb89c436382a8b4a8361b5d008",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/nix-source-closure-repair.md"
+        },
+        {
+          "content_hash": "5358481bd59d41fc4be72025cc17425721e2b34ab9a8d0de95e016b0ee74cef6",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/pre-source-closure-commit.txt"
+        },
+        {
+          "content_hash": "5f015864ce4a2296a1d852ffb6b7f95fe35a10c1ab4319176d368e3f19708101",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/source-commit.txt"
+        },
+        {
+          "content_hash": "8c3055b92e54c2e81eed6e48d4dbe891a3cca6c8adac50743f990a014c228796",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/committed-validation-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "302c74c0046423b7cb4df5d16eadb398074ec288b774dcc1728bb691a902b6d0",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/external-contracts.md"
+        },
+        {
+          "content_hash": "4f44710f58b27f62b699957baa4416490687dad21a22f9f58d19ff52aa003373",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/machine-contract-baseline.command.txt"
+        },
+        {
+          "content_hash": "dff978cc40c1fa45eb2031ffe4ec5466d8254ba580ba40c5bf741c8651dae598",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/machine-contract-baseline.log"
+        },
+        {
+          "content_hash": "4f44710f58b27f62b699957baa4416490687dad21a22f9f58d19ff52aa003373",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/machine-contract-check.command.txt"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/machine-contract-check.log"
+        },
+        {
+          "content_hash": "a63399df803564198da5657aa7fe8167fa4bcd9daf3748655b5e04f6caea9def",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/scaffold-validation.md"
+        },
+        {
+          "content_hash": "db7eb3623870a593899b6a844cf368bb5a7c5f50b80ac0ce3f381615da7a2b90",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-gate-design.command.txt"
+        },
+        {
+          "content_hash": "2980f1963ee8bf7ec1ecb3341df844c877645f6bd3362af7ce1672e4d71be955",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-gate-design.log"
+        },
+        {
+          "content_hash": "c186cd22317bd7fbb3298991156a3885e0e53ece4f61b7cc374d30050551fd30",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-gate-proposal.command.txt"
+        },
+        {
+          "content_hash": "3d7c08c1f8ad6cc7f39247ef30a8f932c7d3710a3590f311f228270a3b7dc69d",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-gate-proposal.log"
+        },
+        {
+          "content_hash": "a98ce8752fabb21f0c2af8619fc09eb3d48ae722faa03cc625845d854694a913",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-gate-tasks.command.txt"
+        },
+        {
+          "content_hash": "2e0d069aa266dbafe28515ea204f8f65475ea369cbae683eb3fed0bd7bf3460f",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-gate-tasks.log"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "eb7cc262b7f9ee979b3e0f452ebb58626141b1a273f3648c8f5d2aececa488c1",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/cairn-validate.log"
+        },
+        {
+          "content_hash": "d6449a2633fc7ffdba3cab7ffd6e21ffda6469ab311c53c72bfe0a89b18e9d57",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/clippy-after-default.log"
+        },
+        {
+          "content_hash": "cacc0182919542bec819eed03e4f0f03c3a0f8a2649d74d84da43658002174ef",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/clippy.command.txt"
+        },
+        {
+          "content_hash": "a0f4f2be391e2bf6825cb11107c92fff990178fd60008c2b7c6b95336677751f",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/clippy.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/clippy.status"
+        },
+        {
+          "content_hash": "e7939eee72af0e2f8012a9121213d9b2f0e0166eaeb3f1887a6c5e9e0d429357",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/default-release-cli.log"
+        },
+        {
+          "content_hash": "c41c60b86e97d48002f2a6c2b03340e6718d2371ab9577d77c1d6b621edf0306",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/default-release-command-tests.log"
+        },
+        {
+          "content_hash": "b122cea54ee7c3c932cf06ebcc798c543698b2f3f4ceac92b9264a0966109be3",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/default-source-review-tests.log"
+        },
+        {
+          "content_hash": "51ab7c3c9da6b804a19876193fa68fc764be1b6d5fd7b55a61926cb44ee4223f",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/final-gates.command.txt"
+        },
+        {
+          "content_hash": "b6d06fbd3a7a5c92d325365c9f82b12eb6c3e59bf5b1a9bb6b3574157f64c39b",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/formatting.command.txt"
+        },
+        {
+          "content_hash": "72fd2ecae49edb6089c8af528008a8291264cb700ba9ff1276dfc8f691c1a55b",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/formatting.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/formatting.status"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/machine-contract-after-default.log"
+        },
+        {
+          "content_hash": "614b2f479d61102180b565fa143579df2f9eb4fc849c29d55ee25cd055475d3a",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/machine-contract-generate-after-default.log"
+        },
+        {
+          "content_hash": "614b2f479d61102180b565fa143579df2f9eb4fc849c29d55ee25cd055475d3a",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/machine-contract-generate.log"
+        },
+        {
+          "content_hash": "4f44710f58b27f62b699957baa4416490687dad21a22f9f58d19ff52aa003373",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/machine-contract.command.txt"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/machine-contract.log"
+        },
+        {
+          "content_hash": "d20d365b2ca672b0a8663d8aeeeaab0ae157710e0e7062d783ac66f39f194396",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/release-cli.command.txt"
+        },
+        {
+          "content_hash": "8ddae0da0da63778129c5528ab93bfc930939b6ae33c99110138f76011dc92e9",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/release-cli.log"
+        },
+        {
+          "content_hash": "648c4c8a582c2d57877e01248e4db8cec26149fac5345aaf3a39450869f73105",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/release-core.command.txt"
+        },
+        {
+          "content_hash": "5e10cd881cfddf1b218c3e0673723bc8116dd201e3ada60bf0e7962d5bdd7b1e",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/release-core.log"
+        },
+        {
+          "content_hash": "0f32e86e655cd88e75cf353048ce5bfe05dd0cabc21e25b3f775deeb3bf640ba",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/tests.status"
+        },
+        {
+          "content_hash": "bb9c2291280d0afa4c981d8c5e4d7086aead5c4d2457cd4d8cdc00d5d0403fc5",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/tigerstyle-after-default.log"
+        },
+        {
+          "content_hash": "74d44fc4f02bd168adaafbbda0ce05849423c1506a50ce78c84da951bd36d15c",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/tigerstyle.command.txt"
+        },
+        {
+          "content_hash": "e010c65ec5d629b08b1406fe1329bbcac1777ec78c4d0914205670f90076a9c5",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/tigerstyle.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/tigerstyle.status"
+        },
+        {
+          "content_hash": "03fde0d018eaff87b28be3705bd2855e34888a342dab946ea63ebb20e08139c2",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/tracey.command.txt"
+        },
+        {
+          "content_hash": "7dfcebb7a5640af2401e8f38a8f687c553326a9f11b82d6d49bf8459d58ffc54",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/evidence/validation-2026-09-02/tracey.log"
+        },
+        {
+          "content_hash": "bd351b6031d3b5c1838aaaca8d9e22bfff377be6edc419dbc4d04327ededfe95",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/proposal.md"
+        },
+        {
+          "content_hash": "ad77d5eb791bd2bf67b4485661c63711fe09cbcf796b2c24c5aeeb835409039a",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/specs/verification-evidence/spec.md"
+        },
+        {
+          "content_hash": "3fff1274f4abf2f4b35bf001b6b99fdb8e1e7c8d2fb5449f8b19308b5f9bbc5c",
+          "exists": true,
+          "path": "./.cairn/changes/bind-source-review-evidence-to-releases/tasks.md"
+        }
+      ],
+      "manifest_hash": "81ffd771dff591db443774ba40f6aab3c80a98a516615f1361e32b65ee64c385"
+    },
+    "kind": "archive",
+    "manifest_hash": "95aa24a464989e07e7377a6f86f48c40046ed9ae4f24a7f630de9ec2fc5c1dd9"
+  },
+  "plan_hash": "75a0acb164af7501c5e20ee9a571db07b119440a7283006ca5c0d9a599fb2628",
+  "policy": "mantle-default",
+  "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+  "reasons": [],
+  "receipt_hash": "7d37ce9907ccfced107c0be7c26b46a95f00266dc5af1d3269f67e82d3562a2e"
+}
