@@ -42,9 +42,20 @@ finding baseline, package omission, or narrower target policy.
 - `nix flake check --no-build -L`: passed.
 - Diff check and new-allowance scan: passed.
 
+## Full-check boundaries
+
+The ordinary full check completes the Tiger Style derivation successfully, then
+exits 1 when the remote builder imports the pinned `rust-src` fixed output with
+a SHA-256 that differs from the specified value.
+
+The local-builder full check exits 1 when the filtered nextest source omits five
+tracked V47/V48 evidence files referenced by six `include_*` macros. It reports
+no Tiger Style finding. Its parallel Tiger derivation does not finish before Nix
+stops the run.
+
 ## Non-claims
 
 This evidence does not prove compiler correctness, complete sandbox correctness,
-external service availability, or release eligibility. Full build-mode flake
-checks are recorded separately because independent infrastructure failures can
-remain after the Tiger Style gate is clean.
+external service availability, or release eligibility. Full flake success
+remains unclaimed because both independent blockers are preserved without
+weakening either gate.
