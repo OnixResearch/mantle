@@ -1,0 +1,6 @@
+[clippy] first-party strict gate
+running: cargo clippy --workspace --all-targets --no-deps --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- -D warnings
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-complete-store-capability-migration/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-complete-store-capability-migration/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.01s
