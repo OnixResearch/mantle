@@ -1,0 +1,1 @@
+nix develop -c cargo -Zscript scripts/check-build-planning-architecture.rs --root .

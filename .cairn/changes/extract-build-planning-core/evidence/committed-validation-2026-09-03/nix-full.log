@@ -1,0 +1,1639 @@
+evaluating flake...
+checking flake output 'packages'...
+checking derivation packages.x86_64-linux.wasi-virt...
+derivation evaluated to /nix/store/cacsszdc86gnw4lccv1kiwip8dljz8r9-wasi-virt-0.2.0.drv
+checking derivation packages.x86_64-linux.default...
+derivation evaluated to /nix/store/wkwd5cdbkmj5rhb0z0r3nzmq13m5wvf1-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.crunch...
+derivation evaluated to /nix/store/wkwd5cdbkmj5rhb0z0r3nzmq13m5wvf1-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.ast-grep-toolchain...
+derivation evaluated to /nix/store/hwz43xm09gs5v38a4pfyc2dhs5n9h1pj-mantle-ast-grep-toolchain-0.42.1.drv
+checking derivation packages.x86_64-linux.ast-grep-package-identity...
+derivation evaluated to /nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv
+checking derivation packages.x86_64-linux.nickel...
+derivation evaluated to /nix/store/mgf4mizpx3zngjhbqpj4cdz6zn1wp7f3-nickel-lang-rev-fixup-1.17.0.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain...
+derivation evaluated to /nix/store/skwkzzc8khiw49fjp2l73d5m4x4m88y6-mantle-wasm-component-toolchain-v1.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-identity...
+derivation evaluated to /nix/store/nrf64w472p89kb8q03zw8wf5hx0198c0-mantle-wasm-component-toolchain-identity.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-compatibility...
+derivation evaluated to /nix/store/lax220sgd6bf2raarrl38cg9clbdgspm-mantle-wasm-component-toolchain-compatibility.drv
+checking derivation packages.x86_64-linux.mantle-transcript-quality...
+derivation evaluated to /nix/store/0hc0jk6i2j36lss9c1rggk6j4lf3pz3w-mantle-transcript-quality-nextest-0.1.0.drv
+checking derivation packages.x86_64-linux.release-nix-witness-quality...
+derivation evaluated to /nix/store/46ydk2s3yrpgna0hi17r7q7lvn4fbxgy-crunch-release-nix-witness-quality-nextest-0.1.0.drv
+checking derivation packages.x86_64-linux.check-nickel-configs...
+derivation evaluated to /nix/store/srbs2g56q3d7mcsyhfcjxndn3hh4byrc-check-nickel-configs.drv
+checking derivation packages.x86_64-linux.check-store-retention-policy...
+derivation evaluated to /nix/store/i1pqkin9jgwqzkrlh34qqgrqy6r47ijs-check-store-retention-policy.drv
+checking derivation packages.x86_64-linux.check-store-overlay-policy...
+derivation evaluated to /nix/store/9wbldpqaq54qvhdar9az2s7wy8mhx2f2-check-store-overlay-policy.drv
+checking derivation packages.x86_64-linux.oci-distribution-registry...
+derivation evaluated to /nix/store/7h1b5w2s2gqhb0dgmiydw4xcl2blxnnv-distribution-3.1.0.drv
+checking derivation packages.x86_64-linux.rustc-wrapper...
+derivation evaluated to /nix/store/90a645q3k23wdrisx45nskhqz0pbydkh-mantle-rustc-wrapper-0.1.0.drv
+checking derivation packages.x86_64-linux.kernelscript-compiler...
+derivation evaluated to /nix/store/z1dps3ryzhmn8iyx6jnpfyxfqlnzqpzq-ocaml5.2.1-kernelscript-0.1.2.drv
+checking derivation packages.x86_64-linux.kernelscript-core-adapter...
+derivation evaluated to /nix/store/pdqmlb9lrz369frd0pq91cb71rs6ywj2-crunch-kernelscript-adapter-0.1.0.drv
+checking derivation packages.x86_64-linux.kernelscript-production...
+derivation evaluated to /nix/store/k05s4c3z3xinl18gkjgdfa4ail0jyxy1-mantle-kernelscript-production-artifacts.drv
+checking derivation packages.x86_64-linux.kernelscript-production-cohort...
+derivation evaluated to /nix/store/s078an6hxw76szh0wih05c6pjqzzwxvk-mantle-kernelscript-production-cohort.drv
+checking derivation packages.x86_64-linux.kernelscript-production-shell...
+derivation evaluated to /nix/store/xarwhw5xcplxaflss3w8xssvpgn1rchg-mantle-kernelscript-production.drv
+checking derivation packages.x86_64-linux.kernelscript-production-runtime-check...
+derivation evaluated to /nix/store/5y295w4fxsfrkarfj49k0j9y8hf5hgj4-vm-test-run-mantle-kernelscript-production-runtime.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-bundle...
+derivation evaluated to /nix/store/58mdyyk7wnymnnd7bzfakqrpi0b1ny59-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-bundler...
+derivation evaluated to /nix/store/5zy41qxrhp4yi8s31fnvbvw1s3aibcpw-mantle-spacewasm-reference-bundler-0.1.0.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-evidence...
+derivation evaluated to /nix/store/imiig80j09fxg2nv2qkyrw4zzmazj9j9-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-evidence.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-rust-toolchain...
+derivation evaluated to /nix/store/ib3maa2zj4d9ikmlx4x15xaiz9vxh55r-rust-minimal-1.91.1.drv
+checking flake output 'apps'...
+checking app 'apps.x86_64-linux.tigerstyle'...
+warning: app 'apps.x86_64-linux.tigerstyle' lacks attribute 'meta'
+checking flake output 'checks'...
+checking derivation checks.x86_64-linux.tigerstyle...
+derivation evaluated to /nix/store/9m3204mjdvadd9gyww3wslzcry87z8az-tigerstyle-consumer-check.drv
+checking derivation checks.x86_64-linux.crunch...
+derivation evaluated to /nix/store/wkwd5cdbkmj5rhb0z0r3nzmq13m5wvf1-mantle-0.1.0.drv
+checking derivation checks.x86_64-linux.ast-grep-package-identity...
+derivation evaluated to /nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv
+checking derivation checks.x86_64-linux.wasm-component-toolchain-identity...
+derivation evaluated to /nix/store/nrf64w472p89kb8q03zw8wf5hx0198c0-mantle-wasm-component-toolchain-identity.drv
+checking derivation checks.x86_64-linux.wasm-component-toolchain-compatibility...
+derivation evaluated to /nix/store/lax220sgd6bf2raarrl38cg9clbdgspm-mantle-wasm-component-toolchain-compatibility.drv
+checking derivation checks.x86_64-linux.mantle-transcript-quality...
+derivation evaluated to /nix/store/0hc0jk6i2j36lss9c1rggk6j4lf3pz3w-mantle-transcript-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.release-nix-witness-quality...
+derivation evaluated to /nix/store/46ydk2s3yrpgna0hi17r7q7lvn4fbxgy-crunch-release-nix-witness-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.kernelscript-production...
+derivation evaluated to /nix/store/205hvznp0xhfhpbd2saqayr4a3wzwhzq-mantle-kernelscript-production-structural-check.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-bundle...
+derivation evaluated to /nix/store/58mdyyk7wnymnnd7bzfakqrpi0b1ny59-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv
+checking derivation checks.x86_64-linux.bounded-tree-source-admission...
+derivation evaluated to /nix/store/v65b9gwnryara9f2hv5qzcpdf8z21l80-mantle-bounded-tree-source-admission.drv
+checking derivation checks.x86_64-linux.transactional-reconciliation-source-admission...
+derivation evaluated to /nix/store/yxp4yg9ql4k15rhqyv0w2i4vd0kh2z71-mantle-transactional-reconciliation-source-admission.drv
+checking derivation checks.x86_64-linux.bootstrap-blocker-inventory...
+derivation evaluated to /nix/store/j1gr4ppf6wils163k969zpcjznwh9sbj-bootstrap-blocker-inventory.drv
+checking derivation checks.x86_64-linux.nickel-cohort...
+derivation evaluated to /nix/store/g98d50d2qd03769lhr936dmw3l8v8cz7-mantle-nickel-cohort-check-0.1.0.drv
+checking derivation checks.x86_64-linux.nickel-export-core-pin...
+derivation evaluated to /nix/store/0581z832zy9m5yh630bz0lh0mi3a0wfa-mantle-nickel-export-core-pin.drv
+checking derivation checks.x86_64-linux.store-capability-architecture...
+derivation evaluated to /nix/store/jsr4vf31060m4zgx4f5whw1y84pj6zy1-mantle-store-capability-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.remote-hexagon-architecture...
+derivation evaluated to /nix/store/prfddx7l2q5h292840rjbf6kbhfqcanz-mantle-remote-hexagon-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.rust-plan-hexagon-architecture...
+derivation evaluated to /nix/store/g5g9nmzq5liwsav1s9ydhqrx5ycxqlan-mantle-rust-plan-hexagon-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.build-planning-architecture...
+derivation evaluated to /nix/store/vs9pacxnr1abwa2l5b0mw3k0vsbzc7jn-mantle-build-planning-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.content-bound-requirement-source-closure...
+derivation evaluated to /nix/store/qsi7ks0sigznnl6w3q197bxh9hgcfrsn-mantle-content-bound-requirement-source-closure.drv
+checking derivation checks.x86_64-linux.content-bound-requirement-evidence...
+derivation evaluated to /nix/store/2bcp35idrrqz0yh12213qk0pns57yvvx-mantle-content-bound-requirement-evidence.drv
+checking derivation checks.x86_64-linux.store-retention-policy...
+derivation evaluated to /nix/store/hx71jnrjihhhjnbpsgbnrmxriv8hcyvm-mantle-store-retention-policy.drv
+checking derivation checks.x86_64-linux.store-overlay-policy...
+derivation evaluated to /nix/store/blsipz68d21ci1ykv729xfbf2yjla9l4-mantle-store-overlay-policy.drv
+checking derivation checks.x86_64-linux.release-determinism-quality...
+derivation evaluated to /nix/store/2rk3k6sgynfhcd8qxh23da66gn24arl6-crunch-release-determinism-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.artifact-auth-radicle-cutover...
+derivation evaluated to /nix/store/rmsb8pd4793r2x1rvbv33jjyflcn4s05-mantle-artifact-auth-radicle-cutover.drv
+checking derivation checks.x86_64-linux.durable-file-publication-adoption...
+derivation evaluated to /nix/store/14gzh1j0yfzds1vkkc9alkxl4xb13km3-mantle-durable-file-publication-adoption.drv
+checking derivation checks.x86_64-linux.remote-core...
+derivation evaluated to /nix/store/y0vhmclc4parkykn9bjhpskjbdwp3szl-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.remote-core-wasm...
+derivation evaluated to /nix/store/m901zh3snp1bldn9kdcsl7fvnhxaxcbi-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.rust-plan-core...
+derivation evaluated to /nix/store/b4glm7r3hqfnjndkawa2l4abfrzy0410-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.rust-plan-core-wasm...
+derivation evaluated to /nix/store/i8zd53g17klpr0hzpd2hfqdl9cwrw2fj-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.build-planning-core...
+derivation evaluated to /nix/store/2yzbxm5jzc5wgjr8097fyx308782xzy1-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.build-planning-core-wasm...
+derivation evaluated to /nix/store/xr1hs3rpij1bsrbcjcnkk3r4qs5gfr1g-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract...
+derivation evaluated to /nix/store/6pp8yb3hdbxni6j1p0vxfz2jhgkgcwjw-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract-wasm...
+derivation evaluated to /nix/store/4sl2z6b2p6z20fzfkk9q3dhwr1qyxpnp-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract-nickel...
+derivation evaluated to /nix/store/2n5hsbslqv56mn7lfk61zikxlnnh0993-mantle-build-contract-nickel.drv
+checking derivation checks.x86_64-linux.nextest...
+derivation evaluated to /nix/store/nsddlmxw61ayniwwmwl8pzy3r8havd2v-mantle-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.clippy...
+derivation evaluated to /nix/store/81c185a0bddifllabpdal0bamyp7gvaj-mantle-clippy-0.1.0.drv
+checking derivation checks.x86_64-linux.fmt...
+derivation evaluated to /nix/store/kh3df8dv4bhhc17hgqigjwp7227cq1qf-mantle-fmt-0.1.0.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-profile...
+derivation evaluated to /nix/store/l7afrlfqdkbk2kr6cc4b3cz71mfvyqgr-spacewasm-reference-profile-export.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-host-library...
+derivation evaluated to /nix/store/w4jrclscwbypndanjqk3q80n0ms9vmq7-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-host-library.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-wasm-library...
+derivation evaluated to /nix/store/55qq4aiiy3kl1vn7m0m6bhbwkrj8viin-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-wasm-library.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-host-runner...
+derivation evaluated to /nix/store/nhq1j51vr6f2c3hyizpym9gqv7kdlyhg-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-diagnostic-runner.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-upstream-unit-tests...
+derivation evaluated to /nix/store/d32qk66pm2qmpp0dbjqsyv9v0qcyrn63-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-unit-tests.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-spectest-address...
+derivation evaluated to /nix/store/idj54q1da8w21x0c59p8ay7vxnh2gin6-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-spectest-address.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-fixtures...
+derivation evaluated to /nix/store/1i1y5ni7ivf7bnhdb2z8i0kpsbkl0x2j-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-fixture-report.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-negative...
+derivation evaluated to /nix/store/6p0ana9vradxplf1as1rb12n67am2gdr-mantle-spacewasm-reference-negative-check.drv
+checking flake output 'devShells'...
+checking derivation devShells.x86_64-linux.default...
+derivation evaluated to /nix/store/79yv04c8ffnzjj4jjgkrnr9adhf084im-nix-shell.drv
+running 36 flake checks...
+building '/nix/store/j1gr4ppf6wils163k969zpcjznwh9sbj-bootstrap-blocker-inventory.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/pdqmlb9lrz369frd0pq91cb71rs6ywj2-crunch-kernelscript-adapter-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/2rk3k6sgynfhcd8qxh23da66gn24arl6-crunch-release-determinism-quality-nextest-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/46ydk2s3yrpgna0hi17r7q7lvn4fbxgy-crunch-release-nix-witness-quality-nextest-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/wkwd5cdbkmj5rhb0z0r3nzmq13m5wvf1-mantle-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/rmsb8pd4793r2x1rvbv33jjyflcn4s05-mantle-artifact-auth-radicle-cutover.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/v65b9gwnryara9f2hv5qzcpdf8z21l80-mantle-bounded-tree-source-admission.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/4sl2z6b2p6z20fzfkk9q3dhwr1qyxpnp-mantle-build-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/i8zd53g17klpr0hzpd2hfqdl9cwrw2fj-mantle-build-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/m901zh3snp1bldn9kdcsl7fvnhxaxcbi-mantle-build-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/xr1hs3rpij1bsrbcjcnkk3r4qs5gfr1g-mantle-build-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/2n5hsbslqv56mn7lfk61zikxlnnh0993-mantle-build-contract-nickel.drv'...
+building '/nix/store/vs9pacxnr1abwa2l5b0mw3k0vsbzc7jn-mantle-build-planning-architecture-check-0.1.0.drv'...
+building '/nix/store/81c185a0bddifllabpdal0bamyp7gvaj-mantle-clippy-0.1.0.drv'...
+building '/nix/store/2bcp35idrrqz0yh12213qk0pns57yvvx-mantle-content-bound-requirement-evidence.drv'...
+mantle-build-planning-architecture-check> cargoArtifacts not set, will not reuse any cargo artifacts
+building '/nix/store/g5g9nmzq5liwsav1s9ydhqrx5ycxqlan-mantle-rust-plan-hexagon-architecture-check-0.1.0.drv'...
+mantle-build-planning-architecture-check> Running phase: unpackPhase
+mantle-build-planning-architecture-check> unpacking source archive /nix/store/zs8vqn9scpdwianxidxzrqcpr71a2nf0-source
+copying 1 paths...
+copying path '/nix/store/zs8vqn9scpdwianxidxzrqcpr71a2nf0-source' to 'ssh-ng://root@aspen1.local'...
+mantle-rust-plan-hexagon-architecture-check> cargoArtifacts not set, will not reuse any cargo artifacts
+building '/nix/store/prfddx7l2q5h292840rjbf6kbhfqcanz-mantle-remote-hexagon-architecture-check-0.1.0.drv'...
+mantle-clippy> Running phase: unpackPhase
+mantle-clippy> unpacking source archive /nix/store/zs8vqn9scpdwianxidxzrqcpr71a2nf0-source
+mantle-rust-plan-hexagon-architecture-check> Running phase: unpackPhase
+mantle-remote-hexagon-architecture-check> cargoArtifacts not set, will not reuse any cargo artifacts
+mantle-rust-plan-hexagon-architecture-check> unpacking source archive /nix/store/zs8vqn9scpdwianxidxzrqcpr71a2nf0-source
+mantle-remote-hexagon-architecture-check> Running phase: unpackPhase
+mantle-remote-hexagon-architecture-check> unpacking source archive /nix/store/zs8vqn9scpdwianxidxzrqcpr71a2nf0-source
+mantle-build-planning-architecture-check> source root is source
+mantle-clippy> source root is source
+mantle-rust-plan-hexagon-architecture-check> source root is source
+mantle-remote-hexagon-architecture-check> source root is source
+mantle-build-planning-architecture-check> Running phase: patchPhase
+mantle-build-planning-architecture-check> Executing configureCargoCommonVars
+mantle-build-planning-architecture-check> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-clippy> Running phase: patchPhase
+mantle-clippy> Executing configureCargoCommonVars
+mantle-clippy> decompressing cargo artifacts from /nix/store/fw20x4r94yda90wscyn34wasy06j7ak5-mantle-deps-0.1.0/target.tar.zst to target
+mantle-rust-plan-hexagon-architecture-check> Running phase: patchPhase
+mantle-rust-plan-hexagon-architecture-check> Executing configureCargoCommonVars
+mantle-rust-plan-hexagon-architecture-check> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-build-planning-architecture-check> Running phase: configurePhase
+mantle-build-planning-architecture-check> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-build-planning-architecture-check> default configurePhase, nothing to do
+mantle-build-planning-architecture-check> Running phase: buildPhase
+mantle-build-planning-architecture-check> +++ command cargo --version
+mantle-build-planning-architecture-check> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-build-planning-architecture-check> +++ command cargo -Zscript --offline scripts/check-build-planning-architecture.rs --self-test
+mantle-rust-plan-hexagon-architecture-check> Running phase: configurePhase
+mantle-rust-plan-hexagon-architecture-check> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-rust-plan-hexagon-architecture-check> default configurePhase, nothing to do
+mantle-rust-plan-hexagon-architecture-check> Running phase: buildPhase
+mantle-rust-plan-hexagon-architecture-check> +++ command cargo --version
+mantle-rust-plan-hexagon-architecture-check> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-rust-plan-hexagon-architecture-check> +++ command cargo -Zscript --offline scripts/check-rust-plan-hexagon.rs --self-test
+mantle-build-planning-architecture-check>    Compiling check-build-planning-architecture v0.0.0 (/build/source/scripts/check-build-planning-architecture.rs)
+mantle-remote-hexagon-architecture-check> Running phase: patchPhase
+mantle-remote-hexagon-architecture-check> Executing configureCargoCommonVars
+mantle-remote-hexagon-architecture-check> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-rust-plan-hexagon-architecture-check>    Compiling check-rust-plan-hexagon v0.0.0 (/build/source/scripts/check-rust-plan-hexagon.rs)
+mantle-remote-hexagon-architecture-check> Running phase: configurePhase
+mantle-remote-hexagon-architecture-check> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-remote-hexagon-architecture-check> default configurePhase, nothing to do
+mantle-remote-hexagon-architecture-check> Running phase: buildPhase
+mantle-remote-hexagon-architecture-check> +++ command cargo --version
+mantle-remote-hexagon-architecture-check> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-remote-hexagon-architecture-check> +++ command cargo -Zscript --offline scripts/check-remote-hexagon.rs --self-test
+mantle-remote-hexagon-architecture-check>    Compiling check-remote-hexagon v0.0.0 (/build/source/scripts/check-remote-hexagon.rs)
+mantle-build-planning-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.37s
+mantle-rust-plan-hexagon-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.29s
+mantle-build-planning-architecture-check>      Running `.cargo-home/build/ca/9db9f2a815dc66/target/debug/check-build-planning-architecture --self-test`
+mantle-rust-plan-hexagon-architecture-check>      Running `.cargo-home/build/df/2dc9c26a85b579/target/debug/check-rust-plan-hexagon --self-test`
+mantle-build-planning-architecture-check> build-planning architecture verified: findings=0 negative-fixtures=14
+mantle-build-planning-architecture-check> +++ command cargo -Zscript --offline scripts/check-build-planning-architecture.rs --root .
+mantle-rust-plan-hexagon-architecture-check> Rust-plan hexagon architecture verified: findings=0 negative-fixtures=13
+mantle-build-planning-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+mantle-build-planning-architecture-check>      Running `.cargo-home/build/ca/9db9f2a815dc66/target/debug/check-build-planning-architecture --root .`
+mantle-rust-plan-hexagon-architecture-check> +++ command cargo -Zscript --offline scripts/check-rust-plan-hexagon.rs --root .
+mantle-build-planning-architecture-check> build-planning architecture verified: findings=0 negative-fixtures=14
+mantle-rust-plan-hexagon-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+mantle-rust-plan-hexagon-architecture-check>      Running `.cargo-home/build/df/2dc9c26a85b579/target/debug/check-rust-plan-hexagon --root .`
+mantle-build-planning-architecture-check> Running phase: installPhase
+mantle-build-planning-architecture-check> Running phase: fixupPhase
+mantle-build-planning-architecture-check> shrinking RPATHs of ELF executables and libraries in /nix/store/8xzgkh04lndv80bpz5vmb3qj80sv50mi-mantle-build-planning-architecture-check-0.1.0
+mantle-build-planning-architecture-check> checking for references to /build/ in /nix/store/8xzgkh04lndv80bpz5vmb3qj80sv50mi-mantle-build-planning-architecture-check-0.1.0...
+mantle-rust-plan-hexagon-architecture-check> Rust-plan hexagon architecture verified: findings=0 negative-fixtures=13
+mantle-rust-plan-hexagon-architecture-check> Running phase: installPhase
+mantle-build-planning-architecture-check> patching script interpreter paths in /nix/store/8xzgkh04lndv80bpz5vmb3qj80sv50mi-mantle-build-planning-architecture-check-0.1.0
+mantle-rust-plan-hexagon-architecture-check> Running phase: fixupPhase
+building '/nix/store/0hc0jk6i2j36lss9c1rggk6j4lf3pz3w-mantle-transcript-quality-nextest-0.1.0.drv'...
+mantle-remote-hexagon-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.30s
+mantle-remote-hexagon-architecture-check>      Running `.cargo-home/build/e3/1b3e58d0489184/target/debug/check-remote-hexagon --self-test`
+mantle-remote-hexagon-architecture-check> remote hexagon architecture verified: findings=0 negative-fixtures=13
+mantle-remote-hexagon-architecture-check> +++ command cargo -Zscript --offline scripts/check-remote-hexagon.rs --root .
+mantle-remote-hexagon-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+mantle-remote-hexagon-architecture-check>      Running `.cargo-home/build/e3/1b3e58d0489184/target/debug/check-remote-hexagon --root .`
+mantle-remote-hexagon-architecture-check> remote hexagon architecture verified: findings=0 negative-fixtures=13
+mantle-remote-hexagon-architecture-check> Running phase: installPhase
+mantle-remote-hexagon-architecture-check> Running phase: fixupPhase
+mantle-remote-hexagon-architecture-check> shrinking RPATHs of ELF executables and libraries in /nix/store/g0hw4hv97fvkixd3dmpx8pnkqf3s230g-mantle-remote-hexagon-architecture-check-0.1.0
+mantle-remote-hexagon-architecture-check> checking for references to /build/ in /nix/store/g0hw4hv97fvkixd3dmpx8pnkqf3s230g-mantle-remote-hexagon-architecture-check-0.1.0...
+mantle-remote-hexagon-architecture-check> patching script interpreter paths in /nix/store/g0hw4hv97fvkixd3dmpx8pnkqf3s230g-mantle-remote-hexagon-architecture-check-0.1.0
+mantle-rust-plan-hexagon-architecture-check> shrinking RPATHs of ELF executables and libraries in /nix/store/4516g5dzvfv6j1vqaf5lvmyqw2frsgbg-mantle-rust-plan-hexagon-architecture-check-0.1.0
+mantle-rust-plan-hexagon-architecture-check> checking for references to /build/ in /nix/store/4516g5dzvfv6j1vqaf5lvmyqw2frsgbg-mantle-rust-plan-hexagon-architecture-check-0.1.0...
+mantle-rust-plan-hexagon-architecture-check> patching script interpreter paths in /nix/store/4516g5dzvfv6j1vqaf5lvmyqw2frsgbg-mantle-rust-plan-hexagon-architecture-check-0.1.0
+building '/nix/store/0581z832zy9m5yh630bz0lh0mi3a0wfa-mantle-nickel-export-core-pin.drv'...
+building '/nix/store/blsipz68d21ci1ykv729xfbf2yjla9l4-mantle-store-overlay-policy.drv'...
+mantle-clippy> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-clippy> Running phase: configurePhase
+mantle-clippy> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-clippy> default configurePhase, nothing to do
+mantle-clippy> Running phase: buildPhase
+mantle-clippy> +++ command cargo --version
+mantle-clippy> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-clippy> +++ command cargo clippy --release --locked --workspace --lib --no-deps --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- -D warnings
+mantle-clippy> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+mantle-clippy>   * `bin` target `crunch`
+mantle-clippy>   * `bin` target `mantle`
+mantle-transcript-quality-nextest> Running phase: unpackPhase
+mantle-transcript-quality-nextest> unpacking source archive /nix/store/zs8vqn9scpdwianxidxzrqcpr71a2nf0-source
+mantle-transcript-quality-nextest> source root is source
+mantle-nickel-export-core-pin> warning: `package.edition` is unspecified, defaulting to the latest edition (currently `2024`)
+mantle-nickel-export-core-pin>    Compiling check-nickel-export-core-pin v0.0.0 (/build/source/scripts/check-nickel-export-core-pin.rs)
+mantle-transcript-quality-nextest> Running phase: patchPhase
+mantle-transcript-quality-nextest> Executing configureCargoCommonVars
+mantle-transcript-quality-nextest> decompressing cargo artifacts from /nix/store/fw20x4r94yda90wscyn34wasy06j7ak5-mantle-deps-0.1.0/target.tar.zst to target
+building '/nix/store/g98d50d2qd03769lhr936dmw3l8v8cz7-mantle-nickel-cohort-check-0.1.0.drv'...
+mantle-nickel-cohort-check> cargoArtifacts not set, will not reuse any cargo artifacts
+mantle-nickel-export-core-pin>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.24s
+mantle-nickel-export-core-pin>      Running `cargo-home/build/32/db26b686b8182b/target/debug/check-nickel-export-core-pin --root source`
+mantle-nickel-export-core-pin> nickel-export-core pin verified: repository=https://github.com/OnixResearch/nickel-export revision=257fafc1c746f1faf156207043a4c826bfb16d49
+mantle-nickel-export-core-pin> warning: `package.edition` is unspecified, defaulting to the latest edition (currently `2024`)
+mantle-nickel-export-core-pin>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+mantle-nickel-export-core-pin>      Running `cargo-home/build/32/db26b686b8182b/target/debug/check-nickel-export-core-pin --self-test`
+mantle-nickel-export-core-pin> nickel-export-core pin self-test passed
+mantle-nickel-cohort-check> Running phase: unpackPhase
+mantle-nickel-cohort-check> unpacking source archive /nix/store/zs8vqn9scpdwianxidxzrqcpr71a2nf0-source
+mantle-clippy>    Compiling nix-compat v0.1.0 (/build/source/vendor/nix-compat)
+mantle-clippy>    Compiling fuse-backend-rs v0.12.0 (/build/source/vendor/fuse-backend-rs)
+mantle-clippy>     Checking crunch-attestation-core v0.1.0 (/build/source/crates/crunch-attestation-core)
+mantle-clippy>    Compiling nix-compat-derive v0.1.0 (/build/source/vendor/nix-compat-derive)
+mantle-clippy>    Compiling snix-castore v0.1.0 (/build/source/vendor/snix-castore)
+mantle-clippy>     Checking snix-tracing v0.1.0 (/build/source/vendor/snix-tracing)
+mantle-clippy>    Compiling snix-store v0.1.0 (/build/source/vendor/snix-store)
+building '/nix/store/nsddlmxw61ayniwwmwl8pzy3r8havd2v-mantle-nextest-0.1.0.drv'...
+mantle-clippy>    Compiling snix-build v0.1.0 (/build/source/vendor/snix-build)
+mantle-nickel-cohort-check> source root is source
+mantle-clippy>     Checking crunch-action-result-core v0.1.0 (/build/source/crates/crunch-action-result-core)
+mantle-nextest> Running phase: unpackPhase
+mantle-nextest> unpacking source archive /nix/store/zs8vqn9scpdwianxidxzrqcpr71a2nf0-source
+mantle-clippy>     Checking crunch-attestation v0.1.0 (/build/source/crates/crunch-attestation)
+mantle-clippy>     Checking crunch-repair-core v0.1.0 (/build/source/crates/crunch-repair-core)
+mantle-clippy>     Checking crunch-gc-core v0.1.0 (/build/source/crates/crunch-gc-core)
+mantle-nickel-cohort-check> Running phase: patchPhase
+mantle-nickel-cohort-check> Executing configureCargoCommonVars
+mantle-nickel-cohort-check> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-nickel-cohort-check> Running phase: configurePhase
+mantle-nickel-cohort-check> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-nickel-cohort-check> default configurePhase, nothing to do
+mantle-nickel-cohort-check> Running phase: buildPhase
+mantle-nickel-cohort-check> +++ command cargo --version
+mantle-nickel-cohort-check> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-nickel-cohort-check> +++ command cargo -Zscript --offline scripts/refresh-nickel-cohort.rs --self-test
+mantle-clippy>     Checking crunch-composition-core v0.1.0 (/build/source/crates/crunch-composition-core)
+mantle-nickel-cohort-check>    Compiling refresh-nickel-cohort v0.0.0 (/build/source/scripts/refresh-nickel-cohort.rs)
+mantle-clippy>     Checking crunch-overlay-core v0.1.0 (/build/source/crates/crunch-overlay-core)
+mantle-clippy>     Checking crunch-remote-core v0.1.0 (/build/source/crates/crunch-remote-core)
+mantle-nickel-cohort-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.30s
+mantle-nickel-cohort-check>      Running `.cargo-home/build/7f/86568e07d79b60/target/debug/refresh-nickel-cohort --self-test`
+mantle-nickel-cohort-check> Nickel cohort importer positive and negative self-tests passed
+mantle-nickel-cohort-check> +++ command cargo -Zscript --offline scripts/check-nickel-cohort.rs --self-test
+mantle-clippy>     Checking crunch-rust-cache-core v0.1.0 (/build/source/crates/crunch-rust-cache-core)
+mantle-nextest> source root is source
+mantle-transcript-quality-nextest> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-nickel-cohort-check>      Locking 34 packages to latest Rust 1.96.0-nightly compatible versions
+mantle-nickel-cohort-check>    Compiling serde_core v1.0.228
+mantle-nickel-cohort-check>    Compiling proc-macro2 v1.0.106
+mantle-nickel-cohort-check>    Compiling quote v1.0.45
+mantle-nickel-cohort-check>    Compiling unicode-ident v1.0.24
+mantle-nickel-cohort-check>    Compiling find-msvc-tools v0.1.9
+mantle-nickel-cohort-check>    Compiling shlex v1.3.0
+mantle-nickel-cohort-check>    Compiling zmij v1.0.21
+mantle-transcript-quality-nextest> Running phase: configurePhase
+mantle-transcript-quality-nextest> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-transcript-quality-nextest> default configurePhase, nothing to do
+mantle-transcript-quality-nextest> Running phase: buildPhase
+mantle-transcript-quality-nextest> +++ command cargo --version
+mantle-transcript-quality-nextest> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-transcript-quality-nextest> +++ command cargo nextest --version
+mantle-transcript-quality-nextest> cargo-nextest 0.9.132
+mantle-transcript-quality-nextest> release: 0.9.132
+mantle-transcript-quality-nextest> host: x86_64-unknown-linux-gnu
+mantle-transcript-quality-nextest> Running phase: checkPhase
+mantle-transcript-quality-nextest> +++ command cargo nextest run --cargo-profile release --test transcript_cli
+mantle-nickel-cohort-check>    Compiling cc v1.2.59
+mantle-nextest> Running phase: patchPhase
+mantle-nextest> Executing configureCargoCommonVars
+mantle-nextest> decompressing cargo artifacts from /nix/store/fw20x4r94yda90wscyn34wasy06j7ak5-mantle-deps-0.1.0/target.tar.zst to target
+mantle-nickel-cohort-check>    Compiling serde_json v1.0.149
+mantle-clippy>     Checking crunch-nar v0.1.0 (/build/source/crates/crunch-nar)
+mantle-clippy>     Checking crunch-glue v0.1.0 (/build/source/crates/crunch-glue)
+mantle-nickel-cohort-check>    Compiling serde v1.0.228
+mantle-clippy>     Checking crunch-eval v0.1.0 (/build/source/crates/crunch-eval)
+mantle-nickel-cohort-check>    Compiling syn v2.0.117
+mantle-transcript-quality-nextest> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+mantle-transcript-quality-nextest>   * `bin` target `crunch`
+mantle-transcript-quality-nextest>   * `bin` target `mantle`
+mantle-nickel-cohort-check>    Compiling winnow v1.0.1
+mantle-clippy>     Checking crunch-project-core v0.1.0 (/build/source/crates/crunch-project-core)
+mantle-clippy>     Checking crunch-evaluation-stream-core v0.1.0 (/build/source/crates/crunch-evaluation-stream-core)
+mantle-nickel-cohort-check>    Compiling toml_parser v1.1.2+spec-1.1.0
+mantle-nickel-cohort-check>    Compiling blake3 v1.8.2
+mantle-clippy>     Checking mantle-rust-plan-core v0.1.0 (/build/source/crates/mantle-rust-plan-core)
+mantle-transcript-quality-nextest>    Compiling nix-compat v0.1.0 (/build/source/vendor/nix-compat)
+mantle-transcript-quality-nextest>    Compiling fuse-backend-rs v0.12.0 (/build/source/vendor/fuse-backend-rs)
+mantle-transcript-quality-nextest>    Compiling crunch-attestation-core v0.1.0 (/build/source/crates/crunch-attestation-core)
+mantle-clippy>     Checking crunch-wasm-component-core v0.1.0 (/build/source/crates/crunch-wasm-component-core)
+mantle-transcript-quality-nextest>    Compiling nix-compat-derive v0.1.0 (/build/source/vendor/nix-compat-derive)
+mantle-transcript-quality-nextest>    Compiling snix-castore v0.1.0 (/build/source/vendor/snix-castore)
+mantle-transcript-quality-nextest>    Compiling snix-tracing v0.1.0 (/build/source/vendor/snix-tracing)
+mantle-nickel-cohort-check>    Compiling arrayref v0.3.9
+mantle-nickel-cohort-check>    Compiling winnow v0.7.15
+mantle-nickel-cohort-check>    Compiling itoa v1.0.18
+mantle-nickel-cohort-check>    Compiling serde_spanned v1.1.1
+mantle-nickel-cohort-check>    Compiling toml_datetime v0.7.5+spec-1.1.0
+mantle-nickel-cohort-check>    Compiling arrayvec v0.7.6
+mantle-clippy>     Checking crunch-build-planning-core v0.1.0 (/build/source/crates/crunch-build-planning-core)
+mantle-nickel-cohort-check>    Compiling toml_writer v1.1.1+spec-1.1.0
+mantle-nickel-cohort-check>    Compiling cfg-if v1.0.4
+mantle-nickel-cohort-check>    Compiling same-file v1.0.6
+mantle-nickel-cohort-check>    Compiling memchr v2.8.0
+mantle-nickel-cohort-check>    Compiling constant_time_eq v0.3.1
+mantle-nextest> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-nextest> Running phase: configurePhase
+mantle-nextest> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-nextest> default configurePhase, nothing to do
+mantle-nextest> Running phase: buildPhase
+mantle-nextest> +++ command cargo --version
+mantle-nextest> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-nextest> +++ command cargo nextest --version
+mantle-nickel-cohort-check>    Compiling serde_derive v1.0.228
+mantle-nextest> cargo-nextest 0.9.132
+mantle-nextest> release: 0.9.132
+mantle-nextest> host: x86_64-unknown-linux-gnu
+mantle-nextest> Running phase: checkPhase
+mantle-nextest> +++ command cargo nextest run --cargo-profile release
+mantle-nickel-cohort-check>    Compiling toml v0.9.12+spec-1.1.0
+mantle-nickel-cohort-check>    Compiling walkdir v2.5.0
+mantle-nextest> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+mantle-nextest>   * `bin` target `crunch`
+mantle-nextest>   * `bin` target `mantle`
+mantle-nextest>    Compiling nix-compat v0.1.0 (/build/source/vendor/nix-compat)
+mantle-nextest>    Compiling fuse-backend-rs v0.12.0 (/build/source/vendor/fuse-backend-rs)
+mantle-nextest>    Compiling crunch-attestation-core v0.1.0 (/build/source/crates/crunch-attestation-core)
+mantle-nextest>    Compiling nix-compat-derive v0.1.0 (/build/source/vendor/nix-compat-derive)
+mantle-clippy>     Checking crunch-shell-core v0.1.0 (/build/source/crates/crunch-shell-core)
+mantle-clippy>     Checking crunch-delta-core v0.1.0 (/build/source/crates/crunch-delta-core)
+mantle-nextest>    Compiling snix-castore v0.1.0 (/build/source/vendor/snix-castore)
+mantle-clippy>     Checking crunch-wasm-component v0.1.0 (/build/source/crates/crunch-wasm-component)
+mantle-clippy>     Checking crunch-shell v0.1.0 (/build/source/crates/crunch-shell)
+mantle-nextest>    Compiling snix-tracing v0.1.0 (/build/source/vendor/snix-tracing)
+mantle-clippy>     Checking crunch-project v0.1.0 (/build/source/crates/crunch-project)
+mantle-clippy>     Checking mantle-rust-plan v0.1.0 (/build/source/crates/mantle-rust-plan)
+mantle-clippy>     Checking crunch-remote v0.1.0 (/build/source/crates/crunch-remote)
+mantle-clippy>     Checking crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)
+mantle-clippy>     Checking crunch-hardware-simulation-core v0.1.0 (/build/source/crates/crunch-hardware-simulation-core)
+mantle-clippy>     Checking crunch-store v0.1.0 (/build/source/crates/crunch-store)
+mantle-nickel-cohort-check>    Compiling check-nickel-cohort v0.0.0 (/build/source/scripts/check-nickel-cohort.rs)
+mantle-nickel-cohort-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.89s
+mantle-nickel-cohort-check>      Running `.cargo-home/build/3d/80d33d8c1ef78b/target/debug/check-nickel-cohort --self-test`
+mantle-nickel-cohort-check> Nickel cohort positive and negative self-tests passed
+mantle-nickel-cohort-check> +++ command cargo -Zscript --offline scripts/check-nickel-cohort.rs --root .
+mantle-clippy>     Checking crunch-spacewasm-core v0.1.0 (/build/source/crates/crunch-spacewasm-core)
+mantle-nickel-cohort-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
+mantle-nickel-cohort-check>      Running `.cargo-home/build/3d/80d33d8c1ef78b/target/debug/check-nickel-cohort --root .`
+mantle-transcript-quality-nextest>    Compiling crunch-attestation v0.1.0 (/build/source/crates/crunch-attestation)
+mantle-nickel-cohort-check> Nickel cohort verified: cli=1.17.0 embedded=2.2.0/0.18.0 revision=1320a983e6c3d1e2fb53dd2464b084b4903b1426
+mantle-nickel-cohort-check> Running phase: installPhase
+mantle-nickel-cohort-check> Running phase: fixupPhase
+mantle-nickel-cohort-check> shrinking RPATHs of ELF executables and libraries in /nix/store/liqrbc6aiig0hrgkh9jskhsvbzal761g-mantle-nickel-cohort-check-0.1.0
+mantle-nickel-cohort-check> checking for references to /build/ in /nix/store/liqrbc6aiig0hrgkh9jskhsvbzal761g-mantle-nickel-cohort-check-0.1.0...
+mantle-nickel-cohort-check> patching script interpreter paths in /nix/store/liqrbc6aiig0hrgkh9jskhsvbzal761g-mantle-nickel-cohort-check-0.1.0
+building '/nix/store/y0vhmclc4parkykn9bjhpskjbdwp3szl-mantle-test-0.1.0.drv'...
+mantle-clippy>     Checking crunch-kernelscript-core v0.1.0 (/build/source/crates/crunch-kernelscript-core)
+mantle-clippy>     Checking mantlepkgs-core v0.1.0 (/build/source/crates/mantlepkgs-core)
+mantle-test> Running phase: unpackPhase
+mantle-test> unpacking source archive /nix/store/zs8vqn9scpdwianxidxzrqcpr71a2nf0-source
+mantle-clippy>     Checking crunch-bootstrap-core v0.1.0 (/build/source/crates/crunch-bootstrap-core)
+mantle-test> source root is source
+mantle-transcript-quality-nextest>    Compiling snix-store v0.1.0 (/build/source/vendor/snix-store)
+mantle-transcript-quality-nextest>    Compiling snix-build v0.1.0 (/build/source/vendor/snix-build)
+mantle-test> Running phase: patchPhase
+mantle-test> Executing configureCargoCommonVars
+mantle-test> decompressing cargo artifacts from /nix/store/fw20x4r94yda90wscyn34wasy06j7ak5-mantle-deps-0.1.0/target.tar.zst to target
+mantle-transcript-quality-nextest>    Compiling crunch-nar v0.1.0 (/build/source/crates/crunch-nar)
+mantle-nextest>    Compiling crunch-attestation v0.1.0 (/build/source/crates/crunch-attestation)
+mantle-clippy>     Checking crunch-eval-budget-core v0.1.0 (/build/source/crates/crunch-eval-budget-core)
+mantle-clippy>     Checking mantle-portable-client-core v0.1.0 (/build/source/crates/mantle-portable-client-core)
+mantle-transcript-quality-nextest>    Compiling crunch-action-result-core v0.1.0 (/build/source/crates/crunch-action-result-core)
+mantle-clippy>     Checking crunch-kernelscript-adapter v0.1.0 (/build/source/crates/crunch-kernelscript-adapter)
+mantle-clippy>     Checking crunch-spacewasm v0.1.0 (/build/source/crates/crunch-spacewasm)
+mantle-clippy>     Checking crunch-hardware-simulation v0.1.0 (/build/source/crates/crunch-hardware-simulation)
+mantle-nextest>    Compiling snix-store v0.1.0 (/build/source/vendor/snix-store)
+mantle-test> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-clippy>     Checking mantle-build-contract v0.1.0 (/build/source/crates/mantle-build-contract)
+mantle-nextest>    Compiling snix-build v0.1.0 (/build/source/vendor/snix-build)
+mantle-test> Running phase: configurePhase
+mantle-test> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-test> default configurePhase, nothing to do
+mantle-test> Running phase: buildPhase
+mantle-test> +++ command cargo --version
+mantle-test> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-test> Running phase: checkPhase
+mantle-test> +++ command cargo test --release --locked -p crunch-remote-core -p crunch-remote --all-targets
+mantle-test> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+mantle-test>   * `bin` target `crunch`
+mantle-test>   * `bin` target `mantle`
+mantle-nextest>    Compiling crunch-nar v0.1.0 (/build/source/crates/crunch-nar)
+mantle-test>    Compiling proc-macro2 v1.0.106
+mantle-test>    Compiling quote v1.0.45
+mantle-test>    Compiling serde_core v1.0.228
+mantle-test>    Compiling cc v1.2.59
+mantle-test>    Compiling serde v1.0.228
+mantle-test>    Compiling serde_json v1.0.149
+mantle-test>    Compiling memchr v2.8.0
+mantle-test>    Compiling syn v2.0.117
+mantle-clippy>     Checking crunch-build v0.1.0 (/build/source/crates/crunch-build)
+mantle-clippy>     Checking crunch-rust-cache v0.1.0 (/build/source/crates/crunch-rust-cache)
+mantle-clippy>     Checking crunch-delta v0.1.0 (/build/source/crates/crunch-delta)
+mantle-test>    Compiling blake3 v1.8.2
+mantle-nextest>    Compiling crunch-action-result-core v0.1.0 (/build/source/crates/crunch-action-result-core)
+mantle-test>    Compiling serde_derive v1.0.228
+mantle-clippy>     Checking crunch-rustc-wrapper v0.1.0 (/build/source/crates/crunch-rustc-wrapper)
+mantle-transcript-quality-nextest>    Compiling crunch-composition-core v0.1.0 (/build/source/crates/crunch-composition-core)
+mantle-test>    Compiling crunch-remote-core v0.1.0 (/build/source/crates/crunch-remote-core)
+mantle-nextest>    Compiling crunch-composition-core v0.1.0 (/build/source/crates/crunch-composition-core)
+mantle-transcript-quality-nextest>    Compiling crunch-overlay-core v0.1.0 (/build/source/crates/crunch-overlay-core)
+mantle-transcript-quality-nextest>    Compiling crunch-repair-core v0.1.0 (/build/source/crates/crunch-repair-core)
+mantle-transcript-quality-nextest>    Compiling crunch-gc-core v0.1.0 (/build/source/crates/crunch-gc-core)
+mantle-transcript-quality-nextest>    Compiling crunch-store v0.1.0 (/build/source/crates/crunch-store)
+mantle-test>    Compiling crunch-remote v0.1.0 (/build/source/crates/crunch-remote)
+mantle-test>     Finished `release` profile [optimized] target(s) in 6.78s
+mantle-test>      Running unittests src/lib.rs (target/release/deps/crunch_remote-0578eb5c6213b6bd)
+mantle-test>
+mantle-test> running 5 tests
+mantle-test> test application::tests::malformed_observation_contract_is_rejected ... ok
+mantle-test> test application::tests::wrong_adapter_observation_fails_closed ... ok
+mantle-test> test application::tests::application_executes_each_effect_before_the_next_transition ... ok
+mantle-test> test application::tests::transient_executor_failure_retries_through_observed_release ... ok
+mantle-test> test application::tests::wrong_port_capability_fails_before_observation ... ok
+mantle-test>
+mantle-test> test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+mantle-test>
+mantle-test>      Running unittests src/lib.rs (target/release/deps/crunch_remote_core-deab153147c12a3c)
+mantle-test>
+mantle-test> running 12 tests
+mantle-test> test admission::tests::output_trust_counts_full_key_material ... ok
+mantle-test> test admission::tests::verified_artifact_rejects_name_and_digest_drift ... ok
+mantle-test> test transition::tests::equivalent_collection_orders_replay_identically ... ok
+mantle-test> test transition::tests::transfer_observation_above_effect_limit_fails_closed ... ok
+mantle-test> test transition::tests::successful_observations_produce_terminal_receipt ... ok
+mantle-test> test transition::tests::transient_executor_failure_retries_with_new_attempt ... ok
+mantle-test> test transition::tests::wrong_effect_and_stale_fence_fail_closed ... ok
+mantle-test> test transition::tests::untrusted_output_cannot_become_success ... ok
+mantle-test> test wire::tests::accepted_wire_frames_keep_stable_bytes ... ok
+mantle-test> test wire::tests::malformed_wire_frame_fails_closed ... ok
+mantle-test> test wire::tests::receipt_preimage_keeps_stable_bytes ... ok
+mantle-test> test admission::tests::missing_inputs_are_stable_and_bounded ... ok
+mantle-test>
+mantle-test> test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+mantle-test>
+mantle-test> Running phase: installPhase
+mantle-test> linking previous artifacts /nix/store/fw20x4r94yda90wscyn34wasy06j7ak5-mantle-deps-0.1.0/target.tar.zst to /nix/store/pbz1nd00jp5wffz2741jm3rnay21mj57-mantle-test-0.1.0/target.tar.zst
+mantle-test> /*stdin*\            : 26.71%   (  51.1 MiB =>   13.7 MiB, /nix/store/pbz1nd00jp5wffz2741jm3rnay21mj57-mantle-test-0.1.0/target.tar.zst)
+mantle-test> Running phase: fixupPhase
+mantle-test> shrinking RPATHs of ELF executables and libraries in /nix/store/pbz1nd00jp5wffz2741jm3rnay21mj57-mantle-test-0.1.0
+mantle-test> checking for references to /build/ in /nix/store/pbz1nd00jp5wffz2741jm3rnay21mj57-mantle-test-0.1.0...
+mantle-test> patching script interpreter paths in /nix/store/pbz1nd00jp5wffz2741jm3rnay21mj57-mantle-test-0.1.0
+building '/nix/store/6pp8yb3hdbxni6j1p0vxfz2jhgkgcwjw-mantle-test-0.1.0.drv'...
+mantle-nextest>    Compiling crunch-repair-core v0.1.0 (/build/source/crates/crunch-repair-core)
+mantle-nextest>    Compiling crunch-gc-core v0.1.0 (/build/source/crates/crunch-gc-core)
+mantle-nextest>    Compiling crunch-overlay-core v0.1.0 (/build/source/crates/crunch-overlay-core)
+mantle-test> Running phase: unpackPhase
+mantle-test> unpacking source archive /nix/store/zs8vqn9scpdwianxidxzrqcpr71a2nf0-source
+mantle-nextest>    Compiling crunch-store v0.1.0 (/build/source/crates/crunch-store)
+mantle-transcript-quality-nextest>    Compiling crunch-remote-core v0.1.0 (/build/source/crates/crunch-remote-core)
+mantle-test> source root is source
+mantle-test> Running phase: patchPhase
+mantle-test> Executing configureCargoCommonVars
+mantle-test> decompressing cargo artifacts from /nix/store/fw20x4r94yda90wscyn34wasy06j7ak5-mantle-deps-0.1.0/target.tar.zst to target
+mantle-clippy>     Checking crunch-pipeline v0.1.0 (/build/source/crates/crunch-pipeline)
+mantle-nextest>    Compiling crunch-remote-core v0.1.0 (/build/source/crates/crunch-remote-core)
+mantle-clippy>     Checking mantle v0.1.0 (/build/source)
+mantle-test> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-test> Running phase: configurePhase
+mantle-test> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-test> default configurePhase, nothing to do
+mantle-test> Running phase: buildPhase
+mantle-test> +++ command cargo --version
+mantle-test> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-test> Running phase: checkPhase
+mantle-test> +++ command cargo test --release --locked -p mantle-build-contract --all-targets
+mantle-test> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+mantle-test>   * `bin` target `crunch`
+mantle-test>   * `bin` target `mantle`
+mantle-test>    Compiling proc-macro2 v1.0.106
+mantle-test>    Compiling quote v1.0.45
+mantle-test>    Compiling cc v1.2.59
+mantle-test>    Compiling serde v1.0.228
+mantle-test>    Compiling serde_json v1.0.149
+mantle-test>    Compiling memchr v2.8.0
+mantle-test>    Compiling syn v2.0.117
+mantle-test>    Compiling blake3 v1.8.2
+mantle-transcript-quality-nextest>    Compiling crunch-rust-cache-core v0.1.0 (/build/source/crates/crunch-rust-cache-core)
+mantle-test>    Compiling serde_derive v1.0.228
+mantle-transcript-quality-nextest>    Compiling crunch-build v0.1.0 (/build/source/crates/crunch-build)
+mantle-nextest>    Compiling crunch-rust-cache-core v0.1.0 (/build/source/crates/crunch-rust-cache-core)
+mantle-clippy>     Finished `release` profile [optimized] target(s) in 27.73s
+mantle-clippy> Running phase: installPhase
+mantle-clippy> linking previous artifacts /nix/store/fw20x4r94yda90wscyn34wasy06j7ak5-mantle-deps-0.1.0/target.tar.zst to /nix/store/16bqx4lcn22qja7n6q3q1xyck3frkan8-mantle-clippy-0.1.0/target.tar.zst
+mantle-clippy> /*stdin*\            : 34.75%   (  55.8 MiB =>   19.4 MiB, /nix/store/16bqx4lcn22qja7n6q3q1xyck3frkan8-mantle-clippy-0.1.0/target.tar.zst)
+mantle-clippy> Running phase: fixupPhase
+mantle-clippy> shrinking RPATHs of ELF executables and libraries in /nix/store/16bqx4lcn22qja7n6q3q1xyck3frkan8-mantle-clippy-0.1.0
+mantle-clippy> checking for references to /build/ in /nix/store/16bqx4lcn22qja7n6q3q1xyck3frkan8-mantle-clippy-0.1.0...
+mantle-clippy> patching script interpreter paths in /nix/store/16bqx4lcn22qja7n6q3q1xyck3frkan8-mantle-clippy-0.1.0
+building '/nix/store/kh3df8dv4bhhc17hgqigjwp7227cq1qf-mantle-fmt-0.1.0.drv'...
+mantle-fmt> cargoVendorDir not set, will not automatically configure vendored sources
+mantle-fmt> cargoArtifacts not set, will not reuse any cargo artifacts
+mantle-nextest>    Compiling crunch-build v0.1.0 (/build/source/crates/crunch-build)
+mantle-test>    Compiling mantle-build-contract v0.1.0 (/build/source/crates/mantle-build-contract)
+mantle-transcript-quality-nextest>    Compiling crunch-rust-cache v0.1.0 (/build/source/crates/crunch-rust-cache)
+mantle-fmt> Running phase: unpackPhase
+mantle-fmt> unpacking source archive /nix/store/zs8vqn9scpdwianxidxzrqcpr71a2nf0-source
+mantle-fmt> source root is source
+mantle-fmt> Running phase: patchPhase
+mantle-fmt> Executing configureCargoCommonVars
+mantle-fmt> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-test>     Finished `release` profile [optimized] target(s) in 5.99s
+mantle-fmt> Running phase: configurePhase
+mantle-fmt> default configurePhase, nothing to do
+mantle-fmt> Running phase: buildPhase
+mantle-test>      Running unittests src/lib.rs (target/release/deps/mantle_build_contract-b01571a4f783563c)
+mantle-test>
+mantle-test> running 6 tests
+mantle-test> test tests::builder_and_request_substitution_are_rejected ... ok
+mantle-test> test tests::schema_and_candidate_drift_are_rejected ... ok
+mantle-test> test tests::cache_use_cannot_hide_a_missing_product ... ok
+mantle-test> test tests::exact_request_and_success_are_admitted ... ok
+mantle-test> test tests::serialized_values_keep_exact_required_non_claims ... ok
+mantle-test> test tests::unknown_and_cache_shapes_fail_closed ... ok
+mantle-test>
+mantle-test> test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+mantle-test>
+mantle-fmt> +++ command cargo --version
+mantle-test>      Running tests/producer_fixtures.rs (target/release/deps/producer_fixtures-3f200fba5efa9711)
+mantle-test>
+mantle-test> running 1 test
+mantle-test> test producer_fixtures_decode_and_admit ... ok
+mantle-test>
+mantle-test> test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+mantle-test>
+mantle-test>      Running unittests examples/emit-fixtures.rs (target/release/examples/emit_fixtures-1c30e3079a1f33d8)
+mantle-test>
+mantle-test> running 0 tests
+mantle-test>
+mantle-test> test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+mantle-test>
+mantle-fmt> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-fmt> +++ command cargo fmt -p mantle -p crunch-action-result-core -p crunch-composition-core -p crunch-nar -p mantlepkgs-core -p mantle-portable-client-core -p mantle-build-contract -p crunch-attestation -p crunch-attestation-core -p crunch-build -p crunch-build-planning-core -p crunch-delta -p crunch-delta-core -p crunch-eval -p crunch-eval-budget-core -p crunch-evaluation-stream-core -p crunch-glue -p crunch-gc-core -p crunch-overlay-core -p crunch-hardware-simulation-core -p crunch-hardware-simulation -p crunch-kernelscript-core -p crunch-kernelscript-adapter -p crunch-spacewasm-core -p crunch-spacewasm -p crunch-pipeline -p crunch-project -p crunch-project-core -p crunch-release-core -p crunch-remote-core -p crunch-remote -p mantle-rust-plan-core -p mantle-rust-plan -p crunch-repair-core -p crunch-rust-cache-core -p crunch-rust-cache -p crunch-rustc-wrapper -p crunch-shell -p crunch-shell-core -p crunch-store -p crunch-wasm-component-core -p crunch-wasm-component -- --check
+mantle-test> Running phase: installPhase
+mantle-test> linking previous artifacts /nix/store/fw20x4r94yda90wscyn34wasy06j7ak5-mantle-deps-0.1.0/target.tar.zst to /nix/store/rnbw6387qgydapzh04j6mxf3n84qpndc-mantle-test-0.1.0/target.tar.zst
+mantle-test> /*stdin*\            : 25.92%   (  37.4 MiB =>   9.68 MiB, /nix/store/rnbw6387qgydapzh04j6mxf3n84qpndc-mantle-test-0.1.0/target.tar.zst)
+mantle-test> Running phase: fixupPhase
+mantle-test> shrinking RPATHs of ELF executables and libraries in /nix/store/rnbw6387qgydapzh04j6mxf3n84qpndc-mantle-test-0.1.0
+mantle-test> checking for references to /build/ in /nix/store/rnbw6387qgydapzh04j6mxf3n84qpndc-mantle-test-0.1.0...
+mantle-test> patching script interpreter paths in /nix/store/rnbw6387qgydapzh04j6mxf3n84qpndc-mantle-test-0.1.0
+building '/nix/store/14gzh1j0yfzds1vkkc9alkxl4xb13km3-mantle-durable-file-publication-adoption.drv'...
+mantle-nextest>    Compiling crunch-rust-cache v0.1.0 (/build/source/crates/crunch-rust-cache)
+building '/nix/store/qsi7ks0sigznnl6w3q197bxh9hgcfrsn-mantle-content-bound-requirement-source-closure.drv'...
+building '/nix/store/jsr4vf31060m4zgx4f5whw1y84pj6zy1-mantle-store-capability-architecture-check-0.1.0.drv'...
+mantle-store-capability-architecture-check> cargoArtifacts not set, will not reuse any cargo artifacts
+mantle-store-capability-architecture-check> Running phase: unpackPhase
+mantle-store-capability-architecture-check> unpacking source archive /nix/store/zs8vqn9scpdwianxidxzrqcpr71a2nf0-source
+mantle-transcript-quality-nextest>    Compiling crunch-eval v0.1.0 (/build/source/crates/crunch-eval)
+mantle-store-capability-architecture-check> source root is source
+mantle-store-capability-architecture-check> Running phase: patchPhase
+mantle-store-capability-architecture-check> Executing configureCargoCommonVars
+mantle-store-capability-architecture-check> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-store-capability-architecture-check> Running phase: configurePhase
+mantle-store-capability-architecture-check> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-store-capability-architecture-check> default configurePhase, nothing to do
+mantle-store-capability-architecture-check> Running phase: buildPhase
+mantle-store-capability-architecture-check> +++ command cargo --version
+mantle-store-capability-architecture-check> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-store-capability-architecture-check> +++ command cargo -Zscript --offline scripts/check-store-capability-architecture.rs --self-test
+mantle-store-capability-architecture-check>      Locking 9 packages to latest Rust 1.96.0-nightly compatible versions
+mantle-store-capability-architecture-check>       Adding syn v2.0.117 (available: v3.0.3)
+mantle-store-capability-architecture-check>    Compiling proc-macro2 v1.0.106
+mantle-store-capability-architecture-check>    Compiling unicode-ident v1.0.24
+mantle-store-capability-architecture-check>    Compiling quote v1.0.45
+mantle-store-capability-architecture-check>    Compiling same-file v1.0.6
+mantle-store-capability-architecture-check>    Compiling walkdir v2.5.0
+mantle-store-capability-architecture-check>    Compiling syn v2.0.117
+mantle-nextest>    Compiling crunch-eval v0.1.0 (/build/source/crates/crunch-eval)
+mantle-fmt> Running phase: ensureTargetDir
+mantle-fmt> Running phase: installPhase
+mantle-fmt> no previous artifacts found, compressing and installing full archive of target to /nix/store/vqqrk29cvr1h4c69nml1z7c91n1q3cpp-mantle-fmt-0.1.0/target.tar.zst
+mantle-fmt> /*stdin*\            :  0.72%   (  10.0 KiB =>     74 B, /nix/store/vqqrk29cvr1h4c69nml1z7c91n1q3cpp-mantle-fmt-0.1.0/target.tar.zst)
+mantle-fmt> Running phase: fixupPhase
+mantle-fmt> shrinking RPATHs of ELF executables and libraries in /nix/store/vqqrk29cvr1h4c69nml1z7c91n1q3cpp-mantle-fmt-0.1.0
+mantle-fmt> checking for references to /build/ in /nix/store/vqqrk29cvr1h4c69nml1z7c91n1q3cpp-mantle-fmt-0.1.0...
+mantle-fmt> patching script interpreter paths in /nix/store/vqqrk29cvr1h4c69nml1z7c91n1q3cpp-mantle-fmt-0.1.0
+building '/nix/store/9m3204mjdvadd9gyww3wslzcry87z8az-tigerstyle-consumer-check.drv'...
+mantle-store-capability-architecture-check>    Compiling check-store-capability-architecture v0.0.0 (/build/source/scripts/check-store-capability-architecture.rs)
+mantle-transcript-quality-nextest>    Compiling crunch-glue v0.1.0 (/build/source/crates/crunch-glue)
+mantle-store-capability-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.51s
+mantle-store-capability-architecture-check>      Running `.cargo-home/build/9c/ee76bed7267b58/target/debug/check-store-capability-architecture --self-test`
+mantle-store-capability-architecture-check> store capability architecture positive and negative self-tests passed
+mantle-store-capability-architecture-check> +++ command cargo -Zscript --offline scripts/check-store-capability-architecture.rs --root .
+mantle-store-capability-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+mantle-store-capability-architecture-check>      Running `.cargo-home/build/9c/ee76bed7267b58/target/debug/check-store-capability-architecture --root .`
+tigerstyle-consumer-check> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+tigerstyle-consumer-check>   * `bin` target `crunch`
+tigerstyle-consumer-check>   * `bin` target `mantle`
+tigerstyle-consumer-check>    Compiling proc-macro2 v1.0.106
+tigerstyle-consumer-check>    Compiling quote v1.0.45
+tigerstyle-consumer-check>    Compiling unicode-ident v1.0.24
+tigerstyle-consumer-check>     Checking cfg-if v1.0.4
+tigerstyle-consumer-check>    Compiling serde_core v1.0.228
+tigerstyle-consumer-check>    Compiling serde v1.0.228
+tigerstyle-consumer-check>    Compiling libc v0.2.186
+tigerstyle-consumer-check>     Checking memchr v2.8.0
+tigerstyle-consumer-check>    Compiling version_check v0.9.5
+tigerstyle-consumer-check>     Checking subtle v2.6.1
+tigerstyle-consumer-check>     Checking smallvec v1.15.1
+tigerstyle-consumer-check>     Checking const-oid v0.9.6
+tigerstyle-consumer-check>     Checking typenum v1.20.1
+tigerstyle-consumer-check>     Checking itoa v1.0.18
+tigerstyle-consumer-check>    Compiling find-msvc-tools v0.1.9
+tigerstyle-consumer-check>    Compiling shlex v1.3.0
+tigerstyle-consumer-check>    Compiling parking_lot_core v0.9.12
+tigerstyle-consumer-check>    Compiling crossbeam-utils v0.8.21
+tigerstyle-consumer-check>     Checking once_cell v1.21.4
+tigerstyle-consumer-check>     Checking scopeguard v1.2.0
+tigerstyle-consumer-check>     Checking regex-syntax v0.8.10
+tigerstyle-consumer-check>     Checking bitflags v2.11.0
+tigerstyle-consumer-check>     Checking allocator-api2 v0.2.21
+tigerstyle-consumer-check>     Checking equivalent v1.0.2
+tigerstyle-consumer-check>    Compiling thiserror v2.0.18
+tigerstyle-consumer-check>     Checking foldhash v0.2.0
+tigerstyle-consumer-check>     Checking stable_deref_trait v1.2.1
+tigerstyle-consumer-check>     Checking fastrand v2.4.1
+tigerstyle-consumer-check>     Checking arrayvec v0.7.6
+tigerstyle-consumer-check>    Compiling zmij v1.0.21
+tigerstyle-consumer-check>    Compiling serde_json v1.0.149
+tigerstyle-consumer-check>     Checking cpufeatures v0.2.17
+tigerstyle-consumer-check>     Checking lock_api v0.4.14
+tigerstyle-consumer-check>    Compiling crc32fast v1.5.0
+tigerstyle-consumer-check>    Compiling rustix v1.1.4
+tigerstyle-consumer-check>    Compiling crossbeam-epoch v0.9.20
+tigerstyle-consumer-check>     Checking linux-raw-sys v0.12.1
+tigerstyle-consumer-check>    Compiling rayon-core v1.13.0
+tigerstyle-consumer-check>     Checking log v0.4.29
+tigerstyle-consumer-check>     Checking same-file v1.0.6
+tigerstyle-consumer-check>     Checking constant_time_eq v0.3.1
+tigerstyle-consumer-check>    Compiling generic-array v0.14.7
+tigerstyle-consumer-check>     Checking walkdir v2.5.0
+tigerstyle-consumer-check>     Checking tinyvec_macros v0.1.1
+tigerstyle-consumer-check>     Checking arrayref v0.3.9
+tigerstyle-consumer-check>     Checking pin-project-lite v0.2.17
+tigerstyle-consumer-check>     Checking tinyvec v1.11.0
+tigerstyle-consumer-check>     Checking gix-trace v0.1.18
+tigerstyle-consumer-check>     Checking futures-core v0.3.32
+tigerstyle-consumer-check>     Checking zeroize v1.8.2
+tigerstyle-consumer-check>     Checking bytesize v2.3.1
+tigerstyle-consumer-check>     Checking human_format v1.2.1
+tigerstyle-consumer-check>     Checking zlib-rs v0.6.3
+tigerstyle-consumer-check>     Checking byteorder v1.5.0
+tigerstyle-consumer-check>    Compiling heapless v0.8.0
+tigerstyle-consumer-check>    Compiling getrandom v0.4.2
+tigerstyle-consumer-check>     Checking rand_core v0.10.0
+tigerstyle-consumer-check>     Checking hashbrown v0.16.1
+tigerstyle-consumer-check>     Checking futures-sink v0.3.32
+tigerstyle-consumer-check>     Checking futures-io v0.3.32
+tigerstyle-consumer-check>     Checking slab v0.4.12
+tigerstyle-consumer-check>     Checking jiff v0.2.23
+tigerstyle-consumer-check>    Compiling rustversion v1.0.22
+tigerstyle-consumer-check>     Checking futures-task v0.3.32
+tigerstyle-consumer-check>     Checking tracing-core v0.1.36
+tigerstyle-consumer-check>    Compiling fs_extra v1.3.0
+tigerstyle-consumer-check>     Checking futures-channel v0.3.32
+tigerstyle-consumer-check>    Compiling dunce v1.0.5
+tigerstyle-consumer-check>     Checking fnv v1.0.7
+tigerstyle-consumer-check>    Compiling libm v0.2.16
+tigerstyle-consumer-check>     Checking percent-encoding v2.3.2
+tigerstyle-consumer-check>     Checking aho-corasick v1.1.4
+tigerstyle-consumer-check>     Checking winnow v0.7.15
+tigerstyle-consumer-check>    Compiling aws-lc-rs v1.16.2
+tigerstyle-consumer-check>     Checking rustls-pki-types v1.14.0
+tigerstyle-consumer-check>     Checking unicode-normalization v0.1.25
+tigerstyle-consumer-check>     Checking foldhash v0.1.5
+tigerstyle-consumer-check>     Checking litemap v0.8.2
+tigerstyle-consumer-check>     Checking base64 v0.22.1
+tigerstyle-consumer-check>    Compiling unicode-xid v0.2.6
+tigerstyle-consumer-check>     Checking crossbeam-channel v0.5.15
+tigerstyle-consumer-check>     Checking writeable v0.6.3
+tigerstyle-consumer-check>     Checking hash32 v0.3.1
+tigerstyle-consumer-check>     Checking encoding_rs v0.8.35
+tigerstyle-consumer-check>    Compiling icu_properties_data v2.2.0
+tigerstyle-consumer-check>    Compiling ident_case v1.0.1
+tigerstyle-consumer-check>    Compiling autocfg v1.5.0
+tigerstyle-consumer-check>     Checking untrusted v0.9.0
+tigerstyle-consumer-check>     Checking utf8_iter v1.0.4
+tigerstyle-consumer-check>    Compiling strsim v0.11.1
+tigerstyle-consumer-check>     Checking hashbrown v0.15.5
+tigerstyle-consumer-check>    Compiling icu_normalizer_data v2.2.0
+tigerstyle-consumer-check>    Compiling pkg-config v0.3.32
+tigerstyle-consumer-check>    Compiling httparse v1.10.1
+tigerstyle-consumer-check>     Checking ipnet v2.12.0
+tigerstyle-consumer-check>     Checking unicode-width v0.2.2
+tigerstyle-consumer-check>    Compiling rustls v0.23.37
+tigerstyle-consumer-check>     Checking either v1.15.0
+tigerstyle-consumer-check>    Compiling signal-hook v0.4.4
+tigerstyle-consumer-check>     Checking tower-service v0.3.3
+tigerstyle-consumer-check>     Checking crossbeam-deque v0.8.6
+tigerstyle-consumer-check>     Checking try-lock v0.2.5
+tigerstyle-consumer-check>     Checking hashbrown v0.14.5
+tigerstyle-consumer-check>     Checking atomic-waker v1.1.2
+tigerstyle-consumer-check>     Checking nonempty v0.12.0
+tigerstyle-consumer-check>     Checking ryu v1.0.23
+tigerstyle-consumer-check>     Checking static_assertions v1.1.0
+tigerstyle-consumer-check>     Checking want v0.3.1
+tigerstyle-consumer-check>     Checking form_urlencoded v1.2.2
+tigerstyle-consumer-check>    Compiling cfg_aliases v0.2.1
+tigerstyle-consumer-check>     Checking sync_wrapper v1.0.2
+tigerstyle-consumer-check>     Checking tower-layer v0.3.3
+tigerstyle-consumer-check>     Checking openssl-probe v0.2.1
+tigerstyle-consumer-check>     Checking iri-string v0.7.12
+tigerstyle-consumer-check>     Checking spin v0.9.9
+tigerstyle-consumer-check>     Checking colorchoice v1.0.5
+tigerstyle-consumer-check>     Checking data-encoding v2.10.0
+tigerstyle-consumer-check>    Compiling semver v1.0.28
+tigerstyle-consumer-check>     Checking rustls-native-certs v0.8.3
+tigerstyle-consumer-check>     Checking simd-adler32 v0.3.9
+tigerstyle-consumer-check>    Compiling unicode-segmentation v1.13.2
+tigerstyle-consumer-check>    Compiling num-traits v0.2.19
+tigerstyle-consumer-check>     Checking lazy_static v1.5.0
+tigerstyle-consumer-check>     Checking unicode-bom v2.0.3
+tigerstyle-consumer-check>     Checking adler2 v2.0.1
+tigerstyle-consumer-check>     Checking faster-hex v0.10.0
+tigerstyle-consumer-check>     Checking mime v0.3.17
+tigerstyle-consumer-check>     Checking utf8parse v0.2.2
+tigerstyle-consumer-check>     Checking miniz_oxide v0.8.9
+tigerstyle-consumer-check>    Compiling rustc_version v0.4.1
+tigerstyle-consumer-check>    Compiling heck v0.5.0
+tigerstyle-consumer-check>     Checking anstyle-parse v1.0.0
+tigerstyle-consumer-check>     Checking kstring v2.0.2
+tigerstyle-consumer-check>     Checking thread_local v1.1.9
+tigerstyle-consumer-check>    Compiling syn v2.0.117
+tigerstyle-consumer-check>    Compiling winnow v1.0.1
+tigerstyle-consumer-check>    Compiling indexmap v2.13.1
+tigerstyle-consumer-check>     Checking shell-words v1.1.1
+tigerstyle-consumer-check>     Checking anstyle v1.0.14
+tigerstyle-consumer-check>     Checking anstyle-query v1.1.5
+tigerstyle-consumer-check>    Compiling portable-atomic v1.13.1
+tigerstyle-consumer-check>     Checking is_terminal_polyfill v1.70.2
+tigerstyle-consumer-check>    Compiling toml_datetime v1.1.1+spec-1.1.0
+tigerstyle-consumer-check>    Compiling anyhow v1.0.102
+tigerstyle-consumer-check>     Checking clap_lex v1.1.0
+tigerstyle-consumer-check>    Compiling memoffset v0.6.5
+tigerstyle-consumer-check>     Checking vte v0.15.0
+tigerstyle-consumer-check>     Checking anstream v1.0.0
+tigerstyle-consumer-check>    Compiling rustix v0.38.44
+tigerstyle-consumer-check>    Compiling convert_case v0.10.0
+tigerstyle-consumer-check>    Compiling jobserver v0.1.34
+tigerstyle-consumer-check>    Compiling zstd-safe v7.2.4
+tigerstyle-consumer-check>    Compiling curve25519-dalek v4.1.3
+tigerstyle-consumer-check>    Compiling typeid v1.0.3
+tigerstyle-consumer-check>     Checking vt100 v0.16.2
+tigerstyle-consumer-check>     Checking clap_builder v4.6.0
+tigerstyle-consumer-check>     Checking arc-swap v1.9.1
+tigerstyle-consumer-check>    Compiling cc v1.2.59
+tigerstyle-consumer-check>     Checking sharded-slab v0.1.7
+tigerstyle-consumer-check>    Compiling nix v0.31.3
+tigerstyle-consumer-check>    Compiling n0-future v0.3.2
+tigerstyle-consumer-check>     Checking tracing-log v0.2.0
+tigerstyle-consumer-check>     Checking linux-raw-sys v0.4.15
+tigerstyle-consumer-check>     Checking cpufeatures v0.3.0
+tigerstyle-consumer-check>     Checking cordyceps v0.3.4
+tigerstyle-consumer-check>    Compiling thiserror v1.0.69
+tigerstyle-consumer-check>    Compiling erased-serde v0.4.10
+tigerstyle-consumer-check>    Compiling zerocopy v0.8.48
+tigerstyle-consumer-check>     Checking unit-prefix v0.5.2
+tigerstyle-consumer-check>     Checking diatomic-waker v0.2.3
+tigerstyle-consumer-check>     Checking nu-ansi-term v0.50.3
+tigerstyle-consumer-check>     Checking spin v0.10.0
+tigerstyle-consumer-check>     Checking parking v2.2.1
+tigerstyle-consumer-check>     Checking bitflags v1.3.2
+tigerstyle-consumer-check>    Compiling siphasher v1.0.2
+tigerstyle-consumer-check>     Checking futures-buffered v0.2.13
+tigerstyle-consumer-check>     Checking futures-lite v2.6.1
+tigerstyle-consumer-check>     Checking chacha20 v0.10.0
+tigerstyle-consumer-check>     Checking flate2 v1.1.9
+tigerstyle-consumer-check>     Checking nibble_vec v0.1.0
+tigerstyle-consumer-check>    Compiling phf_shared v0.11.3
+tigerstyle-consumer-check>    Compiling parking_lot v0.12.5
+tigerstyle-consumer-check>     Checking bytemuck v1.25.0
+tigerstyle-consumer-check>    Compiling new_debug_unreachable v1.0.6
+tigerstyle-consumer-check>    Compiling term v1.2.1
+tigerstyle-consumer-check>    Compiling bit-vec v0.8.0
+tigerstyle-consumer-check>    Compiling fuse-backend-rs v0.12.0 (/build/source/vendor/fuse-backend-rs)
+tigerstyle-consumer-check>     Checking iana-time-zone v0.1.65
+tigerstyle-consumer-check>    Compiling precomputed-hash v0.1.1
+tigerstyle-consumer-check>     Checking endian-type v0.1.2
+tigerstyle-consumer-check>     Checking matchit v0.8.4
+tigerstyle-consumer-check>    Compiling keccak v0.1.6
+tigerstyle-consumer-check>    Compiling nix-compat v0.1.0 (/build/source/vendor/nix-compat)
+tigerstyle-consumer-check>    Compiling fixedbitset v0.5.7
+tigerstyle-consumer-check>     Checking block-buffer v0.10.4
+tigerstyle-consumer-check>     Checking crypto-common v0.1.7
+tigerstyle-consumer-check>    Compiling redb v3.1.3
+tigerstyle-consumer-check>     Checking radix_trie v0.2.1
+mantle-nextest>    Compiling crunch-glue v0.1.0 (/build/source/crates/crunch-glue)
+tigerstyle-consumer-check>    Compiling string_cache v0.8.9
+tigerstyle-consumer-check>     Checking safe_arch v1.2.0
+tigerstyle-consumer-check>     Checking digest v0.10.7
+tigerstyle-consumer-check>    Compiling ena v0.14.4
+tigerstyle-consumer-check>    Compiling proc-macro-error-attr2 v2.0.0
+tigerstyle-consumer-check>     Checking itertools v0.15.0
+tigerstyle-consumer-check>    Compiling bit-set v0.8.0
+tigerstyle-consumer-check>    Compiling ascii-canvas v4.0.0
+tigerstyle-consumer-check>    Compiling petgraph v0.7.1
+tigerstyle-consumer-check>     Checking itertools v0.14.0
+tigerstyle-consumer-check>     Checking nom v8.0.0
+tigerstyle-consumer-check>     Checking rustc-hash v2.1.2
+tigerstyle-consumer-check>     Checking fixedbitset v0.4.2
+tigerstyle-consumer-check>    Compiling snix-castore v0.1.0 (/build/source/vendor/snix-castore)
+tigerstyle-consumer-check>    Compiling toml_parser v1.1.2+spec-1.1.0
+tigerstyle-consumer-check>     Checking humantime v2.3.0
+tigerstyle-consumer-check>    Compiling pico-args v0.5.0
+tigerstyle-consumer-check>    Compiling malachite-nz v0.9.2
+tigerstyle-consumer-check>     Checking sha1 v0.10.6
+tigerstyle-consumer-check>    Compiling cmake v0.1.58
+tigerstyle-consumer-check>     Checking sha2 v0.10.9
+tigerstyle-consumer-check>     Checking md-5 v0.10.6
+tigerstyle-consumer-check>     Checking wide v1.7.0
+tigerstyle-consumer-check>    Compiling nix v0.29.0
+tigerstyle-consumer-check>    Compiling proc-macro2-diagnostics v0.10.1
+tigerstyle-consumer-check>     Checking errno v0.3.14
+tigerstyle-consumer-check>     Checking mio v1.2.0
+tigerstyle-consumer-check>     Checking getrandom v0.2.17
+tigerstyle-consumer-check>     Checking socket2 v0.6.3
+tigerstyle-consumer-check>     Checking sha1-checked v0.10.0
+tigerstyle-consumer-check>     Checking signal-hook-registry v1.4.8
+tigerstyle-consumer-check>     Checking memmap2 v0.9.10
+tigerstyle-consumer-check>     Checking rand_core v0.6.4
+tigerstyle-consumer-check>     Checking filetime v0.2.27
+tigerstyle-consumer-check>     Checking dashmap v6.1.0
+tigerstyle-consumer-check>     Checking console v0.16.3
+tigerstyle-consumer-check>     Checking gix-sec v0.13.2
+tigerstyle-consumer-check>     Checking signature v2.2.0
+tigerstyle-consumer-check>     Checking rand v0.10.1
+tigerstyle-consumer-check>     Checking vmm-sys-util v0.11.2
+tigerstyle-consumer-check>     Checking regex-automata v0.4.14
+tigerstyle-consumer-check>     Checking ed25519 v2.2.3
+tigerstyle-consumer-check>     Checking caps v0.5.6
+tigerstyle-consumer-check>     Checking num_cpus v1.17.0
+tigerstyle-consumer-check>     Checking mio v0.8.11
+tigerstyle-consumer-check>     Checking vm-memory v0.10.0
+tigerstyle-consumer-check>     Checking nix v0.24.3
+tigerstyle-consumer-check>     Checking prodash v31.0.0
+tigerstyle-consumer-check>    Compiling blake3 v1.8.2
+tigerstyle-consumer-check>    Compiling aws-lc-sys v0.39.1
+tigerstyle-consumer-check>    Compiling ring v0.17.14
+tigerstyle-consumer-check>    Compiling zstd-sys v2.0.16+zstd.1.5.7
+tigerstyle-consumer-check>    Compiling libmimalloc-sys v0.1.44
+tigerstyle-consumer-check>    Compiling toml_edit v0.25.10+spec-1.1.0
+tigerstyle-consumer-check>    Compiling bzip2-sys v0.1.13+1.0.8
+tigerstyle-consumer-check>    Compiling lzma-sys v0.1.20
+tigerstyle-consumer-check>     Checking indicatif v0.18.4
+tigerstyle-consumer-check>     Checking threadpool v1.8.1
+tigerstyle-consumer-check>     Checking wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+tigerstyle-consumer-check>     Checking unicode-width v0.1.14
+tigerstyle-consumer-check>     Checking strum v0.26.3
+tigerstyle-consumer-check>    Compiling snix-store v0.1.0 (/build/source/vendor/snix-store)
+tigerstyle-consumer-check>     Checking tempfile v3.27.0
+tigerstyle-consumer-check>     Checking xattr v1.6.1
+tigerstyle-consumer-check>    Compiling yansi v1.0.1
+tigerstyle-consumer-check>     Checking toml_writer v1.1.1+spec-1.1.0
+tigerstyle-consumer-check>    Compiling snix-build v0.1.0 (/build/source/vendor/snix-build)
+tigerstyle-consumer-check>     Checking tar v0.4.45
+tigerstyle-consumer-check>     Checking lru v0.16.4
+tigerstyle-consumer-check>     Checking itertools v0.12.1
+tigerstyle-consumer-check>    Compiling io-lifetimes v3.0.1
+tigerstyle-consumer-check>     Checking termcolor v1.4.1
+tigerstyle-consumer-check>     Checking base64ct v1.8.3
+tigerstyle-consumer-check>    Compiling io-lifetimes v2.0.4
+tigerstyle-consumer-check>    Compiling heck v0.4.1
+tigerstyle-consumer-check>     Checking count-write v0.1.0
+tigerstyle-consumer-check>     Checking bitmaps v3.2.1
+tigerstyle-consumer-check>    Compiling sha3 v0.10.8
+tigerstyle-consumer-check>     Checking fs2 v0.4.3
+tigerstyle-consumer-check>     Checking imara-diff v0.1.8
+tigerstyle-consumer-check>     Checking hashlink v0.10.0
+tigerstyle-consumer-check>     Checking imara-diff v0.2.0
+tigerstyle-consumer-check>    Compiling io-extras v0.19.0
+tigerstyle-consumer-check>     Checking pem-rfc7468 v0.7.0
+tigerstyle-consumer-check>     Checking aliasable v0.1.3
+tigerstyle-consumer-check>    Compiling object v0.37.3
+tigerstyle-consumer-check>     Checking malachite-base v0.9.2
+tigerstyle-consumer-check>     Checking arrayvec v0.5.2
+tigerstyle-consumer-check>    Compiling proc-macro-crate v3.5.0
+tigerstyle-consumer-check>     Checking crunch-repair-core v0.1.0 (/build/source/crates/crunch-repair-core)
+tigerstyle-consumer-check>     Checking crunch-overlay-core v0.1.0 (/build/source/crates/crunch-overlay-core)
+tigerstyle-consumer-check>     Checking crunch-gc-core v0.1.0 (/build/source/crates/crunch-gc-core)
+tigerstyle-consumer-check>     Checking typed-arena v2.0.2
+tigerstyle-consumer-check>     Checking arraydeque v0.5.1
+tigerstyle-consumer-check>     Checking serde_bytes v0.11.19
+tigerstyle-consumer-check>     Checking uuid v1.23.0
+tigerstyle-consumer-check>     Checking toml_datetime v0.7.5+spec-1.1.0
+tigerstyle-consumer-check>     Checking serde_spanned v1.1.1
+tigerstyle-consumer-check>    Compiling paste v1.0.15
+tigerstyle-consumer-check>    Compiling getrandom v0.3.4
+tigerstyle-consumer-check>    Compiling signal-hook v0.3.18
+tigerstyle-consumer-check>     Checking saphyr-parser v0.0.6
+tigerstyle-consumer-check>     Checking pretty v0.12.5
+tigerstyle-consumer-check>     Checking toml v0.9.12+spec-1.1.0
+tigerstyle-consumer-check>     Checking der v0.7.10
+tigerstyle-consumer-check>     Checking imbl-sized-chunks v0.1.3
+tigerstyle-consumer-check>     Checking clru v0.6.3
+tigerstyle-consumer-check>     Checking uluru v3.1.0
+tigerstyle-consumer-check>     Checking vte v0.14.1
+tigerstyle-consumer-check>    Compiling cap-primitives v4.0.2
+tigerstyle-consumer-check>     Checking bzip2 v0.5.2
+tigerstyle-consumer-check>     Checking gimli v0.32.3
+tigerstyle-consumer-check>     Checking unsafe-libyaml v0.2.11
+tigerstyle-consumer-check>     Checking simple-counter v0.1.0
+tigerstyle-consumer-check>     Checking bumpalo v3.20.2
+building '/nix/store/j1gr4ppf6wils163k969zpcjznwh9sbj-bootstrap-blocker-inventory.drv'...
+tigerstyle-consumer-check>     Checking strip-ansi-escapes v0.2.1
+copying 1 paths...
+copying path '/nix/store/fw20x4r94yda90wscyn34wasy06j7ak5-mantle-deps-0.1.0' to 'ssh-ng://root@aspen1.local'...
+tigerstyle-consumer-check>     Checking fs-set-times v0.20.3
+tigerstyle-consumer-check>     Checking rustix-linux-procfs v0.1.1
+tigerstyle-consumer-check>     Checking io-close v0.3.7
+tigerstyle-consumer-check>     Checking sha-1 v0.10.1
+tigerstyle-consumer-check>     Checking num-integer v0.1.46
+tigerstyle-consumer-check>     Checking mimalloc v0.1.48
+tigerstyle-consumer-check>     Checking json_scanner v0.1.0
+tigerstyle-consumer-check>     Checking maybe-owned v0.3.4
+tigerstyle-consumer-check>    Compiling num-bigint-dig v0.8.6
+tigerstyle-consumer-check>     Checking crc-catalog v2.4.0
+tigerstyle-consumer-check>    Compiling owo-colors v4.3.0
+tigerstyle-consumer-check>    Compiling indoc v2.0.7
+tigerstyle-consumer-check>    Compiling litrs v1.0.0
+tigerstyle-consumer-check>    Compiling cap-std v4.0.2
+tigerstyle-consumer-check>    Compiling linkme-impl v0.3.37
+tigerstyle-consumer-check>     Checking rustc-demangle v0.1.28
+tigerstyle-consumer-check>     Checking ambient-authority v0.0.2
+tigerstyle-consumer-check>     Checking num-iter v0.1.46
+tigerstyle-consumer-check>     Checking crc v3.4.0
+tigerstyle-consumer-check>     Checking signal-hook-mio v0.2.5
+tigerstyle-consumer-check>     Checking rand_core v0.9.5
+tigerstyle-consumer-check>    Compiling syn v3.0.3
+tigerstyle-consumer-check>     Checking webpki-roots v1.0.6
+tigerstyle-consumer-check>     Checking is_ci v1.2.0
+tigerstyle-consumer-check>     Checking twox-hash v2.1.2
+tigerstyle-consumer-check>    Compiling cap-fs-ext v4.0.2
+tigerstyle-consumer-check>     Checking unicode-linebreak v0.1.5
+tigerstyle-consumer-check>     Checking toml_write v0.1.2
+tigerstyle-consumer-check>    Compiling linkme v0.3.37
+tigerstyle-consumer-check>     Checking utf8-zero v0.8.1
+tigerstyle-consumer-check>     Checking supports-color v3.0.2
+tigerstyle-consumer-check>     Checking ruzstd v0.8.2
+tigerstyle-consumer-check>     Checking petgraph v0.6.5
+tigerstyle-consumer-check>     Checking toml_edit v0.24.1+spec-1.1.0
+tigerstyle-consumer-check>     Checking lzma-rs v0.3.0
+tigerstyle-consumer-check>     Checking gethostname v0.5.0
+tigerstyle-consumer-check>     Checking terminal_size v0.4.4
+tigerstyle-consumer-check>     Checking fuzzy-matcher v0.3.7
+tigerstyle-consumer-check>    Compiling document-features v0.2.12
+tigerstyle-consumer-check>     Checking bzip2-rs v0.1.2
+tigerstyle-consumer-check>     Checking textwrap v0.16.2
+tigerstyle-consumer-check>     Checking supports-hyperlinks v3.2.0
+tigerstyle-consumer-check>     Checking supports-unicode v3.0.0
+tigerstyle-consumer-check>     Checking dyn-clone v1.0.20
+tigerstyle-consumer-check>     Checking bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+tigerstyle-consumer-check>     Checking crunch-evaluation-stream-core v0.1.0 (/build/source/crates/crunch-evaluation-stream-core)
+tigerstyle-consumer-check>     Checking etcetera v0.11.0
+tigerstyle-consumer-check>     Checking detect-coding-agent v0.1.0
+tigerstyle-consumer-check>     Checking colored v3.1.1
+tigerstyle-consumer-check>     Checking dotenvy v0.15.7
+tigerstyle-consumer-check>     Checking spki v0.7.3
+tigerstyle-consumer-check>     Checking crunch-delta-core v0.1.0 (/build/source/crates/crunch-delta-core)
+tigerstyle-consumer-check>     Checking chapter-tgz v0.1.0
+tigerstyle-consumer-check>     Checking durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+tigerstyle-consumer-check>     Checking bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+tigerstyle-consumer-check>     Checking pkcs8 v0.10.2
+tigerstyle-consumer-check>     Checking pkcs1 v0.7.5
+tigerstyle-consumer-check>     Checking regex v1.12.3
+tigerstyle-consumer-check>     Checking matchers v0.2.0
+tigerstyle-consumer-check>     Checking lalrpop-util v0.22.2
+tigerstyle-consumer-check>     Checking xz2 v0.1.7
+tigerstyle-consumer-check>     Checking ppv-lite86 v0.2.21
+mantle-transcript-quality-nextest>    Compiling crunch-project-core v0.1.0 (/build/source/crates/crunch-project-core)
+tigerstyle-consumer-check>    Compiling synstructure v0.13.2
+tigerstyle-consumer-check>    Compiling darling_core v0.23.0
+tigerstyle-consumer-check>    Compiling darling_core v0.20.11
+tigerstyle-consumer-check>    Compiling proc-macro-error2 v2.0.1
+tigerstyle-consumer-check>     Checking rand_chacha v0.3.1
+tigerstyle-consumer-check>     Checking rand_chacha v0.9.0
+tigerstyle-consumer-check>     Checking rand v0.9.3
+tigerstyle-consumer-check>     Checking rand v0.8.6
+tigerstyle-consumer-check>    Compiling serde_derive v1.0.228
+tigerstyle-consumer-check>    Compiling thiserror-impl v2.0.18
+tigerstyle-consumer-check>    Compiling tokio-macros v2.7.0
+tigerstyle-consumer-check>    Compiling futures-macro v0.3.32
+tigerstyle-consumer-check>    Compiling zerovec-derive v0.11.3
+tigerstyle-consumer-check>    Compiling displaydoc v0.2.5
+tigerstyle-consumer-check>    Compiling tracing-attributes v0.1.31
+tigerstyle-consumer-check>    Compiling derive_more-impl v2.1.1
+tigerstyle-consumer-check>    Compiling curve25519-dalek-derive v0.1.1
+tigerstyle-consumer-check>    Compiling clap_derive v4.6.0
+tigerstyle-consumer-check>    Compiling async-trait v0.1.89
+tigerstyle-consumer-check>    Compiling pin-project-internal v1.1.11
+tigerstyle-consumer-check>    Compiling zerofrom-derive v0.1.7
+tigerstyle-consumer-check>    Compiling yoke-derive v0.8.2
+tigerstyle-consumer-check>    Compiling spez v0.1.2
+tigerstyle-consumer-check>    Compiling async-stream-impl v0.3.6
+building '/nix/store/pdqmlb9lrz369frd0pq91cb71rs6ywj2-crunch-kernelscript-adapter-0.1.0.drv'...
+building '/nix/store/2rk3k6sgynfhcd8qxh23da66gn24arl6-crunch-release-determinism-quality-nextest-0.1.0.drv'...
+building '/nix/store/46ydk2s3yrpgna0hi17r7q7lvn4fbxgy-crunch-release-nix-witness-quality-nextest-0.1.0.drv'...
+crunch-release-determinism-quality-nextest> Running phase: unpackPhase
+crunch-kernelscript-adapter> Running phase: unpackPhase
+crunch-release-nix-witness-quality-nextest> Running phase: unpackPhase
+crunch-release-determinism-quality-nextest> unpacking source archive /nix/store/zs8vqn9scpdwianxidxzrqcpr71a2nf0-source
+crunch-kernelscript-adapter> unpacking source archive /nix/store/zs8vqn9scpdwianxidxzrqcpr71a2nf0-source
+crunch-release-nix-witness-quality-nextest> unpacking source archive /nix/store/zs8vqn9scpdwianxidxzrqcpr71a2nf0-source
+tigerstyle-consumer-check>    Compiling thiserror-impl v1.0.69
+tigerstyle-consumer-check>    Compiling n0-error-macros v0.1.3
+tigerstyle-consumer-check>    Compiling num_enum_derive v0.7.6
+tigerstyle-consumer-check>    Compiling irpc-derive v0.10.0
+tigerstyle-consumer-check>     Checking async-stream v0.3.6
+tigerstyle-consumer-check>    Compiling nix-compat-derive v0.1.0 (/build/source/vendor/nix-compat-derive)
+tigerstyle-consumer-check>    Compiling auto_impl v1.3.0
+tigerstyle-consumer-check>    Compiling strum_macros v0.26.4
+tigerstyle-consumer-check>     Checking futures-util v0.3.32
+tigerstyle-consumer-check>    Compiling getset v0.1.6
+tigerstyle-consumer-check>    Compiling typed-builder-macro v0.22.0
+copying 86 paths...
+copying path '/nix/store/3r2nwafkx9xha0y6xsd0w0557ba0c294-rust-src-1.96.0-nightly-2026-03-21-x86_64-unknown-linux-gnu' to 'ssh-ng://root@aspen1.local'...
+tigerstyle-consumer-check>    Compiling ouroboros_macro v0.18.5
+tigerstyle-consumer-check>     Checking addr2line v0.25.1
+tigerstyle-consumer-check>     Checking pin-project v1.1.11
+tigerstyle-consumer-check>    Compiling maybe-async v0.2.10
+tigerstyle-consumer-check>     Checking zerofrom v0.1.7
+tigerstyle-consumer-check>     Checking tracing v0.1.44
+tigerstyle-consumer-check>     Checking yoke v0.8.2
+tigerstyle-consumer-check>     Checking cobs v0.3.0
+tigerstyle-consumer-check>     Checking nix-archive v0.1.0
+tigerstyle-consumer-check>     Checking zerovec v0.11.6
+tigerstyle-consumer-check>     Checking zerotrie v0.2.4
+tigerstyle-consumer-check>     Checking num_enum v0.7.6
+tigerstyle-consumer-check>    Compiling miette-derive v7.6.0
+tigerstyle-consumer-check>     Checking nix-derivation v0.1.0
+tigerstyle-consumer-check>     Checking tracing-subscriber v0.3.23
+tigerstyle-consumer-check>     Checking n0-error v0.1.3
+bootstrap-blocker-inventory> gcc40 configure preprocess bridge: PASS (classes=3, source_spellings=2, source_bytes_max=65536, invocation_count_max=4096)
+copying path '/nix/store/a09v76b3128942n71iwjacy782a20fcy-clippy-preview-1.96.0-nightly-2026-03-21-x86_64-unknown-linux-gnu' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/llk282jgbwjldijw3mvpvl1pq5gxq68s-llvm-tools-preview-1.96.0-nightly-2026-03-21-x86_64-unknown-linux-gnu' to 'ssh-ng://root@aspen1.local'...
+tigerstyle-consumer-check>     Checking derive_more v2.1.1
+tigerstyle-consumer-check>     Checking crossterm v0.29.0
+bootstrap-blocker-inventory> bootstrap blocker inventory: 0 findings across 0 classes, 472 evidence-backed suppressions, 0 promotion claims, enforce=true
+copying 1 paths...
+copying path '/nix/store/dfq7f67il83rzkkihngkkflfv9pm12pz-bootstrap-blocker-inventory' from 'ssh-ng://root@aspen1.local'...
+tigerstyle-consumer-check>     Checking tinystr v0.8.3
+tigerstyle-consumer-check>     Checking potential_utf v0.1.5
+tigerstyle-consumer-check>     Checking backtrace v0.3.76
+tigerstyle-consumer-check>     Checking icu_collections v2.2.0
+tigerstyle-consumer-check>     Checking icu_locale_core v2.2.0
+tigerstyle-consumer-check>     Checking ed25519-dalek v2.2.0
+tigerstyle-consumer-check>     Checking clap v4.6.0
+tigerstyle-consumer-check>     Checking clap-verbosity-flag v3.0.4
+tigerstyle-consumer-check>    Compiling darling_macro v0.20.11
+tigerstyle-consumer-check>     Checking typed-builder v0.22.0
+crunch-release-determinism-quality-nextest> source root is source
+crunch-release-nix-witness-quality-nextest> source root is source
+crunch-kernelscript-adapter> source root is source
+tigerstyle-consumer-check>    Compiling logos-codegen v0.16.1
+crunch-kernelscript-adapter> Running phase: patchPhase
+crunch-release-determinism-quality-nextest> Running phase: patchPhase
+crunch-release-nix-witness-quality-nextest> Running phase: patchPhase
+crunch-release-nix-witness-quality-nextest> Executing configureCargoCommonVars
+crunch-kernelscript-adapter> Executing configureCargoCommonVars
+crunch-release-determinism-quality-nextest> Executing configureCargoCommonVars
+crunch-release-nix-witness-quality-nextest> decompressing cargo artifacts from /nix/store/fw20x4r94yda90wscyn34wasy06j7ak5-mantle-deps-0.1.0/target.tar.zst to target
+crunch-kernelscript-adapter> decompressing cargo artifacts from /nix/store/fw20x4r94yda90wscyn34wasy06j7ak5-mantle-deps-0.1.0/target.tar.zst to target
+crunch-release-determinism-quality-nextest> decompressing cargo artifacts from /nix/store/fw20x4r94yda90wscyn34wasy06j7ak5-mantle-deps-0.1.0/target.tar.zst to target
+tigerstyle-consumer-check>    Compiling darling_macro v0.23.0
+tigerstyle-consumer-check>    Compiling darling v0.20.11
+tigerstyle-consumer-check>     Checking ouroboros v0.18.5
+tigerstyle-consumer-check>    Compiling derive_builder_core v0.20.2
+copying path '/nix/store/m1mgcnfgl3mvafn946g33644clwqcl9d-rustc-dev-1.96.0-nightly-2026-03-21-x86_64-unknown-linux-gnu' to 'ssh-ng://root@aspen1.local'...
+tigerstyle-consumer-check>     Checking rsa v0.9.10
+tigerstyle-consumer-check>     Checking backtrace-ext v0.2.1
+tigerstyle-consumer-check>     Checking miette v7.6.0
+tigerstyle-consumer-check>    Compiling darling v0.23.0
+tigerstyle-consumer-check>    Compiling serde_with_macros v3.18.0
+tigerstyle-consumer-check>     Checking inquire v0.9.4
+tigerstyle-consumer-check>    Compiling lalrpop v0.22.2
+tigerstyle-consumer-check>     Checking tracing-indicatif v0.3.14
+crunch-kernelscript-adapter> Running phase: updateAutotoolsGnuConfigScriptsPhase
+crunch-release-determinism-quality-nextest> Running phase: updateAutotoolsGnuConfigScriptsPhase
+crunch-release-nix-witness-quality-nextest> Running phase: updateAutotoolsGnuConfigScriptsPhase
+tigerstyle-consumer-check>     Checking icu_provider v2.2.0
+crunch-kernelscript-adapter> Running phase: configurePhase
+crunch-release-determinism-quality-nextest> Running phase: configurePhase
+crunch-release-nix-witness-quality-nextest> Running phase: configurePhase
+crunch-kernelscript-adapter> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+crunch-kernelscript-adapter> default configurePhase, nothing to do
+crunch-release-nix-witness-quality-nextest> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+crunch-release-determinism-quality-nextest> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+crunch-kernelscript-adapter> Running phase: buildPhase
+crunch-release-nix-witness-quality-nextest> default configurePhase, nothing to do
+crunch-release-determinism-quality-nextest> default configurePhase, nothing to do
+crunch-kernelscript-adapter> +++ command cargo --version
+crunch-release-determinism-quality-nextest> Running phase: buildPhase
+crunch-release-nix-witness-quality-nextest> Running phase: buildPhase
+crunch-release-nix-witness-quality-nextest> +++ command cargo --version
+crunch-release-determinism-quality-nextest> +++ command cargo --version
+crunch-kernelscript-adapter> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+crunch-release-determinism-quality-nextest> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+crunch-kernelscript-adapter> +++ command cargo build --release --message-format json-render-diagnostics --locked -p crunch-kernelscript-adapter --bin mantle-kernelscript-core-adapter
+crunch-release-nix-witness-quality-nextest> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+crunch-release-determinism-quality-nextest> +++ command cargo nextest --version
+crunch-release-nix-witness-quality-nextest> +++ command cargo nextest --version
+crunch-kernelscript-adapter> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+crunch-kernelscript-adapter>   * `bin` target `crunch`
+crunch-kernelscript-adapter>   * `bin` target `mantle`
+crunch-release-determinism-quality-nextest> cargo-nextest 0.9.132
+crunch-release-determinism-quality-nextest> release: 0.9.132
+crunch-release-determinism-quality-nextest> host: x86_64-unknown-linux-gnu
+crunch-release-nix-witness-quality-nextest> cargo-nextest 0.9.132
+crunch-release-nix-witness-quality-nextest> release: 0.9.132
+crunch-release-nix-witness-quality-nextest> host: x86_64-unknown-linux-gnu
+crunch-release-determinism-quality-nextest> Running phase: checkPhase
+crunch-release-nix-witness-quality-nextest> Running phase: checkPhase
+crunch-release-determinism-quality-nextest> +++ command cargo nextest run --cargo-profile release --test release_cli release_reproduce_generated_two_clean_store_proof_verifies_deterministic_release
+crunch-release-nix-witness-quality-nextest> +++ command cargo nextest run --cargo-profile release --test release_cli release_nix_witness
+tigerstyle-consumer-check>    Compiling derive_builder_macro v0.20.2
+tigerstyle-consumer-check>     Checking serde_with v3.18.0
+tigerstyle-consumer-check>     Checking icu_normalizer v2.2.0
+tigerstyle-consumer-check>     Checking icu_properties v2.2.0
+tigerstyle-consumer-check>     Checking derive_builder v0.20.2
+crunch-kernelscript-adapter>    Compiling proc-macro2 v1.0.106
+crunch-kernelscript-adapter>    Compiling quote v1.0.45
+crunch-kernelscript-adapter>    Compiling serde_json v1.0.149
+crunch-kernelscript-adapter>    Compiling memchr v2.8.0
+crunch-kernelscript-adapter>    Compiling cc v1.2.59
+crunch-kernelscript-adapter>    Compiling libc v0.2.186
+crunch-kernelscript-adapter>    Compiling digest v0.10.7
+crunch-kernelscript-adapter>    Compiling sha2 v0.10.9
+tigerstyle-consumer-check>     Checking zstd v0.13.3
+crunch-release-determinism-quality-nextest> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+crunch-release-determinism-quality-nextest>   * `bin` target `crunch`
+crunch-release-determinism-quality-nextest>   * `bin` target `mantle`
+crunch-release-nix-witness-quality-nextest> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+crunch-release-nix-witness-quality-nextest>   * `bin` target `crunch`
+crunch-release-nix-witness-quality-nextest>   * `bin` target `mantle`
+tigerstyle-consumer-check>    Compiling logos-derive v0.16.1
+mantle-nextest>    Compiling crunch-project-core v0.1.0 (/build/source/crates/crunch-project-core)
+crunch-kernelscript-adapter>    Compiling syn v2.0.117
+crunch-kernelscript-adapter>    Compiling blake3 v1.8.2
+crunch-release-nix-witness-quality-nextest>    Compiling fuse-backend-rs v0.12.0 (/build/source/vendor/fuse-backend-rs)
+crunch-release-determinism-quality-nextest>    Compiling nix-compat v0.1.0 (/build/source/vendor/nix-compat)
+crunch-release-nix-witness-quality-nextest>    Compiling nix-compat v0.1.0 (/build/source/vendor/nix-compat)
+crunch-release-determinism-quality-nextest>    Compiling fuse-backend-rs v0.12.0 (/build/source/vendor/fuse-backend-rs)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-attestation-core v0.1.0 (/build/source/crates/crunch-attestation-core)
+crunch-release-nix-witness-quality-nextest>    Compiling nix-compat-derive v0.1.0 (/build/source/vendor/nix-compat-derive)
+crunch-release-determinism-quality-nextest>    Compiling crunch-attestation-core v0.1.0 (/build/source/crates/crunch-attestation-core)
+crunch-release-determinism-quality-nextest>    Compiling nix-compat-derive v0.1.0 (/build/source/vendor/nix-compat-derive)
+crunch-release-nix-witness-quality-nextest>    Compiling snix-castore v0.1.0 (/build/source/vendor/snix-castore)
+crunch-release-determinism-quality-nextest>    Compiling snix-castore v0.1.0 (/build/source/vendor/snix-castore)
+crunch-release-nix-witness-quality-nextest>    Compiling snix-build v0.1.0 (/build/source/vendor/snix-build)
+crunch-release-nix-witness-quality-nextest>    Compiling snix-store v0.1.0 (/build/source/vendor/snix-store)
+crunch-release-determinism-quality-nextest>    Compiling snix-store v0.1.0 (/build/source/vendor/snix-store)
+crunch-release-determinism-quality-nextest>    Compiling snix-build v0.1.0 (/build/source/vendor/snix-build)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-action-result-core v0.1.0 (/build/source/crates/crunch-action-result-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-action-result-core v0.1.0 (/build/source/crates/crunch-action-result-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-overlay-core v0.1.0 (/build/source/crates/crunch-overlay-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-repair-core v0.1.0 (/build/source/crates/crunch-repair-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-gc-core v0.1.0 (/build/source/crates/crunch-gc-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-composition-core v0.1.0 (/build/source/crates/crunch-composition-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-composition-core v0.1.0 (/build/source/crates/crunch-composition-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-gc-core v0.1.0 (/build/source/crates/crunch-gc-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-repair-core v0.1.0 (/build/source/crates/crunch-repair-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-overlay-core v0.1.0 (/build/source/crates/crunch-overlay-core)
+crunch-release-determinism-quality-nextest>    Compiling snix-tracing v0.1.0 (/build/source/vendor/snix-tracing)
+crunch-release-nix-witness-quality-nextest>    Compiling snix-tracing v0.1.0 (/build/source/vendor/snix-tracing)
+crunch-release-determinism-quality-nextest>    Compiling crunch-remote-core v0.1.0 (/build/source/crates/crunch-remote-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-remote-core v0.1.0 (/build/source/crates/crunch-remote-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-rust-cache-core v0.1.0 (/build/source/crates/crunch-rust-cache-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-rust-cache-core v0.1.0 (/build/source/crates/crunch-rust-cache-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-eval v0.1.0 (/build/source/crates/crunch-eval)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-wasm-component-core v0.1.0 (/build/source/crates/crunch-wasm-component-core)
+crunch-release-nix-witness-quality-nextest>    Compiling mantle-rust-plan-core v0.1.0 (/build/source/crates/mantle-rust-plan-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-eval v0.1.0 (/build/source/crates/crunch-eval)
+crunch-release-determinism-quality-nextest>    Compiling crunch-evaluation-stream-core v0.1.0 (/build/source/crates/crunch-evaluation-stream-core)
+crunch-release-determinism-quality-nextest>    Compiling mantle-rust-plan-core v0.1.0 (/build/source/crates/mantle-rust-plan-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-wasm-component-core v0.1.0 (/build/source/crates/crunch-wasm-component-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-build-planning-core v0.1.0 (/build/source/crates/crunch-build-planning-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-evaluation-stream-core v0.1.0 (/build/source/crates/crunch-evaluation-stream-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-shell-core v0.1.0 (/build/source/crates/crunch-shell-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-build-planning-core v0.1.0 (/build/source/crates/crunch-build-planning-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-shell-core v0.1.0 (/build/source/crates/crunch-shell-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-delta-core v0.1.0 (/build/source/crates/crunch-delta-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-delta-core v0.1.0 (/build/source/crates/crunch-delta-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-bootstrap-core v0.1.0 (/build/source/crates/crunch-bootstrap-core)
+crunch-release-determinism-quality-nextest>    Compiling mantlepkgs-core v0.1.0 (/build/source/crates/mantlepkgs-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-eval-budget-core v0.1.0 (/build/source/crates/crunch-eval-budget-core)
+crunch-release-determinism-quality-nextest>    Compiling mantle-portable-client-core v0.1.0 (/build/source/crates/mantle-portable-client-core)
+crunch-release-nix-witness-quality-nextest>    Compiling mantlepkgs-core v0.1.0 (/build/source/crates/mantlepkgs-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-eval-budget-core v0.1.0 (/build/source/crates/crunch-eval-budget-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-bootstrap-core v0.1.0 (/build/source/crates/crunch-bootstrap-core)
+crunch-release-nix-witness-quality-nextest>    Compiling mantle-portable-client-core v0.1.0 (/build/source/crates/mantle-portable-client-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-hardware-simulation-core v0.1.0 (/build/source/crates/crunch-hardware-simulation-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-kernelscript-core v0.1.0 (/build/source/crates/crunch-kernelscript-core)
+tigerstyle-consumer-check>     Checking logos v0.16.1
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-hardware-simulation-core v0.1.0 (/build/source/crates/crunch-hardware-simulation-core)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-kernelscript-core v0.1.0 (/build/source/crates/crunch-kernelscript-core)
+tigerstyle-consumer-check>     Checking bytes v1.11.1
+tigerstyle-consumer-check>     Checking bstr v1.12.1
+tigerstyle-consumer-check>     Checking serde_urlencoded v0.7.1
+tigerstyle-consumer-check>     Checking quick-xml v0.40.1
+tigerstyle-consumer-check>     Checking crunch-attestation-core v0.1.0 (/build/source/crates/crunch-attestation-core)
+tigerstyle-consumer-check>     Checking chrono v0.4.44
+tigerstyle-consumer-check>     Checking serde_qs v0.12.0
+tigerstyle-consumer-check>     Checking artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+tigerstyle-consumer-check>     Checking postcard v1.1.3
+tigerstyle-consumer-check>     Checking serde_tagged v0.3.0
+tigerstyle-consumer-check>     Checking oci-spec v0.7.1
+tigerstyle-consumer-check>     Checking codespan-reporting v0.13.1
+tigerstyle-consumer-check>     Checking crunch-composition-core v0.1.0 (/build/source/crates/crunch-composition-core)
+tigerstyle-consumer-check>     Checking nickel-lang-vector v0.2.0
+tigerstyle-consumer-check>     Checking serde_yaml v0.9.34+deprecated
+tigerstyle-consumer-check>     Checking serde_spanned v0.6.9
+tigerstyle-consumer-check>     Checking crunch-remote-core v0.1.0 (/build/source/crates/crunch-remote-core)
+tigerstyle-consumer-check>     Checking toml_datetime v0.6.11
+tigerstyle-consumer-check>     Checking crunch-rust-cache-core v0.1.0 (/build/source/crates/crunch-rust-cache-core)
+tigerstyle-consumer-check>     Checking crunch-shell-core v0.1.0 (/build/source/crates/crunch-shell-core)
+tigerstyle-consumer-check>     Checking crunch-wasm-component-core v0.1.0 (/build/source/crates/crunch-wasm-component-core)
+tigerstyle-consumer-check>     Checking mantle-rust-plan-core v0.1.0 (/build/source/crates/mantle-rust-plan-core)
+tigerstyle-consumer-check>     Checking crunch-build-planning-core v0.1.0 (/build/source/crates/crunch-build-planning-core)
+tigerstyle-consumer-check>     Checking secrecy v0.10.3
+tigerstyle-consumer-check>     Checking crunch-hardware-simulation-core v0.1.0 (/build/source/crates/crunch-hardware-simulation-core)
+tigerstyle-consumer-check>     Checking crunch-bootstrap-core v0.1.0 (/build/source/crates/crunch-bootstrap-core)
+tigerstyle-consumer-check>     Checking mantle-portable-client-core v0.1.0 (/build/source/crates/mantle-portable-client-core)
+tigerstyle-consumer-check>     Checking nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+tigerstyle-consumer-check>     Checking toml_edit v0.22.27
+tigerstyle-consumer-check>     Checking crunch-eval-budget-core v0.1.0 (/build/source/crates/crunch-eval-budget-core)
+tigerstyle-consumer-check>     Checking mantlepkgs-core v0.1.0 (/build/source/crates/mantlepkgs-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-shell v0.1.0 (/build/source/crates/crunch-shell)
+tigerstyle-consumer-check>     Checking futures-executor v0.3.32
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-shell v0.1.0 (/build/source/crates/crunch-shell)
+tigerstyle-consumer-check>     Checking crunch-kernelscript-core v0.1.0 (/build/source/crates/crunch-kernelscript-core)
+tigerstyle-consumer-check>     Checking crunch-spacewasm-core v0.1.0 (/build/source/crates/crunch-spacewasm-core)
+tigerstyle-consumer-check>     Checking mantle-build-contract v0.1.0 (/build/source/crates/mantle-build-contract)
+tigerstyle-consumer-check>     Checking futures v0.3.32
+tigerstyle-consumer-check>     Checking crunch-shell v0.1.0 (/build/source/crates/crunch-shell)
+tigerstyle-consumer-check>     Checking codespan v0.13.1
+tigerstyle-consumer-check>     Checking crunch-action-result-core v0.1.0 (/build/source/crates/crunch-action-result-core)
+tigerstyle-consumer-check>     Checking artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+tigerstyle-consumer-check>     Checking gix-validate v0.11.0
+tigerstyle-consumer-check>     Checking gix-utils v0.3.1
+tigerstyle-consumer-check>     Checking gix-error v0.2.1
+tigerstyle-consumer-check>     Checking tokio v1.51.0
+tigerstyle-consumer-check>     Checking http v1.4.0
+tigerstyle-consumer-check>     Checking idna_adapter v1.2.1
+tigerstyle-consumer-check>     Checking gix-path v0.11.2
+tigerstyle-consumer-check>     Checking gix-date v0.15.1
+tigerstyle-consumer-check>     Checking gix-chunk v0.7.0
+tigerstyle-consumer-check>     Checking gix-quote v0.7.0
+tigerstyle-consumer-check>     Checking idna v1.1.0
+tigerstyle-consumer-check>     Checking gix-packetline v0.21.2
+tigerstyle-consumer-check>     Checking gix-bitmap v0.3.0
+tigerstyle-consumer-check>     Checking crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)
+tigerstyle-consumer-check>     Checking gix-features v0.46.2
+tigerstyle-consumer-check>     Checking gix-config-value v0.17.1
+tigerstyle-consumer-check>     Checking gix-command v0.8.0
+tigerstyle-consumer-check>     Checking gix-actor v0.40.0
+tigerstyle-consumer-check>     Checking gix-url v0.35.2
+tigerstyle-consumer-check>     Checking url v2.5.8
+tigerstyle-consumer-check>     Checking gix-mailmap v0.32.0
+tigerstyle-consumer-check>     Checking gix-prompt v0.14.1
+tigerstyle-consumer-check>     Checking gix-hash v0.23.0
+tigerstyle-consumer-check>     Checking gix-fs v0.19.2
+tigerstyle-consumer-check>     Checking gix-glob v0.24.0
+tigerstyle-consumer-check>     Checking gix-credentials v0.37.1
+tigerstyle-consumer-check>     Checking gix-tempfile v21.0.2
+tigerstyle-consumer-check>     Checking gix-hashtable v0.13.0
+tigerstyle-consumer-check>     Checking gix-commitgraph v0.35.0
+tigerstyle-consumer-check>     Checking gix-object v0.58.0
+tigerstyle-consumer-check>     Checking http-body v1.0.1
+tigerstyle-consumer-check>     Checking ureq-proto v0.6.0
+tigerstyle-consumer-check>     Checking gix-attributes v0.31.0
+tigerstyle-consumer-check>     Checking gix-ignore v0.19.1
+tigerstyle-consumer-check>     Checking http-body-util v0.1.3
+tigerstyle-consumer-check>     Checking gix-lock v21.0.2
+crunch-release-determinism-quality-nextest>    Compiling crunch-attestation v0.1.0 (/build/source/crates/crunch-attestation)
+crunch-release-determinism-quality-nextest>    Compiling crunch-project-core v0.1.0 (/build/source/crates/crunch-project-core)
+tigerstyle-consumer-check>     Checking gix-shallow v0.10.0
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-attestation v0.1.0 (/build/source/crates/crunch-attestation)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-project-core v0.1.0 (/build/source/crates/crunch-project-core)
+crunch-release-determinism-quality-nextest>    Compiling crunch-remote v0.1.0 (/build/source/crates/crunch-remote)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-remote v0.1.0 (/build/source/crates/crunch-remote)
+tigerstyle-consumer-check>     Checking gix-pathspec v0.16.1
+copying path '/nix/store/plshvwcnlnjddl772blynnnq1j8vrp6m-rust-docs-1.96.0-nightly-2026-03-21-x86_64-unknown-linux-gnu' to 'ssh-ng://root@aspen1.local'...
+crunch-kernelscript-adapter>    Compiling serde_derive v1.0.228
+tigerstyle-consumer-check>     Checking crunch-attestation v0.1.0 (/build/source/crates/crunch-attestation)
+tigerstyle-consumer-check>     Checking crunch-project-core v0.1.0 (/build/source/crates/crunch-project-core)
+tigerstyle-consumer-check>     Checking mantle-rust-plan v0.1.0 (/build/source/crates/mantle-rust-plan)
+tigerstyle-consumer-check>     Checking toml v0.8.23
+crunch-release-determinism-quality-nextest>    Compiling mantle-rust-plan v0.1.0 (/build/source/crates/mantle-rust-plan)
+tigerstyle-consumer-check>     Checking crunch-remote v0.1.0 (/build/source/crates/crunch-remote)
+crunch-release-nix-witness-quality-nextest>    Compiling mantle-rust-plan v0.1.0 (/build/source/crates/mantle-rust-plan)
+tigerstyle-consumer-check>     Checking crunch-spacewasm v0.1.0 (/build/source/crates/crunch-spacewasm)
+tigerstyle-consumer-check>     Checking crunch-hardware-simulation v0.1.0 (/build/source/crates/crunch-hardware-simulation)
+tigerstyle-consumer-check>     Checking gix-revwalk v0.29.0
+tigerstyle-consumer-check>     Checking gix-ref v0.61.0
+tigerstyle-consumer-check>     Checking gix-filter v0.28.0
+tigerstyle-consumer-check>     Checking gix-pack v0.68.0
+tigerstyle-consumer-check>     Checking gix-traverse v0.55.0
+tigerstyle-consumer-check>     Checking gix-revision v0.43.0
+tigerstyle-consumer-check>     Checking gix-negotiate v0.29.0
+crunch-release-determinism-quality-nextest>    Compiling crunch-hardware-simulation v0.1.0 (/build/source/crates/crunch-hardware-simulation)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-hardware-simulation v0.1.0 (/build/source/crates/crunch-hardware-simulation)
+tigerstyle-consumer-check>     Checking gix-index v0.49.0
+tigerstyle-consumer-check>     Checking gix-worktree-stream v0.30.0
+tigerstyle-consumer-check>     Checking gix-refspec v0.39.0
+tigerstyle-consumer-check>     Checking gix-archive v0.30.0
+tigerstyle-consumer-check>     Checking crunch-kernelscript-adapter v0.1.0 (/build/source/crates/crunch-kernelscript-adapter)
+tigerstyle-consumer-check>     Checking gix-discover v0.49.0
+tigerstyle-consumer-check>     Checking gix-config v0.54.0
+tigerstyle-consumer-check>     Checking gix-odb v0.78.0
+tigerstyle-consumer-check>     Checking gix-worktree v0.50.0
+tigerstyle-consumer-check>     Checking gix-diff v0.61.0
+tigerstyle-consumer-check>     Checking gix-dir v0.23.0
+tigerstyle-consumer-check>     Checking gix-worktree-state v0.28.0
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-nar v0.1.0 (/build/source/crates/crunch-nar)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-glue v0.1.0 (/build/source/crates/crunch-glue)
+tigerstyle-consumer-check>     Checking gix-submodule v0.28.0
+tigerstyle-consumer-check>     Checking gix-status v0.28.0
+tigerstyle-consumer-check>     Checking gix-blame v0.11.0
+tigerstyle-consumer-check>     Checking crunch-wasm-component v0.1.0 (/build/source/crates/crunch-wasm-component)
+crunch-release-determinism-quality-nextest>    Compiling crunch-nar v0.1.0 (/build/source/crates/crunch-nar)
+tigerstyle-consumer-check>     Checking tokio-util v0.7.18
+tigerstyle-consumer-check>     Checking tower v0.5.3
+tigerstyle-consumer-check>     Checking tokio-stream v0.1.18
+tigerstyle-consumer-check>     Checking async-compression v0.4.19
+tigerstyle-consumer-check>     Checking secretspec v0.17.0
+crunch-release-determinism-quality-nextest>    Compiling crunch-glue v0.1.0 (/build/source/crates/crunch-glue)
+tigerstyle-consumer-check>     Checking fastcdc v3.2.1
+tigerstyle-consumer-check>     Checking astral-tokio-tar v0.6.3
+tigerstyle-consumer-check>     Checking tower-http v0.6.8
+tigerstyle-consumer-check>     Checking h2 v0.4.13
+tigerstyle-consumer-check>     Checking irpc v0.13.0
+tigerstyle-consumer-check>     Checking rustls-webpki v0.103.13
+crunch-kernelscript-adapter>    Compiling serde v1.0.228
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-wasm-component v0.1.0 (/build/source/crates/crunch-wasm-component)
+crunch-release-determinism-quality-nextest>    Compiling crunch-wasm-component v0.1.0 (/build/source/crates/crunch-wasm-component)
+tigerstyle-consumer-check>     Checking crunch-project v0.1.0 (/build/source/crates/crunch-project)
+tigerstyle-consumer-check>    Compiling nickel-lang-parser v0.3.0
+tigerstyle-consumer-check>    Compiling nickel-lang-core v0.18.0
+crunch-kernelscript-adapter>    Compiling crunch-kernelscript-core v0.1.0 (/build/source/crates/crunch-kernelscript-core)
+tigerstyle-consumer-check>     Checking hyper v1.9.0
+tigerstyle-consumer-check>     Checking crunch-nar v0.1.0 (/build/source/crates/crunch-nar)
+tigerstyle-consumer-check>     Checking crunch-glue v0.1.0 (/build/source/crates/crunch-glue)
+crunch-release-determinism-quality-nextest>    Compiling crunch-project v0.1.0 (/build/source/crates/crunch-project)
+tigerstyle-consumer-check>     Checking hyper-util v0.1.20
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-project v0.1.0 (/build/source/crates/crunch-project)
+tigerstyle-consumer-check>     Checking tokio-rustls v0.26.4
+tigerstyle-consumer-check>     Checking rustls-platform-verifier v0.6.2
+tigerstyle-consumer-check>     Checking ureq v3.3.0
+tigerstyle-consumer-check>     Checking hyper-rustls v0.27.7
+crunch-kernelscript-adapter>    Compiling crunch-kernelscript-adapter v0.1.0 (/build/source/crates/crunch-kernelscript-adapter)
+tigerstyle-consumer-check>     Checking reqwest v0.13.2
+tigerstyle-consumer-check>     Checking reqwest-middleware v0.5.1
+tigerstyle-consumer-check>     Checking object_store v0.14.0
+tigerstyle-consumer-check>     Checking gix-transport v0.55.1
+tigerstyle-consumer-check>     Checking malachite-q v0.9.2
+tigerstyle-consumer-check>     Checking reqwest-tracing v0.6.0
+tigerstyle-consumer-check>     Checking gix-protocol v0.59.0
+tigerstyle-consumer-check>     Checking snix-tracing v0.1.0 (/build/source/vendor/snix-tracing)
+tigerstyle-consumer-check>     Checking malachite-float v0.9.2
+tigerstyle-consumer-check>     Checking gix v0.81.0
+mantle-store-capability-architecture-check> store capability architecture verified: external runtime findings=0
+mantle-store-capability-architecture-check> buildPhase completed in 44 seconds
+mantle-store-capability-architecture-check> Running phase: installPhase
+mantle-store-capability-architecture-check> Running phase: fixupPhase
+mantle-store-capability-architecture-check> shrinking RPATHs of ELF executables and libraries in /nix/store/06b4692ja98xggm4vz7cidqqzd082llm-mantle-store-capability-architecture-check-0.1.0
+mantle-store-capability-architecture-check> checking for references to /build/ in /nix/store/06b4692ja98xggm4vz7cidqqzd082llm-mantle-store-capability-architecture-check-0.1.0...
+mantle-store-capability-architecture-check> patching script interpreter paths in /nix/store/06b4692ja98xggm4vz7cidqqzd082llm-mantle-store-capability-architecture-check-0.1.0
+building '/nix/store/hx71jnrjihhhjnbpsgbnrmxriv8hcyvm-mantle-store-retention-policy.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/yxp4yg9ql4k15rhqyv0w2i4vd0kh2z71-mantle-transactional-reconciliation-source-admission.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/2yzbxm5jzc5wgjr8097fyx308782xzy1-mantle-test-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/b4glm7r3hqfnjndkawa2l4abfrzy0410-mantle-test-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+tigerstyle-consumer-check>     Checking malachite v0.9.2
+mantle-transcript-quality-nextest>    Compiling crunch-wasm-component-core v0.1.0 (/build/source/crates/crunch-wasm-component-core)
+copying path '/nix/store/yd4r7ql7nslxd12mpq5hrndrf71c78sl-rust-std-1.96.0-nightly-2026-03-21-x86_64-unknown-linux-gnu' to 'ssh-ng://root@aspen1.local'...
+mantle-transcript-quality-nextest>    Compiling crunch-evaluation-stream-core v0.1.0 (/build/source/crates/crunch-evaluation-stream-core)
+crunch-kernelscript-adapter>     Finished `release` profile [optimized] target(s) in 21.53s
+crunch-kernelscript-adapter> searching for bins/libs to install from cargo build log at cargoBuildLog8Z2x.json
+mantle-transcript-quality-nextest>    Compiling crunch-build-planning-core v0.1.0 (/build/source/crates/crunch-build-planning-core)
+copying path '/nix/store/1yvh3d6y3fj3xk2dgwczrp1dj5svd92c-rust-default-1.96.0-nightly-2026-03-21' to 'ssh-ng://root@aspen1.local'...
+crunch-kernelscript-adapter> installing /build/source/target/release/mantle-kernelscript-core-adapter in postBuildInstallFromCargoBuildLogOutTempkRf/bin
+crunch-kernelscript-adapter> searching for bins/libs complete
+crunch-kernelscript-adapter> Running phase: installPhase
+crunch-kernelscript-adapter> actually installing contents of postBuildInstallFromCargoBuildLogOutTempkRf to /nix/store/3g7x9j193kiy3jfcvy21f0y23xvkfywm-crunch-kernelscript-adapter-0.1.0
+crunch-kernelscript-adapter> stripping references to Rust toolchain
+crunch-kernelscript-adapter> Rust toolchain at: /nix/store/1hz41jg6cc3py3szsn6cxw3m5p42r4fj-rust-default-1.96.0-nightly-2026-04-08
+crunch-kernelscript-adapter> stripping Rust toolchain references done
+crunch-kernelscript-adapter> stripping references to cargoVendorDir from:
+crunch-kernelscript-adapter> /nix/store/3g7x9j193kiy3jfcvy21f0y23xvkfywm-crunch-kernelscript-adapter-0.1.0/bin/mantle-kernelscript-core-adapter
+crunch-release-determinism-quality-nextest>    Compiling crunch-store v0.1.0 (/build/source/crates/crunch-store)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-store v0.1.0 (/build/source/crates/crunch-store)
+crunch-kernelscript-adapter> stripping references done
+crunch-kernelscript-adapter> Running phase: fixupPhase
+crunch-kernelscript-adapter> shrinking RPATHs of ELF executables and libraries in /nix/store/3g7x9j193kiy3jfcvy21f0y23xvkfywm-crunch-kernelscript-adapter-0.1.0
+crunch-kernelscript-adapter> shrinking /nix/store/3g7x9j193kiy3jfcvy21f0y23xvkfywm-crunch-kernelscript-adapter-0.1.0/bin/mantle-kernelscript-core-adapter
+crunch-kernelscript-adapter> checking for references to /build/ in /nix/store/3g7x9j193kiy3jfcvy21f0y23xvkfywm-crunch-kernelscript-adapter-0.1.0...
+crunch-kernelscript-adapter> patching script interpreter paths in /nix/store/3g7x9j193kiy3jfcvy21f0y23xvkfywm-crunch-kernelscript-adapter-0.1.0
+crunch-kernelscript-adapter> stripping (with command strip and flags -S -p) in  /nix/store/3g7x9j193kiy3jfcvy21f0y23xvkfywm-crunch-kernelscript-adapter-0.1.0/bin
+mantle-nextest>    Compiling crunch-evaluation-stream-core v0.1.0 (/build/source/crates/crunch-evaluation-stream-core)
+mantle-nextest>    Compiling crunch-wasm-component-core v0.1.0 (/build/source/crates/crunch-wasm-component-core)
+tigerstyle-consumer-check>     Checking crunch-store v0.1.0 (/build/source/crates/crunch-store)
+copying 1 paths...
+copying path '/nix/store/3g7x9j193kiy3jfcvy21f0y23xvkfywm-crunch-kernelscript-adapter-0.1.0' from 'ssh-ng://root@aspen1.local'...
+building '/nix/store/xarwhw5xcplxaflss3w8xssvpgn1rchg-mantle-kernelscript-production.drv' on 'ssh-ng://root@aspen1.local'...
+mantle-nextest>    Compiling crunch-build-planning-core v0.1.0 (/build/source/crates/crunch-build-planning-core)
+mantle-transcript-quality-nextest>    Compiling mantle-rust-plan-core v0.1.0 (/build/source/crates/mantle-rust-plan-core)
+mantle-transcript-quality-nextest>    Compiling crunch-shell-core v0.1.0 (/build/source/crates/crunch-shell-core)
+mantle-nextest>    Compiling mantle-rust-plan-core v0.1.0 (/build/source/crates/mantle-rust-plan-core)
+mantle-transcript-quality-nextest>    Compiling crunch-delta-core v0.1.0 (/build/source/crates/crunch-delta-core)
+mantle-nextest>    Compiling crunch-shell-core v0.1.0 (/build/source/crates/crunch-shell-core)
+mantle-transcript-quality-nextest>    Compiling crunch-delta v0.1.0 (/build/source/crates/crunch-delta)
+mantle-transcript-quality-nextest>    Compiling crunch-shell v0.1.0 (/build/source/crates/crunch-shell)
+mantle-nextest>    Compiling crunch-delta-core v0.1.0 (/build/source/crates/crunch-delta-core)
+mantle-transcript-quality-nextest>    Compiling mantle-rust-plan v0.1.0 (/build/source/crates/mantle-rust-plan)
+crunch-release-determinism-quality-nextest>    Compiling crunch-build v0.1.0 (/build/source/crates/crunch-build)
+crunch-release-determinism-quality-nextest>    Compiling crunch-rust-cache v0.1.0 (/build/source/crates/crunch-rust-cache)
+crunch-release-determinism-quality-nextest>    Compiling crunch-delta v0.1.0 (/build/source/crates/crunch-delta)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-rust-cache v0.1.0 (/build/source/crates/crunch-rust-cache)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-build v0.1.0 (/build/source/crates/crunch-build)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-delta v0.1.0 (/build/source/crates/crunch-delta)
+mantle-transcript-quality-nextest>    Compiling crunch-wasm-component v0.1.0 (/build/source/crates/crunch-wasm-component)
+mantle-nextest>    Compiling crunch-delta v0.1.0 (/build/source/crates/crunch-delta)
+mantle-transcript-quality-nextest>    Compiling crunch-pipeline v0.1.0 (/build/source/crates/crunch-pipeline)
+crunch-release-determinism-quality-nextest>    Compiling crunch-rustc-wrapper v0.1.0 (/build/source/crates/crunch-rustc-wrapper)
+mantle-nextest>    Compiling crunch-shell v0.1.0 (/build/source/crates/crunch-shell)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-rustc-wrapper v0.1.0 (/build/source/crates/crunch-rustc-wrapper)
+tigerstyle-consumer-check>     Checking crunch-build v0.1.0 (/build/source/crates/crunch-build)
+tigerstyle-consumer-check>     Checking crunch-rust-cache v0.1.0 (/build/source/crates/crunch-rust-cache)
+tigerstyle-consumer-check>     Checking crunch-delta v0.1.0 (/build/source/crates/crunch-delta)
+mantle-transcript-quality-nextest>    Compiling crunch-project v0.1.0 (/build/source/crates/crunch-project)
+mantle-nextest>    Compiling mantle-rust-plan v0.1.0 (/build/source/crates/mantle-rust-plan)
+mantle-nextest>    Compiling crunch-wasm-component v0.1.0 (/build/source/crates/crunch-wasm-component)
+mantle-nextest>    Compiling crunch-pipeline v0.1.0 (/build/source/crates/crunch-pipeline)
+tigerstyle-consumer-check>     Checking crunch-rustc-wrapper v0.1.0 (/build/source/crates/crunch-rustc-wrapper)
+mantle-transcript-quality-nextest>    Compiling crunch-rustc-wrapper v0.1.0 (/build/source/crates/crunch-rustc-wrapper)
+mantle-nextest>    Compiling crunch-project v0.1.0 (/build/source/crates/crunch-project)
+mantle-nextest>    Compiling crunch-rustc-wrapper v0.1.0 (/build/source/crates/crunch-rustc-wrapper)
+copying path '/nix/store/2z4h9397iqllf4vwp8mg8lgmcf0c1hd9-cargo-package-toml_writer-1.0.6+spec-1.1.0' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/3fbffd24zq45k3g294mh599ld8sxfa3x-cargo-package-libloading-0.9.0' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/3lxqy9xr0cd7pgzrkfhrc6mgb7p6blgk-cargo-package-zerotrie-0.2.3' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/3vj5mzh1mkcalz4ciy8f5d8d3j5mlqz2-cargo-package-openssl-probe-0.1.6' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/4dsch1v70h4578smi5rfarl3lg8jqni3-cargo-package-windows_x86_64_msvc-0.53.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/50q86l95cfs0sn22vzz62rawib11xc3f-cargo-package-toml_parser-1.0.9+spec-1.1.0' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/52dj0r93i8i9aswqim7jqvsg8zmqb9i4-cargo-package-idna-1.1.0' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/57mn861izcsqq3cwa9xpqsz962l76dyp-cargo-package-smallvec-1.15.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/5byifq7idwyxq5fql6c967jhn37mzslb-cargo-package-regex-automata-0.4.13' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/6jy9vzq2sv9syvpd3b7inyh48bhckznw-cargo-package-toml_datetime-1.0.0+spec-1.1.0' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/73c66vx70zk7xfwh1rjszhm12k513w4h-cargo-package-git2-0.20.4' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/764w240r2kyrap6b0d06iwxqkhbrv7m3-cargo-package-zmij-1.0.16' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/7aq5iry1xk0p8abycz72lki1nffcmwkv-cargo-package-zerovec-derive-0.11.2' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/7g9v9ca5rpwqzk5dwygc985sh015vp39-cargo-package-socket2-0.6.2' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/7vi44d685xv5jdfaalvyzmka3zvn8j8n-cargo-package-windows_x86_64_gnullvm-0.53.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/9rhj3b7s4l68lqzszn9fqp2xg3vwllzs-cargo-package-stable_deref_trait-1.2.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/a10dzki0qgr2w06zd0c2dp1rirpr7vsb-cargo-package-percent-encoding-2.3.2' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/am1kyrc1hjjsa5xgklwzvfxiqzbgyf17-cargo-package-cargo-platform-0.3.2' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/aw83v4g5xvvqql9gcx9ji46yv8r6z5rw-cargo-package-windows_aarch64_msvc-0.53.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/bni8nfh0w9cgfvgf4gp00iflb2ds02j9-cargo-package-toml-1.0.6+spec-1.1.0' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/bwvqbq1cd7af8capmslww7l1lvb7hiyl-cargo-package-zerofrom-derive-0.1.6' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/c71m9bp4lalhfxcxz91dsmyhl6b01wxd-cargo-package-icu_locale_core-2.1.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/cds3arvbayy3v523xfy9bam58rs80pr8-cargo-package-schannel-0.1.28' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/cqjzbl5ppky1w0iykaamvjrnav7ksznb-cargo-package-icu_properties_data-2.1.2' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/cs5a8n58d7xpbg5pyn2nwgbx978l9lf7-cargo-package-icu_normalizer_data-2.1.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/cwd9gymyrjs1267wlmp4i9iyhk7qmbj1-cargo-package-vcpkg-0.2.15' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/d25clqc3cvld132xb4y9a0dg43qjgam2-cargo-package-rustc_version-0.4.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/d8y3g7jai2amnwqyad0my4lkxnm6bzc9-cargo-package-utf8_iter-1.0.4' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/dxxsh5cdp07f1r56cihagch2xjbiibg4-cargo-package-windows_x86_64_gnu-0.53.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/dygf90gqwc0h87z3z1d283rv1yw8g527-cargo-package-toml_edit-0.25.4+spec-1.1.0' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/fdw7nplg4w0fbnysgq2rzpvigiip59s5-cargo-package-icu_normalizer-2.1.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/ffnq9k71x1ril29vq1csj9xrmj3rvsl5-cargo-package-windows-sys-0.60.2' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/fmyw0wqsiig5mqnv7mybdzgi7hfrlhg2-cargo-package-curl-sys-0.4.85+curl-8.18.0' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/gikc3j23f20cpvclsn871n6sxcnysiwn-cargo-package-url-2.5.8' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/gilk737v176alwf6w8f0xhrdr3jb3ig3-cargo-package-windows_aarch64_gnullvm-0.53.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/if5j5bw0fqjcvilyjyxpdhxwia93cpan-cargo-package-cc-1.2.57' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/iqlb1sas0bv046lipj4x0bj3rq8h6ww8-cargo-package-serde_spanned-1.0.4' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/ivirikhjnfcqm3pkzr313w6blrimy41y-cargo-package-memchr-2.7.6' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/j0i46qpsaqxiv8g5kw9xzky16sibxhw4-cargo-package-unicode-ident-1.0.22' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/jpzzvj1vy7ji34jakvsn9mriv7n5wl15-cargo-package-icu_collections-2.1.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/k6mx8nz876kkhl1plxc4hscfyp8mw0iw-cargo-package-icu_provider-2.1.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/kxhdl1rdwnjirhqcfvnp30iaqp1jdppd-cargo-package-yoke-derive-0.8.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/ldcnr5anx40xkl1w71lyr981kis3kfhb-cargo-package-openssl-sys-0.9.111' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/mfbsl5miw5xa28rzw0bqkgbw4m7jsncb-cargo-package-camino-1.2.2' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/mh4f745yig8946s9gk42rrgdaknr08sz-cargo-package-synstructure-0.13.2' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/nddscgp9svq8mcqbq96gfz5k45fmmq8a-cargo-package-libssh2-sys-0.3.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/nid3766j73ay6ljxr2dw9g0clpddkaz7-cargo-package-libgit2-sys-0.18.3+1.9.2' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/pnnvr987libgcwp8ch62xrrfjrq7rpbn-cargo-package-libz-sys-1.1.23' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/pwrnl39l859rrhgp5y5iv1l3vprb7fpb-cargo-package-windows_i686_gnullvm-0.53.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/q86cgsl8rkn87qf8iq9s02bg8jsblm1w-cargo-package-idna_adapter-1.2.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/qg8f4jh4pgv634qm55qydb95vzds9qv0-cargo-package-yoke-0.8.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/r0xa5hpi49q4vgdr1yfcpmm0xm0v48fa-cargo-package-potential_utf-0.1.4' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/r12fbn58652chmjil7dk15nv62cjldlj-cargo-package-windows_i686_gnu-0.53.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/r3s85kp9h0kbg1g1dv9j0nprqqkj9223-cargo-package-r-efi-5.3.0' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/ra9v5vmfcyj3sl85dhfgac1fvkdqsjv2-cargo-package-tinystr-0.8.2' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/vapb09r1qp7y92ycg45gddlcd7wbb1cs-cargo-package-litemap-0.8.1' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/vls739m03qlp4fmn44hqyykzabgr7vjd-cargo-package-icu_properties-2.1.2' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/vpz19iqmsmvb29n04vm4p639mdgz6p25-cargo-package-regex-syntax-0.8.8' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/vpzaq6v3z1x5c9kscrccd725aackryy0-cargo-package-form_urlencoded-1.2.2' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/vxf9ianrjsm894x0i54kyas2csjrqqsm-cargo-package-getrandom-0.3.4' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/w3aqq7lvr87k78ds6caj1v3bnqjjmw97-cargo-package-displaydoc-0.2.5' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/w65fr7p7cx3v1cddvq257msfix3hdawx-cargo-package-curl-0.4.49' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/ws4xwcx5wi5mjgrmds0iqw9zznn72mcw-cargo-package-windows-targets-0.53.5' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/wss1d2lnfixdq42fs9igqy5a7jbw6bmy-cargo-package-pkg-config-0.3.32' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/xs9g95yypp08hp41p75rkgcppyi7ka24-cargo-package-zerofrom-0.1.6' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/yr4pz7jdsh607fhh167lrqrhmn6r8k3k-cargo-package-winnow-0.7.14' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/zjkgw28vcfhhag4d8fah55qv5m1vphs0-cargo-package-writeable-0.6.2' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/pccsm1wc9ryrshmvp1r47lcl2gwbvnp3-vendor-registry' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/2kp7vvan00f54lf64xcv9h4p0pk9zirp-vendor-cargo-deps' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/6m81rjbw52cpcq9apaivkjp1ddfb1kdy-cargo-octet-0.1.0' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/pksglsjmbq10ils3p9sxs60sh3l7ahn2-rustup' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/psn0v6x3wj3h2vgyi2s2x7rjpzlb5zrr-cargo' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/rb8la66bp5kygvxgqfyw26p12qvvwl4i-octet-verus' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/arsdclqr5dk7qd51ap89p50mvq4pc8bz-cargo-octet-runtime-path' to 'ssh-ng://root@aspen1.local'...
+crunch-release-determinism-quality-nextest>    Compiling crunch-pipeline v0.1.0 (/build/source/crates/crunch-pipeline)
+crunch-release-nix-witness-quality-nextest>    Compiling crunch-pipeline v0.1.0 (/build/source/crates/crunch-pipeline)
+crunch-release-determinism-quality-nextest>    Compiling mantle v0.1.0 (/build/source)
+crunch-release-nix-witness-quality-nextest>    Compiling mantle v0.1.0 (/build/source)
+tigerstyle-consumer-check>     Checking nickel-lang v2.2.0
+tigerstyle-consumer-check>     Checking crunch-eval v0.1.0 (/build/source/crates/crunch-eval)
+mantle-transcript-quality-nextest>    Compiling crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)
+tigerstyle-consumer-check>     Checking crunch-pipeline v0.1.0 (/build/source/crates/crunch-pipeline)
+tigerstyle-consumer-check>     Checking mantle v0.1.0 (/build/source)
+mantle-transcript-quality-nextest>    Compiling crunch-remote v0.1.0 (/build/source/crates/crunch-remote)
+mantle-transcript-quality-nextest>    Compiling crunch-bootstrap-core v0.1.0 (/build/source/crates/crunch-bootstrap-core)
+mantle-nextest>    Compiling crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)
+mantle-nextest>    Compiling crunch-remote v0.1.0 (/build/source/crates/crunch-remote)
+mantle-nextest>    Compiling mantlepkgs-core v0.1.0 (/build/source/crates/mantlepkgs-core)
+copying path '/nix/store/v685hxclxij36n3bcgal3xpv64q4bkqv-dylint-driver-5.0.0' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/q1ch4lshmg6g7nyk6ybsndg6v0jzpgz5-octet-0.1.0' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/wrnlj1dqpfbv6shvdxjnzw5jrf751yi3-octet-ui-library' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/33wkvdjgdpjkmhk777yyszxh7aqvx7r9-cargo-octet-0.1.0' to 'ssh-ng://root@aspen1.local'...
+copying path '/nix/store/vp6wiz8hv30jr5q8gjqivg11h4pfpm64-mantle-wasm-component-toolchain-v1' to 'ssh-ng://root@aspen1.local'...
+tigerstyle-consumer-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 11s
+mantle-transcript-quality-nextest>    Compiling mantlepkgs-core v0.1.0 (/build/source/crates/mantlepkgs-core)
+mantle-transcript-quality-nextest>    Compiling crunch-eval-budget-core v0.1.0 (/build/source/crates/crunch-eval-budget-core)
+error: hash mismatch importing path '/nix/store/3r2nwafkx9xha0y6xsd0w0557ba0c294-rust-src-1.96.0-nightly-2026-03-21-x86_64-unknown-linux-gnu';
+         specified: sha256-q/gu/3mAuLgNfJlxV/Sw1jttbi4PIBjN+XH0bGmB5NQ=
+         got:       sha256-WTRv7eyiu+VOfb8+90cALNJrUa3uLwRFIaeEr+tAIjQ=
+warning: killing stray builder process 1086948 ()...
+warning: killing stray builder process 1088756 ()...
+warning: killing stray builder process 1118279 ()...
+error (ignored): deleting cgroup "/sys/fs/cgroup/system.slice/nix-daemon.service/nix-build-uid-872480768": Device or resource busy
+warning: killing stray builder process 1087847 ()...
+warning: killing stray builder process 1090046 ()...
+warning: killing stray builder process 1118073 ()...
+warning: killing stray builder process 1095497 ()...
+error (ignored): deleting cgroup "/sys/fs/cgroup/system.slice/nix-daemon.service/nix-build-uid-872415232": Device or resource busy
+error: failed to build attribute 'checks.x86_64-linux.crunch', build of '/nix/store/wkwd5cdbkmj5rhb0z0r3nzmq13m5wvf1-mantle-0.1.0.drv^*' failed: Cannot build '/nix/store/wkwd5cdbkmj5rhb0z0r3nzmq13m5wvf1-mantle-0.1.0.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/rdinwazmh9yqfh1a7sw7j8f2i9fyyzv3-mantle-0.1.0
