@@ -1,0 +1,6 @@
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --strict
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- tracey coverage --root . --json
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate proposal bind-source-observations-and-monotonic-ingest --root .
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design bind-source-observations-and-monotonic-ingest --root .
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks bind-source-observations-and-monotonic-ingest --root .
+nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --strict

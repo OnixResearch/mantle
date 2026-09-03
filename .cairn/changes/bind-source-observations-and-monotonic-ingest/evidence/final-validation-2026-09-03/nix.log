@@ -1,0 +1,1063 @@
+commit=2596144f0ff3fcb670f73dac7d29164883b6d199
+
+$ nix flake check --no-build -L
+evaluating flake...
+checking flake output 'packages'...
+checking derivation packages.x86_64-linux.wasi-virt...
+derivation evaluated to /nix/store/cacsszdc86gnw4lccv1kiwip8dljz8r9-wasi-virt-0.2.0.drv
+checking derivation packages.x86_64-linux.default...
+derivation evaluated to /nix/store/wz7jmj39r91x26iz86shm9bldp7z7bx2-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.crunch...
+derivation evaluated to /nix/store/wz7jmj39r91x26iz86shm9bldp7z7bx2-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.ast-grep-toolchain...
+derivation evaluated to /nix/store/hwz43xm09gs5v38a4pfyc2dhs5n9h1pj-mantle-ast-grep-toolchain-0.42.1.drv
+checking derivation packages.x86_64-linux.ast-grep-package-identity...
+derivation evaluated to /nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv
+checking derivation packages.x86_64-linux.nickel...
+derivation evaluated to /nix/store/mgf4mizpx3zngjhbqpj4cdz6zn1wp7f3-nickel-lang-rev-fixup-1.17.0.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain...
+derivation evaluated to /nix/store/skwkzzc8khiw49fjp2l73d5m4x4m88y6-mantle-wasm-component-toolchain-v1.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-identity...
+derivation evaluated to /nix/store/nrf64w472p89kb8q03zw8wf5hx0198c0-mantle-wasm-component-toolchain-identity.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-compatibility...
+derivation evaluated to /nix/store/lax220sgd6bf2raarrl38cg9clbdgspm-mantle-wasm-component-toolchain-compatibility.drv
+checking derivation packages.x86_64-linux.mantle-transcript-quality...
+derivation evaluated to /nix/store/q6b0swdl0pflssvfnm2lrmvqvlnq5zcy-mantle-transcript-quality-nextest-0.1.0.drv
+checking derivation packages.x86_64-linux.release-nix-witness-quality...
+derivation evaluated to /nix/store/ixpi1f5smcalrwn6mcyypbkxia54csxa-crunch-release-nix-witness-quality-nextest-0.1.0.drv
+checking derivation packages.x86_64-linux.check-nickel-configs...
+derivation evaluated to /nix/store/srbs2g56q3d7mcsyhfcjxndn3hh4byrc-check-nickel-configs.drv
+checking derivation packages.x86_64-linux.check-store-retention-policy...
+derivation evaluated to /nix/store/i1pqkin9jgwqzkrlh34qqgrqy6r47ijs-check-store-retention-policy.drv
+checking derivation packages.x86_64-linux.check-store-overlay-policy...
+derivation evaluated to /nix/store/9wbldpqaq54qvhdar9az2s7wy8mhx2f2-check-store-overlay-policy.drv
+checking derivation packages.x86_64-linux.oci-distribution-registry...
+derivation evaluated to /nix/store/7h1b5w2s2gqhb0dgmiydw4xcl2blxnnv-distribution-3.1.0.drv
+checking derivation packages.x86_64-linux.rustc-wrapper...
+derivation evaluated to /nix/store/gcnwjcrdvn2hj8kxw3as1480a8haz2dy-mantle-rustc-wrapper-0.1.0.drv
+checking derivation packages.x86_64-linux.kernelscript-compiler...
+derivation evaluated to /nix/store/z1dps3ryzhmn8iyx6jnpfyxfqlnzqpzq-ocaml5.2.1-kernelscript-0.1.2.drv
+checking derivation packages.x86_64-linux.kernelscript-core-adapter...
+derivation evaluated to /nix/store/3pvn53cbq48ik4bz8jcp4h5qx2x15ygb-crunch-kernelscript-adapter-0.1.0.drv
+checking derivation packages.x86_64-linux.kernelscript-production...
+derivation evaluated to /nix/store/wpnlh5firb0gifydm0c5a1fkl9yzgml1-mantle-kernelscript-production-artifacts.drv
+checking derivation packages.x86_64-linux.kernelscript-production-cohort...
+derivation evaluated to /nix/store/hiianb84wr5v1ihlqiz7dgmlsfdab5av-mantle-kernelscript-production-cohort.drv
+checking derivation packages.x86_64-linux.kernelscript-production-shell...
+derivation evaluated to /nix/store/6k253hqzzfyl9srjm0hm05ypgqx45d4g-mantle-kernelscript-production.drv
+checking derivation packages.x86_64-linux.kernelscript-production-runtime-check...
+derivation evaluated to /nix/store/2p0nvhjr16qblan0x5ygx5h5wc4xlq4i-vm-test-run-mantle-kernelscript-production-runtime.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-bundle...
+derivation evaluated to /nix/store/58mdyyk7wnymnnd7bzfakqrpi0b1ny59-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-bundler...
+derivation evaluated to /nix/store/5zy41qxrhp4yi8s31fnvbvw1s3aibcpw-mantle-spacewasm-reference-bundler-0.1.0.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-evidence...
+derivation evaluated to /nix/store/imiig80j09fxg2nv2qkyrw4zzmazj9j9-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-evidence.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-rust-toolchain...
+derivation evaluated to /nix/store/ib3maa2zj4d9ikmlx4x15xaiz9vxh55r-rust-minimal-1.91.1.drv
+checking flake output 'apps'...
+checking app 'apps.x86_64-linux.tigerstyle'...
+warning: app 'apps.x86_64-linux.tigerstyle' lacks attribute 'meta'
+checking flake output 'checks'...
+checking derivation checks.x86_64-linux.tigerstyle...
+derivation evaluated to /nix/store/6i2ylqxgdmrav5hplivaxav45zz699xr-tigerstyle-consumer-check.drv
+checking derivation checks.x86_64-linux.crunch...
+derivation evaluated to /nix/store/wz7jmj39r91x26iz86shm9bldp7z7bx2-mantle-0.1.0.drv
+checking derivation checks.x86_64-linux.ast-grep-package-identity...
+derivation evaluated to /nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv
+checking derivation checks.x86_64-linux.wasm-component-toolchain-identity...
+derivation evaluated to /nix/store/nrf64w472p89kb8q03zw8wf5hx0198c0-mantle-wasm-component-toolchain-identity.drv
+checking derivation checks.x86_64-linux.wasm-component-toolchain-compatibility...
+derivation evaluated to /nix/store/lax220sgd6bf2raarrl38cg9clbdgspm-mantle-wasm-component-toolchain-compatibility.drv
+checking derivation checks.x86_64-linux.mantle-transcript-quality...
+derivation evaluated to /nix/store/q6b0swdl0pflssvfnm2lrmvqvlnq5zcy-mantle-transcript-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.release-nix-witness-quality...
+derivation evaluated to /nix/store/ixpi1f5smcalrwn6mcyypbkxia54csxa-crunch-release-nix-witness-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.kernelscript-production...
+derivation evaluated to /nix/store/136c6lxjhqsfx9rkr0kl5c9q8cz10pwa-mantle-kernelscript-production-structural-check.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-bundle...
+derivation evaluated to /nix/store/58mdyyk7wnymnnd7bzfakqrpi0b1ny59-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv
+checking derivation checks.x86_64-linux.bounded-tree-source-admission...
+derivation evaluated to /nix/store/p5maj54i79yc5qldmspjbqf7r2m15j1a-mantle-bounded-tree-source-admission.drv
+checking derivation checks.x86_64-linux.transactional-reconciliation-source-admission...
+derivation evaluated to /nix/store/vagv9379gjyj0bmg5iq0q35y9ixs0642-mantle-transactional-reconciliation-source-admission.drv
+checking derivation checks.x86_64-linux.bootstrap-blocker-inventory...
+derivation evaluated to /nix/store/fqiryjklah8a5vac3ywhl3xlpqdwv3z6-bootstrap-blocker-inventory.drv
+checking derivation checks.x86_64-linux.nickel-cohort...
+derivation evaluated to /nix/store/g44a6jrqb1yw9kixkwz4yad36pgcqxyn-mantle-nickel-cohort-check-0.1.0.drv
+checking derivation checks.x86_64-linux.nickel-export-core-pin...
+derivation evaluated to /nix/store/kxx2i90an1303j6pw14wr7qx7mkp6a0r-mantle-nickel-export-core-pin.drv
+checking derivation checks.x86_64-linux.store-capability-architecture...
+derivation evaluated to /nix/store/66mn3bagv53gyvx9sh3x0b6ry8a4wgrr-mantle-store-capability-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.remote-hexagon-architecture...
+derivation evaluated to /nix/store/gp4zckl72v0x50x8vc4qiq47l54ly484-mantle-remote-hexagon-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.rust-plan-hexagon-architecture...
+derivation evaluated to /nix/store/4sk46gqdbcr5qw3g7353gv79g33zhgpf-mantle-rust-plan-hexagon-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.build-planning-architecture...
+derivation evaluated to /nix/store/n0vvk76sbd2ba9aaanx30sfhc4fzl8jg-mantle-build-planning-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.cli-application-architecture...
+derivation evaluated to /nix/store/ja1sld0wlk7c7h5cia2izvbmgwzmx9k5-mantle-cli-application-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.source-observation-architecture...
+derivation evaluated to /nix/store/842hz3wqrh22nfxhw6mqdpfhjrjr53rg-mantle-source-observation-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.content-bound-requirement-source-closure...
+derivation evaluated to /nix/store/j4x89h04k6if1d5hsk7aigman0b2lg08-mantle-content-bound-requirement-source-closure.drv
+checking derivation checks.x86_64-linux.content-bound-requirement-evidence...
+derivation evaluated to /nix/store/qlngvjbw2zlzcq16v2pry8xvdivdbdwp-mantle-content-bound-requirement-evidence.drv
+checking derivation checks.x86_64-linux.store-retention-policy...
+derivation evaluated to /nix/store/640bsjz36p3jd5gapjpr0c1w0gk47cnr-mantle-store-retention-policy.drv
+checking derivation checks.x86_64-linux.store-overlay-policy...
+derivation evaluated to /nix/store/lv1clvwmdjqxr75v00w0a0fgflwskhv5-mantle-store-overlay-policy.drv
+checking derivation checks.x86_64-linux.release-determinism-quality...
+derivation evaluated to /nix/store/n3c6prqzgla9kv8k6x9d3jz2w9sls7qd-crunch-release-determinism-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.artifact-auth-radicle-cutover...
+derivation evaluated to /nix/store/w3nvnccpsxg1anznnk3z4jy6mg8r2h14-mantle-artifact-auth-radicle-cutover.drv
+checking derivation checks.x86_64-linux.durable-file-publication-adoption...
+derivation evaluated to /nix/store/nnz7a32c0h5rklkknh7z4x6vb24bkd3l-mantle-durable-file-publication-adoption.drv
+checking derivation checks.x86_64-linux.remote-core...
+derivation evaluated to /nix/store/r4hhavh5hnv7fgd8gp98nif5kjb7d51x-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.remote-core-wasm...
+derivation evaluated to /nix/store/58c5602lbwv8ic28nf6l73sd6i9hf1n3-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.rust-plan-core...
+derivation evaluated to /nix/store/75kxysr6sfksydpcaql5m2aagvwkw1wc-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.rust-plan-core-wasm...
+derivation evaluated to /nix/store/z5i9gajhbbd3a5dyj61yjxdc3nf9rakl-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.build-planning-core...
+derivation evaluated to /nix/store/jd3vmzyy4yglnd0776sw29x9ckrpfi13-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.build-planning-core-wasm...
+derivation evaluated to /nix/store/4cv39gg8sf4a1v1xyxsd5xm6pxnpjv0w-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.application-core...
+derivation evaluated to /nix/store/yy5qpy6dr59z1rlxkjrdy7i2s4485khy-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.application-core-wasm...
+derivation evaluated to /nix/store/fsg6vvwyxs68hm1n6f32fc2zgqrwcvkq-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.source-core...
+derivation evaluated to /nix/store/zs35zwwsn11w8yivgxlwmbbwx66m9k2g-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.source-core-wasm...
+derivation evaluated to /nix/store/yhfwgbnkwr9x13w3phc0qk02f7k78066-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract...
+derivation evaluated to /nix/store/v7vxcwgxk3c9wkrl7s2db1p6lmf8vr0q-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract-wasm...
+derivation evaluated to /nix/store/vs662vvj6la2zgvm7l1n8s3g7jw2ls70-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract-nickel...
+derivation evaluated to /nix/store/cpsq0i9xdpwrc3gi9piwy8vagmkbpfsy-mantle-build-contract-nickel.drv
+checking derivation checks.x86_64-linux.nextest...
+derivation evaluated to /nix/store/r6mdvkd01m7qgcsb0j3kf6wgg5qb223f-mantle-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.clippy...
+derivation evaluated to /nix/store/bigvh00b340pd20ga35dhkh1dpxfdv5k-mantle-clippy-0.1.0.drv
+checking derivation checks.x86_64-linux.fmt...
+derivation evaluated to /nix/store/35z3iamgrdsjzmym9c2b8dyc30xi62w2-mantle-fmt-0.1.0.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-profile...
+derivation evaluated to /nix/store/l7afrlfqdkbk2kr6cc4b3cz71mfvyqgr-spacewasm-reference-profile-export.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-host-library...
+derivation evaluated to /nix/store/w4jrclscwbypndanjqk3q80n0ms9vmq7-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-host-library.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-wasm-library...
+derivation evaluated to /nix/store/55qq4aiiy3kl1vn7m0m6bhbwkrj8viin-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-wasm-library.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-host-runner...
+derivation evaluated to /nix/store/nhq1j51vr6f2c3hyizpym9gqv7kdlyhg-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-diagnostic-runner.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-upstream-unit-tests...
+derivation evaluated to /nix/store/d32qk66pm2qmpp0dbjqsyv9v0qcyrn63-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-unit-tests.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-spectest-address...
+derivation evaluated to /nix/store/idj54q1da8w21x0c59p8ay7vxnh2gin6-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-spectest-address.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-fixtures...
+derivation evaluated to /nix/store/1i1y5ni7ivf7bnhdb2z8i0kpsbkl0x2j-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-fixture-report.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-negative...
+derivation evaluated to /nix/store/6p0ana9vradxplf1as1rb12n67am2gdr-mantle-spacewasm-reference-negative-check.drv
+checking flake output 'devShells'...
+checking derivation devShells.x86_64-linux.default...
+derivation evaluated to /nix/store/79yv04c8ffnzjj4jjgkrnr9adhf084im-nix-shell.drv
+all checks passed!
+warning: The check omitted these incompatible systems: aarch64-darwin, aarch64-linux, x86_64-darwin
+Use '--all-systems' to check all.
+
+$ nix build focused and quality checks
+these 7 derivations will be built:
+  /nix/store/35z3iamgrdsjzmym9c2b8dyc30xi62w2-mantle-fmt-0.1.0.drv
+  /nix/store/6i2ylqxgdmrav5hplivaxav45zz699xr-tigerstyle-consumer-check.drv
+  /nix/store/842hz3wqrh22nfxhw6mqdpfhjrjr53rg-mantle-source-observation-architecture-check-0.1.0.drv
+  /nix/store/bigvh00b340pd20ga35dhkh1dpxfdv5k-mantle-clippy-0.1.0.drv
+  /nix/store/nnz7a32c0h5rklkknh7z4x6vb24bkd3l-mantle-durable-file-publication-adoption.drv
+  /nix/store/yhfwgbnkwr9x13w3phc0qk02f7k78066-mantle-build-0.1.0.drv
+  /nix/store/zs35zwwsn11w8yivgxlwmbbwx66m9k2g-mantle-test-0.1.0.drv
+building '/nix/store/yhfwgbnkwr9x13w3phc0qk02f7k78066-mantle-build-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/bigvh00b340pd20ga35dhkh1dpxfdv5k-mantle-clippy-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/nnz7a32c0h5rklkknh7z4x6vb24bkd3l-mantle-durable-file-publication-adoption.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/35z3iamgrdsjzmym9c2b8dyc30xi62w2-mantle-fmt-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/842hz3wqrh22nfxhw6mqdpfhjrjr53rg-mantle-source-observation-architecture-check-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/zs35zwwsn11w8yivgxlwmbbwx66m9k2g-mantle-test-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/6i2ylqxgdmrav5hplivaxav45zz699xr-tigerstyle-consumer-check.drv' on 'ssh-ng://root@aspen1.local'...
+copying 1 paths...
+copying path '/nix/store/6ml9vyfln199wi0lrdld5s72dbnmc8cg-source' to 'ssh-ng://root@aspen1.local'...
+building '/nix/store/bigvh00b340pd20ga35dhkh1dpxfdv5k-mantle-clippy-0.1.0.drv'...
+building '/nix/store/yhfwgbnkwr9x13w3phc0qk02f7k78066-mantle-build-0.1.0.drv'...
+mantle-build> Running phase: unpackPhase
+mantle-clippy> Running phase: unpackPhase
+mantle-clippy> unpacking source archive /nix/store/6ml9vyfln199wi0lrdld5s72dbnmc8cg-source
+mantle-build> unpacking source archive /nix/store/6ml9vyfln199wi0lrdld5s72dbnmc8cg-source
+copying 1 paths...
+copying path '/nix/store/sx2l4vvi60l4k3l71n8gr5c8cysnncri-source' to 'ssh-ng://root@aspen1.local'...
+mantle-clippy> source root is source
+mantle-build> source root is source
+mantle-clippy> Running phase: patchPhase
+mantle-clippy> Executing configureCargoCommonVars
+mantle-clippy> decompressing cargo artifacts from /nix/store/a0wpxavb4rqx4h4j80hmvvw81aymiqkk-mantle-deps-0.1.0/target.tar.zst to target
+mantle-build> Running phase: patchPhase
+mantle-build> Executing configureCargoCommonVars
+mantle-build> decompressing cargo artifacts from /nix/store/a0wpxavb4rqx4h4j80hmvvw81aymiqkk-mantle-deps-0.1.0/target.tar.zst to target
+mantle-clippy> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-build> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-clippy> Running phase: configurePhase
+mantle-clippy> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-clippy> default configurePhase, nothing to do
+mantle-clippy> Running phase: buildPhase
+mantle-build> Running phase: configurePhase
+mantle-clippy> +++ command cargo --version
+mantle-build> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-build> default configurePhase, nothing to do
+mantle-build> Running phase: buildPhase
+mantle-build> +++ command cargo --version
+mantle-clippy> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-build> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-build> +++ command cargo build --release -p crunch-source-core --lib --target wasm32-unknown-unknown
+mantle-clippy> +++ command cargo clippy --release --locked --workspace --lib --no-deps --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- -D warnings
+mantle-build> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+mantle-build>   * `bin` target `crunch`
+mantle-build>   * `bin` target `mantle`
+mantle-clippy> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+mantle-clippy>   * `bin` target `crunch`
+mantle-clippy>   * `bin` target `mantle`
+mantle-build>    Compiling proc-macro2 v1.0.106
+mantle-build>    Compiling unicode-ident v1.0.24
+mantle-build>    Compiling quote v1.0.45
+mantle-build>    Compiling shlex v1.3.0
+mantle-build>    Compiling serde_core v1.0.228
+mantle-build>    Compiling find-msvc-tools v0.1.9
+mantle-build>    Compiling zmij v1.0.21
+mantle-build>    Compiling serde v1.0.228
+mantle-build>    Compiling serde_json v1.0.149
+mantle-build>    Compiling cfg-if v1.0.4
+mantle-build>    Compiling itoa v1.0.18
+mantle-build>    Compiling arrayref v0.3.9
+mantle-build>    Compiling constant_time_eq v0.3.1
+mantle-build>    Compiling arrayvec v0.7.6
+mantle-build>    Compiling memchr v2.8.0
+mantle-build>    Compiling cc v1.2.59
+mantle-clippy>    Compiling fuse-backend-rs v0.12.0 (/build/source/vendor/fuse-backend-rs)
+mantle-clippy>    Compiling nix-compat v0.1.0 (/build/source/vendor/nix-compat)
+mantle-clippy>     Checking crunch-attestation-core v0.1.0 (/build/source/crates/crunch-attestation-core)
+mantle-clippy>    Compiling nix-compat-derive v0.1.0 (/build/source/vendor/nix-compat-derive)
+mantle-clippy>    Compiling snix-castore v0.1.0 (/build/source/vendor/snix-castore)
+mantle-clippy>    Compiling snix-store v0.1.0 (/build/source/vendor/snix-store)
+mantle-clippy>    Compiling snix-build v0.1.0 (/build/source/vendor/snix-build)
+mantle-clippy>     Checking crunch-action-result-core v0.1.0 (/build/source/crates/crunch-action-result-core)
+mantle-clippy>     Checking crunch-repair-core v0.1.0 (/build/source/crates/crunch-repair-core)
+mantle-clippy>     Checking crunch-composition-core v0.1.0 (/build/source/crates/crunch-composition-core)
+mantle-clippy>     Checking crunch-gc-core v0.1.0 (/build/source/crates/crunch-gc-core)
+mantle-clippy>     Checking crunch-overlay-core v0.1.0 (/build/source/crates/crunch-overlay-core)
+mantle-clippy>     Checking snix-tracing v0.1.0 (/build/source/vendor/snix-tracing)
+mantle-clippy>     Checking crunch-remote-core v0.1.0 (/build/source/crates/crunch-remote-core)
+mantle-clippy>     Checking crunch-rust-cache-core v0.1.0 (/build/source/crates/crunch-rust-cache-core)
+mantle-clippy>     Checking crunch-eval v0.1.0 (/build/source/crates/crunch-eval)
+mantle-clippy>     Checking crunch-build-planning-core v0.1.0 (/build/source/crates/crunch-build-planning-core)
+mantle-clippy>     Checking mantle-application-core v0.1.0 (/build/source/crates/mantle-application-core)
+mantle-clippy>     Checking crunch-evaluation-stream-core v0.1.0 (/build/source/crates/crunch-evaluation-stream-core)
+mantle-clippy>     Checking crunch-source-core v0.1.0 (/build/source/crates/crunch-source-core)
+mantle-clippy>     Checking crunch-wasm-component-core v0.1.0 (/build/source/crates/crunch-wasm-component-core)
+mantle-clippy>     Checking mantle-rust-plan-core v0.1.0 (/build/source/crates/mantle-rust-plan-core)
+mantle-clippy>     Checking crunch-shell-core v0.1.0 (/build/source/crates/crunch-shell-core)
+mantle-clippy>     Checking crunch-delta-core v0.1.0 (/build/source/crates/crunch-delta-core)
+mantle-clippy>     Checking crunch-bootstrap-core v0.1.0 (/build/source/crates/crunch-bootstrap-core)
+mantle-clippy>     Checking crunch-spacewasm-core v0.1.0 (/build/source/crates/crunch-spacewasm-core)
+mantle-clippy>     Checking crunch-kernelscript-core v0.1.0 (/build/source/crates/crunch-kernelscript-core)
+mantle-clippy>     Checking crunch-hardware-simulation-core v0.1.0 (/build/source/crates/crunch-hardware-simulation-core)
+mantle-clippy>     Checking mantlepkgs-core v0.1.0 (/build/source/crates/mantlepkgs-core)
+mantle-clippy>     Checking crunch-eval-budget-core v0.1.0 (/build/source/crates/crunch-eval-budget-core)
+mantle-clippy>     Checking mantle-portable-client-core v0.1.0 (/build/source/crates/mantle-portable-client-core)
+mantle-clippy>     Checking mantle-build-contract v0.1.0 (/build/source/crates/mantle-build-contract)
+mantle-clippy>     Checking crunch-shell v0.1.0 (/build/source/crates/crunch-shell)
+mantle-clippy>     Checking mantle-application v0.1.0 (/build/source/crates/mantle-application)
+mantle-clippy>     Checking crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)
+mantle-build>    Compiling blake3 v1.8.2
+mantle-build>    Compiling syn v2.0.117
+mantle-clippy>     Checking crunch-remote v0.1.0 (/build/source/crates/crunch-remote)
+mantle-clippy>     Checking mantle-rust-plan v0.1.0 (/build/source/crates/mantle-rust-plan)
+mantle-clippy>     Checking crunch-attestation v0.1.0 (/build/source/crates/crunch-attestation)
+mantle-clippy>     Checking crunch-project-core v0.1.0 (/build/source/crates/crunch-project-core)
+mantle-clippy>     Checking crunch-spacewasm v0.1.0 (/build/source/crates/crunch-spacewasm)
+mantle-clippy>     Checking crunch-hardware-simulation v0.1.0 (/build/source/crates/crunch-hardware-simulation)
+mantle-clippy>     Checking crunch-kernelscript-adapter v0.1.0 (/build/source/crates/crunch-kernelscript-adapter)
+mantle-build>    Compiling serde_derive v1.0.228
+mantle-clippy>     Checking crunch-nar v0.1.0 (/build/source/crates/crunch-nar)
+mantle-clippy>     Checking crunch-glue v0.1.0 (/build/source/crates/crunch-glue)
+mantle-clippy>     Checking crunch-wasm-component v0.1.0 (/build/source/crates/crunch-wasm-component)
+mantle-clippy>     Checking crunch-project v0.1.0 (/build/source/crates/crunch-project)
+mantle-build>    Compiling crunch-source-core v0.1.0 (/build/source/crates/crunch-source-core)
+mantle-build>     Finished `release` profile [optimized] target(s) in 4.31s
+mantle-build> Running phase: installPhase
+mantle-build> linking previous artifacts /nix/store/a0wpxavb4rqx4h4j80hmvvw81aymiqkk-mantle-deps-0.1.0/target.tar.zst to /nix/store/nyjdi1f7ghha8x9madq1f47z9d58qbya-mantle-build-0.1.0/target.tar.zst
+mantle-build> /*stdin*\            : 26.63%   (  41.8 MiB =>   11.1 MiB, /nix/store/nyjdi1f7ghha8x9madq1f47z9d58qbya-mantle-build-0.1.0/target.tar.zst)
+mantle-build> Running phase: fixupPhase
+mantle-build> shrinking RPATHs of ELF executables and libraries in /nix/store/nyjdi1f7ghha8x9madq1f47z9d58qbya-mantle-build-0.1.0
+mantle-build> checking for references to /build/ in /nix/store/nyjdi1f7ghha8x9madq1f47z9d58qbya-mantle-build-0.1.0...
+mantle-build> patching script interpreter paths in /nix/store/nyjdi1f7ghha8x9madq1f47z9d58qbya-mantle-build-0.1.0
+copying 1 paths...
+copying path '/nix/store/nyjdi1f7ghha8x9madq1f47z9d58qbya-mantle-build-0.1.0' from 'ssh-ng://root@aspen1.local'...
+mantle-clippy>     Checking crunch-store v0.1.0 (/build/source/crates/crunch-store)
+mantle-clippy>     Checking crunch-build v0.1.0 (/build/source/crates/crunch-build)
+mantle-clippy>     Checking crunch-rust-cache v0.1.0 (/build/source/crates/crunch-rust-cache)
+mantle-clippy>     Checking crunch-delta v0.1.0 (/build/source/crates/crunch-delta)
+mantle-clippy>     Checking crunch-rustc-wrapper v0.1.0 (/build/source/crates/crunch-rustc-wrapper)
+mantle-clippy>     Checking crunch-pipeline v0.1.0 (/build/source/crates/crunch-pipeline)
+mantle-clippy>     Checking mantle v0.1.0 (/build/source)
+building '/nix/store/nnz7a32c0h5rklkknh7z4x6vb24bkd3l-mantle-durable-file-publication-adoption.drv'...
+building '/nix/store/35z3iamgrdsjzmym9c2b8dyc30xi62w2-mantle-fmt-0.1.0.drv'...
+mantle-fmt> cargoVendorDir not set, will not automatically configure vendored sources
+mantle-fmt> cargoArtifacts not set, will not reuse any cargo artifacts
+mantle-fmt> Running phase: unpackPhase
+mantle-fmt> unpacking source archive /nix/store/6ml9vyfln199wi0lrdld5s72dbnmc8cg-source
+building '/nix/store/zs35zwwsn11w8yivgxlwmbbwx66m9k2g-mantle-test-0.1.0.drv'...
+building '/nix/store/842hz3wqrh22nfxhw6mqdpfhjrjr53rg-mantle-source-observation-architecture-check-0.1.0.drv'...
+mantle-source-observation-architecture-check> cargoArtifacts not set, will not reuse any cargo artifacts
+copying 1 paths...
+copying path '/nix/store/agb43wql7p83z6jwanyg6j2f23hz1dja-mantle-durable-file-publication-adoption' from 'ssh-ng://root@aspen1.local'...
+mantle-test> Running phase: unpackPhase
+mantle-test> unpacking source archive /nix/store/6ml9vyfln199wi0lrdld5s72dbnmc8cg-source
+mantle-source-observation-architecture-check> Running phase: unpackPhase
+mantle-source-observation-architecture-check> unpacking source archive /nix/store/6ml9vyfln199wi0lrdld5s72dbnmc8cg-source
+mantle-clippy>     Finished `release` profile [optimized] target(s) in 17.90s
+mantle-clippy> Running phase: installPhase
+mantle-clippy> linking previous artifacts /nix/store/a0wpxavb4rqx4h4j80hmvvw81aymiqkk-mantle-deps-0.1.0/target.tar.zst to /nix/store/dk92w7waj5rcm80l10bvv2i7b0zx26fh-mantle-clippy-0.1.0/target.tar.zst
+mantle-clippy> /*stdin*\            : 34.72%   (  56.3 MiB =>   19.6 MiB, /nix/store/dk92w7waj5rcm80l10bvv2i7b0zx26fh-mantle-clippy-0.1.0/target.tar.zst)
+mantle-clippy> Running phase: fixupPhase
+copying 1 paths...
+copying path '/nix/store/6m4vx27m9mpcsfc6r5aay1rd0jdlpp28-sx2l4vvi60l4k3l71n8gr5c8cysnncri-source' to 'ssh-ng://root@aspen1.local'...
+mantle-clippy> shrinking RPATHs of ELF executables and libraries in /nix/store/dk92w7waj5rcm80l10bvv2i7b0zx26fh-mantle-clippy-0.1.0
+mantle-clippy> checking for references to /build/ in /nix/store/dk92w7waj5rcm80l10bvv2i7b0zx26fh-mantle-clippy-0.1.0...
+mantle-clippy> patching script interpreter paths in /nix/store/dk92w7waj5rcm80l10bvv2i7b0zx26fh-mantle-clippy-0.1.0
+copying 1 paths...
+copying path '/nix/store/dk92w7waj5rcm80l10bvv2i7b0zx26fh-mantle-clippy-0.1.0' from 'ssh-ng://root@aspen1.local'...
+mantle-fmt> source root is source
+mantle-test> source root is source
+mantle-source-observation-architecture-check> source root is source
+mantle-test> Running phase: patchPhase
+mantle-fmt> Running phase: patchPhase
+mantle-source-observation-architecture-check> Running phase: patchPhase
+mantle-test> Executing configureCargoCommonVars
+mantle-fmt> Executing configureCargoCommonVars
+mantle-test> decompressing cargo artifacts from /nix/store/a0wpxavb4rqx4h4j80hmvvw81aymiqkk-mantle-deps-0.1.0/target.tar.zst to target
+mantle-source-observation-architecture-check> Executing configureCargoCommonVars
+mantle-fmt> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-source-observation-architecture-check> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-fmt> Running phase: configurePhase
+mantle-source-observation-architecture-check> Running phase: configurePhase
+mantle-fmt> default configurePhase, nothing to do
+mantle-fmt> Running phase: buildPhase
+mantle-source-observation-architecture-check> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-fmt> +++ command cargo --version
+mantle-source-observation-architecture-check> default configurePhase, nothing to do
+mantle-source-observation-architecture-check> Running phase: buildPhase
+mantle-source-observation-architecture-check> +++ command cargo --version
+mantle-fmt> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-fmt> +++ command cargo fmt -p mantle -p crunch-action-result-core -p crunch-composition-core -p crunch-nar -p mantlepkgs-core -p mantle-portable-client-core -p mantle-build-contract -p crunch-attestation -p crunch-attestation-core -p crunch-build -p crunch-build-planning-core -p crunch-source-core -p crunch-delta -p crunch-delta-core -p crunch-eval -p crunch-eval-budget-core -p crunch-evaluation-stream-core -p crunch-glue -p crunch-gc-core -p crunch-overlay-core -p crunch-hardware-simulation-core -p crunch-hardware-simulation -p crunch-kernelscript-core -p crunch-kernelscript-adapter -p crunch-spacewasm-core -p crunch-spacewasm -p crunch-pipeline -p crunch-project -p crunch-project-core -p crunch-release-core -p crunch-remote-core -p crunch-remote -p mantle-rust-plan-core -p mantle-rust-plan -p mantle-application-core -p mantle-application -p crunch-repair-core -p crunch-rust-cache-core -p crunch-rust-cache -p crunch-rustc-wrapper -p crunch-shell -p crunch-shell-core -p crunch-store -p crunch-wasm-component-core -p crunch-wasm-component -- --check
+mantle-source-observation-architecture-check> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-source-observation-architecture-check> +++ command cargo -Zscript --offline scripts/check-source-observation-architecture.rs --self-test
+mantle-source-observation-architecture-check>    Compiling check-source-observation-architecture v0.0.0 (/build/source/scripts/check-source-observation-architecture.rs)
+mantle-source-observation-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.38s
+mantle-source-observation-architecture-check>      Running `.cargo-home/build/11/32081362ee7ca6/target/debug/check-source-observation-architecture --self-test`
+mantle-source-observation-architecture-check> source-observation architecture verified: findings=0 negative-fixtures=16
+mantle-source-observation-architecture-check> +++ command cargo -Zscript --offline scripts/check-source-observation-architecture.rs --root .
+mantle-source-observation-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+mantle-source-observation-architecture-check>      Running `.cargo-home/build/11/32081362ee7ca6/target/debug/check-source-observation-architecture --root .`
+mantle-source-observation-architecture-check> source-observation architecture verified: findings=0 negative-fixtures=16
+mantle-source-observation-architecture-check> Running phase: installPhase
+mantle-source-observation-architecture-check> Running phase: fixupPhase
+mantle-source-observation-architecture-check> shrinking RPATHs of ELF executables and libraries in /nix/store/ddm3z5xsfv4lkf3z9jwg84vc47r5xk6x-mantle-source-observation-architecture-check-0.1.0
+mantle-source-observation-architecture-check> checking for references to /build/ in /nix/store/ddm3z5xsfv4lkf3z9jwg84vc47r5xk6x-mantle-source-observation-architecture-check-0.1.0...
+mantle-source-observation-architecture-check> patching script interpreter paths in /nix/store/ddm3z5xsfv4lkf3z9jwg84vc47r5xk6x-mantle-source-observation-architecture-check-0.1.0
+copying 1 paths...
+copying path '/nix/store/ddm3z5xsfv4lkf3z9jwg84vc47r5xk6x-mantle-source-observation-architecture-check-0.1.0' from 'ssh-ng://root@aspen1.local'...
+mantle-test> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-test> Running phase: configurePhase
+mantle-test> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-test> default configurePhase, nothing to do
+mantle-test> Running phase: buildPhase
+mantle-test> +++ command cargo --version
+mantle-test> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-test> Running phase: checkPhase
+mantle-test> +++ command cargo test --release --locked -p crunch-source-core --all-targets
+mantle-test> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+mantle-test>   * `bin` target `crunch`
+mantle-test>   * `bin` target `mantle`
+mantle-test>    Compiling proc-macro2 v1.0.106
+mantle-test>    Compiling quote v1.0.45
+mantle-test>    Compiling serde_core v1.0.228
+mantle-test>    Compiling serde_json v1.0.149
+mantle-test>    Compiling serde v1.0.228
+mantle-test>    Compiling memchr v2.8.0
+mantle-test>    Compiling cc v1.2.59
+mantle-test>    Compiling syn v2.0.117
+mantle-test>    Compiling blake3 v1.8.2
+mantle-test>    Compiling serde_derive v1.0.228
+mantle-fmt> Running phase: ensureTargetDir
+mantle-fmt> Running phase: installPhase
+mantle-fmt> no previous artifacts found, compressing and installing full archive of target to /nix/store/zk8hjpq2l970zx3xdbwxkn0jpi00xxwv-mantle-fmt-0.1.0/target.tar.zst
+mantle-fmt> /*stdin*\            :  0.72%   (  10.0 KiB =>     74 B, /nix/store/zk8hjpq2l970zx3xdbwxkn0jpi00xxwv-mantle-fmt-0.1.0/target.tar.zst)
+mantle-fmt> Running phase: fixupPhase
+mantle-fmt> shrinking RPATHs of ELF executables and libraries in /nix/store/zk8hjpq2l970zx3xdbwxkn0jpi00xxwv-mantle-fmt-0.1.0
+mantle-fmt> checking for references to /build/ in /nix/store/zk8hjpq2l970zx3xdbwxkn0jpi00xxwv-mantle-fmt-0.1.0...
+mantle-fmt> patching script interpreter paths in /nix/store/zk8hjpq2l970zx3xdbwxkn0jpi00xxwv-mantle-fmt-0.1.0
+copying 1 paths...
+copying path '/nix/store/zk8hjpq2l970zx3xdbwxkn0jpi00xxwv-mantle-fmt-0.1.0' from 'ssh-ng://root@aspen1.local'...
+mantle-test>    Compiling crunch-source-core v0.1.0 (/build/source/crates/crunch-source-core)
+mantle-test>     Finished `release` profile [optimized] target(s) in 3.39s
+mantle-test>      Running unittests src/lib.rs (target/release/deps/crunch_source_core-512ecb91f20ec72b)
+mantle-test> 
+mantle-test> running 17 tests
+mantle-test> test tests::canonical_subject_omits_hints_and_readmits_the_same_identity ... ok
+mantle-test> test tests::complete_observation_cannot_claim_unavailable_legacy_provenance ... ok
+mantle-test> test tests::fixed_url_observation_is_deterministic_and_admitted ... ok
+mantle-test> test tests::ingest_add_and_identical_reuse_are_distinct ... ok
+mantle-test> test tests::ingest_identity_and_content_conflicts_preserve_state ... ok
+mantle-test> test tests::ingest_plan_is_order_independent_and_tamper_evident ... ok
+mantle-test> test tests::legacy_projection_is_complete_only_with_all_required_facts ... ok
+mantle-test> test tests::malformed_revision_and_revision_role_fail_closed ... ok
+mantle-test> test tests::malformed_and_contradictory_ingest_facts_reject_without_writes ... ok
+mantle-test> test tests::locator_and_mutable_reference_do_not_change_canonical_identity ... ok
+mantle-test> test tests::malformed_wire_decodes_structurally_but_cannot_enter_core ... ok
+mantle-test> test tests::observation_digest_tampering_fails_closed ... ok
+mantle-test> test tests::projection_profile_and_locator_mismatches_fail_closed ... ok
+mantle-test> test tests::secret_bearing_and_unsafe_locator_hints_fail_closed ... ok
+mantle-test> test tests::vcs_archive_projection_is_an_explicit_supported_profile ... ok
+mantle-test> test tests::sha1_and_sha256_revisions_are_explicit_and_distinct ... ok
+mantle-test> test tests::oversized_existing_set_is_an_explicit_invalid_rejection ... ok
+mantle-test> 
+mantle-test> test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+mantle-test> 
+mantle-test> Running phase: installPhase
+mantle-test> linking previous artifacts /nix/store/a0wpxavb4rqx4h4j80hmvvw81aymiqkk-mantle-deps-0.1.0/target.tar.zst to /nix/store/js88gg3injjyx0kz7mg3cwgbl4gjfaxd-mantle-test-0.1.0/target.tar.zst
+mantle-test> /*stdin*\            : 26.42%   (  44.3 MiB =>   11.7 MiB, /nix/store/js88gg3injjyx0kz7mg3cwgbl4gjfaxd-mantle-test-0.1.0/target.tar.zst)
+mantle-test> Running phase: fixupPhase
+mantle-test> shrinking RPATHs of ELF executables and libraries in /nix/store/js88gg3injjyx0kz7mg3cwgbl4gjfaxd-mantle-test-0.1.0
+mantle-test> checking for references to /build/ in /nix/store/js88gg3injjyx0kz7mg3cwgbl4gjfaxd-mantle-test-0.1.0...
+mantle-test> patching script interpreter paths in /nix/store/js88gg3injjyx0kz7mg3cwgbl4gjfaxd-mantle-test-0.1.0
+copying 1 paths...
+copying path '/nix/store/js88gg3injjyx0kz7mg3cwgbl4gjfaxd-mantle-test-0.1.0' from 'ssh-ng://root@aspen1.local'...
+building '/nix/store/6i2ylqxgdmrav5hplivaxav45zz699xr-tigerstyle-consumer-check.drv'...
+tigerstyle-consumer-check> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+tigerstyle-consumer-check>   * `bin` target `crunch`
+tigerstyle-consumer-check>   * `bin` target `mantle`
+tigerstyle-consumer-check>    Compiling proc-macro2 v1.0.106
+tigerstyle-consumer-check>    Compiling quote v1.0.45
+tigerstyle-consumer-check>    Compiling unicode-ident v1.0.24
+tigerstyle-consumer-check>     Checking cfg-if v1.0.4
+tigerstyle-consumer-check>    Compiling serde_core v1.0.228
+tigerstyle-consumer-check>    Compiling serde v1.0.228
+tigerstyle-consumer-check>     Checking memchr v2.8.0
+tigerstyle-consumer-check>    Compiling libc v0.2.186
+tigerstyle-consumer-check>    Compiling version_check v0.9.5
+tigerstyle-consumer-check>     Checking subtle v2.6.1
+tigerstyle-consumer-check>     Checking const-oid v0.9.6
+tigerstyle-consumer-check>     Checking typenum v1.20.1
+tigerstyle-consumer-check>     Checking itoa v1.0.18
+tigerstyle-consumer-check>    Compiling shlex v1.3.0
+tigerstyle-consumer-check>    Compiling find-msvc-tools v0.1.9
+tigerstyle-consumer-check>     Checking smallvec v1.15.1
+tigerstyle-consumer-check>    Compiling crossbeam-utils v0.8.21
+tigerstyle-consumer-check>    Compiling parking_lot_core v0.9.12
+tigerstyle-consumer-check>     Checking once_cell v1.21.4
+tigerstyle-consumer-check>     Checking regex-syntax v0.8.10
+tigerstyle-consumer-check>     Checking scopeguard v1.2.0
+tigerstyle-consumer-check>     Checking bitflags v2.11.0
+tigerstyle-consumer-check>     Checking equivalent v1.0.2
+tigerstyle-consumer-check>     Checking allocator-api2 v0.2.21
+tigerstyle-consumer-check>    Compiling thiserror v2.0.18
+tigerstyle-consumer-check>     Checking foldhash v0.2.0
+tigerstyle-consumer-check>     Checking stable_deref_trait v1.2.1
+tigerstyle-consumer-check>     Checking arrayvec v0.7.6
+tigerstyle-consumer-check>    Compiling zmij v1.0.21
+tigerstyle-consumer-check>     Checking fastrand v2.4.1
+tigerstyle-consumer-check>    Compiling serde_json v1.0.149
+tigerstyle-consumer-check>    Compiling crossbeam-epoch v0.9.20
+tigerstyle-consumer-check>    Compiling rayon-core v1.13.0
+tigerstyle-consumer-check>     Checking lock_api v0.4.14
+tigerstyle-consumer-check>     Checking cpufeatures v0.2.17
+tigerstyle-consumer-check>    Compiling crc32fast v1.5.0
+tigerstyle-consumer-check>    Compiling rustix v1.1.4
+tigerstyle-consumer-check>     Checking linux-raw-sys v0.12.1
+tigerstyle-consumer-check>     Checking arrayref v0.3.9
+tigerstyle-consumer-check>     Checking constant_time_eq v0.3.1
+tigerstyle-consumer-check>     Checking log v0.4.29
+tigerstyle-consumer-check>     Checking same-file v1.0.6
+tigerstyle-consumer-check>     Checking tinyvec_macros v0.1.1
+tigerstyle-consumer-check>     Checking pin-project-lite v0.2.17
+tigerstyle-consumer-check>     Checking gix-trace v0.1.18
+tigerstyle-consumer-check>     Checking futures-core v0.3.32
+tigerstyle-consumer-check>     Checking zeroize v1.8.2
+tigerstyle-consumer-check>     Checking tinyvec v1.11.0
+tigerstyle-consumer-check>     Checking human_format v1.2.1
+tigerstyle-consumer-check>     Checking bytesize v2.3.1
+tigerstyle-consumer-check>     Checking zlib-rs v0.6.3
+tigerstyle-consumer-check>     Checking byteorder v1.5.0
+tigerstyle-consumer-check>     Checking walkdir v2.5.0
+tigerstyle-consumer-check>    Compiling heapless v0.8.0
+tigerstyle-consumer-check>    Compiling generic-array v0.14.7
+tigerstyle-consumer-check>    Compiling getrandom v0.4.2
+tigerstyle-consumer-check>     Checking rand_core v0.10.0
+tigerstyle-consumer-check>     Checking futures-io v0.3.32
+tigerstyle-consumer-check>     Checking futures-sink v0.3.32
+tigerstyle-consumer-check>     Checking jiff v0.2.23
+tigerstyle-consumer-check>    Compiling rustversion v1.0.22
+tigerstyle-consumer-check>     Checking slab v0.4.12
+tigerstyle-consumer-check>     Checking futures-task v0.3.32
+tigerstyle-consumer-check>     Checking tracing-core v0.1.36
+tigerstyle-consumer-check>    Compiling fs_extra v1.3.0
+tigerstyle-consumer-check>     Checking futures-channel v0.3.32
+tigerstyle-consumer-check>    Compiling dunce v1.0.5
+tigerstyle-consumer-check>    Compiling libm v0.2.16
+tigerstyle-consumer-check>     Checking fnv v1.0.7
+tigerstyle-consumer-check>     Checking percent-encoding v2.3.2
+tigerstyle-consumer-check>    Compiling aws-lc-rs v1.16.2
+tigerstyle-consumer-check>     Checking hashbrown v0.16.1
+tigerstyle-consumer-check>     Checking rustls-pki-types v1.14.0
+tigerstyle-consumer-check>     Checking foldhash v0.1.5
+tigerstyle-consumer-check>     Checking litemap v0.8.2
+tigerstyle-consumer-check>     Checking hash32 v0.3.1
+tigerstyle-consumer-check>     Checking aho-corasick v1.1.4
+tigerstyle-consumer-check>     Checking winnow v0.7.15
+tigerstyle-consumer-check>     Checking writeable v0.6.3
+tigerstyle-consumer-check>     Checking base64 v0.22.1
+tigerstyle-consumer-check>    Compiling unicode-xid v0.2.6
+tigerstyle-consumer-check>     Checking hashbrown v0.15.5
+tigerstyle-consumer-check>     Checking encoding_rs v0.8.35
+tigerstyle-consumer-check>    Compiling pkg-config v0.3.32
+tigerstyle-consumer-check>    Compiling strsim v0.11.1
+tigerstyle-consumer-check>    Compiling autocfg v1.5.0
+tigerstyle-consumer-check>     Checking untrusted v0.9.0
+tigerstyle-consumer-check>    Compiling icu_properties_data v2.2.0
+tigerstyle-consumer-check>    Compiling ident_case v1.0.1
+tigerstyle-consumer-check>    Compiling httparse v1.10.1
+tigerstyle-consumer-check>     Checking unicode-normalization v0.1.25
+tigerstyle-consumer-check>     Checking utf8_iter v1.0.4
+tigerstyle-consumer-check>    Compiling icu_normalizer_data v2.2.0
+tigerstyle-consumer-check>    Compiling rustls v0.23.37
+tigerstyle-consumer-check>     Checking unicode-width v0.2.2
+tigerstyle-consumer-check>     Checking ipnet v2.12.0
+tigerstyle-consumer-check>    Compiling signal-hook v0.4.4
+tigerstyle-consumer-check>     Checking either v1.15.0
+tigerstyle-consumer-check>     Checking try-lock v0.2.5
+tigerstyle-consumer-check>     Checking hashbrown v0.14.5
+tigerstyle-consumer-check>     Checking ryu v1.0.23
+tigerstyle-consumer-check>     Checking atomic-waker v1.1.2
+tigerstyle-consumer-check>     Checking nonempty v0.12.0
+tigerstyle-consumer-check>     Checking tower-service v0.3.3
+tigerstyle-consumer-check>     Checking crossbeam-channel v0.5.15
+tigerstyle-consumer-check>     Checking static_assertions v1.1.0
+tigerstyle-consumer-check>     Checking want v0.3.1
+tigerstyle-consumer-check>     Checking form_urlencoded v1.2.2
+tigerstyle-consumer-check>    Compiling cfg_aliases v0.2.1
+tigerstyle-consumer-check>     Checking sync_wrapper v1.0.2
+tigerstyle-consumer-check>     Checking openssl-probe v0.2.1
+tigerstyle-consumer-check>     Checking tower-layer v0.3.3
+tigerstyle-consumer-check>    Compiling num-traits v0.2.19
+tigerstyle-consumer-check>     Checking data-encoding v2.10.0
+tigerstyle-consumer-check>     Checking spin v0.9.9
+tigerstyle-consumer-check>     Checking colorchoice v1.0.5
+tigerstyle-consumer-check>    Compiling syn v2.0.117
+tigerstyle-consumer-check>     Checking iri-string v0.7.12
+tigerstyle-consumer-check>    Compiling unicode-segmentation v1.13.2
+tigerstyle-consumer-check>     Checking rustls-native-certs v0.8.3
+tigerstyle-consumer-check>     Checking mime v0.3.17
+tigerstyle-consumer-check>     Checking unicode-bom v2.0.3
+tigerstyle-consumer-check>     Checking faster-hex v0.10.0
+tigerstyle-consumer-check>     Checking lazy_static v1.5.0
+tigerstyle-consumer-check>     Checking crossbeam-deque v0.8.6
+tigerstyle-consumer-check>    Compiling semver v1.0.28
+tigerstyle-consumer-check>     Checking adler2 v2.0.1
+tigerstyle-consumer-check>    Compiling indexmap v2.13.1
+tigerstyle-consumer-check>     Checking simd-adler32 v0.3.9
+tigerstyle-consumer-check>     Checking utf8parse v0.2.2
+tigerstyle-consumer-check>    Compiling heck v0.5.0
+tigerstyle-consumer-check>     Checking kstring v2.0.2
+tigerstyle-consumer-check>     Checking thread_local v1.1.9
+tigerstyle-consumer-check>     Checking shell-words v1.1.1
+tigerstyle-consumer-check>    Compiling winnow v1.0.1
+tigerstyle-consumer-check>     Checking anstyle-parse v1.0.0
+tigerstyle-consumer-check>     Checking miniz_oxide v0.8.9
+tigerstyle-consumer-check>    Compiling portable-atomic v1.13.1
+tigerstyle-consumer-check>     Checking anstyle-query v1.1.5
+tigerstyle-consumer-check>     Checking is_terminal_polyfill v1.70.2
+tigerstyle-consumer-check>     Checking anstyle v1.0.14
+tigerstyle-consumer-check>    Compiling toml_datetime v1.1.1+spec-1.1.0
+tigerstyle-consumer-check>     Checking clap_lex v1.1.0
+tigerstyle-consumer-check>    Compiling anyhow v1.0.102
+tigerstyle-consumer-check>    Compiling rustc_version v0.4.1
+tigerstyle-consumer-check>    Compiling memoffset v0.6.5
+tigerstyle-consumer-check>     Checking vte v0.15.0
+tigerstyle-consumer-check>    Compiling zstd-safe v7.2.4
+tigerstyle-consumer-check>    Compiling typeid v1.0.3
+tigerstyle-consumer-check>    Compiling jobserver v0.1.34
+tigerstyle-consumer-check>    Compiling convert_case v0.10.0
+tigerstyle-consumer-check>     Checking anstream v1.0.0
+tigerstyle-consumer-check>    Compiling rustix v0.38.44
+tigerstyle-consumer-check>     Checking vt100 v0.16.2
+tigerstyle-consumer-check>     Checking block-buffer v0.10.4
+tigerstyle-consumer-check>     Checking crypto-common v0.1.7
+tigerstyle-consumer-check>     Checking arc-swap v1.9.1
+tigerstyle-consumer-check>     Checking sharded-slab v0.1.7
+tigerstyle-consumer-check>     Checking digest v0.10.7
+tigerstyle-consumer-check>    Compiling curve25519-dalek v4.1.3
+tigerstyle-consumer-check>    Compiling n0-future v0.3.2
+tigerstyle-consumer-check>    Compiling cc v1.2.59
+tigerstyle-consumer-check>    Compiling nix v0.31.3
+tigerstyle-consumer-check>     Checking tracing-log v0.2.0
+tigerstyle-consumer-check>     Checking bitflags v1.3.2
+tigerstyle-consumer-check>     Checking parking v2.2.1
+tigerstyle-consumer-check>     Checking clap_builder v4.6.0
+tigerstyle-consumer-check>    Compiling zerocopy v0.8.48
+tigerstyle-consumer-check>    Compiling siphasher v1.0.2
+tigerstyle-consumer-check>     Checking nu-ansi-term v0.50.3
+tigerstyle-consumer-check>     Checking sha1 v0.10.6
+tigerstyle-consumer-check>     Checking sha2 v0.10.9
+tigerstyle-consumer-check>     Checking unit-prefix v0.5.2
+tigerstyle-consumer-check>    Compiling thiserror v1.0.69
+tigerstyle-consumer-check>     Checking spin v0.10.0
+tigerstyle-consumer-check>     Checking linux-raw-sys v0.4.15
+tigerstyle-consumer-check>     Checking cordyceps v0.3.4
+tigerstyle-consumer-check>     Checking cpufeatures v0.3.0
+tigerstyle-consumer-check>    Compiling erased-serde v0.4.10
+tigerstyle-consumer-check>     Checking diatomic-waker v0.2.3
+tigerstyle-consumer-check>     Checking sha1-checked v0.10.0
+tigerstyle-consumer-check>    Compiling phf_shared v0.11.3
+tigerstyle-consumer-check>     Checking chacha20 v0.10.0
+tigerstyle-consumer-check>    Compiling parking_lot v0.12.5
+tigerstyle-consumer-check>     Checking futures-lite v2.6.1
+tigerstyle-consumer-check>     Checking md-5 v0.10.6
+tigerstyle-consumer-check>     Checking flate2 v1.1.9
+tigerstyle-consumer-check>     Checking nibble_vec v0.1.0
+tigerstyle-consumer-check>    Compiling new_debug_unreachable v1.0.6
+tigerstyle-consumer-check>    Compiling term v1.2.1
+tigerstyle-consumer-check>     Checking bytemuck v1.25.0
+tigerstyle-consumer-check>    Compiling fixedbitset v0.5.7
+tigerstyle-consumer-check>     Checking futures-buffered v0.2.13
+tigerstyle-consumer-check>     Checking iana-time-zone v0.1.65
+tigerstyle-consumer-check>    Compiling bit-vec v0.8.0
+tigerstyle-consumer-check>    Compiling fuse-backend-rs v0.12.0 (/build/source/vendor/fuse-backend-rs)
+tigerstyle-consumer-check>     Checking regex-automata v0.4.14
+tigerstyle-consumer-check>     Checking matchit v0.8.4
+tigerstyle-consumer-check>    Compiling keccak v0.1.6
+tigerstyle-consumer-check>    Compiling precomputed-hash v0.1.1
+tigerstyle-consumer-check>     Checking endian-type v0.1.2
+tigerstyle-consumer-check>    Compiling redb v3.1.3
+tigerstyle-consumer-check>    Compiling nix-compat v0.1.0 (/build/source/vendor/nix-compat)
+tigerstyle-consumer-check>     Checking errno v0.3.14
+tigerstyle-consumer-check>     Checking mio v1.2.0
+tigerstyle-consumer-check>     Checking getrandom v0.2.17
+tigerstyle-consumer-check>     Checking socket2 v0.6.3
+tigerstyle-consumer-check>     Checking memmap2 v0.9.10
+tigerstyle-consumer-check>     Checking filetime v0.2.27
+tigerstyle-consumer-check>     Checking console v0.16.3
+tigerstyle-consumer-check>     Checking gix-sec v0.13.2
+tigerstyle-consumer-check>     Checking signal-hook-registry v1.4.8
+tigerstyle-consumer-check>    Compiling ascii-canvas v4.0.0
+tigerstyle-consumer-check>    Compiling ena v0.14.4
+tigerstyle-consumer-check>     Checking radix_trie v0.2.1
+tigerstyle-consumer-check>     Checking rand_core v0.6.4
+tigerstyle-consumer-check>    Compiling petgraph v0.7.1
+tigerstyle-consumer-check>     Checking rand v0.10.1
+tigerstyle-consumer-check>    Compiling bit-set v0.8.0
+tigerstyle-consumer-check>    Compiling toml_parser v1.1.2+spec-1.1.0
+tigerstyle-consumer-check>     Checking dashmap v6.1.0
+tigerstyle-consumer-check>    Compiling itertools v0.14.0
+tigerstyle-consumer-check>     Checking vmm-sys-util v0.11.2
+tigerstyle-consumer-check>     Checking nix v0.24.3
+tigerstyle-consumer-check>     Checking signature v2.2.0
+tigerstyle-consumer-check>     Checking mio v0.8.11
+tigerstyle-consumer-check>     Checking caps v0.5.6
+tigerstyle-consumer-check>     Checking vm-memory v0.10.0
+tigerstyle-consumer-check>     Checking num_cpus v1.17.0
+tigerstyle-consumer-check>    Compiling string_cache v0.8.9
+tigerstyle-consumer-check>     Checking safe_arch v1.2.0
+tigerstyle-consumer-check>     Checking ed25519 v2.2.3
+tigerstyle-consumer-check>    Compiling cmake v0.1.58
+tigerstyle-consumer-check>     Checking prodash v31.0.0
+tigerstyle-consumer-check>     Checking indicatif v0.18.4
+tigerstyle-consumer-check>    Compiling proc-macro-error-attr2 v2.0.0
+tigerstyle-consumer-check>     Checking itertools v0.15.0
+tigerstyle-consumer-check>     Checking nom v8.0.0
+tigerstyle-consumer-check>     Checking rustc-hash v2.1.2
+tigerstyle-consumer-check>    Compiling pico-args v0.5.0
+tigerstyle-consumer-check>    Compiling snix-castore v0.1.0 (/build/source/vendor/snix-castore)
+tigerstyle-consumer-check>    Compiling malachite-nz v0.9.2
+tigerstyle-consumer-check>     Checking fixedbitset v0.4.2
+tigerstyle-consumer-check>    Compiling toml_edit v0.25.10+spec-1.1.0
+tigerstyle-consumer-check>     Checking humantime v2.3.0
+tigerstyle-consumer-check>     Checking serde_bytes v0.11.19
+tigerstyle-consumer-check>     Checking threadpool v1.8.1
+tigerstyle-consumer-check>    Compiling nix v0.29.0
+tigerstyle-consumer-check>     Checking wide v1.7.0
+tigerstyle-consumer-check>    Compiling proc-macro2-diagnostics v0.10.1
+tigerstyle-consumer-check>     Checking wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+tigerstyle-consumer-check>     Checking unicode-width v0.1.14
+tigerstyle-consumer-check>     Checking uuid v1.23.0
+tigerstyle-consumer-check>     Checking toml_datetime v0.7.5+spec-1.1.0
+tigerstyle-consumer-check>    Compiling snix-build v0.1.0 (/build/source/vendor/snix-build)
+tigerstyle-consumer-check>     Checking strum v0.26.3
+tigerstyle-consumer-check>    Compiling yansi v1.0.1
+tigerstyle-consumer-check>     Checking toml_writer v1.1.1+spec-1.1.0
+tigerstyle-consumer-check>    Compiling snix-store v0.1.0 (/build/source/vendor/snix-store)
+tigerstyle-consumer-check>     Checking lru v0.16.4
+tigerstyle-consumer-check>     Checking itertools v0.12.1
+tigerstyle-consumer-check>    Compiling blake3 v1.8.2
+tigerstyle-consumer-check>    Compiling aws-lc-sys v0.39.1
+tigerstyle-consumer-check>    Compiling ring v0.17.14
+tigerstyle-consumer-check>    Compiling zstd-sys v2.0.16+zstd.1.5.7
+tigerstyle-consumer-check>    Compiling libmimalloc-sys v0.1.44
+tigerstyle-consumer-check>    Compiling lzma-sys v0.1.20
+tigerstyle-consumer-check>    Compiling bzip2-sys v0.1.13+1.0.8
+tigerstyle-consumer-check>     Checking tempfile v3.27.0
+tigerstyle-consumer-check>     Checking xattr v1.6.1
+tigerstyle-consumer-check>    Compiling sha3 v0.10.8
+tigerstyle-consumer-check>    Compiling io-lifetimes v3.0.1
+tigerstyle-consumer-check>     Checking tar v0.4.45
+tigerstyle-consumer-check>    Compiling proc-macro-crate v3.5.0
+tigerstyle-consumer-check>     Checking bitmaps v3.2.1
+tigerstyle-consumer-check>     Checking termcolor v1.4.1
+tigerstyle-consumer-check>     Checking petgraph v0.6.5
+tigerstyle-consumer-check>     Checking count-write v0.1.0
+tigerstyle-consumer-check>    Compiling heck v0.4.1
+tigerstyle-consumer-check>     Checking base64ct v1.8.3
+tigerstyle-consumer-check>    Compiling io-lifetimes v2.0.4
+tigerstyle-consumer-check>     Checking serde_spanned v1.1.1
+tigerstyle-consumer-check>     Checking fs2 v0.4.3
+tigerstyle-consumer-check>     Checking imara-diff v0.1.8
+tigerstyle-consumer-check>     Checking hashlink v0.10.0
+tigerstyle-consumer-check>     Checking imara-diff v0.2.0
+tigerstyle-consumer-check>    Compiling io-extras v0.19.0
+tigerstyle-consumer-check>    Compiling paste v1.0.15
+tigerstyle-consumer-check>     Checking typed-arena v2.0.2
+tigerstyle-consumer-check>    Compiling getrandom v0.3.4
+tigerstyle-consumer-check>     Checking pem-rfc7468 v0.7.0
+tigerstyle-consumer-check>    Compiling signal-hook v0.3.18
+tigerstyle-consumer-check>    Compiling object v0.37.3
+tigerstyle-consumer-check>     Checking imbl-sized-chunks v0.1.3
+tigerstyle-consumer-check>     Checking arraydeque v0.5.1
+tigerstyle-consumer-check>     Checking aliasable v0.1.3
+tigerstyle-consumer-check>     Checking arrayvec v0.5.2
+tigerstyle-consumer-check>     Checking der v0.7.10
+tigerstyle-consumer-check>     Checking toml_edit v0.24.1+spec-1.1.0
+tigerstyle-consumer-check>     Checking toml v0.9.12+spec-1.1.0
+tigerstyle-consumer-check>     Checking clru v0.6.3
+tigerstyle-consumer-check>     Checking vte v0.14.1
+tigerstyle-consumer-check>     Checking saphyr-parser v0.0.6
+tigerstyle-consumer-check>     Checking uluru v3.1.0
+tigerstyle-consumer-check>     Checking gimli v0.32.3
+tigerstyle-consumer-check>     Checking bumpalo v3.20.2
+tigerstyle-consumer-check>     Checking unsafe-libyaml v0.2.11
+tigerstyle-consumer-check>    Compiling cap-primitives v4.0.2
+tigerstyle-consumer-check>     Checking simple-counter v0.1.0
+tigerstyle-consumer-check>     Checking pretty v0.12.5
+tigerstyle-consumer-check>     Checking strip-ansi-escapes v0.2.1
+tigerstyle-consumer-check>     Checking crunch-overlay-core v0.1.0 (/build/source/crates/crunch-overlay-core)
+tigerstyle-consumer-check>     Checking crunch-gc-core v0.1.0 (/build/source/crates/crunch-gc-core)
+tigerstyle-consumer-check>     Checking crunch-repair-core v0.1.0 (/build/source/crates/crunch-repair-core)
+tigerstyle-consumer-check>     Checking malachite-base v0.9.2
+tigerstyle-consumer-check>     Checking fs-set-times v0.20.3
+tigerstyle-consumer-check>     Checking rustix-linux-procfs v0.1.1
+tigerstyle-consumer-check>     Checking num-integer v0.1.46
+tigerstyle-consumer-check>     Checking io-close v0.3.7
+tigerstyle-consumer-check>     Checking sha-1 v0.10.1
+tigerstyle-consumer-check>     Checking json_scanner v0.1.0
+tigerstyle-consumer-check>     Checking rustc-demangle v0.1.28
+tigerstyle-consumer-check>    Compiling num-bigint-dig v0.8.6
+tigerstyle-consumer-check>    Compiling cap-std v4.0.2
+tigerstyle-consumer-check>    Compiling indoc v2.0.7
+tigerstyle-consumer-check>     Checking regex v1.12.3
+tigerstyle-consumer-check>     Checking matchers v0.2.0
+tigerstyle-consumer-check>     Checking lalrpop-util v0.22.2
+tigerstyle-consumer-check>     Checking crc-catalog v2.4.0
+tigerstyle-consumer-check>    Compiling litrs v1.0.0
+tigerstyle-consumer-check>     Checking ambient-authority v0.0.2
+tigerstyle-consumer-check>     Checking maybe-owned v0.3.4
+tigerstyle-consumer-check>    Compiling owo-colors v4.3.0
+tigerstyle-consumer-check>    Compiling linkme-impl v0.3.37
+tigerstyle-consumer-check>     Checking crc v3.4.0
+tigerstyle-consumer-check>     Checking num-iter v0.1.46
+tigerstyle-consumer-check>     Checking signal-hook-mio v0.2.5
+tigerstyle-consumer-check>     Checking mimalloc v0.1.48
+tigerstyle-consumer-check>     Checking rand_core v0.9.5
+tigerstyle-consumer-check>    Compiling syn v3.0.3
+tigerstyle-consumer-check>     Checking webpki-roots v1.0.6
+tigerstyle-consumer-check>     Checking is_ci v1.2.0
+tigerstyle-consumer-check>     Checking unicode-linebreak v0.1.5
+tigerstyle-consumer-check>     Checking twox-hash v2.1.2
+tigerstyle-consumer-check>    Compiling linkme v0.3.37
+tigerstyle-consumer-check>    Compiling cap-fs-ext v4.0.2
+tigerstyle-consumer-check>     Checking utf8-zero v0.8.1
+tigerstyle-consumer-check>     Checking toml_write v0.1.2
+tigerstyle-consumer-check>     Checking lzma-rs v0.3.0
+tigerstyle-consumer-check>     Checking spki v0.7.3
+tigerstyle-consumer-check>     Checking ruzstd v0.8.2
+tigerstyle-consumer-check>     Checking supports-color v3.0.2
+tigerstyle-consumer-check>     Checking gethostname v0.5.0
+tigerstyle-consumer-check>     Checking terminal_size v0.4.4
+tigerstyle-consumer-check>     Checking fuzzy-matcher v0.3.7
+tigerstyle-consumer-check>     Checking bzip2-rs v0.1.2
+tigerstyle-consumer-check>     Checking supports-hyperlinks v3.2.0
+tigerstyle-consumer-check>     Checking dyn-clone v1.0.20
+tigerstyle-consumer-check>     Checking textwrap v0.16.2
+tigerstyle-consumer-check>     Checking pkcs8 v0.10.2
+tigerstyle-consumer-check>     Checking supports-unicode v3.0.0
+tigerstyle-consumer-check>     Checking bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+tigerstyle-consumer-check>     Checking crunch-evaluation-stream-core v0.1.0 (/build/source/crates/crunch-evaluation-stream-core)
+tigerstyle-consumer-check>     Checking etcetera v0.11.0
+tigerstyle-consumer-check>     Checking crunch-delta-core v0.1.0 (/build/source/crates/crunch-delta-core)
+tigerstyle-consumer-check>     Checking detect-coding-agent v0.1.0
+tigerstyle-consumer-check>     Checking dotenvy v0.15.7
+tigerstyle-consumer-check>     Checking pkcs1 v0.7.5
+tigerstyle-consumer-check>     Checking colored v3.1.1
+tigerstyle-consumer-check>     Checking chapter-tgz v0.1.0
+tigerstyle-consumer-check>     Checking durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+tigerstyle-consumer-check>    Compiling document-features v0.2.12
+tigerstyle-consumer-check>     Checking bzip2 v0.5.2
+tigerstyle-consumer-check>    Compiling synstructure v0.13.2
+tigerstyle-consumer-check>    Compiling darling_core v0.23.0
+tigerstyle-consumer-check>    Compiling darling_core v0.20.11
+tigerstyle-consumer-check>    Compiling proc-macro-error2 v2.0.1
+tigerstyle-consumer-check>     Checking bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+tigerstyle-consumer-check>    Compiling serde_derive v1.0.228
+tigerstyle-consumer-check>    Compiling thiserror-impl v2.0.18
+tigerstyle-consumer-check>    Compiling tokio-macros v2.7.0
+tigerstyle-consumer-check>    Compiling zerofrom-derive v0.1.7
+tigerstyle-consumer-check>    Compiling futures-macro v0.3.32
+tigerstyle-consumer-check>    Compiling yoke-derive v0.8.2
+tigerstyle-consumer-check>    Compiling zerovec-derive v0.11.3
+tigerstyle-consumer-check>    Compiling displaydoc v0.2.5
+tigerstyle-consumer-check>    Compiling tracing-attributes v0.1.31
+tigerstyle-consumer-check>    Compiling derive_more-impl v2.1.1
+tigerstyle-consumer-check>    Compiling curve25519-dalek-derive v0.1.1
+tigerstyle-consumer-check>    Compiling clap_derive v4.6.0
+tigerstyle-consumer-check>    Compiling async-trait v0.1.89
+tigerstyle-consumer-check>    Compiling pin-project-internal v1.1.11
+tigerstyle-consumer-check>    Compiling spez v0.1.2
+tigerstyle-consumer-check>    Compiling async-stream-impl v0.3.6
+tigerstyle-consumer-check>    Compiling n0-error-macros v0.1.3
+tigerstyle-consumer-check>    Compiling thiserror-impl v1.0.69
+tigerstyle-consumer-check>    Compiling num_enum_derive v0.7.6
+tigerstyle-consumer-check>    Compiling irpc-derive v0.10.0
+tigerstyle-consumer-check>    Compiling nix-compat-derive v0.1.0 (/build/source/vendor/nix-compat-derive)
+tigerstyle-consumer-check>     Checking async-stream v0.3.6
+tigerstyle-consumer-check>     Checking ppv-lite86 v0.2.21
+tigerstyle-consumer-check>    Compiling auto_impl v1.3.0
+tigerstyle-consumer-check>    Compiling strum_macros v0.26.4
+tigerstyle-consumer-check>     Checking futures-util v0.3.32
+tigerstyle-consumer-check>    Compiling getset v0.1.6
+tigerstyle-consumer-check>    Compiling typed-builder-macro v0.22.0
+tigerstyle-consumer-check>     Checking n0-error v0.1.3
+tigerstyle-consumer-check>     Checking rand_chacha v0.3.1
+tigerstyle-consumer-check>    Compiling ouroboros_macro v0.18.5
+tigerstyle-consumer-check>     Checking addr2line v0.25.1
+tigerstyle-consumer-check>     Checking pin-project v1.1.11
+tigerstyle-consumer-check>     Checking zerofrom v0.1.7
+tigerstyle-consumer-check>    Compiling maybe-async v0.2.10
+tigerstyle-consumer-check>     Checking rand_chacha v0.9.0
+tigerstyle-consumer-check>     Checking yoke v0.8.2
+tigerstyle-consumer-check>     Checking rand v0.8.6
+tigerstyle-consumer-check>     Checking cobs v0.3.0
+tigerstyle-consumer-check>     Checking tracing v0.1.44
+tigerstyle-consumer-check>     Checking num_enum v0.7.6
+tigerstyle-consumer-check>     Checking zerovec v0.11.6
+tigerstyle-consumer-check>     Checking zerotrie v0.2.4
+tigerstyle-consumer-check>    Compiling logos-codegen v0.16.1
+tigerstyle-consumer-check>     Checking tracing-subscriber v0.3.23
+tigerstyle-consumer-check>     Checking nix-archive v0.1.0
+tigerstyle-consumer-check>    Compiling miette-derive v7.6.0
+tigerstyle-consumer-check>     Checking rand v0.9.3
+tigerstyle-consumer-check>     Checking nix-derivation v0.1.0
+tigerstyle-consumer-check>    Compiling lalrpop v0.22.2
+tigerstyle-consumer-check>     Checking ed25519-dalek v2.2.0
+tigerstyle-consumer-check>     Checking tinystr v0.8.3
+tigerstyle-consumer-check>     Checking potential_utf v0.1.5
+tigerstyle-consumer-check>    Compiling darling_macro v0.20.11
+tigerstyle-consumer-check>     Checking backtrace v0.3.76
+tigerstyle-consumer-check>     Checking icu_collections v2.2.0
+tigerstyle-consumer-check>    Compiling darling_macro v0.23.0
+tigerstyle-consumer-check>     Checking icu_locale_core v2.2.0
+tigerstyle-consumer-check>     Checking derive_more v2.1.1
+tigerstyle-consumer-check>     Checking crossterm v0.29.0
+tigerstyle-consumer-check>     Checking clap v4.6.0
+tigerstyle-consumer-check>    Compiling darling v0.20.11
+tigerstyle-consumer-check>     Checking clap-verbosity-flag v3.0.4
+tigerstyle-consumer-check>     Checking typed-builder v0.22.0
+tigerstyle-consumer-check>    Compiling derive_builder_core v0.20.2
+tigerstyle-consumer-check>     Checking ouroboros v0.18.5
+tigerstyle-consumer-check>    Compiling darling v0.23.0
+tigerstyle-consumer-check>     Checking backtrace-ext v0.2.1
+tigerstyle-consumer-check>    Compiling serde_with_macros v3.18.0
+tigerstyle-consumer-check>     Checking miette v7.6.0
+tigerstyle-consumer-check>    Compiling logos-derive v0.16.1
+tigerstyle-consumer-check>     Checking tracing-indicatif v0.3.14
+tigerstyle-consumer-check>     Checking rsa v0.9.10
+tigerstyle-consumer-check>     Checking inquire v0.9.4
+tigerstyle-consumer-check>     Checking icu_provider v2.2.0
+tigerstyle-consumer-check>     Checking logos v0.16.1
+tigerstyle-consumer-check>     Checking icu_properties v2.2.0
+tigerstyle-consumer-check>     Checking icu_normalizer v2.2.0
+tigerstyle-consumer-check>    Compiling derive_builder_macro v0.20.2
+tigerstyle-consumer-check>     Checking xz2 v0.1.7
+tigerstyle-consumer-check>     Checking serde_with v3.18.0
+tigerstyle-consumer-check>     Checking derive_builder v0.20.2
+tigerstyle-consumer-check>     Checking bytes v1.11.1
+tigerstyle-consumer-check>     Checking bstr v1.12.1
+tigerstyle-consumer-check>     Checking serde_urlencoded v0.7.1
+tigerstyle-consumer-check>     Checking crunch-attestation-core v0.1.0 (/build/source/crates/crunch-attestation-core)
+tigerstyle-consumer-check>     Checking chrono v0.4.44
+tigerstyle-consumer-check>     Checking quick-xml v0.40.1
+tigerstyle-consumer-check>     Checking serde_tagged v0.3.0
+tigerstyle-consumer-check>     Checking postcard v1.1.3
+tigerstyle-consumer-check>     Checking serde_qs v0.12.0
+tigerstyle-consumer-check>     Checking artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+tigerstyle-consumer-check>     Checking oci-spec v0.7.1
+tigerstyle-consumer-check>     Checking codespan-reporting v0.13.1
+tigerstyle-consumer-check>     Checking crunch-composition-core v0.1.0 (/build/source/crates/crunch-composition-core)
+tigerstyle-consumer-check>     Checking nickel-lang-vector v0.2.0
+tigerstyle-consumer-check>     Checking serde_yaml v0.9.34+deprecated
+tigerstyle-consumer-check>     Checking toml_datetime v0.6.11
+tigerstyle-consumer-check>     Checking crunch-remote-core v0.1.0 (/build/source/crates/crunch-remote-core)
+tigerstyle-consumer-check>     Checking serde_spanned v0.6.9
+tigerstyle-consumer-check>     Checking crunch-rust-cache-core v0.1.0 (/build/source/crates/crunch-rust-cache-core)
+tigerstyle-consumer-check>     Checking crunch-shell-core v0.1.0 (/build/source/crates/crunch-shell-core)
+tigerstyle-consumer-check>     Checking mantle-application-core v0.1.0 (/build/source/crates/mantle-application-core)
+tigerstyle-consumer-check>     Checking crunch-wasm-component-core v0.1.0 (/build/source/crates/crunch-wasm-component-core)
+tigerstyle-consumer-check>     Checking crunch-build-planning-core v0.1.0 (/build/source/crates/crunch-build-planning-core)
+tigerstyle-consumer-check>     Checking secrecy v0.10.3
+tigerstyle-consumer-check>     Checking crunch-source-core v0.1.0 (/build/source/crates/crunch-source-core)
+tigerstyle-consumer-check>     Checking futures-executor v0.3.32
+tigerstyle-consumer-check>     Checking mantle-rust-plan-core v0.1.0 (/build/source/crates/mantle-rust-plan-core)
+tigerstyle-consumer-check>     Checking crunch-bootstrap-core v0.1.0 (/build/source/crates/crunch-bootstrap-core)
+tigerstyle-consumer-check>     Checking toml_edit v0.22.27
+tigerstyle-consumer-check>     Checking mantle-portable-client-core v0.1.0 (/build/source/crates/mantle-portable-client-core)
+tigerstyle-consumer-check>     Checking crunch-spacewasm-core v0.1.0 (/build/source/crates/crunch-spacewasm-core)
+tigerstyle-consumer-check>     Checking nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+tigerstyle-consumer-check>     Checking crunch-kernelscript-core v0.1.0 (/build/source/crates/crunch-kernelscript-core)
+tigerstyle-consumer-check>     Checking futures v0.3.32
+tigerstyle-consumer-check>     Checking mantlepkgs-core v0.1.0 (/build/source/crates/mantlepkgs-core)
+tigerstyle-consumer-check>     Checking gix-validate v0.11.0
+tigerstyle-consumer-check>     Checking gix-utils v0.3.1
+tigerstyle-consumer-check>     Checking gix-error v0.2.1
+tigerstyle-consumer-check>     Checking tokio v1.51.0
+tigerstyle-consumer-check>     Checking http v1.4.0
+tigerstyle-consumer-check>     Checking gix-packetline v0.21.2
+tigerstyle-consumer-check>     Checking idna_adapter v1.2.1
+tigerstyle-consumer-check>     Checking crunch-action-result-core v0.1.0 (/build/source/crates/crunch-action-result-core)
+tigerstyle-consumer-check>     Checking gix-path v0.11.2
+tigerstyle-consumer-check>     Checking codespan v0.13.1
+tigerstyle-consumer-check>     Checking idna v1.1.0
+tigerstyle-consumer-check>     Checking gix-date v0.15.1
+tigerstyle-consumer-check>     Checking gix-chunk v0.7.0
+tigerstyle-consumer-check>     Checking gix-quote v0.7.0
+tigerstyle-consumer-check>     Checking gix-features v0.46.2
+tigerstyle-consumer-check>     Checking gix-config-value v0.17.1
+tigerstyle-consumer-check>     Checking gix-actor v0.40.0
+tigerstyle-consumer-check>     Checking gix-bitmap v0.3.0
+tigerstyle-consumer-check>     Checking gix-command v0.8.0
+tigerstyle-consumer-check>     Checking gix-url v0.35.2
+tigerstyle-consumer-check>     Checking artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+tigerstyle-consumer-check>     Checking url v2.5.8
+tigerstyle-consumer-check>     Checking crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)
+tigerstyle-consumer-check>     Checking mantle-application v0.1.0 (/build/source/crates/mantle-application)
+tigerstyle-consumer-check>     Checking crunch-shell v0.1.0 (/build/source/crates/crunch-shell)
+tigerstyle-consumer-check>     Checking crunch-hardware-simulation-core v0.1.0 (/build/source/crates/crunch-hardware-simulation-core)
+tigerstyle-consumer-check>     Checking gix-mailmap v0.32.0
+tigerstyle-consumer-check>     Checking crunch-eval-budget-core v0.1.0 (/build/source/crates/crunch-eval-budget-core)
+tigerstyle-consumer-check>     Checking gix-hash v0.23.0
+tigerstyle-consumer-check>     Checking gix-fs v0.19.2
+tigerstyle-consumer-check>     Checking gix-glob v0.24.0
+tigerstyle-consumer-check>     Checking gix-prompt v0.14.1
+tigerstyle-consumer-check>     Checking mantle-build-contract v0.1.0 (/build/source/crates/mantle-build-contract)
+tigerstyle-consumer-check>     Checking http-body v1.0.1
+tigerstyle-consumer-check>     Checking ureq-proto v0.6.0
+tigerstyle-consumer-check>     Checking gix-credentials v0.37.1
+tigerstyle-consumer-check>     Checking gix-hashtable v0.13.0
+tigerstyle-consumer-check>     Checking gix-commitgraph v0.35.0
+tigerstyle-consumer-check>     Checking gix-tempfile v21.0.2
+tigerstyle-consumer-check>     Checking http-body-util v0.1.3
+tigerstyle-consumer-check>     Checking gix-object v0.58.0
+tigerstyle-consumer-check>     Checking gix-attributes v0.31.0
+tigerstyle-consumer-check>     Checking gix-ignore v0.19.1
+tigerstyle-consumer-check>     Checking gix-lock v21.0.2
+tigerstyle-consumer-check>     Checking gix-shallow v0.10.0
+tigerstyle-consumer-check>     Checking crunch-attestation v0.1.0 (/build/source/crates/crunch-attestation)
+tigerstyle-consumer-check>     Checking crunch-project-core v0.1.0 (/build/source/crates/crunch-project-core)
+tigerstyle-consumer-check>     Checking crunch-remote v0.1.0 (/build/source/crates/crunch-remote)
+tigerstyle-consumer-check>     Checking gix-pathspec v0.16.1
+tigerstyle-consumer-check>     Checking toml v0.8.23
+tigerstyle-consumer-check>     Checking mantle-rust-plan v0.1.0 (/build/source/crates/mantle-rust-plan)
+tigerstyle-consumer-check>     Checking zstd v0.13.3
+tigerstyle-consumer-check>     Checking crunch-spacewasm v0.1.0 (/build/source/crates/crunch-spacewasm)
+tigerstyle-consumer-check>     Checking gix-revwalk v0.29.0
+tigerstyle-consumer-check>     Checking gix-filter v0.28.0
+tigerstyle-consumer-check>     Checking gix-ref v0.61.0
+tigerstyle-consumer-check>     Checking gix-pack v0.68.0
+tigerstyle-consumer-check>     Checking gix-traverse v0.55.0
+tigerstyle-consumer-check>     Checking gix-revision v0.43.0
+tigerstyle-consumer-check>     Checking gix-negotiate v0.29.0
+tigerstyle-consumer-check>     Checking gix-index v0.49.0
+tigerstyle-consumer-check>     Checking gix-worktree-stream v0.30.0
+tigerstyle-consumer-check>     Checking gix-refspec v0.39.0
+tigerstyle-consumer-check>     Checking crunch-kernelscript-adapter v0.1.0 (/build/source/crates/crunch-kernelscript-adapter)
+tigerstyle-consumer-check>     Checking crunch-hardware-simulation v0.1.0 (/build/source/crates/crunch-hardware-simulation)
+tigerstyle-consumer-check>     Checking gix-archive v0.30.0
+tigerstyle-consumer-check>     Checking gix-discover v0.49.0
+tigerstyle-consumer-check>     Checking gix-config v0.54.0
+tigerstyle-consumer-check>     Checking gix-odb v0.78.0
+tigerstyle-consumer-check>     Checking gix-worktree v0.50.0
+tigerstyle-consumer-check>     Checking gix-diff v0.61.0
+tigerstyle-consumer-check>     Checking gix-dir v0.23.0
+tigerstyle-consumer-check>     Checking gix-worktree-state v0.28.0
+tigerstyle-consumer-check>     Checking gix-submodule v0.28.0
+tigerstyle-consumer-check>     Checking crunch-wasm-component v0.1.0 (/build/source/crates/crunch-wasm-component)
+tigerstyle-consumer-check>     Checking gix-blame v0.11.0
+tigerstyle-consumer-check>     Checking gix-status v0.28.0
+tigerstyle-consumer-check>     Checking tokio-util v0.7.18
+tigerstyle-consumer-check>     Checking tower v0.5.3
+tigerstyle-consumer-check>     Checking tokio-stream v0.1.18
+tigerstyle-consumer-check>     Checking async-compression v0.4.19
+tigerstyle-consumer-check>     Checking secretspec v0.17.0
+tigerstyle-consumer-check>     Checking astral-tokio-tar v0.6.3
+tigerstyle-consumer-check>     Checking fastcdc v3.2.1
+tigerstyle-consumer-check>     Checking tower-http v0.6.8
+tigerstyle-consumer-check>     Checking h2 v0.4.13
+tigerstyle-consumer-check>     Checking irpc v0.13.0
+tigerstyle-consumer-check>    Compiling nickel-lang-parser v0.3.0
+tigerstyle-consumer-check>    Compiling nickel-lang-core v0.18.0
+tigerstyle-consumer-check>     Checking crunch-project v0.1.0 (/build/source/crates/crunch-project)
+tigerstyle-consumer-check>     Checking hyper v1.9.0
+tigerstyle-consumer-check>     Checking crunch-nar v0.1.0 (/build/source/crates/crunch-nar)
+tigerstyle-consumer-check>     Checking crunch-glue v0.1.0 (/build/source/crates/crunch-glue)
+tigerstyle-consumer-check>     Checking hyper-util v0.1.20
+tigerstyle-consumer-check>     Checking rustls-webpki v0.103.13
+tigerstyle-consumer-check>     Checking malachite-q v0.9.2
+tigerstyle-consumer-check>     Checking malachite-float v0.9.2
+tigerstyle-consumer-check>     Checking malachite v0.9.2
+tigerstyle-consumer-check>     Checking tokio-rustls v0.26.4
+tigerstyle-consumer-check>     Checking rustls-platform-verifier v0.6.2
+tigerstyle-consumer-check>     Checking ureq v3.3.0
+tigerstyle-consumer-check>     Checking hyper-rustls v0.27.7
+tigerstyle-consumer-check>     Checking reqwest v0.13.2
+tigerstyle-consumer-check>     Checking reqwest-middleware v0.5.1
+tigerstyle-consumer-check>     Checking object_store v0.14.0
+tigerstyle-consumer-check>     Checking gix-transport v0.55.1
+tigerstyle-consumer-check>     Checking reqwest-tracing v0.6.0
+tigerstyle-consumer-check>     Checking gix-protocol v0.59.0
+tigerstyle-consumer-check>     Checking snix-tracing v0.1.0 (/build/source/vendor/snix-tracing)
+tigerstyle-consumer-check>     Checking gix v0.81.0
+tigerstyle-consumer-check>     Checking crunch-store v0.1.0 (/build/source/crates/crunch-store)
+tigerstyle-consumer-check>     Checking crunch-build v0.1.0 (/build/source/crates/crunch-build)
+tigerstyle-consumer-check>     Checking crunch-rust-cache v0.1.0 (/build/source/crates/crunch-rust-cache)
+tigerstyle-consumer-check>     Checking crunch-delta v0.1.0 (/build/source/crates/crunch-delta)
+tigerstyle-consumer-check>     Checking crunch-rustc-wrapper v0.1.0 (/build/source/crates/crunch-rustc-wrapper)
+tigerstyle-consumer-check>     Checking nickel-lang v2.2.0
+tigerstyle-consumer-check>     Checking crunch-eval v0.1.0 (/build/source/crates/crunch-eval)
+tigerstyle-consumer-check>     Checking crunch-pipeline v0.1.0 (/build/source/crates/crunch-pipeline)
+tigerstyle-consumer-check>     Checking mantle v0.1.0 (/build/source)
+tigerstyle-consumer-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 37.25s
+copying 1 paths...
+copying path '/nix/store/37rvdv04rfmkixfpxhsdzfcyb1zafnn1-tigerstyle-consumer-check' from 'ssh-ng://root@aspen1.local'...

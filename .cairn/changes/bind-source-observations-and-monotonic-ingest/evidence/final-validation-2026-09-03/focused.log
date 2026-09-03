@@ -1,0 +1,610 @@
+commit=2596144f0ff3fcb670f73dac7d29164883b6d199
+
+$ nix develop -c cargo test -p crunch-source-core
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.38s
+     Running unittests src/lib.rs (/tmp/mantle-source-observation-target/debug/deps/crunch_source_core-953a74a39db2ab4a)
+
+running 17 tests
+test tests::canonical_subject_omits_hints_and_readmits_the_same_identity ... ok
+test tests::complete_observation_cannot_claim_unavailable_legacy_provenance ... ok
+test tests::ingest_add_and_identical_reuse_are_distinct ... ok
+test tests::locator_and_mutable_reference_do_not_change_canonical_identity ... ok
+test tests::ingest_identity_and_content_conflicts_preserve_state ... ok
+test tests::malformed_revision_and_revision_role_fail_closed ... ok
+test tests::secret_bearing_and_unsafe_locator_hints_fail_closed ... ok
+test tests::malformed_and_contradictory_ingest_facts_reject_without_writes ... ok
+test tests::observation_digest_tampering_fails_closed ... ok
+test tests::projection_profile_and_locator_mismatches_fail_closed ... ok
+test tests::fixed_url_observation_is_deterministic_and_admitted ... ok
+test tests::legacy_projection_is_complete_only_with_all_required_facts ... ok
+test tests::malformed_wire_decodes_structurally_but_cannot_enter_core ... ok
+test tests::vcs_archive_projection_is_an_explicit_supported_profile ... ok
+test tests::ingest_plan_is_order_independent_and_tamper_evident ... ok
+test tests::sha1_and_sha256_revisions_are_explicit_and_distinct ... ok
+test tests::oversized_existing_set_is_an_explicit_invalid_rejection ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+   Doc-tests crunch_source_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+$ nix develop -c cargo test -p mantle --bin mantle source_bundle::
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.52s
+     Running unittests src/main.rs (/tmp/mantle-source-observation-target/debug/deps/mantle-aad3a8277f238be4)
+
+running 104 tests
+test source_bundle::monotonic_ingest::tests::committed_unknown_destination_is_retained_for_recovery ... ok
+test source_bundle::tests::explicit_empty_source_bundle_is_digest_bound_and_rejects_structure_tamper ... ok
+test source_bundle::monotonic_ingest::tests::durable_component_rejects_symlink_parent_without_outside_mutation ... ok
+test source_bundle::monotonic_ingest::tests::durable_component_uses_next_bounded_stage_name_after_collision ... ok
+test source_bundle::tests::exact_legacy_provider_fetch_is_a_case_sensitive_override_input ... ok
+test source_bundle::monotonic_ingest::tests::ambiguous_legacy_local_file_keeps_provenance_unavailable ... ok
+test source_bundle::monotonic_ingest::tests::mirror_location_does_not_change_observed_content_or_identity ... ok
+test source_bundle::monotonic_ingest::tests::durable_component_is_create_new_idempotent_and_conflict_safe ... ok
+test source_bundle::tests::fresh_clone_fixed_point_profile_rejects_missing_materialized_fetch_closure ... ok
+test source_bundle::tests::bootstrap_source_profile_rejects_missing_vendor_for_self_build ... ok
+test source_bundle::monotonic_ingest::tests::adapters_project_each_supported_source_family ... ok
+test source_bundle::tests::materialization_recanonicalizes_only_declared_chunked_records_with_chunk_support ... ok
+test source_bundle::tests::bootstrap_source_profile_rejects_provider_manifest_without_reduction ... ok
+test source_bundle::tests::bootstrap_source_profile_rejects_wrong_provider_kind ... ok
+test source_bundle::monotonic_ingest::tests::secret_bearing_locator_rejects_before_state_mutation ... ok
+test source_bundle::monotonic_ingest::tests::interruption_between_observation_and_record_rolls_back_sidecar ... ok
+test source_bundle::tests::fresh_clone_source_profile_accepts_runtime_generated_provider_manifest ... ok
+test source_bundle::tests::fresh_clone_source_profile_requires_vendor_but_not_unrelated_proof_inputs ... ok
+test source_bundle::monotonic_ingest::tests::interrupted_record_import_rolls_back_all_created_state ... ok
+test source_bundle::tests::source_built_fixed_point_profile_rejects_missing_native_source_closure ... ok
+test source_bundle::tests::source_built_fixed_point_profile_rejects_missing_native_manifest_authority ... ok
+test source_bundle::monotonic_ingest::tests::interrupted_pin_import_rolls_back_records_and_observations ... ok
+test source_bundle::tests::fresh_clone_fixed_point_profile_adds_materialized_fetches_without_widening_three_record_profile ... ok
+test source_bundle::tests::source_bundle_accepts_single_file_payload_root ... ok
+test source_bundle::monotonic_ingest::tests::fresh_import_publishes_record_observation_and_pin ... ok
+test source_bundle::tests::source_bundle_accepts_language_neutral_package_adapters ... ok
+test source_bundle::tests::self_build_hydration_rejects_wrong_manifest_identity_without_outputs ... ok
+test source_bundle::tests::source_bundle_allows_case_sensitive_kernel_headers_only_for_bootstrap_archives ... ok
+test source_bundle::tests::connected_export_fetches_and_fixed_output_validates_missing_file_payload ... ok
+test source_bundle::tests::self_build_hydration_preserves_existing_vendor_without_importing_state ... ok
+test source_bundle::monotonic_ingest::tests::legacy_mutable_git_reference_imports_without_invented_observation ... ok
+test source_bundle::tests::source_bundle_canonicalizes_equivalent_traversal ... ok
+test source_bundle::tests::self_build_hydration_rejects_missing_vendor_record_without_outputs ... ok
+test source_bundle::tests::source_bundle_covers_bootstrap_provider_toolchain_and_proof_records ... ok
+test source_bundle::tests::source_bundle_export_rejects_remote_fetcher_without_local_payload ... ok
+test source_bundle::tests::source_bundle_derives_vcs_snapshot_from_git_fetcher ... ok
+test source_bundle::tests::source_bundle_export_materializes_local_vcs_snapshot_without_dot_git ... ok
+test source_bundle::tests::source_bundle_export_rejects_local_vcs_revision_mismatch ... ok
+test source_bundle::tests::connected_export_rejects_fixed_output_hash_mismatch ... ok
+test source_bundle::tests::source_bundle_rejects_file_below_symlink_record ... ok
+test source_bundle::tests::source_bundle_preserves_fetch_policy_metadata_from_fetch_derivation ... ok
+test source_bundle::tests::source_bundle_export_materializes_local_file_fetcher_payload ... ok
+test source_bundle::tests::source_bundle_rejects_incomplete_adapter_metadata ... ok
+test source_bundle::tests::source_bundle_derives_fetcher_and_store_path_inputs_from_build_root ... ok
+test source_bundle::tests::source_built_fixed_point_profile_rejects_provider_manifest_substitution ... ok
+test source_bundle::tests::source_bundle_rejects_unfixed_builtin_fetcher_in_build_root ... ok
+test source_bundle::tests::source_bundle_rejects_unsafe_symlink ... ok
+test source_bundle::tests::source_bundle_rejects_malformed_roots_and_record_order ... ok
+test source_bundle::tests::source_bundle_rejects_vcs_snapshot_without_revision_identity ... ok
+test source_bundle::tests::source_bundle_rejects_tampered_file_payload_and_store_prefix ... ok
+test source_bundle::tests::source_bundle_rejects_unsafe_identity ... ok
+test source_bundle::tests::source_bundle_verify_reports_missing_state ... ok
+test source_bundle::tests::foreign_source_bundle_preserves_directory_links_and_modes_and_rejects_mode_tamper ... ok
+test source_bundle::tests::source_bundle_export_uses_imported_state_for_remote_fetcher_payload ... ok
+test source_bundle::tests::source_bundle_export_rejects_imported_remote_payload_with_wrong_metadata ... ok
+test source_bundle::tests::source_bundle_no_replace_publication_preserves_existing_destination ... ok
+test source_bundle::tests::source_bundle_rejects_payload_above_named_file_limit ... ok
+test source_bundle::monotonic_ingest::tests::identical_reuse_is_write_free ... ok
+test source_bundle::tests::source_file_chunk_layout_rejects_zero_and_excessive_counts ... ok
+test source_bundle::tests::source_fetch_override_plan_materializes_pinned_file_fetcher_payload ... ok
+test source_bundle::tests::source_bundle_import_and_verify_are_idempotent ... ok
+test source_bundle::tests::source_offline_preflight_allows_roots_without_source_requirements ... ok
+test source_bundle::tests::source_fetch_override_plan_rejects_unpinned_imported_fetcher_payload ... ok
+test source_bundle::tests::source_fetch_override_mapping_rejects_conflicting_payloads ... ok
+test source_bundle::tests::source_file_chunk_layout_is_bounded_exact_and_has_no_empty_tail ... ok
+test source_bundle::tests::source_offline_preflight_reports_remote_network_requirement ... ok
+test source_bundle::monotonic_ingest::tests::identity_conflict_rejects_before_state_mutation ... ok
+test source_bundle::tests::fresh_clone_source_profile_fetch_override_consumes_pinned_provider_archive ... ok
+test source_bundle::tests::source_offline_preflight_accepts_pinned_imported_file_payload ... ok
+test source_bundle::tests::source_relative_path_accepts_double_dot_inside_safe_cargo_fixture_name ... ok
+test source_bundle::tests::source_relative_path_rejects_parent_and_empty_components ... ok
+test source_bundle::tests::source_offline_preflight_reports_missing_local_source_state ... ok
+test source_bundle::tests::constructed_store_path_import_reuses_identical_and_rejects_changed_content ... ok
+test source_bundle::tests::source_fetch_override_plan_deduplicates_identical_url_kind_payloads ... ok
+test source_bundle::tests::source_fetch_override_plan_rejects_wrong_vcs_revision_metadata ... ok
+test source_bundle::monotonic_ingest::tests::interrupted_extension_preserves_all_existing_state ... ok
+test source_bundle::tests::source_offline_preflight_reports_unsupported_adapter ... ok
+test source_bundle::tests::streaming_manifest_digest_matches_canonical_compact_json ... ok
+test source_bundle::tests::structure_only_validation_accepts_valid_manifest ... ok
+test source_bundle::tests::bootstrap_source_profile_exports_imports_and_preflights_ready ... ok
+test source_bundle::tests::structure_only_validation_still_rejects_structural_violations ... ok
+test source_bundle::tests::bootstrap_source_profile_fetch_override_rejects_unpinned_provider_archive ... ok
+test source_bundle::tests::structure_only_validation_skips_payload_digest_but_full_mode_rejects_it ... ok
+test source_bundle::tests::source_offline_preflight_rejects_unpinned_imported_source ... ok
+test source_bundle::tests::bootstrap_source_profile_fetch_override_consumes_pinned_provider_archive ... ok
+test source_bundle::tests::full_proof_source_override_plan_uses_pinned_fixed_point_profile ... ok
+test source_bundle::tests::source_offline_preflight_reports_untrusted_adapter ... ok
+test source_bundle::tests::bootstrap_fetch_override_scratch_lives_until_plan_drop ... ok
+test source_bundle::tests::supplemental_bundle_reader_keeps_fetches_and_excludes_constructed_store_authorities ... ok
+test source_bundle::tests::supplemental_bundle_merge_deduplicates_exact_records_and_rejects_conflicts ... ok
+test source_bundle::tests::source_profile_vendor_pair_accepts_checked_tree_and_rejects_external_tree ... ok
+test source_bundle::tests::self_build_hydration_rejects_vendor_checksum_drift_before_publication ... ok
+test source_bundle::tests::self_build_hydration_rolls_back_vendor_when_state_persistence_fails ... ok
+test source_bundle::tests::self_build_hydration_materializes_valid_vendor_and_pins_provider_state ... ok
+test source_bundle::tests::source_fetch_override_plan_materializes_tarball_and_vcs_payloads ... ok
+test source_bundle::tests::source_bundle_walks_lazy_derivation_files_without_recursive_expansion ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_rejects_supplemental_authority_drift ... ok
+test source_bundle::tests::source_bundle_rejects_lazy_derivation_file_cycles ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_rejects_wrong_profile_mode ... ok
+test source_bundle::tests::source_built_fixed_point_profile_carries_sources_without_provider_outputs ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_preserves_every_other_record ... ok
+test source_bundle::tests::source_built_fixed_point_hydration_pins_all_sources_and_publishes_only_vendor ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_rejects_missing_and_duplicate_authority ... ok
+test source_bundle::tests::source_bundle_accepts_bounded_legacy_provider_compiler_payload ... ok
+
+test result: ok. 104 passed; 0 failed; 0 ignored; 0 measured; 2491 filtered out; finished in 8.63s
+
+
+$ nix develop -c cargo test -p crunch-release-core
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running unittests src/lib.rs (/tmp/mantle-source-observation-target/debug/deps/crunch_release_core-686a8a0bd4337086)
+
+running 269 tests
+test cairn_handoff::tests::required_profile_rejects_missing_receipt ... ok
+test content_bound_requirements::tests::legacy_optional_absence_remains_bounded_and_readable ... ok
+test chapter_transport::tests::receipt_rejects_stale_digest_counts_and_non_claims ... ok
+test content_bound_nominal::tests::nominal_content_bound_values_admit_valid_roles ... ok
+test content_bound_nominal::tests::malformed_roles_fail_closed ... ok
+test content_bound_requirements::tests::selected_revision_integration_receipt_binds_exact_fixture_bytes ... ok
+test ast_grep::tests::self_consistent_unpinned_tool_version_fails_closed ... ok
+test ast_grep::tests::rule_test_summary_counts_must_balance ... ok
+test cairn_handoff::tests::artifact_and_policy_paths_must_be_globally_unique ... ok
+test ast_grep::tests::release_attachment_must_preserve_sidecar_non_claims ... ok
+test chapter_transport::tests::invalid_entry_size_mode_and_shape_fail_closed ... ok
+test ast_grep::tests::negative_fixture_matrix_fails_closed_with_deterministic_diagnostics ... ok
+test chapter_transport::tests::invalid_plan_matrix_fails_closed ... ok
+test cairn_handoff::tests::stale_bytes_and_cross_bundle_reuse_fail_closed ... ok
+test ast_grep::tests::canonical_sidecar_identity_is_order_independent ... ok
+test cairn_handoff::tests::measured_handoff_and_same_bundle_receipt_pass ... ok
+test ast_grep::tests::positive_scan_and_rule_test_fixtures_validate ... ok
+test cairn_handoff::tests::stale_authentication_and_role_schema_swap_fail_closed ... ok
+test determinism::tests::deterministic_sandbox_isolation_evidence_canonical_bytes_sort_checks ... ok
+test content_bound_requirements::tests::frozen_cairn_and_valence_contract_fixtures_match_selected_revisions ... ok
+test chapter_transport::tests::plan_is_input_order_independent_and_groups_roles ... ok
+test determinism::tests::deterministic_receipt_rejects_unsupported_effect_policy ... ok
+test content_bound_requirements::tests::producer_receipt_from_a_different_repository_fails ... ok
+test determinism::tests::deterministic_receipt_blocks_unknown_audit_events_closed_by_default ... ok
+test determinism::tests::deterministic_receipt_blocks_degraded_audit_even_when_effect_is_declared ... ok
+test determinism::tests::deterministic_receipt_blocks_reused_output_store_identity ... ok
+test determinism::tests::deterministic_receipt_accepts_policy_informational_audit_events ... ok
+test determinism::tests::deterministic_receipt_rejects_unsupported_sandbox_profile ... ok
+test determinism::tests::deterministic_release_claim_requires_isolation_evidence ... ok
+test determinism::tests::deterministic_receipt_blocks_impure_mode ... ok
+test determinism::tests::deterministic_receipt_rejects_digest_drift ... ok
+test determinism::tests::deterministic_receipt_rejects_unsupported_workflow_version ... ok
+test determinism::tests::deterministic_receipt_accepts_strict_matching_runs ... ok
+test determinism::tests::deterministic_receipt_rejects_provider_kind_mismatch ... ok
+test determinism::tests::deterministic_release_claim_rejects_profile_family_mismatch ... ok
+test determinism::tests::deterministic_release_claim_rejects_failed_isolation_evidence ... ok
+test content_bound_requirements::tests::stale_registry_wrong_repository_and_domain_substitution_fail ... ok
+test function_address_binding::tests::optional_kamacite_metadata_is_all_present_or_all_absent ... ok
+test function_address_binding::tests::receipt_hash_detects_non_linkage_tampering ... ok
+test chapter_transport::tests::parse_rejects_noncanonical_and_unknown_fields ... ok
+test chapter_transport::tests::canonical_index_and_receipt_round_trip ... ok
+test function_address_binding::tests::rust_renderer_matches_registered_positive_fixture ... ok
+test function_address_binding::tests::renderer_maps_successful_verification_to_direct_cairn_fields ... ok
+test gauntlet::tests::continuous_gauntlet_marks_stale_source_digest ... ok
+test function_address_binding::tests::malformed_and_stale_binding_receipts_fail_closed ... ok
+test gauntlet::tests::canonical_report_rejects_malformed_digest ... ok
+test gauntlet::tests::continuous_gauntlet_accepts_current_track ... ok
+test gauntlet::tests::bootstrap_pressure_blocks_undeclared_protected_exec ... ok
+test gauntlet::tests::nix_mantle_comparison_matches_equivalent_digest_sets ... ok
+test gauntlet::tests::hermeticity_gauntlet_accepts_clean_strict_cell ... ok
+test gauntlet::tests::repeatability_matrix_blocks_reused_fresh_store ... ok
+test gauntlet::tests::substitution_attack_accepts_trusted_case_and_rejects_malicious_strict_case ... ok
+test function_address_binding::tests::renderer_preserves_failure_verification_without_promoting_it ... ok
+test gauntlet::tests::substitution_attack_blocks_malicious_acceptance ... ok
+test function_address_binding::tests::rust_renderer_matches_registered_preserves_positive_fixture ... ok
+test gauntlet::tests::repeatability_matrix_matches_fresh_isolated_cell ... ok
+test gauntlet::tests::nix_mantle_comparison_blocks_missing_equivalence_policy ... ok
+test gauntlet::tests::hermeticity_gauntlet_blocks_strict_violation ... ok
+test function_address_binding::tests::manifest_selection_rejects_stale_valence_kamacite_logical_link ... ok
+test gauntlet::tests::canonical_bytes_are_stable_for_equivalent_continuous_reports ... ok
+test genuine_rebuild::tests::descriptor_rejects_stale_argument_digest_and_single_run ... ok
+test immutable_release::tests::mutated_object_and_declared_identity_mismatch_fail_closed ... ok
+test immutable_release::tests::pointer_switch_and_rollback_preserve_previous_identity ... ok
+test determinism::tests::deterministic_receipt_rejects_missing_effect_observations ... ok
+test immutable_release::tests::immutable_object_accepts_new_and_identical_publication ... ok
+test immutable_release::tests::different_object_identity_creates_a_distinct_plan ... ok
+test content_bound_requirements::tests::duplicate_coverage_missing_receipt_and_weakened_nonclaims_fail ... ok
+test immutable_release::tests::digest_role_substitution_and_missing_binding_fail_closed ... ok
+test function_address_binding::tests::canonical_receipt_hash_is_deterministic_and_binds_diagnostics ... ok
+test immutable_release::tests::deployment_retention_and_readiness_claims_fail_closed ... ok
+test genuine_rebuild::tests::authority_plan_accepts_declared_content_bound_inputs ... ok
+test immutable_release::tests::canonical_evidence_is_metadata_order_independent ... ok
+test immutable_release::tests::pointer_to_missing_object_fails_closed ... ok
+test immutable_release::tests::evidence_binds_object_pointer_metadata_and_roles ... ok
+test determinism::tests::deterministic_release_claim_rejects_missing_isolation_check ... ok
+test manifest::tests::function_address_policy_accepts_optional_absent_evidence ... ok
+test manifest::tests::function_address_policy_rejects_required_absent_evidence ... ok
+test manifest::tests::canonical_bytes_are_stable_and_compact ... ok
+test genuine_rebuild::tests::authority_plan_blocks_reused_and_overlapping_roots ... ok
+test manifest::tests::function_address_release_profile_maps_optional_and_required_modes ... ok
+test function_address_binding::tests::manifest_selection_keeps_artifact_and_logical_receipt_digests_distinct ... ok
+test determinism::tests::deterministic_receipt_canonical_bytes_are_stable ... ok
+test determinism::tests::deterministic_receipt_blocks_missing_or_unsupported_normalization_controls ... ok
+test global_reproducibility::tests::release_scoped_witness_evidence_alone_does_not_become_global ... ok
+test manifest::tests::provider_fixed_point_release_artifact_binding_rejects_malformed_digest ... ok
+test manifest::tests::function_address_release_profile_rejects_unsupported_profile_or_mode ... ok
+test manifest::tests::provider_fixed_point_release_artifact_binding_rejects_mismatch ... ok
+test manifest::tests::provider_fixed_point_release_artifact_binding_accepts_matching_binary ... ok
+test manifest::tests::legacy_source_acquisition_bytes_remain_unchanged_without_observation ... ok
+test manifest::tests::extract_full_proof_identity_fields_rejects_wrong_schema ... ok
+test genuine_rebuild::tests::authority_plan_blocks_target_copy_alias_and_symlink ... ok
+test global_reproducibility::tests::global_reproducibility_report_canonical_bytes_are_stable ... ok
+test genuine_rebuild::tests::authority_plan_blocks_whole_bundle_prior_and_ordinary_outputs ... ok
+test global_reproducibility::tests::global_reproducibility_report_accepts_tiny_eligible_universe ... ok
+test manifest::tests::provider_fixed_point_release_artifact_binding_rejects_missing_binaries ... ok
+test manifest::tests::release_manifest_rejects_unknown_selected_provider_kind ... ok
+test manifest::tests::release_profile_maps_generic_and_onix_stack_modes ... ok
+test manifest::tests::extract_full_proof_identity_fields_rejects_missing_provider_kind ... ok
+test manifest::tests::release_profile_rejects_unsupported_profile_or_stack_mode ... ok
+test manifest::tests::extract_full_proof_identity_fields_accepts_valid_manifest ... ok
+test manifest::tests::release_source_observation_rejects_secret_bearing_locator_before_binding ... ok
+test determinism::tests::legacy_path_bound_receipt_remains_parseable_but_non_promoting ... ok
+test manifest::tests::generic_binding_receipt_is_deterministic_and_policy_order_independent ... ok
+test manifest::tests::stack_provenance_policy_accepts_optional_absent_evidence ... ok
+test manifest::tests::stack_provenance_policy_accepts_optional_present_evidence ... ok
+test manifest::tests::stack_provenance_policy_rejects_required_absent_evidence ... ok
+test manifest::tests::stack_provenance_policy_accepts_required_valid_evidence ... ok
+test manifest::tests::release_source_observation_profile_drift_fails_closed ... ok
+test manifest::tests::function_address_policy_accepts_optional_and_required_generic_binding ... ok
+test manifest::tests::trellis_proof_optional_mode_accepts_absence_without_observations ... ok
+test genuine_rebuild::tests::descriptor_digest_changes_for_every_authority_identity_drift ... ok
+test global_reproducibility::tests::global_reproducibility_blocks_required_negative_fixtures ... ok
+test manifest::tests::validate_accepts_deterministic_proof_artifacts ... ok
+test manifest::tests::stack_provenance_policy_rejects_required_invalid_fixture_matrix ... ok
+test manifest::tests::validate_accepts_manifest_with_valid_external_evidence ... ok
+test manifest::tests::validate_accepts_git_source_acquisition ... ok
+test manifest::tests::release_source_observation_binding_matches_golden_bytes_and_identity ... ok
+test manifest::tests::release_source_observation_tampering_fails_closed ... ok
+test manifest::tests::legacy_manifest_omits_additive_content_bound_requirement_field ... ok
+test manifest::tests::validate_accepts_matching_external_source_acquisition ... ok
+test manifest::tests::validate_accepts_kani_toolchain_evidence_with_matching_receipt ... ok
+test manifest::tests::legacy_function_address_manifest_remains_readable ... ok
+test manifest::tests::validate_accepts_manifest_without_provenance_coverage ... ok
+test manifest::tests::validate_rejects_absolute_member_path ... ok
+test determinism::tests::deterministic_release_claim_requires_exact_digest_set ... ok
+test manifest::tests::validate_rejects_credential_bearing_git_source_url ... ok
+test manifest::tests::generic_binding_digest_changes_for_each_typed_link_domain ... ok
+test manifest::tests::validate_rejects_deterministic_proof_duplicate_path ... ok
+test manifest::tests::unknown_source_signature_cannot_enter_release_authority ... ok
+test manifest::tests::validate_accepts_manifest_with_valid_provenance_coverage ... ok
+test manifest::tests::validate_rejects_deterministic_proof_with_wrong_path ... ok
+test manifest::tests::validate_rejects_deterministic_proof_with_wrong_role ... ok
+test manifest::tests::validate_rejects_external_evidence_duplicate_role ... ok
+test manifest::tests::validate_rejects_external_evidence_empty_claim_scope ... ok
+test manifest::tests::validate_rejects_external_evidence_empty_schema ... ok
+test manifest::tests::validate_rejects_external_evidence_empty_non_claims ... ok
+test manifest::tests::validate_rejects_external_evidence_empty_role ... ok
+test manifest::tests::trellis_proof_required_mode_fails_closed_without_accepted_upstream_authority ... ok
+test manifest::tests::validate_rejects_external_evidence_invalid_digest ... ok
+test manifest::tests::validate_rejects_external_evidence_path_escape ... ok
+test manifest::tests::validate_rejects_git_source_archive_digest_mismatch ... ok
+test manifest::tests::validate_accepts_provider_fixed_point_proof_artifact ... ok
+test manifest::tests::trellis_proof_formal_candidate_remains_recorded_only_in_mantle ... ok
+test manifest::tests::validate_rejects_git_source_with_malformed_commit ... ok
+test manifest::tests::release_source_observation_is_bound_into_canonical_evidence ... ok
+test manifest::tests::validate_rejects_kani_receipt_without_toolchain_identity ... ok
+test manifest::tests::validate_accepts_stack_provenance_release_evidence_with_matching_sidecars ... ok
+test manifest::tests::validate_rejects_kani_missing_version ... ok
+test manifest::tests::validate_rejects_kani_semantic_promotion ... ok
+test manifest::tests::validate_accepts_function_address_through_generic_binding_without_projection ... ok
+test manifest::tests::validate_rejects_kani_stale_closure_identity ... ok
+test manifest::tests::validate_accepts_function_address_through_generic_binding_with_projection ... ok
+test manifest::tests::validate_accepts_non_function_lifecycle_stub_as_opaque_metadata ... ok
+test manifest::tests::validate_rejects_prerequisite_inventory_linkage_mismatch ... ok
+test manifest::tests::validate_rejects_provenance_coverage_with_invalid_binary_hash ... ok
+test manifest::tests::validate_rejects_kani_unsupported_solver_metadata ... ok
+test manifest::tests::validate_rejects_provenance_coverage_with_empty_all_covered_ids ... ok
+test manifest::tests::validate_rejects_provider_fixed_point_proof_file_kind ... ok
+test manifest::tests::validate_keeps_non_trellis_proof_profiles_on_the_generic_contract ... ok
+test manifest::tests::trellis_proof_registered_fixture_is_optional_recorded_only ... ok
+test manifest::tests::trellis_proof_required_accepted_formal_proof_fixture_passes ... ok
+test manifest::tests::validate_rejects_kani_receipt_digest_mismatch ... ok
+test manifest::tests::validate_rejects_provenance_coverage_with_weakened_boundary ... ok
+test manifest::tests::validate_accepts_multiple_profiles_for_same_non_function_kind ... ok
+test manifest::tests::validate_rejects_kani_missing_required_non_claim ... ok
+test manifest::tests::validate_rejects_provider_fixed_point_proof_with_wrong_role ... ok
+test manifest::tests::validate_rejects_source_acquisition_digest_mismatch ... ok
+test manifest::tests::validate_rejects_unsupported_source_acquisition_url ... ok
+test manifest::tests::validate_rejects_stack_provenance_digest_mismatch ... ok
+test manifest::tests::validate_rejects_stage2_digest_not_present_in_binaries ... ok
+test manifest::tests::validate_rejects_stack_provenance_semantic_promotion ... ok
+test nix_witness::tests::mismatch_is_fail_closed_to_cross_builder_mismatch_verdict ... ok
+test nix_witness::tests::canonicalization_preserves_flag_order_and_sorts_artifact_sets ... ok
+test nix_witness::tests::missing_mantle_proof_digest_is_rejected ... ok
+test nix_witness::tests::mismatch_receipt_must_not_report_nix_witness_proof_class ... ok
+test nix_witness::tests::verdict_must_match_digest_set_comparison ... ok
+test oxide_worker::tests::accepts_valid_oxide_release_worker_fixture ... ok
+test proof_audit::tests::approved_downgrade_records_policy_basis_and_narrower_claim ... ok
+test proof_audit::tests::unknown_or_unapproved_audit_events_fail_closed ... ok
+test oxide_worker::tests::rejects_invalid_oxide_release_worker_fixture_matrix ... ok
+test nix_witness::tests::receipt_digest_must_match_canonical_bytes ... ok
+test proof_eligibility::tests::clean_strict_evidence_is_admitted ... ok
+test proof_audit::tests::clean_or_informational_audit_sets_are_admitted_with_stable_digest ... ok
+test proof_eligibility::tests::unapproved_audit_events_fail_closed ... ok
+test proof_eligibility::tests::practical_impure_and_missing_modes_are_blocked ... ok
+test nix_witness::tests::build_flag_order_changes_canonical_digest ... ok
+test nix_witness::tests::canonical_receipt_is_compact_stable_and_digest_bound ... ok
+test publication::tests::invalid_layout_and_policy_fail_closed ... ok
+test proof_eligibility::tests::missing_or_degraded_fact_classes_are_reported ... ok
+test publication::tests::state_machine_rejects_skips_and_post_commit_failures ... ok
+test publication::tests::verification_rejection_and_commit_race_are_terminal_failures ... ok
+test reproducibility::tests::reproducibility_report_accepts_mismatched_digest ... ok
+test publication::tests::cleanup_failure_can_augment_one_phase_failure_only ... ok
+test reproducibility::tests::reproducibility_report_accepts_missing_rebuilt_artifact_fixture ... ok
+test publication::tests::state_machine_accepts_only_the_verified_commit_sequence ... ok
+test reproducibility::tests::reproducibility_report_rejects_impure_rebuild_claim ... ok
+test reproducibility::tests::reproducibility_report_rejects_matched_artifact_with_drift ... ok
+test publication::tests::preexisting_destination_shapes_are_all_blockers ... ok
+test reproducibility::tests::reproducibility_report_rejects_missing_artifact_with_observed_digest ... ok
+test reproducibility::tests::reproducibility_report_rejects_rebuild_class_without_clean_store_identity ... ok
+test reproducibility::tests::reproducibility_report_rejects_proof_linkage_mismatch_fixture ... ok
+test reproducibility::tests::reproducibility_report_accepts_matching_artifact_names_out_of_order ... ok
+test reproducibility::tests::reproducibility_report_accepts_matching_linkage ... ok
+test reproducibility::tests::reproducibility_report_rejects_output_name_drift_fixture ... ok
+test publication::tests::plan_identity_is_deterministic_and_has_no_stage_name_input ... ok
+test publication::tests::staged_artifacts_must_match_the_pre_mutation_plan ... ok
+test reproducibility::tests::reproducibility_report_canonical_bytes_are_stable_and_sorted ... ok
+test source_archive::tests::unsafe_paths_are_rejected ... ok
+test reproducibility::tests::reproducibility_report_rejects_failed_verdict_with_rebuild_claim ... ok
+test source_archive::tests::private_runtime_and_lifecycle_paths_are_excluded ... ok
+test reproducibility::tests::reproducibility_report_digest_is_blake3_of_canonical_bytes ... ok
+test publication::tests::plan_identity_changes_with_release_layout_input_or_policy ... ok
+test source_archive::tests::submodules_are_rejected ... ok
+test source_archive::tests::symlink_targets_must_stay_relative ... ok
+test source_review::tests::mode_parsing_rejects_unknown_values ... ok
+test source_review::tests::policy_threshold_cannot_exceed_reviewer_count ... ok
+test source_review::tests::policy_with_duplicate_reviewer_keys_is_rejected ... ok
+test source_review::tests::policy_without_reviewers_is_valid_but_unsatisfiable ... ok
+test source_review::tests::duplicate_key_under_two_labels_does_not_inflate ... ok
+test source_review::tests::optional_mode_without_attachment_is_not_required ... ok
+test source_archive::tests::source_paths_with_target_named_components_are_preserved ... ok
+test source_archive::tests::unordered_entries_produce_stable_member_order ... ok
+test source_review::tests::required_mode_without_attachment_fails_missing ... ok
+test source_review::tests::unknown_preset_is_rejected ... ok
+test source_review::tests::observation_count_must_match_approvals ... ok
+test source_review::tests::needs_revision_disposition_fails_selected_policy ... ok
+test determinism::tests::deterministic_receipt_rejects_undeclared_observed_effects ... ok
+test source_review::tests::policy_digest_mismatch_fails ... ok
+test source_review::tests::build_witness_domain_cannot_satisfy_review_policy ... ok
+test source_review::tests::missing_required_non_claim_fails_validation ... ok
+test source_review::tests::stale_claim_root_fails ... ok
+test source_review::tests::source_revision_mismatch_fails ... ok
+test source_review::tests::tampered_attachment_identity_fails ... ok
+test tree_copy::tests::compatibility_order_uses_mantle_string_paths_not_component_order ... ok
+test tree_copy::tests::named_entry_depth_and_path_bounds_fail_closed ... ok
+test source_review::tests::optional_mode_with_valid_attachment_reports_verified_optional ... ok
+test source_review::tests::insufficient_distinct_approvals_fail ... ok
+test source_review::tests::unsupported_schema_fails ... ok
+test tree_copy::tests::blocker_order_is_deterministic_by_path_and_kind ... ok
+test source_review::tests::source_revision_presence_must_match_release_subject_exactly ... ok
+test content_bound_requirements::tests::strict_mode_rejects_missing_and_invalid_optional_evidence ... ok
+test source_review::tests::wrong_source_digest_fails_stale_subject ... ok
+test tree_copy::tests::deterministic_plan_orders_directories_files_then_internal_symlinks ... ok
+test source_review::tests::excluded_author_approval_does_not_count ... ok
+test source_review::tests::required_mode_with_two_distinct_reviewers_is_satisfied ... ok
+test source_review::tests::invalid_signature_observation_fails ... ok
+test source_review::tests::duplicate_signature_for_one_key_counts_once ... ok
+test verification_decision::tests::diagnostic_overflow_is_bounded_and_fails_closed ... ok
+test source_review::tests::revoked_reviewer_key_fails ... ok
+test tree_copy::tests::invalid_paths_parent_shapes_duplicates_and_special_files_are_rejected ... ok
+test verification_decision::tests::multiple_required_blockers_keep_contributor_and_diagnostic_order ... ok
+test tree_copy::tests::zero_limits_are_rejected_before_entry_validation ... ok
+test tree_copy::tests::symlink_policy_accepts_only_relative_targets_naming_another_planned_entry ... ok
+test source_review::tests::unknown_reviewer_key_fails ... ok
+test strict_regression::tests::strict_regression_suite_marks_unsupported_axis_as_non_claim ... ok
+test strict_regression::tests::strict_regression_suite_blocks_missing_required_axis ... ok
+test verification_decision::tests::one_required_blocker_rejects_manifest_success ... ok
+test strict_regression::tests::strict_regression_suite_blocks_unstable_clean_output_digest ... ok
+test verification_decision::tests::optional_absence_does_not_block_acceptance ... ok
+test verification_decision::tests::all_required_contributors_accept_only_when_satisfied ... ok
+test verification_decision::tests::completeness_guard_maps_every_required_contributor ... ok
+test strict_regression::tests::strict_regression_suite_blocks_when_poisoned_fixture_is_admitted ... ok
+test strict_regression::tests::strict_regression_suite_accepts_clean_and_poisoned_fixture_outcomes ... ok
+test manifest::tests::function_address_preserves_binding_passes_optional_and_required_modes ... ok
+test manifest::tests::function_address_preserves_binding_rejects_invalid_metadata_matrix ... ok
+test content_bound_requirements::tests::valid_content_bound_release_is_order_independent ... ok
+test manifest::tests::trellis_proof_negative_fixture_matrix_fails_closed ... ok
+test manifest::tests::function_address_generic_binding_rejects_invalid_fixture_matrix ... ok
+test chapter_transport::tests::count_and_total_byte_limits_fail_closed ... ok
+
+test result: ok. 269 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+   Doc-tests crunch_release_core
+
+running 1 test
+test crates/crunch-release-core/src/content_bound_nominal.rs - content_bound_nominal::CheckedRequirementDigest (line 172) - compile fail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+
+$ nix develop -c cargo test -p mantle --bin mantle release_source::tests::
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+     Running unittests src/main.rs (/tmp/mantle-source-observation-target/debug/deps/mantle-aad3a8277f238be4)
+
+running 7 tests
+test release_source::tests::source_archive_rejects_git_submodule_entries ... ok
+test release_source::tests::source_archive_uses_current_worktree_verified_vendor_and_tracked_package_files ... ok
+test release_source::tests::source_archive_rejects_symlink_targets_outside_tree ... ok
+test release_source::tests::git_source_archive_rejects_wrong_commit_before_archiving ... ok
+test release_source::tests::git_source_archive_rejects_missing_ref_policy ... ok
+test release_source::tests::git_source_archive_rejects_ref_policy_mismatch ... ok
+test release_source::tests::git_source_archive_reconstruction_matches_release_source_archive ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 2588 filtered out; finished in 0.17s
+
+
+$ nix develop -c cargo test -p mantle --bin mantle witness_rebuild::tests::source_
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+     Running unittests src/main.rs (/tmp/mantle-source-observation-target/debug/deps/mantle-aad3a8277f238be4)
+
+running 6 tests
+test witness_rebuild::tests::source_acquisition_for_plan_requires_metadata_when_flagged ... ok
+test witness_rebuild::tests::source_acquisition_for_plan_accepts_metadata_when_flagged ... ok
+test witness_rebuild::tests::source_acquisition_for_plan_requires_git_kind_when_flagged ... ok
+test witness_rebuild::tests::source_acquisition_success_audit_records_verified_fetch ... ok
+test witness_rebuild::tests::source_acquisition_prelaunch_failure_audit_records_error ... ok
+test witness_rebuild::tests::source_acquisition_rejects_digest_mismatch_before_extraction ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 2589 filtered out; finished in 0.01s
+
+
+$ nix develop -c cargo test -p mantle --test release_cli source
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 03s
+     Running tests/release_cli.rs (/tmp/mantle-source-observation-target/debug/deps/release_cli-ab1ef7bb148b5f8d)
+
+running 27 tests
+test source_review_fixtures::write_source_review_machine_fixture ... ignored, fixture writer; run explicitly to refresh tests/fixtures/source-review-attachment
+test release_create_rejects_conflicting_source_acquisition_flags ... ok
+test release_create_rejects_git_source_url_without_commit ... ok
+test release_verify_rejects_proof_linkage_source_digest_mismatch ... ok
+test release_nix_witness_rejects_deterministic_proof_source_drift ... ok
+test release_verify_reports_external_deterministic_override_source ... ok
+test source_review_fixtures::source_review_build_witness_domain_cannot_satisfy_review_policy ... ok
+test release_verify_provider_fixed_point_external_override_reports_source ... ok
+test release_verify_fails_when_source_archive_is_missing ... ok
+test source_review_fixtures::source_review_generic_verify_reports_not_required ... ok
+test release_create_records_git_source_metadata ... ok
+test source_review_fixtures::source_review_wrong_source_digest_fails_stale_subject ... ok
+test source_review_fixtures::source_review_duplicate_key_under_two_labels_does_not_inflate ... ok
+test source_review_fixtures::source_review_insufficient_distinct_approvals_fail ... ok
+test source_review_fixtures::source_review_unknown_reviewer_key_fails ... ok
+test source_review_fixtures::source_review_invalid_signature_fails ... ok
+test source_review_fixtures::source_review_stale_claim_root_fails ... ok
+test source_review_fixtures::source_review_required_policy_is_satisfied_with_two_distinct_reviewers ... ok
+test source_review_fixtures::source_review_policy_digest_mismatch_fails ... ok
+test source_review_fixtures::source_review_tampered_attachment_identity_fails ... ok
+test source_review_fixtures::source_review_needs_revision_disposition_fails ... ok
+test source_review_fixtures::source_review_excluded_author_does_not_inflate_count ... ok
+test source_observation_cannot_reuse_witness_signature_as_release_authority ... ok
+test source_review_fixtures::source_review_bundled_attachment_without_authority_fails_closed ... ok
+test witness_import_accepts_directory_source_and_skips_exact_duplicates ... ok
+test source_review_fixtures::source_review_tampered_bundled_attachment_fails_bundle_verification ... ok
+test source_review_fixtures::source_review_create_bundles_attachment_and_optional_verify_reports_verified_optional ... ok
+
+test result: ok. 26 passed; 0 failed; 1 ignored; 0 measured; 141 filtered out; finished in 0.14s
+
+
+$ nix develop -c cargo test -p crunch-project --lib
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/crates/crunch-eval)
+   Compiling crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/crates/crunch-project)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.94s
+     Running unittests src/lib.rs (/tmp/mantle-source-observation-target/debug/deps/crunch_project-93931dab2a55e629)
+
+running 7 tests
+test refresh_adapter::tests::adapter_preserves_failed_resolution_behavior ... ok
+test refresh_adapter::tests::failed_freshness_observation_maps_empty_resolver_diagnostic ... ok
+test refresh_adapter::tests::identity_validation_preserves_missing_and_empty_behavior ... ok
+test refresh_adapter::tests::default_vcs_hooks_fail_closed_with_unsupported_tool_diagnostic ... ok
+test refresh_adapter::tests::adapter_resolves_vcs_identities_and_tree_hashes ... ok
+test refresh_adapter::tests::shell_adapter_keeps_refresh_io_outside_core ... ok
+test attestation_adapter::tests::project_attestation_adapter_preserves_borrowed_input_api ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+$ nix develop -c cargo test -p crunch-build trust_boundary_nominal::tests::
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.42s
+     Running unittests src/lib.rs (/tmp/mantle-source-observation-target/debug/deps/crunch_build-765a7109fc387920)
+
+running 2 tests
+test trust_boundary_nominal::tests::malformed_fetch_and_store_roles_fail_closed ... ok
+test trust_boundary_nominal::tests::fetch_and_store_roles_admit_valid_values ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 678 filtered out; finished in 0.00s
+
+     Running tests/export_api.rs (/tmp/mantle-source-observation-target/debug/deps/export_api-9285488797cff4d4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+$ nix develop -c cargo check -p crunch-source-core --target wasm32-unknown-unknown
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.23s
+
+$ nix develop -c cargo clippy -p crunch-source-core --all-targets -- -D warnings
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-source-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/crates/crunch-source-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.58s
+
+$ nix develop -c cargo clippy -p crunch-release-core --all-targets --no-deps -- -D warnings
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-source-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/crates/crunch-source-core)
+    Checking crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/crates/crunch-release-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.68s
+
+$ nix develop -c cargo clippy -p mantle --bin mantle --test release_cli --no-deps -- -D warnings
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.17s
+
+$ nix develop -c cargo tigerstyle check -p crunch-source-core -- --lib
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-source-observations/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.23s
+
+$ nix develop -c cargo -Zscript scripts/check-source-observation-architecture.rs --self-test
+source-observation architecture verified: findings=0 negative-fixtures=16
+
+$ nix develop -c cargo -Zscript scripts/check-source-observation-architecture.rs --root .
+source-observation architecture verified: findings=0 negative-fixtures=16
+
+$ nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs
+machine schema contract check: PASS (27 contracted, 60 classified)
+
+$ nix develop -c nickel export --format json tests/durable-file-publication-adoption.ncl
+{
+  "tests": true
+}
+
+$ nix develop -c cargo fmt --check -p crunch-source-core -p crunch-release-core -p mantle
+
+$ git diff --check
