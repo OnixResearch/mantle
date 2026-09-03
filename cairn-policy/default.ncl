@@ -571,6 +571,22 @@ let PolicyFieldSetDigest = "2d86abb8cbcb43323f4bdf81870ee963fcdc34ef5bf815eabc5b
         anchor_kind = "exact_marker_bytes",
       },
       {
+        id = "source-observations",
+        requirement_sources = [
+          { root = "cairn/specs/source-transports/spec.md", source_kind = "accepted_specs", extensions = ["md"] },
+          { root = "cairn/specs/release-provenance/spec.md", source_kind = "accepted_specs", extensions = ["md"] },
+          { root = "cairn/specs/durable-file-publication-adoption/spec.md", source_kind = "accepted_specs", extensions = ["md"] },
+        ],
+        evidence_sources = [
+          { root = "tools/source_transports_tracey_refs.rs", source_kind = "rust_source", extensions = ["rs"] },
+          { root = "tools/release_provenance_tracey_refs.rs", source_kind = "rust_source", extensions = ["rs"] },
+          { root = "tools/durable_file_publication_tracey_refs.rs", source_kind = "rust_source", extensions = ["rs"] },
+        ],
+        marker_verbs = ["impl", "verify", "depends", "related"],
+        assurance_level = "declared",
+        anchor_kind = "exact_marker_bytes",
+      },
+      {
         id = "immutable-release-pointer",
         requirement_sources = [
           { root = "cairn/specs/immutable-release-pointer/spec.md", source_kind = "accepted_specs", extensions = ["md"] },

@@ -1,0 +1,289 @@
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/bind-source-observations-and-monotonic-ingest/specs/durable-file-publication-adoption/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/bind-source-observations-and-monotonic-ingest/specs/durable-file-publication-adoption/spec.md"
+    },
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/bind-source-observations-and-monotonic-ingest/specs/release-provenance/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/bind-source-observations-and-monotonic-ingest/specs/release-provenance/spec.md"
+    },
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/bind-source-observations-and-monotonic-ingest/specs/source-transports/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/bind-source-observations-and-monotonic-ingest/specs/source-transports/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "bind-source-observations-and-monotonic-ingest",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "4c32804db9c0d3309e48dd7148eb9f3d3e23f5cd4b0110d83a6fddd7d3046f09",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+    "receipt_hash": "6767ed8b14dd8f3564cacd001ffaea47a8049f223b6d42df429717fe3476d2f6",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/bind-source-observations-and-monotonic-ingest/specs/durable-file-publication-adoption/spec.md",
+    "./.cairn/changes/bind-source-observations-and-monotonic-ingest/specs/release-provenance/spec.md",
+    "./.cairn/changes/bind-source-observations-and-monotonic-ingest/specs/source-transports/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "7781e4d972bbb7f3e6d75d49ca7d51874c08c018f3b5353fdc331118cd4199da",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "c288ff54a7caa7792e2a21c3c967e25b5ef40f7c80b808a8019919ec10067a8c",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "3ecc367ba4856e6254452c7608f978837d8030d403135ed5e238e51b228abf4b",
+        "destination": ".cairn/specs/durable-file-publication-adoption/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "569d1ade2697b0108df7a5224859aece7d736175bb51c6ef43babf2fce059b56",
+        "operations": [
+          {
+            "block_hash": "a1d50ce4fd647e26c75888a199b896681aed684fa88dcabd5104c5bbea2c7c9c",
+            "heading": "### Requirement: Exact immutable-object request mapping",
+            "kind": "modified",
+            "requirement_id": "mantle.durable_file_publication.mapping"
+          },
+          {
+            "block_hash": "452ce7918a356b446450ac8099cf4fb80601431f657f390297a70e72ba51a570",
+            "heading": "### Requirement: Capability-relative durable adapter",
+            "kind": "modified",
+            "requirement_id": "mantle.durable_file_publication.adapter"
+          },
+          {
+            "block_hash": "3a857238f35ef3d39d81f0dc79564a080b789253bd76da59b8405621c58698c0",
+            "heading": "### Requirement: Complete product outcome mapping",
+            "kind": "modified",
+            "requirement_id": "mantle.durable_file_publication.outcomes"
+          },
+          {
+            "block_hash": "607b4049426aeab246e6f20a3b8643f76a2b83fdfee7088b98a1289c0513cc42",
+            "heading": "### Requirement: Mantle retains authority and rollback",
+            "kind": "modified",
+            "requirement_id": "mantle.durable_file_publication.authority"
+          },
+          {
+            "block_hash": "301e2c458926720fdb72f32608b8073ceb3ba776c1af844f2d0220b0da4638c3",
+            "heading": "### Requirement: Corpus, integration, and typed evidence",
+            "kind": "modified",
+            "requirement_id": "mantle.durable_file_publication.validation"
+          },
+          {
+            "block_hash": "2ecd9f6dd3f6ba8fc8f206fde5348a250a775217eec10b7172cbfd58583ab72e",
+            "heading": "### Requirement: Typed adoption evidence",
+            "kind": "modified",
+            "requirement_id": "mantle.durable_file_publication.evidence"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "modified",
+            "requirement_id": "mantle.durable_file_publication.mapping",
+            "state": "applied"
+          },
+          {
+            "kind": "modified",
+            "requirement_id": "mantle.durable_file_publication.adapter",
+            "state": "already_applied"
+          },
+          {
+            "kind": "modified",
+            "requirement_id": "mantle.durable_file_publication.outcomes",
+            "state": "already_applied"
+          },
+          {
+            "kind": "modified",
+            "requirement_id": "mantle.durable_file_publication.authority",
+            "state": "applied"
+          },
+          {
+            "kind": "modified",
+            "requirement_id": "mantle.durable_file_publication.validation",
+            "state": "applied"
+          },
+          {
+            "kind": "modified",
+            "requirement_id": "mantle.durable_file_publication.evidence",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/bind-source-observations-and-monotonic-ingest/specs/durable-file-publication-adoption/spec.md"
+      },
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "2d354ef4fc7c39df3746b0254479a9fde457e2387dbfcfe3e977937bdd1a3b91",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "d2b87e809e37d4ced3b81831184c0d97c6824d51da12cd5ac84b3da991197bb8",
+        "destination": ".cairn/specs/release-provenance/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "9ece410bbde51e449ec8cc384e993364ccbe49cb4799ee662f2a6fd52249a1f0",
+        "operations": [
+          {
+            "block_hash": "8952d117609c2a83094d9ee3b198360b7da6772f14cb3e01fbdf68d5fa2cc9ad",
+            "heading": "### Requirement: Release evidence binds accepted source observations",
+            "kind": "added",
+            "requirement_id": "mantle.release_provenance.source_observation_binding"
+          },
+          {
+            "block_hash": "0039523cea5b1aa1d4a9604cfa24e890fd85c40602e16ddb960e7fefdd20252f",
+            "heading": "### Requirement: Source observation adds no signature authority",
+            "kind": "added",
+            "requirement_id": "mantle.release_provenance.source_observation_signature_boundary"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "mantle.release_provenance.source_observation_binding",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "mantle.release_provenance.source_observation_signature_boundary",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/bind-source-observations-and-monotonic-ingest/specs/release-provenance/spec.md"
+      },
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "c49ea211d0d2cc8a32972265f8813317410588db6fc8cfb4ff756f49c72fa546",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "0db239988b1aa91b11cb185b276fb999f6ddd16f402f54c16dca122cdaa60934",
+        "destination": ".cairn/specs/source-transports/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "eefd1af69d934dceb72a960eb1fc0f56582ae9594cb24eb1055f900889788bb5",
+        "operations": [
+          {
+            "block_hash": "2de174e0d898278151e05b0ea4e9785ec9fdfd587c41dcab15543fb3402200e7",
+            "heading": "### Requirement: Source observations bind immutable acquisition facts to content",
+            "kind": "added",
+            "requirement_id": "source_transports.source_observations.contract"
+          },
+          {
+            "block_hash": "8bd8e081bc0d193df96faf2228267a92733bc808130a335d3a19eb902e194b07",
+            "heading": "### Requirement: Locators and mutable references remain observations",
+            "kind": "added",
+            "requirement_id": "source_transports.source_observations.locator_boundary"
+          },
+          {
+            "block_hash": "f2f9e1ddef17ab008115ca1bdb504126b5b0e56173d03284c07cca85a6a3e799",
+            "heading": "### Requirement: Source ingest is monotonic and conflict detecting",
+            "kind": "added",
+            "requirement_id": "source_transports.monotonic_ingest"
+          },
+          {
+            "block_hash": "92f8dac1752ac646bb2b858b4a3dac8a550204de9c91b7e50ae2870f67f53161",
+            "heading": "### Requirement: Legacy source records do not gain invented provenance",
+            "kind": "added",
+            "requirement_id": "source_transports.source_observations.compatibility"
+          },
+          {
+            "block_hash": "52ee7d85889f62c6c77eb1265bac090e3cd39789c7e0af34f5bfb974581988a2",
+            "heading": "### Requirement: Source observation claims remain bounded",
+            "kind": "added",
+            "requirement_id": "source_transports.source_observations.claim_boundary"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "source_transports.source_observations.contract",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "source_transports.source_observations.locator_boundary",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "source_transports.monotonic_ingest",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "source_transports.source_observations.compatibility",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "source_transports.source_observations.claim_boundary",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/bind-source-observations-and-monotonic-ingest/specs/source-transports/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "569d1ade2697b0108df7a5224859aece7d736175bb51c6ef43babf2fce059b56",
+          "exists": true,
+          "path": "./.cairn/specs/durable-file-publication-adoption/spec.md"
+        },
+        {
+          "content_hash": "9ece410bbde51e449ec8cc384e993364ccbe49cb4799ee662f2a6fd52249a1f0",
+          "exists": true,
+          "path": "./.cairn/specs/release-provenance/spec.md"
+        },
+        {
+          "content_hash": "eefd1af69d934dceb72a960eb1fc0f56582ae9594cb24eb1055f900889788bb5",
+          "exists": true,
+          "path": "./.cairn/specs/source-transports/spec.md"
+        }
+      ],
+      "manifest_hash": "f509ac03816d8e73d1a33c6073b3bdee75da7c85a46bf29882c7154876966210"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "c288ff54a7caa7792e2a21c3c967e25b5ef40f7c80b808a8019919ec10067a8c",
+          "exists": true,
+          "path": "./.cairn/specs/durable-file-publication-adoption/spec.md"
+        },
+        {
+          "content_hash": "2d354ef4fc7c39df3746b0254479a9fde457e2387dbfcfe3e977937bdd1a3b91",
+          "exists": true,
+          "path": "./.cairn/specs/release-provenance/spec.md"
+        },
+        {
+          "content_hash": "c49ea211d0d2cc8a32972265f8813317410588db6fc8cfb4ff756f49c72fa546",
+          "exists": true,
+          "path": "./.cairn/specs/source-transports/spec.md"
+        }
+      ],
+      "manifest_hash": "160b43fcd49a2c27dc25a1fc875425bec88d262e74018132099f9ca5eb4cf866"
+    },
+    "kind": "sync",
+    "manifest_hash": "4aa6ef6d64da3aa6fc621a37805f4044790b7b7ff1d619cb6ddb9c6caa921041"
+  },
+  "plan_hash": "dd6144ce898e0a1b34c92d4fa82c841b44b7b67d67532a6d189535e1048ff358",
+  "policy": "mantle-default",
+  "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+  "reasons": [],
+  "receipt_hash": "9edd06c0d04de9948b25898d094402711e266bd18c718e4076a62acae773a007"
+}

@@ -24,6 +24,8 @@ Every command completed with status `0`.
 - Focused formatting and `git diff --check`: passed.
 - Strict Cairn validation: passed.
 - Pre-sync Tracey coverage: 155 of 155 accepted requirements referenced.
+- Post-sync default Tracey coverage: 157 of 157 requirements referenced.
+- Focused source-observations Tracey coverage: 177 of 177 requirements referenced.
 - Cairn proposal, design, and tasks gates: passed; all 21 tasks are complete.
 
 ## Nix checks

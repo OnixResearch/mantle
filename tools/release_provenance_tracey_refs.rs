@@ -11,6 +11,12 @@
 // behavioral correctness, semantic equivalence, verifier soundness, deployment
 // safety, reproducibility beyond recorded fixtures, or release eligibility.
 
+// Source-observation release binding.
+// Implementation and tests: `crates/crunch-release-core/src/manifest.rs`,
+// `src/release_evidence.rs`, and `tests/release_cli.rs`.
+// r[impl mantle.release_provenance.source_observation_binding]
+// r[verify mantle.release_provenance.source_observation_signature_boundary]
+
 // Valence-validated stack provenance.
 // Implementation and tests: `crates/crunch-release-core/src/manifest.rs`,
 // `src/release_evidence.rs`, `src/release_cmd.rs`, and `tests/release_cli.rs`.
