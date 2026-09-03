@@ -1,0 +1,1 @@
+nix develop -c cargo -Zscript scripts/check-rust-plan-hexagon.rs --root .
