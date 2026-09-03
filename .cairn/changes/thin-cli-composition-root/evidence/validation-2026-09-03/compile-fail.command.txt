@@ -1,0 +1,1 @@
+CARGO_TARGET_DIR=/tmp/mantle-cli-root-focused-target nix develop -c cargo test -p mantle-application --doc

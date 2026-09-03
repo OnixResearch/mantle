@@ -1,0 +1,31 @@
+Inspect the store's PathInfo database
+
+Usage: mantle store [OPTIONS] <COMMAND>
+
+Commands:
+  list              List all known store paths
+  info              Show detailed PathInfo for a store path
+  roots             List retained GC roots with provenance
+  usage             Report bounded retained, reclaimable, shared, and unknown store usage
+  pin               Pin a logical store path as a retained GC root
+  unpin             Remove a retained GC root
+  gc                Plan garbage collection, or execute one accepted unchanged plan
+  verify            Verify NAR hash and trusted signatures of stored paths
+  sign              Sign PathInfo entries with an ed25519 key
+  repair-final-nar  Repair stale signed final-NAR metadata for one exact local path
+  push              Push store paths to a binary cache directory
+  pull              Pull (import) store paths from a binary cache directory or HTTP cache URL
+  archive           Export, import, or list a Mantle-native single-file store archive
+  composition       Plan or realize an experimental frontend-neutral castore composition root
+  help              Print this message or the help of the given subcommand(s)
+
+Options:
+  -v, --verbose                      Enable verbose logging
+      --log-level <LOG_LEVEL>        Log level (trace, debug, info, warn, error)
+      --json                         Emit errors as JSON objects for tooling integration
+      --store <STORE>                Where to export final build outputs on disk. Intermediate deps stay in castore. Source inputs always come from /nix/store. If not writable, builds still succeed (outputs in castore) [default: /nix/store]
+      --store-prefix <STORE_PREFIX>  Logical store path prefix for derivation hashes. All output paths and ATerm hashes are computed against this prefix. Default: /mantle/store. Use --nix-compat for /nix/store [default: /mantle/store]
+      --nix-compat                   Shorthand for --store-prefix=/nix/store. For interop testing with Nix-computed derivations
+      --state-dir <STATE_DIR>        State directory for pathinfo.redb, blobs, and logs. Default: legacy $CRUNCH_STATE_DIR or $XDG_STATE_HOME/crunch or ~/.local/state/crunch. Use --state-dir for an explicit Mantle path
+      --base-store <BASE_STORES>     Ordered list of read-only base store state directories for overlay composition. Declared in priority order (base A before base B)
+  -h, --help                         Print help

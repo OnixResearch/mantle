@@ -1,0 +1,127 @@
+{
+  "schema": "mantle-cli-family-parity-v1",
+  "cases": [
+    {
+      "name": "build",
+      "args": [
+        "build",
+        "--help"
+      ],
+      "status_code": 0,
+      "stdout_blake3": "134244e29ca269335f96aa26f5a5f5b0d2ac97530335917a882b0be8d1235c67",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "rust-plan",
+      "args": [
+        "rust-plan",
+        "--help"
+      ],
+      "status_code": 0,
+      "stdout_blake3": "4674f7aba1651e18ebf081d1382310531594dab5174a45c75888cfc63af72e67",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "remote-build",
+      "args": [
+        "remote",
+        "--help"
+      ],
+      "status_code": 0,
+      "stdout_blake3": "8532ca192ec98136c7fbfe168253854d19999bf921c1f4ff58f60a4e6522709f",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "store",
+      "args": [
+        "store",
+        "--help"
+      ],
+      "status_code": 0,
+      "stdout_blake3": "0729529e7da5b6973626083b7e2cf2314910f1150b85a0b39ffa680cc3125213",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "source",
+      "args": [
+        "source",
+        "--help"
+      ],
+      "status_code": 0,
+      "stdout_blake3": "37eb6532f02121ad335eb9b978e1bc5f2c83b23b1cb9c268e691e70fc8047150",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "release",
+      "args": [
+        "release",
+        "--help"
+      ],
+      "status_code": 0,
+      "stdout_blake3": "4d8fba92b4028d97388eef27ee1f7f3af23cf72ca7d8b9e44602866fda0f8f6f",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "project",
+      "args": [
+        "check",
+        "--help"
+      ],
+      "status_code": 0,
+      "stdout_blake3": "988c79320425d21bb6d20f7558b26517ea6ec70d2c3c82ef3e1d4dff8d64841e",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "bootstrap",
+      "args": [
+        "bootstrap",
+        "--help"
+      ],
+      "status_code": 0,
+      "stdout_blake3": "44ab970472455a83fedf27f889ab0462c5d83d9c51ee5962371176e5baeadc1e",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "artifact",
+      "args": [
+        "artifact",
+        "--help"
+      ],
+      "status_code": 0,
+      "stdout_blake3": "6c7eecc078cefecec00a0516324bdb681f01b462154cc9212beeff2887ac4a5a",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "plan",
+      "args": [
+        "build",
+        "--plan",
+        "--help"
+      ],
+      "status_code": 0,
+      "stdout_blake3": "134244e29ca269335f96aa26f5a5f5b0d2ac97530335917a882b0be8d1235c67",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+    },
+    {
+      "name": "invalid-build",
+      "args": [
+        "build",
+        "--definitely-invalid"
+      ],
+      "status_code": 2,
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "c8b36af575a867d59f3f290d7ca4e379cce3e2560a97a9316519dbc5dfab1006"
+    },
+    {
+      "name": "conflicting-output",
+      "args": [
+        "--json",
+        "build",
+        "--evaluation-stream"
+      ],
+      "status_code": 2,
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "4a5ed0456f4c96918cfa931062a614e256dc81ef868eb57e929fad77f3296dad"
+    }
+  ]
+}

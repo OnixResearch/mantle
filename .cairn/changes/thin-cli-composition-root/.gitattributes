@@ -1,0 +1,5 @@
+evidence/baseline-2026-09-03/cli-family-parity/*.stdout whitespace=-blank-at-eol,-space-before-tab
+evidence/baseline-2026-09-03/cli-family-parity/*.stderr whitespace=-blank-at-eol,-space-before-tab
+evidence/validation-2026-09-03/cli-family-parity-after/*.stdout whitespace=-blank-at-eol,-space-before-tab
+evidence/validation-2026-09-03/cli-family-parity-after/*.stderr whitespace=-blank-at-eol,-space-before-tab
+evidence/validation-2026-09-03/*.log whitespace=-blank-at-eof

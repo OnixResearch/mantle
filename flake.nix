@@ -1116,6 +1116,23 @@
           '';
         };
 
+        cliApplicationArchitectureCheck = craneLib.mkCargoDerivation {
+          pname = "mantle-cli-application-architecture-check";
+          inherit src cargoVendorDir;
+          cargoArtifacts = null;
+          nativeBuildInputs = nativeBuildInputs ++ [ rustToolchain nickelCli ];
+          buildPhaseCargoCommand = ''
+            cargo -Zscript --offline scripts/check-cli-application-architecture.rs --self-test
+            cargo -Zscript --offline scripts/check-cli-application-architecture.rs --root .
+            nickel typecheck config/cli-application-architecture.ncl
+          '';
+          doInstallCargoArtifacts = false;
+          installPhaseCommand = ''
+            mkdir -p "$out"
+            printf '%s\n' 'cli_application_architecture_findings=0' > "$out/report.txt"
+          '';
+        };
+
         tigerstyleRunner = pkgs.writeShellApplication {
           name = "crunch-tigerstyle";
           runtimeInputs = nativeBuildInputs ++ [
@@ -1412,6 +1429,7 @@
           remote-hexagon-architecture = remoteHexagonArchitectureCheck;
           rust-plan-hexagon-architecture = rustPlanHexagonArchitectureCheck;
           build-planning-architecture = buildPlanningArchitectureCheck;
+          cli-application-architecture = cliApplicationArchitectureCheck;
           content-bound-requirement-source-closure = contentBoundRequirementSourceClosure;
           content-bound-requirement-evidence = contentBoundRequirementEvidence;
           store-retention-policy =
@@ -1697,6 +1715,26 @@
               buildInputs
               ;
             cargoExtraArgs = "-p crunch-build-planning-core --lib --target wasm32-unknown-unknown";
+          };
+
+          application-core = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p mantle-application-core -p mantle-application --all-targets";
+          };
+
+          application-core-wasm = craneLib.cargoBuild {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoExtraArgs = "-p mantle-application-core -p mantle-application --lib --target wasm32-unknown-unknown";
           };
 
           mantle-build-contract = craneLib.cargoTest {

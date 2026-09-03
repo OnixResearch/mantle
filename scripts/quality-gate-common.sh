@@ -20,6 +20,8 @@ readonly -a FIRST_PARTY_PACKAGES=(
   crunch-remote-core
   mantle-rust-plan
   mantle-rust-plan-core
+  mantle-application
+  mantle-application-core
   crunch-shell
   crunch-store
 )

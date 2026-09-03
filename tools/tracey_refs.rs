@@ -1179,3 +1179,23 @@
 // Positive and negative evaluator, budget, import, contract, deserialization,
 // vendor, stale-evidence, boundary, formatting, Clippy, Nix, and lifecycle
 // checks are preserved in the active change evidence.
+
+// CLI application architecture bridge.
+//
+// r[impl application_architecture.thin_composition_root]
+// r[impl application_architecture.application_owned_ports]
+// r[impl application_architecture.typed_error_ownership]
+// r[impl application_architecture.effect_observation_boundary]
+// r[impl application_architecture.dependency_guard]
+// The no-std core and application port contracts live under `crates/`.
+// CLI DTOs, compatibility operations, concrete adapters, presentation, and
+// the deterministic architecture checker live under root-owned paths.
+//
+// r[verify application_architecture.thin_composition_root]
+// r[verify application_architecture.application_owned_ports]
+// r[verify application_architecture.typed_error_ownership]
+// r[verify application_architecture.effect_observation_boundary]
+// r[verify application_architecture.dependency_guard]
+// Positive and negative tests cover DTO mapping, family dispatch, typed
+// failures, effect identity, observation mismatch, presentation failure, CLI
+// byte parity, forbidden inward authority, host builds, and WASM builds.

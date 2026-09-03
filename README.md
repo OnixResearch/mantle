@@ -89,7 +89,7 @@ mantle build --plan examples/hello.ncl
 mantle build examples/hello.ncl --no-substitute
 ```
 
-Use `mantle --json build ...` for the stable aggregate build report. Its compatibility identifier is `crunch-build-report-v1`. See the [build-planning core guide](docs/build-planning-core.md) for explicit route, concurrency, and effect boundaries.
+Use `mantle --json build ...` for the stable aggregate build report. Its compatibility identifier is `crunch-build-report-v1`. See the [build-planning core guide](docs/build-planning-core.md) for explicit route, concurrency, and effect boundaries. The [CLI application architecture guide](docs/cli-application-architecture.md) describes the mechanical command root and typed dispatch boundary.
 
 External CI consumers can bind normalized requests and observations through the host-independent [`mantle-build-contract`](docs/build-interchange-contract.md) component. This contract does not import build or store authority.
 
@@ -568,6 +568,7 @@ Useful documentation:
 - [Nickel evaluator cohort](docs/nickel-evaluator-cohort.md)
 - [Remote credential operations](docs/remote-credentials.md)
 - [Remote-build hexagon](docs/remote-build-hexagon.md)
+- [CLI application architecture](docs/cli-application-architecture.md)
 - [Portable remote client](docs/portable-remote-client.md)
 - [Mantle naming rules](docs/mantle-naming.md)
 - [Durable file publication adoption](docs/durable-file-publication-adoption.md)

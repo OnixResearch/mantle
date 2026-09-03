@@ -4882,6 +4882,8 @@ dependencies = [
  "fs2",
  "futures",
  "libc",
+ "mantle-application",
+ "mantle-application-core",
  "mantle-portable-client-core",
  "mantle-rust-plan",
  "mantle-rust-plan-core",
@@ -4911,6 +4913,22 @@ dependencies = [
  "ureq",
  "url",
  "zeroize",
+]
+
+[[package]]
+name = "mantle-application"
+version = "0.1.0"
+dependencies = [
+ "mantle-application-core",
+]
+
+[[package]]
+name = "mantle-application-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

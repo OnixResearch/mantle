@@ -1,0 +1,8 @@
+[package]
+name = "mantle-application"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mantle-application-core = { path = "../mantle-application-core" }

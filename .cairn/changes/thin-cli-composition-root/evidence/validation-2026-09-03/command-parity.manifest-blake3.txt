@@ -1,0 +1,2 @@
+04993d806d317478dd5e4b6d5011e71afa158c2f572149f591605dfcbf9b6fa6  /tmp/mantle-cli-parity-before/manifest.json
+04993d806d317478dd5e4b6d5011e71afa158c2f572149f591605dfcbf9b6fa6  /tmp/mantle-cli-parity-final/manifest.json

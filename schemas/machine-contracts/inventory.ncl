@@ -1173,7 +1173,7 @@ let Registry = {
           "src/oci_registry.rs",
           "src/oci_registry_shell.rs",
           "src/artifact_cmd.rs",
-          "src/main.rs"
+          "src/cli_application.rs"
         ]
       },
       "consumers"= [
@@ -1216,7 +1216,7 @@ let Registry = {
         "contract_blake3"= "d158d85e21edcccbf6d6ae7bc6d3d59aea4acb8f1dc8a52438be38567d4c50f2",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "230228d02be1df38f427caa0f6ca4cd7c1ec8666c2350508d409aef177ccd494",
-        "producer_identity_blake3"= "85afd9299e1a7f14e45d6ec487fba0e03ad60f4af90c2485bff7ab247b6f71c0",
+        "producer_identity_blake3"= "c3e7f6c14e2c71a892b3d1bf9263b3a6efc17a29336be72b33d90d4b26a7d756",
         "consumer_policy_blake3"= "c81ddbc9befcf012a5b42b3f44c2f17fe44f890ce0dfcc228b2cfefd5eb30dd4"
       },
       "non_claims"= [
@@ -1235,7 +1235,7 @@ let Registry = {
           "src/oci_registry.rs",
           "src/oci_registry_shell.rs",
           "src/artifact_cmd.rs",
-          "src/main.rs"
+          "src/cli_application.rs"
         ]
       },
       "consumers"= [
@@ -1277,7 +1277,7 @@ let Registry = {
         "contract_blake3"= "723027e965189230cabb05b8ba069effec984e9bd527625a4320c8bd3cbe1af3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "9acb57b93f3b9150f79d59ff8a46ca3b5c2e5b98e83320b0308d57334a13d4a3",
-        "producer_identity_blake3"= "a9b5e95c15994afc49a699936030209e1d91ec8e386daf04ec2674999984829b",
+        "producer_identity_blake3"= "4a29bba199c7971147453253dac7d20460a46da26138c1957938c16a428944b1",
         "consumer_policy_blake3"= "e81324a18c19a70aaa2bec634d4a0b7dccceede6f048bbd332b432a9938adefe"
       },
       "non_claims"= [
@@ -1357,6 +1357,7 @@ let Registry = {
         "marker"= "cli.error-envelope",
         "source_paths"= [
           "src/errors.rs",
+          "src/cli_architecture/presentation_adapter.rs",
           "src/main.rs"
         ]
       },
@@ -1571,11 +1572,12 @@ let Registry = {
     {
       "id"= "eval.raw-json-output",
       "class"= "external",
-      "rust_owner"= "src/main.rs::Eval",
+      "rust_owner"= "src/cli_application.rs::Eval",
       "producer"= {
         "command_or_api"= "mantle eval --json",
         "marker"= "eval.raw-json-output",
         "source_paths"= [
+          "src/cli_application.rs",
           "src/main.rs"
         ]
       },
@@ -2878,7 +2880,7 @@ let Registry = {
         "marker"= "structured-refactor.command-reports",
         "source_paths"= [
           "src/structured_refactor.rs",
-          "src/main.rs"
+          "src/cli_application.rs"
         ]
       },
       "consumers"= [

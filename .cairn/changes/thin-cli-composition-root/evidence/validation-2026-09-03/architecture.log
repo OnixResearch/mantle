@@ -1,0 +1,16 @@
+negative fixture rejected: path=fixtures/cli-application-architecture/negative/cli.rs owner=negative-fixture authority=cli dependency-path=clap::
+negative fixture rejected: path=fixtures/cli-application-architecture/negative/snix.rs owner=negative-fixture authority=snix dependency-path=snix_
+negative fixture rejected: path=fixtures/cli-application-architecture/negative/filesystem.rs owner=negative-fixture authority=filesystem dependency-path=std::{fsasdisk}
+negative fixture rejected: path=fixtures/cli-application-architecture/negative/process.rs owner=negative-fixture authority=process dependency-path=std::process
+negative fixture rejected: path=fixtures/cli-application-architecture/negative/async-runtime.rs owner=negative-fixture authority=async-runtime dependency-path=tokio
+negative fixture rejected: path=fixtures/cli-application-architecture/negative/environment.rs owner=negative-fixture authority=environment dependency-path=std::{envasambient}
+negative fixture rejected: path=fixtures/cli-application-architecture/negative/clock.rs owner=negative-fixture authority=clock dependency-path=std::time
+negative fixture rejected: path=fixtures/cli-application-architecture/negative/random.rs owner=negative-fixture authority=random dependency-path=rand::
+negative fixture rejected: path=fixtures/cli-application-architecture/negative/network.rs owner=negative-fixture authority=network dependency-path=std::net
+negative fixture rejected: path=fixtures/cli-application-architecture/negative/provider.rs owner=negative-fixture authority=provider dependency-path=provider_sdk
+negative fixture rejected: path=fixtures/cli-application-architecture/negative/store-service.rs owner=negative-fixture authority=store-service dependency-path=crunch_store
+negative fixture rejected: path=fixtures/cli-application-architecture/negative/rendering.rs owner=negative-fixture authority=rendering dependency-path=tracing::
+negative fixture rejected: path=fixtures/cli-application-architecture/negative/root-policy.rs owner=negative-fixture authority=domain-policy dependency-path=fn plan_
+CLI application architecture verified: findings=0 root-production-lines=365 ports=12 negative-fixtures=13 compile-fail-fixtures=2
+owners: core=crates/mantle-application-core application=crates/mantle-application inbound=src/cli_architecture/inbound_adapter.rs operation=src/cli_architecture/operation_adapter.rs presentation=src/cli_architecture/presentation_adapter.rs
+boundaries: core-purity application-owned-ports adapter-direction explicit-composition typed-error-ownership presentation-separation no-std-targets

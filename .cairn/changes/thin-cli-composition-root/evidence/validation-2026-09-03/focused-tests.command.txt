@@ -1,0 +1,4 @@
+cargo test -p mantle-application-core -p mantle-application --lib
+cargo test -p mantle-application --doc
+cargo test -p mantle --bin mantle cli_architecture::
+cargo test -p mantle --bin mantle cli_application::tests::

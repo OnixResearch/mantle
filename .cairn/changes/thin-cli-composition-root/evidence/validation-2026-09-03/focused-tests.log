@@ -1,0 +1,157 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle-application v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root/crates/mantle-application)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.40s
+     Running unittests src/lib.rs (/tmp/mantle-cli-root-focused-target/debug/deps/mantle_application-0b4ff0e985dccc5d)
+
+running 3 tests
+test tests::capability_failure_retains_typed_error ... ok
+test tests::wrong_observation_and_error_bindings_fail_closed ... ok
+test tests::every_family_dispatches_through_its_application_port ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/tmp/mantle-cli-root-focused-target/debug/deps/mantle_application_core-e308a21b834407cb)
+
+running 5 tests
+test tests::invalid_schema_operation_and_identity_fail_closed ... ok
+test tests::reported_and_oversized_failures_are_validated ... ok
+test tests::typed_failure_survives_until_outcome ... ok
+test tests::success_requires_matching_effect_and_family ... ok
+test tests::dispatch_plan_is_deterministic_and_normalized ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+   Doc-tests mantle_application
+
+running 2 tests
+test crates/mantle-application/src/lib.rs - (line 6) - compile fail ... ok
+test crates/mantle-application/src/lib.rs - (line 29) - compile fail ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle-application v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root/crates/mantle-application)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3m 11s
+     Running unittests src/main.rs (/tmp/mantle-cli-root-focused-target/debug/deps/mantle-d1118d7c7603290c)
+
+running 6 tests
+test cli_architecture::tests::command_roots_map_to_capability_scoped_families ... ok
+test cli_architecture::tests::mutation_class_keeps_read_only_and_external_operations_separate ... ok
+test cli_architecture::tests::presentation_rejects_malformed_success_and_failure_outcomes ... ok
+test cli_architecture::tests::run_error_round_trip_preserves_class_message_and_exit ... ok
+test cli_architecture::tests::operation_adapter_rejects_a_request_identity_side_channel ... ok
+test cli_architecture::tests::inbound_validation_rejects_only_conflicting_machine_output_modes ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 2573 filtered out; finished in 0.01s
+
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.79s
+     Running unittests src/main.rs (/tmp/mantle-cli-root-focused-target/debug/deps/mantle-d1118d7c7603290c)
+
+running 92 tests
+test cli_application::tests::bootstrap_full_source_rust_binding_requires_host_tool_manifest_before_route_execution ... ok
+test cli_application::tests::hermeticity_mode_selector_covers_all_modes ... ok
+test cli_application::tests::nix_compat_overrides_store_prefix_to_nix_store ... ok
+test cli_application::tests::cargo_free_self_build_rejects_legacy_options ... ok
+test cli_application::tests::build_plan_remote_facts_are_pure_and_redacted ... ok
+test cli_application::tests::failure_observability_records_bounded_rejections_when_log_shell_is_unavailable ... ok
+test cli_application::tests::bound_rustc_identity_uses_authorized_bytes_without_execution ... ok
+test cli_application::tests::bootstrap_source_root_provider_reaches_materializer_and_fails_closed_on_patches ... ok
+test cli_application::tests::bootstrap_offline_source_preflight_flag_parses ... ok
+test cli_application::tests::explicit_legacy_crunch_store_prefix_is_preserved ... ok
+test cli_application::tests::flake_check_workflow_has_one_verification_command ... ok
+test cli_application::tests::no_host_tools_requires_stage0_inventory_before_host_bwrap_lookup ... ok
+test cli_application::tests::persistent_rust_source_provider_scratch_is_create_new ... ok
+test cli_application::tests::bootstrap_rust_source_provider_action_parses_import_dir ... ok
+test cli_application::tests::bootstrap_rust_source_provider_action_parses ... ok
+test cli_application::tests::bootstrap_rust_source_provider_rejects_binding_an_imported_provider ... ok
+test cli_application::tests::default_store_prefix_is_mantle ... ok
+test cli_application::tests::bootstrap_rust_source_provider_rejects_admission_without_host_tools ... ok
+test cli_application::tests::bootstrap_rust_source_provider_action_parses_smoke_evidence_dir ... ok
+test cli_application::tests::release_function_address_bind_accepts_preserves_manifest_selection ... ok
+test cli_application::tests::cargo_free_fixed_point_accepts_strict_hermetic_mode ... ok
+test cli_application::tests::build_cli_project_selector_is_not_implicit_rust_plan ... ok
+test cli_application::tests::release_gauntlet_continuous_accepts_track_inputs ... ok
+test cli_application::tests::bootstrap_rust_source_provider_rejects_sources_without_admission ... ok
+test cli_application::tests::bootstrap_rust_source_provider_action_parses_persistent_scratch ... ok
+test cli_application::tests::bootstrap_rust_source_provider_action_parses_route_plan ... ok
+test cli_application::tests::release_create_accepts_provider_fixed_point_proof_flag ... ok
+test cli_application::tests::build_cli_rejects_strict_hermetic_with_impure ... ok
+test cli_application::tests::bootstrap_rust_source_provider_rejects_smoke_evidence_without_smoke ... ok
+test cli_application::tests::release_create_accepts_git_source_flags ... ok
+test cli_application::tests::cargo_free_fixed_point_rejects_legacy_options ... ok
+test cli_application::tests::run_target_resolves_explicit_files_and_bare_packages ... ok
+test cli_application::tests::release_create_accepts_kani_toolchain_evidence_flag ... ok
+test cli_application::tests::run_target_resolves_selectors_before_file_suffix ... ok
+test cli_application::tests::rust_child_action_cli_requires_paired_topology_authority ... ok
+test cli_application::tests::run_binary_fallback_skips_invalid_entries ... ok
+test cli_application::tests::run_bin_name_rejects_path_like_values ... ok
+test cli_application::tests::rust_topology_blocker_summary_preserves_blocker_and_missing_blocker_state ... ok
+test cli_application::tests::run_binary_explicit_rejects_non_executable_target ... ok
+test cli_application::tests::bootstrap_rust_source_provider_action_parses_full_source_admission ... ok
+test cli_application::tests::run_binary_explicit_symlink_selects_executable_target ... ok
+test cli_application::tests::cargo_free_fixed_point_rejects_impure_mode ... ok
+test cli_application::tests::release_create_accepts_cairn_handoff_flag ... ok
+test cli_application::tests::release_function_address_bind_accepts_typed_artifact_selection ... ok
+test cli_application::tests::rust_plan_cache_requires_execution_but_off_allows_printing ... ok
+test cli_application::tests::remote_client_json_report_uses_build_report_schema_and_substitution_fields ... ok
+test cli_application::tests::bootstrap_rust_source_provider_rejects_host_tools_without_admission ... ok
+test cli_application::tests::rust_cache_serve_cli_binds_global_store_and_state ... ok
+test cli_application::tests::release_verify_accepts_provider_fixed_point_proof_flags ... ok
+test cli_application::tests::release_function_address_bind_rejects_mixed_preserves_and_explicit_selection ... ok
+test cli_application::tests::release_create_accepts_source_acquisition_url_flag ... ok
+test cli_application::tests::self_build_cli_accepts_cargo_free_fixed_point_out_dir ... ok
+test cli_application::tests::self_build_cli_accepts_cargo_free_out_dir ... ok
+test cli_application::tests::shared_rust_cache_requires_local_execution_and_explicit_trust ... ok
+test cli_application::tests::remote_status_cli_accepts_endpoint_and_concurrency ... ok
+test cli_application::tests::rust_cache_serve_cli_requires_policy_and_receipt_directory ... ok
+test cli_application::tests::release_function_address_bind_rejects_unknown_mode ... ok
+test cli_application::tests::shared_rust_signing_key_loader_requires_private_matching_keypair ... ok
+test cli_application::tests::release_create_accepts_external_evidence_flags ... ok
+test cli_application::tests::source_root_provider_store_name_uses_nix_store_hash_shape ... ok
+test cli_application::tests::source_root_provider_store_name_rejects_bad_digest ... ok
+test cli_application::tests::self_build_cli_rejects_source_built_and_legacy_cargo_free_modes_together ... ok
+test cli_application::tests::self_build_cli_accepts_cargo_free_toolchain_closure_manifest ... ok
+test cli_application::tests::self_build_cli_accepts_dev_cache_flags_without_promoting_cold_path ... ok
+test cli_application::tests::self_build_offline_source_state_requires_manifest ... ok
+test cli_application::tests::self_build_cli_rejects_toolchain_closure_without_cargo_free ... ok
+test cli_application::tests::source_bundle_hydrate_self_build_subcommand_requires_explicit_identity ... ok
+test cli_application::tests::self_build_cli_accepts_source_built_fixed_point_authority ... ok
+test cli_application::tests::self_build_offline_source_manifest_requires_source_state ... ok
+test cli_application::tests::stage0_inventory_requires_no_host_tools_mode ... ok
+test cli_application::tests::receipt_bundle_cli_accepts_trusted_public_key_flags ... ok
+test cli_application::tests::source_bundle_refresh_mantle_source_subcommand_requires_explicit_paths ... ok
+test cli_application::tests::bootstrap_capabilities_is_discoverable_and_self_build_source_root_is_not_advertised ... ok
+test cli_application::tests::release_witness_rebuild_accepts_require_independent_source_flag ... ok
+test cli_application::tests::release_transport_commands_parse ... ok
+test cli_application::tests::release_gauntlet_accepts_strict_hermeticity_regression_inputs ... ok
+test cli_application::tests::release_gauntlet_canonicalize_accepts_report_kind ... ok
+test cli_application::tests::release_witness_rebuild_rejects_conflicting_source_replay_modes ... ok
+test cli_application::tests::release_witness_rebuild_accepts_require_git_source_flag ... ok
+test cli_application::tests::build_cli_accepts_remote_builder_ticket_fd_dispatch_flags ... ok
+test cli_application::tests::self_build_cli_accepts_cargo_free_target_triple ... ok
+test cli_application::tests::release_verify_accepts_required_external_evidence_role ... ok
+test cli_application::tests::release_verify_accepts_onix_stack_release_profile ... ok
+test cli_application::tests::self_build_cli_accepts_cargo_free_rust_source_provider ... ok
+test cli_application::tests::self_build_cli_rejects_rust_source_provider_without_cargo_free ... ok
+test cli_application::tests::source_bundle_bootstrap_profile_subcommand_parses ... ok
+test cli_application::tests::self_build_cli_rejects_fixed_point_without_cargo_free ... ok
+test cli_application::tests::self_build_cli_accepts_impure_mode ... ok
+test cli_application::tests::release_content_bound_requirement_flags_parse ... ok
+test cli_application::tests::rust_plan_cli_cache_is_explicit_and_defaults_off ... ok
+test cli_application::tests::self_build_cli_accepts_promoted_checkpoint_store_and_rejects_dev_state_mix ... ok
+test cli_application::tests::bootstrap_rust_source_provider_fails_closed_without_output ... ok
+
+test result: ok. 92 passed; 0 failed; 0 ignored; 0 measured; 2487 filtered out; finished in 0.27s
+

@@ -1,0 +1,7 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root/crates/crunch-eval)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-thin-cli-composition-root)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 04s
