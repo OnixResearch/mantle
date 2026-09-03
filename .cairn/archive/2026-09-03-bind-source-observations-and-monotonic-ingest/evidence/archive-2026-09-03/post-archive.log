@@ -1,0 +1,1105 @@
+head=c0a241d0d2d4015fca4e1ac23d67e59c81c629c8
+
+$ policy export check
+policy fresh: cairn-policy/generated/cairn-policy.json
+
+$ cairn strict validate
+{
+  "change_issues": [],
+  "changes": 5,
+  "cross_repo_dependencies": [],
+  "cross_repo_evidence_issues": [],
+  "findings": [],
+  "issues": [],
+  "layout": "cairn",
+  "policy": "mantle-default",
+  "profile_issues": [],
+  "resolution": {
+    "diagnostics": [],
+    "locator_consulted": false,
+    "registry_lookup": "local_locator_only",
+    "selected": {
+      "project_identity": null,
+      "root": ".",
+      "source": "explicit_root",
+      "store_id": null,
+      "store_identity": null
+    },
+    "valid": true
+  },
+  "spec_findings": [],
+  "spec_issues": [],
+  "spec_substance": [
+    {
+      "path": "./.cairn/changes/add-dev-cache-cross-run-resume/specs/source-built-fixed-point-improved-iteration/spec.md",
+      "requirement_blocks": 2,
+      "scenario_blocks": 5,
+      "substantive_requirement_blocks": 2
+    },
+    {
+      "path": "./.cairn/changes/add-evidence-driven-resource-policy/specs/remote-builds/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 15,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./.cairn/changes/add-nix-remote-service-gateway/specs/remote-builds/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 15,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/changes/add-radiance-bootstrap-reference-fixture/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/changes/verify-remote-admission-with-trellis/specs/remote-builds/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 10,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/specs/application-architecture/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 10,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/specs/artifact-auth-adoption/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 15,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./.cairn/specs/artifact-auth-operational-receipt/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 10,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/artifact-auth-shell-verification/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 5,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 16,
+      "scenario_blocks": 80,
+      "substantive_requirement_blocks": 16
+    },
+    {
+      "path": "./.cairn/specs/bounded-tree-adoption/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 12,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/build-correctness/spec.md",
+      "requirement_blocks": 47,
+      "scenario_blocks": 112,
+      "substantive_requirement_blocks": 47
+    },
+    {
+      "path": "./.cairn/specs/build-interchange/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 10,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/build-scheduling/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 19,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/specs/build-tool-boundary/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 23,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./.cairn/specs/cache-substitution/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 36,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./.cairn/specs/cairn-input/spec.md",
+      "requirement_blocks": 2,
+      "scenario_blocks": 2,
+      "substantive_requirement_blocks": 2
+    },
+    {
+      "path": "./.cairn/specs/composition-roots/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 22,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./.cairn/specs/durable-file-publication-adoption/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./.cairn/specs/durable-publication-promotion/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 8,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./.cairn/specs/durable-publication-validation/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 10,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/specs/dynamic-derivation-admission/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 12,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/evaluation-performance/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/specs/evaluation-streaming/spec.md",
+      "requirement_blocks": 10,
+      "scenario_blocks": 22,
+      "substantive_requirement_blocks": 10
+    },
+    {
+      "path": "./.cairn/specs/examples/spec.md",
+      "requirement_blocks": 11,
+      "scenario_blocks": 24,
+      "substantive_requirement_blocks": 11
+    },
+    {
+      "path": "./.cairn/specs/external-batch-dispatchers/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 18,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./.cairn/specs/fix-nix-producer/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/specs/flake-source-inventory/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 1,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./.cairn/specs/foreign-derivation-import/spec.md",
+      "requirement_blocks": 45,
+      "scenario_blocks": 134,
+      "substantive_requirement_blocks": 45
+    },
+    {
+      "path": "./.cairn/specs/gcc40-bridge/spec.md",
+      "requirement_blocks": 2,
+      "scenario_blocks": 6,
+      "substantive_requirement_blocks": 2
+    },
+    {
+      "path": "./.cairn/specs/hardware-simulation-builds/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 17,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./.cairn/specs/i386-tinycc27/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 4,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./.cairn/specs/immutable-release-pointer/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 7,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/specs/kani-toolchain-evidence/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 11,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./.cairn/specs/kernel-bundle-oci/spec.md",
+      "requirement_blocks": 14,
+      "scenario_blocks": 30,
+      "substantive_requirement_blocks": 14
+    },
+    {
+      "path": "./.cairn/specs/kernelscript-experiment/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/specs/machine-artifact-contracts/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 9,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./.cairn/specs/mantlepkgs-catalog-structure/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 13,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./.cairn/specs/mantlepkgs-impact-evidence/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 13,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./.cairn/specs/mantlepkgs-update-plans/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 15,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/specs/mantlepkgs-version-resolution/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 15,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/specs/mantlepkgs/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/specs/nickel-export-infrastructure/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 12,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/nickel-toolchain/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 9,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/nix-producer-adapter/spec.md",
+      "requirement_blocks": 13,
+      "scenario_blocks": 29,
+      "substantive_requirement_blocks": 13
+    },
+    {
+      "path": "./.cairn/specs/operator-diagnostics/spec.md",
+      "requirement_blocks": 18,
+      "scenario_blocks": 42,
+      "substantive_requirement_blocks": 18
+    },
+    {
+      "path": "./.cairn/specs/portable-build-receipts/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./.cairn/specs/project-workflows/spec.md",
+      "requirement_blocks": 25,
+      "scenario_blocks": 83,
+      "substantive_requirement_blocks": 25
+    },
+    {
+      "path": "./.cairn/specs/realization-routing/spec.md",
+      "requirement_blocks": 20,
+      "scenario_blocks": 42,
+      "substantive_requirement_blocks": 20
+    },
+    {
+      "path": "./.cairn/specs/reconciliation-pilot/spec.md",
+      "requirement_blocks": 2,
+      "scenario_blocks": 2,
+      "substantive_requirement_blocks": 2
+    },
+    {
+      "path": "./.cairn/specs/release-provenance/spec.md",
+      "requirement_blocks": 78,
+      "scenario_blocks": 120,
+      "substantive_requirement_blocks": 78
+    },
+    {
+      "path": "./.cairn/specs/remote-builds/spec.md",
+      "requirement_blocks": 48,
+      "scenario_blocks": 137,
+      "substantive_requirement_blocks": 48
+    },
+    {
+      "path": "./.cairn/specs/rust-package-planning/spec.md",
+      "requirement_blocks": 149,
+      "scenario_blocks": 494,
+      "substantive_requirement_blocks": 149
+    },
+    {
+      "path": "./.cairn/specs/rustc-cache-adapter/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/source-built-fixed-point-improved-iteration/spec.md",
+      "requirement_blocks": 3,
+      "scenario_blocks": 7,
+      "substantive_requirement_blocks": 3
+    },
+    {
+      "path": "./.cairn/specs/source-transports/spec.md",
+      "requirement_blocks": 17,
+      "scenario_blocks": 36,
+      "substantive_requirement_blocks": 17
+    },
+    {
+      "path": "./.cairn/specs/spacewasm-reference-materialization/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./.cairn/specs/store-lifecycle/spec.md",
+      "requirement_blocks": 24,
+      "scenario_blocks": 48,
+      "substantive_requirement_blocks": 24
+    },
+    {
+      "path": "./.cairn/specs/store-transports/spec.md",
+      "requirement_blocks": 16,
+      "scenario_blocks": 46,
+      "substantive_requirement_blocks": 16
+    },
+    {
+      "path": "./.cairn/specs/vendored-snix-integration/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 11,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./.cairn/specs/verification-evidence/spec.md",
+      "requirement_blocks": 60,
+      "scenario_blocks": 181,
+      "substantive_requirement_blocks": 60
+    },
+    {
+      "path": "./.cairn/specs/wasm-component-builds/spec.md",
+      "requirement_blocks": 14,
+      "scenario_blocks": 25,
+      "substantive_requirement_blocks": 14
+    }
+  ],
+  "specs_validated": 62,
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-dev-cache-cross-run-resume/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 14,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-dev-cache-cross-run-resume/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 13,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-dev-cache-cross-run-resume/specs/source-built-fixed-point-improved-iteration/spec.md",
+      "requirement_blocks": 2,
+      "scenario_blocks": 5,
+      "substantive_lines": 26,
+      "substantive_requirement_blocks": 2,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 8,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-dev-cache-cross-run-resume/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 8,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 8,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 8
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-evidence-driven-resource-policy/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 40,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-evidence-driven-resource-policy/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 22,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-evidence-driven-resource-policy/specs/remote-builds/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 15,
+      "substantive_lines": 66,
+      "substantive_requirement_blocks": 7,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 33,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-evidence-driven-resource-policy/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 33,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 33,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 33
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-nix-remote-service-gateway/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 36,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-nix-remote-service-gateway/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 22,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-nix-remote-service-gateway/specs/remote-builds/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 15,
+      "substantive_lines": 66,
+      "substantive_requirement_blocks": 8,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 31,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-nix-remote-service-gateway/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 31,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 31,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 31
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-radiance-bootstrap-reference-fixture/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 40,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-radiance-bootstrap-reference-fixture/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 26,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-radiance-bootstrap-reference-fixture/specs/bootstrap-inventory/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 14,
+      "substantive_lines": 55,
+      "substantive_requirement_blocks": 8,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 23,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-radiance-bootstrap-reference-fixture/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 23,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 23,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 23
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/verify-remote-admission-with-trellis/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 29,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/verify-remote-admission-with-trellis/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 21,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/verify-remote-admission-with-trellis/specs/remote-builds/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 10,
+      "substantive_lines": 45,
+      "substantive_requirement_blocks": 5,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 19,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/verify-remote-admission-with-trellis/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 19,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 19,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 19
+    }
+  ],
+  "substance_findings": [],
+  "substance_issues": [],
+  "valid": true,
+  "workflow_profiles": [
+    {
+      "acceptance_ids": [],
+      "non_claims": [
+        "workflow state proves only the selected policy graph and observed structural artifact facts",
+        "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+        "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+        "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+      ],
+      "profile_identity_hash": "973f8623237ff98c0ae1ede3912647cbdcfcab067706513efb1adef97fe2a203",
+      "review_receipt_hashes": [],
+      "spec_effect": "delta",
+      "workflow_profile": "spec-driven",
+      "workflow_profile_compatibility_fallback": false,
+      "workflow_profile_source": "change_create",
+      "workflow_profile_version": 1
+    },
+    {
+      "acceptance_ids": [],
+      "non_claims": [
+        "workflow state proves only the selected policy graph and observed structural artifact facts",
+        "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+        "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+        "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+      ],
+      "profile_identity_hash": "0c25822b39d741f940a339ade4c2153624ee7838136b29702a74b371f9e7d224",
+      "review_receipt_hashes": [],
+      "spec_effect": "delta",
+      "workflow_profile": "spec-driven",
+      "workflow_profile_compatibility_fallback": false,
+      "workflow_profile_source": "change_create",
+      "workflow_profile_version": 1
+    }
+  ]
+}
+
+$ default Tracey
+{
+  "command": "traceability coverage",
+  "dangling": [],
+  "input_hash": "35e7b300b00a56533a97c8baa7537805a1390776e8a4b6abb7fa2748844aede6",
+  "missing": [],
+  "policy": "mantle-default",
+  "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+  "profile": {
+    "anchor_kind": "exact_marker_bytes",
+    "assurance_level": "declared",
+    "evidence_sources": [
+      {
+        "extensions": [
+          "rs"
+        ],
+        "root": "tools/release_provenance_tracey_refs.rs",
+        "source_kind": "rust_source"
+      }
+    ],
+    "id": "mantle-default",
+    "marker_verbs": [
+      "impl",
+      "verify",
+      "depends",
+      "related"
+    ],
+    "requirement_sources": [
+      {
+        "extensions": [
+          "md"
+        ],
+        "root": "cairn/specs/release-provenance/spec.md",
+        "source_kind": "accepted_specs"
+      }
+    ]
+  },
+  "profile_id": "mantle-default",
+  "receipt_hash": "c631db429944e383e3b659118409115d55e109fe1ce75ca9174fa5ccae770a9b",
+  "referenced": 157,
+  "requirements": 157,
+  "root": ".",
+  "source_summary": {
+    "evidence_files": 1,
+    "evidence_manifest_hash": "fa42b66aba272c50f041563713b57ff22f66bce554dc5fe3533b306c556cf5eb",
+    "requirement_files": 1,
+    "requirement_manifest_hash": "a4fe599427c9d8da3eaabbde728a73c0090cfd6de1f9f1f0d5abf949b1194609"
+  },
+  "valid": true,
+  "verdict": "pass"
+}
+
+$ source-observations Tracey
+{
+  "command": "traceability coverage",
+  "dangling": [],
+  "input_hash": "b03acd3f9e8ab4a64a34e5de31d9e4f1af26bc557682b995f59bad86d175fd85",
+  "missing": [],
+  "policy": "mantle-default",
+  "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+  "profile": {
+    "anchor_kind": "exact_marker_bytes",
+    "assurance_level": "declared",
+    "evidence_sources": [
+      {
+        "extensions": [
+          "rs"
+        ],
+        "root": "tools/source_transports_tracey_refs.rs",
+        "source_kind": "rust_source"
+      },
+      {
+        "extensions": [
+          "rs"
+        ],
+        "root": "tools/release_provenance_tracey_refs.rs",
+        "source_kind": "rust_source"
+      },
+      {
+        "extensions": [
+          "rs"
+        ],
+        "root": "tools/durable_file_publication_tracey_refs.rs",
+        "source_kind": "rust_source"
+      }
+    ],
+    "id": "source-observations",
+    "marker_verbs": [
+      "impl",
+      "verify",
+      "depends",
+      "related"
+    ],
+    "requirement_sources": [
+      {
+        "extensions": [
+          "md"
+        ],
+        "root": "cairn/specs/source-transports/spec.md",
+        "source_kind": "accepted_specs"
+      },
+      {
+        "extensions": [
+          "md"
+        ],
+        "root": "cairn/specs/release-provenance/spec.md",
+        "source_kind": "accepted_specs"
+      },
+      {
+        "extensions": [
+          "md"
+        ],
+        "root": "cairn/specs/durable-file-publication-adoption/spec.md",
+        "source_kind": "accepted_specs"
+      }
+    ]
+  },
+  "profile_id": "source-observations",
+  "receipt_hash": "537cec65347593101efdca81ee093f7069df4ca518c88f016246414d9910cf9a",
+  "referenced": 177,
+  "requirements": 177,
+  "root": ".",
+  "source_summary": {
+    "evidence_files": 3,
+    "evidence_manifest_hash": "64f93c10f79c878e7bd4dc97693b7ff949a2e1851fcb9d5571084f66666eae14",
+    "requirement_files": 3,
+    "requirement_manifest_hash": "77680aadfb076dc91e5627f2c5e2a304399b90fa7bab507d68015c76241264d9"
+  },
+  "valid": true,
+  "verdict": "pass"
+}
+
+$ source architecture
+source-observation architecture verified: findings=0 negative-fixtures=16
+
+$ machine contracts
+machine schema contract check: PASS (27 contracted, 60 classified)
+
+$ nix no-build
+evaluating flake...
+checking flake output 'packages'...
+checking derivation packages.x86_64-linux.wasi-virt...
+derivation evaluated to /nix/store/cacsszdc86gnw4lccv1kiwip8dljz8r9-wasi-virt-0.2.0.drv
+checking derivation packages.x86_64-linux.default...
+derivation evaluated to /nix/store/wx3fm3dz4x71lrxgkm1r6gyxmkljiplx-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.crunch...
+derivation evaluated to /nix/store/wx3fm3dz4x71lrxgkm1r6gyxmkljiplx-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.ast-grep-toolchain...
+derivation evaluated to /nix/store/hwz43xm09gs5v38a4pfyc2dhs5n9h1pj-mantle-ast-grep-toolchain-0.42.1.drv
+checking derivation packages.x86_64-linux.ast-grep-package-identity...
+derivation evaluated to /nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv
+checking derivation packages.x86_64-linux.nickel...
+derivation evaluated to /nix/store/mgf4mizpx3zngjhbqpj4cdz6zn1wp7f3-nickel-lang-rev-fixup-1.17.0.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain...
+derivation evaluated to /nix/store/skwkzzc8khiw49fjp2l73d5m4x4m88y6-mantle-wasm-component-toolchain-v1.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-identity...
+derivation evaluated to /nix/store/nrf64w472p89kb8q03zw8wf5hx0198c0-mantle-wasm-component-toolchain-identity.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-compatibility...
+derivation evaluated to /nix/store/lax220sgd6bf2raarrl38cg9clbdgspm-mantle-wasm-component-toolchain-compatibility.drv
+checking derivation packages.x86_64-linux.mantle-transcript-quality...
+derivation evaluated to /nix/store/1vz34zrjiqmy124hf1nzjpcxvalwxydg-mantle-transcript-quality-nextest-0.1.0.drv
+checking derivation packages.x86_64-linux.release-nix-witness-quality...
+derivation evaluated to /nix/store/jgsq0311hvnwq1fzajlwwr8xkrbjisia-crunch-release-nix-witness-quality-nextest-0.1.0.drv
+checking derivation packages.x86_64-linux.check-nickel-configs...
+derivation evaluated to /nix/store/srbs2g56q3d7mcsyhfcjxndn3hh4byrc-check-nickel-configs.drv
+checking derivation packages.x86_64-linux.check-store-retention-policy...
+derivation evaluated to /nix/store/i1pqkin9jgwqzkrlh34qqgrqy6r47ijs-check-store-retention-policy.drv
+checking derivation packages.x86_64-linux.check-store-overlay-policy...
+derivation evaluated to /nix/store/9wbldpqaq54qvhdar9az2s7wy8mhx2f2-check-store-overlay-policy.drv
+checking derivation packages.x86_64-linux.oci-distribution-registry...
+derivation evaluated to /nix/store/7h1b5w2s2gqhb0dgmiydw4xcl2blxnnv-distribution-3.1.0.drv
+checking derivation packages.x86_64-linux.rustc-wrapper...
+derivation evaluated to /nix/store/k7hz8sjhv25zxhm2a56sp7zpli2743a8-mantle-rustc-wrapper-0.1.0.drv
+checking derivation packages.x86_64-linux.kernelscript-compiler...
+derivation evaluated to /nix/store/z1dps3ryzhmn8iyx6jnpfyxfqlnzqpzq-ocaml5.2.1-kernelscript-0.1.2.drv
+checking derivation packages.x86_64-linux.kernelscript-core-adapter...
+derivation evaluated to /nix/store/r19rd938089nj637j56r7gjivpzvgrn3-crunch-kernelscript-adapter-0.1.0.drv
+checking derivation packages.x86_64-linux.kernelscript-production...
+derivation evaluated to /nix/store/rrw1959vibfxsl1algg0laf9a3viij9g-mantle-kernelscript-production-artifacts.drv
+checking derivation packages.x86_64-linux.kernelscript-production-cohort...
+derivation evaluated to /nix/store/l8dij8m9jcrr8wakhl2cvh9cvh7m0wg6-mantle-kernelscript-production-cohort.drv
+checking derivation packages.x86_64-linux.kernelscript-production-shell...
+derivation evaluated to /nix/store/z9k4ydrrfl3j9bf294py9xzri5bs5glh-mantle-kernelscript-production.drv
+checking derivation packages.x86_64-linux.kernelscript-production-runtime-check...
+derivation evaluated to /nix/store/w4zvrknib442kj8k01aiv0b60zrsv1pf-vm-test-run-mantle-kernelscript-production-runtime.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-bundle...
+derivation evaluated to /nix/store/58mdyyk7wnymnnd7bzfakqrpi0b1ny59-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-bundler...
+derivation evaluated to /nix/store/5zy41qxrhp4yi8s31fnvbvw1s3aibcpw-mantle-spacewasm-reference-bundler-0.1.0.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-evidence...
+derivation evaluated to /nix/store/imiig80j09fxg2nv2qkyrw4zzmazj9j9-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-evidence.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-rust-toolchain...
+derivation evaluated to /nix/store/ib3maa2zj4d9ikmlx4x15xaiz9vxh55r-rust-minimal-1.91.1.drv
+checking flake output 'apps'...
+checking app 'apps.x86_64-linux.tigerstyle'...
+warning: app 'apps.x86_64-linux.tigerstyle' lacks attribute 'meta'
+checking flake output 'checks'...
+checking derivation checks.x86_64-linux.tigerstyle...
+derivation evaluated to /nix/store/az3p9ldrg3y3p669rqgxk7qggb178rcv-tigerstyle-consumer-check.drv
+checking derivation checks.x86_64-linux.crunch...
+derivation evaluated to /nix/store/wx3fm3dz4x71lrxgkm1r6gyxmkljiplx-mantle-0.1.0.drv
+checking derivation checks.x86_64-linux.ast-grep-package-identity...
+derivation evaluated to /nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv
+checking derivation checks.x86_64-linux.wasm-component-toolchain-identity...
+derivation evaluated to /nix/store/nrf64w472p89kb8q03zw8wf5hx0198c0-mantle-wasm-component-toolchain-identity.drv
+checking derivation checks.x86_64-linux.wasm-component-toolchain-compatibility...
+derivation evaluated to /nix/store/lax220sgd6bf2raarrl38cg9clbdgspm-mantle-wasm-component-toolchain-compatibility.drv
+checking derivation checks.x86_64-linux.mantle-transcript-quality...
+derivation evaluated to /nix/store/1vz34zrjiqmy124hf1nzjpcxvalwxydg-mantle-transcript-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.release-nix-witness-quality...
+derivation evaluated to /nix/store/jgsq0311hvnwq1fzajlwwr8xkrbjisia-crunch-release-nix-witness-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.kernelscript-production...
+derivation evaluated to /nix/store/d50zb1dlwn6fagp30l73jx18ycbi6f0l-mantle-kernelscript-production-structural-check.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-bundle...
+derivation evaluated to /nix/store/58mdyyk7wnymnnd7bzfakqrpi0b1ny59-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv
+checking derivation checks.x86_64-linux.bounded-tree-source-admission...
+derivation evaluated to /nix/store/h0b0x4agvmgi64np59f12989wxlpclin-mantle-bounded-tree-source-admission.drv
+checking derivation checks.x86_64-linux.transactional-reconciliation-source-admission...
+derivation evaluated to /nix/store/kagvbzbndw38z0j5rivxr6dzwrw98bxz-mantle-transactional-reconciliation-source-admission.drv
+checking derivation checks.x86_64-linux.bootstrap-blocker-inventory...
+derivation evaluated to /nix/store/idvpankqfqrid9ckvjpacbajsfqd3bbv-bootstrap-blocker-inventory.drv
+checking derivation checks.x86_64-linux.nickel-cohort...
+derivation evaluated to /nix/store/vrw9i3dbsn75j0jgiq2qnc645mml1q1f-mantle-nickel-cohort-check-0.1.0.drv
+checking derivation checks.x86_64-linux.nickel-export-core-pin...
+derivation evaluated to /nix/store/kxx2i90an1303j6pw14wr7qx7mkp6a0r-mantle-nickel-export-core-pin.drv
+checking derivation checks.x86_64-linux.store-capability-architecture...
+derivation evaluated to /nix/store/y3qiwgi5nv3927mzdzf8inn9dq36jbjs-mantle-store-capability-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.remote-hexagon-architecture...
+derivation evaluated to /nix/store/q3mh7w0hmx7m0bbdiz00fj7sg57lxgad-mantle-remote-hexagon-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.rust-plan-hexagon-architecture...
+derivation evaluated to /nix/store/cbl555dykdwk7kns1hil44wdr1nniiyr-mantle-rust-plan-hexagon-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.build-planning-architecture...
+derivation evaluated to /nix/store/xs47nrgnfqj64lhb2hw1x6ljbnkaiai4-mantle-build-planning-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.cli-application-architecture...
+derivation evaluated to /nix/store/d3jj7csnzx0vwifdyfimxc4jrv0cxz66-mantle-cli-application-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.source-observation-architecture...
+derivation evaluated to /nix/store/fvgay265m14asrs6yi7nxf8v8gi9nn5j-mantle-source-observation-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.content-bound-requirement-source-closure...
+derivation evaluated to /nix/store/jjdavih7ly0sdl69zkp0mrgmrm47xd1j-mantle-content-bound-requirement-source-closure.drv
+checking derivation checks.x86_64-linux.content-bound-requirement-evidence...
+derivation evaluated to /nix/store/7nvcqdj360zn7whxnzma3zm607nfvlqa-mantle-content-bound-requirement-evidence.drv
+checking derivation checks.x86_64-linux.store-retention-policy...
+derivation evaluated to /nix/store/08s9ws3slxllmm3i2phzs65aarlqr47x-mantle-store-retention-policy.drv
+checking derivation checks.x86_64-linux.store-overlay-policy...
+derivation evaluated to /nix/store/j66w11kjgdaixsrdc6kga9zlq75r5iws-mantle-store-overlay-policy.drv
+checking derivation checks.x86_64-linux.release-determinism-quality...
+derivation evaluated to /nix/store/gq8nvsbdcmwqd89rz71aim0ws22i7kqr-crunch-release-determinism-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.artifact-auth-radicle-cutover...
+derivation evaluated to /nix/store/pgrbjgbzbmq3shjwbd8y35vbd7injdva-mantle-artifact-auth-radicle-cutover.drv
+checking derivation checks.x86_64-linux.durable-file-publication-adoption...
+derivation evaluated to /nix/store/dnmy3mbw68v5g499lwh585v84fjyaiwd-mantle-durable-file-publication-adoption.drv
+checking derivation checks.x86_64-linux.remote-core...
+derivation evaluated to /nix/store/n7jx2rfh9nmzfslssz65bl19k3sa8knl-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.remote-core-wasm...
+derivation evaluated to /nix/store/las8vr9560bmsi83bpspsxbv7qxlpmn9-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.rust-plan-core...
+derivation evaluated to /nix/store/kzv3mhaidnjn46xgiv7gb93442kbcz4g-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.rust-plan-core-wasm...
+derivation evaluated to /nix/store/4v3f2jv839csbzcbkna60cx7ln7rg6an-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.build-planning-core...
+derivation evaluated to /nix/store/2spiirj4ichkrm7zzkh5ddp3fcmqh415-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.build-planning-core-wasm...
+derivation evaluated to /nix/store/69bz6gw58xlgv9gnyixbbzknl0xlqk4k-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.application-core...
+derivation evaluated to /nix/store/wynryqfn1i4hln1h8ys7g0w7qmsqlvmr-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.application-core-wasm...
+derivation evaluated to /nix/store/xd292pa8qd8kxrsxbri3vr2dl93zn0rx-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.source-core...
+derivation evaluated to /nix/store/dcfwxv0g5zgzplwiwqlmx5nq3nb0nvxn-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.source-core-wasm...
+derivation evaluated to /nix/store/v37pnfj5v2d2ba4zmb6vijq5jyi4cwak-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract...
+derivation evaluated to /nix/store/hj8rfb4s4iqx68glkbqgamp9li6cn94g-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract-wasm...
+derivation evaluated to /nix/store/15ad3wqk3mk9y7h9zjn8s8h4psq8ibas-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract-nickel...
+derivation evaluated to /nix/store/iqm9gxgy7gwpv857lh9li89r4yv2ssi8-mantle-build-contract-nickel.drv
+checking derivation checks.x86_64-linux.nextest...
+derivation evaluated to /nix/store/z3gcnfbfmw709zy5rf1ajkmglskr0lp3-mantle-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.clippy...
+derivation evaluated to /nix/store/zm934ka9dpilcg6135wkx4blm259kswb-mantle-clippy-0.1.0.drv
+checking derivation checks.x86_64-linux.fmt...
+derivation evaluated to /nix/store/p2sn6cwfks7z1hak8ripysw3qchzk3jb-mantle-fmt-0.1.0.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-profile...
+derivation evaluated to /nix/store/l7afrlfqdkbk2kr6cc4b3cz71mfvyqgr-spacewasm-reference-profile-export.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-host-library...
+derivation evaluated to /nix/store/w4jrclscwbypndanjqk3q80n0ms9vmq7-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-host-library.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-wasm-library...
+derivation evaluated to /nix/store/55qq4aiiy3kl1vn7m0m6bhbwkrj8viin-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-wasm-library.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-host-runner...
+derivation evaluated to /nix/store/nhq1j51vr6f2c3hyizpym9gqv7kdlyhg-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-diagnostic-runner.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-upstream-unit-tests...
+derivation evaluated to /nix/store/d32qk66pm2qmpp0dbjqsyv9v0qcyrn63-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-unit-tests.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-spectest-address...
+derivation evaluated to /nix/store/idj54q1da8w21x0c59p8ay7vxnh2gin6-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-spectest-address.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-fixtures...
+derivation evaluated to /nix/store/1i1y5ni7ivf7bnhdb2z8i0kpsbkl0x2j-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-fixture-report.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-negative...
+derivation evaluated to /nix/store/6p0ana9vradxplf1as1rb12n67am2gdr-mantle-spacewasm-reference-negative-check.drv
+checking flake output 'devShells'...
+checking derivation devShells.x86_64-linux.default...
+derivation evaluated to /nix/store/79yv04c8ffnzjj4jjgkrnr9adhf084im-nix-shell.drv
+all checks passed!
+warning: The check omitted these incompatible systems: aarch64-darwin, aarch64-linux, x86_64-darwin
+Use '--all-systems' to check all.
+
+$ focused post-archive Nix builds
+these 3 derivations will be built:
+  /nix/store/dnmy3mbw68v5g499lwh585v84fjyaiwd-mantle-durable-file-publication-adoption.drv
+  /nix/store/fvgay265m14asrs6yi7nxf8v8gi9nn5j-mantle-source-observation-architecture-check-0.1.0.drv
+  /nix/store/p2sn6cwfks7z1hak8ripysw3qchzk3jb-mantle-fmt-0.1.0.drv
+building '/nix/store/dnmy3mbw68v5g499lwh585v84fjyaiwd-mantle-durable-file-publication-adoption.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/p2sn6cwfks7z1hak8ripysw3qchzk3jb-mantle-fmt-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/fvgay265m14asrs6yi7nxf8v8gi9nn5j-mantle-source-observation-architecture-check-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+copying 1 paths...
+copying path '/nix/store/k8m0vyawxlbbhypzwdjq028gnmw5f2g4-source' to 'ssh-ng://root@aspen1.local'...
+building '/nix/store/dnmy3mbw68v5g499lwh585v84fjyaiwd-mantle-durable-file-publication-adoption.drv'...
+copying 1 paths...
+copying path '/nix/store/lbpq04nsgp3bmkkd6m7c93f4zv5f4j0z-mantle-durable-file-publication-adoption' from 'ssh-ng://root@aspen1.local'...
+copying 1 paths...
+copying path '/nix/store/ihbvmmav2gmad7nnnrkciij3j9v4c7ng-source' to 'ssh-ng://root@aspen1.local'...
+building '/nix/store/p2sn6cwfks7z1hak8ripysw3qchzk3jb-mantle-fmt-0.1.0.drv'...
+mantle-fmt> cargoVendorDir not set, will not automatically configure vendored sources
+mantle-fmt> cargoArtifacts not set, will not reuse any cargo artifacts
+mantle-fmt> Running phase: unpackPhase
+mantle-fmt> unpacking source archive /nix/store/ihbvmmav2gmad7nnnrkciij3j9v4c7ng-source
+building '/nix/store/fvgay265m14asrs6yi7nxf8v8gi9nn5j-mantle-source-observation-architecture-check-0.1.0.drv'...
+mantle-source-observation-architecture-check> cargoArtifacts not set, will not reuse any cargo artifacts
+mantle-source-observation-architecture-check> Running phase: unpackPhase
+mantle-source-observation-architecture-check> unpacking source archive /nix/store/ihbvmmav2gmad7nnnrkciij3j9v4c7ng-source
+mantle-fmt> source root is source
+mantle-source-observation-architecture-check> source root is source
+mantle-fmt> Running phase: patchPhase
+mantle-fmt> Executing configureCargoCommonVars
+mantle-fmt> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-source-observation-architecture-check> Running phase: patchPhase
+mantle-source-observation-architecture-check> Executing configureCargoCommonVars
+mantle-source-observation-architecture-check> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-fmt> Running phase: configurePhase
+mantle-fmt> default configurePhase, nothing to do
+mantle-fmt> Running phase: buildPhase
+mantle-source-observation-architecture-check> Running phase: configurePhase
+mantle-fmt> +++ command cargo --version
+mantle-source-observation-architecture-check> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-source-observation-architecture-check> default configurePhase, nothing to do
+mantle-source-observation-architecture-check> Running phase: buildPhase
+mantle-source-observation-architecture-check> +++ command cargo --version
+mantle-source-observation-architecture-check> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-fmt> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-source-observation-architecture-check> +++ command cargo -Zscript --offline scripts/check-source-observation-architecture.rs --self-test
+mantle-fmt> +++ command cargo fmt -p mantle -p crunch-action-result-core -p crunch-composition-core -p crunch-nar -p mantlepkgs-core -p mantle-portable-client-core -p mantle-build-contract -p crunch-attestation -p crunch-attestation-core -p crunch-build -p crunch-build-planning-core -p crunch-source-core -p crunch-delta -p crunch-delta-core -p crunch-eval -p crunch-eval-budget-core -p crunch-evaluation-stream-core -p crunch-glue -p crunch-gc-core -p crunch-overlay-core -p crunch-hardware-simulation-core -p crunch-hardware-simulation -p crunch-kernelscript-core -p crunch-kernelscript-adapter -p crunch-spacewasm-core -p crunch-spacewasm -p crunch-pipeline -p crunch-project -p crunch-project-core -p crunch-release-core -p crunch-remote-core -p crunch-remote -p mantle-rust-plan-core -p mantle-rust-plan -p mantle-application-core -p mantle-application -p crunch-repair-core -p crunch-rust-cache-core -p crunch-rust-cache -p crunch-rustc-wrapper -p crunch-shell -p crunch-shell-core -p crunch-store -p crunch-wasm-component-core -p crunch-wasm-component -- --check
+mantle-source-observation-architecture-check>    Compiling check-source-observation-architecture v0.0.0 (/build/source/scripts/check-source-observation-architecture.rs)
+mantle-source-observation-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.51s
+mantle-source-observation-architecture-check>      Running `.cargo-home/build/11/32081362ee7ca6/target/debug/check-source-observation-architecture --self-test`
+mantle-source-observation-architecture-check> source-observation architecture verified: findings=0 negative-fixtures=16
+mantle-source-observation-architecture-check> +++ command cargo -Zscript --offline scripts/check-source-observation-architecture.rs --root .
+mantle-source-observation-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+mantle-source-observation-architecture-check>      Running `.cargo-home/build/11/32081362ee7ca6/target/debug/check-source-observation-architecture --root .`
+mantle-source-observation-architecture-check> source-observation architecture verified: findings=0 negative-fixtures=16
+mantle-source-observation-architecture-check> Running phase: installPhase
+mantle-source-observation-architecture-check> Running phase: fixupPhase
+mantle-source-observation-architecture-check> shrinking RPATHs of ELF executables and libraries in /nix/store/r6mnb5gbmixdj3yyy8drwfi6y9bj6vgy-mantle-source-observation-architecture-check-0.1.0
+mantle-source-observation-architecture-check> checking for references to /build/ in /nix/store/r6mnb5gbmixdj3yyy8drwfi6y9bj6vgy-mantle-source-observation-architecture-check-0.1.0...
+mantle-source-observation-architecture-check> patching script interpreter paths in /nix/store/r6mnb5gbmixdj3yyy8drwfi6y9bj6vgy-mantle-source-observation-architecture-check-0.1.0
+copying 1 paths...
+copying path '/nix/store/r6mnb5gbmixdj3yyy8drwfi6y9bj6vgy-mantle-source-observation-architecture-check-0.1.0' from 'ssh-ng://root@aspen1.local'...
+mantle-fmt> Running phase: ensureTargetDir
+mantle-fmt> Running phase: installPhase
+mantle-fmt> no previous artifacts found, compressing and installing full archive of target to /nix/store/hy0w20z63y2yfzxkl2h8sjd3gdnhwn5s-mantle-fmt-0.1.0/target.tar.zst
+mantle-fmt> /*stdin*\            :  0.72%   (  10.0 KiB =>     74 B, /nix/store/hy0w20z63y2yfzxkl2h8sjd3gdnhwn5s-mantle-fmt-0.1.0/target.tar.zst)
+mantle-fmt> Running phase: fixupPhase
+mantle-fmt> shrinking RPATHs of ELF executables and libraries in /nix/store/hy0w20z63y2yfzxkl2h8sjd3gdnhwn5s-mantle-fmt-0.1.0
+mantle-fmt> checking for references to /build/ in /nix/store/hy0w20z63y2yfzxkl2h8sjd3gdnhwn5s-mantle-fmt-0.1.0...
+mantle-fmt> patching script interpreter paths in /nix/store/hy0w20z63y2yfzxkl2h8sjd3gdnhwn5s-mantle-fmt-0.1.0
+copying 1 paths...
+copying path '/nix/store/hy0w20z63y2yfzxkl2h8sjd3gdnhwn5s-mantle-fmt-0.1.0' from 'ssh-ng://root@aspen1.local'...
+
+$ diff check

@@ -17,7 +17,7 @@
   },
   "evidence": [
     "cairn/archive/1970-01-01-adopt-durable-file-publication/evidence/validation.md",
-    ".cairn/changes/bind-source-observations-and-monotonic-ingest/evidence/implementation-2026-09-03/summary.md",
+    ".cairn/archive/2026-09-03-bind-source-observations-and-monotonic-ingest/evidence/implementation-2026-09-03/summary.md",
     "evidence/radicle/durable-file-publication-adoption-v1.json",
     "durable-file-publication:cairn/archive/2026-07-27-establish-durable-file-publication/evidence/validation.md",
     "onix-core:cairn/archive/1970-01-01-admit-durable-file-publication-radicle-source/evidence/declarative-deployment-2026-07-27.md"

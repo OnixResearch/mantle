@@ -43,7 +43,9 @@ The command completed with status `0`.
 
 The refreshed durable-publication adoption receipt has BLAKE3:
 
-`63befee881c12c4edda0b8c523e81e325b632d8b32dc6d454559866d37b092f5`
+Pre-archive receipt: `63befee881c12c4edda0b8c523e81e325b632d8b32dc6d454559866d37b092f5`.
+
+Post-archive receipt: `72dfadbf2e37c35f1e780c9bd578355601bd0de5c56969f7d6eb7a79615e772e`.
 
 ## Broader test boundary
 
