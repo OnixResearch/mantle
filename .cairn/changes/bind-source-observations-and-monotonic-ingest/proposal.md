@@ -14,6 +14,7 @@ Mantle needs those relations without becoming a package registry, treating a URL
 - Give source observations a domain-separated canonical BLAKE3 identity.
 - Add a pure ingest planner with add, identical reuse, conflict rejection, and invalid rejection outcomes.
 - Make successful source ingest monotonic and make every rejected ingest preserve durable state.
+- Extend the pinned durable-file-publication adoption from remote-attempt objects to immutable source records, observation sidecars, and pins.
 - Preserve source-bundle v1 reading and accepted existing identities through explicit compatibility projection.
 - Bind accepted source-observation identity into release evidence without adding a separate source signature.
 - Keep package ownership, package names, versions, and publisher authority outside Mantle.
@@ -34,7 +35,7 @@ Mantle needs those relations without becoming a package registry, treating a URL
 
 ## Impact
 
-- **Affected specs:** `source-transports`, `release-provenance`
+- **Affected specs:** `source-transports`, `release-provenance`, `durable-file-publication-adoption`
 - **Affected code:** a new pure source core, source bundle adapters, release evidence projection, and focused project/fetch adapters
 - **Compatibility:** v1 source bundles remain readable; new observations use an explicit versioned contract
 - **Testing:** canonical identity, malformed input, monotonic ingest, atomic failure, compatibility, release linkage, and Cairn gates

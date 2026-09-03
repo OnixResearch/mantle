@@ -199,7 +199,7 @@ let Registry = {
         "contract_blake3"= "612db8a8461f534e1ae1b968d649144a07afd26e078f3525d17539a507646033",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "2cb9e85a6ebc6a7c062c2b414bd80e59e26140bacfd892e0746e8b478419f080",
-        "producer_identity_blake3"= "38cd88a6e82d44af7766ab22e6b5e5d6c819369b34137ddf97a9093fef3efe20",
+        "producer_identity_blake3"= "72ce4aa3b8cc15f5160355ad6ba23807db352571d981503001fe6969f66fd406",
         "consumer_policy_blake3"= "bc396936e67b37d8e9d42a1017e260d55c78a5c96a9accab2e635d21bbee41e2"
       },
       "non_claims"= [

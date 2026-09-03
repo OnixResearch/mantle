@@ -56,6 +56,13 @@ r[source_transports.monotonic_ingest] Mantle MUST plan source ingest as add, ide
 - **THEN** the planner MUST return identical reuse
 - **AND** the shell MUST perform no content replacement or duplicate publication
 
+#### Scenario: Committed source durability is unknown
+
+- **GIVEN** create-new rename committed and parent synchronization then failed
+- **WHEN** Mantle maps the shared publication result
+- **THEN** it MUST retain the visible destination and report committed durability unknown
+- **AND** it MUST NOT classify the result as rejection, durable success, or authorization to replace prior state
+
 #### Scenario: Existing identity names different content
 
 - **GIVEN** an incoming record reuses an admitted semantic identity with different canonical provenance or payload bytes

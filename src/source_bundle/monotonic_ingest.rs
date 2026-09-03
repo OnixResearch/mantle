@@ -406,12 +406,14 @@ fn interpret_durable_publication(
         DurablePublicationDisposition::NotCommitted { failure, cleanup } => {
             Err(RunError::Internal(format!("{label} was not committed: failure={failure:?} cleanup={cleanup:?}")))
         }
-        DurablePublicationDisposition::CommittedVisibilityOnly
-        | DurablePublicationDisposition::CommittedDurabilityUnknown => {
-            let parent = target.parent().ok_or_else(|| RunError::Internal(format!("{label} has no parent")))?;
-            let primary = RunError::Internal(format!("{label} publication durability was not established"));
-            Err(cleanup_failed_publication(target, parent, label, primary))
-        }
+        DurablePublicationDisposition::CommittedVisibilityOnly => Err(RunError::Internal(format!(
+            "{label} publication committed visibility without the required payload and parent durability: {}",
+            target.display()
+        ))),
+        DurablePublicationDisposition::CommittedDurabilityUnknown => Err(RunError::Internal(format!(
+            "{label} publication committed with unknown parent durability and was retained: {}",
+            target.display()
+        ))),
     }
 }
 
@@ -508,6 +510,7 @@ fn finish_created_publication(target: &Path, parent: &Path, label: &str) -> Resu
     Ok(PublishDisposition::Created)
 }
 
+#[cfg(not(target_os = "linux"))]
 fn cleanup_failed_publication(target: &Path, parent: &Path, label: &str, primary: RunError) -> RunError {
     match fs::remove_file(target) {
         Ok(()) => match sync_parent(parent, label) {
@@ -710,6 +713,25 @@ mod tests {
         assert_eq!(reused, super::PublishDisposition::ExistingEqual);
         assert!(conflict.to_string().contains("conflicts"));
         assert_eq!(std::fs::read(&target).unwrap(), first_bytes);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn committed_unknown_destination_is_retained_for_recovery() {
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("source.json");
+        let expected = b"committed-source";
+        std::fs::write(&target, expected).unwrap();
+        let error = super::interpret_durable_publication(
+            &target,
+            expected,
+            "test source",
+            &durable_file_publication::core::PublicationDisposition::CommittedDurabilityUnknown,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("committed with unknown parent durability"));
+        assert_eq!(std::fs::read(&target).unwrap(), expected);
+        assert!(target.is_file());
     }
 
     #[cfg(target_os = "linux")]

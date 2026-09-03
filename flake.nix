@@ -1672,6 +1672,10 @@
                 rg -Fq 'ImmutablePublicationBackend::Legacy' src/remote_attempt_log_store.rs
                 rg -Fq 'CommittedDurabilityUnknown' src/remote_attempt_log_store.rs
                 rg -Fq 'commit_manifest_with_hook' src/remote_attempt_log_store.rs
+                rg -Fq 'publish_one_file' src/source_bundle/monotonic_ingest.rs
+                rg -Fq 'ReplacementMode::NoReplace' src/source_bundle/monotonic_ingest.rs
+                rg -Fq 'DurabilityMode::DurabilityRequired' src/source_bundle/monotonic_ingest.rs
+                rg -Fq 'CommittedDurabilityUnknown' src/source_bundle/monotonic_ingest.rs
 
                 touch "$out"
               '';

@@ -18,7 +18,7 @@
 ## Phase 3: Source and release shells
 
 - [ ] [serial] I9 Adapt fixed URL, Git, local logical source, package mirror, and opaque adapter inputs into admitted source observations. r[source_transports.source_observations.contract] r[source_transports.source_observations.locator_boundary]
-- [ ] [serial] I10 Apply add plans through staged create-new publication, make identical reuse write-free, and preserve all durable state on rejection or interruption. r[source_transports.monotonic_ingest]
+- [ ] [serial] I10 Apply add plans through the pinned durable-file-publication component, make identical reuse write-free, preserve all durable state before commit, and retain committed-unknown destinations. r[source_transports.monotonic_ingest] r[mantle.durable_file_publication.mapping] r[mantle.durable_file_publication.outcomes]
 - [ ] [serial] I11 Bind source observation identity into release evidence and the existing release-attestation signature without adding a new signer role. r[mantle.release_provenance.source_observation_binding] r[mantle.release_provenance.source_observation_signature_boundary]
 - [ ] [serial] I12 Add versioned machine-contract and Nickel review-contract updates for the new source observation and release binding. r[source_transports.source_observations.contract] r[mantle.release_provenance.source_observation_binding]
 
@@ -26,7 +26,7 @@
 
 - [ ] [parallel] V2 Add positive canonicalization, rematerialization, mirror-equivalence, add, identical-reuse, legacy compatibility, and release-binding fixtures. r[source_transports.source_observations.contract] r[source_transports.monotonic_ingest] r[mantle.release_provenance.source_observation_binding]
 - [ ] [parallel] V3 Add negative fixtures for mutable-ref drift, wrong revision, unsafe projection, unsupported profile, secret-bearing locator, malformed digest, contradictory fields, and incomplete legacy provenance. r[source_transports.source_observations.contract] r[source_transports.source_observations.locator_boundary] r[source_transports.source_observations.compatibility]
-- [ ] [parallel] V4 Add mutation and interruption tests proving rejected or interrupted ingest leaves records, payloads, pins, roots, readiness, and release evidence unchanged. r[source_transports.monotonic_ingest]
+- [ ] [parallel] V4 Add mutation and interruption tests proving rejected or pre-commit interrupted ingest leaves records, payloads, pins, roots, readiness, and release evidence unchanged. r[source_transports.monotonic_ingest]
 - [ ] [parallel] V5 Add negative release fixtures for stale observation identity, stale source bytes, wrong profile, unknown source signature, and cross-role signature substitution. r[mantle.release_provenance.source_observation_binding] r[mantle.release_provenance.source_observation_signature_boundary]
 - [ ] [parallel] V6 Add golden v1 and new-version wire, canonical-byte, manifest, observation, and release-identity fixtures. r[source_transports.source_observations.compatibility]
 

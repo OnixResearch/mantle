@@ -5,16 +5,19 @@
     "product_policy_retained": true,
     "retention_retained": true,
     "shared_deletion_authority": false,
-    "shared_release_authority": false
+    "shared_release_authority": false,
+    "source_ingest_policy_retained": true,
+    "source_readiness_retained": true
   },
   "cargo": {
-    "lock_blake3": "16084ff2974c4e02b962c6aef54bf8141ccfe8d77aea2276f6eb3b98df8e611a",
+    "lock_blake3": "1075382c6a2dfd36012e83d3055d79c29cf14e0c38a2007564d7773bc5af74a0",
     "lock_source": "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f59003cea9bfdb40ed4d89653d50fada1f",
-    "manifest_blake3": "1e60104546bc1c1b5ec36fb80dede4087746b4c83fdf48d6941dab7207d4fd8d",
+    "manifest_blake3": "440b9d457cd07cb1f31d65a860e449d3578078ef3bd426c9f1b0242069907de0",
     "package": "durable-file-publication"
   },
   "evidence": [
     "cairn/archive/1970-01-01-adopt-durable-file-publication/evidence/validation.md",
+    ".cairn/changes/bind-source-observations-and-monotonic-ingest/evidence/implementation-2026-09-03/summary.md",
     "evidence/radicle/durable-file-publication-adoption-v1.json",
     "durable-file-publication:cairn/archive/2026-07-27-establish-durable-file-publication/evidence/validation.md",
     "onix-core:cairn/archive/1970-01-01-admit-durable-file-publication-radicle-source/evidence/declarative-deployment-2026-07-27.md"
@@ -29,6 +32,8 @@
     "consumer_surfaces": [
       "manifest",
       "content-equivalence",
+      "source-ingest",
+      "source-readiness",
       "retention",
       "deletion",
       "receipts",
@@ -48,11 +53,14 @@
     "replacement": "no-replace",
     "shared_surfaces": [
       "remote-attempt-segment",
-      "remote-attempt-anchor"
+      "remote-attempt-anchor",
+      "source-record",
+      "source-observation",
+      "source-pin"
     ]
   },
   "nix": {
-    "flake_blake3": "0b9c2af14df3bd8f5845ad42cc31ec50e9228defe7ff0cb70f6e85759d527e9b",
+    "flake_blake3": "1c096dc203adbd8147d8a102da8f692cb1aeaac32200f5720ce2c0878b9f6a9e",
     "lock_blake3": "9ce3960a702c3aaacf8010cb24a23d5c7646536445144e3cc64137d6cfb76bd3",
     "locked_rev": "951c27f59003cea9bfdb40ed4d89653d50fada1f",
     "locked_url": "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git",
@@ -64,6 +72,7 @@
     "durable-file-publication-source-correctness",
     "whole-mantle-behavior-correctness",
     "remote-attempt-log-semantic-correctness",
+    "source-state-semantic-correctness",
     "manifest-publication-adoption",
     "release-bundle-publication-adoption",
     "android-execution",
@@ -71,7 +80,7 @@
     "release-readiness",
     "retention-or-deletion-authority"
   ],
-  "observed_date": "2026-07-27",
+  "observed_date": "2026-09-03",
   "platforms": {
     "executed": [
       "x86_64-linux"
@@ -112,6 +121,8 @@
     "shared_corpus_cases": 17,
     "source_agreement_negative": "passed",
     "source_agreement_positive": "passed",
+    "source_ingest_test_count": 16,
+    "source_ingest_tests": "passed",
     "tigerstyle": "passed"
   }
 }

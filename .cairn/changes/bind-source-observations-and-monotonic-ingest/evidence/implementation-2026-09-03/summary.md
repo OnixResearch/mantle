@@ -34,7 +34,7 @@ This keeps review evidence and the release observation on the same source conten
 The current working source passed these focused checks:
 
 - `crunch-source-core`: 17 tests;
-- source-bundle and ingest: 102 tests;
+- source-bundle and ingest: 104 tests;
 - `crunch-release-core`: 269 tests and one compile-fail doctest;
 - release-source shell: 7 tests;
 - witness source-acquisition shell: 6 tests;
@@ -44,6 +44,7 @@ The current working source passed these focused checks:
 - source-core WASM check;
 - strict source-core, release-core, and touched root Clippy checks;
 - source-core Tiger Style check;
+- source-observation shell adapter: 16 focused tests;
 - source-observation architecture check with 16 negative fixtures;
 - machine contracts: 27 contracted and 60 classified surfaces.
 

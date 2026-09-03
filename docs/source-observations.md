@@ -62,9 +62,13 @@ It stages data, synchronizes it, and uses no-replace publication.
 The Linux adapter uses `durable-file-publication` revision `951c27f59003cea9bfdb40ed4d89653d50fada1f`.
 It never replaces an admitted source record or pin.
 
-A failed planned import removes files that the same operation created.
+A pre-commit failed import removes files that the same operation created.
 Existing records, payloads, pins, roots, and readiness facts remain unchanged.
-Fault tests cover record and pin interruption points.
+Fault tests cover observation, record, and pin interruption points.
+
+A committed-durability-unknown result is different from an uncommitted failure.
+Mantle retains the visible destination and reports the unknown durability.
+A later import can classify exact bytes as identical reuse.
 
 ## Release linkage
 

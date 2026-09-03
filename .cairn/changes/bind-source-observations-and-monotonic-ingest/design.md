@@ -41,7 +41,9 @@ Secret-bearing URL userinfo and unapproved query fields will be rejected or reda
 - `RejectIdentityConflict` when one identity names different canonical content or provenance;
 - `RejectInvalid` when admission fails.
 
-Only `Add` authorizes a durable create-new commit. Reuse performs no write. Rejection leaves records, payloads, pins, roots, and readiness state unchanged.
+Only `Add` authorizes a durable create-new commit through the pinned `durable-file-publication` component. Reuse performs no write. Rejection leaves records, payloads, pins, roots, and readiness state unchanged.
+
+The shell preserves the component's commit distinctions. It does not erase a visible destination after `CommittedDurabilityUnknown`. That result remains different from rejection and durable success.
 
 **Rationale:** This makes idempotence, conflict handling, and no-loss behavior one reviewable rule.
 
@@ -63,7 +65,7 @@ Mantle will not add a second source-signature role.
 
 ## Functional core and imperative shell
 
-The core owns structural admission, canonicalization, observation identity, ingest planning, and compatibility decisions. The shell owns acquisition, measurement, staging, create-new publication, rollback, pin persistence, and report rendering.
+The core owns structural admission, canonicalization, observation identity, ingest planning, and compatibility decisions. The shell owns acquisition, measurement, durable component adaptation, rollback before commit, pin persistence, and report rendering.
 
 ## Risks and trade-offs
 
