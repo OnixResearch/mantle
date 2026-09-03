@@ -4,3 +4,4 @@ evidence/validation-2026-09-03/cli-family-parity-after/*.stdout whitespace=-blan
 evidence/validation-2026-09-03/cli-family-parity-after/*.stderr whitespace=-blank-at-eol,-space-before-tab
 evidence/validation-2026-09-03/*.log whitespace=-blank-at-eof
 evidence/committed-validation-2026-09-03/*.log whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+evidence/sync-2026-09-03/*.log whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
