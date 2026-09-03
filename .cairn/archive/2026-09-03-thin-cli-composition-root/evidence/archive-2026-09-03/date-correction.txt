@@ -1,0 +1,1 @@
+Cairn emitted 1970-01-01-thin-cli-composition-root; the operator renamed it to 2026-09-03-thin-cli-composition-root before post-archive validation.

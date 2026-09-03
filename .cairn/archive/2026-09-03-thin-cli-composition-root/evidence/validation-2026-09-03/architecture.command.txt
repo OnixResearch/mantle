@@ -1,0 +1,1 @@
+cargo -Zscript --offline scripts/check-cli-application-architecture.rs --root .
