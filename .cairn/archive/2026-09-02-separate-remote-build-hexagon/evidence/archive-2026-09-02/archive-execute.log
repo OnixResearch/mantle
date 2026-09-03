@@ -1,0 +1,947 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: separate-remote-build-hexagon",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon"
+    }
+  ],
+  "blocked": false,
+  "change": "separate-remote-build-hexagon",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "4c32804db9c0d3309e48dd7148eb9f3d3e23f5cd4b0110d83a6fddd7d3046f09",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+    "receipt_hash": "6767ed8b14dd8f3564cacd001ffaea47a8049f223b6d42df429717fe3476d2f6",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "29d15c0f201b1df26fa5231778119932e2f8f3b211b275dbb486606c705cb7c8",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "2d8d4afd7891ecb2cb5d90908d9a20ffb93ef88ea835c7739132db8f05e6ded5",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/design.md"
+        },
+        {
+          "content_hash": "94a16414e7b685090116b94edeb1891c8c360d621f7d1afdb433f4bb2b27dd07",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/architecture-search-2026-09-02.md"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/baseline-2026-09-02/cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "3dc05803e7d9911416b707153b038f5f15147ce6f47cb9be77cef3287006af6a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/baseline-2026-09-02/cairn-validate.log"
+        },
+        {
+          "content_hash": "c5b318324df998bcc48d5b3a5962526621298347770af8c42e8a327bcc88a1c5",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/baseline-2026-09-02/crunch-build-distributed.command.txt"
+        },
+        {
+          "content_hash": "5d64430c07ab9b2874d7e1f16b58d2696771f320034634b359f4993fef7ac8da",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/baseline-2026-09-02/crunch-build-distributed.log"
+        },
+        {
+          "content_hash": "da081a64ba0d92c6ccb0064a491b9adeeac346a8cb967d5f0cc30b6115da9242",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/baseline-2026-09-02/remote-build-shell.command.txt"
+        },
+        {
+          "content_hash": "d7029a2d8656fafcc1394f5a7e7453efb7860aef5738d2d8d469f851697449c7",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/baseline-2026-09-02/remote-build-shell.log"
+        },
+        {
+          "content_hash": "d93716daad0951c10a564284cfcffb8acb0c1dc1aaa2856bfd23632c544944bb",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/baseline-2026-09-02/source-commit.txt"
+        },
+        {
+          "content_hash": "cb6e2e7cdf421ec728ad1798ca514364cb824137c6448dd85e0c5edd3d2cdfd3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/baseline-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "e15baca7550146c22eac89949e2d7ecf072b136fa8d91746e127de696061a705",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/architecture-check.command.txt"
+        },
+        {
+          "content_hash": "d3a8df76365f459439c435765cd872f22c5b8cb9bdde2104cd5358f5c6512a0a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/architecture-check.log"
+        },
+        {
+          "content_hash": "580760d404d69f914f854de908704fa2cf91a5527ba24af663fea49a3872b7c4",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-gate-design.command.txt"
+        },
+        {
+          "content_hash": "6a4ab51e39d3451738bc0b47c8586a80b113737ad82fa817dbe21a4a33efcc2b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-gate-design.log"
+        },
+        {
+          "content_hash": "55f74b6108caef9cf37ffb9485fd0f964d42a69246cc98b7118aa5f40652c344",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-gate-proposal.command.txt"
+        },
+        {
+          "content_hash": "e5d29860f4c72645d9f3bce64ead2a304570051c236183aa679eabade307198b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-gate-proposal.log"
+        },
+        {
+          "content_hash": "a7b824f6f565a21c4b5be488de5ee77a79097ab717561a59c1092e42604e0a19",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-gate-tasks.command.txt"
+        },
+        {
+          "content_hash": "1d9929b197e55eb0bb9fbabf31dd4c74b0a9b151bd26a40da1e7022cd7e611cc",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-gate-tasks.log"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "5ed13ac56d63cf38fa886cb0243e797c05632ec2b2208c731ae028d3055a51bd",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-validate.log"
+        },
+        {
+          "content_hash": "4f44710f58b27f62b699957baa4416490687dad21a22f9f58d19ff52aa003373",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/machine-check.command.txt"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/machine-check.log"
+        },
+        {
+          "content_hash": "af5f7560f12a869379ef2179ea0cace467ae6b6bd9e10d98bb401df92040167e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/nix-full.command.txt"
+        },
+        {
+          "content_hash": "3cc856ccdded7781b93bc386a9ecbfe74bfcaa7b2ae7edc2ea0f2734048e5898",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/nix-full.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/nix-full.status"
+        },
+        {
+          "content_hash": "ee04363d155f100e45c7b0479e6b9eec70c3e7232a66429039db2140d25dab90",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/nix-no-build.command.txt"
+        },
+        {
+          "content_hash": "34ad12c3ada5532e33d24b61909af75855687ca4f0d0c705fac1ab418aad2f42",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/nix-no-build.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/nix-no-build.status"
+        },
+        {
+          "content_hash": "1025010fcdb03e90a18581b580fd2edbf71bd8829ac6db1220db4f06127f2145",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/source-commit.txt"
+        },
+        {
+          "content_hash": "c4672c3fda4c62184dfe6c262619d096fa96f9d2e8a3ca9e58468b53429e37ea",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "03fde0d018eaff87b28be3705bd2855e34888a342dab946ea63ebb20e08139c2",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/tracey.command.txt"
+        },
+        {
+          "content_hash": "7dfcebb7a5640af2401e8f38a8f687c553326a9f11b82d6d49bf8459d58ffc54",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/tracey.log"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/sync-2026-09-02/cairn-post-sync.command.txt"
+        },
+        {
+          "content_hash": "a4fcab63b64ceb789cb53a783c1730385e791b94f4894cdbf35535bc4c31ac4a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/sync-2026-09-02/cairn-post-sync.log"
+        },
+        {
+          "content_hash": "f389269c959dc88b0773dbdcde7f555f8a9f2781513c028a3a9dce3a28e51979",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/sync-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "dc37acafe7947d0c8520fa23b8d5de7f6b3b5a521199d4072f5d62d23be22ad4",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/sync-2026-09-02/sync-dry.command.txt"
+        },
+        {
+          "content_hash": "d7ccc8b814a67105e891168b23cf367840e91dbed1b5d505025e2c18b187845c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/sync-2026-09-02/sync-dry.log"
+        },
+        {
+          "content_hash": "6c1bae0c337b9c46180f875b8da5da35af3ea4eae7ec3304476cf15c5e9e6380",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/sync-2026-09-02/sync-execute.command.txt"
+        },
+        {
+          "content_hash": "453aca60a681a12e009efd3dd4501651b70f776a497008f4d121e5757b47aa46",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/sync-2026-09-02/sync-execute.log"
+        },
+        {
+          "content_hash": "d3a8df76365f459439c435765cd872f22c5b8cb9bdde2104cd5358f5c6512a0a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/architecture-check.log"
+        },
+        {
+          "content_hash": "9b635c486e8cf29bf5c1cae67207a258059f440400c9aba8e61b4d41499a1ede",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/architecture-nix.command.txt"
+        },
+        {
+          "content_hash": "a0330771f910c5779cf2843de8e31f818c279db417c6f746eb3de0d23e69aac9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/architecture-nix.log"
+        },
+        {
+          "content_hash": "d3a8df76365f459439c435765cd872f22c5b8cb9bdde2104cd5358f5c6512a0a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/architecture-precommit.log"
+        },
+        {
+          "content_hash": "d3a8df76365f459439c435765cd872f22c5b8cb9bdde2104cd5358f5c6512a0a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/architecture-self-test.log"
+        },
+        {
+          "content_hash": "91e8e15c2eabd00067446cad12070e26a63bfa527c92eb60b6733c3dce126944",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/architecture.command.txt"
+        },
+        {
+          "content_hash": "580760d404d69f914f854de908704fa2cf91a5527ba24af663fea49a3872b7c4",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-gate-design.command.txt"
+        },
+        {
+          "content_hash": "1e0ad0e5c21720d07c71f8910a0da55271ac0fa3e68f93893ac5838c2572cbab",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-gate-design.log"
+        },
+        {
+          "content_hash": "55f74b6108caef9cf37ffb9485fd0f964d42a69246cc98b7118aa5f40652c344",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-gate-proposal.command.txt"
+        },
+        {
+          "content_hash": "968b6c81096b5567e1b3eba9aac0e78cb4015759893f84a72bc7fed6e9d9f464",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-gate-proposal.log"
+        },
+        {
+          "content_hash": "a7b824f6f565a21c4b5be488de5ee77a79097ab717561a59c1092e42604e0a19",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-gate-tasks.command.txt"
+        },
+        {
+          "content_hash": "d05ad6525a0baad9304388bc9c4aee5d60b1ca3d6f86852b5998209ddb4599f7",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-gate-tasks.log"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "d7ba5227157ac804943561d74190f0e5733e43d43a9e85a9b90079594838aa95",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-validate.log"
+        },
+        {
+          "content_hash": "3d342bb78e058b748574b454dbe3494644052e704ff26fcb99d1e1d4650d0f2b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/clippy.command.txt"
+        },
+        {
+          "content_hash": "6a0de1fd4ce1fefe03dbc0b9274dadaee52ee76180e4b0bd10164eaa902aa19c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/clippy.log"
+        },
+        {
+          "content_hash": "10deec09e5227df3c69e530bff48f99e0ba178fe472e109b521d62adb6062724",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/core-and-application-tests.command.txt"
+        },
+        {
+          "content_hash": "16b48fe521fbcda118cb7ae98e10adad5f92f35e959e53379fa6dfc2c4e145aa",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/core-and-application-tests.log"
+        },
+        {
+          "content_hash": "8d5177e1ca45bbccc7272c60160aa41c5f264092cde9cc4e69adcd5ee56052bd",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/core-nix.command.txt"
+        },
+        {
+          "content_hash": "ef71135eec0a7f183f73838707bb90218d81b62b5f7bdca735dd65ccc70cb80d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/core-nix.log"
+        },
+        {
+          "content_hash": "5552ba5faf1e0b1bd99b63ea4503e761527ed5c09c2ff113bf1f61bbd05fc89c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/core-wasm-nix.command.txt"
+        },
+        {
+          "content_hash": "5656ac3e713e5317fb2d1c23697e0be361069522b3d109302e505f7d161cfb27",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/core-wasm-nix.log"
+        },
+        {
+          "content_hash": "6b293de90772aa0b92123df60d8af5bd7e15ce59a6ab45277065674eff7fa4fc",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/crunch-build-distributed-tests.command.txt"
+        },
+        {
+          "content_hash": "0e023228933ac503fb728537f37ff27f9fecb19d0fbb5da9aac35f81ec760c62",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/crunch-build-distributed-tests.log"
+        },
+        {
+          "content_hash": "7a0adf38dc18300754a50240ea0321b2203bc3909c610684e14d2bce53a312ea",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/durable-publication.command.txt"
+        },
+        {
+          "content_hash": "d3b8e0e4cec13fcf88a64f8bbaf9283ce5a8895af59d583f182533f37d8aa421",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/durable-publication.log"
+        },
+        {
+          "content_hash": "a1ea1aab1523490f8d12f77e3e3ee13dbbb24a314b524c246ebfa2676e35823b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/formatting.command.txt"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/formatting.log"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/machine-check.log"
+        },
+        {
+          "content_hash": "614b2f479d61102180b565fa143579df2f9eb4fc849c29d55ee25cd055475d3a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/machine-generate.log"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/machine-precommit.log"
+        },
+        {
+          "content_hash": "18022d49f8bcbc22bf727432d84ad8c3676544ee81e05f53619ab7d9004462fe",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/machine.command.txt"
+        },
+        {
+          "content_hash": "1c1964c214470aeaca1aec895878a0e4e13184679b3117d95eb2f731de505066",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/octet-deny-all-diagnostic.log"
+        },
+        {
+          "content_hash": "1875b4fb94885cddeafa9db201482de0c9b29710cbe61e40caba8dbca97fa50a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/octet-deterministic-core-summary.txt"
+        },
+        {
+          "content_hash": "2aa882b0eedb87ae5adf8065f99ae13468de72fadbe2e580c033af76c99e1557",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/octet-diagnostic.command.txt"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/octet-diagnostic.status"
+        },
+        {
+          "content_hash": "fb52be9e61f2ba4a0b3c851a8f11377d507e8bb828ed8a5974f0902c0cd0e52e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/remote-adapter-tests.command.txt"
+        },
+        {
+          "content_hash": "400c93210329a1c1d18597e854dd5d64afe92ecb6e1b9eecb4812b1c8b75932b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/remote-adapter-tests.log"
+        },
+        {
+          "content_hash": "b1c153697d4a12bbb808544b295078d23fb522de8ba180d3a9209b4471ad43ab",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/remote-build-shell-tests.command.txt"
+        },
+        {
+          "content_hash": "0c4e7933ca7f0f00b7a5d08bd5ec73b4e498e43f6268220b8659c105be718b55",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/remote-build-shell-tests.log"
+        },
+        {
+          "content_hash": "6378ebe2f5d30ec31e79a4ae852af9ce0d5359c234764c901e46dc111c3009f9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "b3b72212a38a15ee4a6338c53f99ab3e6f7c6ab1520c487288214ac6f87b73e6",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/tigerstyle.command.txt"
+        },
+        {
+          "content_hash": "3d0442632fd4ed20c4105d9a95a21dd7ec978a6da8bb12f1d462876701753426",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/tigerstyle.log"
+        },
+        {
+          "content_hash": "03fde0d018eaff87b28be3705bd2855e34888a342dab946ea63ebb20e08139c2",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/tracey.command.txt"
+        },
+        {
+          "content_hash": "34ae170a7ceb319a42876a26765f3e824fda809a77893db738f8e53b83499323",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/tracey.log"
+        },
+        {
+          "content_hash": "fbb55560b2fcf68d27a40c51f790981f29a86f80528d1d0700b360a7c9133418",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/wasm-check.command.txt"
+        },
+        {
+          "content_hash": "2ebae74353492e0e21e61462309c2ea5db13dd9945c5bbc9977d2c2035f95022",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/evidence/validation-2026-09-02/wasm-check.log"
+        },
+        {
+          "content_hash": "987e67dc83bcef148702f1d31fc44a6442b123954a6db4e4e3cc22313b02200a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/proposal.md"
+        },
+        {
+          "content_hash": "41cf0f9331a9f6a9545a3d22741e9ed97c5072698d92f628dcfe13a061905bca",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/specs/remote-builds/spec.md"
+        },
+        {
+          "content_hash": "f64777533cb93c4f162578f237de9b7c341f5f72b0af799e716841db85f0ec2d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-remote-build-hexagon/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/separate-remote-build-hexagon"
+        }
+      ],
+      "manifest_hash": "557d04d0ad2f9b9501a7ed00918eda10c4bfa3de212dc4ed648661bd79d16e1a"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "2d8d4afd7891ecb2cb5d90908d9a20ffb93ef88ea835c7739132db8f05e6ded5",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/design.md"
+        },
+        {
+          "content_hash": "94a16414e7b685090116b94edeb1891c8c360d621f7d1afdb433f4bb2b27dd07",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/architecture-search-2026-09-02.md"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/baseline-2026-09-02/cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "3dc05803e7d9911416b707153b038f5f15147ce6f47cb9be77cef3287006af6a",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/baseline-2026-09-02/cairn-validate.log"
+        },
+        {
+          "content_hash": "c5b318324df998bcc48d5b3a5962526621298347770af8c42e8a327bcc88a1c5",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/baseline-2026-09-02/crunch-build-distributed.command.txt"
+        },
+        {
+          "content_hash": "5d64430c07ab9b2874d7e1f16b58d2696771f320034634b359f4993fef7ac8da",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/baseline-2026-09-02/crunch-build-distributed.log"
+        },
+        {
+          "content_hash": "da081a64ba0d92c6ccb0064a491b9adeeac346a8cb967d5f0cc30b6115da9242",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/baseline-2026-09-02/remote-build-shell.command.txt"
+        },
+        {
+          "content_hash": "d7029a2d8656fafcc1394f5a7e7453efb7860aef5738d2d8d469f851697449c7",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/baseline-2026-09-02/remote-build-shell.log"
+        },
+        {
+          "content_hash": "d93716daad0951c10a564284cfcffb8acb0c1dc1aaa2856bfd23632c544944bb",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/baseline-2026-09-02/source-commit.txt"
+        },
+        {
+          "content_hash": "cb6e2e7cdf421ec728ad1798ca514364cb824137c6448dd85e0c5edd3d2cdfd3",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/baseline-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "e15baca7550146c22eac89949e2d7ecf072b136fa8d91746e127de696061a705",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/architecture-check.command.txt"
+        },
+        {
+          "content_hash": "d3a8df76365f459439c435765cd872f22c5b8cb9bdde2104cd5358f5c6512a0a",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/architecture-check.log"
+        },
+        {
+          "content_hash": "580760d404d69f914f854de908704fa2cf91a5527ba24af663fea49a3872b7c4",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-gate-design.command.txt"
+        },
+        {
+          "content_hash": "6a4ab51e39d3451738bc0b47c8586a80b113737ad82fa817dbe21a4a33efcc2b",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-gate-design.log"
+        },
+        {
+          "content_hash": "55f74b6108caef9cf37ffb9485fd0f964d42a69246cc98b7118aa5f40652c344",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-gate-proposal.command.txt"
+        },
+        {
+          "content_hash": "e5d29860f4c72645d9f3bce64ead2a304570051c236183aa679eabade307198b",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-gate-proposal.log"
+        },
+        {
+          "content_hash": "a7b824f6f565a21c4b5be488de5ee77a79097ab717561a59c1092e42604e0a19",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-gate-tasks.command.txt"
+        },
+        {
+          "content_hash": "1d9929b197e55eb0bb9fbabf31dd4c74b0a9b151bd26a40da1e7022cd7e611cc",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-gate-tasks.log"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "5ed13ac56d63cf38fa886cb0243e797c05632ec2b2208c731ae028d3055a51bd",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/cairn-validate.log"
+        },
+        {
+          "content_hash": "4f44710f58b27f62b699957baa4416490687dad21a22f9f58d19ff52aa003373",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/machine-check.command.txt"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/machine-check.log"
+        },
+        {
+          "content_hash": "af5f7560f12a869379ef2179ea0cace467ae6b6bd9e10d98bb401df92040167e",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/nix-full.command.txt"
+        },
+        {
+          "content_hash": "3cc856ccdded7781b93bc386a9ecbfe74bfcaa7b2ae7edc2ea0f2734048e5898",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/nix-full.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/nix-full.status"
+        },
+        {
+          "content_hash": "ee04363d155f100e45c7b0479e6b9eec70c3e7232a66429039db2140d25dab90",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/nix-no-build.command.txt"
+        },
+        {
+          "content_hash": "34ad12c3ada5532e33d24b61909af75855687ca4f0d0c705fac1ab418aad2f42",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/nix-no-build.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/nix-no-build.status"
+        },
+        {
+          "content_hash": "1025010fcdb03e90a18581b580fd2edbf71bd8829ac6db1220db4f06127f2145",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/source-commit.txt"
+        },
+        {
+          "content_hash": "c4672c3fda4c62184dfe6c262619d096fa96f9d2e8a3ca9e58468b53429e37ea",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "03fde0d018eaff87b28be3705bd2855e34888a342dab946ea63ebb20e08139c2",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/tracey.command.txt"
+        },
+        {
+          "content_hash": "7dfcebb7a5640af2401e8f38a8f687c553326a9f11b82d6d49bf8459d58ffc54",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/committed-validation-2026-09-02/tracey.log"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/sync-2026-09-02/cairn-post-sync.command.txt"
+        },
+        {
+          "content_hash": "a4fcab63b64ceb789cb53a783c1730385e791b94f4894cdbf35535bc4c31ac4a",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/sync-2026-09-02/cairn-post-sync.log"
+        },
+        {
+          "content_hash": "f389269c959dc88b0773dbdcde7f555f8a9f2781513c028a3a9dce3a28e51979",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/sync-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "dc37acafe7947d0c8520fa23b8d5de7f6b3b5a521199d4072f5d62d23be22ad4",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/sync-2026-09-02/sync-dry.command.txt"
+        },
+        {
+          "content_hash": "d7ccc8b814a67105e891168b23cf367840e91dbed1b5d505025e2c18b187845c",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/sync-2026-09-02/sync-dry.log"
+        },
+        {
+          "content_hash": "6c1bae0c337b9c46180f875b8da5da35af3ea4eae7ec3304476cf15c5e9e6380",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/sync-2026-09-02/sync-execute.command.txt"
+        },
+        {
+          "content_hash": "453aca60a681a12e009efd3dd4501651b70f776a497008f4d121e5757b47aa46",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/sync-2026-09-02/sync-execute.log"
+        },
+        {
+          "content_hash": "d3a8df76365f459439c435765cd872f22c5b8cb9bdde2104cd5358f5c6512a0a",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/architecture-check.log"
+        },
+        {
+          "content_hash": "9b635c486e8cf29bf5c1cae67207a258059f440400c9aba8e61b4d41499a1ede",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/architecture-nix.command.txt"
+        },
+        {
+          "content_hash": "a0330771f910c5779cf2843de8e31f818c279db417c6f746eb3de0d23e69aac9",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/architecture-nix.log"
+        },
+        {
+          "content_hash": "d3a8df76365f459439c435765cd872f22c5b8cb9bdde2104cd5358f5c6512a0a",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/architecture-precommit.log"
+        },
+        {
+          "content_hash": "d3a8df76365f459439c435765cd872f22c5b8cb9bdde2104cd5358f5c6512a0a",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/architecture-self-test.log"
+        },
+        {
+          "content_hash": "91e8e15c2eabd00067446cad12070e26a63bfa527c92eb60b6733c3dce126944",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/architecture.command.txt"
+        },
+        {
+          "content_hash": "580760d404d69f914f854de908704fa2cf91a5527ba24af663fea49a3872b7c4",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-gate-design.command.txt"
+        },
+        {
+          "content_hash": "1e0ad0e5c21720d07c71f8910a0da55271ac0fa3e68f93893ac5838c2572cbab",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-gate-design.log"
+        },
+        {
+          "content_hash": "55f74b6108caef9cf37ffb9485fd0f964d42a69246cc98b7118aa5f40652c344",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-gate-proposal.command.txt"
+        },
+        {
+          "content_hash": "968b6c81096b5567e1b3eba9aac0e78cb4015759893f84a72bc7fed6e9d9f464",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-gate-proposal.log"
+        },
+        {
+          "content_hash": "a7b824f6f565a21c4b5be488de5ee77a79097ab717561a59c1092e42604e0a19",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-gate-tasks.command.txt"
+        },
+        {
+          "content_hash": "d05ad6525a0baad9304388bc9c4aee5d60b1ca3d6f86852b5998209ddb4599f7",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-gate-tasks.log"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "d7ba5227157ac804943561d74190f0e5733e43d43a9e85a9b90079594838aa95",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/cairn-validate.log"
+        },
+        {
+          "content_hash": "3d342bb78e058b748574b454dbe3494644052e704ff26fcb99d1e1d4650d0f2b",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/clippy.command.txt"
+        },
+        {
+          "content_hash": "6a0de1fd4ce1fefe03dbc0b9274dadaee52ee76180e4b0bd10164eaa902aa19c",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/clippy.log"
+        },
+        {
+          "content_hash": "10deec09e5227df3c69e530bff48f99e0ba178fe472e109b521d62adb6062724",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/core-and-application-tests.command.txt"
+        },
+        {
+          "content_hash": "16b48fe521fbcda118cb7ae98e10adad5f92f35e959e53379fa6dfc2c4e145aa",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/core-and-application-tests.log"
+        },
+        {
+          "content_hash": "8d5177e1ca45bbccc7272c60160aa41c5f264092cde9cc4e69adcd5ee56052bd",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/core-nix.command.txt"
+        },
+        {
+          "content_hash": "ef71135eec0a7f183f73838707bb90218d81b62b5f7bdca735dd65ccc70cb80d",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/core-nix.log"
+        },
+        {
+          "content_hash": "5552ba5faf1e0b1bd99b63ea4503e761527ed5c09c2ff113bf1f61bbd05fc89c",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/core-wasm-nix.command.txt"
+        },
+        {
+          "content_hash": "5656ac3e713e5317fb2d1c23697e0be361069522b3d109302e505f7d161cfb27",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/core-wasm-nix.log"
+        },
+        {
+          "content_hash": "6b293de90772aa0b92123df60d8af5bd7e15ce59a6ab45277065674eff7fa4fc",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/crunch-build-distributed-tests.command.txt"
+        },
+        {
+          "content_hash": "0e023228933ac503fb728537f37ff27f9fecb19d0fbb5da9aac35f81ec760c62",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/crunch-build-distributed-tests.log"
+        },
+        {
+          "content_hash": "7a0adf38dc18300754a50240ea0321b2203bc3909c610684e14d2bce53a312ea",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/durable-publication.command.txt"
+        },
+        {
+          "content_hash": "d3b8e0e4cec13fcf88a64f8bbaf9283ce5a8895af59d583f182533f37d8aa421",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/durable-publication.log"
+        },
+        {
+          "content_hash": "a1ea1aab1523490f8d12f77e3e3ee13dbbb24a314b524c246ebfa2676e35823b",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/formatting.command.txt"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/formatting.log"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/machine-check.log"
+        },
+        {
+          "content_hash": "614b2f479d61102180b565fa143579df2f9eb4fc849c29d55ee25cd055475d3a",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/machine-generate.log"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/machine-precommit.log"
+        },
+        {
+          "content_hash": "18022d49f8bcbc22bf727432d84ad8c3676544ee81e05f53619ab7d9004462fe",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/machine.command.txt"
+        },
+        {
+          "content_hash": "1c1964c214470aeaca1aec895878a0e4e13184679b3117d95eb2f731de505066",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/octet-deny-all-diagnostic.log"
+        },
+        {
+          "content_hash": "1875b4fb94885cddeafa9db201482de0c9b29710cbe61e40caba8dbca97fa50a",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/octet-deterministic-core-summary.txt"
+        },
+        {
+          "content_hash": "2aa882b0eedb87ae5adf8065f99ae13468de72fadbe2e580c033af76c99e1557",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/octet-diagnostic.command.txt"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/octet-diagnostic.status"
+        },
+        {
+          "content_hash": "fb52be9e61f2ba4a0b3c851a8f11377d507e8bb828ed8a5974f0902c0cd0e52e",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/remote-adapter-tests.command.txt"
+        },
+        {
+          "content_hash": "400c93210329a1c1d18597e854dd5d64afe92ecb6e1b9eecb4812b1c8b75932b",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/remote-adapter-tests.log"
+        },
+        {
+          "content_hash": "b1c153697d4a12bbb808544b295078d23fb522de8ba180d3a9209b4471ad43ab",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/remote-build-shell-tests.command.txt"
+        },
+        {
+          "content_hash": "0c4e7933ca7f0f00b7a5d08bd5ec73b4e498e43f6268220b8659c105be718b55",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/remote-build-shell-tests.log"
+        },
+        {
+          "content_hash": "6378ebe2f5d30ec31e79a4ae852af9ce0d5359c234764c901e46dc111c3009f9",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "b3b72212a38a15ee4a6338c53f99ab3e6f7c6ab1520c487288214ac6f87b73e6",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/tigerstyle.command.txt"
+        },
+        {
+          "content_hash": "3d0442632fd4ed20c4105d9a95a21dd7ec978a6da8bb12f1d462876701753426",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/tigerstyle.log"
+        },
+        {
+          "content_hash": "03fde0d018eaff87b28be3705bd2855e34888a342dab946ea63ebb20e08139c2",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/tracey.command.txt"
+        },
+        {
+          "content_hash": "34ae170a7ceb319a42876a26765f3e824fda809a77893db738f8e53b83499323",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/tracey.log"
+        },
+        {
+          "content_hash": "fbb55560b2fcf68d27a40c51f790981f29a86f80528d1d0700b360a7c9133418",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/wasm-check.command.txt"
+        },
+        {
+          "content_hash": "2ebae74353492e0e21e61462309c2ea5db13dd9945c5bbc9977d2c2035f95022",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/evidence/validation-2026-09-02/wasm-check.log"
+        },
+        {
+          "content_hash": "987e67dc83bcef148702f1d31fc44a6442b123954a6db4e4e3cc22313b02200a",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/proposal.md"
+        },
+        {
+          "content_hash": "41cf0f9331a9f6a9545a3d22741e9ed97c5072698d92f628dcfe13a061905bca",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/specs/remote-builds/spec.md"
+        },
+        {
+          "content_hash": "f64777533cb93c4f162578f237de9b7c341f5f72b0af799e716841db85f0ec2d",
+          "exists": true,
+          "path": "./.cairn/changes/separate-remote-build-hexagon/tasks.md"
+        }
+      ],
+      "manifest_hash": "1329a68b2ef79009fd811ce494b9170251e7b014c4f7902b02168ec167dc00e9"
+    },
+    "kind": "archive",
+    "manifest_hash": "390280f1de39150adf09cbed819ab2d397a7d8d4095c7daaec7ab7aa75270f1b"
+  },
+  "plan_hash": "6a604939299042c0ac37f82e6daa68137382a86939f04cec06a129e84fe8880f",
+  "policy": "mantle-default",
+  "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+  "reasons": [],
+  "receipt_hash": "db0136903f6ee981d691cbdbce307772162a27e26462b1e5210c32582146b66b"
+}
