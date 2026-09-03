@@ -4,6 +4,17 @@ use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
 
+use crunch_source_core::GitObjectFormat;
+use crunch_source_core::ImmutableRevisionWire;
+use crunch_source_core::LocatorClass;
+use crunch_source_core::ProvenanceDisposition;
+use crunch_source_core::SnapshotProfile;
+use crunch_source_core::SourceKind;
+use crunch_source_core::SourceObservationDraft;
+use crunch_source_core::SourceObservationSubject;
+use crunch_source_core::admit_source_observation_subject;
+use crunch_source_core::build_source_observation;
+use crunch_source_core::source_observation_subject;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -325,7 +336,11 @@ pub struct FunctionAddressReleaseVerification {
     pub diagnostics: Vec<String>,
 }
 
+// machine-artifact-public: release.source-observation-binding
+// r[impl mantle.release_provenance.source_observation_binding]
+// r[impl mantle.release_provenance.source_observation_signature_boundary]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SourceAcquisition {
     pub kind: String,
     pub url: String,
@@ -340,6 +355,8 @@ pub struct SourceAcquisition {
     pub archive_profile: Option<String>,
     #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub archive_version: Option<String>,
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
+    pub source_observation: Option<SourceObservationSubject>,
 }
 
 impl SourceAcquisition {
@@ -353,6 +370,7 @@ impl SourceAcquisition {
             tag: None,
             archive_profile: None,
             archive_version: None,
+            source_observation: None,
         }
     }
 
@@ -372,7 +390,22 @@ impl SourceAcquisition {
             tag,
             archive_profile: Some(RELEASE_SOURCE_ARCHIVE_PROFILE.to_string()),
             archive_version: Some(RELEASE_SOURCE_ARCHIVE_VERSION.to_string()),
+            source_observation: None,
         }
+    }
+
+    pub fn with_derived_source_observation(mut self) -> Result<Self, ReleaseEvidenceError> {
+        let draft = source_acquisition_observation_draft(&self)?;
+        let observation = build_source_observation(draft)
+            .map_err(|error| validation_error(format!("building release source observation: {error:?}")))?;
+        self.source_observation = Some(source_observation_subject(observation.as_wire()));
+        validate_source_observation_binding(&self)?;
+        debug_assert!(self.source_observation.is_some());
+        debug_assert_eq!(
+            self.source_observation.as_ref().map(|value| value.content_blake3.as_str()),
+            Some(self.digest_blake3.as_str())
+        );
+        Ok(self)
     }
 }
 
@@ -2065,6 +2098,7 @@ fn validate_source_acquisition(manifest: &ReleaseEvidenceManifest) -> Result<(),
         return Ok(());
     };
     validate_source_acquisition_digest(source_acquisition, manifest)?;
+    validate_source_observation_binding(source_acquisition)?;
     match source_acquisition.kind.as_str() {
         SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE => validate_external_source_acquisition(source_acquisition),
         SOURCE_ACQUISITION_KIND_GIT => validate_git_source_acquisition(source_acquisition),
@@ -2072,6 +2106,83 @@ fn validate_source_acquisition(manifest: &ReleaseEvidenceManifest) -> Result<(),
             "release evidence source_acquisition.kind must be {SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE} or {SOURCE_ACQUISITION_KIND_GIT}, got {other}"
         ))),
     }
+}
+
+fn source_acquisition_observation_draft(
+    source_acquisition: &SourceAcquisition,
+) -> Result<SourceObservationDraft, ReleaseEvidenceError> {
+    match source_acquisition.kind.as_str() {
+        SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE => Ok(SourceObservationDraft {
+            source_kind: SourceKind::FixedUrl,
+            locator_class: LocatorClass::Url,
+            locator_hint: Some(source_acquisition.url.clone()),
+            immutable_revision: None,
+            normalized_projection: ".".to_string(),
+            snapshot_profile: SnapshotProfile::FlatFileV1,
+            content_blake3: source_acquisition.digest_blake3.clone(),
+            mutable_reference_hint: None,
+            provenance: ProvenanceDisposition::Complete,
+        }),
+        SOURCE_ACQUISITION_KIND_GIT => source_git_observation_draft(source_acquisition),
+        other => Err(validation_error(format!("cannot observe unsupported source acquisition kind {other}"))),
+    }
+}
+
+fn source_git_observation_draft(
+    source_acquisition: &SourceAcquisition,
+) -> Result<SourceObservationDraft, ReleaseEvidenceError> {
+    let commit = source_acquisition
+        .commit
+        .as_ref()
+        .ok_or_else(|| validation_error("cannot observe Git source acquisition without commit".to_string()))?;
+    let object_format = match commit.len() {
+        GIT_SHA1_HEX_LENGTH_CHARS => GitObjectFormat::Sha1,
+        GIT_SHA256_HEX_LENGTH_CHARS => GitObjectFormat::Sha256,
+        _ => return Err(validation_error("cannot observe Git source acquisition with malformed commit".to_string())),
+    };
+    debug_assert_eq!(Some(commit.as_str()), source_acquisition.commit.as_deref());
+    debug_assert_eq!(commit.len(), match object_format {
+        GitObjectFormat::Sha1 => GIT_SHA1_HEX_LENGTH_CHARS,
+        GitObjectFormat::Sha256 => GIT_SHA256_HEX_LENGTH_CHARS,
+    });
+    Ok(SourceObservationDraft {
+        source_kind: SourceKind::VcsSnapshot,
+        locator_class: LocatorClass::GitRemote,
+        locator_hint: Some(source_acquisition.url.clone()),
+        immutable_revision: Some(ImmutableRevisionWire {
+            object_format,
+            value: commit.clone(),
+        }),
+        normalized_projection: ".".to_string(),
+        snapshot_profile: SnapshotProfile::ArchiveTreeV1,
+        content_blake3: source_acquisition.digest_blake3.clone(),
+        mutable_reference_hint: source_acquisition.reference.clone().or_else(|| source_acquisition.tag.clone()),
+        provenance: ProvenanceDisposition::Complete,
+    })
+}
+
+fn validate_source_observation_binding(source_acquisition: &SourceAcquisition) -> Result<(), ReleaseEvidenceError> {
+    let Some(subject) = source_acquisition.source_observation.clone() else {
+        return Ok(());
+    };
+    let observation = admit_source_observation_subject(subject)
+        .map_err(|error| validation_error(format!("release source observation is invalid: {error:?}")))?;
+    let expected = source_acquisition_observation_draft(source_acquisition)?;
+    let rebuilt = build_source_observation(expected)
+        .map_err(|error| validation_error(format!("rebuilding release source observation: {error:?}")))?;
+    if observation.observation_blake3() != rebuilt.observation_blake3() {
+        return Err(validation_error(
+            "release source observation identity does not match source acquisition facts".to_string(),
+        ));
+    }
+    if observation.content_blake3() != source_acquisition.digest_blake3 {
+        return Err(validation_error(
+            "release source observation content_blake3 must match source_acquisition.digest_blake3".to_string(),
+        ));
+    }
+    debug_assert_eq!(observation.content_blake3(), rebuilt.content_blake3());
+    debug_assert_eq!(observation.observation_blake3(), rebuilt.observation_blake3());
+    Ok(())
 }
 
 fn validate_source_acquisition_digest(
@@ -3269,6 +3380,121 @@ mod tests {
 
         assert!(text.contains("source_acquisition"));
         assert!(text.contains(SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE));
+    }
+
+    #[test]
+    fn legacy_source_acquisition_bytes_remain_unchanged_without_observation() {
+        let acquisition =
+            SourceAcquisition::external_archive("https://example.invalid/mantle-src.tar".to_string(), sample_digest(1));
+        let bytes = serde_json::to_string(&acquisition).unwrap();
+        let expected = format!(
+            "{{\"kind\":\"external-archive\",\"url\":\"https://example.invalid/mantle-src.tar\",\"digest_blake3\":\"{}\"}}",
+            sample_digest(1)
+        );
+        assert_eq!(bytes, expected);
+        assert!(!bytes.contains("source_observation"));
+    }
+
+    #[test]
+    fn release_source_observation_is_bound_into_canonical_evidence() {
+        let mut without_observation = sample_manifest();
+        without_observation.source_acquisition = Some(SourceAcquisition::external_archive(
+            "https://example.invalid/mantle-src.tar".to_string(),
+            without_observation.source_archive.digest_blake3.clone(),
+        ));
+        let mut with_observation = without_observation.clone();
+        with_observation.source_acquisition =
+            Some(with_observation.source_acquisition.take().unwrap().with_derived_source_observation().unwrap());
+        let plain = canonical_release_evidence_manifest(without_observation).unwrap();
+        let bound = canonical_release_evidence_manifest(with_observation.clone()).unwrap();
+        let subject = with_observation.source_acquisition.as_ref().unwrap().source_observation.as_ref().unwrap();
+        assert_ne!(blake3::hash(&plain), blake3::hash(&bound));
+        assert!(String::from_utf8(bound).unwrap().contains("source_observation"));
+        assert_eq!(subject.content_blake3, with_observation.source_archive.digest_blake3);
+    }
+
+    #[test]
+    fn release_source_observation_binding_matches_golden_bytes_and_identity() {
+        let acquisition = SourceAcquisition::external_archive(
+            "https://example.invalid/mantle-src.tar".to_string(),
+            "a".repeat(BLAKE3_HEX_LENGTH_CHARS),
+        )
+        .with_derived_source_observation()
+        .unwrap();
+        let mut bytes = serde_json::to_vec_pretty(&acquisition).unwrap();
+        bytes.push(b'\n');
+        assert_eq!(bytes, include_bytes!("../fixtures/release-source-observation-binding-v1.json"));
+        assert_eq!(
+            blake3::hash(&bytes).to_hex().as_str(),
+            "3a10bb482e9fec2acd73a4cd7ac97e7e449da5be8c54f63911f6487d1765360b"
+        );
+    }
+
+    #[test]
+    fn release_source_observation_tampering_fails_closed() {
+        let mut manifest = sample_manifest();
+        let acquisition = SourceAcquisition::external_archive(
+            "https://example.invalid/mantle-src.tar".to_string(),
+            manifest.source_archive.digest_blake3.clone(),
+        )
+        .with_derived_source_observation()
+        .unwrap();
+        manifest.source_acquisition = Some(acquisition);
+        manifest
+            .source_acquisition
+            .as_mut()
+            .unwrap()
+            .source_observation
+            .as_mut()
+            .unwrap()
+            .observation_blake3 = sample_digest(2);
+        let error = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(error.to_string().contains("release source observation is invalid"));
+        assert!(error.to_string().contains("ObservationDigest"));
+    }
+
+    #[test]
+    fn release_source_observation_profile_drift_fails_closed() {
+        let mut manifest = sample_manifest();
+        let acquisition = SourceAcquisition::external_archive(
+            "https://example.invalid/mantle-src.tar".to_string(),
+            manifest.source_archive.digest_blake3.clone(),
+        )
+        .with_derived_source_observation()
+        .unwrap();
+        manifest.source_acquisition = Some(acquisition);
+        manifest.source_acquisition.as_mut().unwrap().source_observation.as_mut().unwrap().snapshot_profile =
+            SnapshotProfile::ArchiveTreeV1;
+        let error = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(error.to_string().contains("release source observation is invalid"));
+        assert!(error.to_string().contains("ObservationDigest"));
+    }
+
+    #[test]
+    fn unknown_source_signature_cannot_enter_release_authority() {
+        let acquisition =
+            SourceAcquisition::external_archive("https://example.invalid/mantle-src.tar".to_string(), sample_digest(1))
+                .with_derived_source_observation()
+                .unwrap();
+        let mut value = serde_json::to_value(acquisition).unwrap();
+        value
+            .as_object_mut()
+            .unwrap()
+            .insert("source_signature".to_string(), serde_json::json!("untrusted"));
+        let error = serde_json::from_value::<SourceAcquisition>(value).unwrap_err();
+        assert!(error.to_string().contains("unknown field"));
+        assert!(error.to_string().contains("source_signature"));
+    }
+
+    #[test]
+    fn release_source_observation_rejects_secret_bearing_locator_before_binding() {
+        let result = SourceAcquisition::external_archive(
+            "https://example.invalid/source.tar?token=private".to_string(),
+            sample_digest(1),
+        )
+        .with_derived_source_observation();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("SecretBearingLocator"));
     }
 
     #[test]

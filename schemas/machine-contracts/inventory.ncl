@@ -80,10 +80,192 @@ let Registry = {
     "oci.registry-pull-report",
     "release.function-address-binding",
     "release.source-review-attachment",
+    "release.source-observation-binding",
+    "source.source-observation",
+    "source.source-ingest-plan",
     "mantlepkgs.package-impact-report",
     "mantlepkgs.update-plan"
   ],
   "surfaces"= [
+    {
+      "id"= "source.source-observation",
+      "class"= "contracted",
+      "rust_owner"= "crates/crunch-source-core/src/observation.rs::SourceObservationWire",
+      "producer"= {
+        "command_or_api"= "crunch_source_core::build_source_observation and mantle source bundle import",
+        "marker"= "source.source-observation",
+        "source_paths"= [
+          "crates/crunch-source-core/src/observation.rs",
+          "src/source_bundle/source_observation_adapter.rs",
+          "crates/crunch-release-core/src/manifest.rs"
+        ]
+      },
+      "consumers"= [
+        "source-bundle ingest",
+        "release evidence",
+        "source-policy adapters"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/source-observation.schema.json",
+        "generated_contract"= "schemas/machine-contracts/source-observation.contract.ncl",
+        "positive_fixtures"= [
+          "schemas/machine-contracts/fixtures/source-observation.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/source-observation.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-source-observation-v1",
+        "supported"= [
+          "mantle-source-observation-v1"
+        ],
+        "unknown_version_behavior"= "reject before observation admission or policy use",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs",
+        "cargo test -p crunch-source-core"
+      ],
+      "fixture_coverage"= [
+        "schema",
+        "version",
+        "bounds",
+        "digest",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds schema, generated contract, shared prelude, fixtures, producer source, and consumer policy",
+      "freshness"= {
+        "schema_blake3"= "cb15a6faf171107558d0313951f4a42eb65a929b2de9817df47982844a6b4e8a",
+        "contract_blake3"= "0d7abfa73d05749996ded17e9cd373190a84f268b4149f3bda9cf45c2cb7b2c4",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "25acd5c992c65d34ea449dca9ede9bc49305bc40e9bb21a5146c415e18dbdf59",
+        "producer_identity_blake3"= "c0184e888414b1a5de008078afb8ab5b7835e1951737f646917b89564c4f8478",
+        "consumer_policy_blake3"= "60a82175c46f436f1618d4b88bf68fd288b2f80f29ebb79b083ee14a0f543d58"
+      },
+      "non_claims"= [
+        "source observation conformance does not prove ownership, trust, review, source correctness, or release eligibility"
+      ],
+      "rationale"= "A canonical backend-neutral source identity keeps transport hints outside source authority."
+    },
+    {
+      "id"= "source.source-ingest-plan",
+      "class"= "contracted",
+      "rust_owner"= "crates/crunch-source-core/src/ingest.rs::SourceIngestPlan",
+      "producer"= {
+        "command_or_api"= "crunch_source_core::plan_source_ingest and mantle source bundle import",
+        "marker"= "source.source-ingest-plan",
+        "source_paths"= [
+          "crates/crunch-source-core/src/ingest.rs",
+          "src/source_bundle/monotonic_ingest.rs"
+        ]
+      },
+      "consumers"= [
+        "source-state publication",
+        "offline source readiness"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/source-ingest-plan.schema.json",
+        "generated_contract"= "schemas/machine-contracts/source-ingest-plan.contract.ncl",
+        "positive_fixtures"= [
+          "schemas/machine-contracts/fixtures/source-ingest-plan.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/source-ingest-plan.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-source-ingest-plan-v1",
+        "supported"= [
+          "mantle-source-ingest-plan-v1"
+        ],
+        "unknown_version_behavior"= "reject before any durable source-state mutation",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs",
+        "cargo test -p crunch-source-core",
+        "cargo test -p mantle --bin mantle source_bundle::monotonic_ingest::tests::"
+      ],
+      "fixture_coverage"= [
+        "schema",
+        "version",
+        "enum",
+        "bounds",
+        "digest",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds schema, generated contract, shared prelude, fixtures, producer source, and consumer policy",
+      "freshness"= {
+        "schema_blake3"= "eae2dfd7c2bec41460fc43445e9cadbdf2a1d3308afdf4efb8280790ea0a61db",
+        "contract_blake3"= "612db8a8461f534e1ae1b968d649144a07afd26e078f3525d17539a507646033",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "2cb9e85a6ebc6a7c062c2b414bd80e59e26140bacfd892e0746e8b478419f080",
+        "producer_identity_blake3"= "38cd88a6e82d44af7766ab22e6b5e5d6c819369b34137ddf97a9093fef3efe20",
+        "consumer_policy_blake3"= "bc396936e67b37d8e9d42a1017e260d55c78a5c96a9accab2e635d21bbee41e2"
+      },
+      "non_claims"= [
+        "ingest planning does not prove source trust, origin, storage durability beyond reported publication, or release eligibility"
+      ],
+      "rationale"= "A deterministic plan makes add-only source mutation explicit and conflict-safe."
+    },
+    {
+      "id"= "release.source-observation-binding",
+      "class"= "contracted",
+      "rust_owner"= "crates/crunch-release-core/src/manifest.rs::SourceAcquisition",
+      "producer"= {
+        "command_or_api"= "mantle release create with an external or Git source acquisition",
+        "marker"= "release.source-observation-binding",
+        "source_paths"= [
+          "crates/crunch-release-core/src/manifest.rs",
+          "crates/crunch-release-core/src/source_review.rs",
+          "src/release_evidence.rs"
+        ]
+      },
+      "consumers"= [
+        "release attestation",
+        "release verification",
+        "witness rebuild"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/release-source-observation-binding.schema.json",
+        "generated_contract"= "schemas/machine-contracts/release-source-observation-binding.contract.ncl",
+        "positive_fixtures"= [
+          "schemas/machine-contracts/fixtures/release-source-observation-binding.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/release-source-observation-binding.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-source-observation-v1",
+        "supported"= [
+          "mantle-source-observation-v1"
+        ],
+        "unknown_version_behavior"= "reject before release evidence canonicalization or signature verification",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs",
+        "cargo test -p crunch-release-core manifest::tests::release_source_observation"
+      ],
+      "fixture_coverage"= [
+        "schema",
+        "version",
+        "cross-field",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds schema, generated contract, shared prelude, fixtures, producer source, and consumer policy",
+      "freshness"= {
+        "schema_blake3"= "772d712ce962b5d97c5a8e30531e0fc3b021db597f74003c842af83d92cc819c",
+        "contract_blake3"= "0b8340d989f11eff3e9a638d63b7c81d85bff8fde02ea14eb175e33e1532372f",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "c15cbbe1577d608994e9c2911b75914eed42b2b1b6dd4499ae4673a734da79d0",
+        "producer_identity_blake3"= "b60492fb20d863615ef1a317784544aad725c1b9ea79bec961b3c7e21235d85a",
+        "consumer_policy_blake3"= "060b7a7cbf1b42a9118e8ea1a94db5332275a6fdb17974c640d408b8ab898eff"
+      },
+      "non_claims"= [
+        "the enclosing release signature authenticates linkage only and does not turn a source observation into review, witness, ownership, or release authority"
+      ],
+      "rationale"= "The existing release signature must cover an exact source subject without creating another signer role."
+    },
     {
       "id"= "release.source-review-attachment",
       "class"= "contracted",
@@ -134,7 +316,7 @@ let Registry = {
         "contract_blake3"= "bd5e73c8be1d9348c4d6e9a2ad9049a71d3f9c976ecadc746e28dda9b4edb6ff",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "8c0fbeb7501409d9d871f79578e693670b262a87e13a7f95bd3eb0eea79b4c54",
-        "producer_identity_blake3"= "fff6ab6538fd1a03611c0d730bce630898fd60912daef3d6079784ff7852bc62",
+        "producer_identity_blake3"= "7124d681fbb051fa66eb43b079ca7f04b90ca14ce2709ddcf5e23943eb87310e",
         "consumer_policy_blake3"= "7fa65ad759e4eee6d33ff8ec0f84d1fe1ac3915b9d94e40e1c87ca19c0d20103"
       },
       "non_claims"= [
@@ -581,7 +763,7 @@ let Registry = {
         "contract_blake3"= "d3b07cd0d3396e6798ec94d68d37cf06a5ee35f81866016fbf1f18e0f401c7ae",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "996d0ea5521663d8180e90e955fcba9c92b4570b8935e13b2e57af45c81260e2",
-        "producer_identity_blake3"= "e8082168a1063088f7f1684ad5d3004454c1315850aa9de2c7a180450f623588",
+        "producer_identity_blake3"= "c561e5d21f9efb1d8e3eecdb0c754a00c86c2f732899cc76f040dcaa93462a61",
         "consumer_policy_blake3"= "b41da07fbbd17d793f07c51876465ca6e73d83db0dc79b9beb02c8a8110b59d1"
       },
       "non_claims"= [
@@ -635,7 +817,7 @@ let Registry = {
         "contract_blake3"= "1c816681434e8114cd6c4bab4a48fd5c5f86ce7c9f33c187ab609ec73f814fd8",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "1ad119357b7d7217396fe2f47598b14cb8d87bc105982a428e3924e7c3213c11",
-        "producer_identity_blake3"= "2997f3bb460185a4c6e2bee6b7a3ed6ca089697572da8435d8ebdd7849732c33",
+        "producer_identity_blake3"= "971d1224ac5da69131ca718f2dd511d37e01d2e5a2fb73a02676ca1c81345abc",
         "consumer_policy_blake3"= "edc96af15dd9073d7cd0178ed0d617acd41c8cf91c6719a674dd1422a7e285e4"
       },
       "non_claims"= [
@@ -689,7 +871,7 @@ let Registry = {
         "contract_blake3"= "953be8500e8110bc2682b8d4aa14136c274f675dc951126f0b6a165f062c5bd3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "cad5f96d2366110d1a790d5ab644163380b9af4f0a5b2be947ceaa39ee03fbd6",
-        "producer_identity_blake3"= "d6a9db2809aa09c8f1c88bcbe67457e461749628617fa420db689cb59b457512",
+        "producer_identity_blake3"= "e0f637c1de1277e574682e5eae74848ab9e954bd49945c5560f209f21ced145c",
         "consumer_policy_blake3"= "8af50ac86145048afc879ae1b6722e155ee6960c6261186014bb505db83b6cb8"
       },
       "non_claims"= [
@@ -858,7 +1040,7 @@ let Registry = {
         "contract_blake3"= "d7b30efe0e40442383eb7c654a3bb0c88b508f059b88008085fd59f0a88b0f23",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "74b65baffbfcfb59d5557a99ea0ed63c02711ee4c865c5f7be1eb14ad57071c8",
-        "producer_identity_blake3"= "32ef83b17f1c86c53abd5c46737adf87b01ea3546963e23598a69392a9a445f2",
+        "producer_identity_blake3"= "2876962210cd684d461244b18107d3a3ce42fd98390f50de735a161ccead4a80",
         "consumer_policy_blake3"= "2604bdd4cb6aa3824e00fa515e64f68a01ab5df84d2f2342ee0f1e7029f91f07"
       },
       "non_claims"= [
@@ -1340,7 +1522,7 @@ let Registry = {
         "contract_blake3"= "ca290b374f6b2987e6bd56f541a4ac2539df2fcc55878eb9572e25734783f16f",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "3d447dccbcf05cc8bdf1875896266084327a7ae352416e319d7408125dd9cd41",
-        "producer_identity_blake3"= "3811492d59f709d8733ea4faec739115f87d50d436558eb0679119dfd619a02a",
+        "producer_identity_blake3"= "d321d705773c24d2e5db9f0ec49568a660357d67b3f9c7305d4d4436d3a17662",
         "consumer_policy_blake3"= "f1fe25ad7bf31510a0d970cabe8f0eea37b17342b7743bcd39c3858a4e5adb0a"
       },
       "non_claims"= [

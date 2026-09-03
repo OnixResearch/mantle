@@ -836,12 +836,11 @@ fn subject_link_failure(
             attachment.subject.claim_root_blake3, input.expected_claim_root_blake3
         )]));
     }
-    if let (Some(expected), Some(actual)) = (&input.expected_source_revision, &attachment.subject.source_revision)
-        && expected != actual
-    {
-        return Some(context.fail("stale-source-subject", vec![format!(
-            "attachment binds source revision {actual} but the release names {expected}"
-        )]));
+    if let Some(diagnostic) = source_revision_link_failure(
+        input.expected_source_revision.as_deref(),
+        attachment.subject.source_revision.as_deref(),
+    ) {
+        return Some(context.fail("stale-source-subject", vec![diagnostic]));
     }
     if attachment.subject.review_policy_digest_blake3 != context.policy_blake3 {
         return Some(context.fail("policy-mismatch", vec![format!(
@@ -850,6 +849,20 @@ fn subject_link_failure(
         )]));
     }
     None
+}
+
+// r[impl mantle.release_provenance.source_observation_binding]
+fn source_revision_link_failure(expected: Option<&str>, actual: Option<&str>) -> Option<String> {
+    match (expected, actual) {
+        (Some(expected), Some(actual)) if expected != actual => {
+            Some(format!("attachment binds source revision {actual} but the release names {expected}"))
+        }
+        (Some(expected), None) => Some(format!("attachment omits source revision but the release names {expected}")),
+        (None, Some(actual)) => {
+            Some(format!("attachment binds source revision {actual} but the release names no immutable revision"))
+        }
+        (Some(_), Some(_)) | (None, None) => None,
+    }
 }
 
 fn role_domain_failure(
@@ -1530,6 +1543,30 @@ mod tests {
         input.expected_source_revision = Some("revision-new".to_string());
         let result = evaluate_source_verification_fail(&input);
         assert_eq!(result.reason_code.as_deref(), Some("stale-source-subject"));
+    }
+
+    #[test]
+    fn source_revision_presence_must_match_release_subject_exactly() {
+        let policy = policy_two_reviewers();
+        let policy_digest = reviewed_source_policy_identity(&policy).unwrap();
+        let missing = attachment(vec![approval("reviewer-a", KEY_A_HEX, &sig_hex('a'))], &policy_digest);
+        let mut missing_input =
+            valid_input(SourceReviewMode::RequiredReviewedSource, &policy, &missing, vec![verified_observation(
+                KEY_A_HEX,
+            )]);
+        missing_input.expected_source_revision = Some("revision-required".to_string());
+        let missing_result = evaluate_source_verification_fail(&missing_input);
+
+        let mut unexpected = missing.clone();
+        unexpected.subject.source_revision = Some("revision-unexpected".to_string());
+        unexpected.attachment_blake3 = attachment_identity_excluding_field(&unexpected);
+        let unexpected_input =
+            valid_input(SourceReviewMode::RequiredReviewedSource, &policy, &unexpected, vec![verified_observation(
+                KEY_A_HEX,
+            )]);
+        let unexpected_result = evaluate_source_verification_fail(&unexpected_input);
+        assert_eq!(missing_result.reason_code.as_deref(), Some("stale-source-subject"));
+        assert_eq!(unexpected_result.reason_code.as_deref(), Some("stale-source-subject"));
     }
 
     #[test]

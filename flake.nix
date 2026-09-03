@@ -331,6 +331,8 @@
             || pkgs.lib.hasPrefix "${toString ./examples/projects}/" pathString
             || pkgs.lib.hasPrefix "${toString ./examples/transcripts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./schemas/machine-contracts}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./crates/crunch-source-core/fixtures}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./crates/crunch-release-core/fixtures}/" pathString
             || pkgs.lib.hasPrefix "${toString ./tests/fixtures}/" pathString
             || pkgs.lib.hasPrefix "${toString ./fixtures/nario-v2}/" pathString
             || isContentBoundRequirementFixture pathString
@@ -1133,6 +1135,22 @@
           '';
         };
 
+        sourceObservationArchitectureCheck = craneLib.mkCargoDerivation {
+          pname = "mantle-source-observation-architecture-check";
+          inherit src cargoVendorDir;
+          cargoArtifacts = null;
+          nativeBuildInputs = nativeBuildInputs ++ [ rustToolchain ];
+          buildPhaseCargoCommand = ''
+            cargo -Zscript --offline scripts/check-source-observation-architecture.rs --self-test
+            cargo -Zscript --offline scripts/check-source-observation-architecture.rs --root .
+          '';
+          doInstallCargoArtifacts = false;
+          installPhaseCommand = ''
+            mkdir -p "$out"
+            printf '%s\n' 'source_observation_architecture_findings=0' > "$out/report.txt"
+          '';
+        };
+
         tigerstyleRunner = pkgs.writeShellApplication {
           name = "crunch-tigerstyle";
           runtimeInputs = nativeBuildInputs ++ [
@@ -1430,6 +1448,7 @@
           rust-plan-hexagon-architecture = rustPlanHexagonArchitectureCheck;
           build-planning-architecture = buildPlanningArchitectureCheck;
           cli-application-architecture = cliApplicationArchitectureCheck;
+          source-observation-architecture = sourceObservationArchitectureCheck;
           content-bound-requirement-source-closure = contentBoundRequirementSourceClosure;
           content-bound-requirement-evidence = contentBoundRequirementEvidence;
           store-retention-policy =
@@ -1735,6 +1754,26 @@
               buildInputs
               ;
             cargoExtraArgs = "-p mantle-application-core -p mantle-application --lib --target wasm32-unknown-unknown";
+          };
+
+          source-core = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p crunch-source-core --all-targets";
+          };
+
+          source-core-wasm = craneLib.cargoBuild {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoExtraArgs = "-p crunch-source-core --lib --target wasm32-unknown-unknown";
           };
 
           mantle-build-contract = craneLib.cargoTest {

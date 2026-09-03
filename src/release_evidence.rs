@@ -781,7 +781,7 @@ fn build_release_manifest(
 ) -> Result<ReleaseEvidenceManifest, RunError> {
     let mut evidence = collect_release_manifest_evidence(request, stage_root, &mut inputs)?;
     let source_archive_digest_blake3 = inputs.source_archive.digest_blake3.clone();
-    let source_acquisition = build_source_acquisition(request, &source_archive_digest_blake3);
+    let source_acquisition = build_source_acquisition(request, &source_archive_digest_blake3)?;
     let cairn_handoff = evidence.cairn_handoff.take();
     let mut manifest = compose_release_manifest(request, inputs, evidence, source_acquisition);
     if let Some(handoff) = cairn_handoff {
@@ -1151,20 +1151,25 @@ pub(crate) fn load_full_self_hosting_proof_identity(
 fn build_source_acquisition(
     request: &ReleaseBundleCreateRequest,
     source_archive_digest_blake3: &str,
-) -> Option<SourceAcquisition> {
-    if let Some(git_source) = &request.git_source {
-        return Some(SourceAcquisition::git(
+) -> Result<Option<SourceAcquisition>, RunError> {
+    let acquisition = if let Some(git_source) = &request.git_source {
+        Some(SourceAcquisition::git(
             git_source.remote_url.clone(),
             git_source.commit.clone(),
             git_source.reference.clone(),
             git_source.tag.clone(),
             source_archive_digest_blake3.to_string(),
-        ));
-    }
-    request
-        .source_acquisition_url
-        .as_ref()
-        .map(|url| SourceAcquisition::external_archive(url.clone(), source_archive_digest_blake3.to_string()))
+        ))
+    } else {
+        request
+            .source_acquisition_url
+            .as_ref()
+            .map(|url| SourceAcquisition::external_archive(url.clone(), source_archive_digest_blake3.to_string()))
+    };
+    acquisition
+        .map(SourceAcquisition::with_derived_source_observation)
+        .transpose()
+        .map_err(core_error_to_run_error)
 }
 
 fn validate_create_request(request: &ReleaseBundleCreateRequest) -> Result<(), RunError> {

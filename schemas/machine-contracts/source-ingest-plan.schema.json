@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/source/source-ingest-plan-v1",
+  "title": "Mantle source ingest plan",
+  "x-mantle-rust-owner": "crates/crunch-source-core/src/ingest.rs::SourceIngestPlan",
+  "type": "object",
+  "required": ["schema", "plan_blake3", "disposition", "record_identity", "candidate_record_bytes_blake3", "write_required", "state_preserved_without_execution", "reason_code", "non_claim"],
+  "properties": {
+    "schema": { "type": "string", "const": "mantle-source-ingest-plan-v1", "x-mantle-issue-class": "version" },
+    "plan_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "disposition": { "type": "string", "enum": ["add", "identical-reuse", "identity-conflict", "invalid-rejection"] },
+    "record_identity": { "type": "string", "minLength": 1, "maxLength": 512, "x-mantle-bound-name": { "minLength": "SOURCE_RECORD_ID_BYTES_MIN", "maxLength": "SOURCE_RECORD_ID_BYTES_MAX" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "non-empty" },
+    "candidate_record_bytes_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "existing_record_bytes_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "write_required": { "type": "boolean" },
+    "state_preserved_without_execution": { "type": "boolean" },
+    "reason_code": { "type": "string", "enum": ["new-record", "identical-record-present", "identity-or-content-conflict", "invalid-record-facts"] },
+    "non_claim": { "type": "string", "const": "ingest-plan-authorizes-only-the-described-local-state-transition-and-does-not-prove-source-trust-origin-or-release-eligibility" }
+  },
+  "additionalProperties": false
+}

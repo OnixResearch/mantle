@@ -1,0 +1,78 @@
+{
+  "surface_id": "release.source-observation-binding",
+  "cases": [
+    {
+      "id": "missing-kind",
+      "issue_class": "schema",
+      "expected_path": "/kind",
+      "artifact": {
+        "url": "https://example.invalid/mantle-src.tar",
+        "digest_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "unsupported-observation-version",
+      "issue_class": "version",
+      "expected_path": "/source_observation/schema",
+      "artifact": {
+        "kind": "external-archive",
+        "url": "https://example.invalid/mantle-src.tar",
+        "digest_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_observation": {
+          "schema": "mantle-source-observation-v0",
+          "source_kind": "fixed-url",
+          "locator_class": "url",
+          "normalized_projection": ".",
+          "snapshot_profile": "flat-file-v1",
+          "content_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "observation_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "provenance": "complete",
+          "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness"
+        }
+      }
+    },
+    {
+      "id": "stale-source-content",
+      "issue_class": "cross-field",
+      "expected_path": "/",
+      "artifact": {
+        "kind": "external-archive",
+        "url": "https://example.invalid/mantle-src.tar",
+        "digest_blake3": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "source_observation": {
+          "schema": "mantle-source-observation-v1",
+          "source_kind": "fixed-url",
+          "locator_class": "url",
+          "normalized_projection": ".",
+          "snapshot_profile": "flat-file-v1",
+          "content_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "observation_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "provenance": "complete",
+          "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness"
+        }
+      }
+    },
+    {
+      "id": "unknown-source-signature",
+      "issue_class": "unknown-field",
+      "expected_path": "/source_signature",
+      "artifact": {
+        "kind": "external-archive",
+        "url": "https://example.invalid/mantle-src.tar",
+        "digest_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "source_observation": {
+          "schema": "mantle-source-observation-v1",
+          "source_kind": "fixed-url",
+          "locator_class": "url",
+          "normalized_projection": ".",
+          "snapshot_profile": "flat-file-v1",
+          "content_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "observation_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "provenance": "complete",
+          "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness"
+        },
+        "source_signature": "untrusted"
+      }
+    }
+  ]
+}

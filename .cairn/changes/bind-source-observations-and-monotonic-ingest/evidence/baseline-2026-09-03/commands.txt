@@ -1,0 +1,4 @@
+cargo test -p mantle --bin mantle source_bundle::tests::
+cargo test -p crunch-release-core --lib
+cargo test -p mantle --bin mantle release_source::tests::
+cargo test -p mantle --test release_cli source

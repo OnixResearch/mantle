@@ -8,6 +8,7 @@ license.workspace = true
 artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
 blake3 = { version = "=1.8.2", default-features = false }
 bounded-tree-core = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "b0fd0103bc9eed2c1b6d852045959462d105d8f1" }
+crunch-source-core = { path = "../crunch-source-core" }
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 

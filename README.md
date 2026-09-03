@@ -249,7 +249,8 @@ mantle --state-dir ./offline-state build \
 
 Source readiness proves declared input availability and identity only. Build
 success, output trust, compiler correctness, and release eligibility require
-separate evidence.
+separate evidence. See [source observations and monotonic ingest](docs/source-observations.md)
+for the identity, compatibility, mutation, and release-linkage rules.
 
 ## Mantlepkgs catalogs
 

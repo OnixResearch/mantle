@@ -11,6 +11,7 @@ readonly -a FIRST_PARTY_PACKAGES=(
   crunch-attestation
   crunch-build
   crunch-build-planning-core
+  crunch-source-core
   crunch-delta
   crunch-eval
   crunch-glue

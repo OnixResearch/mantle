@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/release/source-observation-binding-v1",
+  "title": "Mantle release source observation binding",
+  "x-mantle-rust-owner": "crates/crunch-release-core/src/manifest.rs::SourceAcquisition",
+  "$defs": {
+    "immutable_revision": {
+      "type": "object",
+      "required": ["object_format", "value"],
+      "properties": {
+        "object_format": { "type": "string", "enum": ["sha1", "sha256"] },
+        "value": { "type": "string", "minLength": 40, "maxLength": 64, "x-mantle-bound-name": { "minLength": "GIT_SHA1_HEX_LENGTH_CHARS", "maxLength": "GIT_SHA256_HEX_LENGTH_CHARS" }, "x-mantle-length-unit": "utf8-bytes" }
+      },
+      "additionalProperties": false
+    },
+    "source_observation": {
+      "type": "object",
+      "required": ["schema", "source_kind", "locator_class", "normalized_projection", "snapshot_profile", "content_blake3", "observation_blake3", "provenance", "non_claim"],
+      "properties": {
+        "schema": { "type": "string", "const": "mantle-source-observation-v1", "x-mantle-issue-class": "version" },
+        "source_kind": { "type": "string", "enum": ["fixed-url", "vcs-snapshot", "local-logical", "package-mirror", "opaque-adapter"] },
+        "locator_class": { "type": "string", "enum": ["url", "git-remote", "logical-path", "mirror", "opaque"] },
+        "immutable_revision": { "$ref": "#/$defs/immutable_revision" },
+        "normalized_projection": { "type": "string", "x-mantle-semantic": "non-empty" },
+        "snapshot_profile": { "type": "string", "enum": ["flat-file-v1", "canonical-tree-v1", "archive-tree-v1", "opaque-v1"] },
+        "content_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "observation_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "provenance": { "type": "string", "const": "complete" },
+        "non_claim": { "type": "string", "const": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": ["kind", "url", "digest_blake3"],
+  "properties": {
+    "kind": { "type": "string", "enum": ["external-archive", "git"] },
+    "url": { "type": "string", "maxLength": 8192, "x-mantle-bound-name": { "maxLength": "MAX_SOURCE_ACQUISITION_URL_BYTES_COUNT" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "non-empty" },
+    "digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "commit": { "type": "string", "minLength": 40, "maxLength": 64, "x-mantle-bound-name": { "minLength": "GIT_SHA1_HEX_LENGTH_CHARS", "maxLength": "GIT_SHA256_HEX_LENGTH_CHARS" }, "x-mantle-length-unit": "utf8-bytes" },
+    "reference": { "type": "string", "maxLength": 512, "x-mantle-bound-name": { "maxLength": "MAX_SOURCE_ACQUISITION_REF_BYTES_COUNT" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "non-empty" },
+    "tag": { "type": "string", "maxLength": 512, "x-mantle-bound-name": { "maxLength": "MAX_SOURCE_ACQUISITION_REF_BYTES_COUNT" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "non-empty" },
+    "archive_profile": { "type": "string", "const": "mantle-release-source" },
+    "archive_version": { "type": "string", "const": "v1" },
+    "source_observation": { "$ref": "#/$defs/source_observation" }
+  },
+  "additionalProperties": false,
+  "x-mantle-invariants": [
+    { "kind": "field-equals", "left": "/digest_blake3", "right": "/source_observation/content_blake3" }
+  ]
+}

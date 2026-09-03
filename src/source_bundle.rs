@@ -25,6 +25,11 @@ use url::Url;
 
 use crate::errors::RunError;
 
+#[path = "source_bundle/monotonic_ingest.rs"]
+mod monotonic_ingest;
+#[path = "source_bundle/source_observation_adapter.rs"]
+mod source_observation_adapter;
+
 pub const SOURCE_BUNDLE_FORMAT: &str = "mantle-source-bundle-v1";
 pub const SOURCE_OFFLINE_PREFLIGHT_FORMAT: &str = "mantle-source-offline-preflight-v1";
 pub const BOOTSTRAP_SOURCE_PROFILE_FORMAT: &str = "mantle-bootstrap-source-profile-v1";
@@ -142,6 +147,7 @@ const BOOTSTRAP_PROFILE_INDEX_WIDTH: usize = 4;
 const RECORD_SPEC_SEPARATOR: char = ':';
 const SOURCE_STATE_DIR: &str = "source-bundles";
 const SOURCE_RECORDS_DIR: &str = "records";
+const SOURCE_OBSERVATIONS_DIR: &str = "observations";
 const SOURCE_PINS_DIR: &str = "pins";
 const TEMP_FILE_EXTENSION: &str = "tmp";
 const SOURCE_REFRESH_TEMP_FILE_EXTENSION: &str = "source-refresh-tmp";
@@ -243,7 +249,17 @@ pub struct SourceBundleImportReport {
     pub pinned: bool,
     pub manifest_blake3: String,
     pub records: Vec<SourceRecordSummary>,
+    pub source_observations: Vec<SourceObservationImportSummary>,
     pub non_claim: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SourceObservationImportSummary {
+    pub record_identity: String,
+    pub disposition: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observation_blake3: Option<String>,
+    pub content_blake3: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1658,39 +1674,7 @@ pub fn import_source_bundle(
     validate_manifest(manifest)?;
     assert!(manifest.records.len() <= MAX_SOURCE_RECORDS);
     assert_eq!(manifest.non_claim, SOURCE_BUNDLE_NON_CLAIM);
-    let records_dir = source_records_dir(state_dir);
-    fs::create_dir_all(&records_dir)
-        .map_err(|err| RunError::Internal(format!("creating source records dir {}: {err}", records_dir.display())))?;
-    let mut written_records_len = 0u32;
-    let mut skipped_present_records_len = 0u32;
-    let mut summaries = Vec::with_capacity(manifest.records.len());
-    for record in &manifest.records {
-        let summary = summary_for_record(record)?;
-        let target = records_dir.join(format!("{}.json", record.content_blake3));
-        if target.exists() {
-            skipped_present_records_len = skipped_present_records_len
-                .checked_add(1)
-                .ok_or_else(|| RunError::Internal("present source record count overflow".to_string()))?;
-        } else {
-            write_record_atomically(&target, record)?;
-            written_records_len = written_records_len
-                .checked_add(1)
-                .ok_or_else(|| RunError::Internal("imported source record count overflow".to_string()))?;
-        }
-        summaries.push(summary);
-    }
-    if pin {
-        write_pin_atomically(state_dir, manifest)?;
-    }
-    assert_eq!(summaries.len(), manifest.records.len());
-    Ok(SourceBundleImportReport {
-        imported_count: written_records_len,
-        skipped_present_count: skipped_present_records_len,
-        pinned: pin,
-        manifest_blake3: manifest.manifest_blake3.clone(),
-        records: summaries,
-        non_claim: SOURCE_BUNDLE_NON_CLAIM,
-    })
+    monotonic_ingest::import_source_bundle_monotonic(manifest, state_dir, pin)
 }
 
 // r[impl bootstrap_inventory.fresh_clone_source_hydration]
@@ -3482,20 +3466,12 @@ fn source_records_dir(state_dir: &Path) -> PathBuf {
     state_dir.join(SOURCE_STATE_DIR).join(SOURCE_RECORDS_DIR)
 }
 
+fn source_observations_dir(state_dir: &Path) -> PathBuf {
+    state_dir.join(SOURCE_STATE_DIR).join(SOURCE_OBSERVATIONS_DIR)
+}
+
 fn source_pins_dir(state_dir: &Path) -> PathBuf {
     state_dir.join(SOURCE_STATE_DIR).join(SOURCE_PINS_DIR)
-}
-
-fn write_record_atomically(target: &Path, record: &SourceRecord) -> Result<(), RunError> {
-    write_json_atomically(target, record, "source record")
-}
-
-fn write_pin_atomically(state_dir: &Path, manifest: &SourceBundleManifest) -> Result<(), RunError> {
-    let pins_dir = source_pins_dir(state_dir);
-    fs::create_dir_all(&pins_dir)
-        .map_err(|err| RunError::Internal(format!("creating source pins dir {}: {err}", pins_dir.display())))?;
-    let target = pins_dir.join(format!("{}.json", manifest.manifest_blake3));
-    write_json_atomically(&target, manifest, "source pin")
 }
 
 pub(crate) fn write_json_atomically<T: Serialize>(target: &Path, value: &T, label: &str) -> Result<(), RunError> {
@@ -6405,7 +6381,9 @@ mod tests {
         let error =
             hydrate_self_build_source_bundle(&manifest, &manifest.manifest_blake3, &checkout, &state_dir).unwrap_err();
 
-        assert!(error.to_string().contains("creating source records dir"));
+        let diagnostic = error.to_string();
+        assert!(diagnostic.contains("reading source record dir"), "{diagnostic}");
+        assert!(diagnostic.contains("Not a directory"), "{diagnostic}");
         assert!(!checkout.join(VENDOR_DEPS_DIR_NAME).exists());
         assert!(state_dir.is_file());
     }
@@ -7300,7 +7278,7 @@ mod tests {
     }
 
     #[test]
-    fn constructed_store_path_import_skips_only_identical_content() {
+    fn constructed_store_path_import_reuses_identical_and_rejects_changed_content() {
         let temp = tempfile::tempdir().unwrap();
         let physical_path = temp.path().join("constructed-provider");
         let state_dir = temp.path().join("state");
@@ -7312,17 +7290,22 @@ mod tests {
             import_constructed_store_path_source(logical_path, &physical_path, &state_dir, "/mantle/store").unwrap();
         let second =
             import_constructed_store_path_source(logical_path, &physical_path, &state_dir, "/mantle/store").unwrap();
+        let admitted_path = state_dir
+            .join(SOURCE_STATE_DIR)
+            .join(SOURCE_RECORDS_DIR)
+            .join(format!("{}.json", first.records[0].content_blake3));
+        let admitted_bytes = fs::read(&admitted_path).unwrap();
         fs::write(physical_path.join("provider.txt"), b"substituted-provider").unwrap();
-        let changed =
-            import_constructed_store_path_source(logical_path, &physical_path, &state_dir, "/mantle/store").unwrap();
+        let changed = import_constructed_store_path_source(logical_path, &physical_path, &state_dir, "/mantle/store")
+            .unwrap_err();
 
         assert_eq!(first.imported_count, 1);
         assert_eq!(first.skipped_present_count, 0);
         assert_eq!(second.imported_count, 0);
         assert_eq!(second.skipped_present_count, 1);
-        assert_eq!(changed.imported_count, 1);
-        assert_eq!(changed.skipped_present_count, 0);
-        assert_ne!(first.records[0].content_blake3, changed.records[0].content_blake3);
+        assert!(changed.to_string().contains("source-record-identity-conflict"));
+        assert_eq!(fs::read(&admitted_path).unwrap(), admitted_bytes);
+        assert_eq!(sorted_json_paths(&source_records_dir(&state_dir), "source record").unwrap().len(), 1);
     }
 
     #[test]

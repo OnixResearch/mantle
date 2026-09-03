@@ -1,0 +1,92 @@
+{
+  "surface_id": "source.source-ingest-plan",
+  "cases": [
+    {
+      "id": "missing-schema",
+      "issue_class": "schema",
+      "expected_path": "/schema",
+      "artifact": {}
+    },
+    {
+      "id": "unsupported-version",
+      "issue_class": "version",
+      "expected_path": "/schema",
+      "artifact": {
+        "schema": "mantle-source-ingest-plan-v0",
+        "plan_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "disposition": "add",
+        "record_identity": "source/example",
+        "candidate_record_bytes_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "write_required": true,
+        "state_preserved_without_execution": false,
+        "reason_code": "new-record",
+        "non_claim": "ingest-plan-authorizes-only-the-described-local-state-transition-and-does-not-prove-source-trust-origin-or-release-eligibility"
+      }
+    },
+    {
+      "id": "unsupported-disposition",
+      "issue_class": "enum",
+      "expected_path": "/disposition",
+      "artifact": {
+        "schema": "mantle-source-ingest-plan-v1",
+        "plan_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "disposition": "overwrite",
+        "record_identity": "source/example",
+        "candidate_record_bytes_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "write_required": true,
+        "state_preserved_without_execution": false,
+        "reason_code": "new-record",
+        "non_claim": "ingest-plan-authorizes-only-the-described-local-state-transition-and-does-not-prove-source-trust-origin-or-release-eligibility"
+      }
+    },
+    {
+      "id": "empty-record-identity",
+      "issue_class": "bounds",
+      "expected_path": "/record_identity",
+      "artifact": {
+        "schema": "mantle-source-ingest-plan-v1",
+        "plan_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "disposition": "add",
+        "record_identity": "",
+        "candidate_record_bytes_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "write_required": true,
+        "state_preserved_without_execution": false,
+        "reason_code": "new-record",
+        "non_claim": "ingest-plan-authorizes-only-the-described-local-state-transition-and-does-not-prove-source-trust-origin-or-release-eligibility"
+      }
+    },
+    {
+      "id": "malformed-plan-digest",
+      "issue_class": "digest",
+      "expected_path": "/plan_blake3",
+      "artifact": {
+        "schema": "mantle-source-ingest-plan-v1",
+        "plan_blake3": "short",
+        "disposition": "add",
+        "record_identity": "source/example",
+        "candidate_record_bytes_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "write_required": true,
+        "state_preserved_without_execution": false,
+        "reason_code": "new-record",
+        "non_claim": "ingest-plan-authorizes-only-the-described-local-state-transition-and-does-not-prove-source-trust-origin-or-release-eligibility"
+      }
+    },
+    {
+      "id": "unknown-field",
+      "issue_class": "unknown-field",
+      "expected_path": "/replace_existing",
+      "artifact": {
+        "schema": "mantle-source-ingest-plan-v1",
+        "plan_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "disposition": "add",
+        "record_identity": "source/example",
+        "candidate_record_bytes_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "write_required": true,
+        "state_preserved_without_execution": false,
+        "reason_code": "new-record",
+        "non_claim": "ingest-plan-authorizes-only-the-described-local-state-transition-and-does-not-prove-source-trust-origin-or-release-eligibility",
+        "replace_existing": true
+      }
+    }
+  ]
+}

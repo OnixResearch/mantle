@@ -77,6 +77,7 @@ use crunch_release_core::RebuildRunRootIdentity;
 use crunch_release_core::RebuildRunRootObservation;
 use crunch_release_core::ReleaseReproducibilityReport;
 use crunch_release_core::SUPPORTED_SANDBOX_PROFILE_FAMILY;
+use crunch_release_core::SourceAcquisition;
 use crunch_release_core::content_bound_rebuild_descriptor_digest_blake3;
 use crunch_release_core::deterministic_build_proof_receipt_canonical_bytes;
 use crunch_release_core::deterministic_sandbox_isolation_evidence_canonical_bytes;
@@ -1669,6 +1670,8 @@ fn release_verify_required_stack_provenance_fails_when_missing() {
     assert_human_release_verify_rejection(output, "required Valence stack provenance sidecar or receipt is missing");
 }
 
+// r[verify mantle.release_provenance.source_observation_binding]
+// r[verify mantle.release_provenance.source_observation_signature_boundary]
 #[test]
 fn release_create_records_git_source_metadata() {
     let temp = tempfile::tempdir().unwrap();
@@ -1714,6 +1717,15 @@ fn release_create_records_git_source_metadata() {
     assert_eq!(source.commit.as_deref(), Some(commit.as_str()));
     assert_eq!(source.reference.as_deref(), Some(branch_ref.as_str()));
     assert_eq!(source.digest_blake3, manifest.source_archive.digest_blake3);
+    let observation = source.source_observation.expect("Git source observation should be bound");
+    assert_eq!(observation.schema, "mantle-source-observation-v1");
+    assert_eq!(observation.source_kind, crunch_source_core::SourceKind::VcsSnapshot);
+    assert_eq!(observation.snapshot_profile, crunch_source_core::SnapshotProfile::ArchiveTreeV1);
+    assert_eq!(observation.content_blake3, manifest.source_archive.digest_blake3);
+    assert_eq!(observation.immutable_revision.unwrap().value, commit);
+    assert_eq!(observation.observation_blake3.len(), BLAKE3_HEX_LEN);
+
+    crunch().arg("release").arg("verify").arg(&bundle_dir).assert().success();
 }
 
 #[test]
@@ -7444,6 +7456,53 @@ fn attest_release_verify_rejects_invalid_release_signature() {
         .arg(&verification_dir)
         .arg("--trusted-public-key")
         .arg(release_keypair.verifying_key.to_string())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("release attestation signature failed verification"));
+}
+
+// r[verify mantle.release_provenance.source_observation_signature_boundary]
+#[test]
+fn source_observation_cannot_reuse_witness_signature_as_release_authority() {
+    let (temp, bundle_dir, mut manifest) = make_valid_bundle();
+    manifest.source_acquisition = Some(
+        SourceAcquisition::external_archive(
+            "https://example.invalid/mantle-src.tar".to_string(),
+            manifest.source_archive.digest_blake3.clone(),
+        )
+        .with_derived_source_observation()
+        .unwrap(),
+    );
+    write_canonical_manifest(&bundle_dir, &manifest);
+    let signing_key_path = temp.path().join("release.key");
+    write_release_signing_key(&signing_key_path);
+    let verification_dir = temp.path().join("verification-cross-role");
+    crunch()
+        .current_dir(temp.path())
+        .arg("release")
+        .arg("attest")
+        .arg(&bundle_dir)
+        .arg("--verification-dir")
+        .arg(&verification_dir)
+        .arg("--signing-key")
+        .arg(&signing_key_path)
+        .assert()
+        .success();
+    let release_attestation = read_release_attestation(&verification_dir);
+    let witness_key_path = temp.path().join("witness.key");
+    let witness_keypair = write_generated_signing_key(&witness_key_path);
+    write_witness_material(&verification_dir, &release_attestation, &witness_keypair, "source-observer");
+    write_policy(&verification_dir, witness_keypair.verifying_key.name(), Vec::new(), 0);
+    write_empty_revocations(&verification_dir);
+    let witness_signature = std::fs::read(verification_dir.join("witnesses/source-observer.json.sig")).unwrap();
+    write_file(&verification_dir.join("release-attestation.json.sig"), &witness_signature);
+
+    crunch()
+        .arg("attest")
+        .arg("release-verify")
+        .arg(&verification_dir)
+        .arg("--trusted-public-key")
+        .arg(witness_keypair.verifying_key.to_string())
         .assert()
         .failure()
         .stderr(predicate::str::contains("release attestation signature failed verification"));

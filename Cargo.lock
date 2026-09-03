@@ -1674,6 +1674,7 @@ dependencies = [
  "artifact-auth-core",
  "blake3",
  "bounded-tree-core",
+ "crunch-source-core",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -1771,6 +1772,15 @@ name = "crunch-shell-core"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "crunch-source-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
  "serde",
  "serde_json",
 ]
@@ -4871,6 +4881,7 @@ dependencies = [
  "crunch-rust-cache-core",
  "crunch-rustc-wrapper",
  "crunch-shell",
+ "crunch-source-core",
  "crunch-store",
  "crunch-wasm-component",
  "crunch-wasm-component-core",

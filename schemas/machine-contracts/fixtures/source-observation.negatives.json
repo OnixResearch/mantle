@@ -1,0 +1,76 @@
+{
+  "surface_id": "source.source-observation",
+  "cases": [
+    {
+      "id": "missing-schema",
+      "issue_class": "schema",
+      "expected_path": "/schema",
+      "artifact": {}
+    },
+    {
+      "id": "unsupported-version",
+      "issue_class": "version",
+      "expected_path": "/schema",
+      "artifact": {
+        "schema": "mantle-source-observation-v0",
+        "source_kind": "fixed-url",
+        "locator_class": "url",
+        "normalized_projection": ".",
+        "snapshot_profile": "flat-file-v1",
+        "content_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "observation_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "provenance": "complete",
+        "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness"
+      }
+    },
+    {
+      "id": "malformed-content-digest",
+      "issue_class": "digest",
+      "expected_path": "/content_blake3",
+      "artifact": {
+        "schema": "mantle-source-observation-v1",
+        "source_kind": "fixed-url",
+        "locator_class": "url",
+        "normalized_projection": ".",
+        "snapshot_profile": "flat-file-v1",
+        "content_blake3": "not-a-digest",
+        "observation_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "provenance": "complete",
+        "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness"
+      }
+    },
+    {
+      "id": "empty-projection",
+      "issue_class": "bounds",
+      "expected_path": "/normalized_projection",
+      "artifact": {
+        "schema": "mantle-source-observation-v1",
+        "source_kind": "fixed-url",
+        "locator_class": "url",
+        "normalized_projection": "",
+        "snapshot_profile": "flat-file-v1",
+        "content_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "observation_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "provenance": "complete",
+        "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness"
+      }
+    },
+    {
+      "id": "unknown-field",
+      "issue_class": "unknown-field",
+      "expected_path": "/authority",
+      "artifact": {
+        "schema": "mantle-source-observation-v1",
+        "source_kind": "fixed-url",
+        "locator_class": "url",
+        "normalized_projection": ".",
+        "snapshot_profile": "flat-file-v1",
+        "content_blake3": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "observation_blake3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "provenance": "complete",
+        "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+        "authority": "not-part-of-contract"
+      }
+    }
+  ]
+}
