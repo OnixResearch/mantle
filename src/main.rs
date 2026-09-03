@@ -17,6 +17,7 @@ mod build_correctness;
 mod build_failure;
 mod build_log;
 mod build_plan;
+pub mod build_planning_hexagon;
 // Build-report variants intentionally carry complete stable JSON payloads rather than indirect
 // boxed fragments.
 #[allow(clippy::large_enum_variant)]

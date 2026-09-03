@@ -1,0 +1,12 @@
+{
+  "schema": "mantle-build-planning-route-matrix-v1",
+  "cases": [
+    {"name": "local-cache", "expected_route": "cached-local"},
+    {"name": "substitution", "expected_route": "trusted-substitute"},
+    {"name": "archive", "expected_route": "archive-import"},
+    {"name": "source-bundle", "expected_route": "source-bundle"},
+    {"name": "remote-builder", "expected_route": "p2p-remote-builder"},
+    {"name": "local-build", "expected_route": "local-build"},
+    {"name": "preflight", "expected_route": "preflight-error"}
+  ]
+}

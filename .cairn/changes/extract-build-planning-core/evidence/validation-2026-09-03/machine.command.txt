@@ -1,0 +1,2 @@
+nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs --generate
+nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs

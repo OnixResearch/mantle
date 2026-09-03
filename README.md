@@ -89,7 +89,7 @@ mantle build --plan examples/hello.ncl
 mantle build examples/hello.ncl --no-substitute
 ```
 
-Use `mantle --json build ...` for the stable aggregate build report. Its compatibility identifier is `crunch-build-report-v1`.
+Use `mantle --json build ...` for the stable aggregate build report. Its compatibility identifier is `crunch-build-report-v1`. See the [build-planning core guide](docs/build-planning-core.md) for explicit route, concurrency, and effect boundaries.
 
 External CI consumers can bind normalized requests and observations through the host-independent [`mantle-build-contract`](docs/build-interchange-contract.md) component. This contract does not import build or store authority.
 

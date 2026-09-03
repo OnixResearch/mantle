@@ -195,10 +195,31 @@ pub enum Error {
 }
 
 pub fn resolve_max_jobs(user: Option<u32>) -> u32 {
-    const MAX_JOBS_CAP: u32 = 16;
-    match user {
-        Some(j) => j.clamp(1, MAX_JOBS_CAP),
-        None => std::thread::available_parallelism().map(|n| (n.get() as u32).min(MAX_JOBS_CAP)).unwrap_or(1),
+    let observed_parallelism = if user.is_some() {
+        crunch_build_planning_core::ParallelismObservation::Unavailable
+    } else {
+        observe_available_parallelism()
+    };
+    let facts = crunch_build_planning_core::ParallelismFacts::legacy_compatible(user, observed_parallelism);
+    match resolve_max_jobs_from_facts(facts) {
+        Ok(decision) => decision.effective_jobs,
+        Err(_) => crunch_build_planning_core::DEFAULT_FALLBACK_JOBS,
+    }
+}
+
+pub fn resolve_max_jobs_from_facts(
+    facts: crunch_build_planning_core::ParallelismFacts,
+) -> Result<crunch_build_planning_core::JobLimitDecision, crunch_build_planning_core::ParallelismBlocker> {
+    crunch_build_planning_core::plan_parallelism(facts)
+}
+
+fn observe_available_parallelism() -> crunch_build_planning_core::ParallelismObservation {
+    let Ok(parallelism) = std::thread::available_parallelism() else {
+        return crunch_build_planning_core::ParallelismObservation::Unavailable;
+    };
+    match u32::try_from(parallelism.get()) {
+        Ok(value) => crunch_build_planning_core::ParallelismObservation::Available(value),
+        Err(_) => crunch_build_planning_core::ParallelismObservation::ConversionFailed,
     }
 }
 
@@ -1166,6 +1187,46 @@ mod tests {
         assert_eq!(resolve_max_jobs(Some(0)), 1);
         assert_eq!(resolve_max_jobs(Some(1)), 1);
         assert_eq!(resolve_max_jobs(Some(99)), 16);
+    }
+
+    #[test]
+    fn explicit_parallelism_facts_apply_policy_and_executor_caps() {
+        const REQUESTED_JOBS: u32 = 32;
+        const POLICY_JOBS_MAX: u32 = 12;
+        const EXECUTOR_JOBS_MAX: u32 = 7;
+        let decision = resolve_max_jobs_from_facts(crunch_build_planning_core::ParallelismFacts {
+            requested_jobs: Some(REQUESTED_JOBS),
+            observed_parallelism: crunch_build_planning_core::ParallelismObservation::Available(1),
+            policy_jobs_max: POLICY_JOBS_MAX,
+            executor_jobs_max: Some(EXECUTOR_JOBS_MAX),
+            unavailable_policy: crunch_build_planning_core::UnavailableParallelismPolicy::Block,
+            zero_request_policy: crunch_build_planning_core::ZeroRequestPolicy::ClampToOne,
+        })
+        .unwrap();
+        assert_eq!(decision.effective_jobs, EXECUTOR_JOBS_MAX);
+        assert_eq!(decision.reason_codes, vec!["requested-jobs", "policy-cap", "executor-cap"]);
+    }
+
+    #[test]
+    fn explicit_parallelism_facts_reject_conversion_and_zero_limits() {
+        let conversion = resolve_max_jobs_from_facts(crunch_build_planning_core::ParallelismFacts {
+            requested_jobs: None,
+            observed_parallelism: crunch_build_planning_core::ParallelismObservation::ConversionFailed,
+            policy_jobs_max: crunch_build_planning_core::DEFAULT_POLICY_JOBS_MAX,
+            executor_jobs_max: None,
+            unavailable_policy: crunch_build_planning_core::UnavailableParallelismPolicy::Block,
+            zero_request_policy: crunch_build_planning_core::ZeroRequestPolicy::Block,
+        });
+        let zero_executor = resolve_max_jobs_from_facts(crunch_build_planning_core::ParallelismFacts {
+            requested_jobs: Some(1),
+            observed_parallelism: crunch_build_planning_core::ParallelismObservation::Unavailable,
+            policy_jobs_max: crunch_build_planning_core::DEFAULT_POLICY_JOBS_MAX,
+            executor_jobs_max: Some(0),
+            unavailable_policy: crunch_build_planning_core::UnavailableParallelismPolicy::Block,
+            zero_request_policy: crunch_build_planning_core::ZeroRequestPolicy::ClampToOne,
+        });
+        assert_eq!(conversion, Err(crunch_build_planning_core::ParallelismBlocker::ParallelismConversionFailed));
+        assert_eq!(zero_executor, Err(crunch_build_planning_core::ParallelismBlocker::ExecutorLimitZero));
     }
 
     #[test]

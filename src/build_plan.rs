@@ -487,43 +487,54 @@ fn plan_cache_or_build_action(request: CacheActionRequest<'_>) -> BuildPlanEntry
         root,
         cache_status,
     } = request;
-    if cache_status.all_local {
-        debug_assert!(!cache_status.any_build);
-        debug_assert!(!cache_status.any_remote);
-        return root.plan_entry(
+    let decision =
+        crunch_build_planning_core::select_build_action(crunch_build_planning_core::BuildActionObservationFacts {
+            all_local: cache_status.all_local,
+            any_remote: cache_status.any_remote,
+            any_build: cache_status.any_build,
+            source_bundle_present: source_preflight.is_some(),
+            doctor_preflight_ok: doctor_report.ok,
+        });
+    match decision.action {
+        crunch_build_planning_core::BuildActionClass::Cached => root.plan_entry(
             &plan_store.store_dir,
             PlanAction::Cached,
             cache_status.detail,
             remote_builder,
             source_preflight,
-        );
-    }
-    if cache_status.any_remote && !cache_status.any_build && source_preflight.is_none() {
-        return root.plan_entry(
+        ),
+        crunch_build_planning_core::BuildActionClass::Substitute => root.plan_entry(
             &plan_store.store_dir,
             PlanAction::Substitute,
             cache_status.detail,
             remote_builder,
             source_preflight,
-        );
-    }
-    if doctor_report.ok {
-        return root.plan_entry(
+        ),
+        crunch_build_planning_core::BuildActionClass::Build => root.plan_entry(
             &plan_store.store_dir,
             PlanAction::Build,
             cache_status.detail,
             remote_builder,
             source_preflight,
-        );
+        ),
+        crunch_build_planning_core::BuildActionClass::PreflightError => {
+            let detail = failed_doctor_detail(doctor_report);
+            root.remote_aware_preflight_entry(&plan_store.store_dir, Some(detail), remote_builder, source_preflight)
+        }
     }
-    let failing_checks = doctor_report
+}
+
+fn failed_doctor_detail(report: &crate::operator_diagnostics::PreflightReport) -> String {
+    let failing_checks = report
         .checks
         .iter()
         .filter(|check| check.status == crate::operator_diagnostics::PreflightStatus::Failed)
         .map(|check| check.id)
         .collect::<Vec<_>>();
     let detail = format!("local build blocked by preflight checks: {}", failing_checks.join(", "));
-    root.remote_aware_preflight_entry(&plan_store.store_dir, Some(detail), remote_builder, source_preflight)
+    debug_assert!(!report.ok);
+    debug_assert!(!detail.is_empty());
+    detail
 }
 
 struct PlannedRoot {

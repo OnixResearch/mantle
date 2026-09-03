@@ -1,0 +1,54 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-extract-build-planning-core/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-extract-build-planning-core/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-build-planning-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-extract-build-planning-core/crates/crunch-build-planning-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.18s
+     Running unittests src/lib.rs (/tmp/mantle-remote-hexagon-dev-target/debug/deps/crunch_build_planning_core-d3ea137e6616b490)
+
+running 37 tests
+test planning_tests::parallelism_unavailable_uses_declared_fallback ... ok
+test planning_tests::parallelism_conversion_zero_and_bounds_fail_typed ... ok
+test planning_tests::parallelism_uses_explicit_request_and_caps ... ok
+test tests::candidate_order_does_not_change_tie_breaker_result ... ok
+test tests::cli_remote_builder_plan_rejects_missing_output_trust_before_local_build ... ok
+test tests::existing_action_adapter_records_selected_and_rejected_routes ... ok
+test tests::negative_route_facts_keep_specific_blocker_codes ... ok
+test tests::cli_remote_builder_plan_facts_select_remote_route_without_secrets ... ok
+test planning_tests::missing_observation_blocks_without_effects ... ok
+test tests::offline_incomplete_source_bundle_facts_reject_network_and_local_fetch_routes ... ok
+test tests::offline_policy_rejects_network_routes_before_local_build ... ok
+test planning_tests::offline_network_route_is_rejected_before_local_build ... ok
+test tests::offline_ready_source_bundle_facts_select_input_realization_route ... ok
+test tests::remote_builder_plan_facts_reject_missing_input_capability_and_source_readiness ... ok
+test tests::remote_builder_ticket_without_output_trust_is_rejected ... ok
+test tests::reports_preflight_when_no_realization_route_is_eligible ... ok
+test tests::route_report_binds_base_descriptor_generation_and_selected_layer ... ok
+test tests::route_report_rejects_oversized_layer_label ... ok
+test planning_tests::simultaneous_route_failures_keep_typed_ordered_rejections ... ok
+test planning_tests::route_plan_returns_bound_effects_without_execution_claim ... ok
+test planning_tests::remote_output_trust_gap_remains_typed ... ok
+test tests::route_reports_do_not_include_raw_secret_values ... ok
+test planning_tests::silent_route_substitution_fails_closed ... ok
+test tests::selects_archive_import_when_archive_candidate_is_eligible ... ok
+test tests::selects_cached_local_before_remote_candidates ... ok
+test planning_tests::stale_facts_and_wrong_effects_fail_closed ... ok
+test tests::selects_remote_builder_with_privacy_safe_upload_summary ... ok
+test tests::selects_source_bundle_route_when_source_material_is_required ... ok
+test tests::selects_trusted_substitute_when_local_cache_misses ... ok
+test tests::strong_claim_compatible_route_can_be_selected ... ok
+test tests::strong_claim_policy_rejects_practical_only_remote_build ... ok
+test tests::unknown_build_action_fails_closed_as_preflight_error ... ok
+test tests::upload_policy_rejects_forbidden_secret_descriptors ... ok
+test tests::upload_summary_rejects_overflow_without_panicking ... ok
+test planning_tests::equivalent_upload_discovery_order_produces_one_plan ... ok
+test planning_tests::checked_route_matrix_preserves_preference_order ... ok
+test planning_tests::route_matrix_fixture_matches_extracted_policy ... ok
+
+test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_build_planning_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

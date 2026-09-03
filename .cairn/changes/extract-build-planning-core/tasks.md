@@ -1,0 +1,18 @@
+# Tasks: Extract the build-planning core
+
+## Phase 1: Observation and decision boundary
+
+- [x] [serial] [depends:complete-store-capability-migration] I1 Define bounded local-output, source, substituter, archive, remote, doctor, platform, trust, network, claim-strength, executor, and parallelism observation values. Define typed route decisions, rejected reasons, blockers, job limits, and effect plans. r[realization_routing.explicit_observation_boundary] r[build_scheduling.explicit_parallelism_facts]
+- [x] [serial] I2 Move cache, substitution, source-bundle, remote, local-build, and preflight route selection from `src/build_plan.rs` into the pure realization-routing core. Keep store probes, path checks, key loading, doctor execution, remote discovery, and rendering in adapters. r[realization_routing.explicit_observation_boundary]
+- [x] [serial] [depends:separate-remote-build-hexagon] I3 Supply remote candidate and output-trust facts through the remote application contract without opening sessions or exposing provider types. r[realization_routing.explicit_observation_boundary]
+- [x] [serial] I4 Replace `resolve_max_jobs` host observation with a shell observation and a pure policy over requested jobs, observed parallelism, policy cap, and executor limit. r[build_scheduling.explicit_parallelism_facts]
+- [x] [serial] I5 Return typed selected routes, rejected routes, blockers, and plan-bound effects. Add freshness rechecks before mutating effects and reject drift without silent re-planning. r[realization_routing.plan_execution_separation] r[realization_routing.typed_planning_blockers]
+- [x] [serial] I6 Remove shell `RunError` values from route and concurrency policy. Map typed decisions and blockers only in human and JSON presentation adapters. r[realization_routing.typed_planning_blockers]
+
+## Phase 2: Compatibility and verification
+
+- [x] [parallel] V1 Add a checked route matrix for local cache, substitution, source bundle, remote builder, local build, and preflight failure. Include several simultaneous blockers and varied discovery order. r[realization_routing.explicit_observation_boundary] r[realization_routing.typed_planning_blockers]
+- [x] [parallel] V2 Add parallelism tests for explicit requests, unavailable observations, policy and executor caps, zero, overflow, conversion failure, and poisoned host state. r[build_scheduling.explicit_parallelism_facts]
+- [x] [parallel] V3 Add negative tests for missing observations, hidden ambient reads, effect execution during planning, credential redemption, stale plans, wrong effect identity, and silent route substitution. r[realization_routing.plan_execution_separation]
+- [x] [serial] V4 Run `nix develop -c cargo test -p crunch-pipeline`, `nix develop -c cargo test -p mantle --bin mantle realization_routing::`, and `nix develop -c cargo test -p mantle --bin mantle build_plan::`. Preserve exact output in `cairn/changes/extract-build-planning-core/evidence/focused-validation.md`. r[realization_routing.explicit_observation_boundary] r[build_scheduling.explicit_parallelism_facts]
+- [ ] [serial] V5 Run the architecture and hidden-state negative fixtures, focused first-party Clippy with `-D warnings`, `git diff --check`, `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .`, `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate proposal extract-build-planning-core --root .`, `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design extract-build-planning-core --root .`, `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks extract-build-planning-core --root .`, and `nix flake check -L`. r[realization_routing.plan_execution_separation] r[realization_routing.typed_planning_blockers]

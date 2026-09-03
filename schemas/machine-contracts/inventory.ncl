@@ -311,7 +311,7 @@ let Registry = {
         "contract_blake3"= "16ccc6644e6a2b74b1b4db20014818bb73028343e9c3da8a92a0711ed520d434",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "576b0cc4dbed5d3c850a408c032411c180e9a0446507ec333606c25c4b15f719",
-        "producer_identity_blake3"= "82ea38f01375bc313bb11ebd490a7b6131e6157c133fd97f1fafea97a237641d",
+        "producer_identity_blake3"= "836479c5a54cd3d7d304d5c42e4cb017a092588b57ad3d4c0fb7df17c5a7c2b4",
         "consumer_policy_blake3"= "d9c1ccf9e8d250b9ce0b12e6b0b73a2e13db503096b5d725ac3a16e9d65061ed"
       },
       "non_claims"= [
@@ -322,11 +322,12 @@ let Registry = {
     {
       "id"= "realization.route-plan-report",
       "class"= "contracted",
-      "rust_owner"= "src/realization_routing.rs::RoutePlanReport",
+      "rust_owner"= "crates/crunch-build-planning-core/src/lib.rs::RoutePlanReport",
       "producer"= {
         "command_or_api"= "plan_realization_route",
         "marker"= "realization.route-plan-report",
         "source_paths"= [
+          "crates/crunch-build-planning-core/src/lib.rs",
           "src/realization_routing.rs"
         ]
       },
@@ -361,11 +362,11 @@ let Registry = {
       ],
       "freshness_strategy"= "BLAKE3 binds routing policy projection and tie-break semantics",
       "freshness"= {
-        "schema_blake3"= "17e638b27464d8988265039381be6d97d5fefb7001b64ddfe9b98dab8b4da3c8",
+        "schema_blake3"= "4ea9f5313831926c75c0868a71e2763ee08953fc4de6f8b2281a302215d3b929",
         "contract_blake3"= "e2edd1851549b62bd82a7da7048d1510a1850d756d2a5a5b732d27d603023b9a",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "df3e2f92ce6755726b74253e72c45001d8b7452062a03f2a9f38ada5986088d9",
-        "producer_identity_blake3"= "397fb64d01cd5b36803a04eef8793c4c5666899d551052f7d52461b607b10dd2",
+        "producer_identity_blake3"= "6a9a5e18d46a039bd8109a9362642117b411d2c30081132e4aeb7c692e414b0b",
         "consumer_policy_blake3"= "7660bcc9154bd8b4e2e5f317f88b8a276523f64e31aad9c2fef0bb68d5f89dc1"
       },
       "non_claims"= [
@@ -1215,7 +1216,7 @@ let Registry = {
         "contract_blake3"= "d158d85e21edcccbf6d6ae7bc6d3d59aea4acb8f1dc8a52438be38567d4c50f2",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "230228d02be1df38f427caa0f6ca4cd7c1ec8666c2350508d409aef177ccd494",
-        "producer_identity_blake3"= "20a51bc4f2b184ddc14ce988189f21108e1df5649f17698e43ed7587dabb0c16",
+        "producer_identity_blake3"= "85afd9299e1a7f14e45d6ec487fba0e03ad60f4af90c2485bff7ab247b6f71c0",
         "consumer_policy_blake3"= "c81ddbc9befcf012a5b42b3f44c2f17fe44f890ce0dfcc228b2cfefd5eb30dd4"
       },
       "non_claims"= [
@@ -1276,7 +1277,7 @@ let Registry = {
         "contract_blake3"= "723027e965189230cabb05b8ba069effec984e9bd527625a4320c8bd3cbe1af3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "9acb57b93f3b9150f79d59ff8a46ca3b5c2e5b98e83320b0308d57334a13d4a3",
-        "producer_identity_blake3"= "f995fa1e75069bd1f140e1699543f346151640ec7609c9c8b6e60fee5642f28e",
+        "producer_identity_blake3"= "a9b5e95c15994afc49a699936030209e1d91ec8e386daf04ec2674999984829b",
         "consumer_policy_blake3"= "e81324a18c19a70aaa2bec634d4a0b7dccceede6f048bbd332b432a9938adefe"
       },
       "non_claims"= [

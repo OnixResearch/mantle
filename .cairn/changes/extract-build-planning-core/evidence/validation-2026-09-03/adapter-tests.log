@@ -1,0 +1,13 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-extract-build-planning-core/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-extract-build-planning-core/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
+     Running unittests src/main.rs (/tmp/mantle-remote-hexagon-dev-target/debug/deps/mantle-581f63ca86d7bc23)
+
+running 3 tests
+test build_planning_hexagon::tests::remote_contract_projects_candidate_without_opening_a_session ... ok
+test build_planning_hexagon::tests::stale_plan_rejects_before_effect_executor_runs ... ok
+test build_planning_hexagon::tests::accepted_plan_executes_exact_effect_and_records_observation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 2570 filtered out; finished in 0.00s
+

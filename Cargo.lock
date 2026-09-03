@@ -1450,6 +1450,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-build-planning-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "crunch-composition-core"
 version = "0.1.0"
 dependencies = [
@@ -1616,6 +1625,7 @@ name = "crunch-pipeline"
 version = "0.1.0"
 dependencies = [
  "crunch-build",
+ "crunch-build-planning-core",
  "crunch-eval",
  "crunch-evaluation-stream-core",
  "crunch-glue",
@@ -4840,6 +4850,7 @@ dependencies = [
  "crunch-attestation",
  "crunch-bootstrap-core",
  "crunch-build",
+ "crunch-build-planning-core",
  "crunch-composition-core",
  "crunch-delta",
  "crunch-eval",

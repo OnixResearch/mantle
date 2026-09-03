@@ -1,0 +1,1 @@
+nix build "path:$PWD#checks.x86_64-linux.build-planning-core" --no-link -L --builders ''

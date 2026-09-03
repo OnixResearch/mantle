@@ -1,0 +1,37 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-extract-build-planning-core/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-extract-build-planning-core/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-build-planning-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-extract-build-planning-core/crates/crunch-build-planning-core)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-extract-build-planning-core/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-extract-build-planning-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 13s
+     Running unittests src/main.rs (/tmp/mantle-remote-hexagon-dev-target/debug/deps/mantle-581f63ca86d7bc23)
+
+running 24 tests
+test realization_routing::tests::candidate_order_does_not_change_tie_breaker_result ... ok
+test realization_routing::tests::existing_action_adapter_records_selected_and_rejected_routes ... ok
+test realization_routing::tests::cli_remote_builder_plan_rejects_missing_output_trust_before_local_build ... ok
+test realization_routing::tests::offline_incomplete_source_bundle_facts_reject_network_and_local_fetch_routes ... ok
+test realization_routing::tests::negative_route_facts_keep_specific_blocker_codes ... ok
+test realization_routing::tests::cli_remote_builder_plan_facts_select_remote_route_without_secrets ... ok
+test realization_routing::tests::offline_ready_source_bundle_facts_select_input_realization_route ... ok
+test realization_routing::tests::offline_policy_rejects_network_routes_before_local_build ... ok
+test realization_routing::tests::remote_builder_plan_facts_reject_missing_input_capability_and_source_readiness ... ok
+test realization_routing::tests::remote_builder_ticket_without_output_trust_is_rejected ... ok
+test realization_routing::tests::reports_preflight_when_no_realization_route_is_eligible ... ok
+test realization_routing::tests::selects_archive_import_when_archive_candidate_is_eligible ... ok
+test realization_routing::tests::route_report_binds_base_descriptor_generation_and_selected_layer ... ok
+test realization_routing::tests::route_report_rejects_oversized_layer_label ... ok
+test realization_routing::tests::route_reports_do_not_include_raw_secret_values ... ok
+test realization_routing::tests::selects_cached_local_before_remote_candidates ... ok
+test realization_routing::tests::selects_trusted_substitute_when_local_cache_misses ... ok
+test realization_routing::tests::selects_source_bundle_route_when_source_material_is_required ... ok
+test realization_routing::tests::selects_remote_builder_with_privacy_safe_upload_summary ... ok
+test realization_routing::tests::strong_claim_compatible_route_can_be_selected ... ok
+test realization_routing::tests::strong_claim_policy_rejects_practical_only_remote_build ... ok
+test realization_routing::tests::unknown_build_action_fails_closed_as_preflight_error ... ok
+test realization_routing::tests::upload_policy_rejects_forbidden_secret_descriptors ... ok
+test realization_routing::tests::upload_summary_rejects_overflow_without_panicking ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 2549 filtered out; finished in 0.00s
+

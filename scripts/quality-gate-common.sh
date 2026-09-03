@@ -10,6 +10,7 @@ readonly -a FIRST_PARTY_PACKAGES=(
   mantle
   crunch-attestation
   crunch-build
+  crunch-build-planning-core
   crunch-delta
   crunch-eval
   crunch-glue
