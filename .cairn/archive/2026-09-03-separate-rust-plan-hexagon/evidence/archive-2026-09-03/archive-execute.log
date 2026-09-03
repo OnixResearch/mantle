@@ -1,0 +1,1037 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: separate-rust-plan-hexagon",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon"
+    }
+  ],
+  "blocked": false,
+  "change": "separate-rust-plan-hexagon",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "4c32804db9c0d3309e48dd7148eb9f3d3e23f5cd4b0110d83a6fddd7d3046f09",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+    "receipt_hash": "6767ed8b14dd8f3564cacd001ffaea47a8049f223b6d42df429717fe3476d2f6",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "95a2d91499e900298a6764ea5662f86641c7ae066b3befdca5eabfcfc87d05c1",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "12439b68c164e3136ab2a9e2c14ea3a207a36ee3a9d4266ce17a6e578548f4ec",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/design.md"
+        },
+        {
+          "content_hash": "8a63f0f8b175a31a27b25e06c326637d37b82575640ae2e82f86b53e5d5460ca",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/architecture-search-2026-09-02.md"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/baseline-2026-09-02/cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "fc0b040bb8f401ce191ef5d09019b09eadf964fd2e66032b169a51eb774be66e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/baseline-2026-09-02/cairn-validate.log"
+        },
+        {
+          "content_hash": "f5b92be37c0ef17aff7fb963dabf4426f4a17979964fdf6c604e00b619948c20",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/baseline-2026-09-02/rust-plan-cli.command.txt"
+        },
+        {
+          "content_hash": "471c726f76eb1af76d5ec6ddcc1fd3ec809473f44baa237e179a58d0dca7f773",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/baseline-2026-09-02/rust-plan-cli.log"
+        },
+        {
+          "content_hash": "5871bfeae063654f39bf02958e0bc263d21baa7daeb1928ec56ab29f2afde29b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/baseline-2026-09-02/rust-plan-unit.command.txt"
+        },
+        {
+          "content_hash": "b7097533321303962b417237f2f471cbcd7704ef40c4b24145e4dc250742ac8b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/baseline-2026-09-02/rust-plan-unit.log"
+        },
+        {
+          "content_hash": "66944e97d22e95b8517bab17bd1e5763fa4d962b3ddeea8853bf5081b3f01711",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/baseline-2026-09-02/source-commit.txt"
+        },
+        {
+          "content_hash": "1c8ae6ad2b38b8b1216f46f307b326bd79033208e5c97967c584fd40300e3def",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/baseline-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "fe7bf7f10094642f8e6688552149f322b08765959562185062a30e7a39528117",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/architecture-check.command.txt"
+        },
+        {
+          "content_hash": "85693dc910587f4b5939f0cb0fadd19de3e52941500acc564974565b3c378bba",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/architecture-check.log"
+        },
+        {
+          "content_hash": "d561718e6ff063ee3124178d997dabb4b2b6519d005a8147ee7658f31270e5fd",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-gate-design.command.txt"
+        },
+        {
+          "content_hash": "dc1418594f12ea0ae1109bd7f683bec6bd0ef3a6bf5f35d026bc87f5188bc0f6",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-gate-design.log"
+        },
+        {
+          "content_hash": "c2abcf7cea7d034dabf1504f19916d17b1212c753d2fb8f685a1add88ba20115",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-gate-proposal.command.txt"
+        },
+        {
+          "content_hash": "1cd0330d85c0de5a59cfd1387c208971db86221d6e198245dc6e6e0c3d0eb27d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-gate-proposal.log"
+        },
+        {
+          "content_hash": "77f7d6fd10bd91fba077983439e809b8dbe7bd244603a3bf0726aae527aa99d8",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-gate-tasks.command.txt"
+        },
+        {
+          "content_hash": "d808edae122f273a13ab026c9cccf5c4207fbcb526ad8408d0e02f22481c14f0",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-gate-tasks.log"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "4fa9367064b882c8fb4089a007e91d14505cdb81eb57c09b4705170d9c87ddfb",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-validate.log"
+        },
+        {
+          "content_hash": "4f44710f58b27f62b699957baa4416490687dad21a22f9f58d19ff52aa003373",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/machine-check.command.txt"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/machine-check.log"
+        },
+        {
+          "content_hash": "af5f7560f12a869379ef2179ea0cace467ae6b6bd9e10d98bb401df92040167e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/nix-full.command.txt"
+        },
+        {
+          "content_hash": "8167be958bd24c22a3781dfbdcccbff7c03de9a412338c2405b4f70a072d9fcf",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/nix-full.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/nix-full.status"
+        },
+        {
+          "content_hash": "ee04363d155f100e45c7b0479e6b9eec70c3e7232a66429039db2140d25dab90",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/nix-no-build.command.txt"
+        },
+        {
+          "content_hash": "96ffcf8edcce561b53b36cca46cdbebe1c2ef7755837f762d75fa3e987e066e1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/nix-no-build.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/nix-no-build.status"
+        },
+        {
+          "content_hash": "e54cc252b3040685f435f80c84f4d8afc1f3e84bfaba54f521d4c316155c08c0",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/source-commit.txt"
+        },
+        {
+          "content_hash": "ae6f4c309bbb470994a26d2937900c6800895dab645d2f53f28071fb5421c251",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/summary.md"
+        },
+        {
+          "content_hash": "03fde0d018eaff87b28be3705bd2855e34888a342dab946ea63ebb20e08139c2",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/tracey.command.txt"
+        },
+        {
+          "content_hash": "7dfcebb7a5640af2401e8f38a8f687c553326a9f11b82d6d49bf8459d58ffc54",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/tracey.log"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/sync-2026-09-03/cairn-post-sync.command.txt"
+        },
+        {
+          "content_hash": "282340848b18004a6c4c9a09babb3d80f9bef96156254308afc800bd02e21aa1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/sync-2026-09-03/cairn-post-sync.log"
+        },
+        {
+          "content_hash": "0f147d4cf832c0bcec301c5229d3ce5a5fa85476266921e24f4c1fe7309fcd5e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/sync-2026-09-03/summary.md"
+        },
+        {
+          "content_hash": "bf1df41aade3ac72340d978593875e7fc41cc0250183e199c4fa1218f158473e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/sync-2026-09-03/sync-dry.command.txt"
+        },
+        {
+          "content_hash": "2d98df480c9531334990dd7fd331bd6fa0178559a0fe8e45038a67153fa39cab",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/sync-2026-09-03/sync-dry.log"
+        },
+        {
+          "content_hash": "dd37448d226c85fb09164c6cd57ec8c4183e0b1e042b3acd848ef394994ce5c3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/sync-2026-09-03/sync-execute.command.txt"
+        },
+        {
+          "content_hash": "9a775866372cddfb12b36647174f93c9c7f9486b326af0e28d899a65e1053e81",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/sync-2026-09-03/sync-execute.log"
+        },
+        {
+          "content_hash": "9b75f9d49751c75bbbb92e075098d6b9013cf7492492ef820498891649dd9d64",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/adapter-tests.command.txt"
+        },
+        {
+          "content_hash": "714a2138e4100c9f0ba40daa556709e16414dc8e287f8a0a782690673d91e04b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/adapter-tests.log"
+        },
+        {
+          "content_hash": "85693dc910587f4b5939f0cb0fadd19de3e52941500acc564974565b3c378bba",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/architecture-check.log"
+        },
+        {
+          "content_hash": "3bf90d10474adb5ee801a428b13abfc8c9e7cb55c50d39b745985a85c688b883",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/architecture-nix.command.txt"
+        },
+        {
+          "content_hash": "b3d7390566b4ad82c4ec8a77efa6bcc9ee585fbe1e6da84efc09e93342d70c75",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/architecture-nix.log"
+        },
+        {
+          "content_hash": "85693dc910587f4b5939f0cb0fadd19de3e52941500acc564974565b3c378bba",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/architecture-self-test.log"
+        },
+        {
+          "content_hash": "2471ada5f6d483a3d53e199a417f3771a65a3c5093afc8573a76ff2c2a475b5a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/architecture.command.txt"
+        },
+        {
+          "content_hash": "d561718e6ff063ee3124178d997dabb4b2b6519d005a8147ee7658f31270e5fd",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-gate-design.command.txt"
+        },
+        {
+          "content_hash": "c1bae3946c18e6338524533d853919e8c560a5c93c1e62f6e578e55f47730239",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-gate-design.log"
+        },
+        {
+          "content_hash": "c2abcf7cea7d034dabf1504f19916d17b1212c753d2fb8f685a1add88ba20115",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-gate-proposal.command.txt"
+        },
+        {
+          "content_hash": "31616c0c61a89f0520fead0fc666c6ca578d859b15bc241d3916b16792fac41d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-gate-proposal.log"
+        },
+        {
+          "content_hash": "77f7d6fd10bd91fba077983439e809b8dbe7bd244603a3bf0726aae527aa99d8",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-gate-tasks.command.txt"
+        },
+        {
+          "content_hash": "53d3b77dfa9bd3d43d5ada2f328f1a15f732e9f1f11bdca16bb37c44ac99593f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-gate-tasks.log"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "69db587fcce5c04290a4775b630f1719b2fbbcfd432742fc0b3f3318d09994fe",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-validate.log"
+        },
+        {
+          "content_hash": "9fa8dc9570625be2be53d308f958332981ec8fb8137d3dd7ba0ae5da317eaa7d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/blocker-summary.json"
+        },
+        {
+          "content_hash": "4cae79e6572d3a91ca96ed091c15ea37ebd03f545436470e95b57b0cde49d3ad",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/meta.json"
+        },
+        {
+          "content_hash": "182d9f791a8c453ae9d9adf65171f3f60584ba9115227da43bc9bde9c8f6d154",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/non-claims.txt"
+        },
+        {
+          "content_hash": "7e57c5c4c196a049e0d098d35a46ad65cc96d21b9d7778b255bc789a7a59de9d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/output-digests.json"
+        },
+        {
+          "content_hash": "b3cf1136c9dee8235a5c15205012a9cded01913093bf2838ff4d4ba84c779225",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/preflight.json"
+        },
+        {
+          "content_hash": "e65d6f0346c0ac7e33979b33f7b7f4bf32848fa35f2e7dc88f021665d7a7d235",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/receipt.json"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/smoke-stderr.txt"
+        },
+        {
+          "content_hash": "a16072b1b0f8588ee724b9d9fef7771759b1a884dedd56b869049e07fee3559b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/smoke-stdout.txt"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/status.txt"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/stderr.txt"
+        },
+        {
+          "content_hash": "93e97f1211f210acac0a950e4c91af32f463e7c49b2dd60ccad7fa36226f0daa",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof.command.txt"
+        },
+        {
+          "content_hash": "ae141d6965229bd8b07c253162c3fc82072649b19618bd3711a127ed6b26d57c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof.log"
+        },
+        {
+          "content_hash": "f5b92be37c0ef17aff7fb963dabf4426f4a17979964fdf6c604e00b619948c20",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cli-tests.command.txt"
+        },
+        {
+          "content_hash": "ba5f42bec4f6995421e243a474f94279a6758d9a174eb3ea645eb0393401ca25",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/cli-tests.log"
+        },
+        {
+          "content_hash": "3d342bb78e058b748574b454dbe3494644052e704ff26fcb99d1e1d4650d0f2b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/clippy.command.txt"
+        },
+        {
+          "content_hash": "17b723646439f2bfb97e11bb36f02fb6980ba0ad014e1310b42b617ec68b705e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/clippy.log"
+        },
+        {
+          "content_hash": "f7997df6d01ff2148bf59e557b311a85b04cc27c6c61822c39a36902574f714e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/core-and-application-tests.command.txt"
+        },
+        {
+          "content_hash": "dded054e50133c9eefba9cd5b2e85e58a01a682f8ecbe7aefec39791bb2570db",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/core-and-application-tests.log"
+        },
+        {
+          "content_hash": "3dbcece6e04286b8a6faba756dce41eef540be8405b126afdba0714b2a8fc7e1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/core-nix.command.txt"
+        },
+        {
+          "content_hash": "b954da255050016e6e8479c073c42ffedd8be638db133473b95cb3207c1818bc",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/core-nix.log"
+        },
+        {
+          "content_hash": "5e70ff01e688dbdd0a69ec05dbccde3ea68ec4944dfc620774ab566beec0bd38",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/core-wasm-nix.command.txt"
+        },
+        {
+          "content_hash": "b546358be82e41d87c5b40ffa07e1d13154e6992e6edc4fc92e321e6bb02abcc",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/core-wasm-nix.log"
+        },
+        {
+          "content_hash": "5dcc26bd02f68de30ca7aa009d4da89ad23d9d93228f1182757082c969660df6",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/durable-publication.command.txt"
+        },
+        {
+          "content_hash": "483fea00f5f639b260bf09fea0418db4636bf7e54724860f577775ae4685ea69",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/durable-publication.log"
+        },
+        {
+          "content_hash": "c04938de09d3b725ccd23ccf4777cadbf7698b6b04d3c2c321e3c5ae2c616f57",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/formatting.command.txt"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/formatting.log"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/machine-check.log"
+        },
+        {
+          "content_hash": "614b2f479d61102180b565fa143579df2f9eb4fc849c29d55ee25cd055475d3a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/machine-generate.log"
+        },
+        {
+          "content_hash": "18022d49f8bcbc22bf727432d84ad8c3676544ee81e05f53619ab7d9004462fe",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/machine.command.txt"
+        },
+        {
+          "content_hash": "1368b9bd675c8c8d904da6873f29237dc8196df1f3c1c280ac26fc767b98d566",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/mantle-build.log"
+        },
+        {
+          "content_hash": "a357b768d6882a9bd40996b4b0e412666db6ca089d469c2d300e871151f6c0c3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/rust-plan-unit-focused-rerun.log"
+        },
+        {
+          "content_hash": "5871bfeae063654f39bf02958e0bc263d21baa7daeb1928ec56ab29f2afde29b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/rust-plan-unit-tests.command.txt"
+        },
+        {
+          "content_hash": "a68f753ded30670298f78cc664415383cc086802c61091a62913fe344fed681c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/rust-plan-unit-tests.log"
+        },
+        {
+          "content_hash": "d90240ecadc67bbb03a7c5aa08c9274304fdbf5448aeeb5347d4216be3bdd040",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/rust-plan-unit-transient-failure.log"
+        },
+        {
+          "content_hash": "fc939ea35df19ab9ccca03d4ee21665cc4f27d7056c3d2fb7ca46543cd6ee7a1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "b3b72212a38a15ee4a6338c53f99ab3e6f7c6ab1520c487288214ac6f87b73e6",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/tigerstyle.command.txt"
+        },
+        {
+          "content_hash": "2dcae70b5f85fdbde8585555445e808f771fedc16eac4d7d11a29ec03919f927",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/tigerstyle.log"
+        },
+        {
+          "content_hash": "03fde0d018eaff87b28be3705bd2855e34888a342dab946ea63ebb20e08139c2",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/tracey.command.txt"
+        },
+        {
+          "content_hash": "7dfcebb7a5640af2401e8f38a8f687c553326a9f11b82d6d49bf8459d58ffc54",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/tracey.log"
+        },
+        {
+          "content_hash": "b1be3cde79fd2d0c627bdbc39c361083fca9f94ace069543a945a3c03b268e15",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/wasm-check.command.txt"
+        },
+        {
+          "content_hash": "54d0061aa2c78ebd51bcb64749a458b180ab687e8c3a0edfa943579c6df4c081",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/evidence/validation-2026-09-02/wasm-check.log"
+        },
+        {
+          "content_hash": "ed32ecab7782f096f215c7f346b808b9488cebc81e4a9af32eb52c88073087aa",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/proposal.md"
+        },
+        {
+          "content_hash": "05f49e18c9c34383f7652cda9b686d00be944ef9570bf23498514b2967c66ee2",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/specs/rust-package-planning/spec.md"
+        },
+        {
+          "content_hash": "8c7391037139a34f81f80dabd6d1f0e2d0cc6e57e9176214f17a0b0031f4ff66",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-separate-rust-plan-hexagon/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon"
+        }
+      ],
+      "manifest_hash": "50ac68e5e0b2db31a72a69303071a12253ba32f42367fd6ce599c3c67937ba76"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "12439b68c164e3136ab2a9e2c14ea3a207a36ee3a9d4266ce17a6e578548f4ec",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/design.md"
+        },
+        {
+          "content_hash": "8a63f0f8b175a31a27b25e06c326637d37b82575640ae2e82f86b53e5d5460ca",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/architecture-search-2026-09-02.md"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/baseline-2026-09-02/cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "fc0b040bb8f401ce191ef5d09019b09eadf964fd2e66032b169a51eb774be66e",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/baseline-2026-09-02/cairn-validate.log"
+        },
+        {
+          "content_hash": "f5b92be37c0ef17aff7fb963dabf4426f4a17979964fdf6c604e00b619948c20",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/baseline-2026-09-02/rust-plan-cli.command.txt"
+        },
+        {
+          "content_hash": "471c726f76eb1af76d5ec6ddcc1fd3ec809473f44baa237e179a58d0dca7f773",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/baseline-2026-09-02/rust-plan-cli.log"
+        },
+        {
+          "content_hash": "5871bfeae063654f39bf02958e0bc263d21baa7daeb1928ec56ab29f2afde29b",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/baseline-2026-09-02/rust-plan-unit.command.txt"
+        },
+        {
+          "content_hash": "b7097533321303962b417237f2f471cbcd7704ef40c4b24145e4dc250742ac8b",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/baseline-2026-09-02/rust-plan-unit.log"
+        },
+        {
+          "content_hash": "66944e97d22e95b8517bab17bd1e5763fa4d962b3ddeea8853bf5081b3f01711",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/baseline-2026-09-02/source-commit.txt"
+        },
+        {
+          "content_hash": "1c8ae6ad2b38b8b1216f46f307b326bd79033208e5c97967c584fd40300e3def",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/baseline-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "fe7bf7f10094642f8e6688552149f322b08765959562185062a30e7a39528117",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/architecture-check.command.txt"
+        },
+        {
+          "content_hash": "85693dc910587f4b5939f0cb0fadd19de3e52941500acc564974565b3c378bba",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/architecture-check.log"
+        },
+        {
+          "content_hash": "d561718e6ff063ee3124178d997dabb4b2b6519d005a8147ee7658f31270e5fd",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-gate-design.command.txt"
+        },
+        {
+          "content_hash": "dc1418594f12ea0ae1109bd7f683bec6bd0ef3a6bf5f35d026bc87f5188bc0f6",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-gate-design.log"
+        },
+        {
+          "content_hash": "c2abcf7cea7d034dabf1504f19916d17b1212c753d2fb8f685a1add88ba20115",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-gate-proposal.command.txt"
+        },
+        {
+          "content_hash": "1cd0330d85c0de5a59cfd1387c208971db86221d6e198245dc6e6e0c3d0eb27d",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-gate-proposal.log"
+        },
+        {
+          "content_hash": "77f7d6fd10bd91fba077983439e809b8dbe7bd244603a3bf0726aae527aa99d8",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-gate-tasks.command.txt"
+        },
+        {
+          "content_hash": "d808edae122f273a13ab026c9cccf5c4207fbcb526ad8408d0e02f22481c14f0",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-gate-tasks.log"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "4fa9367064b882c8fb4089a007e91d14505cdb81eb57c09b4705170d9c87ddfb",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/cairn-validate.log"
+        },
+        {
+          "content_hash": "4f44710f58b27f62b699957baa4416490687dad21a22f9f58d19ff52aa003373",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/machine-check.command.txt"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/machine-check.log"
+        },
+        {
+          "content_hash": "af5f7560f12a869379ef2179ea0cace467ae6b6bd9e10d98bb401df92040167e",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/nix-full.command.txt"
+        },
+        {
+          "content_hash": "8167be958bd24c22a3781dfbdcccbff7c03de9a412338c2405b4f70a072d9fcf",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/nix-full.log"
+        },
+        {
+          "content_hash": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/nix-full.status"
+        },
+        {
+          "content_hash": "ee04363d155f100e45c7b0479e6b9eec70c3e7232a66429039db2140d25dab90",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/nix-no-build.command.txt"
+        },
+        {
+          "content_hash": "96ffcf8edcce561b53b36cca46cdbebe1c2ef7755837f762d75fa3e987e066e1",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/nix-no-build.log"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/nix-no-build.status"
+        },
+        {
+          "content_hash": "e54cc252b3040685f435f80c84f4d8afc1f3e84bfaba54f521d4c316155c08c0",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/source-commit.txt"
+        },
+        {
+          "content_hash": "ae6f4c309bbb470994a26d2937900c6800895dab645d2f53f28071fb5421c251",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/summary.md"
+        },
+        {
+          "content_hash": "03fde0d018eaff87b28be3705bd2855e34888a342dab946ea63ebb20e08139c2",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/tracey.command.txt"
+        },
+        {
+          "content_hash": "7dfcebb7a5640af2401e8f38a8f687c553326a9f11b82d6d49bf8459d58ffc54",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/committed-validation-2026-09-03/tracey.log"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/sync-2026-09-03/cairn-post-sync.command.txt"
+        },
+        {
+          "content_hash": "282340848b18004a6c4c9a09babb3d80f9bef96156254308afc800bd02e21aa1",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/sync-2026-09-03/cairn-post-sync.log"
+        },
+        {
+          "content_hash": "0f147d4cf832c0bcec301c5229d3ce5a5fa85476266921e24f4c1fe7309fcd5e",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/sync-2026-09-03/summary.md"
+        },
+        {
+          "content_hash": "bf1df41aade3ac72340d978593875e7fc41cc0250183e199c4fa1218f158473e",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/sync-2026-09-03/sync-dry.command.txt"
+        },
+        {
+          "content_hash": "2d98df480c9531334990dd7fd331bd6fa0178559a0fe8e45038a67153fa39cab",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/sync-2026-09-03/sync-dry.log"
+        },
+        {
+          "content_hash": "dd37448d226c85fb09164c6cd57ec8c4183e0b1e042b3acd848ef394994ce5c3",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/sync-2026-09-03/sync-execute.command.txt"
+        },
+        {
+          "content_hash": "9a775866372cddfb12b36647174f93c9c7f9486b326af0e28d899a65e1053e81",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/sync-2026-09-03/sync-execute.log"
+        },
+        {
+          "content_hash": "9b75f9d49751c75bbbb92e075098d6b9013cf7492492ef820498891649dd9d64",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/adapter-tests.command.txt"
+        },
+        {
+          "content_hash": "714a2138e4100c9f0ba40daa556709e16414dc8e287f8a0a782690673d91e04b",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/adapter-tests.log"
+        },
+        {
+          "content_hash": "85693dc910587f4b5939f0cb0fadd19de3e52941500acc564974565b3c378bba",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/architecture-check.log"
+        },
+        {
+          "content_hash": "3bf90d10474adb5ee801a428b13abfc8c9e7cb55c50d39b745985a85c688b883",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/architecture-nix.command.txt"
+        },
+        {
+          "content_hash": "b3d7390566b4ad82c4ec8a77efa6bcc9ee585fbe1e6da84efc09e93342d70c75",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/architecture-nix.log"
+        },
+        {
+          "content_hash": "85693dc910587f4b5939f0cb0fadd19de3e52941500acc564974565b3c378bba",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/architecture-self-test.log"
+        },
+        {
+          "content_hash": "2471ada5f6d483a3d53e199a417f3771a65a3c5093afc8573a76ff2c2a475b5a",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/architecture.command.txt"
+        },
+        {
+          "content_hash": "d561718e6ff063ee3124178d997dabb4b2b6519d005a8147ee7658f31270e5fd",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-gate-design.command.txt"
+        },
+        {
+          "content_hash": "c1bae3946c18e6338524533d853919e8c560a5c93c1e62f6e578e55f47730239",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-gate-design.log"
+        },
+        {
+          "content_hash": "c2abcf7cea7d034dabf1504f19916d17b1212c753d2fb8f685a1add88ba20115",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-gate-proposal.command.txt"
+        },
+        {
+          "content_hash": "31616c0c61a89f0520fead0fc666c6ca578d859b15bc241d3916b16792fac41d",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-gate-proposal.log"
+        },
+        {
+          "content_hash": "77f7d6fd10bd91fba077983439e809b8dbe7bd244603a3bf0726aae527aa99d8",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-gate-tasks.command.txt"
+        },
+        {
+          "content_hash": "53d3b77dfa9bd3d43d5ada2f328f1a15f732e9f1f11bdca16bb37c44ac99593f",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-gate-tasks.log"
+        },
+        {
+          "content_hash": "0de2782cf4f495f568fe0004a5bec6217eccce92bed30e5b375093a1f95c190f",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-validate.command.txt"
+        },
+        {
+          "content_hash": "69db587fcce5c04290a4775b630f1719b2fbbcfd432742fc0b3f3318d09994fe",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cairn-validate.log"
+        },
+        {
+          "content_hash": "9fa8dc9570625be2be53d308f958332981ec8fb8137d3dd7ba0ae5da317eaa7d",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/blocker-summary.json"
+        },
+        {
+          "content_hash": "4cae79e6572d3a91ca96ed091c15ea37ebd03f545436470e95b57b0cde49d3ad",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/meta.json"
+        },
+        {
+          "content_hash": "182d9f791a8c453ae9d9adf65171f3f60584ba9115227da43bc9bde9c8f6d154",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/non-claims.txt"
+        },
+        {
+          "content_hash": "7e57c5c4c196a049e0d098d35a46ad65cc96d21b9d7778b255bc789a7a59de9d",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/output-digests.json"
+        },
+        {
+          "content_hash": "b3cf1136c9dee8235a5c15205012a9cded01913093bf2838ff4d4ba84c779225",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/preflight.json"
+        },
+        {
+          "content_hash": "e65d6f0346c0ac7e33979b33f7b7f4bf32848fa35f2e7dc88f021665d7a7d235",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/receipt.json"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/smoke-stderr.txt"
+        },
+        {
+          "content_hash": "a16072b1b0f8588ee724b9d9fef7771759b1a884dedd56b869049e07fee3559b",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/smoke-stdout.txt"
+        },
+        {
+          "content_hash": "148f02f92554e6acdee4cc513b5cd4e13883a1726b9dca02b19fe9a95c79a369",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/status.txt"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof/stderr.txt"
+        },
+        {
+          "content_hash": "93e97f1211f210acac0a950e4c91af32f463e7c49b2dd60ccad7fa36226f0daa",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof.command.txt"
+        },
+        {
+          "content_hash": "ae141d6965229bd8b07c253162c3fc82072649b19618bd3711a127ed6b26d57c",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cargo-free-proof.log"
+        },
+        {
+          "content_hash": "f5b92be37c0ef17aff7fb963dabf4426f4a17979964fdf6c604e00b619948c20",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cli-tests.command.txt"
+        },
+        {
+          "content_hash": "ba5f42bec4f6995421e243a474f94279a6758d9a174eb3ea645eb0393401ca25",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/cli-tests.log"
+        },
+        {
+          "content_hash": "3d342bb78e058b748574b454dbe3494644052e704ff26fcb99d1e1d4650d0f2b",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/clippy.command.txt"
+        },
+        {
+          "content_hash": "17b723646439f2bfb97e11bb36f02fb6980ba0ad014e1310b42b617ec68b705e",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/clippy.log"
+        },
+        {
+          "content_hash": "f7997df6d01ff2148bf59e557b311a85b04cc27c6c61822c39a36902574f714e",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/core-and-application-tests.command.txt"
+        },
+        {
+          "content_hash": "dded054e50133c9eefba9cd5b2e85e58a01a682f8ecbe7aefec39791bb2570db",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/core-and-application-tests.log"
+        },
+        {
+          "content_hash": "3dbcece6e04286b8a6faba756dce41eef540be8405b126afdba0714b2a8fc7e1",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/core-nix.command.txt"
+        },
+        {
+          "content_hash": "b954da255050016e6e8479c073c42ffedd8be638db133473b95cb3207c1818bc",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/core-nix.log"
+        },
+        {
+          "content_hash": "5e70ff01e688dbdd0a69ec05dbccde3ea68ec4944dfc620774ab566beec0bd38",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/core-wasm-nix.command.txt"
+        },
+        {
+          "content_hash": "b546358be82e41d87c5b40ffa07e1d13154e6992e6edc4fc92e321e6bb02abcc",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/core-wasm-nix.log"
+        },
+        {
+          "content_hash": "5dcc26bd02f68de30ca7aa009d4da89ad23d9d93228f1182757082c969660df6",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/durable-publication.command.txt"
+        },
+        {
+          "content_hash": "483fea00f5f639b260bf09fea0418db4636bf7e54724860f577775ae4685ea69",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/durable-publication.log"
+        },
+        {
+          "content_hash": "c04938de09d3b725ccd23ccf4777cadbf7698b6b04d3c2c321e3c5ae2c616f57",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/formatting.command.txt"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/formatting.log"
+        },
+        {
+          "content_hash": "eb493ecd680903754baae7e71e30c10eb97bf8e6cacb3dfc1f467fc4bd7fdd9d",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/machine-check.log"
+        },
+        {
+          "content_hash": "614b2f479d61102180b565fa143579df2f9eb4fc849c29d55ee25cd055475d3a",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/machine-generate.log"
+        },
+        {
+          "content_hash": "18022d49f8bcbc22bf727432d84ad8c3676544ee81e05f53619ab7d9004462fe",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/machine.command.txt"
+        },
+        {
+          "content_hash": "1368b9bd675c8c8d904da6873f29237dc8196df1f3c1c280ac26fc767b98d566",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/mantle-build.log"
+        },
+        {
+          "content_hash": "a357b768d6882a9bd40996b4b0e412666db6ca089d469c2d300e871151f6c0c3",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/rust-plan-unit-focused-rerun.log"
+        },
+        {
+          "content_hash": "5871bfeae063654f39bf02958e0bc263d21baa7daeb1928ec56ab29f2afde29b",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/rust-plan-unit-tests.command.txt"
+        },
+        {
+          "content_hash": "a68f753ded30670298f78cc664415383cc086802c61091a62913fe344fed681c",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/rust-plan-unit-tests.log"
+        },
+        {
+          "content_hash": "d90240ecadc67bbb03a7c5aa08c9274304fdbf5448aeeb5347d4216be3bdd040",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/rust-plan-unit-transient-failure.log"
+        },
+        {
+          "content_hash": "fc939ea35df19ab9ccca03d4ee21665cc4f27d7056c3d2fb7ca46543cd6ee7a1",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/summary.md"
+        },
+        {
+          "content_hash": "b3b72212a38a15ee4a6338c53f99ab3e6f7c6ab1520c487288214ac6f87b73e6",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/tigerstyle.command.txt"
+        },
+        {
+          "content_hash": "2dcae70b5f85fdbde8585555445e808f771fedc16eac4d7d11a29ec03919f927",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/tigerstyle.log"
+        },
+        {
+          "content_hash": "03fde0d018eaff87b28be3705bd2855e34888a342dab946ea63ebb20e08139c2",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/tracey.command.txt"
+        },
+        {
+          "content_hash": "7dfcebb7a5640af2401e8f38a8f687c553326a9f11b82d6d49bf8459d58ffc54",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/tracey.log"
+        },
+        {
+          "content_hash": "b1be3cde79fd2d0c627bdbc39c361083fca9f94ace069543a945a3c03b268e15",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/wasm-check.command.txt"
+        },
+        {
+          "content_hash": "54d0061aa2c78ebd51bcb64749a458b180ab687e8c3a0edfa943579c6df4c081",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/evidence/validation-2026-09-02/wasm-check.log"
+        },
+        {
+          "content_hash": "ed32ecab7782f096f215c7f346b808b9488cebc81e4a9af32eb52c88073087aa",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/proposal.md"
+        },
+        {
+          "content_hash": "05f49e18c9c34383f7652cda9b686d00be944ef9570bf23498514b2967c66ee2",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/specs/rust-package-planning/spec.md"
+        },
+        {
+          "content_hash": "8c7391037139a34f81f80dabd6d1f0e2d0cc6e57e9176214f17a0b0031f4ff66",
+          "exists": true,
+          "path": "./.cairn/changes/separate-rust-plan-hexagon/tasks.md"
+        }
+      ],
+      "manifest_hash": "4c92a0bdd1b9bc46a78bd2e3a7088b212d8b36901b5b4c8ce5c04d67b59e558a"
+    },
+    "kind": "archive",
+    "manifest_hash": "7ac7c41911a1148d69753c51427e319830147ec57d95aa88728ad4ce8bed3079"
+  },
+  "plan_hash": "ce634e803afacdd46586f0e7246d92f146948c7f7a300625be041a9db8f442e5",
+  "policy": "mantle-default",
+  "policy_hash": "69891b1b46c1b38dad36043d5603ad45768bbeb4bc61ad10b72bc0cbabadb0d7",
+  "reasons": [],
+  "receipt_hash": "7b51208d7218e71859033b223903b9d56e81c3d8e7e3436af10a9839fb031109"
+}
