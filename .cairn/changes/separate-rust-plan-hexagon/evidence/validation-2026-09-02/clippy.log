@@ -1,0 +1,13 @@
+[clippy] first-party strict gate
+running: cargo clippy --workspace --all-targets --no-deps --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- -D warnings
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/crates/crunch-eval)
+    Checking mantle-rust-plan-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/crates/mantle-rust-plan-core)
+    Checking crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/crates/crunch-pipeline)
+    Checking crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/crates/crunch-project)
+    Checking crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/crates/crunch-hardware-simulation)
+    Checking mantle-rust-plan v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/crates/mantle-rust-plan)
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 42s

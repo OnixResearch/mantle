@@ -160,6 +160,7 @@ mod rust_bootstrap_patch_plan;
 // failures.
 #[allow(dead_code, clippy::result_large_err, clippy::too_many_arguments)]
 mod rust_plan;
+pub mod rust_plan_hexagon;
 // Source-provider receipts retain full stage payloads and detailed fail-closed errors across the
 // shell boundary.
 #[allow(dead_code, clippy::large_enum_variant, clippy::result_large_err)]

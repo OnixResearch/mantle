@@ -1,0 +1,11 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.27s
+     Running unittests src/main.rs (/tmp/mantle-remote-hexagon-dev-target/debug/deps/mantle-a56c986c10d1c6b2)
+
+running 1 test
+test rust_plan::tests::local_castore_restores_every_target_unit_without_compiler_invocation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2569 filtered out; finished in 0.48s
+

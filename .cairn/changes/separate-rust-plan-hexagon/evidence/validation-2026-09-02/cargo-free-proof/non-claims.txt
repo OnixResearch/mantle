@@ -1,0 +1,4 @@
+This proof does not claim Mantle fixed-point self-hosting.
+This proof does not claim source-built bootstrap closure provenance.
+This proof does not claim release-quality reproducibility.
+This proof does not claim network source fetching.

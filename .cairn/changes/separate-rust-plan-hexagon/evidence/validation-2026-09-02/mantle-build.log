@@ -1,0 +1,11 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling ouroboros v0.18.5
+   Compiling nickel-lang-parser v0.3.0
+   Compiling nickel-lang-core v0.18.0
+   Compiling nickel-lang v2.2.0
+   Compiling crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/crates/crunch-eval)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 22s

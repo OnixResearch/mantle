@@ -1,0 +1,1 @@
+nix develop -c cargo test -p mantle --bin mantle rust_plan_hexagon::

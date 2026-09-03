@@ -1,0 +1,13 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+     Running unittests src/main.rs (/tmp/mantle-remote-hexagon-dev-target/debug/deps/mantle-a56c986c10d1c6b2)
+
+running 3 tests
+test rust_plan_hexagon::tests::supplied_fact_adapters_return_application_owned_observations ... ok
+test rust_plan_hexagon::tests::missing_execution_observation_fails_without_process_fallback ... ok
+test rust_plan_hexagon::tests::cache_adapter_rejects_wrong_publication_effect ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 2567 filtered out; finished in 0.00s
+

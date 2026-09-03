@@ -4872,6 +4872,8 @@ dependencies = [
  "futures",
  "libc",
  "mantle-portable-client-core",
+ "mantle-rust-plan",
+ "mantle-rust-plan-core",
  "mantlepkgs-core",
  "nickel-export-core",
  "nix-compat",
@@ -4914,6 +4916,23 @@ name = "mantle-portable-client-core"
 version = "0.1.0"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "mantle-rust-plan"
+version = "0.1.0"
+dependencies = [
+ "mantle-rust-plan-core",
+]
+
+[[package]]
+name = "mantle-rust-plan-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

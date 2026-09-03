@@ -384,6 +384,7 @@ signed directory or HTTP exchange. Mantle keeps existing output and local
 castore reuse ahead of shared transfer. It admits a shared result only after
 full-key authority, policy, object, complete-tree, artifact, and materialization
 checks. See [`docs/native-rust-plan-validation.md`](docs/native-rust-plan-validation.md),
+[`docs/rust-plan-hexagon.md`](docs/rust-plan-hexagon.md),
 [`docs/shared-rust-unit-cache.md`](docs/shared-rust-unit-cache.md), and the
 [Rust compiler cache daemon guide](rust-cache/daemon/README.md).
 

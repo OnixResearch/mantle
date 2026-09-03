@@ -1,0 +1,10 @@
+{
+  "schema": "mantle-cargo-free-rust-plan-proof-v2",
+  "status": "success",
+  "workspace": "/tmp/mantle-rust-plan-cargo-free-proof/work/no-cargo-app",
+  "receipt": "/tmp/mantle-rust-plan-cargo-free-proof/receipt.json",
+  "execution": "/tmp/mantle-rust-plan-cargo-free-proof/execution",
+  "binary": "/tmp/mantle-rust-plan-cargo-free-proof/execution/native_fbb2be21ed3959542fec16f753744a1704a8660c7b83b4b4cb6e6a9053e14311_path_native_no-cargo-app_0.1.0_no-cargo-app_bin_build/no_cargo_app",
+  "smoke_stdout": "42",
+  "cargo_forbidden_marker_absent": true
+}

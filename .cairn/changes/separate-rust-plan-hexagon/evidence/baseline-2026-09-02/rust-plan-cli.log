@@ -1,0 +1,68 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 11s
+     Running tests/rust_plan_cli.rs (/tmp/mantle-remote-hexagon-dev-target/debug/deps/rust_plan_cli-47ac3906a1431e3f)
+
+running 57 tests
+test rust_plan_cli_blocks_unsupported_dev_dependency_test_harness_before_rustc ... ok
+test rust_plan_cli_blocks_unsupported_workspace_member_glob_before_rustc ... ok
+test rust_plan_cli_blocks_unsupported_patch_source_registry_before_rustc ... ok
+test rust_plan_cli_accepts_rlib_cdylib_mixed_library_for_derivation ... ok
+test rust_plan_cli_blocks_host_artifact_topology_without_host_units ... ok
+test rust_plan_cli_blocks_explicit_patch_source_registry_topology_before_rustc ... ok
+test rust_plan_cli_blocks_explicit_workspace_dependency_topology_before_rustc ... ok
+test rust_plan_cli_blocks_unsupported_workspace_dependency_vendored_registry_topology_before_rustc ... ok
+test rust_plan_cli_blocks_unsupported_target_cfg_vendored_registry_topology_before_rustc ... ok
+test rust_plan_cli_blocks_all_features_vendored_registry_topology_before_rustc ... ok
+test rust_plan_cli_binds_conventional_vendor_deps_layout_to_registry_packages ... ok
+test rust_plan_cli_blocks_host_artifact_topology_when_native_host_graph_is_not_ready ... ok
+test rust_plan_cli_blocks_unified_topology_when_native_host_graph_is_not_ready ... ok
+test rust_plan_cli_blocks_native_host_unit_graph_when_native_fragment_is_unsupported ... ok
+test rust_plan_cli_blocks_target_topology_with_proc_macro_host_artifact ... ok
+test rust_plan_cli_executes_supported_unit_from_explicit_receipt_material ... ok
+test rust_plan_cli_no_cargo_oracle_blocks_unsupported_surface_without_cargo_fallback ... ok
+test rust_plan_cli_executes_explicit_patch_source_registry_topology ... ok
+test rust_plan_cli_does_not_select_disabled_default_feature_dependency_in_unified_topology ... ok
+test rust_plan_cli_executes_patch_source_registry_dependency_in_unified_topology ... ok
+test rust_plan_cli_executes_explicit_workspace_dependency_vendored_registry_topology ... ok
+test rust_plan_cli_executes_dependency_chain_from_explicit_receipt_material ... ok
+test rust_plan_cli_executes_feature_gated_vendored_registry_dependency_in_unified_topology ... ok
+test rust_plan_cli_executes_target_unit_topology_from_explicit_receipt_material ... ok
+test rust_plan_cli_executes_target_cfg_vendored_registry_dependency_in_unified_topology ... ok
+test rust_plan_cli_blocks_stale_unified_topology_cached_output ... ok
+test rust_plan_cli_ignores_dev_dependency_options_in_normal_build_topology ... ok
+test rust_plan_cli_executes_workspace_dependency_vendored_registry_dependency_in_unified_topology ... ok
+test rust_plan_cli_no_cargo_oracle_executes_path_workspace_without_invoking_cargo ... ok
+test rust_plan_cli_executes_vendored_registry_dependency_in_unified_topology ... ok
+test rust_plan_cli_executes_workspace_member_glob_topology ... ok
+test rust_plan_cli_ignores_out_of_scope_vendored_registry_targets ... ok
+test rust_plan_cli_plans_featured_build_dependency_vendored_registry_source_edge ... ok
+test rust_plan_cli_executes_transitive_vendored_registry_dependencies_in_unified_topology ... ok
+test rust_plan_cli_plans_dev_dependency_test_topology_evidence ... ok
+test rust_plan_cli_ignores_out_of_scope_transitive_vendored_registry_targets ... ok
+test rust_plan_cli_reports_native_host_unit_graph_for_build_script ... ok
+test rust_plan_cli_reports_native_host_unit_graph_for_proc_macro_dependency ... ok
+test rust_plan_cli_normal_topology_does_not_consume_dev_dependency_test_units ... ok
+test rust_plan_cli_selects_implicit_optional_dependency_feature_from_unit_graph ... ok
+test rust_plan_cli_supports_workspace_package_version_inheritance ... ok
+test rust_plan_cli_executes_native_dev_dependency_test_topology ... ok
+test rust_plan_cli_blocks_unsupported_build_script_link_metadata ... ok
+test rust_plan_cli_blocks_malformed_build_script_metadata ... ok
+test rust_plan_cli_reuses_unified_topology_outputs_on_repeat_run ... ok
+test rust_plan_cli_executes_build_script_metadata_topology ... ok
+test rust_plan_cli_executes_vendored_registry_build_script_in_unified_topology ... ok
+test rust_plan_cli_executes_vendored_registry_build_script_host_artifact_topology ... ok
+test rust_plan_cli_executes_build_dependency_vendored_registry_dependency_in_unified_topology ... ok
+test rust_plan_cli_ignores_out_of_scope_vendored_registry_host_artifact_targets ... ok
+test rust_plan_cli_ignores_out_of_scope_vendored_registry_unified_host_targets ... ok
+test rust_plan_cli_executes_proc_macro_host_artifact_topology ... ok
+test rust_plan_cli_ignores_out_of_scope_vendored_registry_proc_macro_targets ... ok
+test rust_plan_cli_executes_vendored_registry_proc_macro_in_unified_topology ... ok
+test rust_plan_cli_binds_build_script_native_link_metadata ... ok
+test rust_plan_cli_executes_unified_topology_for_proc_macro_shape ... ok
+test rust_plan_cli_executes_unified_topology_with_build_script_and_bin ... ok
+
+test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.50s
+

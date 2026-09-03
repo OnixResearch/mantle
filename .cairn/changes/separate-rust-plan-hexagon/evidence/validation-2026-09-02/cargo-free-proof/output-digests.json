@@ -1,0 +1,12 @@
+{
+  "path": "declared-output/libhelper_lib.rlib",
+  "blake3": "5a258977cc021cef3f9f6a384f14106072681f931f400793de7e0b51047ca10c"
+}
+{
+  "path": "declared-output/libno_cargo_app.rlib",
+  "blake3": "1bb2a6b301e954af13d530963fae0b1683c8bb85470929145749a13e31ecf910"
+}
+{
+  "path": "declared-output/no_cargo_app",
+  "blake3": "0154376edc8b4767edef1ff4147a44368823401a47d4e67b856d38eb7681ffad"
+}

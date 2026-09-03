@@ -56,6 +56,11 @@ use crate::cargo_profile_manifest::resolve_profile;
 use crate::cargo_profile_manifest::select_command_profile;
 use crate::cargo_profile_manifest::select_unit_profile;
 use crate::errors::RunError;
+use crate::rust_plan_hexagon::ProcessObservation as CargoOutput;
+use crate::rust_plan_hexagon::RustPlanAdapterError;
+use crate::rust_plan_hexagon::cargo_adapter::CargoProcessAdapter as CargoOracle;
+use crate::rust_plan_hexagon::cargo_adapter::ProcessRustPlanTools as ProcessCargoOracle;
+use crate::rust_plan_hexagon::compiler_adapter::CompilerProcessAdapter;
 
 const RECEIPT_SCHEMA_VERSION: u32 = 1;
 const RUST_UNIT_EXECUTION_RECEIPT_FILE: &str = ".mantle-rust-unit-execution.json";
@@ -1310,47 +1315,6 @@ pub(crate) struct RustPlanPatchSourceTopologyExecutionReceipt {
     pub(crate) native_registry_patch_source_topology_execution: RustPatchSourceTopologyExecutionReceipt,
 }
 
-#[derive(Debug, Clone)]
-struct CargoOutput {
-    stdout: Vec<u8>,
-    stderr: Vec<u8>,
-    status_code: i32,
-}
-
-trait CargoOracle {
-    fn run_cargo(&self, root: &Path, cargo: &Path, args: &[String]) -> Result<CargoOutput, RunError>;
-    fn run_tool_version(&self, tool: &Path, args: &[&str]) -> Result<CargoOutput, RunError>;
-}
-
-struct ProcessCargoOracle;
-
-impl CargoOracle for ProcessCargoOracle {
-    fn run_cargo(&self, root: &Path, cargo: &Path, args: &[String]) -> Result<CargoOutput, RunError> {
-        let output = Command::new(cargo)
-            .args(args)
-            .current_dir(root)
-            .output()
-            .map_err(|err| RunError::Internal(format!("failed to run {}: {err}", cargo.display())))?;
-        Ok(CargoOutput {
-            stdout: output.stdout,
-            stderr: output.stderr,
-            status_code: output.status.code().unwrap_or(1),
-        })
-    }
-
-    fn run_tool_version(&self, tool: &Path, args: &[&str]) -> Result<CargoOutput, RunError> {
-        let output = Command::new(tool)
-            .args(args)
-            .output()
-            .map_err(|err| RunError::Internal(format!("failed to run {}: {err}", tool.display())))?;
-        Ok(CargoOutput {
-            stdout: output.stdout,
-            stderr: output.stderr,
-            status_code: output.status.code().unwrap_or(1),
-        })
-    }
-}
-
 #[derive(Debug, Deserialize)]
 struct CargoMetadata {
     packages: Vec<CargoPackage>,
@@ -1704,56 +1668,19 @@ fn rust_plan_surface_matrix(
 }
 
 fn rust_plan_surface_matrix_status(no_cargo_oracle: bool, blockers: &[String]) -> &'static str {
-    if !no_cargo_oracle {
-        return "oracle";
-    }
-    if blockers.is_empty() {
-        return "supported";
-    }
-    "blocked"
+    mantle_rust_plan_core::compatibility_status(no_cargo_oracle, blockers)
 }
 
 fn rust_plan_surface_ids(no_cargo_oracle: bool, blockers: &[String]) -> Vec<String> {
-    if !no_cargo_oracle {
-        return vec![RUST_COMPATIBILITY_SURFACE_CARGO_ORACLE.to_string()];
-    }
-    if !blockers.is_empty() {
-        return vec![RUST_COMPATIBILITY_SURFACE_BLOCKED_UNSUPPORTED.to_string()];
-    }
-    vec![
-        RUST_COMPATIBILITY_SURFACE_BASIC_PATH_WORKSPACE.to_string(),
-        RUST_COMPATIBILITY_SURFACE_LOCAL_PATH_DEPENDENCY.to_string(),
-        RUST_COMPATIBILITY_SURFACE_WORKSPACE_INHERITANCE.to_string(),
-        RUST_COMPATIBILITY_SURFACE_SOURCE_CLOSURE_DIGEST.to_string(),
-        RUST_COMPATIBILITY_SURFACE_UNIT_GRAPH_FACTS.to_string(),
-    ]
+    mantle_rust_plan_core::compatibility_surface_ids(no_cargo_oracle, blockers)
 }
 
 fn rust_plan_compatibility_class(no_cargo_oracle: bool, blockers: &[String]) -> &'static str {
-    if !no_cargo_oracle {
-        return RUST_PLAN_CLASS_CARGO_ORACLE_EVIDENCE;
-    }
-    if blockers.is_empty() {
-        return RUST_PLAN_CLASS_CARGO_FREE_BOUNDED_TOPOLOGY;
-    }
-    RUST_PLAN_CLASS_BLOCKED_UNSUPPORTED_SURFACE
+    mantle_rust_plan_core::compatibility_class(no_cargo_oracle, blockers)
 }
 
 fn rust_plan_non_claims(no_cargo_oracle: bool) -> Vec<String> {
-    let mut non_claims = if no_cargo_oracle {
-        vec![
-            "bounded-path-workspace-only".to_string(),
-            "not-full-cargo-feature-resolution".to_string(),
-            "declared-vendor-and-captured-git-only".to_string(),
-            "not-network-or-ambient-cargo-source-resolution".to_string(),
-        ]
-    } else {
-        vec!["cargo-used-for-oracle-metadata-and-unit-graph".to_string()]
-    };
-    non_claims.extend(RUST_PLAN_COMMON_NON_CLAIMS.iter().map(|claim| (*claim).to_string()));
-    non_claims.sort();
-    non_claims.dedup();
-    non_claims
+    mantle_rust_plan_core::compatibility_non_claims(no_cargo_oracle)
 }
 
 struct NativePlanningLayers {
@@ -1874,10 +1801,8 @@ fn build_rust_plan_receipt(
     Ok(receipt)
 }
 
-fn capture_rust_plan_with_oracle(
-    options: &RustPlanOptions,
-    oracle: &impl CargoOracle,
-) -> Result<RustPlanReceipt, RunError> {
+fn capture_rust_plan_with_oracle<T>(options: &RustPlanOptions, oracle: &T) -> Result<RustPlanReceipt, RunError>
+where T: CargoOracle + CompilerProcessAdapter {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     validate_options(options)?;
@@ -2711,13 +2636,13 @@ fn validate_options(options: &RustPlanOptions) -> Result<(), RunError> {
     Ok(())
 }
 
-fn run_checked_text(result: Result<CargoOutput, RunError>, label: &str) -> Result<String, RunError> {
+fn run_checked_text(result: Result<CargoOutput, RustPlanAdapterError>, label: &str) -> Result<String, RunError> {
     let bytes = run_checked_bytes(result, label)?;
     String::from_utf8(bytes).map_err(|err| RunError::Internal(format!("{label} emitted non-UTF-8 output: {err}")))
 }
 
-fn run_checked_bytes(result: Result<CargoOutput, RunError>, label: &str) -> Result<Vec<u8>, RunError> {
-    let output = result?;
+fn run_checked_bytes(result: Result<CargoOutput, RustPlanAdapterError>, label: &str) -> Result<Vec<u8>, RunError> {
+    let output = result.map_err(|error| RunError::Internal(error.to_string()))?;
     if output.status_code != 0 {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(RunError::Build(format!(
@@ -6467,12 +6392,13 @@ fn active_rust_target(options: &RustPlanOptions) -> String {
 }
 
 fn selected_triple_for_execution_kind(execution_kind: &str, options: &RustPlanOptions) -> String {
-    debug_assert!(!execution_kind.is_empty());
-    if execution_kind == TARGET_EXECUTION_KIND {
-        active_rust_target(options)
-    } else {
-        host_target_triple()
-    }
+    let host_triple = host_target_triple();
+    let target_triple = active_rust_target(options);
+    mantle_rust_plan_core::selected_triple(mantle_rust_plan_core::TripleSelectionInput {
+        execution_kind,
+        host_triple: &host_triple,
+        target_triple: &target_triple,
+    })
 }
 
 fn host_target_triple() -> String {
@@ -7721,33 +7647,21 @@ struct NativeRustUnitIdInputs<'a> {
 fn native_rust_unit_id(inputs: NativeRustUnitIdInputs<'_>) -> String {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    let NativeRustUnitIdInputs {
-        package,
-        target,
-        mode,
-        profile,
-        dependency_artifacts,
-    } = inputs;
-    let features = package.selected_features.join(",");
-    let dependencies = dependency_artifacts
-        .iter()
-        .map(|dependency| format!("{}:{}", dependency.package_id, dependency.name))
-        .collect::<Vec<_>>()
-        .join(",");
-    let material = [
-        package.package_id.as_str(),
-        target.name.as_str(),
-        target.kind.as_str(),
-        mode,
-        profile,
-        package.source_digest.algorithm.as_str(),
-        package.source_digest.value.as_str(),
-        features.as_str(),
-        dependencies.as_str(),
-    ]
-    .join("\0");
-    let digest = blake3::hash(material.as_bytes()).to_hex().to_string();
-    format!("native:{digest}:{}:{}:{}:{mode}", package.package_id, target.name, target.kind)
+    mantle_rust_plan_core::native_unit_identity(&mantle_rust_plan_core::NativeUnitIdentityInput {
+        package_id: inputs.package.package_id.clone(),
+        target_name: inputs.target.name.clone(),
+        target_kind: inputs.target.kind.clone(),
+        mode: inputs.mode.to_string(),
+        profile: inputs.profile.to_string(),
+        source_algorithm: inputs.package.source_digest.algorithm.clone(),
+        source_value: inputs.package.source_digest.value.clone(),
+        features: inputs.package.selected_features.clone(),
+        dependencies: inputs
+            .dependency_artifacts
+            .iter()
+            .map(|dependency| (dependency.package_id.clone(), dependency.name.clone()))
+            .collect(),
+    })
 }
 
 fn add_missing_native_producer_blockers(
@@ -10916,27 +10830,7 @@ fn select_supported_target_kind(
 }
 
 fn classify_supported_cargo_target_kind(kinds: &[String], crate_types: &[String]) -> Option<&'static str> {
-    let is_proc_macro_crate_type = crate_types.iter().any(|crate_type| crate_type == "proc-macro");
-    let is_lib_shaped_kind = kinds.iter().any(|kind| kind == "lib" || kind == "rlib");
-    let classified = [
-        (kinds.iter().any(|kind| kind == "custom-build"), "custom-build"),
-        (
-            kinds.iter().any(|kind| kind == "proc-macro") || (is_proc_macro_crate_type && is_lib_shaped_kind),
-            "proc-macro",
-        ),
-        (is_lib_shaped_kind, "lib"),
-        (kinds.iter().any(|kind| kind == "bin"), "bin"),
-    ]
-    .into_iter()
-    .find_map(|(is_kind, kind)| is_kind.then_some(kind));
-    if is_proc_macro_crate_type && is_lib_shaped_kind {
-        debug_assert_ne!(classified, Some("lib"));
-        debug_assert_ne!(classified, Some("bin"));
-    }
-    if let Some(kind) = classified {
-        debug_assert!(!kind.is_empty());
-    }
-    classified
+    mantle_rust_plan_core::classify_target_kind(kinds, crate_types)
 }
 
 fn host_artifacts_by_package(units: &[Value]) -> BTreeMap<String, Vec<RustHostArtifact>> {
@@ -11074,7 +10968,7 @@ fn build_script_metadata_summary(inputs: BuildScriptMetadataKeyInputs<'_>) -> Bu
 }
 
 fn is_host_target_kind(target_kind: &str) -> bool {
-    matches!(target_kind, "custom-build" | "proc-macro")
+    mantle_rust_plan_core::target_kind_uses_host(target_kind)
 }
 
 fn unit_dependency_artifacts(unit: &Value, units: &[Value]) -> Vec<RustDependencyArtifact> {
@@ -11245,7 +11139,7 @@ fn derivation_name(target_name: &str, index: usize) -> String {
 }
 
 fn rust_crate_name(name: &str) -> String {
-    name.replace('-', "_")
+    mantle_rust_plan_core::rust_crate_name(name)
 }
 
 fn required_unit_string(unit: &Value, field: &str, index: usize) -> Result<String, UnitDerivationBlocker> {
@@ -18874,14 +18768,16 @@ mod tests {
     }
 
     impl CargoOracle for FixedOracle {
-        fn run_cargo(&self, _root: &Path, _cargo: &Path, args: &[String]) -> Result<CargoOutput, RunError> {
+        fn run_cargo(&self, _root: &Path, _cargo: &Path, args: &[String]) -> Result<CargoOutput, RustPlanAdapterError> {
             if args.first().map(String::as_str) == Some("metadata") {
                 return Ok(self.metadata.clone());
             }
             Ok(self.unit_graph.clone())
         }
+    }
 
-        fn run_tool_version(&self, tool: &Path, _args: &[&str]) -> Result<CargoOutput, RunError> {
+    impl CompilerProcessAdapter for FixedOracle {
+        fn run_tool_version(&self, tool: &Path, _args: &[&str]) -> Result<CargoOutput, RustPlanAdapterError> {
             if tool.file_name() == Some(OsStr::new("rustc")) {
                 return Ok(self.rustc_version.clone());
             }

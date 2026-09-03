@@ -1,0 +1,1 @@
+nix develop -c ./scripts/prove-cargo-free-rust-plan.sh --full --bundle-dir /tmp/mantle-rust-plan-cargo-free-proof --mantle-bin /tmp/mantle-remote-hexagon-dev-target/debug/mantle --root /tmp/mantle-rust-plan-cargo-free-work

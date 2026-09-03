@@ -119,3 +119,4 @@ compatibility surface, crate name, or historical decision.
 | [0110](0110-complete-store-authority-with-role-capabilities.md) | Complete store authority with role capabilities | Accepted |
 | [0111](0111-bind-source-review-evidence-through-artifact-auth.md) | Bind source-review evidence to releases through Artifact Auth | Accepted |
 | [0112](0112-separate-remote-decisions-from-host-authority.md) | Separate remote decisions from host authority | Accepted |
+| [0113](0113-separate-rust-planning-from-host-authority.md) | Separate Rust planning from host authority | Accepted |

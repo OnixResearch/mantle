@@ -1,0 +1,58 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle-rust-plan-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/crates/mantle-rust-plan-core)
+   Compiling mantle-rust-plan v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-rust-plan-hexagon/crates/mantle-rust-plan)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.48s
+     Running unittests src/lib.rs (/tmp/mantle-remote-hexagon-dev-target/debug/deps/mantle_rust_plan-767c879b5eb9461d)
+
+running 6 tests
+test tests::mismatched_port_capability_is_not_reclassified ... ok
+test tests::planning_only_does_not_execute_units ... ok
+test tests::cache_fault_fails_closed_before_execution ... ok
+test tests::admitted_cache_hit_skips_executor ... ok
+test tests::compiler_failure_stops_dependent_execution ... ok
+test tests::application_executes_declared_effect_and_publishes_success ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/tmp/mantle-remote-hexagon-dev-target/debug/deps/mantle_rust_plan_core-303742883466142b)
+
+running 21 tests
+test tests::compatibility_matches_retained_status_matrix ... ok
+test tests::all_features_select_optional_dependency ... ok
+test tests::cargo_oracle_fixture_is_normalized_before_core_use ... ok
+test tests::compatibility_matrix_matches_golden_legacy_outputs ... ok
+test tests::duplicate_package_ids_fail_admission ... ok
+test tests::missing_dependency_fails_admission ... ok
+test tests::receipt_preimage_matches_golden_identity ... ok
+test tests::native_unit_identity_matches_golden_legacy_preimage ... ok
+test tests::target_classification_preserves_cargo_proc_macro_precedence ... ok
+test tests::unknown_requested_feature_fails_admission ... ok
+test tests::cyclic_package_topology_returns_fail_closed_blocker ... ok
+test tests::no_default_features_excludes_default_closure ... ok
+test tests::cache_fault_blocks_without_execution_fallback ... ok
+test tests::plans_package_feature_host_target_and_effect_topology ... ok
+test tests::observation_byte_limit_is_enforced ... ok
+test tests::successful_observation_produces_bound_receipt ... ok
+test tests::failed_observation_is_a_stable_outcome ... ok
+test tests::unit_effect_environment_is_declared_only ... ok
+test tests::wrong_effect_observation_fails_closed ... ok
+test tests::receipt_json_is_canonical_for_btree_environment ... ok
+test tests::equivalent_collection_orders_produce_one_receipt ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests mantle_rust_plan
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests mantle_rust_plan_core
+
+running 1 test
+test crates/mantle-rust-plan-core/src/lib.rs - (line 11) - compile fail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+

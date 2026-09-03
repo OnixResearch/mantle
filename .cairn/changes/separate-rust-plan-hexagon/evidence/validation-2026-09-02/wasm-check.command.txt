@@ -1,0 +1,1 @@
+nix develop -c cargo check -p mantle-rust-plan-core --target wasm32-unknown-unknown

@@ -1084,6 +1084,22 @@
           '';
         };
 
+        rustPlanHexagonArchitectureCheck = craneLib.mkCargoDerivation {
+          pname = "mantle-rust-plan-hexagon-architecture-check";
+          inherit src cargoVendorDir;
+          cargoArtifacts = null;
+          nativeBuildInputs = nativeBuildInputs ++ [ rustToolchain ];
+          buildPhaseCargoCommand = ''
+            cargo -Zscript --offline scripts/check-rust-plan-hexagon.rs --self-test
+            cargo -Zscript --offline scripts/check-rust-plan-hexagon.rs --root .
+          '';
+          doInstallCargoArtifacts = false;
+          installPhaseCommand = ''
+            mkdir -p "$out"
+            printf '%s\n' 'rust_plan_hexagon_findings=0' > "$out/report.txt"
+          '';
+        };
+
         tigerstyleRunner = pkgs.writeShellApplication {
           name = "crunch-tigerstyle";
           runtimeInputs = nativeBuildInputs ++ [
@@ -1378,6 +1394,7 @@
           nickel-export-core-pin = nickelExportCorePin;
           store-capability-architecture = storeCapabilityArchitectureCheck;
           remote-hexagon-architecture = remoteHexagonArchitectureCheck;
+          rust-plan-hexagon-architecture = rustPlanHexagonArchitectureCheck;
           content-bound-requirement-source-closure = contentBoundRequirementSourceClosure;
           content-bound-requirement-evidence = contentBoundRequirementEvidence;
           store-retention-policy =
@@ -1623,6 +1640,26 @@
               buildInputs
               ;
             cargoExtraArgs = "-p crunch-remote-core --lib --target wasm32-unknown-unknown";
+          };
+
+          rust-plan-core = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p mantle-rust-plan-core -p mantle-rust-plan --all-targets";
+          };
+
+          rust-plan-core-wasm = craneLib.cargoBuild {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoExtraArgs = "-p mantle-rust-plan-core --lib --target wasm32-unknown-unknown";
           };
 
           mantle-build-contract = craneLib.cargoTest {
