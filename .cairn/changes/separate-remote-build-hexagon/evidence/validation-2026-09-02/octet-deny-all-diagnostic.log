@@ -1,0 +1,1665 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-remote-build-hexagon/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-remote-build-hexagon/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v1.3.0
+   Compiling serde_core v1.0.228
+   Compiling zmij v1.0.21
+   Compiling serde_json v1.0.149
+   Compiling serde v1.0.228
+    Checking arrayref v0.3.9
+    Checking itoa v1.0.18
+    Checking cfg-if v1.0.4
+    Checking constant_time_eq v0.3.1
+    Checking memchr v2.8.0
+    Checking arrayvec v0.7.6
+   Compiling cfg_if v1.0.4
+   Compiling constant_time_eq v0.3.1
+   Compiling unicode_ident v1.0.24
+   Compiling itoa v1.0.18
+   Compiling cc v1.2.59
+   Compiling arrayvec v0.7.6
+   Compiling shlex v1.3.0
+   Compiling find_msvc_tools v0.1.9
+   Compiling arrayref v0.3.9
+   Compiling memchr v2.8.0
+   Compiling build-script-build v1.0.228
+   Compiling build-script-build v1.0.106
+   Compiling build-script-build v1.0.228
+   Compiling build-script-build v1.0.21
+   Compiling build-script-build v1.0.149
+   Compiling build-script-build v1.0.45
+   Compiling zmij v1.0.21
+   Compiling proc_macro2 v1.0.106
+   Compiling cc v1.2.59
+   Compiling blake3 v1.8.2
+   Compiling syn v2.0.117
+   Compiling quote v1.0.45
+   Compiling build-script-build v1.8.2
+   Compiling serde_core v1.0.228
+   Compiling blake3 v1.8.2
+   Compiling serde_json v1.0.149
+   Compiling syn v2.0.117
+   Compiling serde_derive v1.0.228
+   Compiling serde_derive v1.0.228
+   Compiling serde v1.0.228
+    Checking crunch-remote-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-remote-build-hexagon/crates/crunch-remote-core)
+error: source file is 355 lines (limit: 300)
+   --> crates/crunch-remote-core/src/admission.rs:1:1
+    |
+  1 | / use alloc::collections::BTreeSet;
+  2 | | use alloc::string::String;
+  3 | | use alloc::string::ToString;
+  4 | | use alloc::vec::Vec;
+...   |
+355 | | }
+    | |__^
+    |
+    = help: Tiger Style (File Length): split oversized source files along module or responsibility boundaries Example: mod parser; mod planner; mod executor;
+    = note: see Tiger Style guide: File Length
+    = note: `-D tigerstyle::excessive-file-length` implied by `-D excessive-file-length`
+    = help: to override `-D excessive-file-length` add `#[allow(tigerstyle::excessive_file_length)]`
+
+error: source file is 496 lines (limit: 300)
+   --> crates/crunch-remote-core/src/model.rs:1:1
+    |
+  1 | / use alloc::collections::BTreeMap;
+  2 | | use alloc::string::String;
+  3 | | use alloc::vec::Vec;
+...   |
+495 | |     pub parameters: BTreeMap<String, String>,
+496 | | }
+    | |__^
+    |
+    = help: Tiger Style (File Length): split oversized source files along module or responsibility boundaries Example: mod parser; mod planner; mod executor;
+    = note: see Tiger Style guide: File Length
+
+error: source file is 623 lines (limit: 300)
+   --> crates/crunch-remote-core/src/transition.rs:1:1
+    |
+  1 | / use alloc::string::String;
+  2 | | use alloc::string::ToString;
+  3 | | use alloc::vec::Vec;
+...   |
+623 | | }
+    | |__^
+    |
+    = help: Tiger Style (File Length): split oversized source files along module or responsibility boundaries Example: mod parser; mod planner; mod executor;
+    = note: see Tiger Style guide: File Length
+
+error: non-trait import `BTreeSet` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/admission.rs:1:1
+  |
+1 | use alloc::collections::BTreeSet;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+  = note: `-D tigerstyle::non-trait-imports` implied by `-D non-trait-imports`
+  = help: to override `-D non-trait-imports` add `#[allow(tigerstyle::non_trait_imports)]`
+
+error: non-trait import `String` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/admission.rs:2:1
+  |
+2 | use alloc::string::String;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `Vec` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/admission.rs:4:1
+  |
+4 | use alloc::vec::Vec;
+  | ^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `AcceptedHelloFacts` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/admission.rs:6:1
+  |
+6 | use crate::AcceptedHelloFacts;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `BLAKE3_HEX_LENGTH` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/admission.rs:7:1
+  |
+7 | use crate::BLAKE3_HEX_LENGTH;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `HelloAdmissionDecision` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/admission.rs:8:1
+  |
+8 | use crate::HelloAdmissionDecision;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `HelloAdmissionInput` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/admission.rs:9:1
+  |
+9 | use crate::HelloAdmissionInput;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `MAX_REMOTE_ATTEMPTS` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:10:1
+   |
+10 | use crate::MAX_REMOTE_ATTEMPTS;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `MAX_REMOTE_BUILD_TIME_MS` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:11:1
+   |
+11 | use crate::MAX_REMOTE_BUILD_TIME_MS;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `MAX_REMOTE_CAPABILITIES` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:12:1
+   |
+12 | use crate::MAX_REMOTE_CAPABILITIES;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `MAX_REMOTE_CPU_UNITS` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:13:1
+   |
+13 | use crate::MAX_REMOTE_CPU_UNITS;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `MAX_REMOTE_EXPECTED_OUTPUTS` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:14:1
+   |
+14 | use crate::MAX_REMOTE_EXPECTED_OUTPUTS;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `MAX_REMOTE_INPUT_REFS` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:15:1
+   |
+15 | use crate::MAX_REMOTE_INPUT_REFS;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `MAX_REMOTE_MEMORY_BYTES` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:16:1
+   |
+16 | use crate::MAX_REMOTE_MEMORY_BYTES;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `MAX_REMOTE_UPLOAD_BYTES` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:17:1
+   |
+17 | use crate::MAX_REMOTE_UPLOAD_BYTES;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `MissingInputFacts` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:18:1
+   |
+18 | use crate::MissingInputFacts;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `OutputTrustInput` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:19:1
+   |
+19 | use crate::OutputTrustInput;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `REMOTE_COMMAND_SCHEMA` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:20:1
+   |
+20 | use crate::REMOTE_COMMAND_SCHEMA;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `REMOTE_PROTOCOL_ALPN` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:21:1
+   |
+21 | use crate::REMOTE_PROTOCOL_ALPN;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `REMOTE_PROTOCOL_VERSION` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:22:1
+   |
+22 | use crate::REMOTE_PROTOCOL_VERSION;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteBuildFallbackPolicy` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:23:1
+   |
+23 | use crate::RemoteBuildFallbackPolicy;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteBuildServiceRequestFacts` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:24:1
+   |
+24 | use crate::RemoteBuildServiceRequestFacts;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteCommand` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:25:1
+   |
+25 | use crate::RemoteCommand;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteCoreError` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:26:1
+   |
+26 | use crate::RemoteCoreError;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteFailurePlan` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:27:1
+   |
+27 | use crate::RemoteFailurePlan;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteOutputTrustDecision` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:28:1
+   |
+28 | use crate::RemoteOutputTrustDecision;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `VerifiedRemoteArtifact` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:29:1
+   |
+29 | use crate::VerifiedRemoteArtifact;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `is_blake3_hex_digest` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/admission.rs:30:1
+   |
+30 | use crate::is_blake3_hex_digest;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: core function returns concrete resource `Command`; return a command description or domain value instead
+  --> crates/crunch-remote-core/src/admission.rs:32:1
+   |
+32 | / pub fn admit_remote_command(mut command: RemoteCommand) -> Result<RemoteCommand, RemoteCoreError> {
+33 | |     command.input_refs.sort();
+34 | |     command.expected_outputs.sort();
+35 | |     validate_remote_command(&command)?;
+...  |
+38 | |     Ok(command)
+39 | | }
+   | |_^
+   |
+   = help: Tiger Style (Functional Core): return command descriptions, domain values, or injected ports from core scopes instead of concrete resource handles Example: fn plan_download(input: Input) -> DownloadCommand
+   = note: see Tiger Style guide: Functional Core / Imperative Shell
+   = note: `-D tigerstyle::resource-return-from-core` implied by `-D resource-return-from-core`
+   = help: to override `-D resource-return-from-core` add `#[allow(tigerstyle::resource_return_from_core)]`
+
+error: private helper appears const-compatible; consider declaring it `const fn` if that does not freeze public API
+  --> crates/crunch-remote-core/src/admission.rs:79:1
+   |
+79 | / fn validate_inputs(input_refs: &[String]) -> Result<(), RemoteCoreError> {
+80 | |     if input_refs.len() > MAX_REMOTE_INPUT_REFS {
+81 | |         return Err(RemoteCoreError::invalid("remote-input-ref-count-exceeded"));
+...  |
+86 | |     })
+87 | | }
+   | |_^
+   |
+   = help: Tiger Style (Functional Core): consider `const fn` for conservative private helpers when doing so does not freeze public API flexibility Example: const fn clamp_to_limit(value: u32, limit: u32) -> u32
+   = note: see Tiger Style guide: Functional Core / Imperative Shell
+   = note: `-D tigerstyle::missing-const-fn` implied by `-D missing-const-fn`
+   = help: to override `-D missing-const-fn` add `#[allow(tigerstyle::missing_const_fn)]`
+
+error: private helper appears const-compatible; consider declaring it `const fn` if that does not freeze public API
+   --> crates/crunch-remote-core/src/admission.rs:89:1
+    |
+ 89 | / fn validate_outputs(outputs: &[crate::RemoteOutputExpectation]) -> Result<(), RemoteCoreError> {
+ 90 | |     if outputs.is_empty() {
+ 91 | |         return Err(RemoteCoreError::invalid("remote-expected-output-missing"));
+...   |
+100 | |     })
+101 | | }
+    | |_^
+    |
+    = help: Tiger Style (Functional Core): consider `const fn` for conservative private helpers when doing so does not freeze public API flexibility Example: const fn clamp_to_limit(value: u32, limit: u32) -> u32
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: private helper appears const-compatible; consider declaring it `const fn` if that does not freeze public API
+   --> crates/crunch-remote-core/src/admission.rs:123:1
+    |
+123 | / fn validate_policy(policy: &crate::RemotePolicy) -> Result<(), RemoteCoreError> {
+124 | |     if policy.attempts_max == 0 || policy.attempts_max > MAX_REMOTE_ATTEMPTS {
+125 | |         return Err(RemoteCoreError::invalid("remote-attempt-limit-invalid"));
+...   |
+141 | |     Ok(())
+142 | | }
+    | |_^
+    |
+    = help: Tiger Style (Functional Core): consider `const fn` for conservative private helpers when doing so does not freeze public API flexibility Example: const fn clamp_to_limit(value: u32, limit: u32) -> u32
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: same-crate enum `model::RemoteBuildFallbackPolicy` is matched exhaustively without a fallback; adding a variant will force this site to change
+   --> crates/crunch-remote-core/src/admission.rs:247:5
+    |
+247 | /     match policy {
+248 | |         RemoteBuildFallbackPolicy::Never => RemoteFailurePlan::ReturnFailure { phase, reason },
+249 | |         RemoteBuildFallbackPolicy::OnRemoteFailure => RemoteFailurePlan::FallbackToLocal { phase, reason },
+250 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Open/Closed Boundaries): avoid fragile same-crate exhaustive enum matches unless the enum is deliberately sealed Example: #[octet::sealed_enum] enum State { Ready, Closed }
+    = note: see Tiger Style guide: Enum Matches / Local Evolution
+    = note: `-D tigerstyle::fragile-exhaustive-enum-match` implied by `-D fragile-exhaustive-enum-match`
+    = help: to override `-D fragile-exhaustive-enum-match` add `#[allow(tigerstyle::fragile_exhaustive_enum_match)]`
+
+error: non-trait import `String` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/error.rs:1:1
+  |
+1 | use alloc::string::String;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `fmt` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/error.rs:2:1
+  |
+2 | use core::fmt;
+  | ^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: item name `RemoteCoreError` repeats `error` from ancestor path segment `error`
+  --> crates/crunch-remote-core/src/error.rs:6:1
+   |
+ 6 | / pub enum RemoteCoreError {
+ 7 | |     /// An admitted value violated a bounded core contract.
+ 8 | |     Invalid { code: String },
+ 9 | |     /// An observation did not belong to the pending effect.
+...  |
+22 | |     IdentitySerialization { reason: String },
+23 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+   = note: `-D tigerstyle::path-segment-repetition` implied by `-D path-segment-repetition`
+   = help: to override `-D path-segment-repetition` add `#[allow(tigerstyle::path_segment_repetition)]`
+
+error: private helper appears const-compatible; consider declaring it `const fn` if that does not freeze public API
+  --> crates/crunch-remote-core/src/error.rs:49:5
+   |
+49 | /     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+50 | |         match self {
+51 | |             Self::IdentitySerialization { reason } => {
+52 | |                 write!(formatter, "{}: {reason}", self.code())
+...  |
+56 | |     }
+   | |_____^
+   |
+   = help: Tiger Style (Functional Core): consider `const fn` for conservative private helpers when doing so does not freeze public API flexibility Example: const fn clamp_to_limit(value: u32, limit: u32) -> u32
+   = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+  --> crates/crunch-remote-core/src/error.rs:49:30
+   |
+49 |     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+   |                              ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+   = note: see Tiger Style guide: Functional Core / Imperative Shell
+   = note: `-D tigerstyle::mutating-input-in-pure` implied by `-D mutating-input-in-pure`
+   = help: to override `-D mutating-input-in-pure` add `#[allow(tigerstyle::mutating_input_in_pure)]`
+
+error: item name `RealizationKeyError` repeats `error` from ancestor path segment `error`
+  --> crates/crunch-remote-core/src/error.rs:61:1
+   |
+61 | / pub enum RealizationKeyError {
+62 | |     EmptyField { field: &'static str },
+63 | |     NotSortedUnique { field: &'static str },
+64 | |     Serialize { source: String },
+65 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: private helper appears const-compatible; consider declaring it `const fn` if that does not freeze public API
+  --> crates/crunch-remote-core/src/error.rs:70:5
+   |
+70 | /     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+71 | |         match self {
+72 | |             Self::EmptyField { field } => write!(formatter, "realization key field {field} must not be empty"),
+73 | |             Self::NotSortedUnique { field } => {
+...  |
+78 | |     }
+   | |_____^
+   |
+   = help: Tiger Style (Functional Core): consider `const fn` for conservative private helpers when doing so does not freeze public API flexibility Example: const fn clamp_to_limit(value: u32, limit: u32) -> u32
+   = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+  --> crates/crunch-remote-core/src/error.rs:70:30
+   |
+70 |     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+   |                              ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+   = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: non-trait import `format` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/identity.rs:1:1
+  |
+1 | use alloc::format;
+  | ^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `String` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/identity.rs:2:1
+  |
+2 | use alloc::string::String;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `BLAKE3_HEX_LENGTH` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/identity.rs:5:1
+  |
+5 | use crate::BLAKE3_HEX_LENGTH;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `RealizationKey` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/identity.rs:6:1
+  |
+6 | use crate::RealizationKey;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `RealizationKeyError` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/identity.rs:7:1
+  |
+7 | use crate::RealizationKeyError;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `RealizationKeyRequest` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/identity.rs:8:1
+  |
+8 | use crate::RealizationKeyRequest;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteBuildIdentityInput` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/identity.rs:9:1
+  |
+9 | use crate::RemoteBuildIdentityInput;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteBuildIdentitySource` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/identity.rs:10:1
+   |
+10 | use crate::RemoteBuildIdentitySource;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteCommand` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/identity.rs:11:1
+   |
+11 | use crate::RemoteCommand;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteCoreError` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/identity.rs:12:1
+   |
+12 | use crate::RemoteCoreError;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteEffect` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/identity.rs:13:1
+   |
+13 | use crate::RemoteEffect;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteOutputExpectation` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/identity.rs:14:1
+   |
+14 | use crate::RemoteOutputExpectation;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteReceiptPreimage` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/identity.rs:15:1
+   |
+15 | use crate::RemoteReceiptPreimage;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: item name `remote_command_identity` repeats `identity` from ancestor path segment `identity`
+  --> crates/crunch-remote-core/src/identity.rs:33:1
+   |
+33 | / pub fn remote_command_identity(command: RemoteCommand) -> Result<String, RemoteCoreError> {
+34 | |     canonical_json_identity(REMOTE_COMMAND_IDENTITY_CONTEXT, &command)
+35 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `remote_effect_identity` repeats `identity` from ancestor path segment `identity`
+  --> crates/crunch-remote-core/src/identity.rs:37:1
+   |
+37 | / pub fn remote_effect_identity(mut effect: RemoteEffect) -> Result<String, RemoteCoreError> {
+38 | |     effect.effect_id_blake3.clear();
+39 | |     canonical_json_identity(REMOTE_EFFECT_IDENTITY_CONTEXT, &effect)
+40 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `remote_receipt_preimage_identity` repeats `identity` from ancestor path segment `identity`
+  --> crates/crunch-remote-core/src/identity.rs:42:1
+   |
+42 | / pub fn remote_receipt_preimage_identity(preimage: RemoteReceiptPreimage) -> Result<String, RemoteCoreError> {
+43 | |     canonical_json_identity(REMOTE_RECEIPT_IDENTITY_CONTEXT, &preimage)
+44 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `canonical_json_identity` repeats `identity` from ancestor path segment `identity`
+  --> crates/crunch-remote-core/src/identity.rs:46:1
+   |
+46 | / fn canonical_json_identity<T: serde::Serialize>(context: &str, value: &T) -> Result<String, RemoteCoreError> {
+47 | |     let bytes = serde_json::to_vec(value).map_err(|error| RemoteCoreError::IdentitySerialization {
+48 | |         reason: error.to_string(),
+49 | |     })?;
+...  |
+55 | |     Ok(digest)
+56 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+  --> crates/crunch-remote-core/src/identity.rs:58:18
+   |
+58 | fn frame(hasher: &mut blake3::Hasher, bytes: &[u8]) -> Result<(), RemoteCoreError> {
+   |                  ^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+   = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: core scope constructs concrete type `blake3::Hasher`; inject the dependency through a port or capability
+  --> crates/crunch-remote-core/src/identity.rs:70:22
+   |
+70 |     let mut hasher = blake3::Hasher::new();
+   |                      ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+   = note: `-D tigerstyle::concrete-construction-in-core` implied by `-D concrete-construction-in-core`
+   = help: to override `-D concrete-construction-in-core` add `#[allow(tigerstyle::concrete_construction_in_core)]`
+
+error: item name `validate_build_identity` repeats `identity` from ancestor path segment `identity`
+   --> crates/crunch-remote-core/src/identity.rs:93:1
+    |
+ 93 | / fn validate_build_identity(input: &RemoteBuildIdentityInput) -> Result<(), RemoteCoreError> {
+ 94 | |     if input.store_prefix.is_empty() || !input.store_prefix.starts_with('/') {
+ 95 | |         return Err(RemoteCoreError::invalid("remote-build-key-store-prefix-invalid"));
+...   |
+105 | |     Ok(())
+106 | | }
+    | |_^
+    |
+    = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+    = note: see Tiger Style guide: Naming
+
+error: private helper appears const-compatible; consider declaring it `const fn` if that does not freeze public API
+   --> crates/crunch-remote-core/src/identity.rs:108:1
+    |
+108 | / fn hash_build_source(hasher: &mut blake3::Hasher, source: &RemoteBuildIdentitySource) {
+109 | |     match source {
+110 | |         RemoteBuildIdentitySource::Action {
+111 | |             action_id,
+...   |
+133 | | }
+    | |_^
+    |
+    = help: Tiger Style (Functional Core): consider `const fn` for conservative private helpers when doing so does not freeze public API flexibility Example: const fn clamp_to_limit(value: u32, limit: u32) -> u32
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/identity.rs:108:30
+    |
+108 | fn hash_build_source(hasher: &mut blake3::Hasher, source: &RemoteBuildIdentitySource) {
+    |                              ^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/identity.rs:135:32
+    |
+135 | fn hash_ordered_values(hasher: &mut blake3::Hasher, label: &str, values: &[String]) {
+    |                                ^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/identity.rs:141:29
+    |
+141 | fn hash_ordered_map(hasher: &mut blake3::Hasher, label: &str, values: &alloc::collections::BTreeMap<String, String>) {
+    |                             ^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/identity.rs:148:34
+    |
+148 | fn hash_expected_outputs(hasher: &mut blake3::Hasher, outputs: &[RemoteOutputExpectation]) {
+    |                                  ^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/identity.rs:156:26
+    |
+156 | fn hash_optional(hasher: &mut blake3::Hasher, label: &str, value: Option<&str>) {
+    |                          ^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/identity.rs:162:29
+    |
+162 | fn hash_labeled_str(hasher: &mut blake3::Hasher, label: &str, value: impl AsRef<str>) {
+    |                             ^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: non-trait import `BTreeMap` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/model.rs:1:1
+  |
+1 | use alloc::collections::BTreeMap;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `String` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/model.rs:2:1
+  |
+2 | use alloc::string::String;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `Vec` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/model.rs:3:1
+  |
+3 | use alloc::vec::Vec;
+  | ^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `Deserialize` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/model.rs:5:1
+  |
+5 | use serde::Deserialize;
+  | ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `Serialize` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/model.rs:6:1
+  |
+6 | use serde::Serialize;
+  | ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: same-crate enum `model::RemoteEffectKind` is matched exhaustively without a fallback; adding a variant will force this site to change
+   --> crates/crunch-remote-core/src/model.rs:155:9
+    |
+155 | /         match self {
+156 | |             Self::VerifyCredential => RemoteCapability::CredentialVerification,
+157 | |             Self::SendHandshake | Self::TransferInputs => RemoteCapability::Transport,
+158 | |             Self::ObserveClock => RemoteCapability::ClockObservation,
+...   |
+165 | |             Self::PublishTelemetry => RemoteCapability::TelemetryPublication,
+166 | |         }
+    | |_________^
+    |
+    = help: Tiger Style (Open/Closed Boundaries): avoid fragile same-crate exhaustive enum matches unless the enum is deliberately sealed Example: #[octet::sealed_enum] enum State { Ready, Closed }
+    = note: see Tiger Style guide: Enum Matches / Local Evolution
+
+error: same-crate enum `model::RemoteEffectKind` is matched exhaustively without a fallback; adding a variant will force this site to change
+   --> crates/crunch-remote-core/src/model.rs:171:9
+    |
+171 | /         match self {
+172 | |             Self::VerifyCredential => RemoteObservationKind::CredentialVerified,
+173 | |             Self::SendHandshake => RemoteObservationKind::HandshakeSent,
+174 | |             Self::ObserveClock => RemoteObservationKind::ClockObserved,
+...   |
+183 | |             Self::PublishTelemetry => RemoteObservationKind::TelemetryPublished,
+184 | |         }
+    | |_________^
+    |
+    = help: Tiger Style (Open/Closed Boundaries): avoid fragile same-crate exhaustive enum matches unless the enum is deliberately sealed Example: #[octet::sealed_enum] enum State { Ready, Closed }
+    = note: see Tiger Style guide: Enum Matches / Local Evolution
+
+error: non-trait import `String` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/transition.rs:1:1
+  |
+1 | use alloc::string::String;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `Vec` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/transition.rs:3:1
+  |
+3 | use alloc::vec::Vec;
+  | ^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `MAX_REMOTE_EFFECT_STEPS` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/transition.rs:5:1
+  |
+5 | use crate::MAX_REMOTE_EFFECT_STEPS;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `REMOTE_CORE_NON_CLAIM` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/transition.rs:6:1
+  |
+6 | use crate::REMOTE_CORE_NON_CLAIM;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `REMOTE_EFFECT_SCHEMA` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/transition.rs:7:1
+  |
+7 | use crate::REMOTE_EFFECT_SCHEMA;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `REMOTE_OBSERVATION_SCHEMA` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/transition.rs:8:1
+  |
+8 | use crate::REMOTE_OBSERVATION_SCHEMA;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `REMOTE_RECEIPT_PREIMAGE_SCHEMA` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/transition.rs:9:1
+  |
+9 | use crate::REMOTE_RECEIPT_PREIMAGE_SCHEMA;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteCommand` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:10:1
+   |
+10 | use crate::RemoteCommand;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteCoreError` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:11:1
+   |
+11 | use crate::RemoteCoreError;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteEffect` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:12:1
+   |
+12 | use crate::RemoteEffect;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteEffectKind` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:13:1
+   |
+13 | use crate::RemoteEffectKind;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteEffectLimits` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:14:1
+   |
+14 | use crate::RemoteEffectLimits;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteEvent` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:15:1
+   |
+15 | use crate::RemoteEvent;
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteFailureClass` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:16:1
+   |
+16 | use crate::RemoteFailureClass;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteObservation` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:17:1
+   |
+17 | use crate::RemoteObservation;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteObservationKind` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:18:1
+   |
+18 | use crate::RemoteObservationKind;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteObservationStatus` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:19:1
+   |
+19 | use crate::RemoteObservationStatus;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteOutcome` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:20:1
+   |
+20 | use crate::RemoteOutcome;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteOutcomeStatus` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:21:1
+   |
+21 | use crate::RemoteOutcomeStatus;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemotePhase` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:22:1
+   |
+22 | use crate::RemotePhase;
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteReceiptPreimage` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:23:1
+   |
+23 | use crate::RemoteReceiptPreimage;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteSession` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:24:1
+   |
+24 | use crate::RemoteSession;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `admit_remote_command` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:25:1
+   |
+25 | use crate::admit_remote_command;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `remote_command_identity` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:26:1
+   |
+26 | use crate::remote_command_identity;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `remote_effect_identity` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:27:1
+   |
+27 | use crate::remote_effect_identity;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `remote_receipt_preimage_identity` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-remote-core/src/transition.rs:28:1
+   |
+28 | use crate::remote_receipt_preimage_identity;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: private helper appears const-compatible; consider declaring it `const fn` if that does not freeze public API
+   --> crates/crunch-remote-core/src/transition.rs:99:1
+    |
+ 99 | / fn validate_observation_attempt(
+100 | |     session: &RemoteSession,
+101 | |     effect: &RemoteEffect,
+102 | |     observation: &RemoteObservation,
+...   |
+113 | |     Ok(())
+114 | | }
+    | |_^
+    |
+    = help: Tiger Style (Functional Core): consider `const fn` for conservative private helpers when doing so does not freeze public API flexibility Example: const fn clamp_to_limit(value: u32, limit: u32) -> u32
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: private helper appears const-compatible; consider declaring it `const fn` if that does not freeze public API
+   --> crates/crunch-remote-core/src/transition.rs:116:1
+    |
+116 | / fn validate_observation_status(observation: &RemoteObservation) -> Result<(), RemoteCoreError> {
+117 | |     match observation.status {
+118 | |         RemoteObservationStatus::Succeeded => {
+119 | |             if observation.failure_class.is_some() || observation.reason_code.is_some() {
+...   |
+129 | |     Ok(())
+130 | | }
+    | |_^
+    |
+    = help: Tiger Style (Functional Core): consider `const fn` for conservative private helpers when doing so does not freeze public API flexibility Example: const fn clamp_to_limit(value: u32, limit: u32) -> u32
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: same-crate enum `model::RemoteObservationStatus` is matched exhaustively without a fallback; adding a variant will force this site to change
+   --> crates/crunch-remote-core/src/transition.rs:117:5
+    |
+117 | /     match observation.status {
+118 | |         RemoteObservationStatus::Succeeded => {
+119 | |             if observation.failure_class.is_some() || observation.reason_code.is_some() {
+120 | |                 return Err(RemoteCoreError::invalid("remote-success-observation-carries-failure"));
+...   |
+128 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Open/Closed Boundaries): avoid fragile same-crate exhaustive enum matches unless the enum is deliberately sealed Example: #[octet::sealed_enum] enum State { Ready, Closed }
+    = note: see Tiger Style guide: Enum Matches / Local Evolution
+
+error: private helper appears const-compatible; consider declaring it `const fn` if that does not freeze public API
+   --> crates/crunch-remote-core/src/transition.rs:153:1
+    |
+153 | / fn apply_success_observation(
+154 | |     session: &mut RemoteSession,
+155 | |     effect: &RemoteEffect,
+156 | |     observation: &RemoteObservation,
+...   |
+174 | | }
+    | |_^
+    |
+    = help: Tiger Style (Functional Core): consider `const fn` for conservative private helpers when doing so does not freeze public API flexibility Example: const fn clamp_to_limit(value: u32, limit: u32) -> u32
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/transition.rs:154:14
+    |
+154 |     session: &mut RemoteSession,
+    |              ^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: same-crate enum `model::RemoteEffectKind` is matched exhaustively without a fallback; adding a variant will force this site to change
+   --> crates/crunch-remote-core/src/transition.rs:158:5
+    |
+158 | /     match effect.kind {
+159 | |         RemoteEffectKind::VerifyCredential => {
+160 | |             plan_next(session, RemoteEffectKind::SendHandshake, "credential-verified")
+...   |
+172 | |         RemoteEffectKind::PublishTelemetry => complete_session(session),
+173 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Open/Closed Boundaries): avoid fragile same-crate exhaustive enum matches unless the enum is deliberately sealed Example: #[octet::sealed_enum] enum State { Ready, Closed }
+    = note: see Tiger Style guide: Enum Matches / Local Evolution
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/transition.rs:176:31
+    |
+176 | fn accept_attempt_id(session: &mut RemoteSession, observation: &RemoteObservation) -> Result<(), RemoteCoreError> {
+    |                               ^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/transition.rs:194:14
+    |
+194 |     session: &mut RemoteSession,
+    |              ^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/transition.rs:203:34
+    |
+203 | fn accept_lease_release(session: &mut RemoteSession) -> Result<(), RemoteCoreError> {
+    |                                  ^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/transition.rs:212:30
+    |
+212 | fn complete_session(session: &mut RemoteSession) -> Result<(), RemoteCoreError> {
+    |                              ^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: private helper appears const-compatible; consider declaring it `const fn` if that does not freeze public API
+   --> crates/crunch-remote-core/src/transition.rs:241:1
+    |
+241 | / fn should_retry(session: &RemoteSession, kind: RemoteEffectKind, failure_class: RemoteFailureClass) -> bool {
+242 | |     let is_retryable_effect = matches!(
+243 | |         kind,
+244 | |         RemoteEffectKind::TransferInputs | RemoteEffectKind::LaunchExecutor | RemoteEffectKind::AdmitOutputs
+...   |
+250 | |         && session.attempt_ordinal < session.command.policy.attempts_max
+251 | | }
+    | |_^
+    |
+    = help: Tiger Style (Functional Core): consider `const fn` for conservative private helpers when doing so does not freeze public API flexibility Example: const fn clamp_to_limit(value: u32, limit: u32) -> u32
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: private helper appears const-compatible; consider declaring it `const fn` if that does not freeze public API
+   --> crates/crunch-remote-core/src/transition.rs:253:1
+    |
+253 | / fn terminal_failure_reason(failure_class: RemoteFailureClass, reason: &str) -> String {
+254 | |     match failure_class {
+255 | |         RemoteFailureClass::StaleFence => "stale-fence".to_string(),
+256 | |         RemoteFailureClass::LimitExceeded => "remote-limit-exceeded".to_string(),
+...   |
+261 | | }
+    | |_^
+    |
+    = help: Tiger Style (Functional Core): consider `const fn` for conservative private helpers when doing so does not freeze public API flexibility Example: const fn clamp_to_limit(value: u32, limit: u32) -> u32
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: same-crate enum `model::RemoteFailureClass` is matched exhaustively without a fallback; adding a variant will force this site to change
+   --> crates/crunch-remote-core/src/transition.rs:254:5
+    |
+254 | /     match failure_class {
+255 | |         RemoteFailureClass::StaleFence => "stale-fence".to_string(),
+256 | |         RemoteFailureClass::LimitExceeded => "remote-limit-exceeded".to_string(),
+257 | |         RemoteFailureClass::UntrustedOutput => "untrusted-output".to_string(),
+258 | |         RemoteFailureClass::Protocol => "remote-protocol-failed".to_string(),
+259 | |         RemoteFailureClass::Transient | RemoteFailureClass::Permanent => reason.to_string(),
+260 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Open/Closed Boundaries): avoid fragile same-crate exhaustive enum matches unless the enum is deliberately sealed Example: #[octet::sealed_enum] enum State { Ready, Closed }
+    = note: see Tiger Style guide: Enum Matches / Local Evolution
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/transition.rs:263:23
+    |
+263 | fn plan_next(session: &mut RemoteSession, kind: RemoteEffectKind, reason: &str) -> Result<(), RemoteCoreError> {
+    |                       ^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: private helper appears const-compatible; consider declaring it `const fn` if that does not freeze public API
+   --> crates/crunch-remote-core/src/transition.rs:267:1
+    |
+267 | / fn phase_for_effect(kind: RemoteEffectKind) -> RemotePhase {
+268 | |     match kind {
+269 | |         RemoteEffectKind::VerifyCredential => RemotePhase::Authenticating,
+270 | |         RemoteEffectKind::SendHandshake => RemotePhase::SendingHandshake,
+...   |
+282 | | }
+    | |_^
+    |
+    = help: Tiger Style (Functional Core): consider `const fn` for conservative private helpers when doing so does not freeze public API flexibility Example: const fn clamp_to_limit(value: u32, limit: u32) -> u32
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: same-crate enum `model::RemoteEffectKind` is matched exhaustively without a fallback; adding a variant will force this site to change
+   --> crates/crunch-remote-core/src/transition.rs:268:5
+    |
+268 | /     match kind {
+269 | |         RemoteEffectKind::VerifyCredential => RemotePhase::Authenticating,
+270 | |         RemoteEffectKind::SendHandshake => RemotePhase::SendingHandshake,
+271 | |         RemoteEffectKind::ObserveClock => RemotePhase::ObservingClock,
+...   |
+280 | |         RemoteEffectKind::PublishTelemetry => RemotePhase::PublishingTelemetry,
+281 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Open/Closed Boundaries): avoid fragile same-crate exhaustive enum matches unless the enum is deliberately sealed Example: #[octet::sealed_enum] enum State { Ready, Closed }
+    = note: see Tiger Style guide: Enum Matches / Local Evolution
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/transition.rs:285:14
+    |
+285 |     session: &mut RemoteSession,
+    |              ^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: same-crate enum `model::RemoteEffectKind` is matched exhaustively without a fallback; adding a variant will force this site to change
+   --> crates/crunch-remote-core/src/transition.rs:324:21
+    |
+324 |       let bytes_max = match kind {
+    |  _____________________^
+325 | |         RemoteEffectKind::TransferInputs => command.policy.input_bytes_max,
+326 | |         RemoteEffectKind::LaunchExecutor | RemoteEffectKind::AdmitOutputs => command.policy.output_bytes_max,
+327 | |         RemoteEffectKind::VerifyCredential
+...   |
+335 | |         | RemoteEffectKind::PublishTelemetry => 0,
+336 | |     };
+    | |_____^
+    |
+    = help: Tiger Style (Open/Closed Boundaries): avoid fragile same-crate exhaustive enum matches unless the enum is deliberately sealed Example: #[octet::sealed_enum] enum State { Ready, Closed }
+    = note: see Tiger Style guide: Enum Matches / Local Evolution
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/transition.rs:349:14
+    |
+349 |     session: &mut RemoteSession,
+    |              ^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/transition.rs:375:35
+    |
+375 | fn record_terminal_event(session: &mut RemoteSession, phase: RemotePhase, reason: &str) -> Result<(), RemoteCoreError> {
+    |                                   ^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/transition.rs:384:26
+    |
+384 | fn fail_session(session: &mut RemoteSession, reason: &str) -> Result<(), RemoteCoreError> {
+    |                          ^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: pure context accepts mutating input capability `&mut `; return an explicit state transition instead
+   --> crates/crunch-remote-core/src/transition.rs:389:25
+    |
+389 | fn set_outcome(session: &mut RemoteSession, status: RemoteOutcomeStatus, reason: &str) -> Result<(), RemoteCoreError> {
+    |                         ^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Functional Core): avoid caller-owned mutation capabilities in pure contexts; return explicit state transitions instead Example: fn update(state: State, command: Command) -> State
+    = note: see Tiger Style guide: Functional Core / Imperative Shell
+
+error: non-trait import `String` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/wire.rs:1:1
+  |
+1 | use alloc::string::String;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `Vec` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/wire.rs:3:1
+  |
+3 | use alloc::vec::Vec;
+  | ^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `Deserialize` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/wire.rs:5:1
+  |
+5 | use serde::Deserialize;
+  | ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `Serialize` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/wire.rs:6:1
+  |
+6 | use serde::Serialize;
+  | ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: non-trait import `RemoteCoreError` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-remote-core/src/wire.rs:8:1
+  |
+8 | use crate::RemoteCoreError;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+error: item name `RemoteWireHello` repeats `wire` from ancestor path segment `wire`
+  --> crates/crunch-remote-core/src/wire.rs:11:1
+   |
+11 | / pub struct RemoteWireHello {
+12 | |     pub alpn: String,
+13 | |     pub version: u32,
+14 | |     pub endpoint_id: String,
+...  |
+17 | |     pub workspace_policy: Option<serde_json::Value>,
+18 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `RemoteWireFailurePhase` repeats `wire` from ancestor path segment `wire`
+  --> crates/crunch-remote-core/src/wire.rs:26:1
+   |
+26 | / pub enum RemoteWireFailurePhase {
+27 | |     TransportSetup,
+28 | |     Authentication,
+29 | |     RequestValidation,
+...  |
+33 | |     OutputImport,
+34 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `RemoteWireRetryClass` repeats `wire` from ancestor path segment `wire`
+  --> crates/crunch-remote-core/src/wire.rs:38:1
+   |
+38 | / pub enum RemoteWireRetryClass {
+39 | |     Retryable,
+40 | |     Terminal,
+41 | |     BuildOutcome,
+42 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `RemoteWireError` repeats `wire` from ancestor path segment `wire`
+  --> crates/crunch-remote-core/src/wire.rs:45:1
+   |
+45 | / pub struct RemoteWireError {
+46 | |     pub phase: RemoteWireFailurePhase,
+47 | |     pub retry_class: RemoteWireRetryClass,
+48 | |     pub message: String,
+49 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `RemoteWireFrame` repeats `wire` from ancestor path segment `wire`
+  --> crates/crunch-remote-core/src/wire.rs:53:1
+   |
+53 | / pub enum RemoteWireFrame {
+54 | |     Hello { hello: RemoteWireHello },
+55 | |     BuildQueued { request_id: String, session_id: String },
+56 | |     BuildStarted { request_id: String },
+57 | |     Done { request_id: String },
+58 | |     Error { error: RemoteWireError },
+59 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `encode_remote_wire_frame` repeats `wire` from ancestor path segment `wire`
+  --> crates/crunch-remote-core/src/wire.rs:61:1
+   |
+61 | / pub fn encode_remote_wire_frame(frame: RemoteWireFrame) -> Result<Vec<u8>, RemoteCoreError> {
+62 | |     serde_json::to_vec(&frame).map_err(|error| RemoteCoreError::IdentitySerialization {
+63 | |         reason: error.to_string(),
+64 | |     })
+65 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `decode_remote_wire_frame` repeats `wire` from ancestor path segment `wire`
+  --> crates/crunch-remote-core/src/wire.rs:67:1
+   |
+67 | / pub fn decode_remote_wire_frame(bytes: Vec<u8>) -> Result<RemoteWireFrame, RemoteCoreError> {
+68 | |     serde_json::from_slice(&bytes).map_err(|_| RemoteCoreError::invalid("remote-wire-frame-invalid"))
+69 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: could not compile `crunch-remote-core` (lib) due to 138 previous errors
+--- octet summary ---
+Status: integration-failure
+Findings: 138
+Warnings: 0
+Errors: 138
+Autofixable: 0
+Tool: cargo-octet 0.1.0
+Toolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu
+Profile: workspace-metadata
+Config hash: b3:6e643fbac17f4fe1a96152826cc9c3c87e50d283d2daabe6e0e0726a7cbee941
+Profile hash: b3:32411a3cd2aad53931d46946254d76afefb22371ac5cb211f6c3f0efd2f52bf9
+
+By crate:
+  crunch_remote_core        138
+
+By effect:
+  unknown         105
+  resource        25
+  failure         8
+
+By lint:
+  non_trait_imports                    79
+  mutating_input_in_pure               20
+  path_segment_repetition              14
+  missing_const_fn                     12
+  fragile_exhaustive_enum_match        8
+  excessive_file_length                3
+  concrete_construction_in_core        1
+  resource_return_from_core            1
+
+Index:
+  F1    excessive_file_length         crunch_remote_core  crates/crunch-remote-core/src/admission.rs:1
+  F2    non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:1
+  F3    non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:2
+  F4    non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:4
+  F5    non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:6
+  F6    non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:7
+  F7    non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:8
+  F8    non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:9
+  F9    non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:10
+  F10   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:11
+  F11   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:12
+  F12   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:13
+  F13   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:14
+  F14   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:15
+  F15   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:16
+  F16   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:17
+  F17   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:18
+  F18   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:19
+  F19   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:20
+  F20   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:21
+  F21   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:22
+  F22   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:23
+  F23   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:24
+  F24   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:25
+  F25   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:26
+  F26   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:27
+  F27   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:28
+  F28   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:29
+  F29   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/admission.rs:30
+  F30   resource_return_from_core     crunch_remote_core  crates/crunch-remote-core/src/admission.rs:32
+  F31   missing_const_fn              crunch_remote_core  crates/crunch-remote-core/src/admission.rs:79
+  F32   missing_const_fn              crunch_remote_core  crates/crunch-remote-core/src/admission.rs:89
+  F33   missing_const_fn              crunch_remote_core  crates/crunch-remote-core/src/admission.rs:123
+  F34   fragile_exhaustive_enum_match crunch_remote_core  crates/crunch-remote-core/src/admission.rs:247
+  F35   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/error.rs:1
+  F36   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/error.rs:2
+  F37   path_segment_repetition       crunch_remote_core  crates/crunch-remote-core/src/error.rs:6
+  F38   missing_const_fn              crunch_remote_core  crates/crunch-remote-core/src/error.rs:49
+  F39   mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/error.rs:49
+  F40   path_segment_repetition       crunch_remote_core  crates/crunch-remote-core/src/error.rs:61
+  F41   missing_const_fn              crunch_remote_core  crates/crunch-remote-core/src/error.rs:70
+  F42   mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/error.rs:70
+  F43   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/identity.rs:1
+  F44   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/identity.rs:2
+  F45   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/identity.rs:5
+  F46   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/identity.rs:6
+  F47   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/identity.rs:7
+  F48   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/identity.rs:8
+  F49   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/identity.rs:9
+  F50   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/identity.rs:10
+  F51   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/identity.rs:11
+  F52   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/identity.rs:12
+  F53   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/identity.rs:13
+  F54   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/identity.rs:14
+  F55   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/identity.rs:15
+  F56   path_segment_repetition       crunch_remote_core  crates/crunch-remote-core/src/identity.rs:33
+  F57   path_segment_repetition       crunch_remote_core  crates/crunch-remote-core/src/identity.rs:37
+  F58   path_segment_repetition       crunch_remote_core  crates/crunch-remote-core/src/identity.rs:42
+  F59   path_segment_repetition       crunch_remote_core  crates/crunch-remote-core/src/identity.rs:46
+  F60   mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/identity.rs:58
+  F61   concrete_construction_in_core crunch_remote_core  crates/crunch-remote-core/src/identity.rs:70
+  F62   path_segment_repetition       crunch_remote_core  crates/crunch-remote-core/src/identity.rs:93
+  F63   missing_const_fn              crunch_remote_core  crates/crunch-remote-core/src/identity.rs:108
+  F64   mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/identity.rs:108
+  F65   mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/identity.rs:135
+  F66   mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/identity.rs:141
+  F67   mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/identity.rs:148
+  F68   mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/identity.rs:156
+  F69   mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/identity.rs:162
+  F70   excessive_file_length         crunch_remote_core  crates/crunch-remote-core/src/model.rs:1
+  F71   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/model.rs:1
+  F72   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/model.rs:2
+  F73   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/model.rs:3
+  F74   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/model.rs:5
+  F75   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/model.rs:6
+  F76   fragile_exhaustive_enum_match crunch_remote_core  crates/crunch-remote-core/src/model.rs:155
+  F77   fragile_exhaustive_enum_match crunch_remote_core  crates/crunch-remote-core/src/model.rs:171
+  F78   excessive_file_length         crunch_remote_core  crates/crunch-remote-core/src/transition.rs:1
+  F79   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:1
+  F80   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:3
+  F81   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:5
+  F82   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:6
+  F83   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:7
+  F84   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:8
+  F85   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:9
+  F86   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:10
+  F87   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:11
+  F88   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:12
+  F89   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:13
+  F90   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:14
+  F91   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:15
+  F92   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:16
+  F93   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:17
+  F94   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:18
+  F95   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:19
+  F96   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:20
+  F97   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:21
+  F98   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:22
+  F99   non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:23
+  F100  non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:24
+  F101  non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:25
+  F102  non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:26
+  F103  non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:27
+  F104  non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/transition.rs:28
+  F105  missing_const_fn              crunch_remote_core  crates/crunch-remote-core/src/transition.rs:99
+  F106  missing_const_fn              crunch_remote_core  crates/crunch-remote-core/src/transition.rs:116
+  F107  fragile_exhaustive_enum_match crunch_remote_core  crates/crunch-remote-core/src/transition.rs:117
+  F108  missing_const_fn              crunch_remote_core  crates/crunch-remote-core/src/transition.rs:153
+  F109  mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/transition.rs:154
+  F110  fragile_exhaustive_enum_match crunch_remote_core  crates/crunch-remote-core/src/transition.rs:158
+  F111  mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/transition.rs:176
+  F112  mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/transition.rs:194
+  F113  mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/transition.rs:203
+  F114  mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/transition.rs:212
+  F115  missing_const_fn              crunch_remote_core  crates/crunch-remote-core/src/transition.rs:241
+  F116  missing_const_fn              crunch_remote_core  crates/crunch-remote-core/src/transition.rs:253
+  F117  fragile_exhaustive_enum_match crunch_remote_core  crates/crunch-remote-core/src/transition.rs:254
+  F118  mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/transition.rs:263
+  F119  missing_const_fn              crunch_remote_core  crates/crunch-remote-core/src/transition.rs:267
+  F120  fragile_exhaustive_enum_match crunch_remote_core  crates/crunch-remote-core/src/transition.rs:268
+  F121  mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/transition.rs:285
+  F122  fragile_exhaustive_enum_match crunch_remote_core  crates/crunch-remote-core/src/transition.rs:324
+  F123  mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/transition.rs:349
+  F124  mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/transition.rs:375
+  F125  mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/transition.rs:384
+  F126  mutating_input_in_pure        crunch_remote_core  crates/crunch-remote-core/src/transition.rs:389
+  F127  non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/wire.rs:1
+  F128  non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/wire.rs:3
+  F129  non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/wire.rs:5
+  F130  non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/wire.rs:6
+  F131  non_trait_imports             crunch_remote_core  crates/crunch-remote-core/src/wire.rs:8
+  F132  path_segment_repetition       crunch_remote_core  crates/crunch-remote-core/src/wire.rs:11
+  F133  path_segment_repetition       crunch_remote_core  crates/crunch-remote-core/src/wire.rs:26
+  F134  path_segment_repetition       crunch_remote_core  crates/crunch-remote-core/src/wire.rs:38
+  F135  path_segment_repetition       crunch_remote_core  crates/crunch-remote-core/src/wire.rs:45
+  F136  path_segment_repetition       crunch_remote_core  crates/crunch-remote-core/src/wire.rs:53
+  F137  path_segment_repetition       crunch_remote_core  crates/crunch-remote-core/src/wire.rs:61
+  F138  path_segment_repetition       crunch_remote_core  crates/crunch-remote-core/src/wire.rs:67
+---

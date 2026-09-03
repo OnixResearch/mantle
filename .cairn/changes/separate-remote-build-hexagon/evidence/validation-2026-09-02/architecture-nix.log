@@ -1,0 +1,30 @@
+this derivation will be built:
+  /nix/store/hh648xgkz2zz20k6ghq2iinf7sda9xyk-mantle-remote-hexagon-architecture-check-0.1.0.drv
+building '/nix/store/hh648xgkz2zz20k6ghq2iinf7sda9xyk-mantle-remote-hexagon-architecture-check-0.1.0.drv'...
+mantle-remote-hexagon-architecture-check> cargoArtifacts not set, will not reuse any cargo artifacts
+mantle-remote-hexagon-architecture-check> Running phase: unpackPhase
+mantle-remote-hexagon-architecture-check> unpacking source archive /nix/store/h8hhkcbf4z6k13k9r5j8vlznfkm2ir6m-source
+mantle-remote-hexagon-architecture-check> source root is source
+mantle-remote-hexagon-architecture-check> Running phase: patchPhase
+mantle-remote-hexagon-architecture-check> Executing configureCargoCommonVars
+mantle-remote-hexagon-architecture-check> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-remote-hexagon-architecture-check> Running phase: configurePhase
+mantle-remote-hexagon-architecture-check> will append /build/source/.cargo-home/config.toml with contents of /nix/store/dk6bnarpmw9b6cihqim3xsvphnc776qi-vendor-cargo-deps/config.toml
+mantle-remote-hexagon-architecture-check> default configurePhase, nothing to do
+mantle-remote-hexagon-architecture-check> Running phase: buildPhase
+mantle-remote-hexagon-architecture-check> +++ command cargo --version
+mantle-remote-hexagon-architecture-check> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-remote-hexagon-architecture-check> +++ command cargo -Zscript --offline scripts/check-remote-hexagon.rs --self-test
+mantle-remote-hexagon-architecture-check>    Compiling check-remote-hexagon v0.0.0 (/build/source/scripts/check-remote-hexagon.rs)
+mantle-remote-hexagon-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.36s
+mantle-remote-hexagon-architecture-check>      Running `.cargo-home/build/e3/1b3e58d0489184/target/debug/check-remote-hexagon --self-test`
+mantle-remote-hexagon-architecture-check> remote hexagon architecture verified: findings=0 negative-fixtures=13
+mantle-remote-hexagon-architecture-check> +++ command cargo -Zscript --offline scripts/check-remote-hexagon.rs --root .
+mantle-remote-hexagon-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+mantle-remote-hexagon-architecture-check>      Running `.cargo-home/build/e3/1b3e58d0489184/target/debug/check-remote-hexagon --root .`
+mantle-remote-hexagon-architecture-check> remote hexagon architecture verified: findings=0 negative-fixtures=13
+mantle-remote-hexagon-architecture-check> Running phase: installPhase
+mantle-remote-hexagon-architecture-check> Running phase: fixupPhase
+mantle-remote-hexagon-architecture-check> shrinking RPATHs of ELF executables and libraries in /nix/store/fa2h79dbs8bh61i3r2qix2qpwxlcpmlf-mantle-remote-hexagon-architecture-check-0.1.0
+mantle-remote-hexagon-architecture-check> checking for references to /build/ in /nix/store/fa2h79dbs8bh61i3r2qix2qpwxlcpmlf-mantle-remote-hexagon-architecture-check-0.1.0...
+mantle-remote-hexagon-architecture-check> patching script interpreter paths in /nix/store/fa2h79dbs8bh61i3r2qix2qpwxlcpmlf-mantle-remote-hexagon-architecture-check-0.1.0

@@ -1,0 +1,2 @@
+nix develop -c cargo fmt --check -p crunch-remote-core -p crunch-remote -p crunch-build -p mantle
+git diff --check

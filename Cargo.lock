@@ -1414,6 +1414,7 @@ dependencies = [
  "crunch-action-result-core",
  "crunch-attestation",
  "crunch-glue",
+ "crunch-remote-core",
  "crunch-store",
  "data-encoding",
  "digest 0.10.7",
@@ -1663,6 +1664,23 @@ dependencies = [
  "artifact-auth-core",
  "blake3",
  "bounded-tree-core",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "crunch-remote"
+version = "0.1.0"
+dependencies = [
+ "crunch-remote-core",
+]
+
+[[package]]
+name = "crunch-remote-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -4836,6 +4854,8 @@ dependencies = [
  "crunch-pipeline",
  "crunch-project",
  "crunch-release-core",
+ "crunch-remote",
+ "crunch-remote-core",
  "crunch-rust-cache",
  "crunch-rust-cache-core",
  "crunch-rustc-wrapper",

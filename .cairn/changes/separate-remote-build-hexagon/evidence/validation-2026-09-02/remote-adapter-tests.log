@@ -1,0 +1,13 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-remote-build-hexagon/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-remote-build-hexagon/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.66s
+     Running unittests src/main.rs (/tmp/mantle-remote-hexagon-dev-target/debug/deps/mantle-755964c229893054)
+
+running 3 tests
+test remote_hexagon::tests::output_projection_removes_store_and_snix_types ... ok
+test remote_hexagon::tests::wire_projection_preserves_accepted_json_bytes ... ok
+test remote_hexagon::tests::output_projection_binds_vendor_records_without_exposing_them ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 2564 filtered out; finished in 0.00s
+

@@ -15,6 +15,8 @@ readonly -a FIRST_PARTY_PACKAGES=(
   crunch-glue
   crunch-pipeline
   crunch-project
+  crunch-remote
+  crunch-remote-core
   crunch-shell
   crunch-store
 )

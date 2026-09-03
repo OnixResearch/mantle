@@ -148,6 +148,7 @@ mod remote_service_secrets;
 mod remote_build;
 mod remote_failure_debug;
 mod remote_farm_config;
+pub mod remote_hexagon;
 mod remote_telemetry_export;
 mod remote_trace_context;
 // Transfer variants preserve complete resumable protocol records, including compatibility-only

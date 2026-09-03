@@ -1,0 +1,2 @@
+nix develop -c cargo -Zscript scripts/check-remote-hexagon.rs --self-test
+nix develop -c cargo -Zscript scripts/check-remote-hexagon.rs --root .

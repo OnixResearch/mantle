@@ -1,0 +1,1 @@
+nix develop -c cargo octet check --package crunch-remote-core --profile deterministic-core --function-addresses off --output-format human --artifact-dir /tmp/mantle-remote-core-octet -- --lib

@@ -29,6 +29,8 @@ members = [
   "crates/crunch-shell",
   "crates/crunch-shell-core",
   "crates/crunch-release-core",
+  "crates/crunch-remote-core",
+  "crates/crunch-remote",
   "crates/crunch-bootstrap-core",
   "crates/crunch-hardware-simulation-core",
   "crates/crunch-hardware-simulation",
@@ -85,6 +87,8 @@ default_scope = [
   "-p", "crunch-project",
   "-p", "crunch-project-core",
   "-p", "crunch-release-core",
+  "-p", "crunch-remote-core",
+  "-p", "crunch-remote",
   "-p", "crunch-repair-core",
   "-p", "crunch-rust-cache-core",
   "-p", "crunch-rust-cache",
@@ -191,6 +195,8 @@ crunch-attestation = { path = "crates/crunch-attestation" }
 crunch-shell = { path = "crates/crunch-shell" }
 crunch-bootstrap-core = { path = "crates/crunch-bootstrap-core" }
 crunch-release-core = { path = "crates/crunch-release-core" }
+crunch-remote-core = { path = "crates/crunch-remote-core" }
+crunch-remote = { path = "crates/crunch-remote" }
 bounded-tree-core = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "b0fd0103bc9eed2c1b6d852045959462d105d8f1" }
 bounded-tree-cap = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "b0fd0103bc9eed2c1b6d852045959462d105d8f1" }
 durable-file-publication = { git = "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git", rev = "951c27f59003cea9bfdb40ed4d89653d50fada1f" }

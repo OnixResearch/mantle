@@ -1068,6 +1068,22 @@
           '';
         };
 
+        remoteHexagonArchitectureCheck = craneLib.mkCargoDerivation {
+          pname = "mantle-remote-hexagon-architecture-check";
+          inherit src cargoVendorDir;
+          cargoArtifacts = null;
+          nativeBuildInputs = nativeBuildInputs ++ [ rustToolchain ];
+          buildPhaseCargoCommand = ''
+            cargo -Zscript --offline scripts/check-remote-hexagon.rs --self-test
+            cargo -Zscript --offline scripts/check-remote-hexagon.rs --root .
+          '';
+          doInstallCargoArtifacts = false;
+          installPhaseCommand = ''
+            mkdir -p "$out"
+            printf '%s\n' 'remote_hexagon_findings=0' > "$out/report.txt"
+          '';
+        };
+
         tigerstyleRunner = pkgs.writeShellApplication {
           name = "crunch-tigerstyle";
           runtimeInputs = nativeBuildInputs ++ [
@@ -1361,6 +1377,7 @@
           nickel-cohort = nickelCohortCheck;
           nickel-export-core-pin = nickelExportCorePin;
           store-capability-architecture = storeCapabilityArchitectureCheck;
+          remote-hexagon-architecture = remoteHexagonArchitectureCheck;
           content-bound-requirement-source-closure = contentBoundRequirementSourceClosure;
           content-bound-requirement-evidence = contentBoundRequirementEvidence;
           store-retention-policy =
@@ -1587,6 +1604,26 @@
 
                 touch "$out"
               '';
+
+          remote-core = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p crunch-remote-core -p crunch-remote --all-targets";
+          };
+
+          remote-core-wasm = craneLib.cargoBuild {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoExtraArgs = "-p crunch-remote-core --lib --target wasm32-unknown-unknown";
+          };
 
           mantle-build-contract = craneLib.cargoTest {
             inherit

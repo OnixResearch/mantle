@@ -108,6 +108,12 @@ use crunch_build::distributed::plan_remote_resource_reservation;
 use crunch_build::distributed::rank_remote_worker_placement_candidates;
 use crunch_build::distributed::remote_resource_remaining_capacity;
 use crunch_build::distributed::validate_remote_resource_lease_snapshot;
+pub use crunch_remote_core::MAX_REMOTE_BUILD_PAYLOAD_BYTES;
+pub use crunch_remote_core::MAX_REMOTE_CAPABILITIES;
+pub use crunch_remote_core::MAX_REMOTE_EXPECTED_OUTPUTS;
+pub use crunch_remote_core::MAX_REMOTE_INPUT_REFS;
+pub use crunch_remote_core::REMOTE_PROTOCOL_ALPN;
+pub use crunch_remote_core::REMOTE_PROTOCOL_VERSION;
 use fs2::FileExt;
 use nix_compat::store_path::StorePath;
 use rand::RngCore;
@@ -139,14 +145,7 @@ use crate::remote_trace_context::REMOTE_TRACE_CONTEXT_CAPABILITY;
 use crate::remote_trace_context::RemoteTraceContext;
 use crate::remote_trace_context::RemoteTraceContextHealth;
 use crate::remote_trace_context::accept_remote_trace_context;
-
-pub const REMOTE_PROTOCOL_ALPN: &str = "mantle-remote-build/1";
 pub const REMOTE_OBSERVABILITY_NON_CLAIM: &str = "remote observability is diagnostic only and does not prove build success, output validity, reproducibility, release eligibility, or physical-target determinism";
-pub const REMOTE_PROTOCOL_VERSION: u32 = 1;
-pub const MAX_REMOTE_CAPABILITIES: usize = 32;
-pub const MAX_REMOTE_INPUT_REFS: usize = 1_000_000;
-pub const MAX_REMOTE_EXPECTED_OUTPUTS: usize = 128;
-pub const MAX_REMOTE_BUILD_PAYLOAD_BYTES: usize = 1_048_576;
 pub const MAX_REMOTE_FRAME_BYTES: usize = 1_048_576;
 const MAX_REMOTE_PATHINFO_READ_BYTES: u64 = 1_048_577;
 const REMOTE_JSON_BYTE_ARRAY_MAX_CHARS_PER_BYTE: usize = 4;
@@ -215,7 +214,6 @@ const LEGACY_LOG_MIGRATION_COUNT_MAX_U32: u32 = 4_294_967_295;
 const LEGACY_LOG_MIGRATION_PAYLOAD_BYTES_MAX: u64 = 18_446_744_073_709_551_615;
 const LEGACY_LOG_MIGRATION_NON_CLAIM: &str =
     "legacy mutable log vectors are not immutable attempt-log history and were not rehashed or promoted";
-const REMOTE_COORDINATOR_BUILD_KEY_LABEL: &str = "remote-coordinator-build-key";
 const REMOTE_COORDINATOR_JOB_ID_LABEL: &str = "remote-coordinator-job";
 const REMOTE_ASSIGNMENT_NONCE_LABEL: &str = "remote-assignment-nonce";
 const EXTERNAL_BATCH_PLAN_REPORT_SCHEMA: &str = "mantle-external-batch-plan-v1";
@@ -1973,34 +1971,26 @@ pub fn validate_hello(
         Ok(value) => value,
         Err(error) => return ProtocolDecision::Reject(format!("expected endpoint invalid: {}", error.as_str())),
     };
-    if hello.alpn != REMOTE_PROTOCOL_ALPN {
-        return ProtocolDecision::Reject(format!("unsupported ALPN {}", hello.alpn));
-    }
-    if hello.version != REMOTE_PROTOCOL_VERSION {
-        return ProtocolDecision::Reject(format!("unsupported protocol version {}", hello.version));
-    }
-    if actual_endpoint != expected_endpoint {
-        return ProtocolDecision::Reject("endpoint identity mismatch".to_string());
-    }
-    if hello.capabilities.len() > MAX_REMOTE_CAPABILITIES {
-        return ProtocolDecision::Reject(format!("capability count exceeds {MAX_REMOTE_CAPABILITIES}"));
-    }
+    let accepted = match crunch_remote_core::admit_hello(crunch_remote_core::HelloAdmissionInput {
+        alpn: hello.alpn.clone(),
+        version: hello.version,
+        endpoint_id: actual_endpoint.as_str().to_string(),
+        expected_endpoint_id: expected_endpoint.as_str().to_string(),
+        capabilities: hello.capabilities.clone(),
+        supported_capabilities: supported_capabilities.to_vec(),
+        workspace_policy_valid: true,
+    }) {
+        crunch_remote_core::HelloAdmissionDecision::Proceed(accepted) => accepted,
+        crunch_remote_core::HelloAdmissionDecision::Reject(reason) => return ProtocolDecision::Reject(reason),
+    };
     if let Some(policy) = hello.workspace_policy.as_ref()
         && let Err(reason) = crate::remote_farm_config::validate_remote_workspace_policy(policy)
     {
         return ProtocolDecision::Reject(format!("invalid workspace registration: {reason}"));
     }
-    let accepted_capabilities = hello
-        .capabilities
-        .iter()
-        .filter(|capability| supported_capabilities.contains(capability))
-        .cloned()
-        .collect::<Vec<_>>();
-    debug_assert!(accepted_capabilities.len() <= hello.capabilities.len());
-    debug_assert!(accepted_capabilities.iter().all(|capability| supported_capabilities.contains(capability)));
     ProtocolDecision::Proceed(AcceptedHello {
-        endpoint_id: hello.endpoint_id.clone(),
-        accepted_capabilities,
+        endpoint_id: accepted.endpoint_id,
+        accepted_capabilities: accepted.accepted_capabilities,
     })
 }
 
@@ -4649,11 +4639,11 @@ pub fn redeem_after_queue(ticket: &mut RemoteTicket, request_validated: bool) ->
 }
 
 pub fn derive_missing_inputs(declared_refs: &[String], present_refs: &[String]) -> Result<Vec<String>, String> {
-    if declared_refs.len() > MAX_REMOTE_INPUT_REFS || present_refs.len() > MAX_REMOTE_INPUT_REFS {
-        return Err(format!("input-ref-count-exceeds-{MAX_REMOTE_INPUT_REFS}"));
-    }
-    let present = present_refs.iter().collect::<std::collections::BTreeSet<_>>();
-    Ok(declared_refs.iter().filter(|reference| !present.contains(reference)).cloned().collect::<Vec<_>>())
+    crunch_remote_core::derive_missing_inputs(crunch_remote_core::MissingInputFacts {
+        declared_refs: declared_refs.to_vec(),
+        present_refs: present_refs.to_vec(),
+    })
+    .map_err(|error| error.code().to_string())
 }
 
 pub fn decide_output_trust(
@@ -4661,73 +4651,23 @@ pub fn decide_output_trust(
     trusted_key_ids: &[String],
     store_prefix_matches: bool,
 ) -> OutputTrustDecision {
-    if !store_prefix_matches {
-        return OutputTrustDecision::Reject("store-prefix-mismatch".to_string());
-    }
-    let signer = parse_output_key_ref(signing_key_id);
-    debug_assert_eq!(signer.name.is_empty(), signing_key_id.is_empty());
-    debug_assert!(signer.key_material_digest_blake3.as_ref().is_none_or(|digest| is_blake3_hex_digest(digest)));
-    let mut is_same_name_material_required = false;
-    let mut is_same_name_different_material = false;
-    for trusted_key_id in trusted_key_ids {
-        let trusted = parse_output_key_ref(trusted_key_id);
-        if trusted.name != signer.name {
-            continue;
-        }
-        match (&signer.key_material_digest_blake3, &trusted.key_material_digest_blake3) {
-            (Some(signer_digest), Some(trusted_digest)) if signer_digest == trusted_digest => {
-                return OutputTrustDecision::Accept {
-                    key_id: signing_key_id.to_string(),
-                    trust_basis: signer.trust_basis(signing_key_id),
-                };
-            }
-            (Some(_), Some(_)) => is_same_name_different_material = true,
-            (None, Some(_)) => is_same_name_material_required = true,
-            (_, None) => {
-                return OutputTrustDecision::Accept {
-                    key_id: signing_key_id.to_string(),
-                    trust_basis: signer.trust_basis(signing_key_id),
-                };
-            }
-        }
-    }
-    if is_same_name_material_required {
-        return OutputTrustDecision::Reject("output-key-material-missing".to_string());
-    }
-    if is_same_name_different_material {
-        return OutputTrustDecision::Reject("same-name-different-output-key".to_string());
-    }
-    OutputTrustDecision::Reject("untrusted-output-key".to_string())
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct OutputKeyRef {
-    name: String,
-    key_material_digest_blake3: Option<String>,
-}
-
-impl OutputKeyRef {
-    fn trust_basis(&self, key_id: &str) -> RemoteOutputTrustBasis {
-        RemoteOutputTrustBasis {
-            key_id: key_id.to_string(),
-            key_material_digest_blake3: self.key_material_digest_blake3.clone(),
-        }
-    }
-}
-
-fn parse_output_key_ref(value: &str) -> OutputKeyRef {
-    if let Some((name, material)) = value.split_once(':')
-        && !name.is_empty()
-        && !material.is_empty()
-    {
-        return OutputKeyRef {
-            name: name.to_string(),
-            key_material_digest_blake3: Some(blake3::hash(material.as_bytes()).to_hex().to_string()),
-        };
-    }
-    OutputKeyRef {
-        name: value.to_string(),
-        key_material_digest_blake3: None,
+    let decision = crunch_remote_core::decide_output_trust(crunch_remote_core::OutputTrustInput {
+        signing_key_id: signing_key_id.to_string(),
+        trusted_key_ids: trusted_key_ids.to_vec(),
+        store_prefix_matches,
+    });
+    match decision {
+        crunch_remote_core::RemoteOutputTrustDecision::Accept {
+            key_id,
+            key_material_digest_blake3,
+        } => OutputTrustDecision::Accept {
+            key_id: key_id.clone(),
+            trust_basis: RemoteOutputTrustBasis {
+                key_id,
+                key_material_digest_blake3,
+            },
+        },
+        crunch_remote_core::RemoteOutputTrustDecision::Reject(reason) => OutputTrustDecision::Reject(reason),
     }
 }
 
@@ -4874,55 +4814,88 @@ pub fn validate_coordinator_build_request(
 
 pub fn normalized_remote_build_key(request: &RemoteCoordinatorBuildRequest) -> Result<String, String> {
     let plan = validate_coordinator_build_request(request)?;
-    let mut hasher = blake3::Hasher::new();
-    hash_labeled_str(&mut hasher, "kind", REMOTE_COORDINATOR_BUILD_KEY_LABEL);
-    hash_labeled_str(&mut hasher, "store-prefix", &request.request.store_prefix);
-    hash_executable_plan_source(&mut hasher, &plan.source);
-    hash_labeled_str(&mut hasher, "system", &plan.system);
-    hash_ordered_values(&mut hasher, "command-arg", &plan.command_args);
-    hash_ordered_map(&mut hasher, "env", &plan.command_env);
-    hash_ordered_values(&mut hasher, "input-ref", &request.request.input_refs);
-    hash_ordered_values(&mut hasher, "source-input-ref", &request.request.source_input_refs);
-    hash_expected_outputs_for_key(&mut hasher, &request.request.expected_outputs);
-    if let Some(replay) = &request.request.failure_replay {
-        hash_labeled_str(&mut hasher, "failure-replay-source-bundle", replay.source_bundle_blake3.as_str());
-        hash_labeled_str(&mut hasher, "failure-replay-execution", replay.execution_blake3.as_str());
+    let input = remote_build_identity_input(request, &plan)?;
+    crunch_remote_core::normalized_remote_build_key(input).map_err(|error| error.code().to_string())
+}
+
+fn remote_build_identity_input(
+    request: &RemoteCoordinatorBuildRequest,
+    plan: &RemoteExecutablePlan,
+) -> Result<crunch_remote_core::RemoteBuildIdentityInput, String> {
+    let (replay_source, replay_execution) = request
+        .request
+        .failure_replay
+        .as_ref()
+        .map(|replay| {
+            (
+                Some(replay.source_bundle_blake3.as_str().to_string()),
+                Some(replay.execution_blake3.as_str().to_string()),
+            )
+        })
+        .unwrap_or((None, None));
+    Ok(crunch_remote_core::RemoteBuildIdentityInput {
+        store_prefix: request.request.store_prefix.clone(),
+        source: remote_build_identity_source(&plan.source),
+        system: plan.system.clone(),
+        command_args: plan.command_args.clone(),
+        command_env: plan.command_env.clone(),
+        input_refs: request.request.input_refs.clone(),
+        source_input_refs: request.request.source_input_refs.clone(),
+        expected_outputs: request.request.expected_outputs.iter().map(remote_output_expectation_fact).collect(),
+        failure_replay_source_bundle_blake3: replay_source,
+        failure_replay_execution_blake3: replay_execution,
+        required_system: request.required_system.clone(),
+        required_features: request.required_features.clone(),
+        required_sandbox_mode: request.required_sandbox_mode.clone(),
+        required_network_mode: request.required_network_mode.clone(),
+        semantic_accelerator_classes: remote_semantic_accelerator_classes(request)?,
+    })
+}
+
+fn remote_build_identity_source(source: &RemoteExecutablePlanSource) -> crunch_remote_core::RemoteBuildIdentitySource {
+    match source {
+        RemoteExecutablePlanSource::Action {
+            action_id,
+            schema,
+            spec_digest_blake3,
+        } => crunch_remote_core::RemoteBuildIdentitySource::Action {
+            action_id: action_id.clone(),
+            schema: schema.clone(),
+            spec_digest_blake3: spec_digest_blake3.clone(),
+        },
+        RemoteExecutablePlanSource::Derivation {
+            declared_drv_path,
+            computed_drv_path,
+            drv_name,
+            drv_digest_blake3,
+        } => crunch_remote_core::RemoteBuildIdentitySource::Derivation {
+            declared_drv_path: declared_drv_path.clone(),
+            computed_drv_path: computed_drv_path.clone(),
+            drv_name: drv_name.clone(),
+            drv_digest_blake3: drv_digest_blake3.clone(),
+        },
     }
-    hash_labeled_str(&mut hasher, "required-system", &request.required_system);
-    hash_ordered_values(&mut hasher, "required-feature", &request.required_features);
-    hash_labeled_str(&mut hasher, "required-sandbox", &request.required_sandbox_mode);
-    hash_labeled_str(&mut hasher, "required-network", &request.required_network_mode);
-    if let Some(requirements) = &request.resource_requirements {
-        let canonical =
-            canonical_remote_resource_requirements(requirements).map_err(|reason| reason.as_str().to_string())?;
-        hash_ordered_values(&mut hasher, "semantic-accelerator-class", &canonical.semantic_accelerator_classes);
+}
+
+fn remote_output_expectation_fact(output: &RemoteExpectedOutput) -> crunch_remote_core::RemoteOutputExpectation {
+    crunch_remote_core::RemoteOutputExpectation {
+        name: output.name.clone(),
+        logical_path: output.logical_path.clone(),
     }
-    let normalized_key_blake3 = hasher.finalize().to_hex().to_string();
-    debug_assert!(is_blake3_hex_digest(&normalized_key_blake3));
-    debug_assert_eq!(normalized_key_blake3.len(), BLAKE3_HEX_LENGTH_CHARS);
-    Ok(normalized_key_blake3)
+}
+
+fn remote_semantic_accelerator_classes(request: &RemoteCoordinatorBuildRequest) -> Result<Vec<String>, String> {
+    let Some(requirements) = &request.resource_requirements else {
+        return Ok(Vec::new());
+    };
+    let canonical =
+        canonical_remote_resource_requirements(requirements).map_err(|reason| reason.as_str().to_string())?;
+    Ok(canonical.semantic_accelerator_classes)
 }
 
 fn hash_ordered_values(hasher: &mut blake3::Hasher, label: &str, values: &[String]) {
     for value in values {
         hash_labeled_str(hasher, label, value);
-    }
-}
-
-fn hash_ordered_map(hasher: &mut blake3::Hasher, label: &str, values: &BTreeMap<String, String>) {
-    for (name, value) in values {
-        hash_labeled_str(hasher, &format!("{label}-name"), name);
-        hash_labeled_str(hasher, &format!("{label}-value"), value);
-    }
-}
-
-fn hash_expected_outputs_for_key(hasher: &mut blake3::Hasher, outputs: &[RemoteExpectedOutput]) {
-    for output in outputs {
-        hash_labeled_str(hasher, "expected-output-name", &output.name);
-        match &output.logical_path {
-            Some(logical_path) => hash_labeled_str(hasher, "expected-output-path", logical_path),
-            None => hash_labeled_str(hasher, "expected-output-path", "<content-addressed>"),
-        }
     }
 }
 
@@ -15963,6 +15936,49 @@ mod tests {
         }
     }
 
+    fn legacy_normalized_remote_build_key(request: &RemoteCoordinatorBuildRequest) -> Result<String, String> {
+        let plan = validate_coordinator_build_request(request)?;
+        let mut hasher = blake3::Hasher::new();
+        hash_labeled_str(&mut hasher, "kind", "remote-coordinator-build-key");
+        hash_labeled_str(&mut hasher, "store-prefix", &request.request.store_prefix);
+        hash_executable_plan_source(&mut hasher, &plan.source);
+        hash_labeled_str(&mut hasher, "system", &plan.system);
+        hash_ordered_values(&mut hasher, "command-arg", &plan.command_args);
+        legacy_hash_ordered_map(&mut hasher, "env", &plan.command_env);
+        hash_ordered_values(&mut hasher, "input-ref", &request.request.input_refs);
+        hash_ordered_values(&mut hasher, "source-input-ref", &request.request.source_input_refs);
+        legacy_hash_expected_outputs(&mut hasher, &request.request.expected_outputs);
+        if let Some(replay) = &request.request.failure_replay {
+            hash_labeled_str(&mut hasher, "failure-replay-source-bundle", replay.source_bundle_blake3.as_str());
+            hash_labeled_str(&mut hasher, "failure-replay-execution", replay.execution_blake3.as_str());
+        }
+        hash_labeled_str(&mut hasher, "required-system", &request.required_system);
+        hash_ordered_values(&mut hasher, "required-feature", &request.required_features);
+        hash_labeled_str(&mut hasher, "required-sandbox", &request.required_sandbox_mode);
+        hash_labeled_str(&mut hasher, "required-network", &request.required_network_mode);
+        if let Some(requirements) = &request.resource_requirements {
+            let canonical =
+                canonical_remote_resource_requirements(requirements).map_err(|reason| reason.as_str().to_string())?;
+            hash_ordered_values(&mut hasher, "semantic-accelerator-class", &canonical.semantic_accelerator_classes);
+        }
+        Ok(hasher.finalize().to_hex().to_string())
+    }
+
+    fn legacy_hash_ordered_map(hasher: &mut blake3::Hasher, label: &str, values: &BTreeMap<String, String>) {
+        for (name, value) in values {
+            hash_labeled_str(hasher, &format!("{label}-name"), name);
+            hash_labeled_str(hasher, &format!("{label}-value"), value);
+        }
+    }
+
+    fn legacy_hash_expected_outputs(hasher: &mut blake3::Hasher, outputs: &[RemoteExpectedOutput]) {
+        for output in outputs {
+            hash_labeled_str(hasher, "expected-output-name", &output.name);
+            let path = output.logical_path.as_deref().unwrap_or("<content-addressed>");
+            hash_labeled_str(hasher, "expected-output-path", path);
+        }
+    }
+
     #[test]
     fn scheduling_quantities_do_not_change_action_key_but_semantic_classes_do() {
         let baseline = fixture_quantified_coordinator_request("resource-identity", "resource-identity-claim");
@@ -15977,9 +15993,11 @@ mod tests {
         semantic_requirements.semantic_accelerator_classes = vec!["amd-gfx942".to_string()];
         semantic_change.request.resource_requirements = semantic_change.resource_requirements.clone();
         let baseline_key = normalized_remote_build_key(&baseline).expect("baseline key derives");
+        let legacy_baseline_key = legacy_normalized_remote_build_key(&baseline).expect("legacy baseline key derives");
         let quantity_key = normalized_remote_build_key(&quantity_only).expect("quantity key derives");
         let semantic_key = normalized_remote_build_key(&semantic_change).expect("semantic key derives");
 
+        assert_eq!(baseline_key, legacy_baseline_key);
         assert_eq!(baseline_key, quantity_key);
         assert_ne!(baseline_key, semantic_key);
         assert_ne!(baseline.resource_requirements, quantity_only.resource_requirements);

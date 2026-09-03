@@ -16,6 +16,7 @@ mod remote_failure_debug;
 mod remote_resources;
 mod remote_telemetry;
 mod remote_transfer;
+pub mod snix_adapter;
 pub use external_batch::*;
 pub use remote_attempt::*;
 pub use remote_attempt_log::*;
@@ -23,6 +24,18 @@ pub use remote_failure_debug::*;
 pub use remote_resources::*;
 pub use remote_telemetry::*;
 pub use remote_transfer::*;
+pub use snix_adapter::DerivationRealizer;
+pub use snix_adapter::LocalBuildServiceRealizer;
+#[cfg(test)]
+use snix_adapter::REMOTE_BUILD_SERVICE_PHASE_REMOTE_DISPATCH;
+#[cfg(test)]
+use snix_adapter::REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION;
+pub use snix_adapter::RemoteBuildServiceAdapter;
+pub use snix_adapter::RemoteBuildServiceDispatchError;
+pub use snix_adapter::RemoteFailureDecision;
+pub use snix_adapter::RemoteFirstBuildService;
+pub use snix_adapter::classify_remote_build_service_failure;
+pub use snix_adapter::validate_remote_build_service_request;
 
 use crate::scheduling::ContentLocalityClass;
 use crate::scheduling::EligiblePreferenceFacts;
@@ -32,171 +45,48 @@ use crate::scheduling::ResourceFitClass;
 use crate::scheduling::TransferCostClass;
 use crate::scheduling::normalize_eligible_preference;
 
-const REALIZATION_KEY_SCHEMA: &str = "crunch-realization-key-v1";
 const MAX_READY_REMOTE_GOALS: usize = 4096;
-const REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION: &str = "request-validation";
-const REMOTE_BUILD_SERVICE_PHASE_REMOTE_DISPATCH: &str = "remote-dispatch";
 const OPERATOR_SECRET_MARKERS: [&str; 5] = ["bearer ", "token=", "authorization", "secret", "password"];
 
-/// Stable provider-neutral key for a derivation realization request.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct RealizationKey(String);
+pub use crunch_remote_core::DerivationKeyFacts;
+pub use crunch_remote_core::InputClosureFact;
+pub use crunch_remote_core::PlatformFacts;
+pub use crunch_remote_core::RealizationKey;
+pub use crunch_remote_core::RealizationKeyError;
+pub use crunch_remote_core::RealizationKeyRequest;
+pub use crunch_remote_core::RealizerProfileFacts;
+pub use crunch_remote_core::RemoteBuildFallbackPolicy;
+pub use crunch_remote_core::SandboxFacts;
+pub use crunch_remote_core::StorePrefixFacts;
+pub use crunch_remote_core::ToolchainFact;
+pub use crunch_remote_core::VerifiedRemoteArtifact as VerifiedRealizationArtifact;
 
-impl RealizationKey {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-/// Derives deterministic realization keys from normalized Crunch facts.
+/// Derives deterministic realization keys from normalized Mantle facts.
 pub trait RealizationKeyDeriver {
     fn derive_key(&self, request: &RealizationKeyRequest) -> Result<RealizationKey, RealizationKeyError>;
 }
 
-/// Default BLAKE3-based provider-neutral key deriver.
+/// BLAKE3 realization-key adapter backed by the strict remote core.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DefaultRealizationKeyDeriver;
 
 impl RealizationKeyDeriver for DefaultRealizationKeyDeriver {
     fn derive_key(&self, request: &RealizationKeyRequest) -> Result<RealizationKey, RealizationKeyError> {
-        request.validate()?;
-        let bytes = serde_json::to_vec(request).map_err(|source| RealizationKeyError::Serialize { source })?;
-        let digest = blake3::hash(&bytes);
-        Ok(RealizationKey(format!(
-            "{REALIZATION_KEY_SCHEMA}:{}",
-            data_encoding::HEXLOWER.encode(digest.as_bytes())
-        )))
+        crunch_remote_core::derive_realization_key(request.clone())
     }
 }
 
-/// Normalized facts that can affect a derivation realization output or the
-/// admissible execution environment.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RealizationKeyRequest {
-    pub derivation: DerivationKeyFacts,
-    pub input_closure: Vec<InputClosureFact>,
-    pub platform: PlatformFacts,
-    pub toolchains: Vec<ToolchainFact>,
-    pub sandbox: SandboxFacts,
-    pub environment: BTreeMap<String, Vec<u8>>,
-    pub store: StorePrefixFacts,
-    pub realizer_profile: RealizerProfileFacts,
-}
-
-impl RealizationKeyRequest {
-    fn validate(&self) -> Result<(), RealizationKeyError> {
-        validate_non_empty(NonEmptyField {
-            field: "derivation.identity",
-            value: &self.derivation.identity,
-        })?;
-        validate_non_empty(NonEmptyField {
-            field: "derivation.builder",
-            value: &self.derivation.builder,
-        })?;
-        validate_non_empty(NonEmptyField {
-            field: "platform.system",
-            value: &self.platform.system,
-        })?;
-        validate_non_empty(NonEmptyField {
-            field: "store.logical_prefix",
-            value: &self.store.logical_prefix,
-        })?;
-        validate_non_empty(NonEmptyField {
-            field: "store.output_prefix",
-            value: &self.store.output_prefix,
-        })?;
-        validate_non_empty(NonEmptyField {
-            field: "sandbox.hermeticity",
-            value: &self.sandbox.hermeticity,
-        })?;
-        validate_non_empty(NonEmptyField {
-            field: "realizer_profile.name",
-            value: &self.realizer_profile.name,
-        })?;
-        validate_sorted_unique_by(&self.input_closure, |fact| fact.store_path.as_str(), "input_closure.store_path")?;
-        validate_sorted_unique_by(&self.toolchains, |fact| fact.name.as_str(), "toolchains.name")?;
-        validate_sorted_unique_by(
-            &self.realizer_profile.capabilities,
-            String::as_str,
-            "realizer_profile.capabilities",
-        )?;
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DerivationKeyFacts {
-    pub identity: String,
-    pub builder: String,
-    pub args: Vec<String>,
-    pub outputs: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InputClosureFact {
-    pub store_path: String,
-    pub nar_hash: String,
-    pub references: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PlatformFacts {
-    pub system: String,
-    pub cpu: String,
-    pub os: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ToolchainFact {
-    pub name: String,
-    pub store_path: String,
-    pub digest: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SandboxFacts {
-    pub hermeticity: String,
-    pub network_allowed: bool,
-    pub fixed_output: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StorePrefixFacts {
-    pub logical_prefix: String,
-    pub output_prefix: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RealizerProfileFacts {
-    pub name: String,
-    pub version: u32,
-    pub capabilities: Vec<String>,
-    pub parameters: BTreeMap<String, String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VerifiedRealizationArtifact {
-    pub outputs: BTreeMap<String, snix_store::path_info::PathInfo>,
-    pub substitutions: BTreeMap<String, crunch_store::OutputSubstitutionReport>,
-}
-
-impl VerifiedRealizationArtifact {
-    pub fn new(
-        outputs: BTreeMap<String, snix_store::path_info::PathInfo>,
-        substitutions: BTreeMap<String, crunch_store::OutputSubstitutionReport>,
-    ) -> Result<Self, ArtifactAdapterError> {
-        if outputs.is_empty() {
-            return Err(ArtifactAdapterError::EmptyArtifact);
+fn validate_sorted_unique_by<'a, T, F>(items: &'a [T], key: F) -> Result<(), ()>
+where F: Fn(&'a T) -> &'a str {
+    let mut previous: Option<&str> = None;
+    for item in items {
+        let current = key(item);
+        if current.is_empty() || previous.is_some_and(|prior| prior >= current) {
+            return Err(());
         }
-        for output_name in substitutions.keys() {
-            if !outputs.contains_key(output_name) {
-                return Err(ArtifactAdapterError::UnknownSubstitutionOutput {
-                    output: output_name.clone(),
-                });
-            }
-        }
-        Ok(Self { outputs, substitutions })
+        previous = Some(current);
     }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -313,12 +203,6 @@ pub fn redact_for_operator(value: &str) -> String {
     }
 }
 
-impl RealizationKey {
-    pub fn short(&self) -> &str {
-        self.0.get(..12).unwrap_or(&self.0)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DistributedProfileConfig {
     pub resolvers: Vec<ResolverProfileConfig>,
@@ -391,94 +275,6 @@ impl RealizationPolicy for RemoteAllowedRealizationPolicy {
     }
 }
 
-#[async_trait::async_trait]
-pub trait DerivationRealizer: Send + Sync {
-    fn profile(&self) -> RealizerProfileFacts;
-
-    async fn realize(
-        &self,
-        request: snix_build::buildservice::BuildRequest,
-    ) -> std::io::Result<snix_build::buildservice::BuildResult>;
-}
-
-#[derive(Debug, Clone)]
-pub struct LocalBuildServiceRealizer<S> {
-    service: S,
-    profile: RealizerProfileFacts,
-}
-
-impl<S> LocalBuildServiceRealizer<S> {
-    pub fn new(service: S, profile: RealizerProfileFacts) -> Self {
-        Self { service, profile }
-    }
-}
-
-#[async_trait::async_trait]
-impl<S> DerivationRealizer for LocalBuildServiceRealizer<S>
-where S: snix_build::buildservice::BuildService + Send + Sync
-{
-    fn profile(&self) -> RealizerProfileFacts {
-        self.profile.clone()
-    }
-
-    async fn realize(
-        &self,
-        request: snix_build::buildservice::BuildRequest,
-    ) -> std::io::Result<snix_build::buildservice::BuildResult> {
-        self.service.do_build(request).await
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RemoteBuildFallbackPolicy {
-    Never,
-    OnRemoteFailure,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum RemoteBuildServiceDispatchError {
-    #[error("remote build service {phase} failed: {reason}")]
-    Phase { phase: &'static str, reason: String },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RemoteFailureDecision {
-    ReturnFailure(RemoteBuildServiceDispatchError),
-    FallbackToLocal { phase: &'static str, reason: String },
-}
-
-pub fn validate_remote_build_service_request(
-    request: &snix_build::buildservice::BuildRequest,
-) -> Result<(), RemoteBuildServiceDispatchError> {
-    if request.command_args.is_empty() {
-        return Err(RemoteBuildServiceDispatchError::Phase {
-            phase: REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION,
-            reason: "remote-build-service-raw-eval-request".to_string(),
-        });
-    }
-    if request.outputs.is_empty() {
-        return Err(RemoteBuildServiceDispatchError::Phase {
-            phase: REMOTE_BUILD_SERVICE_PHASE_REQUEST_VALIDATION,
-            reason: "remote-build-service-outputs-empty".to_string(),
-        });
-    }
-    Ok(())
-}
-
-pub fn classify_remote_build_service_failure(
-    policy: RemoteBuildFallbackPolicy,
-    phase: &'static str,
-    reason: impl Into<String>,
-) -> RemoteFailureDecision {
-    let reason = reason.into();
-    match policy {
-        RemoteBuildFallbackPolicy::Never => {
-            RemoteFailureDecision::ReturnFailure(RemoteBuildServiceDispatchError::Phase { phase, reason })
-        }
-        RemoteBuildFallbackPolicy::OnRemoteFailure => RemoteFailureDecision::FallbackToLocal { phase, reason },
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RemoteGoalAttachment {
     StartRemote {
@@ -534,81 +330,6 @@ where
     debug_assert_eq!(attachments.len(), ready.len());
     debug_assert!(attachments.len() <= MAX_READY_REMOTE_GOALS);
     Ok(attachments)
-}
-
-#[derive(Debug, Clone)]
-pub struct RemoteBuildServiceAdapter<R> {
-    remote: R,
-}
-
-impl<R> RemoteBuildServiceAdapter<R> {
-    pub fn new(remote: R) -> Self {
-        Self { remote }
-    }
-}
-
-#[async_trait::async_trait]
-impl<R> snix_build::buildservice::BuildService for RemoteBuildServiceAdapter<R>
-where R: DerivationRealizer
-{
-    async fn do_build(
-        &self,
-        request: snix_build::buildservice::BuildRequest,
-    ) -> std::io::Result<snix_build::buildservice::BuildResult> {
-        validate_remote_build_service_request(&request).map_err(remote_dispatch_io_error)?;
-        self.remote.realize(request).await.map_err(|source| {
-            remote_dispatch_io_error(RemoteBuildServiceDispatchError::Phase {
-                phase: REMOTE_BUILD_SERVICE_PHASE_REMOTE_DISPATCH,
-                reason: source.to_string(),
-            })
-        })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct RemoteFirstBuildService<R, L> {
-    remote: R,
-    local: L,
-    fallback_policy: RemoteBuildFallbackPolicy,
-}
-
-impl<R, L> RemoteFirstBuildService<R, L> {
-    pub fn new(remote: R, local: L, fallback_policy: RemoteBuildFallbackPolicy) -> Self {
-        Self {
-            remote,
-            local,
-            fallback_policy,
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl<R, L> snix_build::buildservice::BuildService for RemoteFirstBuildService<R, L>
-where
-    R: DerivationRealizer,
-    L: snix_build::buildservice::BuildService,
-{
-    async fn do_build(
-        &self,
-        request: snix_build::buildservice::BuildRequest,
-    ) -> std::io::Result<snix_build::buildservice::BuildResult> {
-        validate_remote_build_service_request(&request).map_err(remote_dispatch_io_error)?;
-        match self.remote.realize(request.clone()).await {
-            Ok(result) => Ok(result),
-            Err(source) => match classify_remote_build_service_failure(
-                self.fallback_policy,
-                REMOTE_BUILD_SERVICE_PHASE_REMOTE_DISPATCH,
-                source.to_string(),
-            ) {
-                RemoteFailureDecision::ReturnFailure(error) => Err(remote_dispatch_io_error(error)),
-                RemoteFailureDecision::FallbackToLocal { .. } => self.local.do_build(request).await,
-            },
-        }
-    }
-}
-
-fn remote_dispatch_io_error(error: RemoteBuildServiceDispatchError) -> std::io::Error {
-    std::io::Error::other(error.to_string())
 }
 
 pub const HASH_NEGOTIATED_REMOTE_REALIZATION_VERSION: &str = "mantle-hash-negotiated-remote-realization-v1";
@@ -727,7 +448,7 @@ impl RemoteRealizationReceipt {
                 return Err(RemoteRealizationProtocolError::MissingContent);
             }
         }
-        validate_sorted_unique_by(&self.outputs, |output| output.output_name.as_str(), "receipt.outputs")
+        validate_sorted_unique_by(&self.outputs, |output| output.output_name.as_str())
             .map_err(|_| RemoteRealizationProtocolError::MissingContent)?;
         if self.outputs.iter().any(|output| output.digest.is_empty()) {
             return Err(RemoteRealizationProtocolError::MissingContent);
@@ -1108,41 +829,6 @@ pub enum ArtifactAdapterError {
     TooManyOutputs,
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum RealizationKeyError {
-    #[error("realization key field {field} must not be empty")]
-    EmptyField { field: &'static str },
-    #[error("realization key collection {field} must be sorted and unique")]
-    NotSortedUnique { field: &'static str },
-    #[error("serializing realization key request: {source}")]
-    Serialize { source: serde_json::Error },
-}
-
-struct NonEmptyField<'a> {
-    field: &'static str,
-    value: &'a str,
-}
-
-fn validate_non_empty(input: NonEmptyField<'_>) -> Result<(), RealizationKeyError> {
-    if input.value.is_empty() {
-        return Err(RealizationKeyError::EmptyField { field: input.field });
-    }
-    Ok(())
-}
-
-fn validate_sorted_unique_by<'a, T, F>(items: &'a [T], key: F, field: &'static str) -> Result<(), RealizationKeyError>
-where F: Fn(&'a T) -> &'a str {
-    let mut previous: Option<&str> = None;
-    for item in items {
-        let current = key(item);
-        if current.is_empty() || previous.is_some_and(|prev| prev >= current) {
-            return Err(RealizationKeyError::NotSortedUnique { field });
-        }
-        previous = Some(current);
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_ne;
@@ -1152,6 +838,8 @@ mod tests {
 
     const TEST_PROFILE_VERSION: u32 = 1;
     const TEST_HARD_BLOCKER_CASE_COUNT: usize = 6;
+    const TEST_OUTPUT_SIZE_BYTES: u64 = 128;
+    const TEST_DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     fn base_request() -> RealizationKeyRequest {
         RealizationKeyRequest {
@@ -1233,20 +921,16 @@ mod tests {
     }
 
     fn verified_artifact() -> VerifiedRealizationArtifact {
-        let store_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("artifact", [7u8; 20]).unwrap();
-        let path_info = snix_store::path_info::PathInfo {
-            store_path,
-            node: snix_castore::Node::Symlink {
-                target: "/crunch/store/source".try_into().unwrap(),
-            },
-            references: vec![],
-            nar_sha256: [8u8; 32],
-            nar_size: 128,
-            signatures: vec![],
-            deriver: None,
-            ca: None,
+        let output = crunch_remote_core::RemoteOutputFact {
+            name: "out".to_string(),
+            logical_path: "/crunch/store/artifact".to_string(),
+            content_digest_blake3: TEST_DIGEST.to_string(),
+            size_bytes: TEST_OUTPUT_SIZE_BYTES,
+            artifact_attestation_blake3: TEST_DIGEST.to_string(),
+            path_info_blake3: Some(TEST_DIGEST.to_string()),
+            substitution: None,
         };
-        VerifiedRealizationArtifact::new(BTreeMap::from([("out".to_string(), path_info)]), BTreeMap::new()).unwrap()
+        VerifiedRealizationArtifact::new(BTreeMap::from([("out".to_string(), output)])).unwrap()
     }
 
     #[test]
@@ -1290,29 +974,17 @@ mod tests {
 
     #[test]
     fn verified_artifact_rejects_empty_outputs() {
-        assert!(matches!(
-            VerifiedRealizationArtifact::new(BTreeMap::new(), BTreeMap::new()),
-            Err(ArtifactAdapterError::EmptyArtifact)
-        ));
+        let error = VerifiedRealizationArtifact::new(BTreeMap::new()).unwrap_err();
+        assert_eq!(error.code(), "verified-artifact-empty");
+        assert!(matches!(error, crunch_remote_core::RemoteCoreError::Invalid { .. }));
     }
 
     #[test]
-    fn verified_artifact_rejects_substitution_for_unknown_output() {
-        let err = VerifiedRealizationArtifact::new(
-            verified_artifact().outputs,
-            BTreeMap::from([("missing".to_string(), crunch_store::OutputSubstitutionReport {
-                mode: crunch_store::OutputSubstitutionMode::Full,
-                transferred_bytes: 0,
-                reused_bytes: 0,
-                metadata_reused: false,
-                fallback_reason: None,
-            })]),
-        )
-        .unwrap_err();
-        assert!(matches!(
-            err,
-            ArtifactAdapterError::UnknownSubstitutionOutput { output } if output == "missing"
-        ));
+    fn verified_artifact_rejects_output_name_mismatch() {
+        let output = verified_artifact().outputs.remove("out").unwrap();
+        let error = VerifiedRealizationArtifact::new(BTreeMap::from([("missing".to_string(), output)])).unwrap_err();
+        assert_eq!(error.code(), "verified-artifact-output-name-mismatch");
+        assert!(matches!(error, crunch_remote_core::RemoteCoreError::Invalid { .. }));
     }
 
     fn remote_request(
@@ -1532,11 +1204,14 @@ mod tests {
 
     #[test]
     fn remote_candidate_verification_rejects_key_mismatch() {
-        let key = key(&base_request());
-        let mut expected = key.clone();
-        expected.0 = "different".to_string();
+        let actual_key = key(&base_request());
+        let mut changed_request = base_request();
+        changed_request.derivation.identity.push_str("-different");
+        let expected_key = key(&changed_request);
         assert_eq!(
-            remote_candidate(key).verify_for_persistence(&expected, &["out".to_string()]).unwrap_err(),
+            remote_candidate(actual_key)
+                .verify_for_persistence(&expected_key, &["out".to_string()])
+                .unwrap_err(),
             RemoteVerificationError::KeyMismatch
         );
     }
@@ -2120,6 +1795,16 @@ mod tests {
         changed.realizer_profile.parameters.insert("cpu".to_string(), "zen4".to_string());
 
         assert_ne!(key(&original), key(&changed));
+    }
+
+    #[test]
+    fn realization_key_matches_legacy_serialization_bytes() {
+        let request = base_request();
+        let bytes = serde_json::to_vec(&request).expect("legacy request serialization");
+        let digest = blake3::hash(&bytes);
+        let legacy = format!("crunch-realization-key-v1:{}", data_encoding::HEXLOWER.encode(digest.as_bytes()));
+        assert_eq!(key(&request).as_str(), legacy);
+        assert!(legacy.starts_with("crunch-realization-key-v1:"));
     }
 
     #[test]
