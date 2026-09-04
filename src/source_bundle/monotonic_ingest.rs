@@ -65,7 +65,7 @@ pub(super) enum SourceIngestHookPoint {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PublishDisposition {
+pub(super) enum PublishDisposition {
     Created,
     ExistingEqual,
 }
@@ -354,7 +354,11 @@ fn publish_json_no_replace<T: Serialize>(
 }
 
 #[cfg(target_os = "linux")]
-fn publish_bytes_no_replace(target: &Path, bytes: &[u8], label: &str) -> Result<PublishDisposition, RunError> {
+pub(super) fn publish_bytes_no_replace(
+    target: &Path,
+    bytes: &[u8],
+    label: &str,
+) -> Result<PublishDisposition, RunError> {
     let parent = target.parent().ok_or_else(|| RunError::Internal(format!("{label} has no parent")))?;
     ensure_source_publication_directory(parent, label)?;
     let destination_leaf = target
@@ -476,7 +480,11 @@ fn sync_source_directory(path: &Path, label: &str) -> Result<(), RunError> {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn publish_bytes_no_replace(target: &Path, bytes: &[u8], label: &str) -> Result<PublishDisposition, RunError> {
+pub(super) fn publish_bytes_no_replace(
+    target: &Path,
+    bytes: &[u8],
+    label: &str,
+) -> Result<PublishDisposition, RunError> {
     let parent = target.parent().ok_or_else(|| RunError::Internal(format!("{label} has no parent")))?;
     fs::create_dir_all(parent)
         .map_err(|error| RunError::Internal(format!("creating {label} parent {}: {error}", parent.display())))?;

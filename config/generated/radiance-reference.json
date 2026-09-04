@@ -1,0 +1,136 @@
+{
+  "compiler_arguments": [
+    "-pkg",
+    "std",
+    "@std.lib",
+    "-pkg",
+    "radiance",
+    "-mod",
+    "compiler/radiance.rad",
+    "-entry",
+    "radiance"
+  ],
+  "emulator_arguments": [
+    "-memory-size=385024",
+    "-data-size=348160",
+    "-stack-size=512",
+    "-count-instructions",
+    "-run"
+  ],
+  "expected_fixed_point_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+  "expected_fixed_point_bytes": 1285492,
+  "native_builds": {
+    "bootstrap_compiler": {
+      "flags": [
+        "-fvisibility=hidden",
+        "-std=c99",
+        "-Os",
+        "-Wall",
+        "-Wextra",
+        "-Wpedantic",
+        "-Wformat=2",
+        "-Wformat-security",
+        "-Wnull-dereference",
+        "-Wno-format-nonliteral",
+        "-Wcast-align",
+        "-Wunused",
+        "-Wuninitialized",
+        "-Wmissing-field-initializers",
+        "-fno-common",
+        "-fstack-protector-all",
+        "-mcmodel=medium"
+      ],
+      "linker_flags": [
+        "-Wl,-z,stack-size=33554432"
+      ],
+      "output_name": "radiance.s0",
+      "role": "bootstrap-compiler",
+      "sources": [
+        "ast.c",
+        "desugar.c",
+        "gen.c",
+        "io.c",
+        "module.c",
+        "options.c",
+        "parser.c",
+        "radiance.c",
+        "ralloc.c",
+        "resolver.c",
+        "riscv.c",
+        "scanner.c",
+        "strings.c",
+        "symtab.c",
+        "gen/data.c",
+        "gen/emit.c"
+      ]
+    },
+    "emulator": {
+      "flags": [
+        "-fvisibility=hidden",
+        "-std=c99",
+        "-O3",
+        "-Wall",
+        "-Wextra",
+        "-Wpedantic",
+        "-Wformat=2",
+        "-Wformat-security",
+        "-Wnull-dereference",
+        "-Wno-format-nonliteral",
+        "-Wcast-align",
+        "-Wunused",
+        "-Wuninitialized",
+        "-Wmissing-field-initializers",
+        "-fno-common",
+        "-fstack-protector-all",
+        "-mcmodel=medium",
+        "-flto"
+      ],
+      "linker_flags": [
+        "-Wl,-z,stack-size=33554432"
+      ],
+      "output_name": "emulator",
+      "role": "emulator",
+      "sources": [
+        "emulator.c",
+        "jit.c",
+        "riscv/debug.c",
+        "io.c",
+        "riscv.c"
+      ]
+    }
+  },
+  "non_claim": "external reference convergence does not prove compiler correctness, seed trust, semantic equivalence, or universal reproducibility",
+  "schema": "mantle-radiance-reference-profile-v1",
+  "sources": [
+    {
+      "content_blake3": "135c2f75eea21199b4538f5f0096e3e329c6b8b70943017644f9cdef05573c66",
+      "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+      "license_spdx": "MIT",
+      "projection": ".",
+      "repository_url": "https://code.radiant.computer/radiance",
+      "revision": "0d8a2d4fe8d0ba488e22c8ed83df1e53a5d23d69489c5d9e7fa0646b1c29c444",
+      "role": "radiance",
+      "snapshot_profile": "canonical-tree-v1"
+    },
+    {
+      "content_blake3": "8c49dadd15e6834dd3204a35f4be00cf1cc01c9672c235a78a0c909b97aa8f1b",
+      "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+      "license_spdx": "MIT",
+      "projection": ".",
+      "repository_url": "https://code.radiant.computer/radiance.s0",
+      "revision": "7834d3a9d44fb48ae3d3c06da992922f3e46b580b3d92df36372081b2fe475c3",
+      "role": "bootstrap-compiler",
+      "snapshot_profile": "canonical-tree-v1"
+    },
+    {
+      "content_blake3": "a6e91a2a6edc0aa4d5ca3c870012fdfb4f14748fed2829c46f6466efab3a27ec",
+      "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+      "license_spdx": "MIT",
+      "projection": ".",
+      "repository_url": "https://code.radiant.computer/emulator",
+      "revision": "92cdb0c5293447964be053214fac403b49193ac3ec07c902576346ebaa205535",
+      "role": "emulator",
+      "snapshot_profile": "canonical-tree-v1"
+    }
+  ]
+}

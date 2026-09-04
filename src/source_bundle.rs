@@ -496,6 +496,14 @@ pub struct SourceSpec {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct VcsCheckoutSourceSpec {
+    pub identity: String,
+    pub path: PathBuf,
+    pub repository_url: String,
+    pub revision: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ForeignSourcePathBinding {
     pub(crate) payload_id: String,
     pub(crate) path: PathBuf,
@@ -633,6 +641,50 @@ pub fn plan_source_bundle(specs: &[SourceSpec], store_prefix: &str) -> Result<So
     assemble_source_bundle(records, store_prefix)
 }
 
+pub(crate) fn plan_vcs_checkout_source_bundle(
+    specs: &[VcsCheckoutSourceSpec],
+    store_prefix: &str,
+) -> Result<SourceBundleManifest, RunError> {
+    if specs.len() > MAX_SOURCE_RECORDS {
+        return Err(RunError::Internal(format!("VCS source record count exceeds {MAX_SOURCE_RECORDS}")));
+    }
+    let mut records = Vec::with_capacity(specs.len());
+    for spec in specs {
+        let url = crunch_build::FetchUrl::new(spec.repository_url.clone())
+            .map_err(|error| RunError::Internal(format!("invalid VCS source URL: {error:?}")))?;
+        let revision = crunch_build::GitRevision::new(spec.revision.clone())
+            .map_err(|error| RunError::Internal(format!("invalid VCS source revision: {error:?}")))?;
+        let mut metadata = BTreeMap::new();
+        metadata.insert(RECORD_METADATA_URL_KEY.to_string(), url.as_str().to_string());
+        metadata.insert(FETCH_ENV_REV_KEY.to_string(), revision.as_str().to_string());
+        metadata.insert(FETCH_ENV_TYPE_KEY.to_string(), FETCH_ENV_TYPE_GIT.to_string());
+        let record = source_record_from_path(SourceRecordPathRequest {
+            kind: SourceRecordKind::VcsSnapshot,
+            identity: spec.identity.clone(),
+            path: &spec.path,
+            store_prefix,
+            metadata,
+            adapter: None,
+            is_skipping_git_dir: true,
+            allow_large_file_chunks: true,
+            root_entry_allowlist: None,
+        })?;
+        let observation = admitted_source_observation(&record).map_err(|error| {
+            RunError::Internal(format!("invalid VCS source revision for {}: {error}", spec.identity))
+        })?;
+        if observation.is_none() {
+            return Err(RunError::Internal(format!(
+                "VCS source revision for {} lacks an immutable SHA-1 or SHA-256 observation",
+                spec.identity
+            )));
+        }
+        records.push(record);
+    }
+    debug_assert_eq!(records.len(), specs.len());
+    debug_assert!(records.iter().all(|record| record.kind == SourceRecordKind::VcsSnapshot));
+    assemble_source_bundle(records, store_prefix)
+}
+
 pub(crate) fn plan_empty_source_bundle(store_prefix: &str) -> Result<SourceBundleManifest, RunError> {
     if !store_prefix.starts_with('/') {
         return Err(RunError::Internal(format!("store prefix must be absolute: {store_prefix}")));
@@ -667,7 +719,7 @@ pub(crate) fn validate_empty_source_bundle(manifest: &SourceBundleManifest) -> R
     Ok(())
 }
 
-pub(crate) fn digest_bound_foreign_source_path(payload_id: &str, path: &Path) -> Result<String, RunError> {
+pub(crate) fn observe_bound_foreign_source_path(payload_id: &str, path: &Path) -> Result<(String, u64), RunError> {
     let records = canonicalize_bound_foreign_source_specs(
         &[SourceSpec {
             kind: SourceRecordKind::LocalPath,
@@ -683,7 +735,16 @@ pub(crate) fn digest_bound_foreign_source_path(payload_id: &str, path: &Path) ->
     if records.len() != 1 {
         return Err(RunError::Internal("bound foreign source digest produced multiple records".to_string()));
     }
-    Ok(record.content_blake3.clone())
+    debug_assert!(!record.content_blake3.is_empty());
+    debug_assert_eq!(records.len(), 1);
+    Ok((record.content_blake3.clone(), record.payload_bytes))
+}
+
+pub(crate) fn digest_bound_foreign_source_path(payload_id: &str, path: &Path) -> Result<String, RunError> {
+    let (digest_blake3, _) = observe_bound_foreign_source_path(payload_id, path)?;
+    debug_assert!(!digest_blake3.is_empty());
+    debug_assert!(!payload_id.is_empty());
+    Ok(digest_blake3)
 }
 
 pub(crate) fn plan_bound_foreign_source_bundle(
@@ -1616,7 +1677,7 @@ pub fn write_source_bundle(path: &Path, manifest: &SourceBundleManifest) -> Resu
     Ok(())
 }
 
-fn write_source_bundle_no_replace(path: &Path, manifest: &SourceBundleManifest) -> Result<(), RunError> {
+pub(crate) fn write_source_bundle_no_replace(path: &Path, manifest: &SourceBundleManifest) -> Result<(), RunError> {
     validate_manifest(manifest)?;
     let parent = path.parent().filter(|candidate| !candidate.as_os_str().is_empty()).unwrap_or(Path::new("."));
     let stage = path.with_extension(SOURCE_REFRESH_TEMP_FILE_EXTENSION);
@@ -1664,6 +1725,17 @@ pub fn read_source_bundle(path: &Path) -> Result<SourceBundleManifest, RunError>
         .map_err(|error| RunError::Internal(format!("parsing source bundle {}: {error}", path.display())))?;
     validate_manifest(&manifest)?;
     Ok(manifest)
+}
+
+pub(crate) fn admitted_source_observation(
+    record: &SourceRecord,
+) -> Result<Option<crunch_source_core::SourceObservationWire>, RunError> {
+    source_observation_adapter::project_source_record(record).map(|projection| projection.observation)
+}
+
+pub(crate) fn publish_immutable_source_bytes(target: &Path, bytes: &[u8], label: &str) -> Result<bool, RunError> {
+    monotonic_ingest::publish_bytes_no_replace(target, bytes, label)
+        .map(|disposition| disposition == monotonic_ingest::PublishDisposition::Created)
 }
 
 pub fn import_source_bundle(
@@ -5725,7 +5797,10 @@ mod tests {
         fs::write(source.join("bin/tool"), b"tool").unwrap();
         fs::set_permissions(source.join("bin/tool"), fs::Permissions::from_mode(UNIX_EXECUTABLE_FILE_MODE)).unwrap();
         symlink("bin/tool", source.join("tool-link")).unwrap();
-        let expected_content_blake3 = digest_bound_foreign_source_path(PAYLOAD_ID, &source).unwrap();
+        let (expected_content_blake3, observed_payload_bytes) =
+            observe_bound_foreign_source_path(PAYLOAD_ID, &source).unwrap();
+        assert!(observed_payload_bytes > 0);
+        assert_eq!(digest_bound_foreign_source_path(PAYLOAD_ID, &source).unwrap(), expected_content_blake3);
         let requirements = [crate::foreign_graph_compiler::CompiledSourceRequirement {
             payload_id: PAYLOAD_ID.to_string(),
             foreign_path: FOREIGN_PATH.to_string(),
@@ -7782,5 +7857,61 @@ mod tests {
 
         let err = validate_source_record(&record, ManifestPayloadValidation::VerifyPayloads).unwrap_err();
         assert!(err.to_string().contains("below symlink"));
+    }
+
+    #[test]
+    fn explicit_vcs_checkout_plan_binds_sha256_observation_and_skips_git_state() {
+        let temp = tempfile::tempdir().unwrap();
+        let checkout = temp.path().join("checkout");
+        fs::create_dir_all(checkout.join(".git")).unwrap();
+        fs::write(checkout.join("source.rad"), b"module source;\n").unwrap();
+        fs::write(checkout.join(".git/HEAD"), b"mutable control state\n").unwrap();
+        let revision = "1111111111111111111111111111111111111111111111111111111111111111";
+        let manifest = plan_vcs_checkout_source_bundle(
+            &[VcsCheckoutSourceSpec {
+                identity: "radiance".to_string(),
+                path: checkout,
+                repository_url: "https://code.radiant.computer/radiance".to_string(),
+                revision: revision.to_string(),
+            }],
+            "/mantle/store",
+        )
+        .unwrap();
+        let record = &manifest.records[0];
+        let observation = admitted_source_observation(record).unwrap().unwrap();
+        assert_eq!(observation.immutable_revision.unwrap().value, revision);
+        assert_eq!(observation.content_blake3.len(), BLAKE3_HEX_BYTES);
+        assert!(record.files.iter().all(|file| !file.path.starts_with(".git")));
+        assert_eq!(record.files.len(), 1);
+    }
+
+    #[test]
+    fn explicit_vcs_checkout_plan_rejects_malformed_revision() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join("source.rad"), b"module source;\n").unwrap();
+        let error = plan_vcs_checkout_source_bundle(
+            &[VcsCheckoutSourceSpec {
+                identity: "radiance".to_string(),
+                path: temp.path().to_path_buf(),
+                repository_url: "https://code.radiant.computer/radiance".to_string(),
+                revision: "mutable-main".to_string(),
+            }],
+            "/mantle/store",
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("revision"));
+        assert!(!temp.path().join("published.json").exists());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn immutable_source_bytes_reuse_exact_content_and_reject_conflict() {
+        let temp = tempfile::tempdir().unwrap();
+        let destination = temp.path().join("source.json");
+        assert!(publish_immutable_source_bytes(&destination, b"exact\n", "test source").unwrap());
+        assert!(!publish_immutable_source_bytes(&destination, b"exact\n", "test source").unwrap());
+        let error = publish_immutable_source_bytes(&destination, b"changed\n", "test source").unwrap_err();
+        assert!(error.to_string().contains("conflict"));
+        assert_eq!(fs::read(&destination).unwrap(), b"exact\n");
     }
 }

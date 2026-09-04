@@ -2,7 +2,7 @@
 
 ### Requirement: Radiance reference sources form one exact cohort
 
-r[mantle.bootstrap.radiance_reference.source_cohort] Mantle MUST bind exact tagged Git SHA-256 objects, source BLAKE3 values, roles, projections, snapshot profiles, and MIT licenses for Radiance, Radiance.s0, and the emulator.
+r[mantle.bootstrap.radiance_reference.source_cohort] Mantle MUST bind exact explicit-format Git SHA-256 commits, source BLAKE3 values, roles, projections, snapshot profiles, and MIT licenses for Radiance, Radiance.s0, and the emulator.
 
 #### Scenario: Complete source cohort is admitted
 
@@ -22,14 +22,16 @@ r[mantle.bootstrap.radiance_reference.offline] The live reference proof MUST use
 
 #### Scenario: Offline source closure is complete
 
-- GIVEN the source bundle contains every admitted source and tool input
+- GIVEN the source bundle contains every admitted external source
+- AND the operator supplies an explicit compiler launcher, driver, linker, CRT tree, and libgcc tree
 - WHEN the proof preflight and stages run
 - THEN every source request MUST resolve from pinned source state
+- AND every supplied tool or runtime input MUST have a receipt-bound identity
 - AND evidence MUST report zero live fetches and source fallbacks
 
 #### Scenario: Source is absent from the bundle
 
-- GIVEN one required source or tool input is unavailable in pinned source state
+- GIVEN one required external source is unavailable in pinned source state
 - WHEN proof preflight runs
 - THEN the proof MUST fail before DNS, proxy, Git, URL, or other network access
 
@@ -45,9 +47,10 @@ r[mantle.bootstrap.radiance_reference.build_graph] The fixture MUST define one s
 
 #### Scenario: C99 route is planned
 
-- GIVEN the admitted host C compiler, Radiance.s0 source, emulator, Radiance source, and limits
+- GIVEN the admitted compiler launcher, resolved driver, linker, CRT tree, libgcc tree, Radiance.s0 source, emulator source, Radiance source, and limits
 - WHEN the C99 route is planned
-- THEN it MUST build Radiance.s0 before the first self-hosted compiler stage
+- THEN it MUST bind each tool and runtime input before it builds Radiance.s0
+- AND it MUST build Radiance.s0 before the first self-hosted compiler stage
 
 ### Requirement: Every stage uses its declared predecessor
 
@@ -61,7 +64,7 @@ r[mantle.bootstrap.radiance_reference.lineage] Each compiler stage MUST execute 
 
 #### Scenario: Ambient or substituted tool appears
 
-- GIVEN a stage discovers an ambient compiler, skips a predecessor, runs an undeclared executable, substitutes output, or uses fallback
+- GIVEN a stage discovers an ambient compiler, mutates a link-runtime tree, skips a predecessor, runs an undeclared executable, substitutes output, or uses fallback
 - WHEN execution or audit admission runs
 - THEN the proof MUST fail without a fixed-point verdict
 
@@ -71,21 +74,21 @@ r[mantle.bootstrap.radiance_reference.convergence] Mantle MUST compare route-loc
 
 #### Scenario: Both routes reach one fixed point
 
-- GIVEN stage one and stage two match inside each route and both route outputs also match
+- GIVEN stage two and stage three match inside each route and both route outputs also match
 - WHEN convergence classification runs
 - THEN the receipt MUST report two route-local fixed points and one cross-route match
 - AND it MUST NOT report compiler correctness or seed trust
 
 #### Scenario: Routes converge to different outputs
 
-- GIVEN stage one and stage two match inside each route but the route outputs differ
+- GIVEN stage two and stage three match inside each route but the route outputs differ
 - WHEN convergence classification runs
 - THEN the receipt MUST preserve both fixed points and report cross-route divergence
 - AND it MUST NOT identify either route as correct without an external oracle
 
 ### Requirement: Reference receipt binds all observed facts
 
-r[mantle.bootstrap.radiance_reference.receipt] The receipt MUST bind source, source-state, toolchain, build, emulator, stage, predecessor, execution, output, comparison, zero-event, and non-claim facts.
+r[mantle.bootstrap.radiance_reference.receipt] The receipt MUST bind source, source-state, compiler launcher, resolved compiler driver, linker, CRT tree, libgcc tree, build, emulator, stage, predecessor, execution, output, comparison, zero-event, and non-claim facts.
 
 #### Scenario: Receipt replays
 
@@ -95,7 +98,7 @@ r[mantle.bootstrap.radiance_reference.receipt] The receipt MUST bind source, sou
 
 #### Scenario: Evidence is stale or mutated
 
-- GIVEN source, seed, compiler, emulator, lineage, output, comparison, or receipt bytes change
+- GIVEN source, seed, compiler driver, linker, CRT tree, libgcc tree, emulator, lineage, output, comparison, or receipt bytes change
 - WHEN receipt validation runs
 - THEN it MUST fail with the first bounded identity or relation mismatch
 

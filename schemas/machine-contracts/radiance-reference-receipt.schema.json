@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/radiance/radiance-reference-receipt-v1",
+  "title": "Mantle Radiance reference receipt",
+  "x-mantle-rust-owner": "crates/crunch-radiance-reference-core/src/model.rs::RadianceReferenceReceipt",
+  "$defs": {
+    "source_observation": {
+      "type": "object",
+      "required": ["schema", "source_kind", "locator_class", "immutable_revision", "normalized_projection", "snapshot_profile", "content_blake3", "observation_blake3", "provenance", "non_claim"],
+      "properties": {
+        "schema": { "type": "string", "const": "mantle-source-observation-v1" },
+        "source_kind": { "type": "string", "const": "vcs-snapshot" },
+        "locator_class": { "type": "string", "const": "git-remote" },
+        "locator_hint": { "type": "string" },
+        "immutable_revision": {
+          "type": "object",
+          "required": ["object_format", "value"],
+          "properties": {
+            "object_format": { "type": "string", "const": "sha256" },
+            "value": { "type": "string", "x-mantle-semantic": "sha256" }
+          },
+          "additionalProperties": false
+        },
+        "normalized_projection": { "type": "string", "const": "." },
+        "snapshot_profile": { "type": "string", "const": "canonical-tree-v1" },
+        "content_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "observation_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "mutable_reference_hint": { "type": "string" },
+        "provenance": { "type": "string", "const": "complete" },
+        "non_claim": { "type": "string", "x-mantle-semantic": "non-empty" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": ["schema", "source_cohort", "source_bundle_blake3", "source_state_blake3", "plan", "tools", "stages", "route_convergence", "cross_route", "zero_events", "publication", "protected_execution_audit_blake3", "receipt_blake3", "non_claim"],
+  "properties": {
+    "schema": { "type": "string", "const": "mantle-radiance-reference-receipt-v1", "x-mantle-issue-class": "version" },
+    "source_cohort": {
+      "type": "object",
+      "required": ["schema", "members", "cohort_blake3", "non_claim"],
+      "properties": {
+        "schema": { "type": "string", "const": "mantle-radiance-source-cohort-v1" },
+        "members": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "x-mantle-bound-name": { "minItems": "RADIANCE_SOURCE_COUNT", "maxItems": "RADIANCE_SOURCE_COUNT" },
+          "items": {
+            "type": "object",
+            "required": ["role", "repository_url", "observation", "license_spdx", "license_blake3"],
+            "properties": {
+              "role": { "type": "string", "enum": ["radiance", "bootstrap-compiler", "emulator"] },
+              "repository_url": { "type": "string" },
+              "observation": { "$ref": "#/$defs/source_observation" },
+              "license_spdx": { "type": "string", "const": "MIT" },
+              "license_blake3": { "type": "string", "x-mantle-semantic": "blake3" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "cohort_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "non_claim": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "source_bundle_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "source_state_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "plan": {
+      "type": "object",
+      "required": ["schema", "source_cohort_blake3", "source_bundle_blake3", "stages", "plan_blake3", "non_claim"],
+      "properties": {
+        "schema": { "type": "string", "const": "mantle-radiance-reference-plan-v1" },
+        "source_cohort_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "source_bundle_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "stages": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "x-mantle-bound-name": { "minItems": "RADIANCE_STAGE_COUNT", "maxItems": "RADIANCE_STAGE_COUNT" },
+          "items": {
+            "type": "object",
+            "required": ["route", "stage", "launch_kind", "predecessor_role", "source_projection", "output_role"],
+            "properties": {
+              "route": { "type": "string", "enum": ["seed", "c99"] },
+              "stage": { "type": "integer", "minimum": 1, "maximum": 3, "x-mantle-bound-name": { "minimum": "RADIANCE_FIRST_STAGE", "maximum": "RADIANCE_STAGES_PER_ROUTE" } },
+              "launch_kind": { "type": "string", "enum": ["native-bootstrap", "emulated-compiler"] },
+              "predecessor_role": { "type": "string", "x-mantle-semantic": "non-empty" },
+              "source_projection": { "type": "string", "const": "." },
+              "output_role": { "type": "string", "x-mantle-semantic": "non-empty" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "plan_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "non_claim": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "tools": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "x-mantle-bound-name": { "minItems": "RADIANCE_TOOL_COUNT", "maxItems": "RADIANCE_TOOL_COUNT" },
+      "items": {
+        "type": "object",
+        "required": ["role", "digest_blake3", "byte_count"],
+        "properties": {
+          "role": { "type": "string", "enum": ["host-c-compiler", "host-c-compiler-driver", "host-linker", "host-crt-inputs", "host-libgcc-inputs", "bootstrap-compiler", "emulator", "seed"] },
+          "digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+          "byte_count": { "type": "integer", "minimum": 1, "maximum": 1073741824, "x-mantle-bound-name": { "minimum": "RADIANCE_ARTIFACT_BYTES_MIN", "maximum": "RADIANCE_LINK_RUNTIME_BYTES_MAX" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "x-mantle-bound-name": { "minItems": "RADIANCE_STAGE_COUNT", "maxItems": "RADIANCE_STAGE_COUNT" },
+      "items": {
+        "type": "object",
+        "required": ["route", "stage", "launch_kind", "launcher_blake3", "predecessor_blake3", "output_role", "output_blake3", "output_bytes", "exit_code", "stdout_blake3", "stderr_blake3", "protected_audit_blake3", "protected_audit_event_count", "denied_event_count"],
+        "properties": {
+          "route": { "type": "string", "enum": ["seed", "c99"] },
+          "stage": { "type": "integer", "minimum": 1, "maximum": 3, "x-mantle-bound-name": { "minimum": "RADIANCE_FIRST_STAGE", "maximum": "RADIANCE_STAGES_PER_ROUTE" } },
+          "launch_kind": { "type": "string", "enum": ["native-bootstrap", "emulated-compiler"] },
+          "launcher_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+          "predecessor_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+          "output_role": { "type": "string", "x-mantle-semantic": "non-empty" },
+          "output_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+          "output_bytes": { "type": "integer", "minimum": 1, "maximum": 67108864, "x-mantle-bound-name": { "minimum": "RADIANCE_ARTIFACT_BYTES_MIN", "maximum": "RADIANCE_ARTIFACT_BYTES_MAX" } },
+          "exit_code": { "type": "integer" },
+          "stdout_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+          "stderr_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+          "protected_audit_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+          "protected_audit_event_count": { "type": "integer", "minimum": 0, "maximum": 4096, "x-mantle-bound-name": { "minimum": "RADIANCE_AUDIT_EVENTS_MIN", "maximum": "RADIANCE_AUDIT_EVENTS_MAX" } },
+          "denied_event_count": { "type": "integer", "minimum": 0, "maximum": 4096, "x-mantle-bound-name": { "minimum": "RADIANCE_AUDIT_EVENTS_MIN", "maximum": "RADIANCE_AUDIT_EVENTS_MAX" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "route_convergence": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "x-mantle-bound-name": { "minItems": "RADIANCE_ROUTE_COUNT", "maxItems": "RADIANCE_ROUTE_COUNT" },
+      "items": {
+        "type": "object",
+        "required": ["route", "left_stage", "right_stage", "left_blake3", "right_blake3", "byte_count", "equal"],
+        "properties": {
+          "route": { "type": "string", "enum": ["seed", "c99"] },
+          "left_stage": { "type": "integer", "const": 2 },
+          "right_stage": { "type": "integer", "const": 3 },
+          "left_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+          "right_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+          "byte_count": { "type": "integer", "minimum": 1, "maximum": 67108864, "x-mantle-bound-name": { "minimum": "RADIANCE_ARTIFACT_BYTES_MIN", "maximum": "RADIANCE_ARTIFACT_BYTES_MAX" } },
+          "equal": { "type": "boolean", "const": true }
+        },
+        "additionalProperties": false
+      }
+    },
+    "cross_route": {
+      "type": "object",
+      "required": ["seed_blake3", "c99_blake3", "seed_bytes", "c99_bytes", "disposition"],
+      "properties": {
+        "seed_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "c99_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+        "seed_bytes": { "type": "integer", "minimum": 1, "maximum": 67108864, "x-mantle-bound-name": { "minimum": "RADIANCE_ARTIFACT_BYTES_MIN", "maximum": "RADIANCE_ARTIFACT_BYTES_MAX" } },
+        "c99_bytes": { "type": "integer", "minimum": 1, "maximum": 67108864, "x-mantle-bound-name": { "minimum": "RADIANCE_ARTIFACT_BYTES_MIN", "maximum": "RADIANCE_ARTIFACT_BYTES_MAX" } },
+        "disposition": { "type": "string", "enum": ["match", "divergence"] }
+      },
+      "additionalProperties": false
+    },
+    "zero_events": {
+      "type": "object",
+      "required": ["live_fetches", "source_fallbacks", "substitutions", "ambient_discoveries"],
+      "properties": {
+        "live_fetches": { "type": "integer", "const": 0, "x-mantle-issue-class": "bounds" },
+        "source_fallbacks": { "type": "integer", "const": 0, "x-mantle-issue-class": "bounds" },
+        "substitutions": { "type": "integer", "const": 0, "x-mantle-issue-class": "bounds" },
+        "ambient_discoveries": { "type": "integer", "const": 0, "x-mantle-issue-class": "bounds" }
+      },
+      "additionalProperties": false
+    },
+    "publication": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "x-mantle-bound-name": { "minItems": "RADIANCE_PUBLICATION_COUNT", "maxItems": "RADIANCE_PUBLICATION_COUNT" },
+      "items": {
+        "type": "object",
+        "required": ["role", "relative_path", "digest_blake3", "byte_count"],
+        "properties": {
+          "role": { "type": "string", "enum": ["seed-route-fixed-point", "c99-route-fixed-point", "bootstrap-compiler", "emulator"] },
+          "relative_path": { "type": "string", "maxLength": 4096, "x-mantle-bound-name": { "maxLength": "RADIANCE_TEXT_BYTES_MAX" }, "x-mantle-length-unit": "utf8-bytes", "x-mantle-semantic": "safe-reference", "x-mantle-issue-class": "reference" },
+          "digest_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+          "byte_count": { "type": "integer", "minimum": 1, "maximum": 67108864, "x-mantle-bound-name": { "minimum": "RADIANCE_ARTIFACT_BYTES_MIN", "maximum": "RADIANCE_ARTIFACT_BYTES_MAX" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "protected_execution_audit_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "receipt_blake3": { "type": "string", "x-mantle-semantic": "blake3", "x-mantle-issue-class": "digest" },
+    "non_claim": { "type": "string", "const": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility", "x-mantle-issue-class": "cross-field" }
+  },
+  "additionalProperties": false
+}

@@ -83,6 +83,9 @@ let Registry = {
     "release.source-observation-binding",
     "source.source-observation",
     "source.source-ingest-plan",
+    "radiance.radiance-source-cohort",
+    "radiance.radiance-reference-receipt",
+    "radiance.radiance-reference-proof-report",
     "mantlepkgs.package-impact-report",
     "mantlepkgs.update-plan"
   ],
@@ -199,7 +202,7 @@ let Registry = {
         "contract_blake3"= "612db8a8461f534e1ae1b968d649144a07afd26e078f3525d17539a507646033",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "2cb9e85a6ebc6a7c062c2b414bd80e59e26140bacfd892e0746e8b478419f080",
-        "producer_identity_blake3"= "72ce4aa3b8cc15f5160355ad6ba23807db352571d981503001fe6969f66fd406",
+        "producer_identity_blake3"= "b60613a53478496eb0207212a3af3ac6516cfa2a33ef18f746ea57a7ec63d79b",
         "consumer_policy_blake3"= "bc396936e67b37d8e9d42a1017e260d55c78a5c96a9accab2e635d21bbee41e2"
       },
       "non_claims"= [
@@ -763,7 +766,7 @@ let Registry = {
         "contract_blake3"= "d3b07cd0d3396e6798ec94d68d37cf06a5ee35f81866016fbf1f18e0f401c7ae",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "996d0ea5521663d8180e90e955fcba9c92b4570b8935e13b2e57af45c81260e2",
-        "producer_identity_blake3"= "c561e5d21f9efb1d8e3eecdb0c754a00c86c2f732899cc76f040dcaa93462a61",
+        "producer_identity_blake3"= "6b6e2bc1c29a80c2bd306feacafbec726ea076f70a562d46187bec7162acbaef",
         "consumer_policy_blake3"= "b41da07fbbd17d793f07c51876465ca6e73d83db0dc79b9beb02c8a8110b59d1"
       },
       "non_claims"= [
@@ -817,7 +820,7 @@ let Registry = {
         "contract_blake3"= "1c816681434e8114cd6c4bab4a48fd5c5f86ce7c9f33c187ab609ec73f814fd8",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "1ad119357b7d7217396fe2f47598b14cb8d87bc105982a428e3924e7c3213c11",
-        "producer_identity_blake3"= "971d1224ac5da69131ca718f2dd511d37e01d2e5a2fb73a02676ca1c81345abc",
+        "producer_identity_blake3"= "08dd42ac6b64facef326724830fddf7019e45e5c9844e1cbe96edfc3221e28f4",
         "consumer_policy_blake3"= "edc96af15dd9073d7cd0178ed0d617acd41c8cf91c6719a674dd1422a7e285e4"
       },
       "non_claims"= [
@@ -871,7 +874,7 @@ let Registry = {
         "contract_blake3"= "953be8500e8110bc2682b8d4aa14136c274f675dc951126f0b6a165f062c5bd3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "cad5f96d2366110d1a790d5ab644163380b9af4f0a5b2be947ceaa39ee03fbd6",
-        "producer_identity_blake3"= "e0f637c1de1277e574682e5eae74848ab9e954bd49945c5560f209f21ced145c",
+        "producer_identity_blake3"= "c24987d7f8cb33de935d08eb914420238868587d25b0fed69dfb4d6f0ec6a8b8",
         "consumer_policy_blake3"= "8af50ac86145048afc879ae1b6722e155ee6960c6261186014bb505db83b6cb8"
       },
       "non_claims"= [
@@ -1040,7 +1043,7 @@ let Registry = {
         "contract_blake3"= "d7b30efe0e40442383eb7c654a3bb0c88b508f059b88008085fd59f0a88b0f23",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "74b65baffbfcfb59d5557a99ea0ed63c02711ee4c865c5f7be1eb14ad57071c8",
-        "producer_identity_blake3"= "2876962210cd684d461244b18107d3a3ce42fd98390f50de735a161ccead4a80",
+        "producer_identity_blake3"= "d5e199276f11309833f2e939e88953ed9a4daf8a9dc882479cb55c11c93cad30",
         "consumer_policy_blake3"= "2604bdd4cb6aa3824e00fa515e64f68a01ab5df84d2f2342ee0f1e7029f91f07"
       },
       "non_claims"= [
@@ -1398,7 +1401,7 @@ let Registry = {
         "contract_blake3"= "d158d85e21edcccbf6d6ae7bc6d3d59aea4acb8f1dc8a52438be38567d4c50f2",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "230228d02be1df38f427caa0f6ca4cd7c1ec8666c2350508d409aef177ccd494",
-        "producer_identity_blake3"= "c3e7f6c14e2c71a892b3d1bf9263b3a6efc17a29336be72b33d90d4b26a7d756",
+        "producer_identity_blake3"= "c61f757f4b8476e023a4630c1e25bde438f6e7a98b74f7568ad895a7ed747472",
         "consumer_policy_blake3"= "c81ddbc9befcf012a5b42b3f44c2f17fe44f890ce0dfcc228b2cfefd5eb30dd4"
       },
       "non_claims"= [
@@ -1459,7 +1462,7 @@ let Registry = {
         "contract_blake3"= "723027e965189230cabb05b8ba069effec984e9bd527625a4320c8bd3cbe1af3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "9acb57b93f3b9150f79d59ff8a46ca3b5c2e5b98e83320b0308d57334a13d4a3",
-        "producer_identity_blake3"= "4a29bba199c7971147453253dac7d20460a46da26138c1957938c16a428944b1",
+        "producer_identity_blake3"= "42e10a59555f0ac9c334172219c0a15c44b9b2ea7e7382407d9b8a8ed1a5700d",
         "consumer_policy_blake3"= "e81324a18c19a70aaa2bec634d4a0b7dccceede6f048bbd332b432a9938adefe"
       },
       "non_claims"= [
@@ -3305,6 +3308,224 @@ let Registry = {
         "budget report conformance does not prove evaluator correctness, semantic equivalence, sandboxing, or release eligibility"
       ],
       "rationale"= "The report is versioned and public, but its dedicated core tests remain authoritative until a generated document-JSON contract is adopted."
+    },
+    {
+      "id"= "radiance.radiance-source-cohort",
+      "class"= "contracted",
+      "rust_owner"= "crates/crunch-radiance-reference-core/src/model.rs::RadianceSourceCohortWire",
+      "producer"= {
+        "command_or_api"= "mantle bootstrap radiance-reference prepare",
+        "marker"= "radiance.radiance-source-cohort",
+        "source_paths"= [
+          "crates/crunch-radiance-reference-core/src/admission.rs",
+          "crates/crunch-radiance-reference-core/src/constants.rs",
+          "crates/crunch-radiance-reference-core/src/model.rs",
+          "src/radiance/profile.rs",
+          "src/radiance/source.rs",
+          "src/source_bundle.rs",
+          "src/source_bundle/source_observation_adapter.rs"
+        ]
+      },
+      "consumers"= [
+        "Radiance proof admission",
+        "receipt validation",
+        "operator review"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/radiance-source-cohort.schema.json",
+        "generated_contract"= "schemas/machine-contracts/radiance-source-cohort.contract.ncl",
+        "positive_fixtures"= [
+          "schemas/machine-contracts/fixtures/radiance-source-cohort.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/radiance-source-cohort.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-radiance-source-cohort-v1",
+        "supported"= [
+          "mantle-radiance-source-cohort-v1"
+        ],
+        "unknown_version_behavior"= "reject before cohort admission or proof input",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs",
+        "cargo test -p crunch-radiance-reference-core"
+      ],
+      "fixture_coverage"= [
+        "schema",
+        "version",
+        "enum",
+        "bounds",
+        "cross-field",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds schema, generated contract, shared prelude, fixtures, producer source, and consumer policy",
+      "freshness"= {
+        "schema_blake3"= "6475fa990c82962a79458bcbc70a94132f51484638fd063a9c6d5f25dc07fa5a",
+        "contract_blake3"= "e3c3e755df498f19d4466c0d2ce5cd67172b214fd42752f09e1e9e1309cdff1a",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "d9fa93e852c0373c8767c9482c0ccc17fa715b0ab231646ebca5ae507cc33f29",
+        "producer_identity_blake3"= "748421bd41eae9594e3c021ef326333aaf53d503875acd6325e6c9dc2204eb58",
+        "consumer_policy_blake3"= "3e7c504ce2888148b0e62ff3422e8afa9b8a868ba2a990e351778e89fb914cb1"
+      },
+      "non_claims"= [
+        "cohort admission does not prove seed trust, source ownership, compiler correctness, or release eligibility"
+      ],
+      "rationale"= "The external Radiance cohort is an optional reference; its identity stays backend-neutral and binds exact SHA-256 Git revisions."
+    },
+    {
+      "id"= "radiance.radiance-reference-receipt",
+      "class"= "contracted",
+      "rust_owner"= "crates/crunch-radiance-reference-core/src/model.rs::RadianceReferenceReceipt",
+      "producer"= {
+        "command_or_api"= "mantle bootstrap radiance-reference prove",
+        "marker"= "radiance.radiance-reference-receipt",
+        "source_paths"= [
+          "crates/crunch-radiance-reference-core/src/admission.rs",
+          "crates/crunch-radiance-reference-core/src/constants.rs",
+          "crates/crunch-radiance-reference-core/src/graph.rs",
+          "crates/crunch-radiance-reference-core/src/lib.rs",
+          "crates/crunch-radiance-reference-core/src/model.rs",
+          "crates/crunch-radiance-reference-core/src/policy/evidence.rs",
+          "crates/crunch-radiance-reference-core/src/policy/lineage.rs",
+          "crates/crunch-radiance-reference-core/src/policy/outcomes.rs",
+          "src/protected_exec.rs",
+          "src/protected_exec_ptrace.rs",
+          "src/radiance/workflow/assembly.rs",
+          "src/radiance/workflow/helpers.rs",
+          "src/radiance/workflow/mod.rs",
+          "src/radiance/workflow/view.rs",
+          "src/radiance/runtime/arguments.rs",
+          "src/radiance/runtime/compile.rs",
+          "src/radiance/runtime/execution.rs",
+          "src/radiance/runtime/link.rs",
+          "src/radiance/runtime/native/authority.rs",
+          "src/radiance/runtime/native/mod.rs",
+          "src/radiance/runtime/native/tool.rs",
+          "src/radiance/runtime/network.rs",
+          "src/radiance/profile.rs",
+          "src/radiance/publication.rs",
+          "src/radiance/source.rs",
+          "src/source_bundle.rs"
+        ]
+      },
+      "consumers"= [
+        "Radiance proof verification",
+        "operator review",
+        "CI evidence"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/radiance-reference-receipt.schema.json",
+        "generated_contract"= "schemas/machine-contracts/radiance-reference-receipt.contract.ncl",
+        "positive_fixtures"= [
+          "schemas/machine-contracts/fixtures/radiance-reference-receipt.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/radiance-reference-receipt.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-radiance-reference-receipt-v1",
+        "supported"= [
+          "mantle-radiance-reference-receipt-v1"
+        ],
+        "unknown_version_behavior"= "reject before receipt validation or publication checks",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs",
+        "cargo test -p crunch-radiance-reference-core"
+      ],
+      "fixture_coverage"= [
+        "schema",
+        "version",
+        "enum",
+        "digest",
+        "reference",
+        "bounds",
+        "cross-field",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds schema, generated contract, shared prelude, fixtures, producer source, and consumer policy",
+      "freshness"= {
+        "schema_blake3"= "1844084b437adb57d0393d3a376a528a40bee2ba776644df80fe8ffbc0c88b17",
+        "contract_blake3"= "324a43007aec634d744aa4e9a83ef398c95c8d35d76e70fa27f23cfae4e86097",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "b2cf887e3d16d2f9e6da0a0cb266cf19b19fdc3dcaf0463dc433224ed42c729d",
+        "producer_identity_blake3"= "b4f9ecfa40a76a4e01fe714bb460ffc5818e3f819c133c6d1e3d54549de38e5b",
+        "consumer_policy_blake3"= "e43aba9348669450039431270f8858e1008b640305e5da15497d8e48053a7154"
+      },
+      "non_claims"= [
+        "route-local or cross-route equality does not prove compiler correctness, seed trust, semantic equivalence, or universal reproducibility"
+      ],
+      "rationale"= "The receipt records bounded source, lineage, execution, and convergence facts for an optional external reference."
+    },
+    {
+      "id"= "radiance.radiance-reference-proof-report",
+      "class"= "contracted",
+      "rust_owner"= "src/radiance/workflow/view.rs::ProofReport",
+      "producer"= {
+        "command_or_api"= "mantle bootstrap radiance-reference prove and verify",
+        "marker"= "radiance.radiance-reference-proof-report",
+        "source_paths"= [
+          "crates/crunch-radiance-reference-core/src/model.rs",
+          "crates/crunch-radiance-reference-core/src/policy/evidence.rs",
+          "crates/crunch-radiance-reference-core/src/policy/outcomes.rs",
+          "src/radiance/workflow/helpers.rs",
+          "src/radiance/workflow/mod.rs",
+          "src/radiance/workflow/view.rs",
+          "src/radiance/profile.rs",
+          "src/radiance/publication.rs"
+        ]
+      },
+      "consumers"= [
+        "operator proof disposition",
+        "CI evidence",
+        "receipt review"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/radiance-reference-proof-report.schema.json",
+        "generated_contract"= "schemas/machine-contracts/radiance-reference-proof-report.contract.ncl",
+        "positive_fixtures"= [
+          "schemas/machine-contracts/fixtures/radiance-reference-proof-report.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/radiance-reference-proof-report.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-radiance-reference-proof-report-v1",
+        "supported"= [
+          "mantle-radiance-reference-proof-report-v1"
+        ],
+        "unknown_version_behavior"= "reject before disposition interpretation",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs",
+        "cargo test -p mantle --bin mantle radiance::"
+      ],
+      "fixture_coverage"= [
+        "schema",
+        "version",
+        "enum",
+        "digest",
+        "bounds",
+        "cross-field",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds schema, generated contract, shared prelude, fixtures, producer source, and consumer policy",
+      "freshness"= {
+        "schema_blake3"= "51a21aa1f7be7181732d32a91a9be26ad64779f00108ed27940d612d9d80a57e",
+        "contract_blake3"= "27b116d4880fd38f62246566ae345d61a5b5caf09c401adc1431ada94a6b5900",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "2fb0624b218eaf8d70f0686699feb0a959e9a3cb37f089a1489ecf8f0079c1bf",
+        "producer_identity_blake3"= "4876233fc7d12917f7bf340de89e47e50a72c9a7ce22e911aa4cee4b9837ad76",
+        "consumer_policy_blake3"= "7bfb3db4967de9e558c4dcf0522151dd0a7c5f921adbde37413a38b68d28c61b"
+      },
+      "non_claims"= [
+        "a match disposition does not prove compiler correctness, seed trust, semantic equivalence, or universal reproducibility"
+      ],
+      "rationale"= "The operator report stays separate from the receipt so divergence can remain reviewable evidence without becoming proof success."
     },
     {
       "id"= "operator.command-contract-reports",

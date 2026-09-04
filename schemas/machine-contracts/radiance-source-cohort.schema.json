@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/radiance/radiance-source-cohort-v1",
+  "title": "Mantle Radiance source cohort",
+  "x-mantle-rust-owner": "crates/crunch-radiance-reference-core/src/model.rs::RadianceSourceCohortWire",
+  "type": "object",
+  "required": ["schema", "members", "cohort_blake3", "non_claim"],
+  "properties": {
+    "schema": { "type": "string", "const": "mantle-radiance-source-cohort-v1", "x-mantle-issue-class": "version" },
+    "members": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "x-mantle-bound-name": { "minItems": "RADIANCE_SOURCE_COUNT", "maxItems": "RADIANCE_SOURCE_COUNT" },
+      "items": {
+        "type": "object",
+        "required": ["role", "repository_url", "observation", "license_spdx", "license_blake3"],
+        "properties": {
+          "role": { "type": "string", "enum": ["radiance", "bootstrap-compiler", "emulator"] },
+          "repository_url": { "type": "string", "enum": ["https://code.radiant.computer/radiance", "https://code.radiant.computer/radiance.s0", "https://code.radiant.computer/emulator"] },
+          "observation": {
+            "type": "object",
+            "required": ["schema", "source_kind", "locator_class", "immutable_revision", "normalized_projection", "snapshot_profile", "content_blake3", "observation_blake3", "provenance", "non_claim"],
+            "properties": {
+              "schema": { "type": "string", "const": "mantle-source-observation-v1" },
+              "source_kind": { "type": "string", "const": "vcs-snapshot" },
+              "locator_class": { "type": "string", "const": "git-remote" },
+              "locator_hint": { "type": "string" },
+              "immutable_revision": {
+                "type": "object",
+                "required": ["object_format", "value"],
+                "properties": {
+                  "object_format": { "type": "string", "const": "sha256", "x-mantle-issue-class": "version" },
+                  "value": { "type": "string", "x-mantle-semantic": "sha256" }
+                },
+                "additionalProperties": false
+              },
+              "normalized_projection": { "type": "string", "const": "." },
+              "snapshot_profile": { "type": "string", "const": "canonical-tree-v1" },
+              "content_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+              "observation_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+              "mutable_reference_hint": { "type": "string" },
+              "provenance": { "type": "string", "const": "complete" },
+              "non_claim": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          "license_spdx": { "type": "string", "const": "MIT", "x-mantle-issue-class": "enum" },
+          "license_blake3": { "type": "string", "x-mantle-semantic": "blake3" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "cohort_blake3": { "type": "string", "x-mantle-semantic": "blake3", "x-mantle-issue-class": "digest" },
+    "non_claim": { "type": "string", "const": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility", "x-mantle-issue-class": "cross-field" }
+  },
+  "additionalProperties": false
+}

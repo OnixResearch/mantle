@@ -1,0 +1,50 @@
+{
+  "imported_count": 3,
+  "skipped_present_count": 0,
+  "pinned": false,
+  "manifest_blake3": "21f962ce6bf2ba89cbd94758d95abe8418cbafc243cdc81a146693d00f2539f4",
+  "records": [
+    {
+      "kind": "vcs-snapshot",
+      "identity": "bootstrap-compiler",
+      "payload_bytes": 489551,
+      "content_blake3": "835aff7b325d5fa859d71167921b7ddfac913182aea0bc68aa69da243cb82b7b",
+      "file_count": 40
+    },
+    {
+      "kind": "vcs-snapshot",
+      "identity": "emulator",
+      "payload_bytes": 181346,
+      "content_blake3": "7845373412ed6ef0af63b1c64d9cbcdd63c165e75cff9de5e7243ef853916f45",
+      "file_count": 17
+    },
+    {
+      "kind": "vcs-snapshot",
+      "identity": "radiance",
+      "payload_bytes": 3179747,
+      "content_blake3": "9d7762409de59b5c2e2f86bb174d489ed70fd500b20e50be0b3ed3022df413bc",
+      "file_count": 703
+    }
+  ],
+  "source_observations": [
+    {
+      "record_identity": "bootstrap-compiler",
+      "disposition": "complete",
+      "observation_blake3": "5a3ce8a6f18d3fbc506ce7b39591a707aef3ac8abb45ec3a51474abee375ddcf",
+      "content_blake3": "8c49dadd15e6834dd3204a35f4be00cf1cc01c9672c235a78a0c909b97aa8f1b"
+    },
+    {
+      "record_identity": "emulator",
+      "disposition": "complete",
+      "observation_blake3": "1834bfecc3f53e448b8c0bbe8e3635e6414438c360d70460458dabc8aeb90fa4",
+      "content_blake3": "a6e91a2a6edc0aa4d5ca3c870012fdfb4f14748fed2829c46f6466efab3a27ec"
+    },
+    {
+      "record_identity": "radiance",
+      "disposition": "complete",
+      "observation_blake3": "c3503ed3a34a8ea85f732205112578c76b82e7a719cedc67ed09d0f392d7069f",
+      "content_blake3": "135c2f75eea21199b4538f5f0096e3e329c6b8b70943017644f9cdef05573c66"
+    }
+  ],
+  "non_claim": "source bundle evidence proves declared source/input availability and identity only"
+}

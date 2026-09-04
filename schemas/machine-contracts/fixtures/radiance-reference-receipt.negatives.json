@@ -1,0 +1,2406 @@
+{
+  "cases": [
+    {
+      "artifact": {},
+      "expected_path": "/schema",
+      "id": "missing-schema",
+      "issue_class": "schema"
+    },
+    {
+      "artifact": {
+        "cross_route": {
+          "c99_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+          "c99_bytes": 1285492,
+          "disposition": "match",
+          "seed_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+          "seed_bytes": 1285492
+        },
+        "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+        "plan": {
+          "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+          "plan_blake3": "c633f5936848ae2ecf29a462a9b6d1e58d0e0658ac872065cbee13d456505cc2",
+          "schema": "mantle-radiance-reference-plan-v1",
+          "source_bundle_blake3": "21f962ce6bf2ba89cbd94758d95abe8418cbafc243cdc81a146693d00f2539f4",
+          "source_cohort_blake3": "80c82a016b6232aa4f8002624fa2fe6296ad3aac9fcf738fdbbad6c424993d4b",
+          "stages": [
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-1",
+              "predecessor_role": "radiance-seed",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 1
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-2",
+              "predecessor_role": "seed-stage-1",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 2
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-3",
+              "predecessor_role": "seed-stage-2",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 3
+            },
+            {
+              "launch_kind": "native-bootstrap",
+              "output_role": "c99-stage-1",
+              "predecessor_role": "radiance-s0",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 1
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "c99-stage-2",
+              "predecessor_role": "c99-stage-1",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 2
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "c99-stage-3",
+              "predecessor_role": "c99-stage-2",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 3
+            }
+          ]
+        },
+        "protected_execution_audit_blake3": "cf46accf75d21eb66e685c25121ce79ac12469754e0a2ba5645bcb79a684b625",
+        "publication": [
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "relative_path": "artifacts/seed-route-fixed-point.rv64",
+            "role": "seed-route-fixed-point"
+          },
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "relative_path": "artifacts/c99-route-fixed-point.rv64",
+            "role": "c99-route-fixed-point"
+          },
+          {
+            "byte_count": 163592,
+            "digest_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "relative_path": "artifacts/radiance.s0",
+            "role": "bootstrap-compiler"
+          },
+          {
+            "byte_count": 100368,
+            "digest_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "relative_path": "artifacts/emulator",
+            "role": "emulator"
+          }
+        ],
+        "receipt_blake3": "61b2bbd1b01b35692d83b2230dfbbce4294bbc927cdeee2cf5e7e858cb5d949f",
+        "route_convergence": [
+          {
+            "byte_count": 1285492,
+            "equal": true,
+            "left_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "left_stage": 2,
+            "right_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "right_stage": 3,
+            "route": "seed"
+          },
+          {
+            "byte_count": 1285492,
+            "equal": true,
+            "left_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "left_stage": 2,
+            "right_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "right_stage": 3,
+            "route": "c99"
+          }
+        ],
+        "schema": "mantle-radiance-reference-receipt-v0",
+        "source_bundle_blake3": "21f962ce6bf2ba89cbd94758d95abe8418cbafc243cdc81a146693d00f2539f4",
+        "source_cohort": {
+          "cohort_blake3": "80c82a016b6232aa4f8002624fa2fe6296ad3aac9fcf738fdbbad6c424993d4b",
+          "members": [
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "135c2f75eea21199b4538f5f0096e3e329c6b8b70943017644f9cdef05573c66",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "0d8a2d4fe8d0ba488e22c8ed83df1e53a5d23d69489c5d9e7fa0646b1c29c444"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/radiance",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "c3503ed3a34a8ea85f732205112578c76b82e7a719cedc67ed09d0f392d7069f",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/radiance",
+              "role": "radiance"
+            },
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "8c49dadd15e6834dd3204a35f4be00cf1cc01c9672c235a78a0c909b97aa8f1b",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "7834d3a9d44fb48ae3d3c06da992922f3e46b580b3d92df36372081b2fe475c3"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/radiance.s0",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "5a3ce8a6f18d3fbc506ce7b39591a707aef3ac8abb45ec3a51474abee375ddcf",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/radiance.s0",
+              "role": "bootstrap-compiler"
+            },
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "a6e91a2a6edc0aa4d5ca3c870012fdfb4f14748fed2829c46f6466efab3a27ec",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "92cdb0c5293447964be053214fac403b49193ac3ec07c902576346ebaa205535"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/emulator",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "1834bfecc3f53e448b8c0bbe8e3635e6414438c360d70460458dabc8aeb90fa4",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/emulator",
+              "role": "emulator"
+            }
+          ],
+          "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+          "schema": "mantle-radiance-source-cohort-v1"
+        },
+        "source_state_blake3": "f7f7c80eff2072784b7e55f236129862ab1ea9cb713ab41f807a533190894cbd",
+        "stages": [
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-1",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "4ce108463036e84eb77c0cd971f8a64bcdbb7122be912208168d9a959c6d735f",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 1,
+            "stderr_blake3": "5fe5974c17811d78442506edcfb878dc3c2b388133dc3b226f5550c5f6e4eb18",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-2",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "d536a33c23b1ee8d60d08c5fc9bc8b3db8faae2c4ef74f408139698c430eab45",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 2,
+            "stderr_blake3": "b9f645668f6fbd26a9130d87bb9ee93617d612d32ab702de9bf5a740dd630487",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-3",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "ec2df2784d71b9d48fc7c7f65007b9dd1093b8e03f33f0526832bc5c434b1337",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 3,
+            "stderr_blake3": "56b494b6ff4e8658cdd9a258b650a678542d70859db8edb7ab3d330a0dfef4ec",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "native-bootstrap",
+            "launcher_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "output_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
+            "output_bytes": 2460836,
+            "output_role": "c99-stage-1",
+            "predecessor_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "protected_audit_blake3": "206437f5a37d6f734a4c9e232e06fa6ed56dd5b44563e188d1345fa3785face9",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 1,
+            "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "c99-stage-2",
+            "predecessor_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
+            "protected_audit_blake3": "c9ee6e3bff1bbaa96749a2c6e24771f0578c068b8ac0031d4bab4244c06d2b9f",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 2,
+            "stderr_blake3": "38c3f75303fb4ae70110a5a08f252f1948ba4278a98a6ee01125ac7db0f1d965",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "c99-stage-3",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "3e0d414a6676abdb479603e3deecd0be9fa1977e41ae97408c4fc0999a64021b",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 3,
+            "stderr_blake3": "30c2d8f176c6626abcc972dbfae0dd78ba9afc7321fc8bba3ea9577b2823d8d5",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        ],
+        "tools": [
+          {
+            "byte_count": 11533,
+            "digest_blake3": "bf001a7008d11536ffda1370cd0368d13b80ef7e6aa4c0f579ca8e74694acdb2",
+            "role": "host-c-compiler"
+          },
+          {
+            "byte_count": 216200,
+            "digest_blake3": "acfd6b4ca32ff8dd24bbc0a5254949f7e4568e7841ab1a8208b39f1c5326734e",
+            "role": "host-c-compiler-driver"
+          },
+          {
+            "byte_count": 8738448,
+            "digest_blake3": "746fd75279b882f5cfb425627e593b3187ce348b0b8bdbda763361e7b3428c03",
+            "role": "host-linker"
+          },
+          {
+            "byte_count": 14315343,
+            "digest_blake3": "ebf9bad0070579d25d7b88a23089ebd5f82fd6e12fa47a64f54b006b939fa122",
+            "role": "host-crt-inputs"
+          },
+          {
+            "byte_count": 17595978,
+            "digest_blake3": "1df3e2cb7404f995ee4da9ac4f40c1bd4615969fa9435541f4ca7f5ffccf989d",
+            "role": "host-libgcc-inputs"
+          },
+          {
+            "byte_count": 163592,
+            "digest_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "role": "bootstrap-compiler"
+          },
+          {
+            "byte_count": 100368,
+            "digest_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "role": "emulator"
+          },
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "role": "seed"
+          }
+        ],
+        "zero_events": {
+          "ambient_discoveries": 0,
+          "live_fetches": 0,
+          "source_fallbacks": 0,
+          "substitutions": 0
+        }
+      },
+      "expected_path": "/schema",
+      "id": "unsupported-version",
+      "issue_class": "version"
+    },
+    {
+      "artifact": {
+        "cross_route": {
+          "c99_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+          "c99_bytes": 1285492,
+          "disposition": "match",
+          "seed_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+          "seed_bytes": 1285492
+        },
+        "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+        "plan": {
+          "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+          "plan_blake3": "c633f5936848ae2ecf29a462a9b6d1e58d0e0658ac872065cbee13d456505cc2",
+          "schema": "mantle-radiance-reference-plan-v1",
+          "source_bundle_blake3": "21f962ce6bf2ba89cbd94758d95abe8418cbafc243cdc81a146693d00f2539f4",
+          "source_cohort_blake3": "80c82a016b6232aa4f8002624fa2fe6296ad3aac9fcf738fdbbad6c424993d4b",
+          "stages": [
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-1",
+              "predecessor_role": "radiance-seed",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 1
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-2",
+              "predecessor_role": "seed-stage-1",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 2
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-3",
+              "predecessor_role": "seed-stage-2",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 3
+            },
+            {
+              "launch_kind": "native-bootstrap",
+              "output_role": "c99-stage-1",
+              "predecessor_role": "radiance-s0",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 1
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "c99-stage-2",
+              "predecessor_role": "c99-stage-1",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 2
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "c99-stage-3",
+              "predecessor_role": "c99-stage-2",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 3
+            }
+          ]
+        },
+        "protected_execution_audit_blake3": "cf46accf75d21eb66e685c25121ce79ac12469754e0a2ba5645bcb79a684b625",
+        "publication": [
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "relative_path": "artifacts/seed-route-fixed-point.rv64",
+            "role": "seed-route-fixed-point"
+          },
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "relative_path": "artifacts/c99-route-fixed-point.rv64",
+            "role": "c99-route-fixed-point"
+          },
+          {
+            "byte_count": 163592,
+            "digest_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "relative_path": "artifacts/radiance.s0",
+            "role": "bootstrap-compiler"
+          },
+          {
+            "byte_count": 100368,
+            "digest_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "relative_path": "artifacts/emulator",
+            "role": "emulator"
+          }
+        ],
+        "receipt_blake3": "61b2bbd1b01b35692d83b2230dfbbce4294bbc927cdeee2cf5e7e858cb5d949f",
+        "route_convergence": [
+          {
+            "byte_count": 1285492,
+            "equal": true,
+            "left_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "left_stage": 2,
+            "right_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "right_stage": 3,
+            "route": "seed"
+          },
+          {
+            "byte_count": 1285492,
+            "equal": true,
+            "left_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "left_stage": 2,
+            "right_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "right_stage": 3,
+            "route": "c99"
+          }
+        ],
+        "schema": "mantle-radiance-reference-receipt-v1",
+        "source_bundle_blake3": "21f962ce6bf2ba89cbd94758d95abe8418cbafc243cdc81a146693d00f2539f4",
+        "source_cohort": {
+          "cohort_blake3": "80c82a016b6232aa4f8002624fa2fe6296ad3aac9fcf738fdbbad6c424993d4b",
+          "members": [
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "135c2f75eea21199b4538f5f0096e3e329c6b8b70943017644f9cdef05573c66",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "0d8a2d4fe8d0ba488e22c8ed83df1e53a5d23d69489c5d9e7fa0646b1c29c444"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/radiance",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "c3503ed3a34a8ea85f732205112578c76b82e7a719cedc67ed09d0f392d7069f",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/radiance",
+              "role": "radiance"
+            },
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "8c49dadd15e6834dd3204a35f4be00cf1cc01c9672c235a78a0c909b97aa8f1b",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "7834d3a9d44fb48ae3d3c06da992922f3e46b580b3d92df36372081b2fe475c3"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/radiance.s0",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "5a3ce8a6f18d3fbc506ce7b39591a707aef3ac8abb45ec3a51474abee375ddcf",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/radiance.s0",
+              "role": "bootstrap-compiler"
+            },
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "a6e91a2a6edc0aa4d5ca3c870012fdfb4f14748fed2829c46f6466efab3a27ec",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "92cdb0c5293447964be053214fac403b49193ac3ec07c902576346ebaa205535"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/emulator",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "1834bfecc3f53e448b8c0bbe8e3635e6414438c360d70460458dabc8aeb90fa4",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/emulator",
+              "role": "emulator"
+            }
+          ],
+          "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+          "schema": "mantle-radiance-source-cohort-v1"
+        },
+        "source_state_blake3": "f7f7c80eff2072784b7e55f236129862ab1ea9cb713ab41f807a533190894cbd",
+        "stages": [
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-1",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "4ce108463036e84eb77c0cd971f8a64bcdbb7122be912208168d9a959c6d735f",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 1,
+            "stderr_blake3": "5fe5974c17811d78442506edcfb878dc3c2b388133dc3b226f5550c5f6e4eb18",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-2",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "d536a33c23b1ee8d60d08c5fc9bc8b3db8faae2c4ef74f408139698c430eab45",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 2,
+            "stderr_blake3": "b9f645668f6fbd26a9130d87bb9ee93617d612d32ab702de9bf5a740dd630487",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-3",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "ec2df2784d71b9d48fc7c7f65007b9dd1093b8e03f33f0526832bc5c434b1337",
+            "protected_audit_event_count": 1,
+            "route": "unknown-route",
+            "stage": 3,
+            "stderr_blake3": "56b494b6ff4e8658cdd9a258b650a678542d70859db8edb7ab3d330a0dfef4ec",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "native-bootstrap",
+            "launcher_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "output_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
+            "output_bytes": 2460836,
+            "output_role": "c99-stage-1",
+            "predecessor_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "protected_audit_blake3": "206437f5a37d6f734a4c9e232e06fa6ed56dd5b44563e188d1345fa3785face9",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 1,
+            "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "c99-stage-2",
+            "predecessor_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
+            "protected_audit_blake3": "c9ee6e3bff1bbaa96749a2c6e24771f0578c068b8ac0031d4bab4244c06d2b9f",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 2,
+            "stderr_blake3": "38c3f75303fb4ae70110a5a08f252f1948ba4278a98a6ee01125ac7db0f1d965",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "c99-stage-3",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "3e0d414a6676abdb479603e3deecd0be9fa1977e41ae97408c4fc0999a64021b",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 3,
+            "stderr_blake3": "30c2d8f176c6626abcc972dbfae0dd78ba9afc7321fc8bba3ea9577b2823d8d5",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        ],
+        "tools": [
+          {
+            "byte_count": 11533,
+            "digest_blake3": "bf001a7008d11536ffda1370cd0368d13b80ef7e6aa4c0f579ca8e74694acdb2",
+            "role": "host-c-compiler"
+          },
+          {
+            "byte_count": 216200,
+            "digest_blake3": "acfd6b4ca32ff8dd24bbc0a5254949f7e4568e7841ab1a8208b39f1c5326734e",
+            "role": "host-c-compiler-driver"
+          },
+          {
+            "byte_count": 8738448,
+            "digest_blake3": "746fd75279b882f5cfb425627e593b3187ce348b0b8bdbda763361e7b3428c03",
+            "role": "host-linker"
+          },
+          {
+            "byte_count": 14315343,
+            "digest_blake3": "ebf9bad0070579d25d7b88a23089ebd5f82fd6e12fa47a64f54b006b939fa122",
+            "role": "host-crt-inputs"
+          },
+          {
+            "byte_count": 17595978,
+            "digest_blake3": "1df3e2cb7404f995ee4da9ac4f40c1bd4615969fa9435541f4ca7f5ffccf989d",
+            "role": "host-libgcc-inputs"
+          },
+          {
+            "byte_count": 163592,
+            "digest_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "role": "bootstrap-compiler"
+          },
+          {
+            "byte_count": 100368,
+            "digest_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "role": "emulator"
+          },
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "role": "seed"
+          }
+        ],
+        "zero_events": {
+          "ambient_discoveries": 0,
+          "live_fetches": 0,
+          "source_fallbacks": 0,
+          "substitutions": 0
+        }
+      },
+      "expected_path": "/stages/2/route",
+      "id": "unsupported-route",
+      "issue_class": "enum"
+    },
+    {
+      "artifact": {
+        "cross_route": {
+          "c99_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+          "c99_bytes": 1285492,
+          "disposition": "match",
+          "seed_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+          "seed_bytes": 1285492
+        },
+        "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+        "plan": {
+          "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+          "plan_blake3": "c633f5936848ae2ecf29a462a9b6d1e58d0e0658ac872065cbee13d456505cc2",
+          "schema": "mantle-radiance-reference-plan-v1",
+          "source_bundle_blake3": "21f962ce6bf2ba89cbd94758d95abe8418cbafc243cdc81a146693d00f2539f4",
+          "source_cohort_blake3": "80c82a016b6232aa4f8002624fa2fe6296ad3aac9fcf738fdbbad6c424993d4b",
+          "stages": [
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-1",
+              "predecessor_role": "radiance-seed",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 1
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-2",
+              "predecessor_role": "seed-stage-1",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 2
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-3",
+              "predecessor_role": "seed-stage-2",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 3
+            },
+            {
+              "launch_kind": "native-bootstrap",
+              "output_role": "c99-stage-1",
+              "predecessor_role": "radiance-s0",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 1
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "c99-stage-2",
+              "predecessor_role": "c99-stage-1",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 2
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "c99-stage-3",
+              "predecessor_role": "c99-stage-2",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 3
+            }
+          ]
+        },
+        "protected_execution_audit_blake3": "cf46accf75d21eb66e685c25121ce79ac12469754e0a2ba5645bcb79a684b625",
+        "publication": [
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "relative_path": "artifacts/seed-route-fixed-point.rv64",
+            "role": "seed-route-fixed-point"
+          },
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "relative_path": "artifacts/c99-route-fixed-point.rv64",
+            "role": "c99-route-fixed-point"
+          },
+          {
+            "byte_count": 163592,
+            "digest_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "relative_path": "artifacts/radiance.s0",
+            "role": "bootstrap-compiler"
+          },
+          {
+            "byte_count": 100368,
+            "digest_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "relative_path": "artifacts/emulator",
+            "role": "emulator"
+          }
+        ],
+        "receipt_blake3": "61b2bbd1b01b35692d83b2230dfbbce4294bbc927cdeee2cf5e7e858cb5d949f",
+        "route_convergence": [
+          {
+            "byte_count": 1285492,
+            "equal": true,
+            "left_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "left_stage": 2,
+            "right_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "right_stage": 3,
+            "route": "seed"
+          },
+          {
+            "byte_count": 1285492,
+            "equal": true,
+            "left_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "left_stage": 2,
+            "right_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "right_stage": 3,
+            "route": "c99"
+          }
+        ],
+        "schema": "mantle-radiance-reference-receipt-v1",
+        "source_bundle_blake3": "21f962ce6bf2ba89cbd94758d95abe8418cbafc243cdc81a146693d00f2539f4",
+        "source_cohort": {
+          "cohort_blake3": "80c82a016b6232aa4f8002624fa2fe6296ad3aac9fcf738fdbbad6c424993d4b",
+          "members": [
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "135c2f75eea21199b4538f5f0096e3e329c6b8b70943017644f9cdef05573c66",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "0d8a2d4fe8d0ba488e22c8ed83df1e53a5d23d69489c5d9e7fa0646b1c29c444"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/radiance",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "c3503ed3a34a8ea85f732205112578c76b82e7a719cedc67ed09d0f392d7069f",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/radiance",
+              "role": "radiance"
+            },
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "8c49dadd15e6834dd3204a35f4be00cf1cc01c9672c235a78a0c909b97aa8f1b",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "7834d3a9d44fb48ae3d3c06da992922f3e46b580b3d92df36372081b2fe475c3"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/radiance.s0",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "5a3ce8a6f18d3fbc506ce7b39591a707aef3ac8abb45ec3a51474abee375ddcf",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/radiance.s0",
+              "role": "bootstrap-compiler"
+            },
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "a6e91a2a6edc0aa4d5ca3c870012fdfb4f14748fed2829c46f6466efab3a27ec",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "92cdb0c5293447964be053214fac403b49193ac3ec07c902576346ebaa205535"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/emulator",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "1834bfecc3f53e448b8c0bbe8e3635e6414438c360d70460458dabc8aeb90fa4",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/emulator",
+              "role": "emulator"
+            }
+          ],
+          "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+          "schema": "mantle-radiance-source-cohort-v1"
+        },
+        "source_state_blake3": "f7f7c80eff2072784b7e55f236129862ab1ea9cb713ab41f807a533190894cbd",
+        "stages": [
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-1",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "4ce108463036e84eb77c0cd971f8a64bcdbb7122be912208168d9a959c6d735f",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 1,
+            "stderr_blake3": "5fe5974c17811d78442506edcfb878dc3c2b388133dc3b226f5550c5f6e4eb18",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-2",
+            "predecessor_blake3": "not-a-digest",
+            "protected_audit_blake3": "d536a33c23b1ee8d60d08c5fc9bc8b3db8faae2c4ef74f408139698c430eab45",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 2,
+            "stderr_blake3": "b9f645668f6fbd26a9130d87bb9ee93617d612d32ab702de9bf5a740dd630487",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-3",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "ec2df2784d71b9d48fc7c7f65007b9dd1093b8e03f33f0526832bc5c434b1337",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 3,
+            "stderr_blake3": "56b494b6ff4e8658cdd9a258b650a678542d70859db8edb7ab3d330a0dfef4ec",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "native-bootstrap",
+            "launcher_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "output_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
+            "output_bytes": 2460836,
+            "output_role": "c99-stage-1",
+            "predecessor_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "protected_audit_blake3": "206437f5a37d6f734a4c9e232e06fa6ed56dd5b44563e188d1345fa3785face9",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 1,
+            "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "c99-stage-2",
+            "predecessor_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
+            "protected_audit_blake3": "c9ee6e3bff1bbaa96749a2c6e24771f0578c068b8ac0031d4bab4244c06d2b9f",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 2,
+            "stderr_blake3": "38c3f75303fb4ae70110a5a08f252f1948ba4278a98a6ee01125ac7db0f1d965",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "c99-stage-3",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "3e0d414a6676abdb479603e3deecd0be9fa1977e41ae97408c4fc0999a64021b",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 3,
+            "stderr_blake3": "30c2d8f176c6626abcc972dbfae0dd78ba9afc7321fc8bba3ea9577b2823d8d5",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        ],
+        "tools": [
+          {
+            "byte_count": 11533,
+            "digest_blake3": "bf001a7008d11536ffda1370cd0368d13b80ef7e6aa4c0f579ca8e74694acdb2",
+            "role": "host-c-compiler"
+          },
+          {
+            "byte_count": 216200,
+            "digest_blake3": "acfd6b4ca32ff8dd24bbc0a5254949f7e4568e7841ab1a8208b39f1c5326734e",
+            "role": "host-c-compiler-driver"
+          },
+          {
+            "byte_count": 8738448,
+            "digest_blake3": "746fd75279b882f5cfb425627e593b3187ce348b0b8bdbda763361e7b3428c03",
+            "role": "host-linker"
+          },
+          {
+            "byte_count": 14315343,
+            "digest_blake3": "ebf9bad0070579d25d7b88a23089ebd5f82fd6e12fa47a64f54b006b939fa122",
+            "role": "host-crt-inputs"
+          },
+          {
+            "byte_count": 17595978,
+            "digest_blake3": "1df3e2cb7404f995ee4da9ac4f40c1bd4615969fa9435541f4ca7f5ffccf989d",
+            "role": "host-libgcc-inputs"
+          },
+          {
+            "byte_count": 163592,
+            "digest_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "role": "bootstrap-compiler"
+          },
+          {
+            "byte_count": 100368,
+            "digest_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "role": "emulator"
+          },
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "role": "seed"
+          }
+        ],
+        "zero_events": {
+          "ambient_discoveries": 0,
+          "live_fetches": 0,
+          "source_fallbacks": 0,
+          "substitutions": 0
+        }
+      },
+      "expected_path": "/stages/1/predecessor_blake3",
+      "id": "lineage-digest-malformed",
+      "issue_class": "digest"
+    },
+    {
+      "artifact": {
+        "cross_route": {
+          "c99_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+          "c99_bytes": 1285492,
+          "disposition": "match",
+          "seed_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+          "seed_bytes": 1285492
+        },
+        "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+        "plan": {
+          "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+          "plan_blake3": "c633f5936848ae2ecf29a462a9b6d1e58d0e0658ac872065cbee13d456505cc2",
+          "schema": "mantle-radiance-reference-plan-v1",
+          "source_bundle_blake3": "21f962ce6bf2ba89cbd94758d95abe8418cbafc243cdc81a146693d00f2539f4",
+          "source_cohort_blake3": "80c82a016b6232aa4f8002624fa2fe6296ad3aac9fcf738fdbbad6c424993d4b",
+          "stages": [
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-1",
+              "predecessor_role": "radiance-seed",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 1
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-2",
+              "predecessor_role": "seed-stage-1",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 2
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-3",
+              "predecessor_role": "seed-stage-2",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 3
+            },
+            {
+              "launch_kind": "native-bootstrap",
+              "output_role": "c99-stage-1",
+              "predecessor_role": "radiance-s0",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 1
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "c99-stage-2",
+              "predecessor_role": "c99-stage-1",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 2
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "c99-stage-3",
+              "predecessor_role": "c99-stage-2",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 3
+            }
+          ]
+        },
+        "protected_execution_audit_blake3": "cf46accf75d21eb66e685c25121ce79ac12469754e0a2ba5645bcb79a684b625",
+        "publication": [
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "relative_path": "artifacts/seed-route-fixed-point.rv64",
+            "role": "seed-route-fixed-point"
+          },
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "relative_path": "artifacts/c99-route-fixed-point.rv64",
+            "role": "c99-route-fixed-point"
+          },
+          {
+            "byte_count": 163592,
+            "digest_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "relative_path": "artifacts/radiance.s0",
+            "role": "bootstrap-compiler"
+          },
+          {
+            "byte_count": 100368,
+            "digest_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "relative_path": "artifacts/emulator",
+            "role": "emulator"
+          }
+        ],
+        "receipt_blake3": "61b2bbd1b01b35692d83b2230dfbbce4294bbc927cdeee2cf5e7e858cb5d949f",
+        "route_convergence": [
+          {
+            "byte_count": 1285492,
+            "equal": true,
+            "left_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "left_stage": 2,
+            "right_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "right_stage": 3,
+            "route": "seed"
+          },
+          {
+            "byte_count": 1285492,
+            "equal": true,
+            "left_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "left_stage": 2,
+            "right_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "right_stage": 3,
+            "route": "c99"
+          }
+        ],
+        "schema": "mantle-radiance-reference-receipt-v1",
+        "source_bundle_blake3": "21f962ce6bf2ba89cbd94758d95abe8418cbafc243cdc81a146693d00f2539f4",
+        "source_cohort": {
+          "cohort_blake3": "80c82a016b6232aa4f8002624fa2fe6296ad3aac9fcf738fdbbad6c424993d4b",
+          "members": [
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "135c2f75eea21199b4538f5f0096e3e329c6b8b70943017644f9cdef05573c66",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "0d8a2d4fe8d0ba488e22c8ed83df1e53a5d23d69489c5d9e7fa0646b1c29c444"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/radiance",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "c3503ed3a34a8ea85f732205112578c76b82e7a719cedc67ed09d0f392d7069f",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/radiance",
+              "role": "radiance"
+            },
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "8c49dadd15e6834dd3204a35f4be00cf1cc01c9672c235a78a0c909b97aa8f1b",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "7834d3a9d44fb48ae3d3c06da992922f3e46b580b3d92df36372081b2fe475c3"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/radiance.s0",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "5a3ce8a6f18d3fbc506ce7b39591a707aef3ac8abb45ec3a51474abee375ddcf",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/radiance.s0",
+              "role": "bootstrap-compiler"
+            },
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "a6e91a2a6edc0aa4d5ca3c870012fdfb4f14748fed2829c46f6466efab3a27ec",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "92cdb0c5293447964be053214fac403b49193ac3ec07c902576346ebaa205535"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/emulator",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "1834bfecc3f53e448b8c0bbe8e3635e6414438c360d70460458dabc8aeb90fa4",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/emulator",
+              "role": "emulator"
+            }
+          ],
+          "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+          "schema": "mantle-radiance-source-cohort-v1"
+        },
+        "source_state_blake3": "f7f7c80eff2072784b7e55f236129862ab1ea9cb713ab41f807a533190894cbd",
+        "stages": [
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-1",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "4ce108463036e84eb77c0cd971f8a64bcdbb7122be912208168d9a959c6d735f",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 1,
+            "stderr_blake3": "5fe5974c17811d78442506edcfb878dc3c2b388133dc3b226f5550c5f6e4eb18",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-2",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "d536a33c23b1ee8d60d08c5fc9bc8b3db8faae2c4ef74f408139698c430eab45",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 2,
+            "stderr_blake3": "b9f645668f6fbd26a9130d87bb9ee93617d612d32ab702de9bf5a740dd630487",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-3",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "ec2df2784d71b9d48fc7c7f65007b9dd1093b8e03f33f0526832bc5c434b1337",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 3,
+            "stderr_blake3": "56b494b6ff4e8658cdd9a258b650a678542d70859db8edb7ab3d330a0dfef4ec",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "native-bootstrap",
+            "launcher_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "output_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
+            "output_bytes": 2460836,
+            "output_role": "c99-stage-1",
+            "predecessor_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "protected_audit_blake3": "206437f5a37d6f734a4c9e232e06fa6ed56dd5b44563e188d1345fa3785face9",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 1,
+            "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "c99-stage-2",
+            "predecessor_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
+            "protected_audit_blake3": "c9ee6e3bff1bbaa96749a2c6e24771f0578c068b8ac0031d4bab4244c06d2b9f",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 2,
+            "stderr_blake3": "38c3f75303fb4ae70110a5a08f252f1948ba4278a98a6ee01125ac7db0f1d965",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "c99-stage-3",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "3e0d414a6676abdb479603e3deecd0be9fa1977e41ae97408c4fc0999a64021b",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 3,
+            "stderr_blake3": "30c2d8f176c6626abcc972dbfae0dd78ba9afc7321fc8bba3ea9577b2823d8d5",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        ],
+        "tools": [
+          {
+            "byte_count": 11533,
+            "digest_blake3": "bf001a7008d11536ffda1370cd0368d13b80ef7e6aa4c0f579ca8e74694acdb2",
+            "role": "host-c-compiler"
+          },
+          {
+            "byte_count": 216200,
+            "digest_blake3": "acfd6b4ca32ff8dd24bbc0a5254949f7e4568e7841ab1a8208b39f1c5326734e",
+            "role": "host-c-compiler-driver"
+          },
+          {
+            "byte_count": 8738448,
+            "digest_blake3": "746fd75279b882f5cfb425627e593b3187ce348b0b8bdbda763361e7b3428c03",
+            "role": "host-linker"
+          },
+          {
+            "byte_count": 14315343,
+            "digest_blake3": "ebf9bad0070579d25d7b88a23089ebd5f82fd6e12fa47a64f54b006b939fa122",
+            "role": "host-crt-inputs"
+          },
+          {
+            "byte_count": 17595978,
+            "digest_blake3": "1df3e2cb7404f995ee4da9ac4f40c1bd4615969fa9435541f4ca7f5ffccf989d",
+            "role": "host-libgcc-inputs"
+          },
+          {
+            "byte_count": 163592,
+            "digest_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "role": "bootstrap-compiler"
+          },
+          {
+            "byte_count": 100368,
+            "digest_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "role": "emulator"
+          },
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "role": "seed"
+          }
+        ],
+        "zero_events": {
+          "ambient_discoveries": 0,
+          "live_fetches": 1,
+          "source_fallbacks": 0,
+          "substitutions": 0
+        }
+      },
+      "expected_path": "/zero_events/live_fetches",
+      "id": "live-fetch-event",
+      "issue_class": "bounds"
+    },
+    {
+      "artifact": {
+        "cross_route": {
+          "c99_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+          "c99_bytes": 1285492,
+          "disposition": "match",
+          "seed_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+          "seed_bytes": 1285492
+        },
+        "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+        "plan": {
+          "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+          "plan_blake3": "c633f5936848ae2ecf29a462a9b6d1e58d0e0658ac872065cbee13d456505cc2",
+          "schema": "mantle-radiance-reference-plan-v1",
+          "source_bundle_blake3": "21f962ce6bf2ba89cbd94758d95abe8418cbafc243cdc81a146693d00f2539f4",
+          "source_cohort_blake3": "80c82a016b6232aa4f8002624fa2fe6296ad3aac9fcf738fdbbad6c424993d4b",
+          "stages": [
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-1",
+              "predecessor_role": "radiance-seed",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 1
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-2",
+              "predecessor_role": "seed-stage-1",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 2
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-3",
+              "predecessor_role": "seed-stage-2",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 3
+            },
+            {
+              "launch_kind": "native-bootstrap",
+              "output_role": "c99-stage-1",
+              "predecessor_role": "radiance-s0",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 1
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "c99-stage-2",
+              "predecessor_role": "c99-stage-1",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 2
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "c99-stage-3",
+              "predecessor_role": "c99-stage-2",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 3
+            }
+          ]
+        },
+        "protected_execution_audit_blake3": "cf46accf75d21eb66e685c25121ce79ac12469754e0a2ba5645bcb79a684b625",
+        "publication": [
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "relative_path": "../escape",
+            "role": "seed-route-fixed-point"
+          },
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "relative_path": "artifacts/c99-route-fixed-point.rv64",
+            "role": "c99-route-fixed-point"
+          },
+          {
+            "byte_count": 163592,
+            "digest_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "relative_path": "artifacts/radiance.s0",
+            "role": "bootstrap-compiler"
+          },
+          {
+            "byte_count": 100368,
+            "digest_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "relative_path": "artifacts/emulator",
+            "role": "emulator"
+          }
+        ],
+        "receipt_blake3": "61b2bbd1b01b35692d83b2230dfbbce4294bbc927cdeee2cf5e7e858cb5d949f",
+        "route_convergence": [
+          {
+            "byte_count": 1285492,
+            "equal": true,
+            "left_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "left_stage": 2,
+            "right_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "right_stage": 3,
+            "route": "seed"
+          },
+          {
+            "byte_count": 1285492,
+            "equal": true,
+            "left_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "left_stage": 2,
+            "right_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "right_stage": 3,
+            "route": "c99"
+          }
+        ],
+        "schema": "mantle-radiance-reference-receipt-v1",
+        "source_bundle_blake3": "21f962ce6bf2ba89cbd94758d95abe8418cbafc243cdc81a146693d00f2539f4",
+        "source_cohort": {
+          "cohort_blake3": "80c82a016b6232aa4f8002624fa2fe6296ad3aac9fcf738fdbbad6c424993d4b",
+          "members": [
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "135c2f75eea21199b4538f5f0096e3e329c6b8b70943017644f9cdef05573c66",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "0d8a2d4fe8d0ba488e22c8ed83df1e53a5d23d69489c5d9e7fa0646b1c29c444"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/radiance",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "c3503ed3a34a8ea85f732205112578c76b82e7a719cedc67ed09d0f392d7069f",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/radiance",
+              "role": "radiance"
+            },
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "8c49dadd15e6834dd3204a35f4be00cf1cc01c9672c235a78a0c909b97aa8f1b",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "7834d3a9d44fb48ae3d3c06da992922f3e46b580b3d92df36372081b2fe475c3"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/radiance.s0",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "5a3ce8a6f18d3fbc506ce7b39591a707aef3ac8abb45ec3a51474abee375ddcf",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/radiance.s0",
+              "role": "bootstrap-compiler"
+            },
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "a6e91a2a6edc0aa4d5ca3c870012fdfb4f14748fed2829c46f6466efab3a27ec",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "92cdb0c5293447964be053214fac403b49193ac3ec07c902576346ebaa205535"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/emulator",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "1834bfecc3f53e448b8c0bbe8e3635e6414438c360d70460458dabc8aeb90fa4",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/emulator",
+              "role": "emulator"
+            }
+          ],
+          "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+          "schema": "mantle-radiance-source-cohort-v1"
+        },
+        "source_state_blake3": "f7f7c80eff2072784b7e55f236129862ab1ea9cb713ab41f807a533190894cbd",
+        "stages": [
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-1",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "4ce108463036e84eb77c0cd971f8a64bcdbb7122be912208168d9a959c6d735f",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 1,
+            "stderr_blake3": "5fe5974c17811d78442506edcfb878dc3c2b388133dc3b226f5550c5f6e4eb18",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-2",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "d536a33c23b1ee8d60d08c5fc9bc8b3db8faae2c4ef74f408139698c430eab45",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 2,
+            "stderr_blake3": "b9f645668f6fbd26a9130d87bb9ee93617d612d32ab702de9bf5a740dd630487",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-3",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "ec2df2784d71b9d48fc7c7f65007b9dd1093b8e03f33f0526832bc5c434b1337",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 3,
+            "stderr_blake3": "56b494b6ff4e8658cdd9a258b650a678542d70859db8edb7ab3d330a0dfef4ec",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "native-bootstrap",
+            "launcher_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "output_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
+            "output_bytes": 2460836,
+            "output_role": "c99-stage-1",
+            "predecessor_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "protected_audit_blake3": "206437f5a37d6f734a4c9e232e06fa6ed56dd5b44563e188d1345fa3785face9",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 1,
+            "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "c99-stage-2",
+            "predecessor_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
+            "protected_audit_blake3": "c9ee6e3bff1bbaa96749a2c6e24771f0578c068b8ac0031d4bab4244c06d2b9f",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 2,
+            "stderr_blake3": "38c3f75303fb4ae70110a5a08f252f1948ba4278a98a6ee01125ac7db0f1d965",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "c99-stage-3",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "3e0d414a6676abdb479603e3deecd0be9fa1977e41ae97408c4fc0999a64021b",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 3,
+            "stderr_blake3": "30c2d8f176c6626abcc972dbfae0dd78ba9afc7321fc8bba3ea9577b2823d8d5",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        ],
+        "tools": [
+          {
+            "byte_count": 11533,
+            "digest_blake3": "bf001a7008d11536ffda1370cd0368d13b80ef7e6aa4c0f579ca8e74694acdb2",
+            "role": "host-c-compiler"
+          },
+          {
+            "byte_count": 216200,
+            "digest_blake3": "acfd6b4ca32ff8dd24bbc0a5254949f7e4568e7841ab1a8208b39f1c5326734e",
+            "role": "host-c-compiler-driver"
+          },
+          {
+            "byte_count": 8738448,
+            "digest_blake3": "746fd75279b882f5cfb425627e593b3187ce348b0b8bdbda763361e7b3428c03",
+            "role": "host-linker"
+          },
+          {
+            "byte_count": 14315343,
+            "digest_blake3": "ebf9bad0070579d25d7b88a23089ebd5f82fd6e12fa47a64f54b006b939fa122",
+            "role": "host-crt-inputs"
+          },
+          {
+            "byte_count": 17595978,
+            "digest_blake3": "1df3e2cb7404f995ee4da9ac4f40c1bd4615969fa9435541f4ca7f5ffccf989d",
+            "role": "host-libgcc-inputs"
+          },
+          {
+            "byte_count": 163592,
+            "digest_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "role": "bootstrap-compiler"
+          },
+          {
+            "byte_count": 100368,
+            "digest_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "role": "emulator"
+          },
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "role": "seed"
+          }
+        ],
+        "zero_events": {
+          "ambient_discoveries": 0,
+          "live_fetches": 0,
+          "source_fallbacks": 0,
+          "substitutions": 0
+        }
+      },
+      "expected_path": "/publication/0/relative_path",
+      "id": "publication-path-escape",
+      "issue_class": "reference"
+    },
+    {
+      "artifact": {
+        "cross_route": {
+          "c99_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+          "c99_bytes": 1285492,
+          "disposition": "match",
+          "seed_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+          "seed_bytes": 1285492
+        },
+        "non_claim": "radiance-proves-compiler-correctness",
+        "plan": {
+          "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+          "plan_blake3": "c633f5936848ae2ecf29a462a9b6d1e58d0e0658ac872065cbee13d456505cc2",
+          "schema": "mantle-radiance-reference-plan-v1",
+          "source_bundle_blake3": "21f962ce6bf2ba89cbd94758d95abe8418cbafc243cdc81a146693d00f2539f4",
+          "source_cohort_blake3": "80c82a016b6232aa4f8002624fa2fe6296ad3aac9fcf738fdbbad6c424993d4b",
+          "stages": [
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-1",
+              "predecessor_role": "radiance-seed",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 1
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-2",
+              "predecessor_role": "seed-stage-1",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 2
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-3",
+              "predecessor_role": "seed-stage-2",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 3
+            },
+            {
+              "launch_kind": "native-bootstrap",
+              "output_role": "c99-stage-1",
+              "predecessor_role": "radiance-s0",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 1
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "c99-stage-2",
+              "predecessor_role": "c99-stage-1",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 2
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "c99-stage-3",
+              "predecessor_role": "c99-stage-2",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 3
+            }
+          ]
+        },
+        "protected_execution_audit_blake3": "cf46accf75d21eb66e685c25121ce79ac12469754e0a2ba5645bcb79a684b625",
+        "publication": [
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "relative_path": "artifacts/seed-route-fixed-point.rv64",
+            "role": "seed-route-fixed-point"
+          },
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "relative_path": "artifacts/c99-route-fixed-point.rv64",
+            "role": "c99-route-fixed-point"
+          },
+          {
+            "byte_count": 163592,
+            "digest_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "relative_path": "artifacts/radiance.s0",
+            "role": "bootstrap-compiler"
+          },
+          {
+            "byte_count": 100368,
+            "digest_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "relative_path": "artifacts/emulator",
+            "role": "emulator"
+          }
+        ],
+        "receipt_blake3": "61b2bbd1b01b35692d83b2230dfbbce4294bbc927cdeee2cf5e7e858cb5d949f",
+        "route_convergence": [
+          {
+            "byte_count": 1285492,
+            "equal": true,
+            "left_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "left_stage": 2,
+            "right_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "right_stage": 3,
+            "route": "seed"
+          },
+          {
+            "byte_count": 1285492,
+            "equal": true,
+            "left_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "left_stage": 2,
+            "right_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "right_stage": 3,
+            "route": "c99"
+          }
+        ],
+        "schema": "mantle-radiance-reference-receipt-v1",
+        "source_bundle_blake3": "21f962ce6bf2ba89cbd94758d95abe8418cbafc243cdc81a146693d00f2539f4",
+        "source_cohort": {
+          "cohort_blake3": "80c82a016b6232aa4f8002624fa2fe6296ad3aac9fcf738fdbbad6c424993d4b",
+          "members": [
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "135c2f75eea21199b4538f5f0096e3e329c6b8b70943017644f9cdef05573c66",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "0d8a2d4fe8d0ba488e22c8ed83df1e53a5d23d69489c5d9e7fa0646b1c29c444"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/radiance",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "c3503ed3a34a8ea85f732205112578c76b82e7a719cedc67ed09d0f392d7069f",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/radiance",
+              "role": "radiance"
+            },
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "8c49dadd15e6834dd3204a35f4be00cf1cc01c9672c235a78a0c909b97aa8f1b",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "7834d3a9d44fb48ae3d3c06da992922f3e46b580b3d92df36372081b2fe475c3"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/radiance.s0",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "5a3ce8a6f18d3fbc506ce7b39591a707aef3ac8abb45ec3a51474abee375ddcf",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/radiance.s0",
+              "role": "bootstrap-compiler"
+            },
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "a6e91a2a6edc0aa4d5ca3c870012fdfb4f14748fed2829c46f6466efab3a27ec",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "92cdb0c5293447964be053214fac403b49193ac3ec07c902576346ebaa205535"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/emulator",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "1834bfecc3f53e448b8c0bbe8e3635e6414438c360d70460458dabc8aeb90fa4",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/emulator",
+              "role": "emulator"
+            }
+          ],
+          "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+          "schema": "mantle-radiance-source-cohort-v1"
+        },
+        "source_state_blake3": "f7f7c80eff2072784b7e55f236129862ab1ea9cb713ab41f807a533190894cbd",
+        "stages": [
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-1",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "4ce108463036e84eb77c0cd971f8a64bcdbb7122be912208168d9a959c6d735f",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 1,
+            "stderr_blake3": "5fe5974c17811d78442506edcfb878dc3c2b388133dc3b226f5550c5f6e4eb18",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-2",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "d536a33c23b1ee8d60d08c5fc9bc8b3db8faae2c4ef74f408139698c430eab45",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 2,
+            "stderr_blake3": "b9f645668f6fbd26a9130d87bb9ee93617d612d32ab702de9bf5a740dd630487",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-3",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "ec2df2784d71b9d48fc7c7f65007b9dd1093b8e03f33f0526832bc5c434b1337",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 3,
+            "stderr_blake3": "56b494b6ff4e8658cdd9a258b650a678542d70859db8edb7ab3d330a0dfef4ec",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "native-bootstrap",
+            "launcher_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "output_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
+            "output_bytes": 2460836,
+            "output_role": "c99-stage-1",
+            "predecessor_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "protected_audit_blake3": "206437f5a37d6f734a4c9e232e06fa6ed56dd5b44563e188d1345fa3785face9",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 1,
+            "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "c99-stage-2",
+            "predecessor_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
+            "protected_audit_blake3": "c9ee6e3bff1bbaa96749a2c6e24771f0578c068b8ac0031d4bab4244c06d2b9f",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 2,
+            "stderr_blake3": "38c3f75303fb4ae70110a5a08f252f1948ba4278a98a6ee01125ac7db0f1d965",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "c99-stage-3",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "3e0d414a6676abdb479603e3deecd0be9fa1977e41ae97408c4fc0999a64021b",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 3,
+            "stderr_blake3": "30c2d8f176c6626abcc972dbfae0dd78ba9afc7321fc8bba3ea9577b2823d8d5",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        ],
+        "tools": [
+          {
+            "byte_count": 11533,
+            "digest_blake3": "bf001a7008d11536ffda1370cd0368d13b80ef7e6aa4c0f579ca8e74694acdb2",
+            "role": "host-c-compiler"
+          },
+          {
+            "byte_count": 216200,
+            "digest_blake3": "acfd6b4ca32ff8dd24bbc0a5254949f7e4568e7841ab1a8208b39f1c5326734e",
+            "role": "host-c-compiler-driver"
+          },
+          {
+            "byte_count": 8738448,
+            "digest_blake3": "746fd75279b882f5cfb425627e593b3187ce348b0b8bdbda763361e7b3428c03",
+            "role": "host-linker"
+          },
+          {
+            "byte_count": 14315343,
+            "digest_blake3": "ebf9bad0070579d25d7b88a23089ebd5f82fd6e12fa47a64f54b006b939fa122",
+            "role": "host-crt-inputs"
+          },
+          {
+            "byte_count": 17595978,
+            "digest_blake3": "1df3e2cb7404f995ee4da9ac4f40c1bd4615969fa9435541f4ca7f5ffccf989d",
+            "role": "host-libgcc-inputs"
+          },
+          {
+            "byte_count": 163592,
+            "digest_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "role": "bootstrap-compiler"
+          },
+          {
+            "byte_count": 100368,
+            "digest_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "role": "emulator"
+          },
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "role": "seed"
+          }
+        ],
+        "zero_events": {
+          "ambient_discoveries": 0,
+          "live_fetches": 0,
+          "source_fallbacks": 0,
+          "substitutions": 0
+        }
+      },
+      "expected_path": "/non_claim",
+      "id": "cross-route-divergence-claim",
+      "issue_class": "cross-field"
+    },
+    {
+      "artifact": {
+        "cross_route": {
+          "c99_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+          "c99_bytes": 1285492,
+          "disposition": "match",
+          "seed_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+          "seed_bytes": 1285492
+        },
+        "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+        "plan": {
+          "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+          "plan_blake3": "c633f5936848ae2ecf29a462a9b6d1e58d0e0658ac872065cbee13d456505cc2",
+          "schema": "mantle-radiance-reference-plan-v1",
+          "source_bundle_blake3": "21f962ce6bf2ba89cbd94758d95abe8418cbafc243cdc81a146693d00f2539f4",
+          "source_cohort_blake3": "80c82a016b6232aa4f8002624fa2fe6296ad3aac9fcf738fdbbad6c424993d4b",
+          "stages": [
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-1",
+              "predecessor_role": "radiance-seed",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 1
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-2",
+              "predecessor_role": "seed-stage-1",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 2
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "seed-stage-3",
+              "predecessor_role": "seed-stage-2",
+              "route": "seed",
+              "source_projection": ".",
+              "stage": 3
+            },
+            {
+              "launch_kind": "native-bootstrap",
+              "output_role": "c99-stage-1",
+              "predecessor_role": "radiance-s0",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 1
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "c99-stage-2",
+              "predecessor_role": "c99-stage-1",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 2
+            },
+            {
+              "launch_kind": "emulated-compiler",
+              "output_role": "c99-stage-3",
+              "predecessor_role": "c99-stage-2",
+              "route": "c99",
+              "source_projection": ".",
+              "stage": 3
+            }
+          ]
+        },
+        "protected_execution_audit_blake3": "cf46accf75d21eb66e685c25121ce79ac12469754e0a2ba5645bcb79a684b625",
+        "publication": [
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "relative_path": "artifacts/seed-route-fixed-point.rv64",
+            "role": "seed-route-fixed-point"
+          },
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "relative_path": "artifacts/c99-route-fixed-point.rv64",
+            "role": "c99-route-fixed-point"
+          },
+          {
+            "byte_count": 163592,
+            "digest_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "relative_path": "artifacts/radiance.s0",
+            "role": "bootstrap-compiler"
+          },
+          {
+            "byte_count": 100368,
+            "digest_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "relative_path": "artifacts/emulator",
+            "role": "emulator"
+          }
+        ],
+        "receipt_blake3": "61b2bbd1b01b35692d83b2230dfbbce4294bbc927cdeee2cf5e7e858cb5d949f",
+        "route_convergence": [
+          {
+            "byte_count": 1285492,
+            "equal": true,
+            "left_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "left_stage": 2,
+            "right_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "right_stage": 3,
+            "route": "seed"
+          },
+          {
+            "byte_count": 1285492,
+            "equal": true,
+            "left_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "left_stage": 2,
+            "right_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "right_stage": 3,
+            "route": "c99"
+          }
+        ],
+        "schema": "mantle-radiance-reference-receipt-v1",
+        "seed_trusted": true,
+        "source_bundle_blake3": "21f962ce6bf2ba89cbd94758d95abe8418cbafc243cdc81a146693d00f2539f4",
+        "source_cohort": {
+          "cohort_blake3": "80c82a016b6232aa4f8002624fa2fe6296ad3aac9fcf738fdbbad6c424993d4b",
+          "members": [
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "135c2f75eea21199b4538f5f0096e3e329c6b8b70943017644f9cdef05573c66",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "0d8a2d4fe8d0ba488e22c8ed83df1e53a5d23d69489c5d9e7fa0646b1c29c444"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/radiance",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "c3503ed3a34a8ea85f732205112578c76b82e7a719cedc67ed09d0f392d7069f",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/radiance",
+              "role": "radiance"
+            },
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "8c49dadd15e6834dd3204a35f4be00cf1cc01c9672c235a78a0c909b97aa8f1b",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "7834d3a9d44fb48ae3d3c06da992922f3e46b580b3d92df36372081b2fe475c3"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/radiance.s0",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "5a3ce8a6f18d3fbc506ce7b39591a707aef3ac8abb45ec3a51474abee375ddcf",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/radiance.s0",
+              "role": "bootstrap-compiler"
+            },
+            {
+              "license_blake3": "d0f870e9de0345cb08c6ecc3367d99c12a89756d23cfec7f8260aaf1dcc888b6",
+              "license_spdx": "MIT",
+              "observation": {
+                "content_blake3": "a6e91a2a6edc0aa4d5ca3c870012fdfb4f14748fed2829c46f6466efab3a27ec",
+                "immutable_revision": {
+                  "object_format": "sha256",
+                  "value": "92cdb0c5293447964be053214fac403b49193ac3ec07c902576346ebaa205535"
+                },
+                "locator_class": "git-remote",
+                "locator_hint": "https://code.radiant.computer/emulator",
+                "non_claim": "source-observation-binds-supplied-origin-projection-profile-and-content-facts-without-proving-ownership-trust-review-or-correctness",
+                "normalized_projection": ".",
+                "observation_blake3": "1834bfecc3f53e448b8c0bbe8e3635e6414438c360d70460458dabc8aeb90fa4",
+                "provenance": "complete",
+                "schema": "mantle-source-observation-v1",
+                "snapshot_profile": "canonical-tree-v1",
+                "source_kind": "vcs-snapshot"
+              },
+              "repository_url": "https://code.radiant.computer/emulator",
+              "role": "emulator"
+            }
+          ],
+          "non_claim": "radiance-reference-records-bounded-source-lineage-execution-and-convergence-facts-without-proving-compiler-correctness-seed-trust-semantic-equivalence-or-universal-reproducibility",
+          "schema": "mantle-radiance-source-cohort-v1"
+        },
+        "source_state_blake3": "f7f7c80eff2072784b7e55f236129862ab1ea9cb713ab41f807a533190894cbd",
+        "stages": [
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-1",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "4ce108463036e84eb77c0cd971f8a64bcdbb7122be912208168d9a959c6d735f",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 1,
+            "stderr_blake3": "5fe5974c17811d78442506edcfb878dc3c2b388133dc3b226f5550c5f6e4eb18",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-2",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "d536a33c23b1ee8d60d08c5fc9bc8b3db8faae2c4ef74f408139698c430eab45",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 2,
+            "stderr_blake3": "b9f645668f6fbd26a9130d87bb9ee93617d612d32ab702de9bf5a740dd630487",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "seed-stage-3",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "ec2df2784d71b9d48fc7c7f65007b9dd1093b8e03f33f0526832bc5c434b1337",
+            "protected_audit_event_count": 1,
+            "route": "seed",
+            "stage": 3,
+            "stderr_blake3": "56b494b6ff4e8658cdd9a258b650a678542d70859db8edb7ab3d330a0dfef4ec",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "native-bootstrap",
+            "launcher_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "output_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
+            "output_bytes": 2460836,
+            "output_role": "c99-stage-1",
+            "predecessor_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "protected_audit_blake3": "206437f5a37d6f734a4c9e232e06fa6ed56dd5b44563e188d1345fa3785face9",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 1,
+            "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "c99-stage-2",
+            "predecessor_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
+            "protected_audit_blake3": "c9ee6e3bff1bbaa96749a2c6e24771f0578c068b8ac0031d4bab4244c06d2b9f",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 2,
+            "stderr_blake3": "38c3f75303fb4ae70110a5a08f252f1948ba4278a98a6ee01125ac7db0f1d965",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          },
+          {
+            "denied_event_count": 0,
+            "exit_code": 0,
+            "launch_kind": "emulated-compiler",
+            "launcher_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "output_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "output_bytes": 1285492,
+            "output_role": "c99-stage-3",
+            "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "protected_audit_blake3": "3e0d414a6676abdb479603e3deecd0be9fa1977e41ae97408c4fc0999a64021b",
+            "protected_audit_event_count": 1,
+            "route": "c99",
+            "stage": 3,
+            "stderr_blake3": "30c2d8f176c6626abcc972dbfae0dd78ba9afc7321fc8bba3ea9577b2823d8d5",
+            "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+          }
+        ],
+        "tools": [
+          {
+            "byte_count": 11533,
+            "digest_blake3": "bf001a7008d11536ffda1370cd0368d13b80ef7e6aa4c0f579ca8e74694acdb2",
+            "role": "host-c-compiler"
+          },
+          {
+            "byte_count": 216200,
+            "digest_blake3": "acfd6b4ca32ff8dd24bbc0a5254949f7e4568e7841ab1a8208b39f1c5326734e",
+            "role": "host-c-compiler-driver"
+          },
+          {
+            "byte_count": 8738448,
+            "digest_blake3": "746fd75279b882f5cfb425627e593b3187ce348b0b8bdbda763361e7b3428c03",
+            "role": "host-linker"
+          },
+          {
+            "byte_count": 14315343,
+            "digest_blake3": "ebf9bad0070579d25d7b88a23089ebd5f82fd6e12fa47a64f54b006b939fa122",
+            "role": "host-crt-inputs"
+          },
+          {
+            "byte_count": 17595978,
+            "digest_blake3": "1df3e2cb7404f995ee4da9ac4f40c1bd4615969fa9435541f4ca7f5ffccf989d",
+            "role": "host-libgcc-inputs"
+          },
+          {
+            "byte_count": 163592,
+            "digest_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
+            "role": "bootstrap-compiler"
+          },
+          {
+            "byte_count": 100368,
+            "digest_blake3": "ce738d442238fa06553a857118b588b4c998ce963d6279389ef57394b3280672",
+            "role": "emulator"
+          },
+          {
+            "byte_count": 1285492,
+            "digest_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
+            "role": "seed"
+          }
+        ],
+        "zero_events": {
+          "ambient_discoveries": 0,
+          "live_fetches": 0,
+          "source_fallbacks": 0,
+          "substitutions": 0
+        }
+      },
+      "expected_path": "/seed_trusted",
+      "id": "unknown-field",
+      "issue_class": "unknown-field"
+    }
+  ],
+  "surface_id": "radiance.radiance-reference-receipt"
+}

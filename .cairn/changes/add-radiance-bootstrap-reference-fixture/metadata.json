@@ -6,7 +6,6 @@
   "groups": [
     "feature:bootstrap-reference"
   ],
-  "status": "blocked",
   "workflow_profile": {
     "id": "spec-driven",
     "source": "change_create",

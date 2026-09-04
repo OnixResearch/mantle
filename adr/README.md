@@ -122,3 +122,4 @@ compatibility surface, crate name, or historical decision.
 | [0113](0113-separate-rust-planning-from-host-authority.md) | Separate Rust planning from host authority | Accepted |
 | [0114](0114-plan-build-routes-from-explicit-observations.md) | Plan build routes from explicit observations | Accepted |
 | [0115](0115-keep-the-cli-root-mechanical.md) | Keep the CLI root mechanical | Accepted |
+| [0116](0116-bound-radiance-as-an-optional-external-reference.md) | Bound Radiance as an optional external reference | Accepted |

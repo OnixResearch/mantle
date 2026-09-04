@@ -396,6 +396,11 @@ fn bootstrap_command_label(action: Option<&BootstrapAction>) -> &'static str {
     match action {
         Some(BootstrapAction::Capabilities) => "bootstrap.capabilities",
         Some(BootstrapAction::ParityReport { .. }) => "bootstrap.parity-report",
+        Some(BootstrapAction::RadianceReference { action }) => match action {
+            RadianceReferenceAction::Prepare { .. } => "bootstrap.radiance-reference.prepare",
+            RadianceReferenceAction::Prove { .. } => "bootstrap.radiance-reference.prove",
+            RadianceReferenceAction::Verify { .. } => "bootstrap.radiance-reference.verify",
+        },
         Some(BootstrapAction::TrustReport { .. }) => "bootstrap.trust-report",
         Some(BootstrapAction::RustSourceProvider { .. }) => "bootstrap.rust-source-provider",
         Some(BootstrapAction::FullSourceRustHostTools { .. }) => "bootstrap.full-source-rust-host-tools",
@@ -3858,6 +3863,7 @@ fn run_bootstrap_action(ctx: &RunContext, action: &BootstrapAction) -> Result<()
         BootstrapAction::ParityReport { require } => {
             bootstrap_parity::cmd_bootstrap_parity_report(&current_dir_or_error()?, require, ctx.json)
         }
+        BootstrapAction::RadianceReference { action } => radiance::run_command(action, &ctx.store_prefix, ctx.json),
         BootstrapAction::TrustReport { proof_root } => {
             source_built_trust_report_shell::cmd_bootstrap_trust_report(proof_root, ctx.json)
         }

@@ -1151,6 +1151,29 @@
           '';
         };
 
+        radianceReferenceArchitectureCheck = craneLib.mkCargoDerivation {
+          pname = "mantle-radiance-reference-architecture-check";
+          inherit src cargoVendorDir;
+          cargoArtifacts = null;
+          nativeBuildInputs = nativeBuildInputs ++ [ rustToolchain nickelCli pkgs.jq ];
+          buildPhaseCargoCommand = ''
+            cargo -Zscript --offline scripts/check-radiance-reference-architecture.rs --self-test
+            cargo -Zscript --offline scripts/check-radiance-reference-architecture.rs --root .
+            nickel typecheck config/radiance-reference.ncl
+            nickel typecheck bootstrap/radiance-reference/routes.ncl
+            nickel typecheck bootstrap/radiance-reference/native-tools.ncl
+            nickel export --format json config/radiance-reference.ncl > "$TMPDIR/radiance-reference.json"
+            jq --sort-keys . "$TMPDIR/radiance-reference.json" > "$TMPDIR/actual.sorted.json"
+            jq --sort-keys . config/generated/radiance-reference.json > "$TMPDIR/expected.sorted.json"
+            diff -u "$TMPDIR/expected.sorted.json" "$TMPDIR/actual.sorted.json"
+          '';
+          doInstallCargoArtifacts = false;
+          installPhaseCommand = ''
+            mkdir -p "$out"
+            printf '%s\n' 'radiance_reference_architecture_findings=0' > "$out/report.txt"
+          '';
+        };
+
         tigerstyleRunner = pkgs.writeShellApplication {
           name = "crunch-tigerstyle";
           runtimeInputs = nativeBuildInputs ++ [
@@ -1449,6 +1472,7 @@
           build-planning-architecture = buildPlanningArchitectureCheck;
           cli-application-architecture = cliApplicationArchitectureCheck;
           source-observation-architecture = sourceObservationArchitectureCheck;
+          radiance-reference-architecture = radianceReferenceArchitectureCheck;
           content-bound-requirement-source-closure = contentBoundRequirementSourceClosure;
           content-bound-requirement-evidence = contentBoundRequirementEvidence;
           store-retention-policy =
@@ -1778,6 +1802,37 @@
               buildInputs
               ;
             cargoExtraArgs = "-p crunch-source-core --lib --target wasm32-unknown-unknown";
+          };
+
+          radiance-reference-core = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p crunch-radiance-reference-core --all-targets";
+          };
+
+          radiance-reference-core-wasm = craneLib.cargoBuild {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoExtraArgs = "-p crunch-radiance-reference-core --lib --target wasm32-unknown-unknown";
+          };
+
+          radiance-reference-shell = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p mantle --bin mantle radiance::";
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
           };
 
           mantle-build-contract = craneLib.cargoTest {

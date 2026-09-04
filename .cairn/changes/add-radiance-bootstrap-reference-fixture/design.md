@@ -10,7 +10,7 @@ All three reviewed repositories use Git SHA-256 objects and MIT licenses.
 
 Completion requires two independently started routes to reach admitted route-local fixed points under one explicit Mantle proof profile.
 
-Every source, tool, predecessor, execution, and output must have an exact identity. Equality remains evidence of convergence only.
+Every source, executable, link-runtime input, predecessor, execution, and output must have an exact identity. Equality remains evidence of convergence only.
 
 A live fetch, ambient compiler, undeclared executable, substituted predecessor, stale receipt, or fixed-point correctness claim is false completion.
 
@@ -24,9 +24,9 @@ A live fetch, ambient compiler, undeclared executable, substituted predecessor, 
 
 ### Decision: Bind a three-repository source cohort
 
-**Choice:** The source profile names exact tagged Git SHA-256 objects, source-tree BLAKE3 values, repository roles, MIT licenses, projection rules, and snapshot profiles.
+**Choice:** The source profile names exact explicit-format Git SHA-256 commits, source-tree BLAKE3 values, repository roles, MIT licenses, projection rules, and snapshot profiles.
 
-**Rationale:** A branch name or portal URL cannot identify the reviewed source bytes.
+**Rationale:** A branch name or portal URL cannot identify the reviewed source bytes. The selected Radiance commit is the tested initial-seed cohort. Later commit `673ae4f6...` exceeds the unchanged C99 compiler module bound and also uses unsupported syntax.
 
 ### Decision: Use authenticated offline source bundles
 
@@ -36,7 +36,7 @@ A live fetch, ambient compiler, undeclared executable, substituted predecessor, 
 
 ### Decision: Separate the two route roots
 
-**Choice:** Route `seed` starts from the admitted Radiance RV64 seed. Route `c99` starts from an admitted host C compiler that builds Radiance.s0.
+**Choice:** Route `seed` starts from the admitted Radiance RV64 seed. Route `c99` starts from an admitted compiler launcher, resolved compiler driver, linker, CRT tree, and libgcc tree that build Radiance.s0.
 
 Both routes build or use the admitted emulator and then compile the same Radiance source projection.
 
@@ -93,8 +93,8 @@ The receipt binds:
 
 - three external repository identities and licenses;
 - source-bundle and source-state identities;
-- host C compiler and emulator build identities;
-- every stage executable and immediate predecessor;
+- compiler launcher, resolved driver, linker, CRT tree, and libgcc tree identities;
+- bootstrap compiler, emulator, seed, every stage executable, and immediate predecessor;
 - protected execution audit;
 - route-local fixed-point outcomes;
 - cross-route comparison;
@@ -105,11 +105,11 @@ The receipt binds:
 
 Positive fixtures cover source admission, graph construction, two route-local fixed points, matching and differing cross-route outputs, replay, and publication.
 
-Negative fixtures cover source drift, wrong Git format, missing license, seed drift, compiler substitution, ambient tools, live fetch, wrong predecessor, output mutation, and overclaims.
+Negative fixtures cover source drift, wrong Git format, missing license, seed drift, compiler or runtime-input substitution, ambient tools, live fetch, wrong predecessor, output mutation, and overclaims.
 
 ## Risks and Trade-offs
 
-- The host C compiler remains an explicit route root and trust input.
+- The host compiler, linker, CRT, and libgcc trees remain explicit route roots and trust inputs.
 - External projects can change or disappear. Offline bundles preserve the reviewed source bytes.
 - The full run can be costly. Default checks validate contracts and small frozen fixtures only.
 

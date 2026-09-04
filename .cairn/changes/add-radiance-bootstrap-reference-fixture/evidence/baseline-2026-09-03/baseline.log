@@ -1,0 +1,969 @@
+base=d2a7e0c4f196f89cb43f3f9a25f87100f2c59506
+
+$ cargo test -p crunch-source-core
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling shlex v1.3.0
+   Compiling serde_core v1.0.228
+   Compiling find-msvc-tools v0.1.9
+   Compiling zmij v1.0.21
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.149
+   Compiling constant_time_eq v0.3.1
+   Compiling arrayref v0.3.9
+   Compiling arrayvec v0.7.6
+   Compiling itoa v1.0.18
+   Compiling cfg-if v1.0.4
+   Compiling memchr v2.8.0
+   Compiling cc v1.2.59
+   Compiling blake3 v1.8.2
+   Compiling syn v2.0.117
+   Compiling serde_derive v1.0.228
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-source-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.15s
+     Running unittests src/lib.rs (/tmp/mantle-radiance-reference-target/debug/deps/crunch_source_core-953a74a39db2ab4a)
+
+running 17 tests
+test tests::complete_observation_cannot_claim_unavailable_legacy_provenance ... ok
+test tests::ingest_add_and_identical_reuse_are_distinct ... ok
+test tests::legacy_projection_is_complete_only_with_all_required_facts ... ok
+test tests::fixed_url_observation_is_deterministic_and_admitted ... ok
+test tests::malformed_revision_and_revision_role_fail_closed ... ok
+test tests::canonical_subject_omits_hints_and_readmits_the_same_identity ... ok
+test tests::malformed_wire_decodes_structurally_but_cannot_enter_core ... ok
+test tests::ingest_plan_is_order_independent_and_tamper_evident ... ok
+test tests::ingest_identity_and_content_conflicts_preserve_state ... ok
+test tests::secret_bearing_and_unsafe_locator_hints_fail_closed ... ok
+test tests::projection_profile_and_locator_mismatches_fail_closed ... ok
+test tests::malformed_and_contradictory_ingest_facts_reject_without_writes ... ok
+test tests::observation_digest_tampering_fails_closed ... ok
+test tests::locator_and_mutable_reference_do_not_change_canonical_identity ... ok
+test tests::vcs_archive_projection_is_an_explicit_supported_profile ... ok
+test tests::sha1_and_sha256_revisions_are_explicit_and_distinct ... ok
+test tests::oversized_existing_set_is_an_explicit_invalid_rejection ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+   Doc-tests crunch_source_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+$ cargo test source_bundle
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling memchr v2.8.0
+   Compiling libc v0.2.186
+   Compiling version_check v0.9.5
+   Compiling typenum v1.20.1
+   Compiling subtle v2.6.1
+   Compiling smallvec v1.15.1
+   Compiling const-oid v0.9.6
+   Compiling parking_lot_core v0.9.12
+   Compiling regex-syntax v0.8.10
+   Compiling crossbeam-utils v0.8.21
+   Compiling scopeguard v1.2.0
+   Compiling equivalent v1.0.2
+   Compiling once_cell v1.21.4
+   Compiling bitflags v2.11.0
+   Compiling allocator-api2 v0.2.21
+   Compiling lock_api v0.4.14
+   Compiling thiserror v2.0.18
+   Compiling foldhash v0.2.0
+   Compiling stable_deref_trait v1.2.1
+   Compiling fastrand v2.4.1
+   Compiling same-file v1.0.6
+   Compiling serde_json v1.0.149
+   Compiling crc32fast v1.5.0
+   Compiling generic-array v0.14.7
+   Compiling cpufeatures v0.2.17
+   Compiling walkdir v2.5.0
+   Compiling rustix v1.1.4
+   Compiling linux-raw-sys v0.12.1
+   Compiling hashbrown v0.16.1
+   Compiling aho-corasick v1.1.4
+   Compiling log v0.4.29
+   Compiling crossbeam-epoch v0.9.20
+   Compiling rayon-core v1.13.0
+   Compiling tinyvec_macros v0.1.1
+   Compiling gix-trace v0.1.18
+   Compiling pin-project-lite v0.2.17
+   Compiling tinyvec v1.11.0
+   Compiling fnv v1.0.7
+   Compiling futures-core v0.3.32
+   Compiling zeroize v1.8.2
+   Compiling bytesize v2.3.1
+   Compiling regex-automata v0.4.14
+   Compiling human_format v1.2.1
+   Compiling unicode-normalization v0.1.25
+   Compiling zlib-rs v0.6.3
+   Compiling winnow v0.7.15
+   Compiling byteorder v1.5.0
+   Compiling getrandom v0.4.2
+   Compiling heapless v0.8.0
+   Compiling rand_core v0.10.0
+   Compiling futures-io v0.3.32
+   Compiling futures-sink v0.3.32
+   Compiling futures-task v0.3.32
+   Compiling rustversion v1.0.22
+   Compiling jiff v0.2.23
+   Compiling slab v0.4.12
+   Compiling hash32 v0.3.1
+   Compiling futures-channel v0.3.32
+   Compiling strsim v0.11.1
+   Compiling libm v0.2.16
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling crossbeam-channel v0.5.15
+   Compiling tracing-core v0.1.36
+   Compiling dunce v1.0.5
+   Compiling syn v2.0.117
+   Compiling digest v0.10.7
+   Compiling fs_extra v1.3.0
+   Compiling percent-encoding v2.3.2
+   Compiling either v1.15.0
+   Compiling autocfg v1.5.0
+   Compiling crossbeam-deque v0.8.6
+   Compiling aws-lc-rs v1.16.2
+   Compiling sha1 v0.10.6
+   Compiling rustls-pki-types v1.14.0
+   Compiling foldhash v0.1.5
+   Compiling jobserver v0.1.34
+   Compiling sha1-checked v0.10.0
+   Compiling base64 v0.22.1
+   Compiling writeable v0.6.3
+   Compiling cc v1.2.59
+   Compiling litemap v0.8.2
+   Compiling unicode-xid v0.2.6
+   Compiling hashbrown v0.15.5
+   Compiling errno v0.3.14
+   Compiling mio v1.2.0
+   Compiling getrandom v0.2.17
+   Compiling socket2 v0.6.3
+   Compiling signal-hook-registry v1.4.8
+   Compiling memmap2 v0.9.10
+   Compiling parking_lot v0.12.5
+   Compiling faster-hex v0.10.0
+   Compiling indexmap v2.13.1
+   Compiling encoding_rs v0.8.35
+   Compiling icu_normalizer_data v2.2.0
+   Compiling pkg-config v0.3.32
+   Compiling cmake v0.1.58
+   Compiling utf8_iter v1.0.4
+   Compiling ident_case v1.0.1
+   Compiling prodash v31.0.0
+   Compiling httparse v1.10.1
+   Compiling icu_properties_data v2.2.0
+   Compiling untrusted v0.9.0
+   Compiling rustls v0.23.37
+   Compiling ipnet v2.12.0
+   Compiling unicode-width v0.2.2
+   Compiling signal-hook v0.4.4
+   Compiling tempfile v3.27.0
+   Compiling num-traits v0.2.19
+   Compiling static_assertions v1.1.0
+   Compiling tower-service v0.3.3
+   Compiling ryu v1.0.23
+   Compiling blake3 v1.8.2
+   Compiling aws-lc-sys v0.39.1
+   Compiling ring v0.17.14
+   Compiling hashbrown v0.14.5
+   Compiling atomic-waker v1.1.2
+   Compiling nonempty v0.12.0
+   Compiling try-lock v0.2.5
+   Compiling rand_core v0.6.4
+   Compiling form_urlencoded v1.2.2
+   Compiling want v0.3.1
+   Compiling cfg_aliases v0.2.1
+   Compiling unicode-segmentation v1.13.2
+   Compiling sha2 v0.10.9
+   Compiling sync_wrapper v1.0.2
+   Compiling tower-layer v0.3.3
+   Compiling openssl-probe v0.2.1
+   Compiling data-encoding v2.10.0
+   Compiling spin v0.9.9
+   Compiling iri-string v0.7.12
+   Compiling colorchoice v1.0.5
+   Compiling rustls-native-certs v0.8.3
+   Compiling dashmap v6.1.0
+   Compiling lazy_static v1.5.0
+   Compiling adler2 v2.0.1
+   Compiling unicode-bom v2.0.3
+   Compiling mime v0.3.17
+   Compiling simd-adler32 v0.3.9
+   Compiling anstyle v1.0.14
+   Compiling semver v1.0.28
+   Compiling signature v2.2.0
+   Compiling convert_case v0.10.0
+   Compiling filetime v0.2.27
+   Compiling miniz_oxide v0.8.9
+   Compiling heck v0.5.0
+   Compiling utf8parse v0.2.2
+   Compiling kstring v2.0.2
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling regex v1.12.3
+   Compiling anstyle-parse v1.0.0
+   Compiling rustc_version v0.4.1
+   Compiling itertools v0.14.0
+   Compiling thread_local v1.1.9
+   Compiling anstyle-query v1.1.5
+   Compiling winnow v1.0.1
+   Compiling portable-atomic v1.13.1
+   Compiling shell-words v1.1.1
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling libmimalloc-sys v0.1.44
+   Compiling anstream v1.0.0
+   Compiling curve25519-dalek v4.1.3
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling synstructure v0.13.2
+   Compiling darling_core v0.23.0
+   Compiling anyhow v1.0.102
+   Compiling clap_lex v1.1.0
+   Compiling darling_core v0.20.11
+   Compiling clap_builder v4.6.0
+   Compiling ed25519 v2.2.3
+   Compiling lzma-sys v0.1.20
+   Compiling bzip2-sys v0.1.13+1.0.8
+   Compiling memoffset v0.6.5
+   Compiling vte v0.15.0
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling zstd-safe v7.2.4
+   Compiling typeid v1.0.3
+   Compiling rustix v0.38.44
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling tokio-macros v2.7.0
+   Compiling futures-macro v0.3.32
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling displaydoc v0.2.5
+   Compiling tracing-attributes v0.1.31
+   Compiling derive_more-impl v2.1.1
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling toml_edit v0.25.10+spec-1.1.0
+   Compiling darling_macro v0.23.0
+   Compiling async-trait v0.1.89
+   Compiling clap_derive v4.6.0
+   Compiling proc-macro-crate v3.5.0
+   Compiling futures-util v0.3.32
+   Compiling darling v0.23.0
+   Compiling darling_macro v0.20.11
+   Compiling serde_with_macros v3.18.0
+   Compiling tracing v0.1.44
+   Compiling zerofrom v0.1.7
+   Compiling yoke v0.8.2
+   Compiling pin-project-internal v1.1.11
+   Compiling vt100 v0.16.2
+   Compiling zerovec v0.11.6
+   Compiling zerotrie v0.2.4
+   Compiling sharded-slab v0.1.7
+   Compiling n0-future v0.3.2
+   Compiling nix v0.31.3
+   Compiling console v0.16.3
+   Compiling xattr v1.6.1
+   Compiling arc-swap v1.9.1
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling derive_more v2.1.1
+   Compiling ed25519-dalek v2.2.0
+   Compiling matchers v0.2.0
+   Compiling tracing-log v0.2.0
+   Compiling icu_collections v2.2.0
+   Compiling nu-ansi-term v0.50.3
+   Compiling icu_locale_core v2.2.0
+   Compiling siphasher v1.0.2
+   Compiling diatomic-waker v0.2.3
+   Compiling spin v0.10.0
+   Compiling zerocopy v0.8.48
+   Compiling clap v4.6.0
+   Compiling cordyceps v0.3.4
+   Compiling linux-raw-sys v0.4.15
+   Compiling bitflags v1.3.2
+   Compiling thiserror v1.0.69
+   Compiling erased-serde v0.4.10
+   Compiling parking v2.2.1
+   Compiling cpufeatures v0.3.0
+   Compiling serde_with v3.18.0
+   Compiling unit-prefix v0.5.2
+   Compiling pin-project v1.1.11
+   Compiling tracing-subscriber v0.3.23
+   Compiling chacha20 v0.10.0
+   Compiling futures-lite v2.6.1
+   Compiling phf_shared v0.11.3
+   Compiling indicatif v0.18.4
+   Compiling futures-buffered v0.2.13
+   Compiling darling v0.20.11
+   Compiling num_enum_derive v0.7.6
+   Compiling mimalloc v0.1.48
+   Compiling spez v0.1.2
+   Compiling thiserror-impl v1.0.69
+   Compiling bytes v1.11.1
+   Compiling bstr v1.12.1
+   Compiling icu_provider v2.2.0
+   Compiling futures-executor v0.3.32
+   Compiling async-stream-impl v0.3.6
+   Compiling n0-error-macros v0.1.3
+   Compiling flate2 v1.1.9
+   Compiling gix-sec v0.13.2
+   Compiling md-5 v0.10.6
+   Compiling futures v0.3.32
+   Compiling nibble_vec v0.1.0
+   Compiling new_debug_unreachable v1.0.6
+   Compiling icu_normalizer v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling nix-compat v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/vendor/nix-compat)
+   Compiling precomputed-hash v0.1.1
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/vendor/fuse-backend-rs)
+   Compiling gix-validate v0.11.0
+   Compiling gix-utils v0.3.1
+   Compiling gix-error v0.2.1
+   Compiling tokio v1.51.0
+   Compiling http v1.4.0
+   Compiling gix-packetline v0.21.2
+   Compiling gix-path v0.11.2
+   Compiling gix-date v0.15.1
+   Compiling gix-chunk v0.7.0
+   Compiling gix-quote v0.7.0
+   Compiling fixedbitset v0.5.7
+   Compiling gix-features v0.46.2
+   Compiling gix-config-value v0.17.1
+   Compiling gix-command v0.8.0
+   Compiling keccak v0.1.6
+   Compiling gix-actor v0.40.0
+   Compiling endian-type v0.1.2
+   Compiling matchit v0.8.4
+   Compiling idna_adapter v1.2.1
+   Compiling gix-hash v0.23.0
+   Compiling gix-fs v0.19.2
+   Compiling http-body v1.0.1
+   Compiling idna v1.1.0
+   Compiling gix-glob v0.24.0
+   Compiling bit-vec v0.8.0
+   Compiling redb v3.1.3
+   Compiling term v1.2.1
+   Compiling bytemuck v1.25.0
+   Compiling iana-time-zone v0.1.65
+   Compiling num_enum v0.7.6
+   Compiling n0-error v0.1.3
+   Compiling ena v0.14.4
+   Compiling http-body-util v0.1.3
+   Compiling bit-set v0.8.0
+   Compiling chrono v0.4.44
+   Compiling gix-hashtable v0.13.0
+   Compiling gix-commitgraph v0.35.0
+   Compiling gix-attributes v0.31.0
+   Compiling gix-tempfile v21.0.2
+   Compiling ascii-canvas v4.0.0
+   Compiling xz2 v0.1.7
+   Compiling safe_arch v1.2.0
+   Compiling url v2.5.8
+   Compiling radix_trie v0.2.1
+   Compiling async-stream v0.3.6
+   Compiling sha3 v0.10.8
+   Compiling petgraph v0.7.1
+   Compiling gix-object v0.58.0
+   Compiling tracing-indicatif v0.3.14
+   Compiling gix-bitmap v0.3.0
+   Compiling string_cache v0.8.9
+   Compiling gix-lock v21.0.2
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-attestation-core)
+   Compiling quick-xml v0.40.1
+   Compiling serde_urlencoded v0.7.1
+   Compiling nix v0.24.3
+   Compiling derive_builder_core v0.20.2
+   Compiling rand v0.10.1
+   Compiling bzip2 v0.5.2
+   Compiling vmm-sys-util v0.11.2
+   Compiling clap-verbosity-flag v3.0.4
+   Compiling cobs v0.3.0
+   Compiling lalrpop-util v0.22.2
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/vendor/nix-compat-derive)
+   Compiling irpc-derive v0.10.0
+   Compiling num_cpus v1.17.0
+   Compiling mio v0.8.11
+   Compiling vm-memory v0.10.0
+   Compiling caps v0.5.6
+   Compiling itertools v0.15.0
+   Compiling proc-macro-error-attr2 v2.0.0
+   Compiling nom v8.0.0
+   Compiling gix-revwalk v0.29.0
+   Compiling humantime v2.3.0
+   Compiling malachite-nz v0.9.2
+   Compiling fixedbitset v0.4.2
+   Compiling snix-castore v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/vendor/snix-castore)
+   Compiling pico-args v0.5.0
+   Compiling rustc-hash v2.1.2
+   Compiling gix-traverse v0.55.0
+   Compiling petgraph v0.6.5
+   Compiling derive_builder_macro v0.20.2
+   Compiling lalrpop v0.22.2
+   Compiling proc-macro-error2 v2.0.1
+   Compiling gix-ref v0.61.0
+   Compiling gix-filter v0.28.0
+   Compiling threadpool v1.8.1
+   Compiling postcard v1.1.3
+   Compiling serde_tagged v0.3.0
+   Compiling gix-index v0.49.0
+   Compiling wide v1.7.0
+   Compiling gix-ignore v0.19.1
+   Compiling serde_qs v0.12.0
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling auto_impl v1.3.0
+   Compiling tokio-util v0.7.18
+   Compiling tower v0.5.3
+   Compiling tokio-stream v0.1.18
+   Compiling malachite-base v0.9.2
+   Compiling nix v0.29.0
+   Compiling serde_bytes v0.11.19
+   Compiling astral-tokio-tar v0.6.3
+   Compiling tower-http v0.6.8
+   Compiling fastcdc v3.2.1
+   Compiling proc-macro2-diagnostics v0.10.1
+   Compiling h2 v0.4.13
+   Compiling yansi v1.0.1
+   Compiling unicode-width v0.1.14
+   Compiling wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+   Compiling derive_builder v0.20.2
+   Compiling ppv-lite86 v0.2.21
+   Compiling gix-worktree v0.50.0
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-attestation)
+   Compiling getset v0.1.6
+   Compiling gix-pathspec v0.16.1
+   Compiling typed-builder-macro v0.22.0
+   Compiling strum_macros v0.26.4
+   Compiling toml_datetime v0.7.5+spec-1.1.0
+   Compiling uuid v1.23.0
+   Compiling strum v0.26.3
+   Compiling snix-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/vendor/snix-store)
+   Compiling snix-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/vendor/snix-build)
+   Compiling toml_writer v1.1.1+spec-1.1.0
+   Compiling gix-url v0.35.2
+   Compiling tar v0.4.45
+   Compiling nix-archive v0.1.0
+   Compiling zstd v0.13.3
+   Compiling logos-codegen v0.16.1
+   Compiling itertools v0.12.1
+   Compiling lru v0.16.4
+   Compiling async-compression v0.4.19
+   Compiling count-write v0.1.0
+   Compiling heck v0.4.1
+   Compiling io-lifetimes v3.0.1
+   Compiling bitmaps v3.2.1
+   Compiling termcolor v1.4.1
+   Compiling io-lifetimes v2.0.4
+   Compiling base64ct v1.8.3
+   Compiling codespan-reporting v0.13.1
+   Compiling imbl-sized-chunks v0.1.3
+   Compiling ouroboros_macro v0.18.5
+   Compiling irpc v0.13.0
+   Compiling pem-rfc7468 v0.7.0
+   Compiling rand_chacha v0.3.1
+   Compiling logos-derive v0.16.1
+   Compiling crunch-action-result-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-action-result-core)
+   Compiling gix-revision v0.43.0
+   Compiling gix-prompt v0.14.1
+   Compiling typed-builder v0.22.0
+   Compiling crunch-composition-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-composition-core)
+   Compiling oci-spec v0.7.1
+   Compiling crunch-repair-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-repair-core)
+   Compiling hyper v1.9.0
+   Compiling crunch-gc-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-gc-core)
+   Compiling crunch-overlay-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-overlay-core)
+   Compiling imara-diff v0.2.0
+   Compiling hashlink v0.10.0
+   Compiling crunch-nar v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-nar)
+   Compiling imara-diff v0.1.8
+   Compiling serde_spanned v1.1.1
+   Compiling fs2 v0.4.3
+   Compiling object v0.37.3
+   Compiling arraydeque v0.5.1
+   Compiling arrayvec v0.5.2
+   Compiling paste v1.0.15
+   Compiling aliasable v0.1.3
+   Compiling io-extras v0.19.0
+   Compiling hyper-util v0.1.20
+   Compiling signal-hook v0.3.18
+   Compiling typed-arena v2.0.2
+   Compiling getrandom v0.3.4
+   Compiling ouroboros v0.18.5
+   Compiling saphyr-parser v0.0.6
+   Compiling gix-diff v0.61.0
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling pretty v0.12.5
+   Compiling logos v0.16.1
+   Compiling gix-refspec v0.39.0
+   Compiling gix-credentials v0.37.1
+   Compiling rand v0.8.6
+   Compiling der v0.7.10
+   Compiling codespan v0.13.1
+   Compiling nickel-lang-vector v0.2.0
+   Compiling toml_edit v0.24.1+spec-1.1.0
+   Compiling gix-discover v0.49.0
+   Compiling clru v0.6.3
+   Compiling vte v0.14.1
+   Compiling uluru v3.1.0
+   Compiling cap-primitives v4.0.2
+   Compiling unsafe-libyaml v0.2.11
+   Compiling simple-counter v0.1.0
+   Compiling bumpalo v3.20.2
+   Compiling gimli v0.32.3
+   Compiling gix-pack v0.68.0
+   Compiling strip-ansi-escapes v0.2.1
+   Compiling fs-set-times v0.20.3
+   Compiling gix-dir v0.23.0
+   Compiling gix-config v0.54.0
+   Compiling gix-worktree-stream v0.30.0
+   Compiling gix-negotiate v0.29.0
+   Compiling gix-shallow v0.10.0
+   Compiling maybe-async v0.2.10
+   Compiling num-integer v0.1.46
+   Compiling spki v0.7.3
+   Compiling rustix-linux-procfs v0.1.1
+   Compiling io-close v0.3.7
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling sha-1 v0.10.1
+   Compiling json_scanner v0.1.0
+   Compiling ambient-authority v0.0.2
+   Compiling linkme-impl v0.3.37
+   Compiling maybe-owned v0.3.4
+   Compiling crc-catalog v2.4.0
+   Compiling rustc-demangle v0.1.28
+   Compiling num-bigint-dig v0.8.6
+   Compiling cap-std v4.0.2
+   Compiling indoc v2.0.7
+   Compiling owo-colors v4.3.0
+   Compiling litrs v1.0.0
+   Compiling crc v3.4.0
+   Compiling gix-worktree-state v0.28.0
+   Compiling num-iter v0.1.46
+   Compiling pkcs8 v0.10.2
+   Compiling gix-archive v0.30.0
+   Compiling document-features v0.2.12
+   Compiling gix-status v0.28.0
+   Compiling signal-hook-mio v0.2.5
+   Compiling gix-submodule v0.28.0
+   Compiling gix-odb v0.78.0
+   Compiling rand_core v0.9.5
+   Compiling gix-blame v0.11.0
+   Compiling gix-mailmap v0.32.0
+   Compiling ureq-proto v0.6.0
+   Compiling crunch-remote-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-remote-core)
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling webpki-roots v1.0.6
+   Compiling syn v3.0.3
+   Compiling unicode-linebreak v0.1.5
+   Compiling toml_write v0.1.2
+   Compiling cap-fs-ext v4.0.2
+   Compiling twox-hash v2.1.2
+   Compiling addr2line v0.25.1
+   Compiling utf8-zero v0.8.1
+   Compiling is_ci v1.2.0
+   Compiling linkme v0.3.37
+   Compiling toml_edit v0.22.27
+   Compiling ruzstd v0.8.2
+   Compiling textwrap v0.16.2
+   Compiling supports-color v3.0.2
+   Compiling crossterm v0.29.0
+   Compiling rand_chacha v0.9.0
+   Compiling pkcs1 v0.7.5
+   Compiling lzma-rs v0.3.0
+   Compiling artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling gethostname v0.5.0
+   Compiling crunch-rust-cache-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-rust-cache-core)
+   Compiling miette-derive v7.6.0
+   Compiling fuzzy-matcher v0.3.7
+   Compiling terminal_size v0.4.4
+   Compiling bzip2-rs v0.1.2
+   Compiling nickel-lang-parser v0.3.0
+   Compiling nickel-lang-core v0.18.0
+   Compiling predicates-core v1.0.10
+   Compiling dyn-clone v1.0.20
+   Compiling supports-hyperlinks v3.2.0
+   Compiling supports-unicode v3.0.0
+   Compiling backtrace v0.3.76
+   Compiling bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+   Compiling inquire v0.9.4
+   Compiling rand v0.9.3
+   Compiling crunch-glue v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-glue)
+   Compiling crunch-project-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-project-core)
+   Compiling secrecy v0.10.3
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-wasm-component-core)
+   Compiling crunch-build-planning-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-build-planning-core)
+   Compiling mantle-rust-plan-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/mantle-rust-plan-core)
+   Compiling mantle-application-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/mantle-application-core)
+   Compiling crunch-shell-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-shell-core)
+   Compiling rsa v0.9.10
+   Compiling backtrace-ext v0.2.1
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-source-core)
+   Compiling float-cmp v0.10.0
+   Compiling crunch-evaluation-stream-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-evaluation-stream-core)
+   Compiling toml v0.8.23
+   Compiling miette v7.6.0
+   Compiling etcetera v0.11.0
+   Compiling assert_cmd v2.2.0
+   Compiling colored v3.1.1
+   Compiling normalize-line-endings v0.3.0
+   Compiling difflib v0.4.0
+   Compiling crunch-delta-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-delta-core)
+   Compiling detect-coding-agent v0.1.0
+   Compiling termtree v0.5.1
+   Compiling dotenvy v0.15.7
+   Compiling predicates-tree v1.0.13
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-release-core)
+   Compiling predicates v3.1.4
+   Compiling crunch-shell v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-shell)
+   Compiling mantle-application v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/mantle-application)
+   Compiling bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+   Compiling crunch-remote v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-remote)
+   Compiling chapter-tgz v0.1.0
+   Compiling mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/mantlepkgs-core)
+   Compiling mantle-portable-client-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/mantle-portable-client-core)
+   Compiling mantle-rust-plan v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/mantle-rust-plan)
+   Compiling secretspec v0.17.0
+   Compiling crunch-hardware-simulation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-hardware-simulation-core)
+   Compiling crunch-bootstrap-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-bootstrap-core)
+   Compiling nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+   Compiling crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-eval-budget-core)
+   Compiling nix-derivation v0.1.0
+   Compiling durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+   Compiling wait-timeout v0.2.1
+   Compiling diff v0.1.13
+   Compiling crunch-kernelscript-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-kernelscript-core)
+   Compiling transactional-reconciliation-core v0.1.0 (https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9#606489b5)
+   Compiling pretty_assertions v1.4.1
+   Compiling crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-wasm-component)
+   Compiling crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-hardware-simulation)
+   Compiling crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-project)
+   Compiling malachite-q v0.9.2
+   Compiling rustls-webpki v0.103.13
+   Compiling malachite-float v0.9.2
+   Compiling malachite v0.9.2
+   Compiling tokio-rustls v0.26.4
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling ureq v3.3.0
+   Compiling hyper-rustls v0.27.7
+   Compiling reqwest v0.13.2
+   Compiling reqwest-middleware v0.5.1
+   Compiling object_store v0.14.0
+   Compiling gix-transport v0.55.1
+   Compiling reqwest-tracing v0.6.0
+   Compiling gix-protocol v0.59.0
+   Compiling snix-tracing v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/vendor/snix-tracing)
+   Compiling gix v0.81.0
+   Compiling crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-store)
+   Compiling crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-build)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-rustc-wrapper)
+   Compiling nickel-lang v2.2.0
+   Compiling crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-eval)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3m 15s
+     Running unittests src/main.rs (/tmp/mantle-radiance-reference-target/debug/deps/mantle-aad3a8277f238be4)
+
+running 104 tests
+test source_bundle::monotonic_ingest::tests::ambiguous_legacy_local_file_keeps_provenance_unavailable ... ok
+test source_bundle::monotonic_ingest::tests::mirror_location_does_not_change_observed_content_or_identity ... ok
+test source_bundle::monotonic_ingest::tests::committed_unknown_destination_is_retained_for_recovery ... ok
+test source_bundle::tests::explicit_empty_source_bundle_is_digest_bound_and_rejects_structure_tamper ... ok
+test source_bundle::monotonic_ingest::tests::durable_component_rejects_symlink_parent_without_outside_mutation ... ok
+test source_bundle::tests::exact_legacy_provider_fetch_is_a_case_sensitive_override_input ... ok
+test source_bundle::monotonic_ingest::tests::durable_component_uses_next_bounded_stage_name_after_collision ... ok
+test source_bundle::monotonic_ingest::tests::adapters_project_each_supported_source_family ... ok
+test source_bundle::monotonic_ingest::tests::secret_bearing_locator_rejects_before_state_mutation ... ok
+test source_bundle::monotonic_ingest::tests::interruption_between_observation_and_record_rolls_back_sidecar ... ok
+test source_bundle::monotonic_ingest::tests::legacy_mutable_git_reference_imports_without_invented_observation ... ok
+test source_bundle::tests::materialization_recanonicalizes_only_declared_chunked_records_with_chunk_support ... ok
+test source_bundle::monotonic_ingest::tests::interrupted_pin_import_rolls_back_records_and_observations ... ok
+test source_bundle::monotonic_ingest::tests::interrupted_record_import_rolls_back_all_created_state ... ok
+test source_bundle::monotonic_ingest::tests::fresh_import_publishes_record_observation_and_pin ... ok
+test source_bundle::monotonic_ingest::tests::durable_component_is_create_new_idempotent_and_conflict_safe ... ok
+test source_bundle::tests::connected_export_fetches_and_fixed_output_validates_missing_file_payload ... ok
+test source_bundle::tests::connected_export_rejects_fixed_output_hash_mismatch ... ok
+test source_bundle::monotonic_ingest::tests::identity_conflict_rejects_before_state_mutation ... ok
+test source_bundle::tests::foreign_source_bundle_preserves_directory_links_and_modes_and_rejects_mode_tamper ... ok
+test source_bundle::monotonic_ingest::tests::identical_reuse_is_write_free ... ok
+test source_bundle::monotonic_ingest::tests::interrupted_extension_preserves_all_existing_state ... ok
+test source_bundle::tests::source_bundle_accepts_single_file_payload_root ... ok
+test source_bundle::tests::fresh_clone_source_profile_requires_vendor_but_not_unrelated_proof_inputs ... ok
+test source_bundle::tests::fresh_clone_source_profile_accepts_runtime_generated_provider_manifest ... ok
+test source_bundle::tests::bootstrap_source_profile_rejects_wrong_provider_kind ... ok
+test source_bundle::tests::bootstrap_source_profile_rejects_provider_manifest_without_reduction ... ok
+test source_bundle::tests::source_bundle_derives_vcs_snapshot_from_git_fetcher ... ok
+test source_bundle::tests::source_bundle_derives_fetcher_and_store_path_inputs_from_build_root ... ok
+test source_bundle::tests::constructed_store_path_import_reuses_identical_and_rejects_changed_content ... ok
+test source_bundle::tests::bootstrap_source_profile_rejects_missing_vendor_for_self_build ... ok
+test source_bundle::tests::source_built_fixed_point_profile_rejects_missing_native_source_closure ... ok
+test source_bundle::tests::source_bundle_accepts_language_neutral_package_adapters ... ok
+test source_bundle::tests::source_built_fixed_point_profile_rejects_missing_native_manifest_authority ... ok
+test source_bundle::tests::source_bundle_export_rejects_remote_fetcher_without_local_payload ... ok
+test source_bundle::tests::source_bundle_canonicalizes_equivalent_traversal ... ok
+test source_bundle::tests::source_built_fixed_point_profile_rejects_provider_manifest_substitution ... ok
+test source_bundle::tests::source_bundle_covers_bootstrap_provider_toolchain_and_proof_records ... ok
+test source_bundle::tests::source_bundle_rejects_file_below_symlink_record ... ok
+test source_bundle::tests::source_bundle_preserves_fetch_policy_metadata_from_fetch_derivation ... ok
+test source_bundle::tests::fresh_clone_fixed_point_profile_rejects_missing_materialized_fetch_closure ... ok
+test source_bundle::tests::source_bundle_allows_case_sensitive_kernel_headers_only_for_bootstrap_archives ... ok
+test source_bundle::tests::source_bundle_rejects_incomplete_adapter_metadata ... ok
+test source_bundle::tests::source_bundle_export_materializes_local_file_fetcher_payload ... ok
+test source_bundle::tests::source_bundle_rejects_payload_above_named_file_limit ... ok
+test source_bundle::tests::fresh_clone_fixed_point_profile_adds_materialized_fetches_without_widening_three_record_profile ... ok
+test source_bundle::tests::self_build_hydration_rejects_wrong_manifest_identity_without_outputs ... ok
+test source_bundle::tests::source_bundle_rejects_unfixed_builtin_fetcher_in_build_root ... ok
+test source_bundle::tests::source_bundle_rejects_unsafe_identity ... ok
+test source_bundle::tests::source_bundle_rejects_unsafe_symlink ... ok
+test source_bundle::tests::source_bundle_rejects_vcs_snapshot_without_revision_identity ... ok
+test source_bundle::tests::source_fetch_override_mapping_rejects_conflicting_payloads ... ok
+test source_bundle::tests::self_build_hydration_preserves_existing_vendor_without_importing_state ... ok
+test source_bundle::tests::source_bundle_no_replace_publication_preserves_existing_destination ... ok
+test source_bundle::tests::source_bundle_verify_reports_missing_state ... ok
+test source_bundle::tests::source_bundle_rejects_tampered_file_payload_and_store_prefix ... ok
+test source_bundle::tests::source_file_chunk_layout_is_bounded_exact_and_has_no_empty_tail ... ok
+test source_bundle::tests::source_bundle_rejects_malformed_roots_and_record_order ... ok
+test source_bundle::tests::source_file_chunk_layout_rejects_zero_and_excessive_counts ... ok
+test source_bundle::tests::source_bundle_export_rejects_imported_remote_payload_with_wrong_metadata ... ok
+test source_bundle::tests::source_bundle_export_rejects_local_vcs_revision_mismatch ... ok
+test source_bundle::tests::source_bundle_export_materializes_local_vcs_snapshot_without_dot_git ... ok
+test source_bundle::tests::source_offline_preflight_allows_roots_without_source_requirements ... ok
+test source_bundle::tests::self_build_hydration_rejects_missing_vendor_record_without_outputs ... ok
+test source_bundle::tests::source_offline_preflight_reports_remote_network_requirement ... ok
+test source_bundle::tests::source_bundle_import_and_verify_are_idempotent ... ok
+test source_bundle::tests::source_offline_preflight_reports_missing_local_source_state ... ok
+test source_bundle::tests::source_relative_path_accepts_double_dot_inside_safe_cargo_fixture_name ... ok
+test source_bundle::tests::fresh_clone_source_profile_fetch_override_consumes_pinned_provider_archive ... ok
+test source_bundle::tests::source_offline_preflight_reports_unsupported_adapter ... ok
+test source_bundle::tests::source_bundle_export_uses_imported_state_for_remote_fetcher_payload ... ok
+test source_bundle::tests::bootstrap_source_profile_fetch_override_rejects_unpinned_provider_archive ... ok
+test source_bundle::tests::source_fetch_override_plan_rejects_unpinned_imported_fetcher_payload ... ok
+test source_bundle::tests::source_relative_path_rejects_parent_and_empty_components ... ok
+test source_bundle::tests::structure_only_validation_accepts_valid_manifest ... ok
+test source_bundle::tests::supplemental_bundle_merge_deduplicates_exact_records_and_rejects_conflicts ... ok
+test source_bundle::tests::source_offline_preflight_rejects_unpinned_imported_source ... ok
+test source_bundle::tests::structure_only_validation_still_rejects_structural_violations ... ok
+test source_bundle::tests::source_profile_vendor_pair_accepts_checked_tree_and_rejects_external_tree ... ok
+test source_bundle::tests::streaming_manifest_digest_matches_canonical_compact_json ... ok
+test source_bundle::tests::source_fetch_override_plan_rejects_wrong_vcs_revision_metadata ... ok
+test source_bundle::tests::structure_only_validation_skips_payload_digest_but_full_mode_rejects_it ... ok
+test source_bundle::tests::source_offline_preflight_reports_untrusted_adapter ... ok
+test source_bundle::tests::supplemental_bundle_reader_keeps_fetches_and_excludes_constructed_store_authorities ... ok
+test source_bundle::tests::full_proof_source_override_plan_uses_pinned_fixed_point_profile ... ok
+test source_bundle::tests::source_fetch_override_plan_materializes_pinned_file_fetcher_payload ... ok
+test source_bundle::tests::source_offline_preflight_accepts_pinned_imported_file_payload ... ok
+test source_bundle::tests::bootstrap_source_profile_exports_imports_and_preflights_ready ... ok
+test source_bundle::tests::bootstrap_source_profile_fetch_override_consumes_pinned_provider_archive ... ok
+test source_bundle::tests::bootstrap_fetch_override_scratch_lives_until_plan_drop ... ok
+test source_bundle::tests::source_fetch_override_plan_deduplicates_identical_url_kind_payloads ... ok
+test source_bundle::tests::source_bundle_walks_lazy_derivation_files_without_recursive_expansion ... ok
+test source_bundle::tests::source_bundle_rejects_lazy_derivation_file_cycles ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_rejects_supplemental_authority_drift ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_rejects_wrong_profile_mode ... ok
+test source_bundle::tests::source_built_fixed_point_profile_carries_sources_without_provider_outputs ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_preserves_every_other_record ... ok
+test source_bundle::tests::self_build_hydration_rolls_back_vendor_when_state_persistence_fails ... ok
+test source_bundle::tests::self_build_hydration_materializes_valid_vendor_and_pins_provider_state ... ok
+test source_bundle::tests::self_build_hydration_rejects_vendor_checksum_drift_before_publication ... ok
+test source_bundle::tests::source_fetch_override_plan_materializes_tarball_and_vcs_payloads ... ok
+test source_bundle::tests::source_built_mantle_source_refresh_rejects_missing_and_duplicate_authority ... ok
+test source_bundle::tests::source_built_fixed_point_hydration_pins_all_sources_and_publishes_only_vendor ... ok
+test source_bundle::tests::source_bundle_accepts_bounded_legacy_provider_compiler_payload ... ok
+
+test result: ok. 104 passed; 0 failed; 0 ignored; 0 measured; 2491 filtered out; finished in 8.75s
+
+
+$ cargo test protected ptrace positive
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.63s
+     Running unittests src/main.rs (/tmp/mantle-radiance-reference-target/debug/deps/mantle-aad3a8277f238be4)
+
+running 1 test
+test protected_exec_ptrace::linux::tests::ptrace_supervisor_allows_declared_exec_and_records_exact_bytes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2594 filtered out; finished in 0.11s
+
+
+$ nix flake check --no-build
+evaluating flake...
+checking flake output 'packages'...
+checking derivation packages.x86_64-linux.wasi-virt...
+derivation evaluated to /nix/store/cacsszdc86gnw4lccv1kiwip8dljz8r9-wasi-virt-0.2.0.drv
+checking derivation packages.x86_64-linux.default...
+derivation evaluated to /nix/store/0gwjr91p5333m3rkh4fa3f8798qdqnx0-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.crunch...
+derivation evaluated to /nix/store/0gwjr91p5333m3rkh4fa3f8798qdqnx0-mantle-0.1.0.drv
+checking derivation packages.x86_64-linux.ast-grep-toolchain...
+derivation evaluated to /nix/store/hwz43xm09gs5v38a4pfyc2dhs5n9h1pj-mantle-ast-grep-toolchain-0.42.1.drv
+checking derivation packages.x86_64-linux.ast-grep-package-identity...
+derivation evaluated to /nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv
+checking derivation packages.x86_64-linux.nickel...
+derivation evaluated to /nix/store/mgf4mizpx3zngjhbqpj4cdz6zn1wp7f3-nickel-lang-rev-fixup-1.17.0.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain...
+derivation evaluated to /nix/store/skwkzzc8khiw49fjp2l73d5m4x4m88y6-mantle-wasm-component-toolchain-v1.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-identity...
+derivation evaluated to /nix/store/nrf64w472p89kb8q03zw8wf5hx0198c0-mantle-wasm-component-toolchain-identity.drv
+checking derivation packages.x86_64-linux.wasm-component-toolchain-compatibility...
+derivation evaluated to /nix/store/lax220sgd6bf2raarrl38cg9clbdgspm-mantle-wasm-component-toolchain-compatibility.drv
+checking derivation packages.x86_64-linux.mantle-transcript-quality...
+derivation evaluated to /nix/store/2xzxkr2y8avfh420rcyxxpx0xv1smxm3-mantle-transcript-quality-nextest-0.1.0.drv
+checking derivation packages.x86_64-linux.release-nix-witness-quality...
+derivation evaluated to /nix/store/7v68vhv8gpjrr711zci9sp6ppcrih71q-crunch-release-nix-witness-quality-nextest-0.1.0.drv
+checking derivation packages.x86_64-linux.check-nickel-configs...
+derivation evaluated to /nix/store/srbs2g56q3d7mcsyhfcjxndn3hh4byrc-check-nickel-configs.drv
+checking derivation packages.x86_64-linux.check-store-retention-policy...
+derivation evaluated to /nix/store/i1pqkin9jgwqzkrlh34qqgrqy6r47ijs-check-store-retention-policy.drv
+checking derivation packages.x86_64-linux.check-store-overlay-policy...
+derivation evaluated to /nix/store/9wbldpqaq54qvhdar9az2s7wy8mhx2f2-check-store-overlay-policy.drv
+checking derivation packages.x86_64-linux.oci-distribution-registry...
+derivation evaluated to /nix/store/7h1b5w2s2gqhb0dgmiydw4xcl2blxnnv-distribution-3.1.0.drv
+checking derivation packages.x86_64-linux.rustc-wrapper...
+derivation evaluated to /nix/store/0d1jmd71iijqvgk6q0f3m2c6dql51myy-mantle-rustc-wrapper-0.1.0.drv
+checking derivation packages.x86_64-linux.kernelscript-compiler...
+derivation evaluated to /nix/store/z1dps3ryzhmn8iyx6jnpfyxfqlnzqpzq-ocaml5.2.1-kernelscript-0.1.2.drv
+checking derivation packages.x86_64-linux.kernelscript-core-adapter...
+derivation evaluated to /nix/store/y5gjxd97rvg80x6y4ry1jz59y1zy9jm2-crunch-kernelscript-adapter-0.1.0.drv
+checking derivation packages.x86_64-linux.kernelscript-production...
+derivation evaluated to /nix/store/8f0kg1lk5fn9p0vrkf1jiplp1f0hlhh6-mantle-kernelscript-production-artifacts.drv
+checking derivation packages.x86_64-linux.kernelscript-production-cohort...
+derivation evaluated to /nix/store/srdva043pni8gm1qqqg0agz9cz23ml0s-mantle-kernelscript-production-cohort.drv
+checking derivation packages.x86_64-linux.kernelscript-production-shell...
+derivation evaluated to /nix/store/zagpnr0rcl4y2brk6n3ng7j9ikzz4dym-mantle-kernelscript-production.drv
+checking derivation packages.x86_64-linux.kernelscript-production-runtime-check...
+derivation evaluated to /nix/store/i42ga9pv7i1yfbvw4qp6yilijsbpj6g1-vm-test-run-mantle-kernelscript-production-runtime.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-bundle...
+derivation evaluated to /nix/store/58mdyyk7wnymnnd7bzfakqrpi0b1ny59-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-bundler...
+derivation evaluated to /nix/store/5zy41qxrhp4yi8s31fnvbvw1s3aibcpw-mantle-spacewasm-reference-bundler-0.1.0.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-evidence...
+derivation evaluated to /nix/store/imiig80j09fxg2nv2qkyrw4zzmazj9j9-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-evidence.drv
+checking derivation packages.x86_64-linux.spacewasm-reference-rust-toolchain...
+derivation evaluated to /nix/store/ib3maa2zj4d9ikmlx4x15xaiz9vxh55r-rust-minimal-1.91.1.drv
+checking flake output 'apps'...
+checking app 'apps.x86_64-linux.tigerstyle'...
+warning: app 'apps.x86_64-linux.tigerstyle' lacks attribute 'meta'
+checking flake output 'checks'...
+checking derivation checks.x86_64-linux.tigerstyle...
+derivation evaluated to /nix/store/d7z38xyfiikmslmfvfm6f1g3qa1hllka-tigerstyle-consumer-check.drv
+checking derivation checks.x86_64-linux.crunch...
+derivation evaluated to /nix/store/0gwjr91p5333m3rkh4fa3f8798qdqnx0-mantle-0.1.0.drv
+checking derivation checks.x86_64-linux.ast-grep-package-identity...
+derivation evaluated to /nix/store/6f1xqfw3dc0hca3x412qqcgb4cca9d99-mantle-ast-grep-package-identity-smoke.drv
+checking derivation checks.x86_64-linux.wasm-component-toolchain-identity...
+derivation evaluated to /nix/store/nrf64w472p89kb8q03zw8wf5hx0198c0-mantle-wasm-component-toolchain-identity.drv
+checking derivation checks.x86_64-linux.wasm-component-toolchain-compatibility...
+derivation evaluated to /nix/store/lax220sgd6bf2raarrl38cg9clbdgspm-mantle-wasm-component-toolchain-compatibility.drv
+checking derivation checks.x86_64-linux.mantle-transcript-quality...
+derivation evaluated to /nix/store/2xzxkr2y8avfh420rcyxxpx0xv1smxm3-mantle-transcript-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.release-nix-witness-quality...
+derivation evaluated to /nix/store/7v68vhv8gpjrr711zci9sp6ppcrih71q-crunch-release-nix-witness-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.kernelscript-production...
+derivation evaluated to /nix/store/xin3fqaz40h8w9cyzdcchhyknknb91dg-mantle-kernelscript-production-structural-check.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-bundle...
+derivation evaluated to /nix/store/58mdyyk7wnymnnd7bzfakqrpi0b1ny59-mantle-spacewasm-reference-bundle-e24cf09355a90497148eb5029fdb8e3400bd63e3.drv
+checking derivation checks.x86_64-linux.bounded-tree-source-admission...
+derivation evaluated to /nix/store/2znpjcz5jk78clnmd4chl7w7skhrs4h1-mantle-bounded-tree-source-admission.drv
+checking derivation checks.x86_64-linux.transactional-reconciliation-source-admission...
+derivation evaluated to /nix/store/w40ryrwvimg4v7yvzffv06fnpm8d9skq-mantle-transactional-reconciliation-source-admission.drv
+checking derivation checks.x86_64-linux.bootstrap-blocker-inventory...
+derivation evaluated to /nix/store/zl5nf8lhm9n88gmzjrmf12mldhnrhpgn-bootstrap-blocker-inventory.drv
+checking derivation checks.x86_64-linux.nickel-cohort...
+derivation evaluated to /nix/store/xd2v3d4j226k0rsg39sh03h233g2p881-mantle-nickel-cohort-check-0.1.0.drv
+checking derivation checks.x86_64-linux.nickel-export-core-pin...
+derivation evaluated to /nix/store/kxx2i90an1303j6pw14wr7qx7mkp6a0r-mantle-nickel-export-core-pin.drv
+checking derivation checks.x86_64-linux.store-capability-architecture...
+derivation evaluated to /nix/store/jgg4p99xgicbpv5spyfrb6js0166y2kf-mantle-store-capability-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.remote-hexagon-architecture...
+derivation evaluated to /nix/store/md5s2k7bwfkyjzs61sshz5mkhpji3ga2-mantle-remote-hexagon-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.rust-plan-hexagon-architecture...
+derivation evaluated to /nix/store/mmaa58aby4lk9fl7fkk6lmsr9g96nfvm-mantle-rust-plan-hexagon-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.build-planning-architecture...
+derivation evaluated to /nix/store/m5z9m2915whyp8sxngb8njsdhczx218k-mantle-build-planning-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.cli-application-architecture...
+derivation evaluated to /nix/store/l788ik7siwx88lbpdy8yfcz72arja44r-mantle-cli-application-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.source-observation-architecture...
+derivation evaluated to /nix/store/2yaqryhd3q88xmcrzdz6ymq7c4aazc0a-mantle-source-observation-architecture-check-0.1.0.drv
+checking derivation checks.x86_64-linux.content-bound-requirement-source-closure...
+derivation evaluated to /nix/store/dal16pribcpf4b448x9q4v1w0d8pybpa-mantle-content-bound-requirement-source-closure.drv
+checking derivation checks.x86_64-linux.content-bound-requirement-evidence...
+derivation evaluated to /nix/store/jg5v7zbwyw585nbv2wg2cvbbix1yfaxr-mantle-content-bound-requirement-evidence.drv
+checking derivation checks.x86_64-linux.store-retention-policy...
+derivation evaluated to /nix/store/alxb9fqmfcl9dgwfl6cydzcxw9bxmj3g-mantle-store-retention-policy.drv
+checking derivation checks.x86_64-linux.store-overlay-policy...
+derivation evaluated to /nix/store/znzjq5vgix6n84akb6dsl759bm8l30yl-mantle-store-overlay-policy.drv
+checking derivation checks.x86_64-linux.release-determinism-quality...
+derivation evaluated to /nix/store/igrn4l1rmi7v8p6a2kbwwy3yyjai24ix-crunch-release-determinism-quality-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.artifact-auth-radicle-cutover...
+derivation evaluated to /nix/store/ka9d84i30iq7xknpihgl0zcdyb3as3y7-mantle-artifact-auth-radicle-cutover.drv
+checking derivation checks.x86_64-linux.durable-file-publication-adoption...
+derivation evaluated to /nix/store/8qjfhsj4jz2dq3hy1dgf1zvjs55k456l-mantle-durable-file-publication-adoption.drv
+checking derivation checks.x86_64-linux.remote-core...
+derivation evaluated to /nix/store/6z128fjznhdx2wi4p19gyryc9higa74r-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.remote-core-wasm...
+derivation evaluated to /nix/store/bq2nfss2p3fdhqw4n1bvxl7d3paxsqsk-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.rust-plan-core...
+derivation evaluated to /nix/store/4pzvxwndnjxvjwj1gnskqkzmrw262j9f-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.rust-plan-core-wasm...
+derivation evaluated to /nix/store/z85yyp3faw3yf9k7vxkkfix5a46xss1w-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.build-planning-core...
+derivation evaluated to /nix/store/n00hslhn6fpr0v3bnj79f4537zx8i9b2-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.build-planning-core-wasm...
+derivation evaluated to /nix/store/5g9gcqyh7rmpyb9kccj562509325rnvx-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.application-core...
+derivation evaluated to /nix/store/1hq8a5kqn529qdfwb7jfsw5hlswdhdjj-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.application-core-wasm...
+derivation evaluated to /nix/store/b9lgrpi3wrsfhi0nwn4zb0ypa7hk51gj-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.source-core...
+derivation evaluated to /nix/store/mxims6hihydvn88b3p6dn4rgd7fmcpp1-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.source-core-wasm...
+derivation evaluated to /nix/store/81m5pfkk2s7kvj9hpqqpnhal47zpwqn1-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract...
+derivation evaluated to /nix/store/4bvysrs58k0rjhq3xg6j5drnmr3i7pz5-mantle-test-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract-wasm...
+derivation evaluated to /nix/store/91zw282121dg13iccsj2h1pi3i58r9ya-mantle-build-0.1.0.drv
+checking derivation checks.x86_64-linux.mantle-build-contract-nickel...
+derivation evaluated to /nix/store/vnscfg9znz04x16gllgiab4k11wlxlcf-mantle-build-contract-nickel.drv
+checking derivation checks.x86_64-linux.nextest...
+derivation evaluated to /nix/store/8iwyc98ymr13yascq7ccbd0r6szxmjg8-mantle-nextest-0.1.0.drv
+checking derivation checks.x86_64-linux.clippy...
+derivation evaluated to /nix/store/xjizf4qgdvs8cfg5l4x50m3fcim4791y-mantle-clippy-0.1.0.drv
+checking derivation checks.x86_64-linux.fmt...
+derivation evaluated to /nix/store/mr4x0wcyn4n44f1xv0wcd7ns7bimxxp9-mantle-fmt-0.1.0.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-profile...
+derivation evaluated to /nix/store/l7afrlfqdkbk2kr6cc4b3cz71mfvyqgr-spacewasm-reference-profile-export.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-host-library...
+derivation evaluated to /nix/store/w4jrclscwbypndanjqk3q80n0ms9vmq7-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-host-library.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-wasm-library...
+derivation evaluated to /nix/store/55qq4aiiy3kl1vn7m0m6bhbwkrj8viin-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-wasm-library.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-host-runner...
+derivation evaluated to /nix/store/nhq1j51vr6f2c3hyizpym9gqv7kdlyhg-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-diagnostic-runner.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-upstream-unit-tests...
+derivation evaluated to /nix/store/d32qk66pm2qmpp0dbjqsyv9v0qcyrn63-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-unit-tests.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-spectest-address...
+derivation evaluated to /nix/store/idj54q1da8w21x0c59p8ay7vxnh2gin6-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-spectest-address.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-fixtures...
+derivation evaluated to /nix/store/1i1y5ni7ivf7bnhdb2z8i0kpsbkl0x2j-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-fixture-report.drv
+checking derivation checks.x86_64-linux.spacewasm-reference-negative...
+derivation evaluated to /nix/store/6p0ana9vradxplf1as1rb12n67am2gdr-mantle-spacewasm-reference-negative-check.drv
+checking flake output 'devShells'...
+checking derivation devShells.x86_64-linux.default...
+derivation evaluated to /nix/store/79yv04c8ffnzjj4jjgkrnr9adhf084im-nix-shell.drv
+all checks passed!
+warning: The check omitted these incompatible systems: aarch64-darwin, aarch64-linux, x86_64-darwin
+Use '--all-systems' to check all.

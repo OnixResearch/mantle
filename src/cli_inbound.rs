@@ -1195,6 +1195,12 @@ pub(super) enum BootstrapAction {
         require: Vec<bootstrap_parity::ParityAxis>,
     },
 
+    /// Prepare, run, or verify the optional offline Radiance reference proof
+    RadianceReference {
+        #[command(subcommand)]
+        action: RadianceReferenceAction,
+    },
+
     /// Verify and render the bounded source-built proof trust result
     TrustReport {
         /// Source-built fixed-point proof root
@@ -1363,6 +1369,61 @@ pub(super) enum BootstrapAction {
         /// Permit ambient host dependencies; outputs are not proof-eligible.
         #[arg(long, conflicts_with = "strict_hermetic")]
         impure: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub(super) enum RadianceReferenceAction {
+    /// Authenticate three connected Git SHA-256 checkouts and publish one offline bundle
+    Prepare {
+        #[arg(long)]
+        git: PathBuf,
+        #[arg(long)]
+        radiance_checkout: PathBuf,
+        #[arg(long)]
+        bootstrap_compiler_checkout: PathBuf,
+        #[arg(long)]
+        emulator_checkout: PathBuf,
+        #[arg(long)]
+        source_bundle_out: PathBuf,
+        #[arg(long)]
+        cohort_out: PathBuf,
+    },
+
+    /// Run both routes from one authenticated offline source bundle
+    Prove {
+        #[arg(long)]
+        source_bundle: PathBuf,
+        #[arg(long)]
+        expected_source_bundle_blake3: String,
+        #[arg(long)]
+        cohort: PathBuf,
+        #[arg(long)]
+        expected_cohort_blake3: String,
+        /// Explicit Clang-compatible C compiler launcher; PATH lookup is forbidden
+        #[arg(long)]
+        cc: PathBuf,
+        /// Exact compiler driver executed by the explicit launcher
+        #[arg(long)]
+        cc_driver: PathBuf,
+        /// Explicit linker executable; PATH lookup is forbidden
+        #[arg(long)]
+        linker: PathBuf,
+        /// Directory holding Scrt1.o, crti.o, crtn.o, libc, and the dynamic loader
+        #[arg(long)]
+        crt_dir: PathBuf,
+        /// Directory holding crtbeginS.o, crtendS.o, and libgcc
+        #[arg(long)]
+        libgcc_dir: PathBuf,
+        /// Absent absolute proof-output directory
+        #[arg(long)]
+        output: PathBuf,
+    },
+
+    /// Replay receipt, protected-audit, and publication checks without execution
+    Verify {
+        #[arg(long)]
+        output: PathBuf,
     },
 }
 

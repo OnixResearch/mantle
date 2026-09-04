@@ -119,6 +119,7 @@ mod protected_exec;
 #[allow(dead_code)]
 mod protected_exec_ptrace;
 mod protected_exec_seccomp;
+mod radiance;
 #[allow(dead_code)]
 mod realization_routing;
 mod rebuild_authority;

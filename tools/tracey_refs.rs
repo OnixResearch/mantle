@@ -528,6 +528,23 @@
 // external-evidence handoff without witness quorum, and all-axis CLI tests.
 // Runtime adoption evidence remains owned by the active checkpoint change.
 
+// Radiance external-reference bridge.
+//
+// r[impl bootstrap_inventory.radiance_reference]
+// Implemented by the no-std cohort, plan, convergence, and receipt core in
+// `crates/crunch-radiance-reference-core`, connected preparation in
+// `src/radiance/source.rs`, protected native builds under
+// `src/radiance/runtime/native/`, stage execution in
+// `src/radiance/runtime/execution.rs`, the fd-close plus nonlocal-socket
+// filter in `src/radiance/runtime/network.rs`, and immutable publication in
+// `src/radiance/publication.rs`.
+//
+// r[verify bootstrap_inventory.radiance_reference]
+// Verified by core cohort, plan, lineage, convergence, zero-event,
+// publication, tamper, and claim-boundary tests; shell profile, checkout,
+// digest, CLI, and filter tests; the architecture checker with positive and
+// negative fixtures; and the live offline proof receipt.
+
 // Full-check blocker closure bridge.
 //
 // r[impl bootstrap_inventory.full_check_blocker_closure]

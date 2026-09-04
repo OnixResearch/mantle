@@ -9,13 +9,13 @@ This diversity can test Mantle source admission, execution authority, lineage, f
 ## What Changes
 
 - Add an optional external bootstrap fixture for three MIT-licensed Radiant repositories.
-- Pin Radiance revision `673ae4f6c906ace05e15a21ff85400cab3f15027891a7a17e03f90e76b025423`.
+- Pin Radiance revision `0d8a2d4fe8d0ba488e22c8ed83df1e53a5d23d69489c5d9e7fa0646b1c29c444`.
 - Pin Radiance.s0 revision `7834d3a9d44fb48ae3d3c06da992922f3e46b580b3d92df36372081b2fe475c3`.
 - Pin emulator revision `92cdb0c5293447964be053214fac403b49193ac3ec07c902576346ebaa205535`.
 - Acquire and import all source through authenticated offline source bundles.
-- Build the C stage-zero compiler and emulator from admitted source.
+- Build the C stage-zero compiler and emulator from admitted source with an exact compiler, linker, CRT, and libgcc cohort.
 - Run seed and C99 routes through explicit predecessor and execution-authority policy.
-- Compare route-local stage-one and stage-two fixed points with BLAKE3.
+- Compare route-local stage-two and stage-three fixed points with BLAKE3.
 - Compare converged outputs across routes without treating equality as correctness.
 - Emit one bounded external-reference receipt and reusable exact artifacts.
 
@@ -42,4 +42,4 @@ This diversity can test Mantle source admission, execution authority, lineage, f
 
 ## Verification Expectations
 
-Each route must use only declared predecessors and offline sources. Mutated source, seed, toolchain, lineage, output, or receipt evidence must fail closed.
+Each route must use only declared predecessors and offline sources. Mutated source, seed, compiler driver, link-runtime tree, lineage, output, or receipt evidence must fail closed.

@@ -575,6 +575,7 @@ Useful documentation:
 - [Durable file publication adoption](docs/durable-file-publication-adoption.md)
 - [Immutable release objects and the current pointer](docs/immutable-release-current-pointer.md)
 - [Filesystem and castore NAR boundary](docs/nix-archive-nar-boundary.md)
+- [Radiance bootstrap reference](docs/radiance-bootstrap-reference.md)
 
 ## Requirements
 
@@ -615,3 +616,6 @@ notices.
 - [cachix/nix-derivation](https://github.com/cachix/nix-derivation) provides the reviewed Nix 2.34 derivation parsing, validation, serialization, and store-path compatibility candidate. Mantle retains native BLAKE3, configurable-prefix, build, store, evidence, and release authority.
 - `bounded-tree` at `rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX`, revision `b0fd0103bc9eed2c1b6d852045959462d105d8f1`, provides product-neutral bounded tree planning, capability-relative observation, revalidation, and copy mechanics. Mantle retains product identity, evidence, publication, and release authority.
 - `transactional-reconciliation-core` at `rad:z4Tky6zvC8w4Y6c4YBzNxVbq5n752`, revision `606489b5f40298181214bb76bc3457b607f225d9`, provides immutable planning, exact reservation admission, and unknown-outcome classification. Mantle retains GC semantics, store mutation, effect authority, and evidence.
+- [Radiance](https://code.radiant.computer/radiance), Git SHA-256 commit `0d8a2d4fe8d0ba488e22c8ed83df1e53a5d23d69489c5d9e7fa0646b1c29c444`, supplies the optional self-hosting compiler source and RV64 seed reference.
+- [radiance.s0](https://code.radiant.computer/radiance.s0), Git SHA-256 commit `7834d3a9d44fb48ae3d3c06da992922f3e46b580b3d92df36372081b2fe475c3`, supplies the optional C99 bootstrap route.
+- [Radiance emulator](https://code.radiant.computer/emulator), Git SHA-256 commit `92cdb0c5293447964be053214fac403b49193ac3ec07c902576346ebaa205535`, supplies the optional RV64 execution adapter. Mantle retains source admission, execution, evidence, and release authority.
