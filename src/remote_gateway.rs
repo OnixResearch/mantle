@@ -9,6 +9,7 @@
 //! r[impl remote_builds.versioned_build_api]
 //! r[impl remote_builds.gateway_non_claims]
 
+// machine-artifact-public: remote.gateway-json-family
 use std::fs;
 use std::future::Future;
 use std::io;

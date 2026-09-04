@@ -1,0 +1,3 @@
+integration-merge-validation=FAIL
+exit=101
+blocker=known vendored fuse-backend-rs Clippy findings; rerun uses documented --no-deps first-party scope
