@@ -101,7 +101,13 @@ fn command_admission_facts(command: &Command) -> mantle_portable_client_core::Ad
         _ => false,
     };
     let remote_operation_is_client = match command {
-        Command::Remote { action } => !matches!(action, RemoteAction::Serve { .. }),
+        Command::Remote { action } => !matches!(
+            action,
+            RemoteAction::Serve { .. }
+                | RemoteAction::Gateway {
+                    action: RemoteGatewayAction::ApiDispatchStdioOnce { .. } | RemoteGatewayAction::NixStdioOnce { .. },
+                }
+        ),
         _ => false,
     };
     mantle_portable_client_core::AdmissionFacts {
@@ -408,6 +414,14 @@ fn bootstrap_command_label(action: Option<&BootstrapAction>) -> &'static str {
 
 fn remote_command_label(action: &RemoteAction) -> &'static str {
     match action {
+        RemoteAction::Gateway { action } => match action {
+            RemoteGatewayAction::Metadata => "remote.gateway.metadata",
+            RemoteGatewayAction::Plan { .. } => "remote.gateway.plan",
+            RemoteGatewayAction::Status { .. } => "remote.gateway.status",
+            RemoteGatewayAction::ApiStdioOnce => "remote.gateway.api-stdio-once",
+            RemoteGatewayAction::ApiDispatchStdioOnce { .. } => "remote.gateway.api-dispatch-stdio-once",
+            RemoteGatewayAction::NixStdioOnce { .. } => "remote.gateway.nix-stdio-once",
+        },
         RemoteAction::Ticket { action } => remote_ticket_command_label(action),
         RemoteAction::Status { .. } => "remote.status",
         RemoteAction::Debug { action } => match action {

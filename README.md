@@ -569,6 +569,7 @@ Useful documentation:
 - [Nickel evaluator cohort](docs/nickel-evaluator-cohort.md)
 - [Remote credential operations](docs/remote-credentials.md)
 - [Remote-build hexagon](docs/remote-build-hexagon.md)
+- [Remote service gateway](docs/remote-service-gateway.md)
 - [CLI application architecture](docs/cli-application-architecture.md)
 - [Portable remote client](docs/portable-remote-client.md)
 - [Mantle naming rules](docs/mantle-naming.md)

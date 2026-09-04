@@ -60,6 +60,37 @@ let DefaultFailureCaptureTotalBytes = 16777216 in
 let DefaultFailureCaptureFileBytes = 8388608 in
 let DefaultFailureCaptureDepth = 16 in
 
+let GatewayBounds = {
+  connections_max | Number | default = 1024,
+  frame_bytes_max | Number | default = 1048576,
+  message_bytes_max | Number | default = 4194304,
+  concurrent_operations_max | Number | default = 1024,
+  idle_secs_max | Number | default = 3600,
+  cursor_bytes_max | Number | default = 512,
+  log_window_bytes_max | Number | default = 1048576,
+  event_page_items_max | Number | default = 1024,
+  partial_transfer_bytes_max | Number | default = 1073741824,
+  paths_max | Number | default = 4096,
+} in
+
+let _gateway_policy = {
+  policy_identity_blake3
+    | doc "BLAKE3 identity of the reviewed gateway policy"
+    | String
+    | default = "2ecf6b4eae0613dff46c65561b9d9921a26933b25cb2be42ec10a9a3ca9586bc",
+  audience | String | default = "mantle-remote-gateway",
+  api_version | Number | default = 1,
+  nix_protocol_major | Number | default = 1,
+  nix_protocol_minor_min | Number | default = 23,
+  nix_protocol_minor_max | Number | default = 37,
+  bounds | GatewayBounds | default = {},
+  public_endpoint_enabled
+    | doc "Public exposure is disabled unless the archived credential-hardening receipt is exact"
+    | Bool
+    | default = false,
+  credential_hardening_evidence_blake3 | String | optional,
+} in
+
 let RemoteTelemetryPolicy = {
   event_capacity
     | doc "Maximum provider-neutral lifecycle events admitted per export cycle"
@@ -384,6 +415,10 @@ let RemoteBuilderPoolContract = {
     | doc "Bounded disabled-by-default Prometheus and OTLP exporter configuration."
     = RemoteTelemetryExport,
 
+  GatewayPolicy
+    | doc "Private-by-default Nix and asynchronous Build API gateway policy."
+    = _gateway_policy,
+
   ResourceInventory = RemoteResourceInventory,
   ResourceRequirements = RemoteResourceRequirements,
   LocalityPolicy = RemoteLocalityPolicy,
@@ -409,6 +444,11 @@ let RemoteBuilderPoolContract = {
   telemetry
     | doc "Disabled-by-default bounded remote lifecycle telemetry exporters."
     | RemoteTelemetryExport
+    | default = {},
+
+  gateway
+    | doc "Private-by-default gateway limits and public-exposure evidence gate."
+    | _gateway_policy
     | default = {},
 
   trace_context

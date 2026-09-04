@@ -1,0 +1,30 @@
+{
+  "id": "gateway-change",
+  "assurance_level": "declared",
+  "anchor_kind": "exact_marker_bytes",
+  "marker_verbs": ["impl", "verify", "depends", "related"],
+  "requirement_sources": [
+    {
+      "root": ".cairn/changes/add-nix-remote-service-gateway/specs/remote-builds/spec.md",
+      "extensions": ["md"],
+      "source_kind": "requirements_doc"
+    }
+  ],
+  "evidence_sources": [
+    {
+      "root": "crates/crunch-build/src/distributed/remote_gateway.rs",
+      "extensions": ["rs"],
+      "source_kind": "rust_source"
+    },
+    {
+      "root": "src/remote_gateway.rs",
+      "extensions": ["rs"],
+      "source_kind": "rust_source"
+    },
+    {
+      "root": "src/remote_gateway_api.rs",
+      "extensions": ["rs"],
+      "source_kind": "rust_source"
+    }
+  ]
+}

@@ -63,13 +63,13 @@ The versioned API provides bounded operations for:
 - discover signed results;
 - read bounded project or account usage summaries.
 
-Every list or byte response has named configurable bounds. Cursors are opaque, versioned, and authenticated against query scope. The API returns typed reason codes, not raw internal errors.
+Every list or byte response has a named policy limit or protocol constant. Cursors are opaque, versioned, and authenticated against query scope. The pure API planner returns typed reason codes. The shell maps failures to stable redacted operator errors.
 
 ## Completion events
 
-Mantle appends an event when an admitted attempt changes observable state. Completion events include public attempt and request identities, terminal class, result-evidence identity when present, policy version, sequence, and producer signature.
+Mantle appends a completion event when an admitted attempt reaches a terminal state. Completion events include public attempt and request identities, terminal class, result-evidence identity when present, policy identity, sequence, and producer signature.
 
-Delivery is at least once. Consumers deduplicate by event identity and sequence. Events contain references to bounded logs and evidence, not log bodies or credentials.
+Delivery is at least once. Consumers deduplicate by event identity and sequence. Events can reference result evidence. They contain no log body or credential.
 
 ## Store and cache boundaries
 
@@ -85,7 +85,9 @@ Disconnect, timeout, cancellation, duplicate messages, stale fences, invalid cur
 
 ## Evidence and non-claims
 
-The gateway records bounded protocol version, operation class, authority decision identity, attempt identity, state transition, byte counts, and error category. It never records bearer material or raw OIDC tokens.
+The Build API returns bounded operation class, authority evidence identity, attempt identity, byte count, and outcome evidence. Nix protocol metadata separately identifies the supported protocol range and operation table. Neither surface records bearer material or raw OIDC tokens.
+
+Each record carries a typed `RecordedOnly` projection to `valence.build-service-evidence.v1`. The projection is a bundle-assembly input. It is not a complete Valence bundle and does not claim validation by Valence.
 
 Compatibility evidence proves only that selected operations interoperate under the tested client and policy. It does not prove arbitrary Nix compatibility, hermetic builds, sandboxing, output correctness, or release eligibility.
 
