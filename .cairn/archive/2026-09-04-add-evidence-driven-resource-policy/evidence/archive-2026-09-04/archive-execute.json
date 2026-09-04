@@ -1,0 +1,477 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: add-evidence-driven-resource-policy",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy"
+    }
+  ],
+  "blocked": false,
+  "change": "add-evidence-driven-resource-policy",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "0c9d8ce2dd523de14496e45af2117118ea53827153b9a0bd6cf11bb5e88835ad",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+    "receipt_hash": "b476b08a11456e26e76cb472af0963a1356f795be02cec5ae6de482246164bc1",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "b10ea1c2766ac938f6b06dc953d05d6f54f2b7b3d203e42f3676294bd0b83964",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "9b6986dedbb184fa0ff04829331138e969cf2a54ef3cbe6b6b669321bb69d503",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/design.md"
+        },
+        {
+          "content_hash": "0c8d295b87ff723e3fc17eca5101fffb763c19c1bf0f269558dbe9b995ad118f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/architecture-search-2026-09-04.md"
+        },
+        {
+          "content_hash": "b785e060799b57c31cdbc70964a6fedf9ab9b4fcfdf0317120552472d84d0711",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/archive-2026-09-04/archive-dry-run.json"
+        },
+        {
+          "content_hash": "a0a7d421eb293fe484e722502e96dedf15fcaea6e1ea6757db27e0e2b742761f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/baseline-2026-09-04/commands.log"
+        },
+        {
+          "content_hash": "e566f5bc8a9878b5e2fb2a4c786d26c571eed5e970c34453c46de4029213b3c2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/baseline-2026-09-04/retry-and-lifecycle.log"
+        },
+        {
+          "content_hash": "6fecf837e819b27ea6df18da27162352d47da5a8e53a338de53ace72a9d7c23c",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/baseline-2026-09-04/status.txt"
+        },
+        {
+          "content_hash": "ee8d52d3e6209c88e4652e4439d2a4321e4b3676aca255f3b7b4d754119eb0bb",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/baseline-2026-09-04/summary.md"
+        },
+        {
+          "content_hash": "f5399c516edaadec72a9e45e44ba9517b0bd6c2f7c71dfbb29b1856c83c86872",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/broad-test-exact-rerun.log"
+        },
+        {
+          "content_hash": "5893db1651d17f98e610528b5ac95d44ad2e88925b9c12bbe2e5b9b19e59ba55",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/broad-test-exact-rerun.status"
+        },
+        {
+          "content_hash": "57c8cc1cf76e28551e01b9fdce285846aebfb8d57d5621363815cb0d1ac8c167",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/broad-workspace.status"
+        },
+        {
+          "content_hash": "027ec0bfa397272a590394f7daed7351479ff669af910e4801392f267e35d4d7",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/cairn-pre-sync.log"
+        },
+        {
+          "content_hash": "1a5a1b3a09d4aa802270b73c6a7abbdcc56522e46d9205ecf51ce3aafae4cfc9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/cargo-clippy-workspace.log"
+        },
+        {
+          "content_hash": "62f977980d6ded28121ce3baf57b829581f10807f038d94f676fc038c844d03d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/cargo-test-workspace.log"
+        },
+        {
+          "content_hash": "c5079adeeb45c10d6a4f6b8ca611435a3e81ac08cc7961ba3a1964abd1b1b192",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/focused-commands.log"
+        },
+        {
+          "content_hash": "6f7723b0d28449dd65e481d5f1f8b072d204f2edead2ad4b2b9a59a458c33cf5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/nix-checks.attempt1.log"
+        },
+        {
+          "content_hash": "58ab35a99c5548877f2dacd87ea823f0fffc353022c94324cee14c67ed0289eb",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/nix-checks.log"
+        },
+        {
+          "content_hash": "73c9c09c8df37c5e71520947cf8af11cf9f78a8b1e6be81335f442a375e6bde1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/nix-flake-check-no-build.log"
+        },
+        {
+          "content_hash": "5893db1651d17f98e610528b5ac95d44ad2e88925b9c12bbe2e5b9b19e59ba55",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/nix-flake-check-no-build.status"
+        },
+        {
+          "content_hash": "257c6286790c4aa7bd0d7eaa4d1a4f58ccda448aea0809ee493deddfa90594ec",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/octet-application-summary.txt"
+        },
+        {
+          "content_hash": "1a9a923dbd371c3e828ce9fa80e1b5b46557475f9c28c58d4c72e15c1db9a35c",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/octet-application.log"
+        },
+        {
+          "content_hash": "7b97feca06d8664a24cc525e1eda9f52323a48a367fffe12e0f63e0b2b35b404",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/octet-core-summary.txt"
+        },
+        {
+          "content_hash": "fcc350b997ae65f67142b84bf97a8be77e8ecfc44d3c075e1f6f87aca3a99197",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/octet-core.log"
+        },
+        {
+          "content_hash": "1e9110c8618927fedf01f53755b8fb6d7b663893b022f2e97ff7b4e6361f102d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/octet.status"
+        },
+        {
+          "content_hash": "2d48521983cc391ef091289acc1bc9f961a5ecfa7dc11379ba9c5a8df04e9bdb",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/pinned-octet.log"
+        },
+        {
+          "content_hash": "01514b8d69abec5a237ddc5c4371864e99489dfc9df68c071791b82f58dba6bb",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/pinned-octet.status"
+        },
+        {
+          "content_hash": "d64aa6b8f248fcfda7e0f361ebd9de3419305946d78d8955acf2e83d3c4f5a14",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/summary.md"
+        },
+        {
+          "content_hash": "257c6286790c4aa7bd0d7eaa4d1a4f58ccda448aea0809ee493deddfa90594ec",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/tiger-application-summary.txt"
+        },
+        {
+          "content_hash": "b3c76d92e3678bfef3d77386b9137341e671deb42af090c25ab0eabb89eac397",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/tiger-application.log"
+        },
+        {
+          "content_hash": "7b97feca06d8664a24cc525e1eda9f52323a48a367fffe12e0f63e0b2b35b404",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/tiger-core-summary.txt"
+        },
+        {
+          "content_hash": "5f9a97b3c62fe4b6efb6f41ad9d5c4dab214ebba8651110340c1e3839ff5afa9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/tiger-core.log"
+        },
+        {
+          "content_hash": "1e9110c8618927fedf01f53755b8fb6d7b663893b022f2e97ff7b4e6361f102d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/tiger.status"
+        },
+        {
+          "content_hash": "ddd9c29c7db38e1748954a27e1ab87ff9020c3214769ce7d188c402354c89196",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/sync-2026-09-04/accepted-requirements.log"
+        },
+        {
+          "content_hash": "72334638a288d64b594e9b2ca763ac149b1a764a1c69ee77fd13f9a11fcc3233",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/sync-2026-09-04/final-active-validation.log"
+        },
+        {
+          "content_hash": "4fbf24627701bb9d18b55e626fb5af09e2b46639e655d6044386f3cf9a154cf3",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/sync-2026-09-04/post-sync-tasks-gate.json"
+        },
+        {
+          "content_hash": "881fec667836d959095154ef92625f1beb771bc6f79cf06595bed2ea6a264b12",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/sync-2026-09-04/post-sync-tracey.log"
+        },
+        {
+          "content_hash": "324037bf778e6205cbe83be307e379a16f9ae1e69826ed37bed0ce48bac68704",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/sync-2026-09-04/post-sync-validate.json"
+        },
+        {
+          "content_hash": "6ced2107e1f01e677af8a5cfece7f41ee5989a253b49fe6f51b248810ce3e125",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/sync-2026-09-04/summary.md"
+        },
+        {
+          "content_hash": "703fd677191d1fea795ca49665e30228ff971f0139455d3d64c2935c6b303763",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/sync-2026-09-04/sync-dry-run.json"
+        },
+        {
+          "content_hash": "29dbcfaa95c882117f98ec8b0b59ba59f2ec0ac0d48ef46251c791dfca605d75",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/evidence/sync-2026-09-04/sync-execute.json"
+        },
+        {
+          "content_hash": "20dc3e1733ca2b659758b168d332081e044526b070c33b00268f53fd108fe0a5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/proposal.md"
+        },
+        {
+          "content_hash": "5e6cedcea111ad8f614ad3b919597d19865b362271b2af28d669903be8de636e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/specs/remote-builds/spec.md"
+        },
+        {
+          "content_hash": "a4f780c643cabfec8e8b06f8d28b079e4f4abcca167712a82d1e07d4c4ec3797",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-04-add-evidence-driven-resource-policy/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy"
+        }
+      ],
+      "manifest_hash": "6bec2726b6cafda03c33e747737df2930c876e1298fb5eb3e13e80c5093cf810"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "9b6986dedbb184fa0ff04829331138e969cf2a54ef3cbe6b6b669321bb69d503",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/design.md"
+        },
+        {
+          "content_hash": "0c8d295b87ff723e3fc17eca5101fffb763c19c1bf0f269558dbe9b995ad118f",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/architecture-search-2026-09-04.md"
+        },
+        {
+          "content_hash": "b785e060799b57c31cdbc70964a6fedf9ab9b4fcfdf0317120552472d84d0711",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/archive-2026-09-04/archive-dry-run.json"
+        },
+        {
+          "content_hash": "a0a7d421eb293fe484e722502e96dedf15fcaea6e1ea6757db27e0e2b742761f",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/baseline-2026-09-04/commands.log"
+        },
+        {
+          "content_hash": "e566f5bc8a9878b5e2fb2a4c786d26c571eed5e970c34453c46de4029213b3c2",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/baseline-2026-09-04/retry-and-lifecycle.log"
+        },
+        {
+          "content_hash": "6fecf837e819b27ea6df18da27162352d47da5a8e53a338de53ace72a9d7c23c",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/baseline-2026-09-04/status.txt"
+        },
+        {
+          "content_hash": "ee8d52d3e6209c88e4652e4439d2a4321e4b3676aca255f3b7b4d754119eb0bb",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/baseline-2026-09-04/summary.md"
+        },
+        {
+          "content_hash": "f5399c516edaadec72a9e45e44ba9517b0bd6c2f7c71dfbb29b1856c83c86872",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/broad-test-exact-rerun.log"
+        },
+        {
+          "content_hash": "5893db1651d17f98e610528b5ac95d44ad2e88925b9c12bbe2e5b9b19e59ba55",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/broad-test-exact-rerun.status"
+        },
+        {
+          "content_hash": "57c8cc1cf76e28551e01b9fdce285846aebfb8d57d5621363815cb0d1ac8c167",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/broad-workspace.status"
+        },
+        {
+          "content_hash": "027ec0bfa397272a590394f7daed7351479ff669af910e4801392f267e35d4d7",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/cairn-pre-sync.log"
+        },
+        {
+          "content_hash": "1a5a1b3a09d4aa802270b73c6a7abbdcc56522e46d9205ecf51ce3aafae4cfc9",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/cargo-clippy-workspace.log"
+        },
+        {
+          "content_hash": "62f977980d6ded28121ce3baf57b829581f10807f038d94f676fc038c844d03d",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/cargo-test-workspace.log"
+        },
+        {
+          "content_hash": "c5079adeeb45c10d6a4f6b8ca611435a3e81ac08cc7961ba3a1964abd1b1b192",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/focused-commands.log"
+        },
+        {
+          "content_hash": "6f7723b0d28449dd65e481d5f1f8b072d204f2edead2ad4b2b9a59a458c33cf5",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/nix-checks.attempt1.log"
+        },
+        {
+          "content_hash": "58ab35a99c5548877f2dacd87ea823f0fffc353022c94324cee14c67ed0289eb",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/nix-checks.log"
+        },
+        {
+          "content_hash": "73c9c09c8df37c5e71520947cf8af11cf9f78a8b1e6be81335f442a375e6bde1",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/nix-flake-check-no-build.log"
+        },
+        {
+          "content_hash": "5893db1651d17f98e610528b5ac95d44ad2e88925b9c12bbe2e5b9b19e59ba55",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/nix-flake-check-no-build.status"
+        },
+        {
+          "content_hash": "257c6286790c4aa7bd0d7eaa4d1a4f58ccda448aea0809ee493deddfa90594ec",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/octet-application-summary.txt"
+        },
+        {
+          "content_hash": "1a9a923dbd371c3e828ce9fa80e1b5b46557475f9c28c58d4c72e15c1db9a35c",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/octet-application.log"
+        },
+        {
+          "content_hash": "7b97feca06d8664a24cc525e1eda9f52323a48a367fffe12e0f63e0b2b35b404",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/octet-core-summary.txt"
+        },
+        {
+          "content_hash": "fcc350b997ae65f67142b84bf97a8be77e8ecfc44d3c075e1f6f87aca3a99197",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/octet-core.log"
+        },
+        {
+          "content_hash": "1e9110c8618927fedf01f53755b8fb6d7b663893b022f2e97ff7b4e6361f102d",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/octet.status"
+        },
+        {
+          "content_hash": "2d48521983cc391ef091289acc1bc9f961a5ecfa7dc11379ba9c5a8df04e9bdb",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/pinned-octet.log"
+        },
+        {
+          "content_hash": "01514b8d69abec5a237ddc5c4371864e99489dfc9df68c071791b82f58dba6bb",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/pinned-octet.status"
+        },
+        {
+          "content_hash": "d64aa6b8f248fcfda7e0f361ebd9de3419305946d78d8955acf2e83d3c4f5a14",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/summary.md"
+        },
+        {
+          "content_hash": "257c6286790c4aa7bd0d7eaa4d1a4f58ccda448aea0809ee493deddfa90594ec",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/tiger-application-summary.txt"
+        },
+        {
+          "content_hash": "b3c76d92e3678bfef3d77386b9137341e671deb42af090c25ab0eabb89eac397",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/tiger-application.log"
+        },
+        {
+          "content_hash": "7b97feca06d8664a24cc525e1eda9f52323a48a367fffe12e0f63e0b2b35b404",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/tiger-core-summary.txt"
+        },
+        {
+          "content_hash": "5f9a97b3c62fe4b6efb6f41ad9d5c4dab214ebba8651110340c1e3839ff5afa9",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/tiger-core.log"
+        },
+        {
+          "content_hash": "1e9110c8618927fedf01f53755b8fb6d7b663893b022f2e97ff7b4e6361f102d",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/tiger.status"
+        },
+        {
+          "content_hash": "ddd9c29c7db38e1748954a27e1ab87ff9020c3214769ce7d188c402354c89196",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/sync-2026-09-04/accepted-requirements.log"
+        },
+        {
+          "content_hash": "72334638a288d64b594e9b2ca763ac149b1a764a1c69ee77fd13f9a11fcc3233",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/sync-2026-09-04/final-active-validation.log"
+        },
+        {
+          "content_hash": "4fbf24627701bb9d18b55e626fb5af09e2b46639e655d6044386f3cf9a154cf3",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/sync-2026-09-04/post-sync-tasks-gate.json"
+        },
+        {
+          "content_hash": "881fec667836d959095154ef92625f1beb771bc6f79cf06595bed2ea6a264b12",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/sync-2026-09-04/post-sync-tracey.log"
+        },
+        {
+          "content_hash": "324037bf778e6205cbe83be307e379a16f9ae1e69826ed37bed0ce48bac68704",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/sync-2026-09-04/post-sync-validate.json"
+        },
+        {
+          "content_hash": "6ced2107e1f01e677af8a5cfece7f41ee5989a253b49fe6f51b248810ce3e125",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/sync-2026-09-04/summary.md"
+        },
+        {
+          "content_hash": "703fd677191d1fea795ca49665e30228ff971f0139455d3d64c2935c6b303763",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/sync-2026-09-04/sync-dry-run.json"
+        },
+        {
+          "content_hash": "29dbcfaa95c882117f98ec8b0b59ba59f2ec0ac0d48ef46251c791dfca605d75",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/evidence/sync-2026-09-04/sync-execute.json"
+        },
+        {
+          "content_hash": "20dc3e1733ca2b659758b168d332081e044526b070c33b00268f53fd108fe0a5",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/proposal.md"
+        },
+        {
+          "content_hash": "5e6cedcea111ad8f614ad3b919597d19865b362271b2af28d669903be8de636e",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/specs/remote-builds/spec.md"
+        },
+        {
+          "content_hash": "a4f780c643cabfec8e8b06f8d28b079e4f4abcca167712a82d1e07d4c4ec3797",
+          "exists": true,
+          "path": "./.cairn/changes/add-evidence-driven-resource-policy/tasks.md"
+        }
+      ],
+      "manifest_hash": "23e70335aee3489d329731cbbb8e92c898eb8433d4f30fc8a6b70dbf475e9820"
+    },
+    "kind": "archive",
+    "manifest_hash": "0b6c441498bfdb16303edb1b697fc2e56931ccca6b91330ea5409178cc0135f1"
+  },
+  "plan_hash": "9bdab54a0520c5c5208cb8e3c639d7a9fdf255f9b611a06b242319ab86538708",
+  "policy": "mantle-default",
+  "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+  "reasons": [],
+  "receipt_hash": "249c7165fab9d447ed8b52819b7d0a418b338d769a6ddee9628fd9c0714dbb2b"
+}
