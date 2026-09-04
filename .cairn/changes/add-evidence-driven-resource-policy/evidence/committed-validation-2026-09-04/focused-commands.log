@@ -1,0 +1,1405 @@
+
+$ git rev-parse HEAD
+e0b25b5b4d9fce6d947010f7a0465f50f084c636
+
+$ git status --short --branch
+## drain/add-evidence-driven-resource-policy-20260904...origin/main [ahead 1]
+?? .cairn/changes/add-evidence-driven-resource-policy/evidence/committed-validation-2026-09-04/
+
+$ cargo fmt --all -- --check
+
+$ cargo test -p crunch-resource-policy-core --all-targets --offline
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling serde_core v1.0.228
+   Compiling shlex v1.3.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling zmij v1.0.21
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.149
+   Compiling itoa v1.0.18
+   Compiling arrayvec v0.7.6
+   Compiling cfg-if v1.0.4
+   Compiling arrayref v0.3.9
+   Compiling constant_time_eq v0.3.1
+   Compiling memchr v2.8.0
+   Compiling cc v1.2.59
+   Compiling blake3 v1.8.2
+   Compiling syn v2.0.117
+   Compiling serde_derive v1.0.228
+   Compiling crunch-resource-policy-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-resource-policy-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.38s
+     Running unittests src/lib.rs (/tmp/mantle-resource-policy-committed-target/debug/deps/crunch_resource_policy_core-f9364c375d61678b)
+
+running 15 tests
+test tests::chaoscontrol_campaign_requires_all_six_bounded_fault_classes ... ok
+test tests::action_family_is_canonical_and_rejects_control_bearing_unknown_fields ... ok
+test tests::positive_oom_creates_strictly_larger_new_fenced_attempt_intent ... ok
+test tests::benchmark_separates_correctness_compatibility_and_bounded_measurements ... ok
+test tests::retry_rejects_arbitrary_ambiguous_untrusted_exhausted_and_quota_failures ... ok
+test tests::result_reuse_rejects_each_missing_authority_fact_without_mutation ... ok
+test tests::result_sharing_is_private_by_default_and_named_scope_records_evidence_link ... ok
+test tests::rollback_controls_disable_one_authority_without_disabling_observation_or_selection ... ok
+test tests::observe_only_records_historical_choice_but_schedules_static_class ... ok
+test tests::selection_rejects_quota_and_feature_mismatch_only_when_enforced ... ok
+test tests::observations_are_tamper_evident_and_filter_reason_codes_are_explicit ... ok
+test tests::opted_in_enforcement_selects_history_without_weakening_hard_requirements ... ok
+test tests::usage_reservation_and_reconciliation_are_idempotent_and_never_double_charge ... ok
+test tests::accounting_rejects_conflict_quota_missing_overflow_and_preserves_explicit_terminal_states ... ok
+test tests::selection_is_deterministic_stably_ordered_monotonic_and_bounded ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests examples/generate_resource_policy_fixtures.rs (/tmp/mantle-resource-policy-committed-target/debug/examples/generate_resource_policy_fixtures-e60c011c52ae3f30)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+$ cargo check -p crunch-resource-policy-core --target wasm32-unknown-unknown --offline
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v1.3.0
+   Compiling serde_core v1.0.228
+   Compiling zmij v1.0.21
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.149
+    Checking arrayvec v0.7.6
+    Checking itoa v1.0.18
+    Checking cfg-if v1.0.4
+    Checking memchr v2.8.0
+    Checking arrayref v0.3.9
+    Checking constant_time_eq v0.3.1
+   Compiling cc v1.2.59
+   Compiling syn v2.0.117
+   Compiling blake3 v1.8.2
+   Compiling serde_derive v1.0.228
+    Checking crunch-resource-policy-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-resource-policy-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.32s
+
+$ cargo test -p crunch-resource-policy --all-targets --offline
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling serde v1.0.228
+   Compiling allocator-api2 v0.2.21
+   Compiling foldhash v0.2.0
+   Compiling equivalent v1.0.2
+   Compiling diff v0.1.13
+   Compiling yansi v1.0.1
+   Compiling blake3 v1.8.2
+   Compiling pretty_assertions v1.4.1
+   Compiling hashbrown v0.17.1
+   Compiling iddqd v0.4.6
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be#e41340be)
+   Compiling crunch-resource-policy-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-resource-policy-core)
+   Compiling valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=e40c76b4d2070a29636e00c85c0dff93f03dba2f#e40c76b4)
+   Compiling crunch-resource-policy v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-resource-policy)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.96s
+     Running unittests src/lib.rs (/tmp/mantle-resource-policy-committed-target/debug/deps/crunch_resource_policy-11aa7ec8e150c053)
+
+running 6 tests
+test tests::application_store_failure_never_grants_quota_or_mutates_loaded_state ... ok
+test tests::type_shapes_do_not_expose_ambient_maps_or_secret_fields ... ok
+test tests::application_commits_add_once_and_reuses_without_second_mutation ... ok
+test tests::valence_projection_rejects_missing_attempt_linkage ... ok
+test tests::valence_projection_links_selection_retry_usage_and_reuse_without_overclaim ... ok
+test tests::valence_publication_validates_before_effect_and_reports_port_failure ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+$ cargo check -p crunch-resource-policy --target wasm32-unknown-unknown --offline
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.149
+    Checking memchr v2.8.0
+    Checking allocator-api2 v0.2.21
+    Checking foldhash v0.2.0
+    Checking equivalent v1.0.2
+   Compiling blake3 v1.8.2
+    Checking hashbrown v0.17.1
+    Checking iddqd v0.4.6
+    Checking artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be#e41340be)
+    Checking crunch-resource-policy-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-resource-policy-core)
+    Checking valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=e40c76b4d2070a29636e00c85c0dff93f03dba2f#e40c76b4)
+    Checking crunch-resource-policy v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-resource-policy)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.73s
+
+$ cargo test -p mantle --bin mantle resource_policy --offline
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling memchr v2.8.0
+   Compiling libc v0.2.186
+   Compiling version_check v0.9.5
+   Compiling typenum v1.20.1
+   Compiling subtle v2.6.1
+   Compiling const-oid v0.9.6
+   Compiling smallvec v1.15.1
+   Compiling crossbeam-utils v0.8.21
+   Compiling regex-syntax v0.8.10
+   Compiling parking_lot_core v0.9.12
+   Compiling scopeguard v1.2.0
+   Compiling once_cell v1.21.4
+   Compiling bitflags v2.11.0
+   Compiling thiserror v2.0.18
+   Compiling hashbrown v0.16.1
+   Compiling stable_deref_trait v1.2.1
+   Compiling serde_json v1.0.149
+   Compiling lock_api v0.4.14
+   Compiling fastrand v2.4.1
+   Compiling same-file v1.0.6
+   Compiling crossbeam-epoch v0.9.20
+   Compiling rayon-core v1.13.0
+   Compiling crc32fast v1.5.0
+   Compiling rustix v1.1.4
+   Compiling generic-array v0.14.7
+   Compiling walkdir v2.5.0
+   Compiling cpufeatures v0.2.17
+   Compiling linux-raw-sys v0.12.1
+   Compiling log v0.4.29
+   Compiling tinyvec_macros v0.1.1
+   Compiling pin-project-lite v0.2.17
+   Compiling gix-trace v0.1.18
+   Compiling tinyvec v1.11.0
+   Compiling zeroize v1.8.2
+   Compiling futures-core v0.3.32
+   Compiling fnv v1.0.7
+   Compiling human_format v1.2.1
+   Compiling bytesize v2.3.1
+   Compiling zlib-rs v0.6.3
+   Compiling byteorder v1.5.0
+   Compiling heapless v0.8.0
+   Compiling rand_core v0.10.0
+   Compiling getrandom v0.4.2
+   Compiling aho-corasick v1.1.4
+   Compiling winnow v0.7.15
+   Compiling futures-sink v0.3.32
+   Compiling hash32 v0.3.1
+   Compiling crossbeam-channel v0.5.15
+   Compiling futures-io v0.3.32
+   Compiling futures-channel v0.3.32
+   Compiling futures-task v0.3.32
+   Compiling unicode-normalization v0.1.25
+   Compiling strsim v0.11.1
+   Compiling slab v0.4.12
+   Compiling jiff v0.2.23
+   Compiling rustversion v1.0.22
+   Compiling crossbeam-deque v0.8.6
+   Compiling indexmap v2.13.1
+   Compiling libm v0.2.16
+   Compiling tracing-core v0.1.36
+   Compiling syn v2.0.117
+   Compiling dunce v1.0.5
+   Compiling jobserver v0.1.34
+   Compiling fs_extra v1.3.0
+   Compiling faster-hex v0.10.0
+   Compiling percent-encoding v2.3.2
+   Compiling autocfg v1.5.0
+   Compiling either v1.15.0
+   Compiling cc v1.2.59
+   Compiling regex-automata v0.4.14
+   Compiling aws-lc-rs v1.16.2
+   Compiling rustls-pki-types v1.14.0
+   Compiling writeable v0.6.3
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling litemap v0.8.2
+   Compiling unicode-xid v0.2.6
+   Compiling base64 v0.22.1
+   Compiling foldhash v0.1.5
+   Compiling digest v0.10.7
+   Compiling encoding_rs v0.8.35
+   Compiling hashbrown v0.15.5
+   Compiling errno v0.3.14
+   Compiling mio v1.2.0
+   Compiling getrandom v0.2.17
+   Compiling sha1 v0.10.6
+   Compiling signal-hook-registry v1.4.8
+   Compiling socket2 v0.6.3
+   Compiling parking_lot v0.12.5
+   Compiling memmap2 v0.9.10
+   Compiling sha1-checked v0.10.0
+   Compiling cmake v0.1.58
+   Compiling icu_properties_data v2.2.0
+   Compiling pkg-config v0.3.32
+   Compiling untrusted v0.9.0
+   Compiling prodash v31.0.0
+   Compiling httparse v1.10.1
+   Compiling icu_normalizer_data v2.2.0
+   Compiling utf8_iter v1.0.4
+   Compiling ident_case v1.0.1
+   Compiling unicode-width v0.2.2
+   Compiling rustls v0.23.37
+   Compiling ipnet v2.12.0
+   Compiling blake3 v1.8.2
+   Compiling aws-lc-sys v0.39.1
+   Compiling ring v0.17.14
+   Compiling signal-hook v0.4.4
+   Compiling num-traits v0.2.19
+   Compiling hashbrown v0.14.5
+   Compiling static_assertions v1.1.0
+   Compiling try-lock v0.2.5
+   Compiling ryu v1.0.23
+   Compiling tower-service v0.3.3
+   Compiling atomic-waker v1.1.2
+   Compiling nonempty v0.12.0
+   Compiling want v0.3.1
+   Compiling rand_core v0.6.4
+   Compiling form_urlencoded v1.2.2
+   Compiling cfg_aliases v0.2.1
+   Compiling unicode-segmentation v1.13.2
+   Compiling sha2 v0.10.9
+   Compiling sync_wrapper v1.0.2
+   Compiling tower-layer v0.3.3
+   Compiling openssl-probe v0.2.1
+   Compiling iri-string v0.7.12
+   Compiling data-encoding v2.10.0
+   Compiling spin v0.9.9
+   Compiling colorchoice v1.0.5
+   Compiling unicode-bom v2.0.3
+   Compiling rustls-native-certs v0.8.3
+   Compiling semver v1.0.28
+   Compiling simd-adler32 v0.3.9
+   Compiling lazy_static v1.5.0
+   Compiling mime v0.3.17
+   Compiling anstyle v1.0.14
+   Compiling dashmap v6.1.0
+   Compiling adler2 v2.0.1
+   Compiling tempfile v3.27.0
+   Compiling rustc_version v0.4.1
+   Compiling miniz_oxide v0.8.9
+   Compiling convert_case v0.10.0
+   Compiling signature v2.2.0
+   Compiling filetime v0.2.27
+   Compiling heck v0.5.0
+   Compiling utf8parse v0.2.2
+   Compiling curve25519-dalek v4.1.3
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling anstyle-parse v1.0.0
+   Compiling kstring v2.0.2
+   Compiling itertools v0.14.0
+   Compiling thread_local v1.1.9
+   Compiling shell-words v1.1.1
+   Compiling anstyle-query v1.1.5
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling portable-atomic v1.13.1
+   Compiling winnow v1.0.1
+   Compiling anstream v1.0.0
+   Compiling libmimalloc-sys v0.1.44
+   Compiling anyhow v1.0.102
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling clap_lex v1.1.0
+   Compiling ed25519 v2.2.3
+   Compiling lzma-sys v0.1.20
+   Compiling regex v1.12.3
+   Compiling bzip2-sys v0.1.13+1.0.8
+   Compiling clap_builder v4.6.0
+   Compiling memoffset v0.6.5
+   Compiling vte v0.15.0
+   Compiling typeid v1.0.3
+   Compiling synstructure v0.13.2
+   Compiling darling_core v0.23.0
+   Compiling darling_core v0.20.11
+   Compiling rustix v0.38.44
+   Compiling zstd-safe v7.2.4
+   Compiling vt100 v0.16.2
+   Compiling matchers v0.2.0
+   Compiling xattr v1.6.1
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling sharded-slab v0.1.7
+   Compiling nix v0.31.3
+   Compiling n0-future v0.3.2
+   Compiling console v0.16.3
+   Compiling arc-swap v1.9.1
+   Compiling tracing-log v0.2.0
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling tokio-macros v2.7.0
+   Compiling futures-macro v0.3.32
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling displaydoc v0.2.5
+   Compiling tracing-attributes v0.1.31
+   Compiling derive_more-impl v2.1.1
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling toml_edit v0.25.10+spec-1.1.0
+   Compiling futures-util v0.3.32
+   Compiling clap_derive v4.6.0
+   Compiling zerofrom v0.1.7
+   Compiling async-trait v0.1.89
+   Compiling darling_macro v0.20.11
+   Compiling yoke v0.8.2
+   Compiling pin-project-internal v1.1.11
+   Compiling cpufeatures v0.3.0
+   Compiling nu-ansi-term v0.50.3
+   Compiling bitflags v1.3.2
+   Compiling linux-raw-sys v0.4.15
+   Compiling zerovec v0.11.6
+   Compiling zerotrie v0.2.4
+   Compiling darling_macro v0.23.0
+   Compiling tracing v0.1.44
+   Compiling proc-macro-crate v3.5.0
+   Compiling siphasher v1.0.2
+   Compiling diatomic-waker v0.2.3
+   Compiling darling v0.23.0
+   Compiling thiserror v1.0.69
+   Compiling zerocopy v0.8.48
+   Compiling parking v2.2.1
+   Compiling unit-prefix v0.5.2
+   Compiling erased-serde v0.4.10
+   Compiling serde_with_macros v3.18.0
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling spin v0.10.0
+   Compiling cordyceps v0.3.4
+   Compiling num_enum_derive v0.7.6
+   Compiling indicatif v0.18.4
+   Compiling futures-lite v2.6.1
+   Compiling phf_shared v0.11.3
+   Compiling icu_collections v2.2.0
+   Compiling pin-project v1.1.11
+   Compiling derive_more v2.1.1
+   Compiling icu_locale_core v2.2.0
+   Compiling tracing-subscriber v0.3.23
+   Compiling ed25519-dalek v2.2.0
+   Compiling futures-buffered v0.2.13
+   Compiling chacha20 v0.10.0
+   Compiling darling v0.20.11
+   Compiling clap v4.6.0
+   Compiling async-stream-impl v0.3.6
+   Compiling n0-error-macros v0.1.3
+   Compiling serde_with v3.18.0
+   Compiling thiserror-impl v1.0.69
+   Compiling spez v0.1.2
+   Compiling mimalloc v0.1.48
+   Compiling flate2 v1.1.9
+   Compiling md-5 v0.10.6
+   Compiling gix-sec v0.13.2
+   Compiling nibble_vec v0.1.0
+   Compiling serde v1.0.228
+   Compiling icu_provider v2.2.0
+   Compiling bytemuck v1.25.0
+   Compiling matchit v0.8.4
+   Compiling bit-vec v0.8.0
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/vendor/fuse-backend-rs)
+   Compiling fixedbitset v0.5.7
+   Compiling nix-compat v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/vendor/nix-compat)
+   Compiling keccak v0.1.6
+   Compiling precomputed-hash v0.1.1
+   Compiling icu_normalizer v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling endian-type v0.1.2
+   Compiling new_debug_unreachable v1.0.6
+   Compiling term v1.2.1
+   Compiling redb v3.1.3
+   Compiling iana-time-zone v0.1.65
+   Compiling radix_trie v0.2.1
+   Compiling petgraph v0.7.1
+   Compiling sha3 v0.10.8
+   Compiling string_cache v0.8.9
+   Compiling bit-set v0.8.0
+   Compiling ena v0.14.4
+   Compiling n0-error v0.1.3
+   Compiling bytes v1.11.1
+   Compiling bstr v1.12.1
+   Compiling chrono v0.4.44
+   Compiling futures-executor v0.3.32
+   Compiling ascii-canvas v4.0.0
+   Compiling quick-xml v0.40.1
+   Compiling serde_urlencoded v0.7.1
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-attestation-core)
+   Compiling tracing-indicatif v0.3.14
+   Compiling safe_arch v1.2.0
+   Compiling async-stream v0.3.6
+   Compiling futures v0.3.32
+   Compiling nix v0.24.3
+   Compiling clap-verbosity-flag v3.0.4
+   Compiling rand v0.10.1
+   Compiling num_enum v0.7.6
+   Compiling bzip2 v0.5.2
+   Compiling tokio v1.51.0
+   Compiling gix-validate v0.11.0
+   Compiling gix-utils v0.3.1
+   Compiling gix-error v0.2.1
+   Compiling http v1.4.0
+   Compiling gix-packetline v0.21.2
+   Compiling derive_builder_core v0.20.2
+   Compiling lalrpop-util v0.22.2
+   Compiling gix-path v0.11.2
+   Compiling gix-date v0.15.1
+   Compiling gix-chunk v0.7.0
+   Compiling gix-quote v0.7.0
+   Compiling idna_adapter v1.2.1
+   Compiling gix-bitmap v0.3.0
+   Compiling idna v1.1.0
+   Compiling gix-features v0.46.2
+   Compiling gix-config-value v0.17.1
+   Compiling gix-command v0.8.0
+   Compiling gix-actor v0.40.0
+   Compiling vmm-sys-util v0.11.2
+   Compiling cobs v0.3.0
+   Compiling url v2.5.8
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/vendor/nix-compat-derive)
+   Compiling gix-hash v0.23.0
+   Compiling http-body v1.0.1
+   Compiling gix-fs v0.19.2
+   Compiling gix-glob v0.24.0
+   Compiling irpc-derive v0.10.0
+   Compiling http-body-util v0.1.3
+   Compiling num_cpus v1.17.0
+   Compiling caps v0.5.6
+   Compiling mio v0.8.11
+   Compiling gix-hashtable v0.13.0
+   Compiling gix-tempfile v21.0.2
+   Compiling gix-commitgraph v0.35.0
+   Compiling gix-attributes v0.31.0
+   Compiling vm-memory v0.10.0
+   Compiling itertools v0.15.0
+   Compiling proc-macro-error-attr2 v2.0.0
+   Compiling gix-object v0.58.0
+   Compiling nom v8.0.0
+   Compiling rustc-hash v2.1.2
+   Compiling malachite-nz v0.9.2
+   Compiling gix-lock v21.0.2
+   Compiling fixedbitset v0.4.2
+   Compiling snix-castore v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/vendor/snix-castore)
+   Compiling humantime v2.3.0
+   Compiling pico-args v0.5.0
+   Compiling proc-macro-error2 v2.0.1
+   Compiling petgraph v0.6.5
+   Compiling threadpool v1.8.1
+   Compiling gix-ignore v0.19.1
+   Compiling lalrpop v0.22.2
+   Compiling derive_builder_macro v0.20.2
+   Compiling postcard v1.1.3
+   Compiling wide v1.7.0
+   Compiling serde_tagged v0.3.0
+   Compiling serde_qs v0.12.0
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling auto_impl v1.3.0
+   Compiling malachite-base v0.9.2
+   Compiling nix v0.29.0
+   Compiling proc-macro2-diagnostics v0.10.1
+   Compiling gix-revwalk v0.29.0
+   Compiling gix-filter v0.28.0
+   Compiling gix-ref v0.61.0
+   Compiling serde_bytes v0.11.19
+   Compiling gix-traverse v0.55.0
+   Compiling wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+   Compiling xz2 v0.1.7
+   Compiling unicode-width v0.1.14
+   Compiling derive_builder v0.20.2
+   Compiling getset v0.1.6
+   Compiling gix-index v0.49.0
+   Compiling gix-pathspec v0.16.1
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-attestation)
+   Compiling typed-builder-macro v0.22.0
+   Compiling strum_macros v0.26.4
+   Compiling uuid v1.23.0
+   Compiling toml_datetime v0.7.5+spec-1.1.0
+   Compiling toml_writer v1.1.1+spec-1.1.0
+   Compiling snix-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/vendor/snix-build)
+   Compiling snix-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/vendor/snix-store)
+   Compiling strum v0.26.3
+   Compiling gix-url v0.35.2
+   Compiling logos-codegen v0.16.1
+   Compiling nix-archive v0.1.0
+   Compiling tar v0.4.45
+   Compiling itertools v0.12.1
+   Compiling lru v0.16.4
+   Compiling gix-worktree v0.50.0
+   Compiling zstd v0.13.3
+   Compiling heck v0.4.1
+   Compiling typed-builder v0.22.0
+   Compiling bitmaps v3.2.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling base64ct v1.8.3
+   Compiling count-write v0.1.0
+   Compiling io-lifetimes v3.0.1
+   Compiling termcolor v1.4.1
+   Compiling io-lifetimes v2.0.4
+   Compiling pem-rfc7468 v0.7.0
+   Compiling ouroboros_macro v0.18.5
+   Compiling gix-revision v0.43.0
+   Compiling tokio-util v0.7.18
+   Compiling tower v0.5.3
+   Compiling tokio-stream v0.1.18
+   Compiling async-compression v0.4.19
+   Compiling oci-spec v0.7.1
+   Compiling codespan-reporting v0.13.1
+   Compiling rand_chacha v0.3.1
+   Compiling imbl-sized-chunks v0.1.3
+   Compiling logos-derive v0.16.1
+   Compiling astral-tokio-tar v0.6.3
+   Compiling fastcdc v3.2.1
+   Compiling tower-http v0.6.8
+   Compiling crunch-action-result-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-action-result-core)
+   Compiling gix-prompt v0.14.1
+   Compiling crunch-composition-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-composition-core)
+   Compiling crunch-overlay-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-overlay-core)
+   Compiling crunch-gc-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-gc-core)
+   Compiling crunch-repair-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-repair-core)
+   Compiling h2 v0.4.13
+   Compiling imara-diff v0.2.0
+   Compiling imara-diff v0.1.8
+   Compiling hashlink v0.10.0
+   Compiling fs2 v0.4.3
+   Compiling serde_spanned v1.1.1
+   Compiling getrandom v0.3.4
+   Compiling paste v1.0.15
+   Compiling aliasable v0.1.3
+   Compiling typed-arena v2.0.2
+   Compiling signal-hook v0.3.18
+   Compiling arrayvec v0.5.2
+   Compiling io-extras v0.19.0
+   Compiling object v0.37.3
+   Compiling arraydeque v0.5.1
+   Compiling ouroboros v0.18.5
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling gix-diff v0.61.0
+   Compiling gix-credentials v0.37.1
+   Compiling pretty v0.12.5
+   Compiling saphyr-parser v0.0.6
+   Compiling codespan v0.13.1
+   Compiling logos v0.16.1
+   Compiling gix-refspec v0.39.0
+   Compiling nickel-lang-vector v0.2.0
+   Compiling rand v0.8.6
+   Compiling der v0.7.10
+   Compiling toml_edit v0.24.1+spec-1.1.0
+   Compiling gix-discover v0.49.0
+   Compiling clru v0.6.3
+   Compiling vte v0.14.1
+   Compiling uluru v3.1.0
+   Compiling bumpalo v3.20.2
+   Compiling gimli v0.32.3
+   Compiling unsafe-libyaml v0.2.11
+   Compiling simple-counter v0.1.0
+   Compiling cap-primitives v4.0.2
+   Compiling gix-dir v0.23.0
+   Compiling gix-pack v0.68.0
+   Compiling irpc v0.13.0
+   Compiling strip-ansi-escapes v0.2.1
+   Compiling fs-set-times v0.20.3
+   Compiling crunch-nar v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-nar)
+   Compiling gix-config v0.54.0
+   Compiling gix-worktree-stream v0.30.0
+   Compiling spki v0.7.3
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling gix-negotiate v0.29.0
+   Compiling gix-shallow v0.10.0
+   Compiling maybe-async v0.2.10
+   Compiling num-integer v0.1.46
+   Compiling rustix-linux-procfs v0.1.1
+   Compiling sha-1 v0.10.1
+   Compiling io-close v0.3.7
+   Compiling hyper v1.9.0
+   Compiling json_scanner v0.1.0
+   Compiling num-bigint-dig v0.8.6
+   Compiling linkme-impl v0.3.37
+   Compiling cap-std v4.0.2
+   Compiling ambient-authority v0.0.2
+   Compiling indoc v2.0.7
+   Compiling maybe-owned v0.3.4
+   Compiling rustc-demangle v0.1.28
+   Compiling crc-catalog v2.4.0
+   Compiling owo-colors v4.3.0
+   Compiling litrs v1.0.0
+   Compiling crc v3.4.0
+   Compiling gix-odb v0.78.0
+   Compiling gix-submodule v0.28.0
+   Compiling gix-worktree-state v0.28.0
+   Compiling num-iter v0.1.46
+   Compiling gix-archive v0.30.0
+   Compiling pkcs8 v0.10.2
+   Compiling signal-hook-mio v0.2.5
+   Compiling rand_core v0.9.5
+   Compiling document-features v0.2.12
+   Compiling addr2line v0.25.1
+   Compiling gix-status v0.28.0
+   Compiling gix-blame v0.11.0
+   Compiling ureq-proto v0.6.0
+   Compiling gix-mailmap v0.32.0
+   Compiling toml_datetime v0.6.11
+   Compiling hyper-util v0.1.20
+   Compiling serde_spanned v0.6.9
+   Compiling crunch-remote-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-remote-core)
+   Compiling webpki-roots v1.0.6
+   Compiling syn v3.0.3
+   Compiling cap-fs-ext v4.0.2
+   Compiling utf8-zero v0.8.1
+   Compiling linkme v0.3.37
+   Compiling twox-hash v2.1.2
+   Compiling toml_write v0.1.2
+   Compiling unicode-linebreak v0.1.5
+   Compiling is_ci v1.2.0
+   Compiling ruzstd v0.8.2
+   Compiling crossterm v0.29.0
+   Compiling rand_chacha v0.9.0
+   Compiling supports-color v3.0.2
+   Compiling toml_edit v0.22.27
+   Compiling pkcs1 v0.7.5
+   Compiling lzma-rs v0.3.0
+   Compiling textwrap v0.16.2
+   Compiling artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling gethostname v0.5.0
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-source-core)
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be#e41340be)
+   Compiling crunch-rust-cache-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-rust-cache-core)
+   Compiling miette-derive v7.6.0
+   Compiling nickel-lang-parser v0.3.0
+   Compiling nickel-lang-core v0.18.0
+   Compiling fuzzy-matcher v0.3.7
+   Compiling terminal_size v0.4.4
+   Compiling bzip2-rs v0.1.2
+   Compiling predicates-core v1.0.10
+   Compiling supports-unicode v3.0.0
+   Compiling supports-hyperlinks v3.2.0
+   Compiling bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+   Compiling dyn-clone v1.0.20
+   Compiling backtrace v0.3.76
+   Compiling inquire v0.9.4
+   Compiling rsa v0.9.10
+   Compiling valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=e40c76b4d2070a29636e00c85c0dff93f03dba2f#e40c76b4)
+   Compiling rand v0.9.3
+   Compiling crunch-glue v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-glue)
+   Compiling crunch-project-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-project-core)
+   Compiling secrecy v0.10.3
+   Compiling mantle-application-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/mantle-application-core)
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-wasm-component-core)
+   Compiling mantle-rust-plan-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/mantle-rust-plan-core)
+   Compiling crunch-build-planning-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-build-planning-core)
+   Compiling crunch-shell-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-shell-core)
+   Compiling crunch-resource-policy-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-resource-policy-core)
+   Compiling crunch-evaluation-stream-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-evaluation-stream-core)
+   Compiling backtrace-ext v0.2.1
+   Compiling toml v0.8.23
+   Compiling miette v7.6.0
+   Compiling float-cmp v0.10.0
+   Compiling etcetera v0.11.0
+   Compiling normalize-line-endings v0.3.0
+   Compiling detect-coding-agent v0.1.0
+   Compiling assert_cmd v2.2.0
+   Compiling colored v3.1.1
+   Compiling dotenvy v0.15.7
+   Compiling crunch-delta-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-delta-core)
+   Compiling termtree v0.5.1
+   Compiling difflib v0.4.0
+   Compiling mantle-application v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/mantle-application)
+   Compiling predicates-tree v1.0.13
+   Compiling crunch-shell v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-shell)
+   Compiling crunch-remote v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-remote)
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-release-core)
+   Compiling crunch-radiance-reference-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-radiance-reference-core)
+   Compiling bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+   Compiling secretspec v0.17.0
+   Compiling mantle-rust-plan v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/mantle-rust-plan)
+   Compiling predicates v3.1.4
+   Compiling chapter-tgz v0.1.0
+   Compiling mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/mantlepkgs-core)
+   Compiling nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+   Compiling crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-eval-budget-core)
+   Compiling mantle-portable-client-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/mantle-portable-client-core)
+   Compiling crunch-bootstrap-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-bootstrap-core)
+   Compiling crunch-hardware-simulation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-hardware-simulation-core)
+   Compiling nix-derivation v0.1.0
+   Compiling durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+   Compiling wait-timeout v0.2.1
+   Compiling crunch-kernelscript-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-kernelscript-core)
+   Compiling transactional-reconciliation-core v0.1.0 (https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9#606489b5)
+   Compiling crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-wasm-component)
+   Compiling crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-project)
+   Compiling crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-hardware-simulation)
+   Compiling malachite-q v0.9.2
+   Compiling malachite-float v0.9.2
+   Compiling rustls-webpki v0.103.13
+   Compiling malachite v0.9.2
+   Compiling crunch-resource-policy v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-resource-policy)
+   Compiling tokio-rustls v0.26.4
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling ureq v3.3.0
+   Compiling hyper-rustls v0.27.7
+   Compiling reqwest v0.13.2
+   Compiling reqwest-middleware v0.5.1
+   Compiling object_store v0.14.0
+   Compiling gix-transport v0.55.1
+   Compiling reqwest-tracing v0.6.0
+   Compiling gix-protocol v0.59.0
+   Compiling snix-tracing v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/vendor/snix-tracing)
+   Compiling gix v0.81.0
+   Compiling crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-store)
+   Compiling crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-build)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-rustc-wrapper)
+   Compiling nickel-lang v2.2.0
+   Compiling crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-eval)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 18s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/tmp/mantle-resource-policy-committed-target/debug/deps/mantle-56e008977d3c9314)
+
+running 3 tests
+test resource_policy::tests::sharing_adapter_cannot_bypass_existing_strong_result_admission ... ok
+test resource_policy::tests::retry_adapter_uses_existing_assignment_core_for_new_fence_and_attempt ... ok
+test resource_policy::tests::coordinator_adapter_intersects_policy_with_static_eligibility ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 2627 filtered out; finished in 0.00s
+
+
+$ cargo test -p mantle --bin mantle remote_build::tests::evidence_policy_selects_and_reserves_the_larger_statically_eligible_worker --offline -- --exact
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/tmp/mantle-resource-policy-committed-target/debug/deps/mantle-56e008977d3c9314)
+
+running 1 test
+test remote_build::tests::evidence_policy_selects_and_reserves_the_larger_statically_eligible_worker ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2629 filtered out; finished in 0.01s
+
+
+$ cargo test -p mantle --test resource_policy_evidence --offline
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 00s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running tests/resource_policy_evidence.rs (/tmp/mantle-resource-policy-committed-target/debug/deps/resource_policy_evidence-21bea24ac76f4572)
+
+running 6 tests
+test generated_profile_defaults_every_authority_feature_to_off ... ok
+test source_review_adapts_only_the_licensed_nixbench_workload_shape ... ok
+test chaoscontrol_campaign_binds_source_and_all_required_failure_classes ... ok
+test benchmark_corpus_replays_to_the_checked_report_and_keeps_measurements_separate ... ok
+test onixos_machine_classes_are_source_bound_and_feed_observe_only_selection ... ok
+test contracted_resource_fixtures_accept_positive_and_reject_every_negative ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+$ cargo clippy -p crunch-resource-policy-core -p crunch-resource-policy --all-targets --all-features --offline -- -D warnings
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Checking arrayvec v0.7.6
+    Checking cfg-if v1.0.4
+    Checking arrayref v0.3.9
+    Checking constant_time_eq v0.3.1
+    Checking memchr v2.8.0
+    Checking itoa v1.0.18
+    Checking allocator-api2 v0.2.21
+    Checking equivalent v1.0.2
+    Checking foldhash v0.2.0
+    Checking diff v0.1.13
+    Checking yansi v1.0.1
+    Checking serde_core v1.0.228
+    Checking zmij v1.0.21
+    Checking blake3 v1.8.2
+    Checking hashbrown v0.17.1
+    Checking pretty_assertions v1.4.1
+    Checking iddqd v0.4.6
+    Checking serde v1.0.228
+    Checking serde_json v1.0.149
+    Checking artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be#e41340be)
+    Checking crunch-resource-policy-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-resource-policy-core)
+    Checking valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=e40c76b4d2070a29636e00c85c0dff93f03dba2f#e40c76b4)
+    Checking crunch-resource-policy v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-resource-policy)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.16s
+
+$ cargo clippy -p mantle --bin mantle --no-deps --offline -- -D warnings
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Checking memchr v2.8.0
+    Checking subtle v2.6.1
+    Checking const-oid v0.9.6
+    Checking smallvec v1.15.1
+    Checking typenum v1.20.1
+    Checking once_cell v1.21.4
+    Checking regex-syntax v0.8.10
+    Checking scopeguard v1.2.0
+    Checking bitflags v2.11.0
+    Checking libc v0.2.186
+    Checking crossbeam-utils v0.8.21
+    Checking stable_deref_trait v1.2.1
+    Checking fastrand v2.4.1
+    Checking hashbrown v0.16.1
+    Checking cpufeatures v0.2.17
+    Checking serde v1.0.228
+    Checking thiserror v2.0.18
+    Checking linux-raw-sys v0.12.1
+    Checking crc32fast v1.5.0
+    Checking log v0.4.29
+    Checking same-file v1.0.6
+    Checking lock_api v0.4.14
+    Checking tinyvec_macros v0.1.1
+    Checking pin-project-lite v0.2.17
+    Checking gix-trace v0.1.18
+    Checking futures-core v0.3.32
+    Checking zeroize v1.8.2
+    Checking human_format v1.2.1
+    Checking tinyvec v1.11.0
+    Checking bytesize v2.3.1
+    Checking zlib-rs v0.6.3
+    Checking byteorder v1.5.0
+    Checking walkdir v2.5.0
+    Checking rand_core v0.10.0
+    Checking futures-sink v0.3.32
+    Checking futures-io v0.3.32
+    Checking futures-task v0.3.32
+    Checking jiff v0.2.23
+    Checking slab v0.4.12
+    Checking zerofrom v0.1.7
+    Checking tracing-core v0.1.36
+    Checking futures-channel v0.3.32
+    Checking percent-encoding v2.3.2
+    Checking fnv v1.0.7
+    Checking hash32 v0.3.1
+    Checking crossbeam-epoch v0.9.20
+    Checking crossbeam-channel v0.5.15
+    Checking rustix v1.1.4
+    Checking libm v0.2.16
+    Checking yoke v0.8.2
+    Checking rustls-pki-types v1.14.0
+    Checking base64 v0.22.1
+    Checking aho-corasick v1.1.4
+    Checking serde_json v1.0.149
+    Checking bytes v1.11.1
+    Checking winnow v0.7.15
+    Checking heapless v0.8.0
+    Checking unicode-normalization v0.1.25
+    Checking crossbeam-deque v0.8.6
+    Checking indexmap v2.13.1
+    Checking futures-util v0.3.32
+    Checking zerovec v0.11.6
+    Checking tracing v0.1.44
+    Checking foldhash v0.1.5
+   Compiling equivalent v1.0.2
+    Checking rayon-core v1.13.0
+    Checking writeable v0.6.3
+    Checking litemap v0.8.2
+    Checking generic-array v0.14.7
+    Checking hashbrown v0.15.5
+    Checking faster-hex v0.10.0
+    Checking zerotrie v0.2.4
+    Checking http v1.4.0
+    Checking aws-lc-sys v0.39.1
+    Checking encoding_rs v0.8.35
+   Compiling strsim v0.11.1
+    Checking untrusted v0.9.0
+    Checking utf8_iter v1.0.4
+    Checking tinystr v0.8.3
+    Checking potential_utf v0.1.5
+    Checking unicode-width v0.2.2
+    Checking ipnet v2.12.0
+    Checking icu_properties_data v2.2.0
+    Checking httparse v1.10.1
+    Checking icu_normalizer_data v2.2.0
+    Checking icu_collections v2.2.0
+    Checking icu_locale_core v2.2.0
+    Checking either v1.15.0
+    Checking try-lock v0.2.5
+    Checking hashbrown v0.14.5
+    Checking static_assertions v1.1.0
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.7
+    Checking tower-service v0.3.3
+    Checking ryu v1.0.23
+    Checking atomic-waker v1.1.2
+    Checking nonempty v0.12.0
+    Checking want v0.3.1
+    Checking regex-automata v0.4.14
+    Checking parking_lot_core v0.9.12
+    Checking errno v0.3.14
+    Checking mio v1.2.0
+    Checking getrandom v0.2.17
+    Checking socket2 v0.6.3
+    Checking digest v0.10.7
+    Checking getrandom v0.4.2
+    Checking memmap2 v0.9.10
+    Checking http-body v1.0.1
+    Checking form_urlencoded v1.2.2
+    Checking signal-hook-registry v1.4.8
+    Checking aws-lc-rs v1.16.2
+    Checking parking_lot v0.12.5
+    Checking ring v0.17.14
+    Checking rand_core v0.6.4
+    Checking sync_wrapper v1.0.2
+    Checking tower-layer v0.3.3
+    Checking openssl-probe v0.2.1
+    Checking blake3 v1.8.2
+    Checking sha1 v0.10.6
+    Checking sha2 v0.10.9
+    Checking signal-hook v0.4.4
+    Checking spin v0.9.9
+    Checking data-encoding v2.10.0
+    Checking rustls-native-certs v0.8.3
+    Checking colorchoice v1.0.5
+    Checking iri-string v0.7.12
+    Checking dashmap v6.1.0
+    Checking prodash v31.0.0
+    Checking tokio v1.51.0
+    Checking lazy_static v1.5.0
+    Checking http-body-util v0.1.3
+   Compiling unicode-segmentation v1.13.2
+    Checking unicode-bom v2.0.3
+    Checking sha1-checked v0.10.0
+    Checking icu_provider v2.2.0
+    Checking simd-adler32 v0.3.9
+    Checking adler2 v2.0.1
+    Checking mime v0.3.17
+    Checking num-traits v0.2.19
+    Checking signature v2.2.0
+    Checking filetime v0.2.27
+   Compiling darling_core v0.23.0
+    Checking utf8parse v0.2.2
+    Checking miniz_oxide v0.8.9
+    Checking kstring v2.0.2
+    Checking thread_local v1.1.9
+   Compiling convert_case v0.10.0
+    Checking anstyle-parse v1.0.0
+    Checking shell-words v1.1.1
+    Checking anstyle v1.0.14
+    Checking icu_normalizer v2.2.0
+    Checking icu_properties v2.2.0
+    Checking anstyle-query v1.1.5
+    Checking is_terminal_polyfill v1.70.2
+   Compiling toml_parser v1.1.2+spec-1.1.0
+    Checking anstream v1.0.0
+    Checking clap_lex v1.1.0
+   Compiling derive_more-impl v2.1.1
+    Checking curve25519-dalek v4.1.3
+    Checking portable-atomic v1.13.1
+    Checking ed25519 v2.2.3
+   Compiling darling_core v0.20.11
+    Checking clap_builder v4.6.0
+    Checking vte v0.15.0
+   Compiling cfg-if v1.0.4
+    Checking rustls-webpki v0.103.13
+   Compiling toml_edit v0.25.10+spec-1.1.0
+    Checking tempfile v3.27.0
+    Checking futures-executor v0.3.32
+    Checking vt100 v0.16.2
+    Checking xattr v1.6.1
+    Checking libmimalloc-sys v0.1.44
+    Checking futures v0.3.32
+    Checking anyhow v1.0.102
+    Checking zstd-sys v2.0.16+zstd.1.5.7
+    Checking sharded-slab v0.1.7
+    Checking console v0.16.3
+    Checking tracing-log v0.2.0
+    Checking arc-swap v1.9.1
+    Checking rustls v0.23.37
+    Checking cpufeatures v0.3.0
+    Checking spin v0.10.0
+    Checking bitflags v1.3.2
+    Checking linux-raw-sys v0.4.15
+    Checking idna_adapter v1.2.1
+    Checking cordyceps v0.3.4
+    Checking diatomic-waker v0.2.3
+    Checking unit-prefix v0.5.2
+   Compiling proc-macro-crate v3.5.0
+    Checking parking v2.2.1
+    Checking nu-ansi-term v0.50.3
+    Checking idna v1.1.0
+    Checking indicatif v0.18.4
+    Checking chacha20 v0.10.0
+    Checking ed25519-dalek v2.2.0
+    Checking futures-buffered v0.2.13
+    Checking futures-lite v2.6.1
+    Checking zstd-safe v7.2.4
+    Checking rustix v0.38.44
+    Checking bstr v1.12.1
+    Checking regex v1.12.3
+    Checking url v2.5.8
+    Checking matchers v0.2.0
+    Checking pin-project v1.1.11
+    Checking tracing-subscriber v0.3.23
+   Compiling num_enum_derive v0.7.6
+    Checking mimalloc v0.1.48
+    Checking lzma-sys v0.1.20
+    Checking bzip2-sys v0.1.13+1.0.8
+    Checking memoffset v0.6.5
+    Checking typeid v1.0.3
+    Checking derive_more v2.1.1
+    Checking flate2 v1.1.9
+    Checking md-5 v0.10.6
+    Checking gix-sec v0.13.2
+    Checking nibble_vec v0.1.0
+    Checking bytemuck v1.25.0
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/vendor/fuse-backend-rs)
+    Checking gix-validate v0.11.0
+    Checking gix-utils v0.3.1
+    Checking gix-error v0.2.1
+    Checking clap v4.6.0
+    Checking gix-packetline v0.21.2
+    Checking matchit v0.8.4
+    Checking endian-type v0.1.2
+    Checking iana-time-zone v0.1.65
+   Compiling nix-compat v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/vendor/nix-compat)
+   Compiling darling_macro v0.23.0
+   Compiling string_cache v0.8.9
+    Checking safe_arch v1.2.0
+    Checking clap-verbosity-flag v3.0.4
+    Checking gix-path v0.11.2
+   Compiling petgraph v0.7.1
+    Checking radix_trie v0.2.1
+    Checking chrono v0.4.44
+    Checking gix-date v0.15.1
+    Checking gix-chunk v0.7.0
+    Checking gix-quote v0.7.0
+    Checking gix-bitmap v0.3.0
+   Compiling itertools v0.14.0
+   Compiling sha3 v0.10.8
+    Checking gix-features v0.46.2
+    Checking gix-config-value v0.17.1
+    Checking gix-command v0.8.0
+    Checking thiserror v1.0.69
+    Checking n0-error v0.1.3
+    Checking gix-actor v0.40.0
+   Compiling darling v0.23.0
+    Checking async-stream v0.3.6
+    Checking bzip2 v0.5.2
+    Checking num_enum v0.7.6
+    Checking erased-serde v0.4.10
+    Checking nix v0.24.3
+    Checking xz2 v0.1.7
+    Checking nix v0.31.3
+   Compiling darling_macro v0.20.11
+    Checking gix-hash v0.23.0
+    Checking gix-fs v0.19.2
+    Checking gix-glob v0.24.0
+   Compiling serde_with_macros v3.18.0
+    Checking rand v0.10.1
+    Checking zstd v0.13.3
+    Checking zerocopy v0.8.48
+    Checking tracing-indicatif v0.3.14
+    Checking vmm-sys-util v0.11.2
+    Checking gix-tempfile v21.0.2
+    Checking gix-hashtable v0.13.0
+    Checking gix-commitgraph v0.35.0
+   Compiling darling v0.20.11
+    Checking gix-attributes v0.31.0
+    Checking crunch-attestation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-attestation-core)
+    Checking serde_urlencoded v0.7.1
+    Checking itertools v0.15.0
+    Checking gix-object v0.58.0
+   Compiling derive_builder_core v0.20.2
+    Checking gix-lock v21.0.2
+    Checking caps v0.5.6
+    Checking vm-memory v0.10.0
+    Checking mio v0.8.11
+    Checking num_cpus v1.17.0
+    Checking quick-xml v0.40.1
+    Checking nom v8.0.0
+    Checking cobs v0.3.0
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/vendor/nix-compat-derive)
+    Checking rustc-hash v2.1.2
+    Checking fixedbitset v0.4.2
+   Compiling snix-castore v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/vendor/snix-castore)
+    Checking serde_with v3.18.0
+    Checking humantime v2.3.0
+    Checking postcard v1.1.3
+    Checking tokio-util v0.7.18
+    Checking tower v0.5.3
+    Checking tokio-stream v0.1.18
+    Checking petgraph v0.6.5
+    Checking async-compression v0.4.19
+    Checking threadpool v1.8.1
+    Checking gix-revwalk v0.29.0
+    Checking gix-filter v0.28.0
+   Compiling derive_builder_macro v0.20.2
+    Checking gix-ref v0.61.0
+    Checking tokio-rustls v0.26.4
+    Checking tower-http v0.6.8
+    Checking rustls-platform-verifier v0.6.2
+    Checking astral-tokio-tar v0.6.3
+    Checking fastcdc v3.2.1
+    Checking gix-traverse v0.55.0
+    Checking serde_tagged v0.3.0
+    Checking gix-ignore v0.19.1
+    Checking wide v1.7.0
+    Checking serde_qs v0.12.0
+    Checking redb v3.1.3
+    Checking h2 v0.4.13
+    Checking n0-future v0.3.2
+    Checking artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+    Checking serde_bytes v0.11.19
+    Checking malachite-base v0.9.2
+   Compiling lalrpop-util v0.22.2
+    Checking irpc v0.13.0
+    Checking gix-index v0.49.0
+    Checking winnow v1.0.1
+    Checking unicode-width v0.1.14
+    Checking wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+    Checking derive_builder v0.20.2
+    Checking crunch-attestation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-attestation)
+    Checking gix-pathspec v0.16.1
+    Checking uuid v1.23.0
+    Checking toml_datetime v0.7.5+spec-1.1.0
+   Compiling snix-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/vendor/snix-store)
+    Checking toml_writer v1.1.1+spec-1.1.0
+   Compiling snix-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/vendor/snix-build)
+   Compiling lalrpop v0.22.2
+   Compiling yansi v1.0.1
+    Checking strum v0.26.3
+    Checking typed-builder v0.22.0
+    Checking nix v0.29.0
+   Compiling logos-codegen v0.16.1
+    Checking gix-url v0.35.2
+    Checking oci-spec v0.7.1
+    Checking tar v0.4.45
+    Checking nix-archive v0.1.0
+    Checking itertools v0.12.1
+    Checking lru v0.16.4
+   Compiling proc-macro2-diagnostics v0.10.1
+    Checking base64ct v1.8.3
+    Checking gix-worktree v0.50.0
+    Checking count-write v0.1.0
+    Checking bitmaps v3.2.1
+    Checking termcolor v1.4.1
+    Checking crunch-action-result-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-action-result-core)
+    Checking pem-rfc7468 v0.7.0
+    Checking gix-revision v0.43.0
+   Compiling ouroboros_macro v0.18.5
+    Checking gix-prompt v0.14.1
+    Checking codespan-reporting v0.13.1
+    Checking crunch-gc-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-gc-core)
+    Checking crunch-repair-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-repair-core)
+    Checking crunch-composition-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-composition-core)
+    Checking crunch-overlay-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-overlay-core)
+    Checking imbl-sized-chunks v0.1.3
+    Checking fs2 v0.4.3
+    Checking imara-diff v0.2.0
+    Checking imara-diff v0.1.8
+    Checking hashlink v0.10.0
+    Checking serde_spanned v1.1.1
+    Checking aliasable v0.1.3
+    Checking typed-arena v2.0.2
+    Checking arrayvec v0.5.2
+    Checking arraydeque v0.5.1
+    Checking toml v0.9.12+spec-1.1.0
+    Checking nickel-lang-vector v0.2.0
+    Checking codespan v0.13.1
+    Checking gix-diff v0.61.0
+    Checking gix-refspec v0.39.0
+    Checking pretty v0.12.5
+    Checking saphyr-parser v0.0.6
+    Checking gix-credentials v0.37.1
+    Checking der v0.7.10
+    Checking io-lifetimes v3.0.1
+    Checking io-lifetimes v2.0.4
+   Compiling logos-derive v0.16.1
+    Checking toml_edit v0.24.1+spec-1.1.0
+    Checking gix-discover v0.49.0
+    Checking clru v0.6.3
+    Checking vte v0.14.1
+    Checking ppv-lite86 v0.2.21
+    Checking uluru v3.1.0
+    Checking gimli v0.32.3
+    Checking ouroboros v0.18.5
+    Checking bumpalo v3.20.2
+    Checking unsafe-libyaml v0.2.11
+    Checking logos v0.16.1
+    Checking simple-counter v0.1.0
+    Checking strip-ansi-escapes v0.2.1
+    Checking hyper v1.9.0
+    Checking fs-set-times v0.20.3
+    Checking gix-pack v0.68.0
+    Checking io-extras v0.19.0
+    Checking gix-dir v0.23.0
+    Checking object v0.37.3
+    Checking getrandom v0.3.4
+    Checking signal-hook v0.3.18
+    Checking rand_chacha v0.3.1
+    Checking gix-config v0.54.0
+    Checking gix-worktree-stream v0.30.0
+    Checking gix-negotiate v0.29.0
+    Checking gix-shallow v0.10.0
+    Checking rustix-linux-procfs v0.1.1
+    Checking num-integer v0.1.46
+    Checking sha-1 v0.10.1
+    Checking io-close v0.3.7
+    Checking rand v0.8.6
+    Checking json_scanner v0.1.0
+    Checking rustc-demangle v0.1.28
+    Checking ambient-authority v0.0.2
+    Checking spki v0.7.3
+    Checking crc-catalog v2.4.0
+    Checking maybe-owned v0.3.4
+    Checking gix-worktree-state v0.28.0
+    Checking num-iter v0.1.46
+    Checking gix-status v0.28.0
+    Checking gix-archive v0.30.0
+    Checking crc v3.4.0
+    Checking pkcs8 v0.10.2
+    Checking signal-hook-mio v0.2.5
+    Checking serde_yaml v0.9.34+deprecated
+    Checking rand_core v0.9.5
+    Checking cap-primitives v4.0.2
+    Checking gix-blame v0.11.0
+    Checking gix-mailmap v0.32.0
+    Checking crunch-remote-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-remote-core)
+    Checking ureq-proto v0.6.0
+    Checking webpki-roots v1.0.6
+    Checking toml_datetime v0.6.11
+    Checking hyper-util v0.1.20
+    Checking serde_spanned v0.6.9
+    Checking unicode-linebreak v0.1.5
+    Checking utf8-zero v0.8.1
+    Checking gix-odb v0.78.0
+    Checking is_ci v1.2.0
+    Checking twox-hash v2.1.2
+    Checking toml_write v0.1.2
+    Checking cap-std v4.0.2
+    Checking ureq v3.3.0
+    Checking num-bigint-dig v0.8.6
+    Checking rand_chacha v0.9.0
+    Checking supports-color v3.0.2
+    Checking gix-submodule v0.28.0
+    Checking textwrap v0.16.2
+    Checking ruzstd v0.8.2
+    Checking toml_edit v0.22.27
+    Checking crossterm v0.29.0
+    Checking pkcs1 v0.7.5
+    Checking crunch-nar v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-nar)
+    Checking lzma-rs v0.3.0
+    Checking owo-colors v4.3.0
+    Checking artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+    Checking gethostname v0.5.0
+    Checking crunch-rust-cache-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-rust-cache-core)
+    Checking terminal_size v0.4.4
+    Checking fuzzy-matcher v0.3.7
+    Checking artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be#e41340be)
+    Checking crunch-source-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-source-core)
+    Checking bzip2-rs v0.1.2
+    Checking dyn-clone v1.0.20
+    Checking supports-unicode v3.0.0
+    Checking bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+    Checking supports-hyperlinks v3.2.0
+    Checking cap-fs-ext v4.0.2
+    Checking addr2line v0.25.1
+    Checking crunch-glue v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-glue)
+    Checking rand v0.9.3
+    Checking linkme v0.3.37
+    Checking crunch-project-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-project-core)
+    Checking rsa v0.9.10
+    Checking crunch-evaluation-stream-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-evaluation-stream-core)
+    Checking crunch-build-planning-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-build-planning-core)
+    Checking hyper-rustls v0.27.7
+    Checking mantle-application-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/mantle-application-core)
+    Checking inquire v0.9.4
+    Checking mantle-rust-plan-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/mantle-rust-plan-core)
+    Checking crunch-resource-policy-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-resource-policy-core)
+    Checking valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=e40c76b4d2070a29636e00c85c0dff93f03dba2f#e40c76b4)
+    Checking crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-wasm-component-core)
+    Checking crunch-shell-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-shell-core)
+    Checking secrecy v0.10.3
+    Checking etcetera v0.11.0
+    Checking reqwest v0.13.2
+    Checking colored v3.1.1
+    Checking dotenvy v0.15.7
+    Checking crunch-delta-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-delta-core)
+    Checking detect-coding-agent v0.1.0
+    Checking crunch-shell v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-shell)
+    Checking mantle-application v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/mantle-application)
+    Checking crunch-radiance-reference-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-radiance-reference-core)
+    Checking crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-release-core)
+    Checking bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+    Checking crunch-remote v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-remote)
+    Checking chapter-tgz v0.1.0
+    Checking durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+    Checking mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/mantlepkgs-core)
+    Checking toml v0.8.23
+    Checking crunch-bootstrap-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-bootstrap-core)
+    Checking nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+    Checking crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-eval-budget-core)
+    Checking nix-derivation v0.1.0
+    Checking mantle-portable-client-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/mantle-portable-client-core)
+    Checking backtrace v0.3.76
+    Checking mantle-rust-plan v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/mantle-rust-plan)
+    Checking reqwest-middleware v0.5.1
+    Checking object_store v0.14.0
+    Checking gix-transport v0.55.1
+    Checking backtrace-ext v0.2.1
+    Checking miette v7.6.0
+    Checking reqwest-tracing v0.6.0
+    Checking gix-protocol v0.59.0
+    Checking malachite-nz v0.9.2
+    Checking secretspec v0.17.0
+   Compiling nickel-lang-parser v0.3.0
+   Compiling nickel-lang-core v0.18.0
+    Checking snix-tracing v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/vendor/snix-tracing)
+    Checking gix v0.81.0
+    Checking crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-wasm-component)
+    Checking crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-project)
+    Checking crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-store)
+    Checking crunch-resource-policy v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-resource-policy)
+    Checking malachite-q v0.9.2
+    Checking malachite-float v0.9.2
+    Checking malachite v0.9.2
+    Checking crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-build)
+    Checking crunch-rust-cache v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-rust-cache)
+    Checking crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-delta)
+    Checking crunch-rustc-wrapper v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-rustc-wrapper)
+    Checking nickel-lang v2.2.0
+    Checking crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-eval)
+    Checking crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy/crates/crunch-pipeline)
+    Checking mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-evidence-driven-resource-policy)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 10s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+
+$ cargo -Zscript --offline scripts/check-resource-policy-architecture.rs --self-test
+resource-policy architecture verified: findings=0 negative-fixtures=12
+
+$ cargo -Zscript --offline scripts/check-resource-policy-architecture.rs --root .
+resource-policy architecture verified: findings=0 negative-fixtures=12
+
+$ cargo -Zscript --offline scripts/check-machine-schema-contracts.rs
+machine schema contract check: PASS (32 contracted, 66 classified)
+
+$ /nix/store/imrb93xskk3jn33fgcvj0mqjfx4lypvk-nickel-1.16.0/bin/nickel typecheck config/resource-policy.ncl
+
+$ cmp config/generated/resource-policy.json /tmp/resource-policy.committed.json
+
+$ nixfmt --check flake.nix
+
+$ git diff --check HEAD^ HEAD
+
+committed-focused-suite=PASS

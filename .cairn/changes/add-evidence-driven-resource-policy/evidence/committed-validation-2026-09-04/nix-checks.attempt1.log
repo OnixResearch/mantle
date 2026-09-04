@@ -1,0 +1,8 @@
+Command intent: run the four focused Nix checks and record each command.
+Status: not run
+
+The shell rejected the logging printf before the first Nix command:
+
+sh: -c: line 10: unexpected EOF while looking for matching `''
+
+This was an operator quoting error. It did not run a product check or mutate the repository.
