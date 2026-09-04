@@ -5474,6 +5474,7 @@ fn run_cargo_free_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<()
         rust_source_provider: request.rust_source_provider,
         rust_action_resources: None,
         hermeticity_mode: select_hermeticity_mode(request.hermeticity)?,
+        resume: cargo_free_self_build::CargoFreeFixedPointResume::None,
         json: request.ctx.json,
     };
     if request.fixed_point {

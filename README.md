@@ -409,6 +409,10 @@ nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs --self
 Use [`docs/operator-proof-guide.md`](docs/operator-proof-guide.md) before making
 or reviewing self-build, Cargo-free, Nix-free, or release claims.
 
+Development-only fixed-point resume is documented in
+[`docs/dev-cache-cross-run-resume.md`](docs/dev-cache-cross-run-resume.md).
+It does not satisfy a promoted proof.
+
 ### Bootstrap proof methodology
 
 Mantle uses a layered, fail-closed evidence argument. A successful build does

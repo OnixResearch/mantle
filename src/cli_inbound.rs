@@ -677,8 +677,8 @@ pub(super) enum Command {
         #[arg(long, requires = "source_built_fixed_point")]
         dev_provider_cache: Option<PathBuf>,
 
-        /// Resume a dev run from verified per-stage completion markers.
-        #[arg(long, requires = "source_built_fixed_point")]
+        /// Resume a dev run from remeasured content-addressed stage bundles.
+        #[arg(long, requires_all = ["source_built_fixed_point", "dev_provider_cache"])]
         dev_resume: bool,
 
         /// Fast-fail a dev run when the current source profile is unchanged.

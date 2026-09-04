@@ -10,25 +10,29 @@ The resume boundary must distrust marker status. It must remeasure all identitie
 
 ### Decision: Build a pure resume plan from remeasured facts
 
-The core receives current source, plan, policy, stage, producer, and output identities. It returns an ordered restore plan or a fail-closed restart decision.
+`crunch-dev-resume-core` is a `no_std + alloc` functional core. It receives current source, plan, policy, stage, producer, output, payload, and bundle identities.
 
-The core does not read files or trust producer status fields.
+The core returns an ordered restore plan or a fail-closed restart decision. It does not read files or trust producer status fields.
 
 ### Decision: Publish one content-addressed bundle per completed stage
 
-The shell stages the required execution tree, outputs, and marker facts. It publishes the bundle only after the core accepts the complete identity set.
+The shell publishes one manifest for each of the six ordered stages. Shared immutable payload objects use BLAKE3 identities, so stage manifests do not duplicate large trees.
 
-A partial, stale, mismatched, or unknown bundle cannot authorize a skip.
+The manifest becomes visible only after every referenced object passes remeasurement. A partial, stale, mismatched, conflicting, or unknown bundle cannot authorize a skip.
+
+### Decision: Reuse bounded checkpoint I/O without sharing authority
+
+The dev shell reuses the existing no-follow observation, copy, and no-replace publication mechanisms. Dev manifests and promoted checkpoint manifests keep separate origins and cache namespaces.
 
 ### Decision: Restore into a fresh staging directory
 
-A dev resume creates a fresh staging directory, revalidates the selected bundle, restores the required state, and continues at the first incomplete stage.
+A dev resume creates a fresh staging directory. The shell remeasures the selected objects, restores the required state, and continues at the first incomplete stage.
 
-The report records restored stages separately from executed stages.
+The machine report records restored stages separately from stages executed in the current attempt.
 
 ### Decision: Keep promoted proof authority cold
 
-A promoted run ignores all resume bundles and dev stores. It starts from empty provider and output authority and cannot publish success from restored work.
+A promoted run rejects dev resume options before cache access. It starts from empty provider and output authority and cannot publish success from restored work.
 
 ## Validation
 

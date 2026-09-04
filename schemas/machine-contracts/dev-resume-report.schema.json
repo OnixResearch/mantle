@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/bootstrap/dev-resume-report-v1",
+  "title": "Mantle dev resume report",
+  "x-mantle-rust-owner": "crates/crunch-dev-resume-core/src/model.rs::DevResumeReport",
+  "$defs": {
+    "blake3": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "stagex-transition",
+        "stagex-provider",
+        "full-source-native-provider",
+        "full-source-rust-provider",
+        "mantle-stage1",
+        "mantle-stage2"
+      ]
+    },
+    "rejected_candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundle_identity_blake3", "completed_stage", "reason"],
+      "properties": {
+        "bundle_identity_blake3": { "$ref": "#/$defs/blake3" },
+        "completed_stage": { "$ref": "#/$defs/stage" },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "no-candidate",
+            "promoted-mode",
+            "candidate-limit-exceeded",
+            "schema-mismatch",
+            "manifest-invalid",
+            "bundle-identity-mismatch",
+            "source-mismatch",
+            "plan-mismatch",
+            "policy-mismatch",
+            "stage-mismatch",
+            "producer-mismatch",
+            "output-mismatch",
+            "execution-evidence-mismatch",
+            "payload-set-incomplete",
+            "payload-mismatch",
+            "conflicting-candidate"
+          ]
+        }
+      }
+    },
+    "stages": {
+      "type": "array",
+      "maxItems": 6,
+      "x-mantle-bound-name": { "maxItems": "DEV_RESUME_STAGE_COUNT" },
+      "items": { "$ref": "#/$defs/stage" }
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "x-mantle-bound-name": { "minLength": "TEXT_BYTES_MIN", "maxLength": "TEXT_BYTES_MAX" },
+      "x-mantle-length-unit": "utf8-bytes"
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "status",
+    "mode",
+    "plan_digest_blake3",
+    "selected_bundle_identity_blake3",
+    "published_bundle_identities_blake3",
+    "restored_stages",
+    "executed_stages",
+    "first_incomplete_stage",
+    "rejected_candidates",
+    "cache_adoption_disposition",
+    "promoted_receipt_written",
+    "release_alias_updated",
+    "non_claims"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "mantle-dev-stage-resume-report-v1",
+      "x-mantle-issue-class": "version"
+    },
+    "status": {
+      "type": "string",
+      "const": "dev-only"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["dev", "promoted"]
+    },
+    "plan_digest_blake3": {
+      "$ref": "#/$defs/blake3"
+    },
+    "selected_bundle_identity_blake3": {
+      "type": ["string", "null"],
+      "x-mantle-semantic": "blake3"
+    },
+    "published_bundle_identities_blake3": {
+      "type": "array",
+      "maxItems": 6,
+      "x-mantle-bound-name": { "maxItems": "DEV_RESUME_STAGE_COUNT" },
+      "items": { "$ref": "#/$defs/blake3" }
+    },
+    "restored_stages": {
+      "$ref": "#/$defs/stages"
+    },
+    "executed_stages": {
+      "$ref": "#/$defs/stages"
+    },
+    "first_incomplete_stage": {
+      "type": ["string", "null"],
+      "enum": [
+        null,
+        "stagex-transition",
+        "stagex-provider",
+        "full-source-native-provider",
+        "full-source-rust-provider",
+        "mantle-stage1",
+        "mantle-stage2"
+      ]
+    },
+    "rejected_candidates": {
+      "type": "array",
+      "maxItems": 16,
+      "x-mantle-bound-name": { "maxItems": "DEV_RESUME_CANDIDATES_MAX" },
+      "items": { "$ref": "#/$defs/rejected_candidate" }
+    },
+    "cache_adoption_disposition": {
+      "type": "string",
+      "enum": ["cold-executed", "provider-cache-adopted", "resume-restored"]
+    },
+    "promoted_receipt_written": {
+      "type": "boolean",
+      "const": false
+    },
+    "release_alias_updated": {
+      "type": "boolean",
+      "const": false
+    },
+    "non_claims": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "x-mantle-bound-name": { "minItems": "DEV_RESUME_NON_CLAIM_COUNT", "maxItems": "DEV_RESUME_NON_CLAIM_COUNT" },
+      "items": { "$ref": "#/$defs/text" }
+    }
+  }
+}

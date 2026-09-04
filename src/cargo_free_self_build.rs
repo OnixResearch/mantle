@@ -21,10 +21,10 @@ use crate::errors::RunError;
 
 const SCHEMA: &str = "mantle-cargo-free-self-build-v1";
 const FIXED_POINT_SCHEMA: &str = "mantle-cargo-free-fixed-point-proof-v1";
-const RECEIPT_FILE: &str = "receipt.json";
+pub(crate) const RECEIPT_FILE: &str = "receipt.json";
 const STDERR_FILE: &str = "stderr.txt";
 const STATUS_FILE: &str = "status.txt";
-const META_FILE: &str = "meta.json";
+pub(crate) const META_FILE: &str = "meta.json";
 const PRE_FLIGHT_FILE: &str = "preflight.json";
 const NON_CLAIMS_FILE: &str = "non-claims.txt";
 const SMOKE_STDOUT_FILE: &str = "smoke-stdout.txt";
@@ -49,14 +49,14 @@ const LINKER_ALIAS: &str = "ld";
 const ARCHIVER_ALIAS: &str = "ar";
 const RANLIB_ALIAS: &str = "ranlib";
 const PKG_CONFIG_ALIAS: &str = "pkg-config";
-const PRODUCED_MANTLE_FILE: &str = "mantle";
+pub(crate) const PRODUCED_MANTLE_FILE: &str = "mantle";
 const MANTLE_TARGET_NAME: &str = "mantle";
 const MANTLE_TARGET_KIND: &str = "bin";
 const SUCCESS_STATUS: &str = "success";
 const BLOCKED_STATUS: &str = "blocked";
 const MISMATCH_STATUS: &str = "mismatch";
-const STAGE1_DIR: &str = "stage1";
-const STAGE2_DIR: &str = "stage2";
+pub(crate) const STAGE1_DIR: &str = "stage1";
+pub(crate) const STAGE2_DIR: &str = "stage2";
 const JSON_FLAG: &str = "--json";
 const RUST_PLAN_COMMAND: &str = "rust-plan";
 const ROOT_FLAG: &str = "--root";
@@ -138,6 +138,12 @@ const CARGO_SHIM_PERMISSIONS: u32 = 0o755;
 #[cfg(unix)]
 const UNIX_EXECUTE_BITS: u32 = 0o111;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CargoFreeFixedPointResume {
+    None,
+    Stage1,
+}
+
 pub(crate) struct CargoFreeSelfBuildOptions<'a> {
     pub(crate) root: &'a Path,
     pub(crate) out_dir: &'a Path,
@@ -147,6 +153,7 @@ pub(crate) struct CargoFreeSelfBuildOptions<'a> {
     pub(crate) rust_source_provider: Option<&'a Path>,
     pub(crate) rust_action_resources: Option<crate::source_built_rust_action_plan::RustActionResourceLimits>,
     pub(crate) hermeticity_mode: crunch_pipeline::HermeticityMode,
+    pub(crate) resume: CargoFreeFixedPointResume,
     pub(crate) json: bool,
 }
 
@@ -1439,7 +1446,7 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     ensure_outside_root(&bundle_dir, &root)?;
     debug_assert!(root.is_absolute());
     debug_assert!(!bundle_dir.starts_with(&root));
-    prepare_fixed_point_output_dir(&bundle_dir)?;
+    prepare_fixed_point_output_dir(&bundle_dir, options.resume)?;
     let loaded_toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
     let loaded_rust_provider =
         load_rust_source_provider(options.rust_source_provider, loaded_toolchain_closure.manifest.as_ref())?;
@@ -1476,18 +1483,25 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
     };
     let host_mantle = env::current_exe().map_err(|err| internal(format!("resolve current executable: {err}")))?;
     let stage_policy_digest = toolchain_status.policy_digest_blake3.as_deref();
-    let stage1 = execute_fixed_point_stage(
-        &plan.stages[FIXED_POINT_STAGE1_INDEX],
-        &host_mantle,
-        &compatibility.summary.stage_rustc,
-        &loaded_toolchain_closure,
-        loaded_rust_provider.source_built_shell.as_ref(),
-        &loaded_rust_provider.source_built_host_tools,
-        &loaded_rust_provider.source_built_native_artifacts,
-        loaded_rust_provider.source_built_action_trust.as_ref(),
-        options.rust_action_resources.as_ref(),
-        stage_policy_digest,
-    )?;
+    let stage1 = match options.resume {
+        CargoFreeFixedPointResume::None => execute_fixed_point_stage(
+            &plan.stages[FIXED_POINT_STAGE1_INDEX],
+            &host_mantle,
+            &compatibility.summary.stage_rustc,
+            &loaded_toolchain_closure,
+            loaded_rust_provider.source_built_shell.as_ref(),
+            &loaded_rust_provider.source_built_host_tools,
+            &loaded_rust_provider.source_built_native_artifacts,
+            loaded_rust_provider.source_built_action_trust.as_ref(),
+            options.rust_action_resources.as_ref(),
+            stage_policy_digest,
+        )?,
+        CargoFreeFixedPointResume::Stage1 => load_restored_fixed_point_stage(
+            &plan.stages[FIXED_POINT_STAGE1_INDEX],
+            stage_policy_digest,
+            fixed_point_c_compiler_route(&loaded_toolchain_closure)?,
+        )?,
+    };
     if !stage1.success {
         return finish_fixed_point(&finish_context, stage1, None, BLOCKED_STATUS);
     }
@@ -1668,10 +1682,11 @@ fn rust_plan_args(
     args
 }
 
-fn prepare_fixed_point_output_dir(bundle_dir: &Path) -> Result<(), RunError> {
+fn prepare_fixed_point_output_dir(bundle_dir: &Path, resume: CargoFreeFixedPointResume) -> Result<(), RunError> {
     fs::create_dir_all(bundle_dir).map_err(|err| internal(format!("create {}: {err}", bundle_dir.display())))?;
+    let stage1 = bundle_dir.join(STAGE1_DIR);
     let owned_paths = [
-        bundle_dir.join(STAGE1_DIR),
+        stage1.clone(),
         bundle_dir.join(STAGE2_DIR),
         bundle_dir.join(EXECUTION_DIR),
         bundle_dir.join(TOOLCHAIN_DIR),
@@ -1680,8 +1695,15 @@ fn prepare_fixed_point_output_dir(bundle_dir: &Path) -> Result<(), RunError> {
         bundle_dir.join(NON_CLAIMS_FILE),
     ];
     for path in &owned_paths {
+        if resume == CargoFreeFixedPointResume::Stage1 && path == &stage1 {
+            continue;
+        }
         remove_owned_path(path)?;
     }
+    if resume == CargoFreeFixedPointResume::Stage1 && !stage1.is_dir() {
+        return Err(internal("restored fixed-point stage1 directory is missing".to_string()));
+    }
+    debug_assert_eq!(resume == CargoFreeFixedPointResume::Stage1, stage1.is_dir());
     fs::create_dir_all(bundle_dir).map_err(|err| internal(format!("create {}: {err}", bundle_dir.display())))
 }
 
@@ -2358,6 +2380,57 @@ fn execute_fixed_point_stage(
     record_file_write(&stage.stderr_path, &output.stderr, &mut blocker);
     record_file_write(&stage.status_path, status_text(output.status.code()).as_bytes(), &mut blocker);
     fixed_point_stage_from_output(stage, output.status.code(), blocker, policy_digest_blake3, c_compiler_route)
+}
+
+fn load_restored_fixed_point_stage(
+    stage: &FixedPointStagePlan,
+    policy_digest_blake3: Option<&str>,
+    c_compiler_route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
+) -> Result<FixedPointStageRun, RunError> {
+    if stage.name != STAGE1_DIR || !stage.stage_dir.is_dir() {
+        return Err(internal("restored fixed-point stage1 shape is invalid".to_string()));
+    }
+    let receipt = parse_receipt(&stage.receipt_path, true)?
+        .ok_or_else(|| internal("restored fixed-point stage1 receipt is missing".to_string()))?;
+    let execution_status = receipt_execution_status(Some(&receipt));
+    if execution_status != SUCCESS_STATUS {
+        return Err(internal("restored fixed-point stage1 receipt is not successful".to_string()));
+    }
+    if policy_digest_blake3.is_some_and(|expected| {
+        receipt.pointer(&format!("/{TOOLCHAIN_CLOSURE_POLICY_DIGEST_FIELD}")).and_then(Value::as_str) != Some(expected)
+    }) {
+        return Err(internal("restored fixed-point stage1 policy identity mismatch".to_string()));
+    }
+    require_executable(&stage.binary_path)?;
+    let digest = blake3_file(&stage.binary_path)?;
+    let smoke_status_code = run_smoke_to_paths(&stage.binary_path, &stage.smoke_stdout_path, &stage.smoke_stderr_path)?;
+    if smoke_status_code != SUCCESS_EXIT_CODE || failed_unit_count(&receipt) != 0 {
+        return Err(internal("restored fixed-point stage1 validation failed".to_string()));
+    }
+    let run = FixedPointStageRun {
+        name: stage.name,
+        dir: stage.stage_dir.clone(),
+        execution_dir: stage.execution_dir.clone(),
+        receipt_path: stage.receipt_path.clone(),
+        stderr_path: stage.stderr_path.clone(),
+        status_path: stage.status_path.clone(),
+        status_code: Some(SUCCESS_EXIT_CODE),
+        execution_status,
+        cargo_marker_absent: !stage.cargo_marker_path.exists(),
+        success: true,
+        unit_count: unit_count(&receipt),
+        failed_unit_count: failed_unit_count(&receipt),
+        binary: Some(stage.binary_path.clone()),
+        binary_blake3: Some(digest),
+        smoke_status_code: Some(smoke_status_code),
+        source_built_toolchain_closure_policy_digest_blake3: policy_digest_blake3.map(ToOwned::to_owned),
+        selected_c_compiler: c_compiler_route,
+        blocker: None,
+        blocker_diagnostic: None,
+    };
+    debug_assert!(run.success);
+    debug_assert!(run.binary.is_some());
+    Ok(run)
 }
 
 fn fixed_point_c_compiler_route(
@@ -4887,6 +4960,24 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::*;
+
+    #[test]
+    fn fixed_point_output_preparation_preserves_only_an_explicit_restored_stage1() {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle = temp.path().join("bundle");
+        fs::create_dir_all(bundle.join(STAGE1_DIR)).unwrap();
+        fs::create_dir_all(bundle.join(STAGE2_DIR)).unwrap();
+        fs::write(bundle.join(STAGE1_DIR).join("kept"), b"stage1").unwrap();
+        fs::write(bundle.join(STAGE2_DIR).join("removed"), b"stage2").unwrap();
+
+        prepare_fixed_point_output_dir(&bundle, CargoFreeFixedPointResume::Stage1).unwrap();
+        assert!(bundle.join(STAGE1_DIR).join("kept").is_file());
+        assert!(!bundle.join(STAGE2_DIR).exists());
+
+        prepare_fixed_point_output_dir(&bundle, CargoFreeFixedPointResume::None).unwrap();
+        assert!(!bundle.join(STAGE1_DIR).exists());
+        assert!(!bundle.join(STAGE2_DIR).exists());
+    }
 
     const FIXED_POINT_TEST_DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const FIXED_POINT_TEST_DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";

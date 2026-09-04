@@ -1504,6 +1504,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crunch-dev-resume-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "crunch-eval"
 version = "0.1.0"
 dependencies = [
@@ -4923,6 +4932,7 @@ dependencies = [
  "crunch-build-planning-core",
  "crunch-composition-core",
  "crunch-delta",
+ "crunch-dev-resume-core",
  "crunch-eval",
  "crunch-eval-budget-core",
  "crunch-evaluation-stream-core",

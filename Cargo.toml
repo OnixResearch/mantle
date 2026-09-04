@@ -20,6 +20,7 @@ members = [
   "crates/crunch-store",
   "crates/crunch-build",
   "crates/crunch-build-planning-core",
+  "crates/crunch-dev-resume-core",
   "crates/crunch-source-core",
   "crates/crunch-radiance-reference-core",
   "crates/crunch-resource-policy-core",
@@ -79,6 +80,7 @@ default_scope = [
   "-p", "crunch-attestation-core",
   "-p", "crunch-build",
   "-p", "crunch-build-planning-core",
+  "-p", "crunch-dev-resume-core",
   "-p", "crunch-source-core",
   "-p", "crunch-radiance-reference-core",
   "-p", "crunch-resource-policy-core",
@@ -207,6 +209,7 @@ mantlepkgs-core = { path = "crates/mantlepkgs-core" }
 mantle-portable-client-core = { path = "crates/mantle-portable-client-core" }
 crunch-build = { path = "crates/crunch-build" }
 crunch-build-planning-core = { path = "crates/crunch-build-planning-core" }
+crunch-dev-resume-core = { path = "crates/crunch-dev-resume-core" }
 crunch-source-core = { path = "crates/crunch-source-core" }
 crunch-radiance-reference-core = { path = "crates/crunch-radiance-reference-core" }
 crunch-resource-policy-core = { path = "crates/crunch-resource-policy-core" }

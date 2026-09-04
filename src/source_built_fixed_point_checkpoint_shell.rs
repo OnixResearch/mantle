@@ -25,12 +25,12 @@ use crate::source_built_fixed_point_checkpoint::ProofCheckpointOrigin;
 use crate::source_built_fixed_point_checkpoint::ProviderCheckpointAdmission;
 use crate::source_built_fixed_point_checkpoint::ProviderCheckpointManifest;
 use crate::source_built_fixed_point_checkpoint::ProviderCheckpointStageObservation;
-use crate::source_built_fixed_point_checkpoint::admit_promoted_provider_checkpoint;
 use crate::source_built_fixed_point_checkpoint::build_provider_checkpoint_manifest;
 use crate::source_built_fixed_point_checkpoint::provider_checkpoint_lookup_key;
 use crate::source_built_fixed_point_checkpoint::provider_checkpoint_manifest_digest;
 
 pub(crate) const PROVIDER_CHECKPOINTS_SUBDIR: &str = "promoted-provider-checkpoints";
+pub(crate) const DEV_PROVIDER_CHECKPOINTS_SUBDIR: &str = "dev-provider-checkpoints";
 pub(crate) const PROVIDER_CHECKPOINT_MANIFEST_FILE: &str = "manifest.json";
 const CHECKPOINT_PAYLOAD_ROOT: &str = "payload";
 const CHECKPOINT_TEMP_PREFIX: &str = ".checkpoint-tmp-";
@@ -112,19 +112,53 @@ pub(crate) fn publish_provider_checkpoint(
     expected_stagex_provider_digest_blake3: &str,
     limits: ProviderCheckpointLimits,
 ) -> Result<PublishedProviderCheckpoint, RunError> {
+    publish_provider_checkpoint_for_origin(
+        checkpoint_store,
+        plan,
+        stage_observations,
+        payload_sources,
+        expected_stagex_provider_digest_blake3,
+        limits,
+        ProofCheckpointOrigin::PromotedExecution,
+    )
+}
+
+pub(crate) fn publish_dev_provider_checkpoint(
+    checkpoint_store: &Path,
+    plan: &SourceBuiltFixedPointPlan,
+    stage_observations: Vec<ProviderCheckpointStageObservation>,
+    payload_sources: &[CheckpointPayloadSource],
+    expected_stagex_provider_digest_blake3: &str,
+    limits: ProviderCheckpointLimits,
+) -> Result<PublishedProviderCheckpoint, RunError> {
+    publish_provider_checkpoint_for_origin(
+        checkpoint_store,
+        plan,
+        stage_observations,
+        payload_sources,
+        expected_stagex_provider_digest_blake3,
+        limits,
+        ProofCheckpointOrigin::DevExecution,
+    )
+}
+
+fn publish_provider_checkpoint_for_origin(
+    checkpoint_store: &Path,
+    plan: &SourceBuiltFixedPointPlan,
+    stage_observations: Vec<ProviderCheckpointStageObservation>,
+    payload_sources: &[CheckpointPayloadSource],
+    expected_stagex_provider_digest_blake3: &str,
+    limits: ProviderCheckpointLimits,
+    origin: ProofCheckpointOrigin,
+) -> Result<PublishedProviderCheckpoint, RunError> {
     require_absolute_directory_or_create(checkpoint_store)?;
     let payloads = observe_payload_sources(payload_sources, limits)?;
-    let manifest = build_provider_checkpoint_manifest(
-        plan,
-        ProofCheckpointOrigin::PromotedExecution,
-        stage_observations,
-        payloads,
-    )
-    .map_err(checkpoint_policy_error)?;
+    let manifest = build_provider_checkpoint_manifest(plan, origin, stage_observations, payloads)
+        .map_err(checkpoint_policy_error)?;
     let lookup_key_blake3 = provider_checkpoint_lookup_key(plan).map_err(checkpoint_policy_error)?;
     let checkpoint_digest_blake3 = provider_checkpoint_manifest_digest(&manifest).map_err(checkpoint_policy_error)?;
     let checkpoint_root = checkpoint_store
-        .join(PROVIDER_CHECKPOINTS_SUBDIR)
+        .join(checkpoint_subdir(origin))
         .join(&lookup_key_blake3)
         .join(&checkpoint_digest_blake3);
     if checkpoint_root.exists() {
@@ -134,6 +168,7 @@ pub(crate) fn publish_provider_checkpoint(
             &manifest,
             expected_stagex_provider_digest_blake3,
             limits,
+            origin,
         );
     }
     publish_checkpoint_create_new(
@@ -143,6 +178,7 @@ pub(crate) fn publish_provider_checkpoint(
         payload_sources,
         expected_stagex_provider_digest_blake3,
         limits,
+        origin,
     )
 }
 
@@ -153,12 +189,44 @@ pub(crate) fn admit_provider_checkpoint_store(
     expected_stagex_provider_digest_blake3: &str,
     limits: ProviderCheckpointLimits,
 ) -> Result<Option<AdmittedProviderCheckpoint>, RunError> {
+    admit_provider_checkpoint_store_for_origin(
+        checkpoint_store,
+        plan,
+        expected_stagex_provider_digest_blake3,
+        limits,
+        ProofCheckpointOrigin::PromotedExecution,
+    )
+}
+
+pub(crate) fn admit_dev_provider_checkpoint_store(
+    checkpoint_store: &Path,
+    plan: &SourceBuiltFixedPointPlan,
+    expected_stagex_provider_digest_blake3: &str,
+    limits: ProviderCheckpointLimits,
+) -> Result<Option<AdmittedProviderCheckpoint>, RunError> {
+    admit_provider_checkpoint_store_for_origin(
+        checkpoint_store,
+        plan,
+        expected_stagex_provider_digest_blake3,
+        limits,
+        ProofCheckpointOrigin::DevExecution,
+    )
+}
+
+fn admit_provider_checkpoint_store_for_origin(
+    checkpoint_store: &Path,
+    plan: &SourceBuiltFixedPointPlan,
+    expected_stagex_provider_digest_blake3: &str,
+    limits: ProviderCheckpointLimits,
+    origin: ProofCheckpointOrigin,
+) -> Result<Option<AdmittedProviderCheckpoint>, RunError> {
     if !checkpoint_store.is_absolute() {
         return Err(checkpoint_error(format!("checkpoint store must be absolute: {}", checkpoint_store.display())));
     }
     let lookup_key = provider_checkpoint_lookup_key(plan).map_err(checkpoint_policy_error)?;
-    let lookup_root = checkpoint_store.join(PROVIDER_CHECKPOINTS_SUBDIR).join(lookup_key);
-    let selected = select_admitted_checkpoint(&lookup_root, plan, expected_stagex_provider_digest_blake3, limits)?;
+    let lookup_root = checkpoint_store.join(checkpoint_subdir(origin)).join(lookup_key);
+    let selected =
+        select_admitted_checkpoint(&lookup_root, plan, expected_stagex_provider_digest_blake3, limits, origin)?;
     Ok(selected.map(|(checkpoint_root, manifest, admission)| AdmittedProviderCheckpoint {
         checkpoint_root,
         manifest,
@@ -172,15 +240,34 @@ pub(crate) fn restore_provider_checkpoint(
     restores: &[CheckpointPayloadRestore],
     limits: ProviderCheckpointLimits,
 ) -> Result<RestoredProviderCheckpoint, RunError> {
-    validate_restore_requests(restores, &admitted.manifest)?;
+    validate_restore_requests(restores, &admitted.manifest, true)?;
+    restore_selected_provider_checkpoint(admitted, restores, limits, false)
+}
+
+pub(crate) fn restore_dev_provider_checkpoint(
+    admitted: AdmittedProviderCheckpoint,
+    restores: &[CheckpointPayloadRestore],
+    limits: ProviderCheckpointLimits,
+) -> Result<RestoredProviderCheckpoint, RunError> {
+    validate_restore_requests(restores, &admitted.manifest, false)?;
+    restore_selected_provider_checkpoint(admitted, restores, limits, true)
+}
+
+fn restore_selected_provider_checkpoint(
+    admitted: AdmittedProviderCheckpoint,
+    restores: &[CheckpointPayloadRestore],
+    limits: ProviderCheckpointLimits,
+    allow_existing_identical: bool,
+) -> Result<RestoredProviderCheckpoint, RunError> {
     let mut created = Vec::new();
     for request in restores {
-        if let Err(error) = restore_one_payload(&admitted, request, limits) {
-            return Err(add_cleanup_result(error, cleanup_restores(&created)));
+        match restore_one_payload(&admitted, request, limits, allow_existing_identical) {
+            Ok(true) => created.push(request.destination_path.to_path_buf()),
+            Ok(false) => {}
+            Err(error) => return Err(add_cleanup_result(error, cleanup_restores(&created))),
         }
-        created.push(request.destination_path.to_path_buf());
     }
-    assert_eq!(created.len(), restores.len());
+    debug_assert!(created.len() <= restores.len());
     Ok(RestoredProviderCheckpoint {
         checkpoint_root: admitted.checkpoint_root,
         manifest: admitted.manifest,
@@ -192,14 +279,31 @@ fn restore_one_payload(
     admitted: &AdmittedProviderCheckpoint,
     request: &CheckpointPayloadRestore,
     limits: ProviderCheckpointLimits,
-) -> Result<(), RunError> {
+    allow_existing_identical: bool,
+) -> Result<bool, RunError> {
     let payload = payload_by_id(&admitted.manifest, &request.payload_id)?;
     let source = admitted.checkpoint_root.join(&payload.relative_path);
     if request.destination_path.exists() {
-        return Err(checkpoint_error(format!(
-            "checkpoint restore destination exists: {}",
-            request.destination_path.display()
-        )));
+        if !allow_existing_identical {
+            return Err(checkpoint_error(format!(
+                "checkpoint restore destination exists: {}",
+                request.destination_path.display()
+            )));
+        }
+        let observed = observe_payload(
+            &request.destination_path,
+            payload.payload_id.as_str(),
+            Path::new(&payload.relative_path),
+            request.kind,
+            limits,
+        )?;
+        if &observed != payload {
+            return Err(checkpoint_error(format!(
+                "existing dev checkpoint payload identity mismatch for {}",
+                request.payload_id
+            )));
+        }
+        return Ok(false);
     }
     copy_payload(&source, &request.destination_path, request.kind, limits)?;
     let observed = observe_payload(
@@ -216,7 +320,7 @@ fn restore_one_payload(
             request.payload_id
         )));
     }
-    Ok(())
+    Ok(true)
 }
 
 fn select_admitted_checkpoint(
@@ -224,6 +328,7 @@ fn select_admitted_checkpoint(
     plan: &SourceBuiltFixedPointPlan,
     expected_stagex_provider_digest_blake3: &str,
     limits: ProviderCheckpointLimits,
+    origin: ProofCheckpointOrigin,
 ) -> Result<Option<(PathBuf, ProviderCheckpointManifest, ProviderCheckpointAdmission)>, RunError> {
     if !lookup_root.exists() {
         return Ok(None);
@@ -254,7 +359,7 @@ fn select_admitted_checkpoint(
             return Err(checkpoint_error(format!("partial or unknown checkpoint candidate: {}", path.display())));
         }
         let (manifest, admission) =
-            load_and_admit_checkpoint(&path, plan, expected_stagex_provider_digest_blake3, limits)?;
+            load_and_admit_checkpoint_for_origin(&path, plan, expected_stagex_provider_digest_blake3, limits, origin)?;
         if admission.checkpoint_digest_blake3 != name {
             return Err(checkpoint_error(format!("checkpoint candidate path digest mismatch: {}", path.display())));
         }
@@ -278,17 +383,34 @@ fn select_admitted_checkpoint(
     Ok(selected)
 }
 
-pub(crate) fn load_and_admit_checkpoint(
+fn load_and_admit_checkpoint_for_origin(
     checkpoint_root: &Path,
     plan: &SourceBuiltFixedPointPlan,
     expected_stagex_provider_digest_blake3: &str,
     limits: ProviderCheckpointLimits,
+    origin: ProofCheckpointOrigin,
 ) -> Result<(ProviderCheckpointManifest, ProviderCheckpointAdmission), RunError> {
     let manifest = read_checkpoint_manifest(checkpoint_root)?;
     let observed = observe_manifest_payloads(checkpoint_root, &manifest, limits)?;
-    let admission =
-        admit_promoted_provider_checkpoint(plan, &manifest, &observed, expected_stagex_provider_digest_blake3)
-            .map_err(checkpoint_policy_error)?;
+    let admission = match origin {
+        ProofCheckpointOrigin::PromotedExecution => {
+            crate::source_built_fixed_point_checkpoint::admit_promoted_provider_checkpoint(
+                plan,
+                &manifest,
+                &observed,
+                expected_stagex_provider_digest_blake3,
+            )
+        }
+        ProofCheckpointOrigin::DevExecution => {
+            crate::source_built_fixed_point_checkpoint::admit_dev_provider_checkpoint(
+                plan,
+                &manifest,
+                &observed,
+                expected_stagex_provider_digest_blake3,
+            )
+        }
+    }
+    .map_err(checkpoint_policy_error)?;
     assert_eq!(manifest.lookup_key_blake3, admission.lookup_key_blake3);
     Ok((manifest, admission))
 }
@@ -300,6 +422,7 @@ fn publish_checkpoint_create_new(
     payload_sources: &[CheckpointPayloadSource],
     expected_stagex_provider_digest_blake3: &str,
     limits: ProviderCheckpointLimits,
+    origin: ProofCheckpointOrigin,
 ) -> Result<PublishedProviderCheckpoint, RunError> {
     let parent = checkpoint_root
         .parent()
@@ -321,6 +444,7 @@ fn publish_checkpoint_create_new(
         payload_sources,
         expected_stagex_provider_digest_blake3,
         limits,
+        origin,
     );
     if let Err(error) = result {
         return Err(add_cleanup_result(error, remove_tree(&temporary)));
@@ -336,6 +460,7 @@ fn publish_checkpoint_create_new(
                 manifest,
                 expected_stagex_provider_digest_blake3,
                 limits,
+                origin,
             );
         }
         return Err(checkpoint_error(format!("publishing checkpoint {}: {error}", checkpoint_root.display())));
@@ -359,6 +484,7 @@ fn materialize_checkpoint_candidate(
     payload_sources: &[CheckpointPayloadSource],
     expected_stagex_provider_digest_blake3: &str,
     limits: ProviderCheckpointLimits,
+    origin: ProofCheckpointOrigin,
 ) -> Result<(), RunError> {
     for source in payload_sources {
         let destination = temporary.join(&source.relative_path);
@@ -371,7 +497,7 @@ fn materialize_checkpoint_candidate(
     }
     write_manifest_create_new(&temporary.join(PROVIDER_CHECKPOINT_MANIFEST_FILE), manifest)?;
     let (observed_manifest, admission) =
-        load_and_admit_checkpoint(temporary, plan, expected_stagex_provider_digest_blake3, limits)?;
+        load_and_admit_checkpoint_for_origin(temporary, plan, expected_stagex_provider_digest_blake3, limits, origin)?;
     if observed_manifest != *manifest {
         return Err(checkpoint_error("materialized checkpoint manifest changed before publication".to_string()));
     }
@@ -385,9 +511,15 @@ fn validate_existing_checkpoint(
     expected_manifest: &ProviderCheckpointManifest,
     expected_stagex_provider_digest_blake3: &str,
     limits: ProviderCheckpointLimits,
+    origin: ProofCheckpointOrigin,
 ) -> Result<PublishedProviderCheckpoint, RunError> {
-    let (observed_manifest, admission) =
-        load_and_admit_checkpoint(&checkpoint_root, plan, expected_stagex_provider_digest_blake3, limits)?;
+    let (observed_manifest, admission) = load_and_admit_checkpoint_for_origin(
+        &checkpoint_root,
+        plan,
+        expected_stagex_provider_digest_blake3,
+        limits,
+        origin,
+    )?;
     let expected_digest = provider_checkpoint_manifest_digest(expected_manifest).map_err(checkpoint_policy_error)?;
     if admission.checkpoint_digest_blake3 != expected_digest || observed_manifest != *expected_manifest {
         return Err(checkpoint_error(format!(
@@ -602,8 +734,12 @@ fn write_manifest_create_new(path: &Path, manifest: &ProviderCheckpointManifest)
 fn validate_restore_requests(
     restores: &[CheckpointPayloadRestore],
     manifest: &ProviderCheckpointManifest,
+    require_complete: bool,
 ) -> Result<(), RunError> {
-    if restores.len() != manifest.payloads.len() {
+    if restores.is_empty() {
+        return Err(checkpoint_error("checkpoint restore request set is empty".to_string()));
+    }
+    if require_complete && restores.len() != manifest.payloads.len() {
         return Err(checkpoint_error("checkpoint restore request count does not match manifest".to_string()));
     }
     let mut requests = BTreeMap::new();
@@ -616,7 +752,10 @@ fn validate_restore_requests(
             return Err(checkpoint_error(format!("checkpoint restore kind mismatch for {}", request.payload_id)));
         }
     }
-    assert_eq!(requests.len(), manifest.payloads.len());
+    if require_complete {
+        assert_eq!(requests.len(), manifest.payloads.len());
+    }
+    debug_assert!(!requests.is_empty());
     Ok(())
 }
 
@@ -666,7 +805,7 @@ fn require_absolute_directory_or_create(path: &Path) -> Result<(), RunError> {
     Ok(())
 }
 
-fn cleanup_restores(paths: &[PathBuf]) -> Result<(), RunError> {
+pub(crate) fn cleanup_restores(paths: &[PathBuf]) -> Result<(), RunError> {
     for path in paths.iter().rev() {
         remove_tree(path)?;
     }
@@ -694,6 +833,13 @@ fn add_cleanup_result(primary: RunError, cleanup: Result<(), RunError>) -> RunEr
     match cleanup {
         Ok(()) => primary,
         Err(cleanup_error) => checkpoint_error(format!("{primary}; cleanup failed: {cleanup_error}")),
+    }
+}
+
+const fn checkpoint_subdir(origin: ProofCheckpointOrigin) -> &'static str {
+    match origin {
+        ProofCheckpointOrigin::PromotedExecution => PROVIDER_CHECKPOINTS_SUBDIR,
+        ProofCheckpointOrigin::DevExecution => DEV_PROVIDER_CHECKPOINTS_SUBDIR,
     }
 }
 
@@ -756,6 +902,28 @@ mod tests {
             fs::read_link(fixture.restore_root.join("stagex-transition/opaque-link")).unwrap(),
             Path::new("../negative-fixture")
         );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn dev_checkpoint_keeps_origin_separate_and_restores_a_transition_subset() {
+        let fixture = CheckpointFixture::new();
+        let published = fixture.publish_dev();
+        let promoted = admit_provider_checkpoint_store(&fixture.store, &fixture.plan, DIGEST_B, fixture.limits);
+        let admitted = admit_dev_provider_checkpoint_store(&fixture.store, &fixture.plan, DIGEST_B, fixture.limits)
+            .unwrap()
+            .expect("published dev checkpoint");
+        let transition_restore = restore(
+            PAYLOAD_STAGEX_TRANSITION,
+            &fixture.restore_root.join("stagex-transition"),
+            CheckpointPayloadKind::PreservedTree,
+        );
+        let restored = restore_dev_provider_checkpoint(admitted, &[transition_restore], fixture.limits).unwrap();
+
+        assert!(promoted.unwrap().is_none());
+        assert_eq!(restored.admission.checkpoint_digest_blake3, published.checkpoint_digest_blake3);
+        assert!(fixture.restore_root.join("stagex-transition/report").is_file());
+        assert!(!fixture.restore_root.join("native-store/stagex-provider").exists());
     }
 
     #[test]
@@ -879,6 +1047,18 @@ mod tests {
 
         fn publish(&self) -> PublishedProviderCheckpoint {
             publish_provider_checkpoint(
+                &self.store,
+                &self.plan,
+                self.stage_observations(),
+                &self.payload_sources(),
+                DIGEST_B,
+                self.limits,
+            )
+            .unwrap()
+        }
+
+        fn publish_dev(&self) -> PublishedProviderCheckpoint {
+            publish_dev_provider_checkpoint(
                 &self.store,
                 &self.plan,
                 self.stage_observations(),

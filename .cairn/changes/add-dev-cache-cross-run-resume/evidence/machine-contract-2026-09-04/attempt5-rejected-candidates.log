@@ -1,0 +1,6 @@
+$ cargo -Zscript --offline scripts/check-machine-schema-contracts.rs --generate
+sh: line 6: cargo: command not found
+generate_status=127
+$ cargo -Zscript --offline scripts/check-machine-schema-contracts.rs
+sh: line 10: cargo: command not found
+check_status=127

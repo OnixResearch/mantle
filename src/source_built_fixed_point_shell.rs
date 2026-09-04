@@ -52,6 +52,7 @@ use crate::stagex_provider::StagexProviderRequest;
 use crate::stagex_transition::StagexTransitionRequest;
 
 mod checkpoint_integration;
+mod dev_resume;
 
 use checkpoint_integration::import_provider_checkpoint_attempt;
 use checkpoint_integration::print_checkpoint_import_completion;
@@ -518,6 +519,9 @@ fn validate_options(options: &SourceBuiltFixedPointOptions<'_>) -> Result<(), Ru
             ));
         }
         validate_checkpoint_store_filesystem(options.output_dir, checkpoint_store)?;
+    }
+    if options.dev_resume && options.dev_provider_cache.is_none() {
+        return Err(proof_error("dev resume requires --dev-provider-cache".to_string()));
     }
     if let Some(import_attempt) = options.proof_checkpoint_import_attempt {
         if options.proof_checkpoint_store.is_none() {
@@ -1036,8 +1040,17 @@ fn prepare_plan(
 fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAttempt) -> Result<bool, RunError> {
     enforce_open_file_descriptor_limit(prepared.plan.resource_bounds.open_file_descriptors_max)?;
     validate_runtime_bounds(options, prepared)?;
-    let restored_checkpoint = restore_constructed_provider_checkpoint(options, prepared)?;
-    let restored_native_prefix = if restored_checkpoint.is_none() {
+    let dev_resume::PreparedDevResume {
+        plan: resume_plan,
+        provider_resume,
+        fixed_point_resume,
+    } = dev_resume::prepare_dev_resume(options, prepared)?;
+    let restored_checkpoint = if provider_resume.is_none() {
+        restore_constructed_provider_checkpoint(options, prepared)?
+    } else {
+        None
+    };
+    let restored_native_prefix = if restored_checkpoint.is_none() && provider_resume.is_none() {
         options
             .proof_native_checkpoint_attempt
             .map(|attempt| restore_native_provider_prefix_attempt(options, prepared, attempt))
@@ -1045,7 +1058,11 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
     } else {
         None
     };
-    let adopt = if restored_checkpoint.is_none() && restored_native_prefix.is_none() {
+    let adopt = if restored_checkpoint.is_none()
+        && restored_native_prefix.is_none()
+        && provider_resume.is_none()
+        && !options.dev_resume
+    {
         dev_cache_adoption(options, &prepared.plan)?
     } else {
         false
@@ -1054,177 +1071,297 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
     if adopt {
         record_dev_cache_hit(prepared)?;
     }
-    let providers = if let Some(restored) = restored_checkpoint {
-        restored
-    } else if let Some(native_prefix) = restored_native_prefix {
-        construct_rust_provider_from_native_prefix(options, prepared, native_prefix)?
-    } else if adopt {
-        let adopted = adopt_cached_provider_subtrees(options, prepared, &prepared.plan)?;
-        construct_full_source_providers(
-            options,
-            prepared,
-            prepared.staging_dir.join(STAGEX_TRANSITION_EXECUTION_DIR),
-            synthesized_adopted_stagex_report(prepared),
-            Some(adopted),
-        )?
-    } else {
-        let stagex_transition_execution_dir = prepared.staging_dir.join(STAGEX_TRANSITION_EXECUTION_DIR);
-        let transition_resume = options.dev_resume
-            && stagex_transition_execution_dir.is_dir()
-            && transition_marker_is_trusted(prepared, &transition_input_replay_digest(prepared)?)?;
-        if !transition_resume {
-            let transition_result = run_in_isolated_exec_thread("StageX transition", || {
-                crate::stagex_transition::materialize_protected_transition(StagexTransitionRequest {
-                    seed_path: &prepared.stagex_seed,
-                    hex0_source_path: &prepared.source_root.join("bootstrap/seeds/AMD64/hex0_AMD64.hex0"),
-                    kaem_source_path: &prepared.source_root.join("bootstrap/seeds/AMD64/kaem-minimal.hex0"),
-                    lineage_manifest_path: &prepared.stagex_lineage,
-                    source_bundle_path: Some(&prepared.stagex_source_bundle),
-                    stage0_answers_path: Some(&prepared.source_root.join("bootstrap/stage0-amd64.answers")),
-                    scratch_dir: &stagex_transition_execution_dir,
-                })
-            })?;
-            let transition_report =
-                transition_result.map_err(|error| proof_error(format!("StageX transition failed: {error}")))?;
-            if transition_report.status != PROOF_STATUS_COMPLETE {
-                return Err(proof_error(format!(
-                    "StageX transition status must be complete, got {}",
-                    transition_report.status
-                )));
-            }
-            let transition_event_count = u32::try_from(transition_report.protected_exec_events.len())
-                .map_err(|_| proof_error("StageX protected-exec event count exceeds u32".to_string()))?;
-            if transition_event_count > options.protected_exec_events_max {
-                return Err(proof_error(format!(
-                    "StageX protected-exec event count {transition_event_count} exceeds configured bound {}",
-                    options.protected_exec_events_max
-                )));
-            }
-            drop(transition_report);
-            let transition_report_path = stagex_transition_execution_dir.join(STAGEX_TRANSITION_REPORT_FILE);
-            let transition_report_digest = crate::protected_exec::blake3_file_hex(&transition_report_path)
-                .map_err(|error| proof_error(format!("hashing fresh StageX transition report: {error}")))?;
-            if options.dev_provider_cache.is_some() || options.dev_resume {
-                write_stage_marker(prepared, "stagex-transition", &transition_report_digest)?;
-            }
-        }
-
-        let stagex_transition_root = prepared.native_store_dir.join(STAGEX_TRANSITION_STORE_BASENAME);
-        let stagex_transition_replay_root = prepared.staging_dir.join(STAGEX_TRANSITION_HANDOFF_REPLAY_DIR);
-        materialize_or_validate_stagex_transition_handoff(
-            is_dev,
-            &stagex_transition_execution_dir,
-            &stagex_transition_root,
-            &stagex_transition_replay_root,
-        )?;
-        let transition_logical_path = crate::full_source_provider::adopt_verified_local_provider_path_strict(
-            &stagex_transition_root,
-            &prepared.native_store_dir,
-            &prepared.native_state_dir,
-            LOGICAL_STORE_PREFIX,
-        )?;
-        if transition_logical_path != STAGEX_TRANSITION_LOGICAL_PATH {
-            return Err(proof_error(format!(
-                "fresh StageX transition logical path mismatch: expected {STAGEX_TRANSITION_LOGICAL_PATH}, observed {transition_logical_path}"
-            )));
-        }
-        crate::source_bundle::import_constructed_store_path_source(
-            &transition_logical_path,
-            &stagex_transition_root,
-            &prepared.native_state_dir,
-            LOGICAL_STORE_PREFIX,
-        )?;
-
-        let stagex_provider_root = prepared.native_store_dir.join(STAGEX_PROVIDER_STORE_BASENAME);
-        let reuse_stagex_provider = is_dev && stagex_provider_root.exists();
-        let stagex_provider_replay_root = prepared.staging_dir.join(STAGEX_PROVIDER_REPLAY_DIR);
-        let stagex_provider_output_root = if reuse_stagex_provider {
-            &stagex_provider_replay_root
-        } else {
-            &stagex_provider_root
-        };
-        let stagex_provider_result = run_in_isolated_exec_thread("StageX provider publication", || {
-            crate::stagex_provider::materialize_stagex_provider(StagexProviderRequest {
-                lineage_manifest_path: &prepared.stagex_lineage,
-                transition_root: &stagex_transition_execution_dir,
-                output_path: stagex_provider_output_root,
-            })
-        })?;
-        let stagex_provider_report = stagex_provider_result
-            .map_err(|error| proof_error(format!("StageX provider publication failed: {error}")))?;
-        validate_stagex_provider_normalized_identity(&stagex_provider_report.normalized_provider_digest_blake3)?;
-        if reuse_stagex_provider {
-            // Provider receipts bind current-run transition evidence. Keep the replay for receipts,
-            // and compare the reusable runtime payload through its normalized identity.
-            let persistent_digest =
-                crate::stagex_provider::observe_normalized_provider_payload_digest(&stagex_provider_root)
-                    .map_err(|error| proof_error(format!("observing persistent StageX provider payload: {error}")))?;
-            validate_reusable_stagex_provider_identity(
-                &stagex_provider_report.normalized_provider_digest_blake3,
-                &persistent_digest,
-            )?;
-            assert!(stagex_provider_replay_root.is_dir());
-            assert!(stagex_provider_root.is_dir());
-        }
-        validate_runtime_bounds(options, prepared)?;
-        let stagex_logical_path = crate::full_source_provider::adopt_verified_local_provider_path_strict(
-            &stagex_provider_root,
-            &prepared.native_store_dir,
-            &prepared.native_state_dir,
-            LOGICAL_STORE_PREFIX,
-        )?;
-        if stagex_logical_path != STAGEX_PROVIDER_LOGICAL_PATH {
-            return Err(proof_error(format!(
-                "fresh StageX provider logical path mismatch: expected {STAGEX_PROVIDER_LOGICAL_PATH}, observed {stagex_logical_path}"
-            )));
-        }
-        crate::source_bundle::import_constructed_store_path_source(
-            &stagex_logical_path,
-            &stagex_provider_root,
-            &prepared.native_state_dir,
-            LOGICAL_STORE_PREFIX,
-        )?;
-        construct_full_source_providers(
-            options,
-            prepared,
-            stagex_transition_execution_dir,
-            stagex_provider_report,
-            None,
-        )?
-    };
+    let providers = select_or_construct_providers(
+        options,
+        prepared,
+        is_dev,
+        provider_resume,
+        restored_checkpoint,
+        restored_native_prefix,
+        adopt,
+    )?;
     validate_runtime_bounds(options, prepared)?;
     if options.proof_checkpoint_store.is_some() && providers.provider_checkpoint.is_none() {
         publish_constructed_provider_checkpoint(options, prepared, &providers)?;
         validate_runtime_bounds(options, prepared)?;
     }
-    run_cargo_free_fixed_point(options, prepared, &providers)?;
+    run_cargo_free_fixed_point(options, prepared, &providers, &fixed_point_resume)?;
     validate_runtime_bounds(options, prepared)?;
     if is_dev {
-        // Dev runs reuse the persistent content-addressed store and can adopt
-        // cached providers, so they are dev-labeled: populate the provider cache
-        // entry, never write a promoted receipt, never update release aliases.
-        write_dev_provider_cache(options, prepared, &providers)?;
-        write_dev_adopted_marker(prepared)?;
+        finish_dev_attempt(options, prepared, &providers, &resume_plan, adopt)?;
         Ok(true)
     } else {
-        let root_action_trust = crate::source_built_root_action_trust::write_root_action_trust(
-            &prepared.staging_dir,
-            &prepared.staging_dir.join(FIXED_POINT_DIR),
-            &prepared.plan,
-            &providers,
-        )?;
-        debug_assert!(root_action_trust.plan_path.is_file());
-        debug_assert_eq!(root_action_trust.plan_file_digest_blake3.len(), BLAKE3_HEX_LENGTH);
-        debug_assert!(root_action_trust.reconciliation_path.is_file());
-        debug_assert_eq!(root_action_trust.reconciliation_file_digest_blake3.len(), BLAKE3_HEX_LENGTH);
-        crate::source_built_fixed_point_receipt::write_source_built_fixed_point_receipt(
-            &prepared.staging_dir,
-            &prepared.plan,
-            &providers,
-        )?;
-        validate_runtime_bounds(options, prepared)?;
+        finish_promoted_attempt(options, prepared, &providers)?;
         Ok(false)
     }
+}
+
+fn select_or_construct_providers(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    is_dev: bool,
+    provider_resume: Option<checkpoint_integration::DevProviderResume>,
+    restored_checkpoint: Option<ConstructedProviders>,
+    restored_native_prefix: Option<NativeProviderPrefix>,
+    adopt: bool,
+) -> Result<ConstructedProviders, RunError> {
+    match provider_resume {
+        Some(checkpoint_integration::DevProviderResume::Complete(providers)) => {
+            admit_stagex_transition_handoff(prepared, is_dev, &providers.stagex_transition_execution_dir)?;
+            Ok(*providers)
+        }
+        Some(checkpoint_integration::DevProviderResume::Native(prefix)) => {
+            admit_stagex_transition_handoff(prepared, is_dev, &prefix.stagex_transition_execution_dir)?;
+            construct_rust_provider_from_native_prefix(options, prepared, *prefix)
+        }
+        Some(checkpoint_integration::DevProviderResume::Stagex {
+            execution_dir,
+            provider_report,
+        }) => {
+            admit_stagex_transition_handoff(prepared, is_dev, &execution_dir)?;
+            admit_restored_stagex_prefix(prepared, &execution_dir, &provider_report)?;
+            construct_full_source_providers(options, prepared, execution_dir, provider_report, None)
+        }
+        Some(checkpoint_integration::DevProviderResume::Transition { execution_dir }) => {
+            construct_providers_after_transition(options, prepared, is_dev, Some(execution_dir))
+        }
+        None => {
+            if let Some(providers) = restored_checkpoint {
+                return Ok(providers);
+            }
+            if let Some(prefix) = restored_native_prefix {
+                return construct_rust_provider_from_native_prefix(options, prepared, prefix);
+            }
+            if adopt {
+                let adopted = adopt_cached_provider_subtrees(options, prepared, &prepared.plan)?;
+                return construct_full_source_providers(
+                    options,
+                    prepared,
+                    prepared.staging_dir.join(STAGEX_TRANSITION_EXECUTION_DIR),
+                    synthesized_adopted_stagex_report(prepared),
+                    Some(adopted),
+                );
+            }
+            construct_providers_after_transition(options, prepared, is_dev, None)
+        }
+    }
+}
+
+fn construct_providers_after_transition(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    is_dev: bool,
+    restored_transition: Option<PathBuf>,
+) -> Result<ConstructedProviders, RunError> {
+    let transition = prepare_stagex_transition(options, prepared, restored_transition)?;
+    admit_stagex_transition_handoff(prepared, is_dev, &transition)?;
+    let stagex_provider = build_stagex_provider(options, prepared, is_dev, &transition)?;
+    construct_full_source_providers(options, prepared, transition, stagex_provider, None)
+}
+
+fn prepare_stagex_transition(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    restored: Option<PathBuf>,
+) -> Result<PathBuf, RunError> {
+    if let Some(restored) = restored {
+        if !restored.is_dir() || restored != prepared.staging_dir.join(STAGEX_TRANSITION_EXECUTION_DIR) {
+            return Err(proof_error("restored StageX transition path is invalid".to_string()));
+        }
+        return Ok(restored);
+    }
+    let execution_dir = prepared.staging_dir.join(STAGEX_TRANSITION_EXECUTION_DIR);
+    let same_attempt_resume = options.dev_resume
+        && execution_dir.is_dir()
+        && transition_marker_is_trusted(prepared, &transition_input_replay_digest(prepared)?)?;
+    if same_attempt_resume {
+        return Ok(execution_dir);
+    }
+    let result = run_in_isolated_exec_thread("StageX transition", || {
+        crate::stagex_transition::materialize_protected_transition(StagexTransitionRequest {
+            seed_path: &prepared.stagex_seed,
+            hex0_source_path: &prepared.source_root.join("bootstrap/seeds/AMD64/hex0_AMD64.hex0"),
+            kaem_source_path: &prepared.source_root.join("bootstrap/seeds/AMD64/kaem-minimal.hex0"),
+            lineage_manifest_path: &prepared.stagex_lineage,
+            source_bundle_path: Some(&prepared.stagex_source_bundle),
+            stage0_answers_path: Some(&prepared.source_root.join("bootstrap/stage0-amd64.answers")),
+            scratch_dir: &execution_dir,
+        })
+    })?;
+    let report = result.map_err(|error| proof_error(format!("StageX transition failed: {error}")))?;
+    if report.status != PROOF_STATUS_COMPLETE {
+        return Err(proof_error(format!("StageX transition status must be complete, got {}", report.status)));
+    }
+    let event_count = u32::try_from(report.protected_exec_events.len())
+        .map_err(|_| proof_error("StageX protected-exec event count exceeds u32".to_string()))?;
+    if event_count > options.protected_exec_events_max {
+        return Err(proof_error("StageX protected-exec event count exceeds the configured bound".to_string()));
+    }
+    if options.dev_provider_cache.is_some() || options.dev_resume {
+        let replay_digest = transition_input_replay_digest(prepared)?;
+        write_stage_marker(prepared, "stagex-transition", &replay_digest)?;
+    }
+    debug_assert!(execution_dir.is_dir());
+    debug_assert!(event_count <= options.protected_exec_events_max);
+    Ok(execution_dir)
+}
+
+fn admit_stagex_transition_handoff(
+    prepared: &PreparedAttempt,
+    is_dev: bool,
+    execution_dir: &Path,
+) -> Result<(), RunError> {
+    let transition_root = prepared.native_store_dir.join(STAGEX_TRANSITION_STORE_BASENAME);
+    let replay_root = prepared.staging_dir.join(STAGEX_TRANSITION_HANDOFF_REPLAY_DIR);
+    materialize_or_validate_stagex_transition_handoff(is_dev, execution_dir, &transition_root, &replay_root)?;
+    let logical = crate::full_source_provider::adopt_verified_local_provider_path_strict(
+        &transition_root,
+        &prepared.native_store_dir,
+        &prepared.native_state_dir,
+        LOGICAL_STORE_PREFIX,
+    )?;
+    if logical != STAGEX_TRANSITION_LOGICAL_PATH {
+        return Err(proof_error("restored StageX transition logical path mismatch".to_string()));
+    }
+    crate::source_bundle::import_constructed_store_path_source(
+        &logical,
+        &transition_root,
+        &prepared.native_state_dir,
+        LOGICAL_STORE_PREFIX,
+    )?;
+    debug_assert!(transition_root.is_dir());
+    Ok(())
+}
+
+fn build_stagex_provider(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    is_dev: bool,
+    transition: &Path,
+) -> Result<crate::stagex_provider::StagexProviderPublicationReport, RunError> {
+    let provider_root = prepared.native_store_dir.join(STAGEX_PROVIDER_STORE_BASENAME);
+    let is_reuse = is_dev && provider_root.exists();
+    let replay_root = prepared.staging_dir.join(STAGEX_PROVIDER_REPLAY_DIR);
+    let output_root = if is_reuse { &replay_root } else { &provider_root };
+    let result = run_in_isolated_exec_thread("StageX provider publication", || {
+        crate::stagex_provider::materialize_stagex_provider(StagexProviderRequest {
+            lineage_manifest_path: &prepared.stagex_lineage,
+            transition_root: transition,
+            output_path: output_root,
+        })
+    })?;
+    let report = result.map_err(|error| proof_error(format!("StageX provider publication failed: {error}")))?;
+    validate_stagex_provider_normalized_identity(&report.normalized_provider_digest_blake3)?;
+    if is_reuse {
+        let persistent = crate::stagex_provider::observe_normalized_provider_payload_digest(&provider_root)
+            .map_err(|error| proof_error(format!("observing persistent StageX provider payload: {error}")))?;
+        validate_reusable_stagex_provider_identity(&report.normalized_provider_digest_blake3, &persistent)?;
+    }
+    validate_runtime_bounds(options, prepared)?;
+    admit_restored_stagex_prefix(prepared, transition, &report)?;
+    debug_assert!(provider_root.is_dir());
+    Ok(report)
+}
+
+fn admit_restored_stagex_prefix(
+    prepared: &PreparedAttempt,
+    transition: &Path,
+    report: &crate::stagex_provider::StagexProviderPublicationReport,
+) -> Result<(), RunError> {
+    if !transition.is_dir() || !report.output_path.is_dir() {
+        return Err(proof_error("restored StageX prefix is incomplete".to_string()));
+    }
+    let logical = crate::full_source_provider::adopt_verified_local_provider_path_strict(
+        &report.output_path,
+        &prepared.native_store_dir,
+        &prepared.native_state_dir,
+        LOGICAL_STORE_PREFIX,
+    )?;
+    if logical != STAGEX_PROVIDER_LOGICAL_PATH {
+        return Err(proof_error("restored StageX provider logical path mismatch".to_string()));
+    }
+    crate::source_bundle::import_constructed_store_path_source(
+        &logical,
+        &report.output_path,
+        &prepared.native_state_dir,
+        LOGICAL_STORE_PREFIX,
+    )?;
+    debug_assert!(transition.is_dir());
+    debug_assert!(report.output_path.is_dir());
+    Ok(())
+}
+
+fn finish_dev_attempt(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    providers: &ConstructedProviders,
+    resume_plan: &crunch_dev_resume_core::ResumePlan,
+    adopted: bool,
+) -> Result<(), RunError> {
+    let is_cold_resume_source =
+        options.dev_resume && resume_plan.disposition == crunch_dev_resume_core::ResumeDisposition::ExecuteCold;
+    let published_bundle_identities = if is_cold_resume_source {
+        dev_resume::publish_dev_resume_bundles(
+            options,
+            prepared,
+            providers,
+            &prepared.staging_dir.join(FIXED_POINT_DIR),
+        )?
+    } else {
+        Vec::new()
+    };
+    if !adopted && providers.provider_checkpoint.is_none() {
+        write_dev_provider_cache(options, prepared, providers)?;
+    }
+    let disposition = if resume_plan.disposition == crunch_dev_resume_core::ResumeDisposition::Restore {
+        "resume-restored"
+    } else if adopted {
+        "provider-cache-adopted"
+    } else {
+        "cold-executed"
+    };
+    let adoption_plan = adopted.then(|| provider_adoption_report_plan(resume_plan));
+    let report_plan = adoption_plan.as_ref().unwrap_or(resume_plan);
+    dev_resume::write_dev_resume_report(prepared, report_plan, &published_bundle_identities, disposition)?;
+    write_dev_adopted_marker(prepared)
+}
+
+fn provider_adoption_report_plan(cold_plan: &crunch_dev_resume_core::ResumePlan) -> crunch_dev_resume_core::ResumePlan {
+    let executed_stages = vec![
+        crunch_dev_resume_core::ResumeStage::FullSourceRustProvider,
+        crunch_dev_resume_core::ResumeStage::MantleStage1,
+        crunch_dev_resume_core::ResumeStage::MantleStage2,
+    ];
+    let mut plan = cold_plan.clone();
+    plan.restored_stages.clear();
+    plan.executed_stages = executed_stages;
+    plan.first_incomplete_stage = plan.executed_stages.first().copied();
+    plan.selected_bundle_identity_blake3 = None;
+    plan.completed_stage = None;
+    debug_assert!(plan.restored_stages.is_empty());
+    debug_assert_eq!(plan.first_incomplete_stage, Some(crunch_dev_resume_core::ResumeStage::FullSourceRustProvider));
+    plan
+}
+
+fn finish_promoted_attempt(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    providers: &ConstructedProviders,
+) -> Result<(), RunError> {
+    let root_action_trust = crate::source_built_root_action_trust::write_root_action_trust(
+        &prepared.staging_dir,
+        &prepared.staging_dir.join(FIXED_POINT_DIR),
+        &prepared.plan,
+        providers,
+    )?;
+    debug_assert!(root_action_trust.plan_path.is_file());
+    debug_assert!(root_action_trust.reconciliation_path.is_file());
+    crate::source_built_fixed_point_receipt::write_source_built_fixed_point_receipt(
+        &prepared.staging_dir,
+        &prepared.plan,
+        providers,
+    )?;
+    validate_runtime_bounds(options, prepared)
 }
 
 fn write_dev_adopted_marker(prepared: &PreparedAttempt) -> Result<(), RunError> {
@@ -1258,9 +1395,6 @@ fn write_dev_provider_cache(
     let policies = DevCachePolicies::from_plan(plan);
     let cache_key = dev_provider_cache_key(&plan.source_authority_digest_blake3, &policies);
     let entry_root = cache.join(DEV_CACHE_PROVIDERS_SUBDIR).join(&plan.plan_digest_blake3).join(&cache_key);
-    if entry_root.exists() {
-        return Err(proof_error(format!("dev provider-cache entry root exists: {}", entry_root.display())));
-    }
     let stagex_basename = STAGEX_PROVIDER_STORE_BASENAME;
     let stagex_src = prepared.native_store_dir.join(stagex_basename);
     if !stagex_src.is_dir() {
@@ -1277,13 +1411,6 @@ fn write_dev_provider_cache(
     if !native_src.is_dir() {
         return Err(proof_error(format!("cold native provider store missing: {}", native_src.display())));
     }
-    fs::create_dir_all(&entry_root).map_err(|error| {
-        proof_error(format!("creating dev provider-cache entry root {}: {error}", entry_root.display()))
-    })?;
-    crate::stagex_mes_lib::copy_tree_bounded(&stagex_src, &entry_root.join(stagex_basename))
-        .map_err(|error| proof_error(format!("publishing cached StageX provider: {error}")))?;
-    crate::stagex_mes_lib::copy_tree_bounded(native_src, &entry_root.join(native_basename))
-        .map_err(|error| proof_error(format!("publishing cached native provider: {error}")))?;
     let entry = crate::source_built_fixed_point_dev_cache::DevProviderCacheEntry {
         schema: crate::source_built_fixed_point_dev_cache::DEV_CACHE_SCHEMA.to_string(),
         plan_digest_blake3: plan.plan_digest_blake3.clone(),
@@ -1305,10 +1432,41 @@ fn write_dev_provider_cache(
             digest_blake3: providers.native_admission.output_digest_blake3.clone(),
         },
     };
+    if entry_root.exists() {
+        return validate_existing_dev_provider_cache(&entry_root, &entry);
+    }
+    fs::create_dir_all(&entry_root).map_err(|error| {
+        proof_error(format!("creating dev provider-cache entry root {}: {error}", entry_root.display()))
+    })?;
+    crate::stagex_mes_lib::copy_tree_bounded(&stagex_src, &entry_root.join(stagex_basename))
+        .map_err(|error| proof_error(format!("publishing cached StageX provider: {error}")))?;
+    crate::stagex_mes_lib::copy_tree_bounded(native_src, &entry_root.join(native_basename))
+        .map_err(|error| proof_error(format!("publishing cached native provider: {error}")))?;
     write_json_create_new(&entry_root.join(DEV_CACHE_ENTRY_FILE), &entry)?;
     debug_assert!(entry_root.join(DEV_CACHE_ENTRY_FILE).is_file());
     debug_assert!(entry_root.join(stagex_basename).is_dir());
     debug_assert!(entry_root.join(native_basename).is_dir());
+    Ok(())
+}
+
+fn validate_existing_dev_provider_cache(entry_root: &Path, expected: &DevProviderCacheEntry) -> Result<(), RunError> {
+    let path = entry_root.join(DEV_CACHE_ENTRY_FILE);
+    let bytes = fs::read(&path).map_err(|error| {
+        proof_error(format!("reading existing dev provider-cache entry {}: {error}", path.display()))
+    })?;
+    let observed: DevProviderCacheEntry = serde_json::from_slice(&bytes).map_err(|error| {
+        proof_error(format!("parsing existing dev provider-cache entry {}: {error}", path.display()))
+    })?;
+    if observed != *expected {
+        return Err(proof_error("existing dev provider-cache entry conflicts with current providers".to_string()));
+    }
+    if !entry_root.join(&observed.stagex_provider.store_basename).is_dir()
+        || !entry_root.join(&observed.native_provider.store_basename).is_dir()
+    {
+        return Err(proof_error("existing dev provider-cache payload is incomplete".to_string()));
+    }
+    debug_assert_eq!(observed.cache_key, expected.cache_key);
+    debug_assert_eq!(observed.plan_digest_blake3, expected.plan_digest_blake3);
     Ok(())
 }
 
@@ -2262,9 +2420,13 @@ fn run_cargo_free_fixed_point(
     options: &SourceBuiltFixedPointOptions<'_>,
     prepared: &PreparedAttempt,
     providers: &ConstructedProviders,
+    resume: &dev_resume::FixedPointResume,
 ) -> Result<(), RunError> {
     let target = TARGET_TRIPLE.to_string();
     let fixed_point_dir = prepared.staging_dir.join(FIXED_POINT_DIR);
+    if matches!(resume, dev_resume::FixedPointResume::Complete) {
+        return validate_completed_fixed_point(options, providers, &fixed_point_dir);
+    }
     let open_file_descriptors_max =
         u32::try_from(crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX)
             .map_err(|_| proof_error("Rust action open-file limit exceeds u32".to_string()))?;
@@ -2283,9 +2445,24 @@ fn run_cargo_free_fixed_point(
         rust_source_provider: Some(&providers.rust_provider.output_path),
         rust_action_resources: Some(rust_action_resources),
         hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
+        resume: match resume {
+            dev_resume::FixedPointResume::None => crate::cargo_free_self_build::CargoFreeFixedPointResume::None,
+            dev_resume::FixedPointResume::Stage1 => crate::cargo_free_self_build::CargoFreeFixedPointResume::Stage1,
+            dev_resume::FixedPointResume::Complete => {
+                return Err(proof_error("complete fixed-point resume reached execution".to_string()));
+            }
+        },
         json: options.json,
     })?;
-    let meta_path = fixed_point_dir.join("meta.json");
+    validate_completed_fixed_point(options, providers, &fixed_point_dir)
+}
+
+fn validate_completed_fixed_point(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    providers: &ConstructedProviders,
+    fixed_point_dir: &Path,
+) -> Result<(), RunError> {
+    let meta_path = fixed_point_dir.join(crate::cargo_free_self_build::META_FILE);
     let meta: serde_json::Value = serde_json::from_slice(
         &fs::read(&meta_path)
             .map_err(|error| proof_error(format!("reading fixed-point summary {}: {error}", meta_path.display())))?,
@@ -2304,8 +2481,8 @@ fn run_cargo_free_fixed_point(
     if stage1_digest.is_none_or(|digest| digest.len() != BLAKE3_HEX_LENGTH) {
         return Err(proof_error("fixed-point binary digest has invalid length".to_string()));
     }
-    validate_fixed_point_rust_action_evidence(&fixed_point_dir, &meta, "stage1")?;
-    validate_fixed_point_rust_action_evidence(&fixed_point_dir, &meta, "stage2")?;
+    validate_fixed_point_rust_action_evidence(fixed_point_dir, &meta, "stage1")?;
+    validate_fixed_point_rust_action_evidence(fixed_point_dir, &meta, "stage2")?;
     debug_assert_eq!(providers.native_admission.output_digest_blake3, options.expected_native_provider_blake3);
     Ok(())
 }
@@ -2929,6 +3106,24 @@ mod tests {
     }
 
     #[test]
+    fn provider_adoption_report_lists_only_stages_executed_in_this_attempt() {
+        let cold = crunch_dev_resume_core::plan_resume(&crunch_dev_resume_core::ResumePlanInput {
+            mode: crunch_dev_resume_core::ResumeRunMode::Dev,
+            candidates: Vec::new(),
+            observed_rejections: Vec::new(),
+        });
+        let report = provider_adoption_report_plan(&cold);
+
+        assert!(report.restored_stages.is_empty());
+        assert_eq!(report.executed_stages, vec![
+            crunch_dev_resume_core::ResumeStage::FullSourceRustProvider,
+            crunch_dev_resume_core::ResumeStage::MantleStage1,
+            crunch_dev_resume_core::ResumeStage::MantleStage2,
+        ]);
+        assert_eq!(report.first_incomplete_stage, Some(crunch_dev_resume_core::ResumeStage::FullSourceRustProvider));
+    }
+
+    #[test]
     fn options_reject_existing_output_and_malformed_digests() {
         let temp = tempfile::tempdir().unwrap();
         let executable = temp.path().join("bwrap");
@@ -2970,10 +3165,15 @@ mod tests {
         unbound_native_reuse.output_dir = &absent;
         unbound_native_reuse.proof_native_checkpoint_attempt = Some(&native_attempt);
         let native_reuse = validate_options(&unbound_native_reuse).unwrap_err();
+        let mut unbound_dev_resume = options.clone();
+        unbound_dev_resume.output_dir = &absent;
+        unbound_dev_resume.dev_resume = true;
+        let dev_resume = validate_options(&unbound_dev_resume).unwrap_err();
 
         assert!(existing.to_string().contains("must be absent"));
         assert!(digest.to_string().contains("expected native provider BLAKE3"));
         assert!(native_reuse.to_string().contains("requires a checkpoint store"));
+        assert!(dev_resume.to_string().contains("requires --dev-provider-cache"));
     }
 
     #[test]
@@ -3596,6 +3796,28 @@ mod tests {
         assert!(prepared.native_store_dir.join("aaa-native").join("bin").is_file());
         assert!(adopted.output.path.ends_with("aaa-native"));
         assert!(adopted.transcript_digest_blake3.len() == BLAKE3_HEX_LENGTH);
+    }
+
+    #[test]
+    fn dev_resume_report_separates_restored_executed_and_published_stages() {
+        const PUBLISHED_IDENTITY: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let temp = tempfile::tempdir().unwrap();
+        let prepared = prepared_fixture(&temp, temp.path().join("report-staging"));
+        let plan = crunch_dev_resume_core::plan_resume(&crunch_dev_resume_core::ResumePlanInput {
+            mode: crunch_dev_resume_core::ResumeRunMode::Dev,
+            candidates: Vec::new(),
+            observed_rejections: Vec::new(),
+        });
+        let path =
+            dev_resume::write_dev_resume_report(&prepared, &plan, &[PUBLISHED_IDENTITY.to_string()], "cold-executed")
+                .unwrap();
+        let report: crunch_dev_resume_core::DevResumeReport = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+
+        assert!(report.restored_stages.is_empty());
+        assert_eq!(report.executed_stages, crunch_dev_resume_core::ResumeStage::ALL);
+        assert_eq!(report.published_bundle_identities_blake3, [PUBLISHED_IDENTITY]);
+        assert!(!report.promoted_receipt_written);
+        assert!(!report.release_alias_updated);
     }
 
     fn prepared_fixture(temp: &tempfile::TempDir, staging: PathBuf) -> PreparedAttempt {

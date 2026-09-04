@@ -1264,3 +1264,17 @@
 // r[verify remote_builds.trellis_admission_claim_boundary]
 // Matrix, drift, mutation, source, claim, machine-contract, Kamacite, Valence,
 // Trellis, Nix, and lifecycle checks retain the bounded claim.
+
+// Dev cross-run resume bridge.
+//
+// r[impl source_built_fixed_point_improved_iteration.dev_cross_run_resume]
+// r[impl source_built_fixed_point_improved_iteration.dev_resume_runtime_confirmation]
+// The no-std core validates content-bound stage candidates. The shell owns
+// remeasurement, no-replace publication, restoration, execution, and reports.
+// Promoted mode rejects the dev namespace before cache access.
+//
+// r[verify source_built_fixed_point_improved_iteration.dev_cross_run_resume]
+// r[verify source_built_fixed_point_improved_iteration.dev_resume_runtime_confirmation]
+// Positive, mutation, architecture, WASM, machine-contract, runtime-cycle,
+// promoted-cold, Nix, and lifecycle evidence keep restored work distinct from
+// execution in the current attempt.

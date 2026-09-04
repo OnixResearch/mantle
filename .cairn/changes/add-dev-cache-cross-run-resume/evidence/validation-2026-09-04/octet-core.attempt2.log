@@ -1,0 +1,1628 @@
+$ cargo octet check -p crunch-dev-resume-core
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-dev-cache-cross-run-resume/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-dev-cache-cross-run-resume/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling blake3 v1.8.2
+   Compiling build-script-build v1.0.106
+   Compiling build-script-build v1.0.228
+   Compiling build-script-build v1.0.228
+   Compiling build-script-build v1.8.2
+   Compiling build-script-build v1.0.45
+   Compiling proc_macro2 v1.0.106
+   Compiling syn v2.0.117
+   Compiling quote v1.0.45
+   Compiling blake3 v1.8.2
+   Compiling serde_core v1.0.228
+   Compiling serde_derive v1.0.228
+   Compiling syn v2.0.117
+   Compiling serde_derive v1.0.228
+    Checking   Compiling serde v1.0.228 crunch-dev-resume-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-dev-cache-cross-run-resume/crates/crunch-dev-resume-core)
+
+warning: non-trait import `String` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/identity.rs:1:1
+  |
+1 | use alloc::string::String;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+  = note: `#[warn(tigerstyle::non_trait_imports)]` on by default
+
+warning: non-trait import `DEV_RESUME_BUNDLE_SCHEMA` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/identity.rs:4:1
+  |
+4 | use crate::DEV_RESUME_BUNDLE_SCHEMA;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumeBundleManifest` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/identity.rs:5:1
+  |
+5 | use crate::ResumeBundleManifest;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumeError` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/identity.rs:6:1
+  |
+6 | use crate::ResumeError;
+  | ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumePolicyDigests` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/identity.rs:7:1
+  |
+7 | use crate::ResumePolicyDigests;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `validate_resume_manifest_material` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/identity.rs:8:1
+  |
+8 | use crate::validation::validate_resume_manifest_material;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: item name `compute_resume_policy_identity` repeats `identity` from ancestor path segment `identity`
+  --> crates/crunch-dev-resume-core/src/identity.rs:14:1
+   |
+14 | / pub fn compute_resume_policy_identity(policies: &ResumePolicyDigests) -> Result<String, ResumeError> {
+15 | |     let mut hasher = blake3::Hasher::new_derive_key(POLICY_IDENTITY_CONTEXT);
+16 | |     for digest in [
+17 | |         &policies.closure_policy_digest_blake3,
+...  |
+29 | |     Ok(identity)
+30 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+   = note: `#[warn(tigerstyle::path_segment_repetition)]` on by default
+
+warning: item name `compute_resume_bundle_identity` repeats `identity` from ancestor path segment `identity`
+  --> crates/crunch-dev-resume-core/src/identity.rs:42:1
+   |
+42 | / pub fn compute_resume_bundle_identity(manifest: &ResumeBundleManifest) -> Result<String, ResumeError> {
+43 | |     validate_resume_manifest_material(manifest)?;
+44 | |     let mut hasher = blake3::Hasher::new_derive_key(BUNDLE_IDENTITY_CONTEXT);
+45 | |     frame_text(&mut hasher, &manifest.schema)?;
+...  |
+68 | |     Ok(identity)
+69 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+warning: core scope constructs concrete type `{
+             validate_resume_manifest_material(manifest)?;
+             let mut hasher = blake3::Hasher::new_derive_key(BUNDLE_IDENTITY_CONTEXT);
+             frame_text(&mut hasher, &manifest.schema)?;
+             frame_text(&mut hasher, &manifest.source_authority_digest_blake3)?;
+             frame_text(&mut hasher, &manifest.plan_digest_blake3)?;
+             frame_text(&mut hasher, &manifest.policy_digest_blake3)?;
+             hasher.update(&[manifest.completed_stage.stage.code()]);
+             frame_text(&mut hasher, &manifest.completed_stage.stage_id)?;
+             frame_text(&mut hasher, &manifest.completed_stage.producer_executable_digest_blake3)?;
+             frame_text(&mut hasher, &manifest.completed_stage.output_digest_blake3)?;
+             frame_text(&mut hasher, &manifest.completed_stage.execution_evidence_digest_blake3)?;
+             let payload_count = u32::try_from(manifest.payloads.len())
+                 .map_err(|_| ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/identity.rs:42:103
+   |
+42 |   pub fn compute_resume_bundle_identity(manifest: &ResumeBundleManifest) -> Result<String, ResumeError> {
+   |  _______________________________________________________________________________________________________^
+43 | |     validate_resume_manifest_material(manifest)?;
+44 | |     let mut hasher = blake3::Hasher::new_derive_key(BUNDLE_IDENTITY_CONTEXT);
+45 | |     frame_text(&mut hasher, &manifest.schema)?;
+...  |
+68 | |     Ok(identity)
+69 | | }
+   | |_^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+   = note: `#[warn(tigerstyle::concrete_construction_in_core)]` on by default
+
+warning: core scope constructs concrete type `u32::try_from(manifest.payloads.len())
+                 .map_err(|_| ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/identity.rs:54:25
+   |
+54 |       let payload_count = u32::try_from(manifest.payloads.len())
+   |  _________________________^
+55 | |         .map_err(|_| ResumeError::new("resume payload count does not fit u32"))?;
+   | |________________________________________________________________________________^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `u32::try_from(manifest.payloads.len())
+                 .map_err(|_| ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/identity.rs:54:25
+   |
+54 |       let payload_count = u32::try_from(manifest.payloads.len())
+   |  _________________________^
+55 | |         .map_err(|_| ResumeError::new("resume payload count does not fit u32"))?;
+   | |_______________________________________________________________________________^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `|_| ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/identity.rs:55:18
+   |
+55 |         .map_err(|_| ResumeError::new("resume payload count does not fit u32"))?;
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/identity.rs:55:22
+   |
+55 |         .map_err(|_| ResumeError::new("resume payload count does not fit u32"))?;
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+             let length_bytes =
+                 u64::try_from(value.len()).map_err(|_| ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/identity.rs:71:84
+   |
+71 |   fn frame_text(hasher: &mut blake3::Hasher, value: &str) -> Result<(), ResumeError> {
+   |  ____________________________________________________________________________________^
+72 | |     let length_bytes =
+73 | |         u64::try_from(value.len()).map_err(|_| ResumeError::new("resume text length does not fit u64"))?;
+74 | |     hasher.update(&length_bytes.to_le_bytes());
+75 | |     hasher.update(value.as_bytes());
+76 | |     Ok(())
+77 | | }
+   | |_^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `u64::try_from(value.len()).map_err(|_| ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/identity.rs:73:9
+   |
+73 |         u64::try_from(value.len()).map_err(|_| ResumeError::new("resume text length does not fit u64"))?;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `u64::try_from(value.len()).map_err(|_| ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/identity.rs:73:9
+   |
+73 |         u64::try_from(value.len()).map_err(|_| ResumeError::new("resume text length does not fit u64"))?;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `|_| ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/identity.rs:73:44
+   |
+73 |         u64::try_from(value.len()).map_err(|_| ResumeError::new("resume text length does not fit u64"))?;
+   |                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/identity.rs:73:48
+   |
+73 |         u64::try_from(value.len()).map_err(|_| ResumeError::new("resume text length does not fit u64"))?;
+   |                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: non-trait import `String` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/model.rs:1:1
+  |
+1 | use alloc::string::String;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `Vec` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/model.rs:2:1
+  |
+2 | use alloc::vec::Vec;
+  | ^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `fmt` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/model.rs:3:1
+  |
+3 | use core::fmt;
+  | ^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `Deserialize` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/model.rs:5:1
+  |
+5 | use serde::Deserialize;
+  | ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `Serialize` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/model.rs:6:1
+  |
+6 | use serde::Serialize;
+  | ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `Vec` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/planning.rs:2:1
+  |
+2 | use alloc::vec::Vec;
+  | ^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `DEV_RESUME_CANDIDATES_MAX` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/planning.rs:4:1
+  |
+4 | use crate::DEV_RESUME_CANDIDATES_MAX;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `RejectedResumeCandidate` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/planning.rs:5:1
+  |
+5 | use crate::RejectedResumeCandidate;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumeCandidateObservation` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/planning.rs:6:1
+  |
+6 | use crate::ResumeCandidateObservation;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumeDisposition` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/planning.rs:7:1
+  |
+7 | use crate::ResumeDisposition;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumePlan` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/planning.rs:8:1
+  |
+8 | use crate::ResumePlan;
+  | ^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumePlanInput` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/planning.rs:9:1
+  |
+9 | use crate::ResumePlanInput;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumeRejectReason` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-dev-resume-core/src/planning.rs:10:1
+   |
+10 | use crate::ResumeRejectReason;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumeRunMode` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-dev-resume-core/src/planning.rs:11:1
+   |
+11 | use crate::ResumeRunMode;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumeStage` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-dev-resume-core/src/planning.rs:12:1
+   |
+12 | use crate::ResumeStage;
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+warning: non-trait import `DEV_RESUME_CANDIDATES_MAX_USIZE` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-dev-resume-core/src/planning.rs:13:1
+   |
+13 | use crate::model::DEV_RESUME_CANDIDATES_MAX_USIZE;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+warning: non-trait import `DEV_RESUME_STAGE_COUNT_USIZE` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-dev-resume-core/src/planning.rs:14:1
+   |
+14 | use crate::model::DEV_RESUME_STAGE_COUNT_USIZE;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+warning: non-trait import `validate_resume_candidate` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-dev-resume-core/src/planning.rs:15:1
+   |
+15 | use crate::validate_resume_candidate;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+warning: core scope constructs concrete type `{
+             if input.mode == ResumeRunMode::Promoted {
+                 return cold_plan(ResumeRejectReason::PromotedMode, bounded_rejections(&input.observed_rejections));
+             }
+             let Some(total_count) = input.candidates.len().checked_add(input.observed_rejections.len()) else {
+                 return cold_plan(ResumeRejectReason::CandidateLimitExceeded, Vec`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/planning.rs:20:59
+   |
+20 |   pub fn plan_resume(input: &ResumePlanInput) -> ResumePlan {
+   |  ___________________________________________________________^
+21 | |     if input.mode == ResumeRunMode::Promoted {
+22 | |         return cold_plan(ResumeRejectReason::PromotedMode, bounded_rejections(&input.observed_rejections));
+...  |
+53 | |     plan
+54 | | }
+   | |_^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `return cold_plan(ResumeRejectReason::CandidateLimitExceeded, Vec`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/planning.rs:25:9
+   |
+25 |         return cold_plan(ResumeRejectReason::CandidateLimitExceeded, Vec::new());
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `cold_plan(ResumeRejectReason::CandidateLimitExceeded, Vec`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/planning.rs:25:16
+   |
+25 |         return cold_plan(ResumeRejectReason::CandidateLimitExceeded, Vec::new());
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `Vec`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/planning.rs:25:70
+   |
+25 |         return cold_plan(ResumeRejectReason::CandidateLimitExceeded, Vec::new());
+   |                                                                      ^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `return cold_plan(ResumeRejectReason::CandidateLimitExceeded, Vec`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/planning.rs:28:9
+   |
+28 |         return cold_plan(ResumeRejectReason::CandidateLimitExceeded, Vec::new());
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `cold_plan(ResumeRejectReason::CandidateLimitExceeded, Vec`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/planning.rs:28:16
+   |
+28 |         return cold_plan(ResumeRejectReason::CandidateLimitExceeded, Vec::new());
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `Vec`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/planning.rs:28:70
+   |
+28 |         return cold_plan(ResumeRejectReason::CandidateLimitExceeded, Vec::new());
+   |                                                                      ^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+             let executed_stages = ResumeStage::ALL.to_vec();
+             let plan = ResumePlan {
+                 disposition: ResumeDisposition::ExecuteCold,
+                 selected_bundle_identity_blake3: None,
+                 completed_stage: None,
+                 restored_stages: Vec`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/planning.rs:129:107
+    |
+129 |   fn cold_plan(reason: ResumeRejectReason, rejected_candidates: Vec<RejectedResumeCandidate>) -> ResumePlan {
+    |  ___________________________________________________________________________________________________________^
+130 | |     let executed_stages = ResumeStage::ALL.to_vec();
+131 | |     let plan = ResumePlan {
+132 | |         disposition: ResumeDisposition::ExecuteCold,
+...   |
+143 | |     plan
+144 | | }
+    | |_^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumePlan {
+                 disposition: ResumeDisposition::ExecuteCold,
+                 selected_bundle_identity_blake3: None,
+                 completed_stage: None,
+                 restored_stages: Vec`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/planning.rs:131:16
+    |
+131 |       let plan = ResumePlan {
+    |  ________________^
+132 | |         disposition: ResumeDisposition::ExecuteCold,
+133 | |         selected_bundle_identity_blake3: None,
+134 | |         completed_stage: None,
+...   |
+139 | |         rejected_candidates,
+140 | |     };
+    | |_____^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `Vec`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/planning.rs:135:26
+    |
+135 |         restored_stages: Vec::new(),
+    |                          ^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: non-trait import `BLAKE3_HEX_LENGTH_CHARS` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/validation.rs:1:1
+  |
+1 | use crate::BLAKE3_HEX_LENGTH_CHARS;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `DEV_RESUME_BUNDLE_SCHEMA` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/validation.rs:2:1
+  |
+2 | use crate::DEV_RESUME_BUNDLE_SCHEMA;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `DEV_RESUME_PAYLOADS_MAX` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/validation.rs:3:1
+  |
+3 | use crate::DEV_RESUME_PAYLOADS_MAX;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `DEV_RESUME_TEXT_BYTES_MAX` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/validation.rs:4:1
+  |
+4 | use crate::DEV_RESUME_TEXT_BYTES_MAX;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `FIXED_POINT_COMPLETE_PAYLOAD_ID` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/validation.rs:5:1
+  |
+5 | use crate::FIXED_POINT_COMPLETE_PAYLOAD_ID;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `MANTLE_STAGE1_PAYLOAD_ID` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/validation.rs:6:1
+  |
+6 | use crate::MANTLE_STAGE1_PAYLOAD_ID;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `PROVIDER_CHECKPOINT_PAYLOAD_ID` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/validation.rs:7:1
+  |
+7 | use crate::PROVIDER_CHECKPOINT_PAYLOAD_ID;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumeBundleManifest` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/validation.rs:8:1
+  |
+8 | use crate::ResumeBundleManifest;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumeCandidateObservation` hides the owner path; prefer the qualified path at the use site
+ --> crates/crunch-dev-resume-core/src/validation.rs:9:1
+  |
+9 | use crate::ResumeCandidateObservation;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+  = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumeError` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-dev-resume-core/src/validation.rs:10:1
+   |
+10 | use crate::ResumeError;
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumePayloadBinding` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-dev-resume-core/src/validation.rs:11:1
+   |
+11 | use crate::ResumePayloadBinding;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumeRejectReason` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-dev-resume-core/src/validation.rs:12:1
+   |
+12 | use crate::ResumeRejectReason;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumeStage` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-dev-resume-core/src/validation.rs:13:1
+   |
+13 | use crate::ResumeStage;
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+warning: non-trait import `ResumeStageBinding` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-dev-resume-core/src/validation.rs:14:1
+   |
+14 | use crate::ResumeStageBinding;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+warning: non-trait import `compute_resume_bundle_identity` hides the owner path; prefer the qualified path at the use site
+  --> crates/crunch-dev-resume-core/src/validation.rs:15:1
+   |
+15 | use crate::compute_resume_bundle_identity;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+warning: core scope constructs concrete type `{
+             validate_resume_manifest_material(manifest)?;
+             validate_identity_digest(&manifest.bundle_identity_blake3)?;
+             let expected = compute_resume_bundle_identity(manifest)?;
+             if manifest.bundle_identity_blake3 != expected {
+                 return Err(ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:17:93
+   |
+17 |   pub fn validate_resume_manifest(manifest: &ResumeBundleManifest) -> Result<(), ResumeError> {
+   |  _____________________________________________________________________________________________^
+18 | |     validate_resume_manifest_material(manifest)?;
+19 | |     validate_identity_digest(&manifest.bundle_identity_blake3)?;
+20 | |     let expected = compute_resume_bundle_identity(manifest)?;
+...  |
+26 | |     Ok(())
+27 | | }
+   | |_^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `if manifest.bundle_identity_blake3 != expected {
+                 return Err(ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:21:5
+   |
+21 | /     if manifest.bundle_identity_blake3 != expected {
+22 | |         return Err(ResumeError::new("resume bundle identity mismatch"));
+23 | |     }
+   | |_____^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+                 return Err(ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:21:52
+   |
+21 |       if manifest.bundle_identity_blake3 != expected {
+   |  ____________________________________________________^
+22 | |         return Err(ResumeError::new("resume bundle identity mismatch"));
+23 | |     }
+   | |_____^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `return Err(ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:22:9
+   |
+22 |         return Err(ResumeError::new("resume bundle identity mismatch"));
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `Err(ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:22:16
+   |
+22 |         return Err(ResumeError::new("resume bundle identity mismatch"));
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:22:20
+   |
+22 |         return Err(ResumeError::new("resume bundle identity mismatch"));
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+             if manifest.schema != DEV_RESUME_BUNDLE_SCHEMA {
+                 return Err(ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:29:109
+   |
+29 |   pub(crate) fn validate_resume_manifest_material(manifest: &ResumeBundleManifest) -> Result<(), ResumeError> {
+   |  _____________________________________________________________________________________________________________^
+30 | |     if manifest.schema != DEV_RESUME_BUNDLE_SCHEMA {
+31 | |         return Err(ResumeError::new("resume bundle schema mismatch"));
+...  |
+41 | |     Ok(())
+42 | | }
+   | |_^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `if manifest.schema != DEV_RESUME_BUNDLE_SCHEMA {
+                 return Err(ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:30:5
+   |
+30 | /     if manifest.schema != DEV_RESUME_BUNDLE_SCHEMA {
+31 | |         return Err(ResumeError::new("resume bundle schema mismatch"));
+32 | |     }
+   | |_____^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+                 return Err(ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:30:52
+   |
+30 |       if manifest.schema != DEV_RESUME_BUNDLE_SCHEMA {
+   |  ____________________________________________________^
+31 | |         return Err(ResumeError::new("resume bundle schema mismatch"));
+32 | |     }
+   | |_____^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `return Err(ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:31:9
+   |
+31 |         return Err(ResumeError::new("resume bundle schema mismatch"));
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `Err(ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:31:16
+   |
+31 |         return Err(ResumeError::new("resume bundle schema mismatch"));
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:31:20
+   |
+31 |         return Err(ResumeError::new("resume bundle schema mismatch"));
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+             if binding.stage_id != binding.stage.id() {
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:92:84
+    |
+ 92 |   fn validate_stage_binding(binding: &ResumeStageBinding) -> Result<(), ResumeError> {
+    |  ____________________________________________________________________________________^
+ 93 | |     if binding.stage_id != binding.stage.id() {
+ 94 | |         return Err(ResumeError::new("resume stage identifier mismatch"));
+...   |
+100 | |     Ok(())
+101 | | }
+    | |_^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `if binding.stage_id != binding.stage.id() {
+                 return Err(ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:93:5
+   |
+93 | /     if binding.stage_id != binding.stage.id() {
+94 | |         return Err(ResumeError::new("resume stage identifier mismatch"));
+95 | |     }
+   | |_____^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+                 return Err(ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:93:47
+   |
+93 |       if binding.stage_id != binding.stage.id() {
+   |  _______________________________________________^
+94 | |         return Err(ResumeError::new("resume stage identifier mismatch"));
+95 | |     }
+   | |_____^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `return Err(ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:94:9
+   |
+94 |         return Err(ResumeError::new("resume stage identifier mismatch"));
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `Err(ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:94:16
+   |
+94 |         return Err(ResumeError::new("resume stage identifier mismatch"));
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumeError`; inject the dependency through a port or capability
+  --> crates/crunch-dev-resume-core/src/validation.rs:94:20
+   |
+94 |         return Err(ResumeError::new("resume stage identifier mismatch"));
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+   = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+             let payload_count =
+                 u32::try_from(payloads.len()).map_err(|_| ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:103:84
+    |
+103 |   fn validate_payloads(payloads: &[ResumePayloadBinding]) -> Result<(), ResumeError> {
+    |  ____________________________________________________________________________________^
+104 | |     let payload_count =
+105 | |         u32::try_from(payloads.len()).map_err(|_| ResumeError::new("resume payload count does not fit u32"))?;
+106 | |     if payload_count == 0 || payload_count > DEV_RESUME_PAYLOADS_MAX {
+...   |
+124 | |     Ok(())
+125 | | }
+    | |_^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `u32::try_from(payloads.len()).map_err(|_| ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:105:9
+    |
+105 |         u32::try_from(payloads.len()).map_err(|_| ResumeError::new("resume payload count does not fit u32"))?;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `u32::try_from(payloads.len()).map_err(|_| ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:105:9
+    |
+105 |         u32::try_from(payloads.len()).map_err(|_| ResumeError::new("resume payload count does not fit u32"))?;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `|_| ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:105:47
+    |
+105 |         u32::try_from(payloads.len()).map_err(|_| ResumeError::new("resume payload count does not fit u32"))?;
+    |                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:105:51
+    |
+105 |         u32::try_from(payloads.len()).map_err(|_| ResumeError::new("resume payload count does not fit u32"))?;
+    |                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `if payload_count == 0 || payload_count > DEV_RESUME_PAYLOADS_MAX {
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:106:5
+    |
+106 | /     if payload_count == 0 || payload_count > DEV_RESUME_PAYLOADS_MAX {
+107 | |         return Err(ResumeError::new("resume payload count is outside bounds"));
+108 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:106:70
+    |
+106 |       if payload_count == 0 || payload_count > DEV_RESUME_PAYLOADS_MAX {
+    |  ______________________________________________________________________^
+107 | |         return Err(ResumeError::new("resume payload count is outside bounds"));
+108 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:107:9
+    |
+107 |         return Err(ResumeError::new("resume payload count is outside bounds"));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:107:16
+    |
+107 |         return Err(ResumeError::new("resume payload count is outside bounds"));
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:107:20
+    |
+107 |         return Err(ResumeError::new("resume payload count is outside bounds"));
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+                 validate_text(&payload.payload_id)?;
+                 validate_relative_path(&payload.destination_relative_path)?;
+                 validate_identity_digest(&payload.digest_blake3)?;
+                 if payload.total_file_bytes == 0 || payload.entry_count == 0 {
+                     return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:110:29
+    |
+110 |       for payload in payloads {
+    |  _____________________________^
+111 | |         validate_text(&payload.payload_id)?;
+112 | |         validate_relative_path(&payload.destination_relative_path)?;
+113 | |         validate_identity_digest(&payload.digest_blake3)?;
+...   |
+120 | |         previous_id = Some(payload.payload_id.as_str());
+121 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `if payload.total_file_bytes == 0 || payload.entry_count == 0 {
+                     return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:114:9
+    |
+114 | /         if payload.total_file_bytes == 0 || payload.entry_count == 0 {
+115 | |             return Err(ResumeError::new("resume payload has empty bounds"));
+116 | |         }
+    | |_________^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+                     return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:114:70
+    |
+114 |           if payload.total_file_bytes == 0 || payload.entry_count == 0 {
+    |  ______________________________________________________________________^
+115 | |             return Err(ResumeError::new("resume payload has empty bounds"));
+116 | |         }
+    | |_________^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:115:13
+    |
+115 |             return Err(ResumeError::new("resume payload has empty bounds"));
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:115:20
+    |
+115 |             return Err(ResumeError::new("resume payload has empty bounds"));
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:115:24
+    |
+115 |             return Err(ResumeError::new("resume payload has empty bounds"));
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `if previous_id.is_some_and(|previous| previous >= payload.payload_id.as_str()) {
+                     return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:117:9
+    |
+117 | /         if previous_id.is_some_and(|previous| previous >= payload.payload_id.as_str()) {
+118 | |             return Err(ResumeError::new("resume payload identifiers are not strictly ordered"));
+119 | |         }
+    | |_________^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+                     return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:117:88
+    |
+117 |           if previous_id.is_some_and(|previous| previous >= payload.payload_id.as_str()) {
+    |  ________________________________________________________________________________________^
+118 | |             return Err(ResumeError::new("resume payload identifiers are not strictly ordered"));
+119 | |         }
+    | |_________^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:118:13
+    |
+118 |             return Err(ResumeError::new("resume payload identifiers are not strictly ordered"));
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:118:20
+    |
+118 |             return Err(ResumeError::new("resume payload identifiers are not strictly ordered"));
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:118:24
+    |
+118 |             return Err(ResumeError::new("resume payload identifiers are not strictly ordered"));
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+             let match_count = payloads.iter().filter(|payload| payload.payload_id == required_id).count();
+             if match_count != 1 {
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:142:101
+    |
+142 |   fn require_payload(payloads: &[ResumePayloadBinding], required_id: &str) -> Result<(), ResumeError> {
+    |  _____________________________________________________________________________________________________^
+143 | |     let match_count = payloads.iter().filter(|payload| payload.payload_id == required_id).count();
+144 | |     if match_count != 1 {
+145 | |         return Err(ResumeError::new("resume payload set is incomplete"));
+146 | |     }
+147 | |     Ok(())
+148 | | }
+    | |_^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `if match_count != 1 {
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:144:5
+    |
+144 | /     if match_count != 1 {
+145 | |         return Err(ResumeError::new("resume payload set is incomplete"));
+146 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:144:25
+    |
+144 |       if match_count != 1 {
+    |  _________________________^
+145 | |         return Err(ResumeError::new("resume payload set is incomplete"));
+146 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:145:9
+    |
+145 |         return Err(ResumeError::new("resume payload set is incomplete"));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:145:16
+    |
+145 |         return Err(ResumeError::new("resume payload set is incomplete"));
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:145:20
+    |
+145 |         return Err(ResumeError::new("resume payload set is incomplete"));
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+             validate_text(value)?;
+             if value.starts_with('/') || value.ends_with('/') {
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:150:67
+    |
+150 |   fn validate_relative_path(value: &str) -> Result<(), ResumeError> {
+    |  ___________________________________________________________________^
+151 | |     validate_text(value)?;
+152 | |     if value.starts_with('/') || value.ends_with('/') {
+153 | |         return Err(ResumeError::new("resume payload path is not relative"));
+...   |
+158 | |     Ok(())
+159 | | }
+    | |_^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `if value.starts_with('/') || value.ends_with('/') {
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:152:5
+    |
+152 | /     if value.starts_with('/') || value.ends_with('/') {
+153 | |         return Err(ResumeError::new("resume payload path is not relative"));
+154 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:152:55
+    |
+152 |       if value.starts_with('/') || value.ends_with('/') {
+    |  _______________________________________________________^
+153 | |         return Err(ResumeError::new("resume payload path is not relative"));
+154 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:153:9
+    |
+153 |         return Err(ResumeError::new("resume payload path is not relative"));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:153:16
+    |
+153 |         return Err(ResumeError::new("resume payload path is not relative"));
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:153:20
+    |
+153 |         return Err(ResumeError::new("resume payload path is not relative"));
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `if value.split('/').any(|segment| segment.is_empty() || segment == "." || segment == "..") {
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:155:5
+    |
+155 | /     if value.split('/').any(|segment| segment.is_empty() || segment == "." || segment == "..") {
+156 | |         return Err(ResumeError::new("resume payload path contains an unsafe segment"));
+157 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:155:96
+    |
+155 |       if value.split('/').any(|segment| segment.is_empty() || segment == "." || segment == "..") {
+    |  ________________________________________________________________________________________________^
+156 | |         return Err(ResumeError::new("resume payload path contains an unsafe segment"));
+157 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:156:9
+    |
+156 |         return Err(ResumeError::new("resume payload path contains an unsafe segment"));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:156:16
+    |
+156 |         return Err(ResumeError::new("resume payload path contains an unsafe segment"));
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:156:20
+    |
+156 |         return Err(ResumeError::new("resume payload path contains an unsafe segment"));
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+             let length_bytes =
+                 u32::try_from(value.len()).map_err(|_| ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:161:58
+    |
+161 |   fn validate_text(value: &str) -> Result<(), ResumeError> {
+    |  __________________________________________________________^
+162 | |     let length_bytes =
+163 | |         u32::try_from(value.len()).map_err(|_| ResumeError::new("resume text length does not fit u32"))?;
+164 | |     if length_bytes == 0 || length_bytes > DEV_RESUME_TEXT_BYTES_MAX || value.chars().any(char::is_control) {
+...   |
+167 | |     Ok(())
+168 | | }
+    | |_^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `u32::try_from(value.len()).map_err(|_| ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:163:9
+    |
+163 |         u32::try_from(value.len()).map_err(|_| ResumeError::new("resume text length does not fit u32"))?;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `u32::try_from(value.len()).map_err(|_| ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:163:9
+    |
+163 |         u32::try_from(value.len()).map_err(|_| ResumeError::new("resume text length does not fit u32"))?;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `|_| ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:163:44
+    |
+163 |         u32::try_from(value.len()).map_err(|_| ResumeError::new("resume text length does not fit u32"))?;
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:163:48
+    |
+163 |         u32::try_from(value.len()).map_err(|_| ResumeError::new("resume text length does not fit u32"))?;
+    |                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `if length_bytes == 0 || length_bytes > DEV_RESUME_TEXT_BYTES_MAX || value.chars().any(char::is_control) {
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:164:5
+    |
+164 | /     if length_bytes == 0 || length_bytes > DEV_RESUME_TEXT_BYTES_MAX || value.chars().any(char::is_control) {
+165 | |         return Err(ResumeError::new("resume text is outside bounds"));
+166 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:164:109
+    |
+164 |       if length_bytes == 0 || length_bytes > DEV_RESUME_TEXT_BYTES_MAX || value.chars().any(char::is_control) {
+    |  _____________________________________________________________________________________________________________^
+165 | |         return Err(ResumeError::new("resume text is outside bounds"));
+166 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:165:9
+    |
+165 |         return Err(ResumeError::new("resume text is outside bounds"));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:165:16
+    |
+165 |         return Err(ResumeError::new("resume text is outside bounds"));
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:165:20
+    |
+165 |         return Err(ResumeError::new("resume text is outside bounds"));
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+             if !is_digest(value) {
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:170:80
+    |
+170 |   pub(crate) fn validate_identity_digest(value: &str) -> Result<(), ResumeError> {
+    |  ________________________________________________________________________________^
+171 | |     if !is_digest(value) {
+172 | |         return Err(ResumeError::new("resume identity is not a lowercase BLAKE3 digest"));
+...   |
+175 | | }
+    | |_^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `if !is_digest(value) {
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:171:5
+    |
+171 | /     if !is_digest(value) {
+172 | |         return Err(ResumeError::new("resume identity is not a lowercase BLAKE3 digest"));
+173 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `{
+                 return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:171:26
+    |
+171 |       if !is_digest(value) {
+    |  __________________________^
+172 | |         return Err(ResumeError::new("resume identity is not a lowercase BLAKE3 digest"));
+173 | |     }
+    | |_____^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `return Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:172:9
+    |
+172 |         return Err(ResumeError::new("resume identity is not a lowercase BLAKE3 digest"));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `Err(ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:172:16
+    |
+172 |         return Err(ResumeError::new("resume identity is not a lowercase BLAKE3 digest"));
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+warning: core scope constructs concrete type `ResumeError`; inject the dependency through a port or capability
+   --> crates/crunch-dev-resume-core/src/validation.rs:172:20
+    |
+172 |         return Err(ResumeError::new("resume identity is not a lowercase BLAKE3 digest"));
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Dependency Inversion): inject infrastructure dependencies through ports or capabilities instead of constructing concrete types in core Example: fn run(clock: impl Clock) -> Output
+    = note: see Tiger Style guide: Architecture / Ports and Capabilities
+
+   Compiling crunch_dev_resume_core v0.1.0
+    Finished checking
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 16.84s
+--- octet summary ---
+Status: warning-only
+Findings: 133
+Warnings: 133
+Errors: 0
+Autofixable: 0
+Tool: cargo-octet 0.1.0
+Toolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu
+Config hash: b3:740bc726d09d2bdef5a631ed20d19652a8ce648db3e053e9d7abd668346c682e
+Profile hash: b3:f6f7edbf6bad50a38def5c923343e237e3df3b6019b87237cc5164777701ebc6
+
+By crate:
+  crunch_dev_resume_core        133
+
+By effect:
+  unknown        133
+
+By lint:
+  concrete_construction_in_core        92
+  non_trait_imports                    39
+  path_segment_repetition              2
+
+Index:
+  F1    non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:1
+  F2    non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:4
+  F3    non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:5
+  F4    non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:6
+  F5    non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:7
+  F6    non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:8
+  F7    path_segment_repetition       crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:14
+  F8    path_segment_repetition       crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:42
+  F9    concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:42
+  F10   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:54
+  F11   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:54
+  F12   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:55
+  F13   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:55
+  F14   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:71
+  F15   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:73
+  F16   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:73
+  F17   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:73
+  F18   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/identity.rs:73
+  F19   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/model.rs:1
+  F20   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/model.rs:2
+  F21   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/model.rs:3
+  F22   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/model.rs:5
+  F23   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/model.rs:6
+  F24   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:2
+  F25   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:4
+  F26   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:5
+  F27   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:6
+  F28   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:7
+  F29   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:8
+  F30   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:9
+  F31   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:10
+  F32   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:11
+  F33   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:12
+  F34   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:13
+  F35   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:14
+  F36   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:15
+  F37   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:20
+  F38   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:25
+  F39   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:25
+  F40   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:25
+  F41   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:28
+  F42   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:28
+  F43   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:28
+  F44   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:129
+  F45   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:131
+  F46   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/planning.rs:135
+  F47   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:1
+  F48   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:2
+  F49   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:3
+  F50   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:4
+  F51   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:5
+  F52   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:6
+  F53   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:7
+  F54   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:8
+  F55   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:9
+  F56   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:10
+  F57   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:11
+  F58   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:12
+  F59   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:13
+  F60   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:14
+  F61   non_trait_imports             crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:15
+  F62   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:17
+  F63   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:21
+  F64   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:21
+  F65   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:22
+  F66   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:22
+  F67   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:22
+  F68   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:29
+  F69   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:30
+  F70   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:30
+  F71   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:31
+  F72   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:31
+  F73   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:31
+  F74   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:92
+  F75   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:93
+  F76   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:93
+  F77   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:94
+  F78   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:94
+  F79   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:94
+  F80   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:103
+  F81   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:105
+  F82   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:105
+  F83   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:105
+  F84   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:105
+  F85   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:106
+  F86   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:106
+  F87   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:107
+  F88   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:107
+  F89   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:107
+  F90   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:110
+  F91   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:114
+  F92   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:114
+  F93   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:115
+  F94   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:115
+  F95   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:115
+  F96   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:117
+  F97   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:117
+  F98   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:118
+  F99   concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:118
+  F100  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:118
+  F101  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:142
+  F102  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:144
+  F103  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:144
+  F104  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:145
+  F105  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:145
+  F106  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:145
+  F107  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:150
+  F108  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:152
+  F109  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:152
+  F110  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:153
+  F111  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:153
+  F112  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:153
+  F113  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:155
+  F114  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:155
+  F115  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:156
+  F116  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:156
+  F117  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:156
+  F118  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:161
+  F119  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:163
+  F120  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:163
+  F121  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:163
+  F122  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:163
+  F123  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:164
+  F124  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:164
+  F125  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:165
+  F126  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:165
+  F127  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:165
+  F128  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:170
+  F129  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:171
+  F130  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:171
+  F131  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:172
+  F132  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:172
+  F133  concrete_construction_in_core crunch_dev_resume_core  crates/crunch-dev-resume-core/src/validation.rs:172
+---

@@ -1,0 +1,6 @@
+$ cargo -Zscript --offline scripts/check-machine-schema-contracts.rs
+machine schema contract check failed: root JSON producer family coverage rejected:
+  - registry [schema] source:src/source_built_fixed_point_shell/dev_resume/tests.rs: root JSON serialization source has no inventory family decision
+status=1
+
+Resolution: the test now calls the contracted dev-resume JSON writer instead of creating a second root JSON producer.

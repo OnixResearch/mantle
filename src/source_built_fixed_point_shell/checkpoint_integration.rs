@@ -501,6 +501,82 @@ pub(super) fn print_checkpoint_import_completion(
     Ok(())
 }
 
+pub(super) enum DevProviderResume {
+    Transition {
+        execution_dir: PathBuf,
+    },
+    Stagex {
+        execution_dir: PathBuf,
+        provider_report: crate::stagex_provider::StagexProviderPublicationReport,
+    },
+    Native(Box<NativeProviderPrefix>),
+    Complete(Box<ConstructedProviders>),
+}
+
+pub(super) fn restore_dev_provider_stage(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    checkpoint_store: &Path,
+    completed_stage: crunch_dev_resume_core::ResumeStage,
+) -> Result<Option<DevProviderResume>, RunError> {
+    let limits = crate::source_built_fixed_point_checkpoint_shell::provider_checkpoint_limits(options.disk_bytes_max);
+    let Some(admitted) = crate::source_built_fixed_point_checkpoint_shell::admit_dev_provider_checkpoint_store(
+        checkpoint_store,
+        &prepared.plan,
+        STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST,
+        limits,
+    )?
+    else {
+        return Ok(None);
+    };
+    let stagex_basename = checkpoint_payload_basename(
+        &admitted.manifest,
+        crate::source_built_fixed_point_checkpoint::PAYLOAD_STAGEX_PROVIDER,
+    )?;
+    let native_basename = checkpoint_payload_basename(
+        &admitted.manifest,
+        crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_PROVIDER,
+    )?;
+    let paths = RestoredProviderPaths::new(prepared, stagex_basename, native_basename)?;
+    let requests = dev_provider_restore_requests(&paths, completed_stage)?;
+    let restored =
+        crate::source_built_fixed_point_checkpoint_shell::restore_dev_provider_checkpoint(admitted, &requests, limits)?;
+    let result = match completed_stage {
+        crunch_dev_resume_core::ResumeStage::StagexTransition => Ok(DevProviderResume::Transition {
+            execution_dir: paths.stagex_transition,
+        }),
+        crunch_dev_resume_core::ResumeStage::StagexProvider => {
+            restored_stagex_provider_report(&paths.stagex_provider, &restored).map(|provider_report| {
+                DevProviderResume::Stagex {
+                    execution_dir: paths.stagex_transition,
+                    provider_report,
+                }
+            })
+        }
+        crunch_dev_resume_core::ResumeStage::FullSourceNativeProvider => {
+            validate_restored_native_prefix(options, prepared, &paths, &restored)
+                .map(|native| DevProviderResume::Native(Box::new(native)))
+        }
+        crunch_dev_resume_core::ResumeStage::FullSourceRustProvider
+        | crunch_dev_resume_core::ResumeStage::MantleStage1
+        | crunch_dev_resume_core::ResumeStage::MantleStage2 => {
+            validate_restored_provider_checkpoint(options, prepared, paths, restored)
+                .map(|providers| DevProviderResume::Complete(Box::new(providers)))
+        }
+    };
+    match result {
+        Ok(resume) => Ok(Some(resume)),
+        Err(error) => {
+            let mut destinations = requests.iter().map(|request| request.destination_path.clone()).collect::<Vec<_>>();
+            destinations.push(prepared.staging_dir.join(CHECKPOINT_ORIGIN_EVIDENCE_DIR));
+            if let Err(cleanup) = crate::source_built_fixed_point_checkpoint_shell::cleanup_restores(&destinations) {
+                return Err(proof_error(format!("{error}; dev resume cleanup failed: {cleanup}")));
+            }
+            Err(error)
+        }
+    }
+}
+
 pub(super) fn restore_constructed_provider_checkpoint(
     options: &SourceBuiltFixedPointOptions<'_>,
     prepared: &PreparedAttempt,
@@ -690,6 +766,38 @@ impl RestoredProviderPaths {
     }
 }
 
+fn dev_provider_restore_requests(
+    paths: &RestoredProviderPaths,
+    completed_stage: crunch_dev_resume_core::ResumeStage,
+) -> Result<Vec<crate::source_built_fixed_point_checkpoint_shell::CheckpointPayloadRestore>, RunError> {
+    let all = paths.requests();
+    let selected = all
+        .into_iter()
+        .filter(|request| dev_stage_requires_payload(completed_stage, &request.payload_id))
+        .collect::<Vec<_>>();
+    if selected.is_empty() {
+        return Err(proof_error("dev resume selected no provider checkpoint payloads".to_string()));
+    }
+    debug_assert!(selected.len() <= crate::source_built_fixed_point_checkpoint::PROVIDER_CHECKPOINT_PAYLOAD_COUNT);
+    Ok(selected)
+}
+
+fn dev_stage_requires_payload(stage: crunch_dev_resume_core::ResumeStage, payload_id: &str) -> bool {
+    use crate::source_built_fixed_point_checkpoint::*;
+    match stage {
+        crunch_dev_resume_core::ResumeStage::StagexTransition => payload_id == PAYLOAD_STAGEX_TRANSITION,
+        crunch_dev_resume_core::ResumeStage::StagexProvider => {
+            matches!(payload_id, PAYLOAD_STAGEX_TRANSITION | PAYLOAD_STAGEX_PROVIDER)
+        }
+        crunch_dev_resume_core::ResumeStage::FullSourceNativeProvider => {
+            !matches!(payload_id, PAYLOAD_RUST_PROVIDER | PAYLOAD_TOOLCHAIN_CLOSURE | PAYLOAD_RUST_ACTION_TRUST)
+        }
+        crunch_dev_resume_core::ResumeStage::FullSourceRustProvider
+        | crunch_dev_resume_core::ResumeStage::MantleStage1
+        | crunch_dev_resume_core::ResumeStage::MantleStage2 => true,
+    }
+}
+
 fn checkpoint_restore(
     payload_id: &str,
     destination_path: &Path,
@@ -715,6 +823,120 @@ fn checkpoint_payload_basename<'a>(
         .file_name()
         .and_then(|value| value.to_str())
         .ok_or_else(|| proof_error(format!("checkpoint payload {payload_id} has no UTF-8 basename")))
+}
+
+fn validate_restored_native_prefix(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    paths: &RestoredProviderPaths,
+    restored: &crate::source_built_fixed_point_checkpoint_shell::RestoredProviderCheckpoint,
+) -> Result<NativeProviderPrefix, RunError> {
+    let stagex_logical =
+        register_adopted_provider(&paths.stagex_provider, &prepared.native_store_dir, &prepared.native_state_dir)?;
+    if stagex_logical != STAGEX_PROVIDER_LOGICAL_PATH {
+        return Err(proof_error("dev resume StageX provider logical path mismatch".to_string()));
+    }
+    let native_logical =
+        register_adopted_provider(&paths.native_provider, &prepared.native_store_dir, &prepared.native_state_dir)?;
+    let native_admission_report_path = prepared.staging_dir.join(NATIVE_ADMISSION_REPORT_FILE);
+    let native_admission = crate::full_source_provider::cmd_admit_full_source_provider(
+        &paths.native_provider,
+        options.expected_native_provider_blake3,
+        &prepared.native_source_manifest,
+        &crate::source_bundle::read_source_bundle(&prepared.native_source_manifest)?.manifest_blake3,
+        &native_admission_report_path,
+        false,
+    )?;
+    let host_manifest = paths
+        .rust_host_evidence
+        .join(crate::full_source_rust_binding_shell::FULL_SOURCE_RUST_HOST_TOOL_MANIFEST_FILE);
+    let host_observation = crate::full_source_rust_binding_shell::observe_full_source_rust_host_tools(
+        &host_manifest,
+        &native_admission.output_digest_blake3,
+    )
+    .map_err(|error| proof_error(format!("validating resumed Rust host-tool evidence: {error}")))?;
+    let rust_host_tools = resumed_host_tool_observations(&host_observation.manifest)?;
+    let native_provider = restored_native_provider_observation(
+        prepared,
+        &paths.native_provider,
+        &native_logical,
+        &paths.origin_native_admission,
+        restored,
+    )?;
+    let prefix = NativeProviderPrefix {
+        stagex_transition_execution_dir: paths.stagex_transition.clone(),
+        stagex_provider_report: restored_stagex_provider_report(&paths.stagex_provider, restored)?,
+        native_provider,
+        native_action_trust: Some(restored_native_action_trust(paths)?),
+        native_admission,
+        native_admission_report_path,
+        rust_host_tools,
+        rust_host_tool_evidence_dir: paths.rust_host_evidence.clone(),
+        rust_host_tool_manifest_path: host_manifest,
+    };
+    debug_assert!(prefix.stagex_transition_execution_dir.is_dir());
+    debug_assert!(!prefix.rust_host_tools.is_empty());
+    Ok(prefix)
+}
+
+fn resumed_host_tool_observations(
+    manifest: &crate::full_source_rust_binding::FullSourceRustHostToolManifest,
+) -> Result<BTreeMap<String, BuildObservation>, RunError> {
+    let mut observations = BTreeMap::new();
+    for tool in &manifest.tools {
+        let label = rust_host_tool_name(tool.role).to_string();
+        let observation = resumed_build_observation(
+            &label,
+            &tool.path,
+            &tool.construction_receipt_path,
+            &tool.construction_receipt_digest_blake3,
+        )?;
+        if observations.insert(label, observation).is_some() {
+            return Err(proof_error("resumed host-tool manifest has a duplicate role".to_string()));
+        }
+    }
+    for support in &manifest.support_inputs {
+        if support.id != "linux-headers" {
+            return Err(proof_error(format!("unsupported resumed host support input {}", support.id)));
+        }
+        let observation = resumed_build_observation(
+            "linux-headers",
+            &support.path,
+            &support.attestation_path,
+            &support.attestation_digest_blake3,
+        )?;
+        if observations.insert("linux-headers".to_string(), observation).is_some() {
+            return Err(proof_error("resumed Linux headers input is duplicated".to_string()));
+        }
+    }
+    debug_assert!(!observations.is_empty());
+    Ok(observations)
+}
+
+fn resumed_build_observation(
+    label: &str,
+    path: &str,
+    attestation_path: &str,
+    attestation_digest_blake3: &str,
+) -> Result<BuildObservation, RunError> {
+    let output_path = PathBuf::from(path);
+    let evidence_path = PathBuf::from(attestation_path);
+    if !output_path.is_dir() || !evidence_path.is_file() {
+        return Err(proof_error(format!("resumed host input is missing for {label}")));
+    }
+    Ok(BuildObservation {
+        output: BuildJsonOutput {
+            name: BUILD_OUTPUT_NAME.to_string(),
+            path: output_path,
+            artifact_attestation: BuildJsonAttestationReference {
+                logical_path: path.to_string(),
+                path: evidence_path.clone(),
+            },
+        },
+        transcript_path: evidence_path,
+        transcript_digest_blake3: attestation_digest_blake3.to_string(),
+        action_trust: None,
+    })
 }
 
 fn validate_restored_provider_checkpoint(
@@ -1229,6 +1451,25 @@ fn write_checkpoint_restore_transcript(
     write_bytes_create_new(&transcript, text.as_bytes())
 }
 
+pub(super) fn publish_dev_resume_provider_checkpoint(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    providers: &ConstructedProviders,
+    checkpoint_store: &Path,
+) -> Result<crate::source_built_fixed_point_checkpoint_shell::PublishedProviderCheckpoint, RunError> {
+    let limits = crate::source_built_fixed_point_checkpoint_shell::provider_checkpoint_limits(options.disk_bytes_max);
+    let stage_observations = provider_checkpoint_stage_observations(prepared, providers, limits)?;
+    let payload_sources = provider_checkpoint_payload_sources(providers)?;
+    crate::source_built_fixed_point_checkpoint_shell::publish_dev_provider_checkpoint(
+        checkpoint_store,
+        &prepared.plan,
+        stage_observations,
+        &payload_sources,
+        STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST,
+        limits,
+    )
+}
+
 pub(super) fn publish_constructed_provider_checkpoint(
     options: &SourceBuiltFixedPointOptions<'_>,
     prepared: &PreparedAttempt,
@@ -1251,7 +1492,7 @@ pub(super) fn publish_constructed_provider_checkpoint(
     write_checkpoint_publication_transcript(prepared, &published)
 }
 
-fn provider_checkpoint_payload_sources(
+pub(super) fn provider_checkpoint_payload_sources(
     providers: &ConstructedProviders,
 ) -> Result<
     [crate::source_built_fixed_point_checkpoint_shell::CheckpointPayloadSource;
@@ -1418,7 +1659,7 @@ fn checkpoint_payload_source(
     }
 }
 
-fn provider_checkpoint_stage_observations(
+pub(super) fn provider_checkpoint_stage_observations(
     prepared: &PreparedAttempt,
     providers: &ConstructedProviders,
     limits: crate::source_built_fixed_point_checkpoint_shell::ProviderCheckpointLimits,

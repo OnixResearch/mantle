@@ -1,0 +1,34 @@
+$ nix build .#checks.x86_64-linux.dev-resume-architecture --no-link -L --option secret-key-files '
+this derivation will be built:
+  /nix/store/9lbz53jkc7cprnwdz3amddcrsk7ciynh-mantle-dev-resume-architecture-check-0.1.0.drv
+building '/nix/store/9lbz53jkc7cprnwdz3amddcrsk7ciynh-mantle-dev-resume-architecture-check-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+building '/nix/store/9lbz53jkc7cprnwdz3amddcrsk7ciynh-mantle-dev-resume-architecture-check-0.1.0.drv'...
+mantle-dev-resume-architecture-check> cargoArtifacts not set, will not reuse any cargo artifacts
+mantle-dev-resume-architecture-check> Running phase: unpackPhase
+mantle-dev-resume-architecture-check> unpacking source archive /nix/store/qb37npcr2j3cgwc4xwq3l02d7fqxlgds-source
+mantle-dev-resume-architecture-check> source root is source
+mantle-dev-resume-architecture-check> Running phase: patchPhase
+mantle-dev-resume-architecture-check> Executing configureCargoCommonVars
+mantle-dev-resume-architecture-check> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-dev-resume-architecture-check> Running phase: configurePhase
+mantle-dev-resume-architecture-check> will append /build/source/.cargo-home/config.toml with contents of /nix/store/64gnhir3apzl283gjcpa4g4ga4snzvhl-vendor-cargo-deps/config.toml
+mantle-dev-resume-architecture-check> default configurePhase, nothing to do
+mantle-dev-resume-architecture-check> Running phase: buildPhase
+mantle-dev-resume-architecture-check> +++ command cargo --version
+mantle-dev-resume-architecture-check> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-dev-resume-architecture-check> +++ command cargo -Zscript --offline scripts/check-dev-resume-architecture.rs --self-test
+mantle-dev-resume-architecture-check>    Compiling check-dev-resume-architecture v0.0.0 (/build/source/scripts/check-dev-resume-architecture.rs)
+mantle-dev-resume-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.26s
+mantle-dev-resume-architecture-check>      Running `.cargo-home/build/ac/204ef9797c570c/target/debug/check-dev-resume-architecture --self-test`
+mantle-dev-resume-architecture-check> dev-resume architecture verified: findings=0 negative-fixtures=9
+mantle-dev-resume-architecture-check> +++ command cargo -Zscript --offline scripts/check-dev-resume-architecture.rs --root .
+mantle-dev-resume-architecture-check>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+mantle-dev-resume-architecture-check>      Running `.cargo-home/build/ac/204ef9797c570c/target/debug/check-dev-resume-architecture --root .`
+mantle-dev-resume-architecture-check> dev-resume architecture verified: findings=0 negative-fixtures=9
+mantle-dev-resume-architecture-check> Running phase: installPhase
+mantle-dev-resume-architecture-check> Running phase: fixupPhase
+mantle-dev-resume-architecture-check> shrinking RPATHs of ELF executables and libraries in /nix/store/2707fk99kc7n554z02zm6khz04l4hgvn-mantle-dev-resume-architecture-check-0.1.0
+mantle-dev-resume-architecture-check> checking for references to /build/ in /nix/store/2707fk99kc7n554z02zm6khz04l4hgvn-mantle-dev-resume-architecture-check-0.1.0...
+mantle-dev-resume-architecture-check> patching script interpreter paths in /nix/store/2707fk99kc7n554z02zm6khz04l4hgvn-mantle-dev-resume-architecture-check-0.1.0
+copying 1 paths...
+copying path '/nix/store/2707fk99kc7n554z02zm6khz04l4hgvn-mantle-dev-resume-architecture-check-0.1.0' from 'ssh-ng://root@aspen1.local'...

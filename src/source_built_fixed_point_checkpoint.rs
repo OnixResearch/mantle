@@ -217,10 +217,44 @@ pub(crate) fn admit_promoted_provider_checkpoint(
     observed_payloads: &[CheckpointPayloadIdentity],
     expected_stagex_provider_digest_blake3: &str,
 ) -> Result<ProviderCheckpointAdmission, CheckpointError> {
+    admit_provider_checkpoint(
+        plan,
+        manifest,
+        observed_payloads,
+        expected_stagex_provider_digest_blake3,
+        ProofCheckpointOrigin::PromotedExecution,
+    )
+}
+
+pub(crate) fn admit_dev_provider_checkpoint(
+    plan: &SourceBuiltFixedPointPlan,
+    manifest: &ProviderCheckpointManifest,
+    observed_payloads: &[CheckpointPayloadIdentity],
+    expected_stagex_provider_digest_blake3: &str,
+) -> Result<ProviderCheckpointAdmission, CheckpointError> {
+    admit_provider_checkpoint(
+        plan,
+        manifest,
+        observed_payloads,
+        expected_stagex_provider_digest_blake3,
+        ProofCheckpointOrigin::DevExecution,
+    )
+}
+
+fn admit_provider_checkpoint(
+    plan: &SourceBuiltFixedPointPlan,
+    manifest: &ProviderCheckpointManifest,
+    observed_payloads: &[CheckpointPayloadIdentity],
+    expected_stagex_provider_digest_blake3: &str,
+    expected_origin: ProofCheckpointOrigin,
+) -> Result<ProviderCheckpointAdmission, CheckpointError> {
     validate_digest("expected StageX provider", expected_stagex_provider_digest_blake3)?;
     validate_manifest_shape(manifest)?;
-    if manifest.origin != ProofCheckpointOrigin::PromotedExecution {
-        return Err(checkpoint_error("promoted proof rejects a dev checkpoint"));
+    if manifest.origin != expected_origin {
+        if expected_origin == ProofCheckpointOrigin::PromotedExecution {
+            return Err(checkpoint_error("promoted proof rejects a dev checkpoint"));
+        }
+        return Err(checkpoint_error("dev resume rejects a promoted checkpoint"));
     }
     let expected_lookup_key = provider_checkpoint_lookup_key(plan)?;
     if manifest.lookup_key_blake3 != expected_lookup_key {
@@ -240,7 +274,7 @@ pub(crate) fn admit_promoted_provider_checkpoint(
     let checkpoint_digest_blake3 = provider_checkpoint_manifest_digest(manifest)?;
     let completed_stage_count = u32::try_from(manifest.stages.len())
         .map_err(|_| checkpoint_error("provider checkpoint stage count does not fit u32"))?;
-    assert_eq!(completed_stage_count as usize, PROVIDER_CHECKPOINT_STAGE_COUNT);
+    assert_eq!(usize::try_from(completed_stage_count).ok(), Some(PROVIDER_CHECKPOINT_STAGE_COUNT));
     assert_eq!(checkpoint_digest_blake3.len(), BLAKE3_HEX_LENGTH);
     Ok(ProviderCheckpointAdmission {
         checkpoint_digest_blake3,
@@ -880,7 +914,10 @@ mod tests {
         let payload_error =
             admit_promoted_provider_checkpoint(&plan, &promoted_manifest, &changed_payloads, DIGEST_B).unwrap_err();
 
+        let dev_admission = admit_dev_provider_checkpoint(&plan, &dev_manifest, &payloads, DIGEST_B).unwrap();
+
         assert!(dev_error.to_string().contains("dev checkpoint"));
+        assert_eq!(usize::try_from(dev_admission.completed_stage_count).unwrap(), PROVIDER_CHECKPOINT_STAGE_COUNT);
         assert!(payload_error.to_string().contains("payload observations"));
     }
 

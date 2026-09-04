@@ -1,0 +1,14 @@
+$ cargo -Zscript --offline scripts/check-machine-schema-contracts.rs --generate
+machine schema contract check failed: bootstrap.dev-resume-report schema rejected:
+  - bootstrap.dev-resume-report [bounds] #/$defs/stages/maxItems: numeric bound maxItems requires x-mantle-bound-name
+  - bootstrap.dev-resume-report [bounds] #/properties/non_claims/items/maxLength: numeric bound maxLength requires x-mantle-bound-name
+  - bootstrap.dev-resume-report [bounds] #/properties/non_claims/items/minLength: numeric bound minLength requires x-mantle-bound-name
+  - bootstrap.dev-resume-report [bounds] #/properties/non_claims/items/x-mantle-length-unit: string bounds require exact utf8-bytes length semantics
+  - bootstrap.dev-resume-report [bounds] #/properties/non_claims/maxItems: numeric bound maxItems requires x-mantle-bound-name
+  - bootstrap.dev-resume-report [bounds] #/properties/non_claims/minItems: numeric bound minItems requires x-mantle-bound-name
+  - bootstrap.dev-resume-report [schema] #/$defs/blake3/pattern: unsupported schema construct pattern
+  - bootstrap.dev-resume-report [schema] #/$defs/stages/uniqueItems: unsupported schema construct uniqueItems
+  - bootstrap.dev-resume-report [schema] #/properties/first_incomplete_stage: schema node requires type, $ref, const, or enum
+  - bootstrap.dev-resume-report [schema] #/properties/first_incomplete_stage/anyOf: unsupported schema construct anyOf
+  - bootstrap.dev-resume-report [schema] #/properties/selected_bundle_identity_blake3: schema node requires type, $ref, const, or enum
+  - bootstrap.dev-resume-report [schema] #/properties/selected_bundle_identity_blake3/anyOf: unsupported schema construct anyOf

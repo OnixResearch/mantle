@@ -89,6 +89,7 @@ let Registry = {
     "resource.action-family",
     "resource.resource-observation",
     "remote.trellis-admission-evidence",
+    "bootstrap.dev-resume-report",
     "mantlepkgs.package-impact-report",
     "mantlepkgs.update-plan"
   ],
@@ -1404,7 +1405,7 @@ let Registry = {
         "contract_blake3"= "d158d85e21edcccbf6d6ae7bc6d3d59aea4acb8f1dc8a52438be38567d4c50f2",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "230228d02be1df38f427caa0f6ca4cd7c1ec8666c2350508d409aef177ccd494",
-        "producer_identity_blake3"= "669fcf3d8519fa02516ff2733c211540b2c7607fc80f32708e4c9505d4ed4702",
+        "producer_identity_blake3"= "8808e834385d3f37ed62bd3cf23066ee57b6d9d04f45f3529892e4dd5f52cee9",
         "consumer_policy_blake3"= "c81ddbc9befcf012a5b42b3f44c2f17fe44f890ce0dfcc228b2cfefd5eb30dd4"
       },
       "non_claims"= [
@@ -1465,7 +1466,7 @@ let Registry = {
         "contract_blake3"= "723027e965189230cabb05b8ba069effec984e9bd527625a4320c8bd3cbe1af3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "9acb57b93f3b9150f79d59ff8a46ca3b5c2e5b98e83320b0308d57334a13d4a3",
-        "producer_identity_blake3"= "2ee2ac83b44a963a869ea8fabc21878aab9bebb9f0e3dd1a5458da01832f1177",
+        "producer_identity_blake3"= "27d185730d86506ec333b356c0b23dab33bdb919f9f6b261bc7687807d58d7f4",
         "consumer_policy_blake3"= "e81324a18c19a70aaa2bec634d4a0b7dccceede6f048bbd332b432a9938adefe"
       },
       "non_claims"= [
@@ -1605,6 +1606,73 @@ let Registry = {
         "conformance proves the named abstract model and recorded supported projection cases only; it does not prove implementation equivalence, persistence, transport, cryptography, workers, liveness, whole builds, or release eligibility"
       ],
       "rationale"= "A versioned report keeps external formal evidence reviewable without giving it runtime report or output authority."
+    },
+    {
+      "id"= "bootstrap.dev-resume-report",
+      "class"= "contracted",
+      "rust_owner"= "crates/crunch-dev-resume-core/src/model.rs::DevResumeReport",
+      "producer"= {
+        "command_or_api"= "mantle self-build --source-built-fixed-point --dev-provider-cache <dir> --dev-resume --json",
+        "marker"= "bootstrap.dev-resume-report",
+        "source_paths"= [
+          "crates/crunch-dev-resume-core/src/model.rs",
+          "crates/crunch-dev-resume-core/src/planning.rs",
+          "src/source_built_fixed_point_shell.rs",
+          "src/source_built_fixed_point_shell/dev_resume.rs",
+          "src/source_built_fixed_point_shell/dev_resume/candidates.rs",
+          "src/source_built_fixed_point_shell/dev_resume/load.rs",
+          "src/source_built_fixed_point_shell/dev_resume/manifest_io.rs",
+          "src/source_built_fixed_point_shell/dev_resume/publish.rs",
+          "src/source_built_fixed_point_shell/dev_resume/io.rs"
+        ]
+      },
+      "consumers"= [
+        "development fixed-point operators",
+        "Cairn runtime evidence review",
+        "cache isolation validation"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/dev-resume-report.schema.json",
+        "generated_contract"= "schemas/machine-contracts/dev-resume-report.contract.ncl",
+        "positive_fixtures"= [
+          "schemas/machine-contracts/fixtures/dev-resume-report.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/dev-resume-report.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-dev-stage-resume-report-v1",
+        "supported"= [
+          "mantle-dev-stage-resume-report-v1"
+        ],
+        "unknown_version_behavior"= "reject before restored work can skip stage execution",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "cargo test -p crunch-dev-resume-core",
+        "cargo test -p mantle --bin mantle source_built_fixed_point_shell::dev_resume",
+        "cargo -Zscript scripts/check-machine-schema-contracts.rs"
+      ],
+      "fixture_coverage"= [
+        "schema",
+        "version",
+        "digest",
+        "bounds",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "The no-std core owns the closed report DTO and the shell records only remeasured dev-resume decisions",
+      "freshness"= {
+        "schema_blake3"= "e87ec2ee2e34202c50e33dc2d7401a39a5e8cb1e7f3d93f0dc887f41b68539bf",
+        "contract_blake3"= "da93927fdd716060b6194c24078efb374a993299dc83d50e37aac0133e0e26c8",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "b114829e0a36c84a92da558377b95b0ece311107390acff70d44f51de5a2fddc",
+        "producer_identity_blake3"= "ced6db4cdf472e513859dda845488a4668e18ab970a3ec66d3f6d86ab0918acb",
+        "consumer_policy_blake3"= "127fb0de77183b9d49f89506a72a42208092e2a73ada034d2b63b48e80db47de"
+      },
+      "non_claims"= [
+        "dev resume reports do not prove current-attempt execution, promoted proof success, compiler correctness, or release eligibility"
+      ],
+      "rationale"= "A versioned report keeps restored stages distinct from current execution and preserves the promoted cold-path boundary."
     },
     {
       "id"= "resource.action-family",

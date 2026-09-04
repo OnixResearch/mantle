@@ -1214,6 +1214,22 @@
           '';
         };
 
+        devResumeArchitectureCheck = craneLib.mkCargoDerivation {
+          pname = "mantle-dev-resume-architecture-check";
+          inherit src cargoVendorDir;
+          cargoArtifacts = null;
+          nativeBuildInputs = nativeBuildInputs ++ [ rustToolchain ];
+          buildPhaseCargoCommand = ''
+            cargo -Zscript --offline scripts/check-dev-resume-architecture.rs --self-test
+            cargo -Zscript --offline scripts/check-dev-resume-architecture.rs --root .
+          '';
+          doInstallCargoArtifacts = false;
+          installPhaseCommand = ''
+            mkdir -p "$out"
+            printf '%s\n' 'dev_resume_architecture_findings=0' > "$out/report.txt"
+          '';
+        };
+
         trellisRemoteAdmissionEvidenceCheck = craneLib.mkCargoDerivation {
           pname = "mantle-trellis-remote-admission-evidence-check";
           inherit src cargoVendorDir;
@@ -1539,6 +1555,7 @@
           source-observation-architecture = sourceObservationArchitectureCheck;
           radiance-reference-architecture = radianceReferenceArchitectureCheck;
           resource-policy-architecture = resourcePolicyArchitectureCheck;
+          dev-resume-architecture = devResumeArchitectureCheck;
           trellis-remote-admission-evidence = trellisRemoteAdmissionEvidenceCheck;
           content-bound-requirement-source-closure = contentBoundRequirementSourceClosure;
           content-bound-requirement-evidence = contentBoundRequirementEvidence;
@@ -1930,6 +1947,37 @@
               buildInputs
               ;
             cargoTestExtraArgs = "-p mantle --test resource_policy_evidence";
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          };
+
+          dev-resume-core = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p crunch-dev-resume-core --all-targets";
+          };
+
+          dev-resume-core-wasm = craneLib.cargoBuild {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoExtraArgs = "-p crunch-dev-resume-core --lib --target wasm32-unknown-unknown";
+          };
+
+          dev-resume-integration = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p mantle --bin mantle source_built_fixed_point_shell";
             SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
           };
 
