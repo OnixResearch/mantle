@@ -1,0 +1,140 @@
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- sync verify-remote-admission-with-trellis --root . --execute
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/verify-remote-admission-with-trellis/specs/remote-builds/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/verify-remote-admission-with-trellis/specs/remote-builds/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "verify-remote-admission-with-trellis",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "0c9d8ce2dd523de14496e45af2117118ea53827153b9a0bd6cf11bb5e88835ad",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+    "receipt_hash": "b476b08a11456e26e76cb472af0963a1356f795be02cec5ae6de482246164bc1",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/verify-remote-admission-with-trellis/specs/remote-builds/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "439df63e903a1be3cd84bf13e26e6cec9e016f4990e349698b5388c0ff9d3a74",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "16bef677017870273ff7a5034a6b830d5897a408af40572681bc89e163dfd2dd",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "07ff91398c60decff1e502587cb854194789607d2529807fe905aae403c20b4f",
+        "destination": ".cairn/specs/remote-builds/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "2a2a2e6a752b46411a9aa7c547e0aa1952afc4efb6d83aa5b233babd7d68f629",
+        "operations": [
+          {
+            "block_hash": "aaa22064e0043d89698ad851e57d0c1c733f3606d149ed059c65b8fdaaae32e2",
+            "heading": "### Requirement: Remote admission has a Trellis-verified abstract model",
+            "kind": "added",
+            "requirement_id": "remote_builds.trellis_admission_model"
+          },
+          {
+            "block_hash": "1130597ba8c4294be48a110523a800ef209350f662d9d569613c036e5123acb4",
+            "heading": "### Requirement: Trellis proves the closed remote-attempt safety set",
+            "kind": "added",
+            "requirement_id": "remote_builds.trellis_admission_safety"
+          },
+          {
+            "block_hash": "727c184379b1fa9cb0f1b3c4736ef905a187714bb24b4ecfbf1a1fa37e0891c2",
+            "heading": "### Requirement: Mantle decisions have a fail-closed model projection",
+            "kind": "added",
+            "requirement_id": "remote_builds.trellis_admission_projection"
+          },
+          {
+            "block_hash": "6b56e9155f8792dee5145ae2f178888a751dc4286a80fa80c95893cc8be5c7e1",
+            "heading": "### Requirement: Trellis proof evidence remains external to runtime authority",
+            "kind": "added",
+            "requirement_id": "remote_builds.trellis_admission_evidence_boundary"
+          },
+          {
+            "block_hash": "5ed15ced4958ac12f4d338ddc8c1d84cfdfd4154f5e08424079b94f8512a93a0",
+            "heading": "### Requirement: Formal proof claims remain bounded",
+            "kind": "added",
+            "requirement_id": "remote_builds.trellis_admission_claim_boundary"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "remote_builds.trellis_admission_model",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "remote_builds.trellis_admission_safety",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "remote_builds.trellis_admission_projection",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "remote_builds.trellis_admission_evidence_boundary",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "remote_builds.trellis_admission_claim_boundary",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/verify-remote-admission-with-trellis/specs/remote-builds/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "2a2a2e6a752b46411a9aa7c547e0aa1952afc4efb6d83aa5b233babd7d68f629",
+          "exists": true,
+          "path": "./.cairn/specs/remote-builds/spec.md"
+        }
+      ],
+      "manifest_hash": "9412432bdca2539abe67d5ee6d82dff10cb1487ed9b155bc597cfc40b8f79095"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "16bef677017870273ff7a5034a6b830d5897a408af40572681bc89e163dfd2dd",
+          "exists": true,
+          "path": "./.cairn/specs/remote-builds/spec.md"
+        }
+      ],
+      "manifest_hash": "d5cd86a1eb365425c9f325839f39a2392f399d5185a45eb0ace5af3a45fc7158"
+    },
+    "kind": "sync",
+    "manifest_hash": "8c3b302b888c2ac7287f94f56b76f536946e8fd149285b3e46e254f5d9be5b21"
+  },
+  "plan_hash": "5c27cc149603979781f6f323744ef8ad5268a2164d05b2ad6a5b0dd95c15a168",
+  "policy": "mantle-default",
+  "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+  "reasons": [],
+  "receipt_hash": "fd8fd55c93522a4fd461f0324a15a411c8999dabef50edef692e2f6682a0f454"
+}

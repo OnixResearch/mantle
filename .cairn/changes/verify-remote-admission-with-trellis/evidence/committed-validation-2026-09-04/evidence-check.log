@@ -1,0 +1,2 @@
+$ cargo -Zscript --offline tools/check-trellis-remote-admission.rs --self-test --trellis-root /tmp/trellis-fenced-attempt-oracle-source
+trellis remote-admission evidence: PASS (cases=6720, source=e13e9f71da4964ab4d4f04d9c29525b20f0e778997da5ada7b6caa0f1711f56c, valence=accepted_formal_proof)
