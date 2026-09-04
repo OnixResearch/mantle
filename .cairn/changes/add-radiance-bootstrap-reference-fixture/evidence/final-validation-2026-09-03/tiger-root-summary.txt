@@ -1,0 +1,5 @@
+$ ./scripts/check-first-party-tigerstyle.sh -p mantle -- --bin mantle
+status=1
+root_error_lines=2326
+radiance_path_mentions=0
+verdict=INHERITED_ROOT_FINDINGS_WITH_ZERO_RADIANCE_FINDINGS

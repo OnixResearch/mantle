@@ -82,12 +82,13 @@ It must not import upstream claims that fixed-point equality proves compiler cor
   claims?
 - Inspected evidence: three Git SHA-256 repositories, their exact source and
   license identities, incompatible-revision probes, the research route pair,
-  V14 protected execution, and the V15 eight-role receipt.
+  V14 protected execution, the V15 eight-role receipt, and the V16 final proof
+  from implementation commit `5e35c8a518e871cbbf844598b274ddb7842c9316`.
 - Decision: Accept the frozen cohort and the per-translation-unit compiler
   roots with a separate single-threaded linker root. Reject source patches,
   mutable refs, live fetches, and correctness attribution.
 - Owner: Mantle owns source admission, protected execution, receipt policy,
   publication, and non-claims. The Radiance projects retain their source and
   compiler meaning.
-- Next action: preserve V15 replay evidence, run focused quality and Cairn
+- Next action: preserve V16 replay evidence, run focused quality and Cairn
   gates, sync the accepted requirement, and archive the change.

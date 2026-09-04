@@ -3451,7 +3451,7 @@ let Registry = {
         "schema_blake3"= "1844084b437adb57d0393d3a376a528a40bee2ba776644df80fe8ffbc0c88b17",
         "contract_blake3"= "324a43007aec634d744aa4e9a83ef398c95c8d35d76e70fa27f23cfae4e86097",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
-        "fixture_set_blake3"= "b2cf887e3d16d2f9e6da0a0cb266cf19b19fdc3dcaf0463dc433224ed42c729d",
+        "fixture_set_blake3"= "ec9659f68d7ed946cf7cbae5bc0e66387b4fd661fd8161c257f101b224f2abdc",
         "producer_identity_blake3"= "b4f9ecfa40a76a4e01fe714bb460ffc5818e3f819c133c6d1e3d54549de38e5b",
         "consumer_policy_blake3"= "e43aba9348669450039431270f8858e1008b640305e5da15497d8e48053a7154"
       },
@@ -3518,7 +3518,7 @@ let Registry = {
         "schema_blake3"= "51a21aa1f7be7181732d32a91a9be26ad64779f00108ed27940d612d9d80a57e",
         "contract_blake3"= "27b116d4880fd38f62246566ae345d61a5b5caf09c401adc1431ada94a6b5900",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
-        "fixture_set_blake3"= "2fb0624b218eaf8d70f0686699feb0a959e9a3cb37f089a1489ecf8f0079c1bf",
+        "fixture_set_blake3"= "80349c9c9eb3eda5184986a3459d6ac32f95e6bb1c62750bbaeeffa0c61084c1",
         "producer_identity_blake3"= "4876233fc7d12917f7bf340de89e47e50a72c9a7ce22e911aa4cee4b9837ad76",
         "consumer_policy_blake3"= "7bfb3db4967de9e558c4dcf0522151dd0a7c5f921adbde37413a38b68d28c61b"
       },

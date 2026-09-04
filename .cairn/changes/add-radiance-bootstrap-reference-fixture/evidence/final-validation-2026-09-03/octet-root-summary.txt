@@ -1,0 +1,5 @@
+$ cargo octet check -p mantle -- --all-targets
+status=0
+root_findings=42188
+radiance_path_mentions=0
+verdict=INHERITED_ROOT_FINDINGS_WITH_ZERO_RADIANCE_FINDINGS

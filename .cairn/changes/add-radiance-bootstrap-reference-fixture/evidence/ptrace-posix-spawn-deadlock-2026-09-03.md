@@ -50,6 +50,6 @@ The confined shape completed in live proof v14 with 50 allowed events, zero
 denied events, and no V98 change or relabel. V14 receipt BLAKE3 is
 `325ee17e3e216a0069c7570f02431cda4a47174652c71c6bbe050a250b72a23a`.
 
-V14 proves the execution-shape repair. The final receipt successor adds exact
-compiler-driver, CRT-tree, and libgcc-tree observations before lifecycle
-closure.
+V14 proves the execution-shape repair. V15 adds exact compiler-driver,
+CRT-tree, and libgcc-tree observations. V16 reruns that complete receipt from
+implementation commit `5e35c8a518e871cbbf844598b274ddb7842c9316` before lifecycle closure.

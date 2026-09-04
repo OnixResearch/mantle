@@ -73,7 +73,7 @@
             }
           ]
         },
-        "protected_execution_audit_blake3": "cf46accf75d21eb66e685c25121ce79ac12469754e0a2ba5645bcb79a684b625",
+        "protected_execution_audit_blake3": "2da1ee4274c085598aef78258cbaec4fc84cc764d80db469356c198160dd004e",
         "publication": [
           {
             "byte_count": 1285492,
@@ -100,7 +100,7 @@
             "role": "emulator"
           }
         ],
-        "receipt_blake3": "61b2bbd1b01b35692d83b2230dfbbce4294bbc927cdeee2cf5e7e858cb5d949f",
+        "receipt_blake3": "da80e6d4f2fbf4adb82aabfaeef37e4f61e8a628024d999672458f0589e571c9",
         "route_convergence": [
           {
             "byte_count": 1285492,
@@ -207,11 +207,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-1",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "4ce108463036e84eb77c0cd971f8a64bcdbb7122be912208168d9a959c6d735f",
+            "protected_audit_blake3": "c043990433982a3ff794da5253095a19abc27889d82b9e64f4d97aa6534471fc",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 1,
-            "stderr_blake3": "5fe5974c17811d78442506edcfb878dc3c2b388133dc3b226f5550c5f6e4eb18",
+            "stderr_blake3": "dfcb4dda6b5d908bc33fb8ed5cfcb57edb27a3682d8a374b6856a430581aa6ea",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -223,11 +223,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-2",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "d536a33c23b1ee8d60d08c5fc9bc8b3db8faae2c4ef74f408139698c430eab45",
+            "protected_audit_blake3": "0371ddecc9f86e7542e3bb96514ba31607dd7c2ee7bfcb94cf05ab4e6251b98d",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 2,
-            "stderr_blake3": "b9f645668f6fbd26a9130d87bb9ee93617d612d32ab702de9bf5a740dd630487",
+            "stderr_blake3": "c74edc65756c695e6c4d14349a3dde2010e13b78b4ae972b001fe9974dc0ba32",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -239,11 +239,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-3",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "ec2df2784d71b9d48fc7c7f65007b9dd1093b8e03f33f0526832bc5c434b1337",
+            "protected_audit_blake3": "919b276fc93b779b7bab539f1205f4e0b31e68101b1d9df44959ec421dcf7a40",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 3,
-            "stderr_blake3": "56b494b6ff4e8658cdd9a258b650a678542d70859db8edb7ab3d330a0dfef4ec",
+            "stderr_blake3": "b0f9e752b16876e7aa2bc785dde55a8ec6e72b4bb52b3720a3f9d601327fd4d9",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -255,7 +255,7 @@
             "output_bytes": 2460836,
             "output_role": "c99-stage-1",
             "predecessor_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
-            "protected_audit_blake3": "206437f5a37d6f734a4c9e232e06fa6ed56dd5b44563e188d1345fa3785face9",
+            "protected_audit_blake3": "0253bf738affb4250e4bc974aef25af63cd2fb9bbda6c75fadf2734f7ffc6829",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 1,
@@ -271,11 +271,11 @@
             "output_bytes": 1285492,
             "output_role": "c99-stage-2",
             "predecessor_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
-            "protected_audit_blake3": "c9ee6e3bff1bbaa96749a2c6e24771f0578c068b8ac0031d4bab4244c06d2b9f",
+            "protected_audit_blake3": "4f12b885641a68d195e9c7729db1ff67b889ae8a9e7104110d3617b0c8a5c78e",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 2,
-            "stderr_blake3": "38c3f75303fb4ae70110a5a08f252f1948ba4278a98a6ee01125ac7db0f1d965",
+            "stderr_blake3": "3dcfd7951fe2acbb4510cc19619289160baf05b2a3da027460d6be778f95c2a2",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -287,11 +287,11 @@
             "output_bytes": 1285492,
             "output_role": "c99-stage-3",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "3e0d414a6676abdb479603e3deecd0be9fa1977e41ae97408c4fc0999a64021b",
+            "protected_audit_blake3": "28f922be756a1a49ac0945f5285e05b5503dfaf8853b12c1c1546958bec8200e",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 3,
-            "stderr_blake3": "30c2d8f176c6626abcc972dbfae0dd78ba9afc7321fc8bba3ea9577b2823d8d5",
+            "stderr_blake3": "b461a18c58acea758ebd3f73122a4618807658b02b30bc5df175ab0fc6c95107",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           }
         ],
@@ -415,7 +415,7 @@
             }
           ]
         },
-        "protected_execution_audit_blake3": "cf46accf75d21eb66e685c25121ce79ac12469754e0a2ba5645bcb79a684b625",
+        "protected_execution_audit_blake3": "2da1ee4274c085598aef78258cbaec4fc84cc764d80db469356c198160dd004e",
         "publication": [
           {
             "byte_count": 1285492,
@@ -442,7 +442,7 @@
             "role": "emulator"
           }
         ],
-        "receipt_blake3": "61b2bbd1b01b35692d83b2230dfbbce4294bbc927cdeee2cf5e7e858cb5d949f",
+        "receipt_blake3": "da80e6d4f2fbf4adb82aabfaeef37e4f61e8a628024d999672458f0589e571c9",
         "route_convergence": [
           {
             "byte_count": 1285492,
@@ -549,11 +549,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-1",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "4ce108463036e84eb77c0cd971f8a64bcdbb7122be912208168d9a959c6d735f",
+            "protected_audit_blake3": "c043990433982a3ff794da5253095a19abc27889d82b9e64f4d97aa6534471fc",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 1,
-            "stderr_blake3": "5fe5974c17811d78442506edcfb878dc3c2b388133dc3b226f5550c5f6e4eb18",
+            "stderr_blake3": "dfcb4dda6b5d908bc33fb8ed5cfcb57edb27a3682d8a374b6856a430581aa6ea",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -565,11 +565,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-2",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "d536a33c23b1ee8d60d08c5fc9bc8b3db8faae2c4ef74f408139698c430eab45",
+            "protected_audit_blake3": "0371ddecc9f86e7542e3bb96514ba31607dd7c2ee7bfcb94cf05ab4e6251b98d",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 2,
-            "stderr_blake3": "b9f645668f6fbd26a9130d87bb9ee93617d612d32ab702de9bf5a740dd630487",
+            "stderr_blake3": "c74edc65756c695e6c4d14349a3dde2010e13b78b4ae972b001fe9974dc0ba32",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -581,11 +581,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-3",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "ec2df2784d71b9d48fc7c7f65007b9dd1093b8e03f33f0526832bc5c434b1337",
+            "protected_audit_blake3": "919b276fc93b779b7bab539f1205f4e0b31e68101b1d9df44959ec421dcf7a40",
             "protected_audit_event_count": 1,
             "route": "unknown-route",
             "stage": 3,
-            "stderr_blake3": "56b494b6ff4e8658cdd9a258b650a678542d70859db8edb7ab3d330a0dfef4ec",
+            "stderr_blake3": "b0f9e752b16876e7aa2bc785dde55a8ec6e72b4bb52b3720a3f9d601327fd4d9",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -597,7 +597,7 @@
             "output_bytes": 2460836,
             "output_role": "c99-stage-1",
             "predecessor_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
-            "protected_audit_blake3": "206437f5a37d6f734a4c9e232e06fa6ed56dd5b44563e188d1345fa3785face9",
+            "protected_audit_blake3": "0253bf738affb4250e4bc974aef25af63cd2fb9bbda6c75fadf2734f7ffc6829",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 1,
@@ -613,11 +613,11 @@
             "output_bytes": 1285492,
             "output_role": "c99-stage-2",
             "predecessor_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
-            "protected_audit_blake3": "c9ee6e3bff1bbaa96749a2c6e24771f0578c068b8ac0031d4bab4244c06d2b9f",
+            "protected_audit_blake3": "4f12b885641a68d195e9c7729db1ff67b889ae8a9e7104110d3617b0c8a5c78e",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 2,
-            "stderr_blake3": "38c3f75303fb4ae70110a5a08f252f1948ba4278a98a6ee01125ac7db0f1d965",
+            "stderr_blake3": "3dcfd7951fe2acbb4510cc19619289160baf05b2a3da027460d6be778f95c2a2",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -629,11 +629,11 @@
             "output_bytes": 1285492,
             "output_role": "c99-stage-3",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "3e0d414a6676abdb479603e3deecd0be9fa1977e41ae97408c4fc0999a64021b",
+            "protected_audit_blake3": "28f922be756a1a49ac0945f5285e05b5503dfaf8853b12c1c1546958bec8200e",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 3,
-            "stderr_blake3": "30c2d8f176c6626abcc972dbfae0dd78ba9afc7321fc8bba3ea9577b2823d8d5",
+            "stderr_blake3": "b461a18c58acea758ebd3f73122a4618807658b02b30bc5df175ab0fc6c95107",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           }
         ],
@@ -757,7 +757,7 @@
             }
           ]
         },
-        "protected_execution_audit_blake3": "cf46accf75d21eb66e685c25121ce79ac12469754e0a2ba5645bcb79a684b625",
+        "protected_execution_audit_blake3": "2da1ee4274c085598aef78258cbaec4fc84cc764d80db469356c198160dd004e",
         "publication": [
           {
             "byte_count": 1285492,
@@ -784,7 +784,7 @@
             "role": "emulator"
           }
         ],
-        "receipt_blake3": "61b2bbd1b01b35692d83b2230dfbbce4294bbc927cdeee2cf5e7e858cb5d949f",
+        "receipt_blake3": "da80e6d4f2fbf4adb82aabfaeef37e4f61e8a628024d999672458f0589e571c9",
         "route_convergence": [
           {
             "byte_count": 1285492,
@@ -891,11 +891,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-1",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "4ce108463036e84eb77c0cd971f8a64bcdbb7122be912208168d9a959c6d735f",
+            "protected_audit_blake3": "c043990433982a3ff794da5253095a19abc27889d82b9e64f4d97aa6534471fc",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 1,
-            "stderr_blake3": "5fe5974c17811d78442506edcfb878dc3c2b388133dc3b226f5550c5f6e4eb18",
+            "stderr_blake3": "dfcb4dda6b5d908bc33fb8ed5cfcb57edb27a3682d8a374b6856a430581aa6ea",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -907,11 +907,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-2",
             "predecessor_blake3": "not-a-digest",
-            "protected_audit_blake3": "d536a33c23b1ee8d60d08c5fc9bc8b3db8faae2c4ef74f408139698c430eab45",
+            "protected_audit_blake3": "0371ddecc9f86e7542e3bb96514ba31607dd7c2ee7bfcb94cf05ab4e6251b98d",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 2,
-            "stderr_blake3": "b9f645668f6fbd26a9130d87bb9ee93617d612d32ab702de9bf5a740dd630487",
+            "stderr_blake3": "c74edc65756c695e6c4d14349a3dde2010e13b78b4ae972b001fe9974dc0ba32",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -923,11 +923,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-3",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "ec2df2784d71b9d48fc7c7f65007b9dd1093b8e03f33f0526832bc5c434b1337",
+            "protected_audit_blake3": "919b276fc93b779b7bab539f1205f4e0b31e68101b1d9df44959ec421dcf7a40",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 3,
-            "stderr_blake3": "56b494b6ff4e8658cdd9a258b650a678542d70859db8edb7ab3d330a0dfef4ec",
+            "stderr_blake3": "b0f9e752b16876e7aa2bc785dde55a8ec6e72b4bb52b3720a3f9d601327fd4d9",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -939,7 +939,7 @@
             "output_bytes": 2460836,
             "output_role": "c99-stage-1",
             "predecessor_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
-            "protected_audit_blake3": "206437f5a37d6f734a4c9e232e06fa6ed56dd5b44563e188d1345fa3785face9",
+            "protected_audit_blake3": "0253bf738affb4250e4bc974aef25af63cd2fb9bbda6c75fadf2734f7ffc6829",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 1,
@@ -955,11 +955,11 @@
             "output_bytes": 1285492,
             "output_role": "c99-stage-2",
             "predecessor_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
-            "protected_audit_blake3": "c9ee6e3bff1bbaa96749a2c6e24771f0578c068b8ac0031d4bab4244c06d2b9f",
+            "protected_audit_blake3": "4f12b885641a68d195e9c7729db1ff67b889ae8a9e7104110d3617b0c8a5c78e",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 2,
-            "stderr_blake3": "38c3f75303fb4ae70110a5a08f252f1948ba4278a98a6ee01125ac7db0f1d965",
+            "stderr_blake3": "3dcfd7951fe2acbb4510cc19619289160baf05b2a3da027460d6be778f95c2a2",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -971,11 +971,11 @@
             "output_bytes": 1285492,
             "output_role": "c99-stage-3",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "3e0d414a6676abdb479603e3deecd0be9fa1977e41ae97408c4fc0999a64021b",
+            "protected_audit_blake3": "28f922be756a1a49ac0945f5285e05b5503dfaf8853b12c1c1546958bec8200e",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 3,
-            "stderr_blake3": "30c2d8f176c6626abcc972dbfae0dd78ba9afc7321fc8bba3ea9577b2823d8d5",
+            "stderr_blake3": "b461a18c58acea758ebd3f73122a4618807658b02b30bc5df175ab0fc6c95107",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           }
         ],
@@ -1099,7 +1099,7 @@
             }
           ]
         },
-        "protected_execution_audit_blake3": "cf46accf75d21eb66e685c25121ce79ac12469754e0a2ba5645bcb79a684b625",
+        "protected_execution_audit_blake3": "2da1ee4274c085598aef78258cbaec4fc84cc764d80db469356c198160dd004e",
         "publication": [
           {
             "byte_count": 1285492,
@@ -1126,7 +1126,7 @@
             "role": "emulator"
           }
         ],
-        "receipt_blake3": "61b2bbd1b01b35692d83b2230dfbbce4294bbc927cdeee2cf5e7e858cb5d949f",
+        "receipt_blake3": "da80e6d4f2fbf4adb82aabfaeef37e4f61e8a628024d999672458f0589e571c9",
         "route_convergence": [
           {
             "byte_count": 1285492,
@@ -1233,11 +1233,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-1",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "4ce108463036e84eb77c0cd971f8a64bcdbb7122be912208168d9a959c6d735f",
+            "protected_audit_blake3": "c043990433982a3ff794da5253095a19abc27889d82b9e64f4d97aa6534471fc",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 1,
-            "stderr_blake3": "5fe5974c17811d78442506edcfb878dc3c2b388133dc3b226f5550c5f6e4eb18",
+            "stderr_blake3": "dfcb4dda6b5d908bc33fb8ed5cfcb57edb27a3682d8a374b6856a430581aa6ea",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -1249,11 +1249,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-2",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "d536a33c23b1ee8d60d08c5fc9bc8b3db8faae2c4ef74f408139698c430eab45",
+            "protected_audit_blake3": "0371ddecc9f86e7542e3bb96514ba31607dd7c2ee7bfcb94cf05ab4e6251b98d",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 2,
-            "stderr_blake3": "b9f645668f6fbd26a9130d87bb9ee93617d612d32ab702de9bf5a740dd630487",
+            "stderr_blake3": "c74edc65756c695e6c4d14349a3dde2010e13b78b4ae972b001fe9974dc0ba32",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -1265,11 +1265,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-3",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "ec2df2784d71b9d48fc7c7f65007b9dd1093b8e03f33f0526832bc5c434b1337",
+            "protected_audit_blake3": "919b276fc93b779b7bab539f1205f4e0b31e68101b1d9df44959ec421dcf7a40",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 3,
-            "stderr_blake3": "56b494b6ff4e8658cdd9a258b650a678542d70859db8edb7ab3d330a0dfef4ec",
+            "stderr_blake3": "b0f9e752b16876e7aa2bc785dde55a8ec6e72b4bb52b3720a3f9d601327fd4d9",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -1281,7 +1281,7 @@
             "output_bytes": 2460836,
             "output_role": "c99-stage-1",
             "predecessor_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
-            "protected_audit_blake3": "206437f5a37d6f734a4c9e232e06fa6ed56dd5b44563e188d1345fa3785face9",
+            "protected_audit_blake3": "0253bf738affb4250e4bc974aef25af63cd2fb9bbda6c75fadf2734f7ffc6829",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 1,
@@ -1297,11 +1297,11 @@
             "output_bytes": 1285492,
             "output_role": "c99-stage-2",
             "predecessor_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
-            "protected_audit_blake3": "c9ee6e3bff1bbaa96749a2c6e24771f0578c068b8ac0031d4bab4244c06d2b9f",
+            "protected_audit_blake3": "4f12b885641a68d195e9c7729db1ff67b889ae8a9e7104110d3617b0c8a5c78e",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 2,
-            "stderr_blake3": "38c3f75303fb4ae70110a5a08f252f1948ba4278a98a6ee01125ac7db0f1d965",
+            "stderr_blake3": "3dcfd7951fe2acbb4510cc19619289160baf05b2a3da027460d6be778f95c2a2",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -1313,11 +1313,11 @@
             "output_bytes": 1285492,
             "output_role": "c99-stage-3",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "3e0d414a6676abdb479603e3deecd0be9fa1977e41ae97408c4fc0999a64021b",
+            "protected_audit_blake3": "28f922be756a1a49ac0945f5285e05b5503dfaf8853b12c1c1546958bec8200e",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 3,
-            "stderr_blake3": "30c2d8f176c6626abcc972dbfae0dd78ba9afc7321fc8bba3ea9577b2823d8d5",
+            "stderr_blake3": "b461a18c58acea758ebd3f73122a4618807658b02b30bc5df175ab0fc6c95107",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           }
         ],
@@ -1441,7 +1441,7 @@
             }
           ]
         },
-        "protected_execution_audit_blake3": "cf46accf75d21eb66e685c25121ce79ac12469754e0a2ba5645bcb79a684b625",
+        "protected_execution_audit_blake3": "2da1ee4274c085598aef78258cbaec4fc84cc764d80db469356c198160dd004e",
         "publication": [
           {
             "byte_count": 1285492,
@@ -1468,7 +1468,7 @@
             "role": "emulator"
           }
         ],
-        "receipt_blake3": "61b2bbd1b01b35692d83b2230dfbbce4294bbc927cdeee2cf5e7e858cb5d949f",
+        "receipt_blake3": "da80e6d4f2fbf4adb82aabfaeef37e4f61e8a628024d999672458f0589e571c9",
         "route_convergence": [
           {
             "byte_count": 1285492,
@@ -1575,11 +1575,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-1",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "4ce108463036e84eb77c0cd971f8a64bcdbb7122be912208168d9a959c6d735f",
+            "protected_audit_blake3": "c043990433982a3ff794da5253095a19abc27889d82b9e64f4d97aa6534471fc",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 1,
-            "stderr_blake3": "5fe5974c17811d78442506edcfb878dc3c2b388133dc3b226f5550c5f6e4eb18",
+            "stderr_blake3": "dfcb4dda6b5d908bc33fb8ed5cfcb57edb27a3682d8a374b6856a430581aa6ea",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -1591,11 +1591,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-2",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "d536a33c23b1ee8d60d08c5fc9bc8b3db8faae2c4ef74f408139698c430eab45",
+            "protected_audit_blake3": "0371ddecc9f86e7542e3bb96514ba31607dd7c2ee7bfcb94cf05ab4e6251b98d",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 2,
-            "stderr_blake3": "b9f645668f6fbd26a9130d87bb9ee93617d612d32ab702de9bf5a740dd630487",
+            "stderr_blake3": "c74edc65756c695e6c4d14349a3dde2010e13b78b4ae972b001fe9974dc0ba32",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -1607,11 +1607,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-3",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "ec2df2784d71b9d48fc7c7f65007b9dd1093b8e03f33f0526832bc5c434b1337",
+            "protected_audit_blake3": "919b276fc93b779b7bab539f1205f4e0b31e68101b1d9df44959ec421dcf7a40",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 3,
-            "stderr_blake3": "56b494b6ff4e8658cdd9a258b650a678542d70859db8edb7ab3d330a0dfef4ec",
+            "stderr_blake3": "b0f9e752b16876e7aa2bc785dde55a8ec6e72b4bb52b3720a3f9d601327fd4d9",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -1623,7 +1623,7 @@
             "output_bytes": 2460836,
             "output_role": "c99-stage-1",
             "predecessor_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
-            "protected_audit_blake3": "206437f5a37d6f734a4c9e232e06fa6ed56dd5b44563e188d1345fa3785face9",
+            "protected_audit_blake3": "0253bf738affb4250e4bc974aef25af63cd2fb9bbda6c75fadf2734f7ffc6829",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 1,
@@ -1639,11 +1639,11 @@
             "output_bytes": 1285492,
             "output_role": "c99-stage-2",
             "predecessor_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
-            "protected_audit_blake3": "c9ee6e3bff1bbaa96749a2c6e24771f0578c068b8ac0031d4bab4244c06d2b9f",
+            "protected_audit_blake3": "4f12b885641a68d195e9c7729db1ff67b889ae8a9e7104110d3617b0c8a5c78e",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 2,
-            "stderr_blake3": "38c3f75303fb4ae70110a5a08f252f1948ba4278a98a6ee01125ac7db0f1d965",
+            "stderr_blake3": "3dcfd7951fe2acbb4510cc19619289160baf05b2a3da027460d6be778f95c2a2",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -1655,11 +1655,11 @@
             "output_bytes": 1285492,
             "output_role": "c99-stage-3",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "3e0d414a6676abdb479603e3deecd0be9fa1977e41ae97408c4fc0999a64021b",
+            "protected_audit_blake3": "28f922be756a1a49ac0945f5285e05b5503dfaf8853b12c1c1546958bec8200e",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 3,
-            "stderr_blake3": "30c2d8f176c6626abcc972dbfae0dd78ba9afc7321fc8bba3ea9577b2823d8d5",
+            "stderr_blake3": "b461a18c58acea758ebd3f73122a4618807658b02b30bc5df175ab0fc6c95107",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           }
         ],
@@ -1783,7 +1783,7 @@
             }
           ]
         },
-        "protected_execution_audit_blake3": "cf46accf75d21eb66e685c25121ce79ac12469754e0a2ba5645bcb79a684b625",
+        "protected_execution_audit_blake3": "2da1ee4274c085598aef78258cbaec4fc84cc764d80db469356c198160dd004e",
         "publication": [
           {
             "byte_count": 1285492,
@@ -1810,7 +1810,7 @@
             "role": "emulator"
           }
         ],
-        "receipt_blake3": "61b2bbd1b01b35692d83b2230dfbbce4294bbc927cdeee2cf5e7e858cb5d949f",
+        "receipt_blake3": "da80e6d4f2fbf4adb82aabfaeef37e4f61e8a628024d999672458f0589e571c9",
         "route_convergence": [
           {
             "byte_count": 1285492,
@@ -1917,11 +1917,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-1",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "4ce108463036e84eb77c0cd971f8a64bcdbb7122be912208168d9a959c6d735f",
+            "protected_audit_blake3": "c043990433982a3ff794da5253095a19abc27889d82b9e64f4d97aa6534471fc",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 1,
-            "stderr_blake3": "5fe5974c17811d78442506edcfb878dc3c2b388133dc3b226f5550c5f6e4eb18",
+            "stderr_blake3": "dfcb4dda6b5d908bc33fb8ed5cfcb57edb27a3682d8a374b6856a430581aa6ea",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -1933,11 +1933,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-2",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "d536a33c23b1ee8d60d08c5fc9bc8b3db8faae2c4ef74f408139698c430eab45",
+            "protected_audit_blake3": "0371ddecc9f86e7542e3bb96514ba31607dd7c2ee7bfcb94cf05ab4e6251b98d",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 2,
-            "stderr_blake3": "b9f645668f6fbd26a9130d87bb9ee93617d612d32ab702de9bf5a740dd630487",
+            "stderr_blake3": "c74edc65756c695e6c4d14349a3dde2010e13b78b4ae972b001fe9974dc0ba32",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -1949,11 +1949,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-3",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "ec2df2784d71b9d48fc7c7f65007b9dd1093b8e03f33f0526832bc5c434b1337",
+            "protected_audit_blake3": "919b276fc93b779b7bab539f1205f4e0b31e68101b1d9df44959ec421dcf7a40",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 3,
-            "stderr_blake3": "56b494b6ff4e8658cdd9a258b650a678542d70859db8edb7ab3d330a0dfef4ec",
+            "stderr_blake3": "b0f9e752b16876e7aa2bc785dde55a8ec6e72b4bb52b3720a3f9d601327fd4d9",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -1965,7 +1965,7 @@
             "output_bytes": 2460836,
             "output_role": "c99-stage-1",
             "predecessor_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
-            "protected_audit_blake3": "206437f5a37d6f734a4c9e232e06fa6ed56dd5b44563e188d1345fa3785face9",
+            "protected_audit_blake3": "0253bf738affb4250e4bc974aef25af63cd2fb9bbda6c75fadf2734f7ffc6829",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 1,
@@ -1981,11 +1981,11 @@
             "output_bytes": 1285492,
             "output_role": "c99-stage-2",
             "predecessor_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
-            "protected_audit_blake3": "c9ee6e3bff1bbaa96749a2c6e24771f0578c068b8ac0031d4bab4244c06d2b9f",
+            "protected_audit_blake3": "4f12b885641a68d195e9c7729db1ff67b889ae8a9e7104110d3617b0c8a5c78e",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 2,
-            "stderr_blake3": "38c3f75303fb4ae70110a5a08f252f1948ba4278a98a6ee01125ac7db0f1d965",
+            "stderr_blake3": "3dcfd7951fe2acbb4510cc19619289160baf05b2a3da027460d6be778f95c2a2",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -1997,11 +1997,11 @@
             "output_bytes": 1285492,
             "output_role": "c99-stage-3",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "3e0d414a6676abdb479603e3deecd0be9fa1977e41ae97408c4fc0999a64021b",
+            "protected_audit_blake3": "28f922be756a1a49ac0945f5285e05b5503dfaf8853b12c1c1546958bec8200e",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 3,
-            "stderr_blake3": "30c2d8f176c6626abcc972dbfae0dd78ba9afc7321fc8bba3ea9577b2823d8d5",
+            "stderr_blake3": "b461a18c58acea758ebd3f73122a4618807658b02b30bc5df175ab0fc6c95107",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           }
         ],
@@ -2125,7 +2125,7 @@
             }
           ]
         },
-        "protected_execution_audit_blake3": "cf46accf75d21eb66e685c25121ce79ac12469754e0a2ba5645bcb79a684b625",
+        "protected_execution_audit_blake3": "2da1ee4274c085598aef78258cbaec4fc84cc764d80db469356c198160dd004e",
         "publication": [
           {
             "byte_count": 1285492,
@@ -2152,7 +2152,7 @@
             "role": "emulator"
           }
         ],
-        "receipt_blake3": "61b2bbd1b01b35692d83b2230dfbbce4294bbc927cdeee2cf5e7e858cb5d949f",
+        "receipt_blake3": "da80e6d4f2fbf4adb82aabfaeef37e4f61e8a628024d999672458f0589e571c9",
         "route_convergence": [
           {
             "byte_count": 1285492,
@@ -2260,11 +2260,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-1",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "4ce108463036e84eb77c0cd971f8a64bcdbb7122be912208168d9a959c6d735f",
+            "protected_audit_blake3": "c043990433982a3ff794da5253095a19abc27889d82b9e64f4d97aa6534471fc",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 1,
-            "stderr_blake3": "5fe5974c17811d78442506edcfb878dc3c2b388133dc3b226f5550c5f6e4eb18",
+            "stderr_blake3": "dfcb4dda6b5d908bc33fb8ed5cfcb57edb27a3682d8a374b6856a430581aa6ea",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -2276,11 +2276,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-2",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "d536a33c23b1ee8d60d08c5fc9bc8b3db8faae2c4ef74f408139698c430eab45",
+            "protected_audit_blake3": "0371ddecc9f86e7542e3bb96514ba31607dd7c2ee7bfcb94cf05ab4e6251b98d",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 2,
-            "stderr_blake3": "b9f645668f6fbd26a9130d87bb9ee93617d612d32ab702de9bf5a740dd630487",
+            "stderr_blake3": "c74edc65756c695e6c4d14349a3dde2010e13b78b4ae972b001fe9974dc0ba32",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -2292,11 +2292,11 @@
             "output_bytes": 1285492,
             "output_role": "seed-stage-3",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "ec2df2784d71b9d48fc7c7f65007b9dd1093b8e03f33f0526832bc5c434b1337",
+            "protected_audit_blake3": "919b276fc93b779b7bab539f1205f4e0b31e68101b1d9df44959ec421dcf7a40",
             "protected_audit_event_count": 1,
             "route": "seed",
             "stage": 3,
-            "stderr_blake3": "56b494b6ff4e8658cdd9a258b650a678542d70859db8edb7ab3d330a0dfef4ec",
+            "stderr_blake3": "b0f9e752b16876e7aa2bc785dde55a8ec6e72b4bb52b3720a3f9d601327fd4d9",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -2308,7 +2308,7 @@
             "output_bytes": 2460836,
             "output_role": "c99-stage-1",
             "predecessor_blake3": "ac040ea04c2a83b521c87c53a2bce2cc77b7efbab52f781ad5e1e7af24e53c75",
-            "protected_audit_blake3": "206437f5a37d6f734a4c9e232e06fa6ed56dd5b44563e188d1345fa3785face9",
+            "protected_audit_blake3": "0253bf738affb4250e4bc974aef25af63cd2fb9bbda6c75fadf2734f7ffc6829",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 1,
@@ -2324,11 +2324,11 @@
             "output_bytes": 1285492,
             "output_role": "c99-stage-2",
             "predecessor_blake3": "4e3d7ce0ce9432dd494a59e06711868623ce538c2bb68c93dd9f3417eae51c2a",
-            "protected_audit_blake3": "c9ee6e3bff1bbaa96749a2c6e24771f0578c068b8ac0031d4bab4244c06d2b9f",
+            "protected_audit_blake3": "4f12b885641a68d195e9c7729db1ff67b889ae8a9e7104110d3617b0c8a5c78e",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 2,
-            "stderr_blake3": "38c3f75303fb4ae70110a5a08f252f1948ba4278a98a6ee01125ac7db0f1d965",
+            "stderr_blake3": "3dcfd7951fe2acbb4510cc19619289160baf05b2a3da027460d6be778f95c2a2",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           },
           {
@@ -2340,11 +2340,11 @@
             "output_bytes": 1285492,
             "output_role": "c99-stage-3",
             "predecessor_blake3": "a06905539bd81c9581218ca648e98fb7a55c5a7e79847b6c840181a3e2605b07",
-            "protected_audit_blake3": "3e0d414a6676abdb479603e3deecd0be9fa1977e41ae97408c4fc0999a64021b",
+            "protected_audit_blake3": "28f922be756a1a49ac0945f5285e05b5503dfaf8853b12c1c1546958bec8200e",
             "protected_audit_event_count": 1,
             "route": "c99",
             "stage": 3,
-            "stderr_blake3": "30c2d8f176c6626abcc972dbfae0dd78ba9afc7321fc8bba3ea9577b2823d8d5",
+            "stderr_blake3": "b461a18c58acea758ebd3f73122a4618807658b02b30bc5df175ab0fc6c95107",
             "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
           }
         ],
