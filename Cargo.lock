@@ -164,11 +164,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "artifact-auth-core"
+version = "0.1.0"
+source = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be#e41340bec587b6d049b5cc518ec7db925dde84be"
+dependencies = [
+ "blake3",
+ "serde",
+]
+
+[[package]]
 name = "artifact-auth-ed25519"
 version = "0.1.0"
 source = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d880ddf4c2967f4c024b489b5c0022bf1"
 dependencies = [
- "artifact-auth-core",
+ "artifact-auth-core 0.1.0 (git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1)",
  "blake3",
  "ed25519-dalek",
 ]
@@ -1359,7 +1368,7 @@ dependencies = [
 name = "crunch-action-result-core"
 version = "0.1.0"
 dependencies = [
- "artifact-auth-core",
+ "artifact-auth-core 0.1.0 (git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1)",
  "blake3",
  "pretty_assertions",
  "serde",
@@ -1404,7 +1413,7 @@ dependencies = [
 name = "crunch-build"
 version = "0.1.0"
 dependencies = [
- "artifact-auth-core",
+ "artifact-auth-core 0.1.0 (git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1)",
  "artifact-auth-ed25519",
  "async-trait",
  "blake3",
@@ -1681,7 +1690,7 @@ dependencies = [
 name = "crunch-release-core"
 version = "0.1.0"
 dependencies = [
- "artifact-auth-core",
+ "artifact-auth-core 0.1.0 (git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1)",
  "blake3",
  "bounded-tree-core",
  "crunch-source-core",
@@ -1712,6 +1721,26 @@ name = "crunch-repair-core"
 version = "0.1.0"
 dependencies = [
  "blake3",
+]
+
+[[package]]
+name = "crunch-resource-policy"
+version = "0.1.0"
+dependencies = [
+ "crunch-resource-policy-core",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "valence-core",
+]
+
+[[package]]
+name = "crunch-resource-policy-core"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -3842,6 +3871,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashbrown"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+dependencies = [
+ "allocator-api2",
+]
+
+[[package]]
 name = "hashlink"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4144,6 +4182,18 @@ name = "id-arena"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d3067d79b975e8844ca9eb072e16b31c3c1c36928edf9c6789548c524d0d954"
+
+[[package]]
+name = "iddqd"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8450e1521a7518a32addf0b805ffcfbc8f9c558d2ad5769f068f2aeef5a81126"
+dependencies = [
+ "allocator-api2",
+ "equivalent",
+ "foldhash 0.2.0",
+ "hashbrown 0.17.1",
+]
 
 [[package]]
 name = "ident_case"
@@ -4854,7 +4904,7 @@ dependencies = [
 name = "mantle"
 version = "0.1.0"
 dependencies = [
- "artifact-auth-core",
+ "artifact-auth-core 0.1.0 (git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1)",
  "artifact-auth-ed25519",
  "assert_cmd",
  "base64",
@@ -4888,6 +4938,8 @@ dependencies = [
  "crunch-release-core",
  "crunch-remote",
  "crunch-remote-core",
+ "crunch-resource-policy",
+ "crunch-resource-policy-core",
  "crunch-rust-cache",
  "crunch-rust-cache-core",
  "crunch-rustc-wrapper",
@@ -8790,6 +8842,18 @@ dependencies = [
  "js-sys",
  "serde_core",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "valence-core"
+version = "0.1.0"
+source = "git+ssh://git@github.com/OnixResearch/valence.git?rev=e40c76b4d2070a29636e00c85c0dff93f03dba2f#e40c76b4d2070a29636e00c85c0dff93f03dba2f"
+dependencies = [
+ "artifact-auth-core 0.1.0 (git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be)",
+ "blake3",
+ "iddqd",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -13,6 +13,8 @@ readonly -a FIRST_PARTY_PACKAGES=(
   crunch-build-planning-core
   crunch-source-core
   crunch-radiance-reference-core
+  crunch-resource-policy-core
+  crunch-resource-policy
   crunch-delta
   crunch-eval
   crunch-glue

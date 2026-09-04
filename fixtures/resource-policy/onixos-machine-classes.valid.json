@@ -1,0 +1,59 @@
+{
+  "schema": "mantle-onixos-resource-machine-classes-v1",
+  "repository": "github.com/onixcomputer/onix-modules",
+  "revision": "8c7f0155492118c98ada55162f984dc24c00e150",
+  "contract_path": "lib/inventory.ncl",
+  "contract_blake3": "ce9bdc96706f7b5c2e514ea33e65f897877e126c2ea75f2a70dc98184c7ccee8",
+  "onixos_machine_class": "nixos",
+  "classes": [
+    {
+      "class_id": "onixos-small",
+      "endpoint_ids": [
+        "worker-small"
+      ],
+      "ordinal": 1,
+      "architecture": "x86_64",
+      "platform": "x86_64-linux",
+      "kvm_available": true,
+      "trust_tier": "trusted-builder",
+      "isolation": "microvm",
+      "features": [
+        "avx2",
+        "kvm"
+      ],
+      "capacity": {
+        "cpu_units": 2,
+        "memory_bytes": 1073741824,
+        "scratch_bytes": 2147483648
+      },
+      "reservation_charge_units": 100,
+      "available": true,
+      "onixos_source_blake3": "ce9bdc96706f7b5c2e514ea33e65f897877e126c2ea75f2a70dc98184c7ccee8"
+    },
+    {
+      "class_id": "onixos-large",
+      "endpoint_ids": [
+        "worker-large"
+      ],
+      "ordinal": 2,
+      "architecture": "x86_64",
+      "platform": "x86_64-linux",
+      "kvm_available": true,
+      "trust_tier": "trusted-builder",
+      "isolation": "microvm",
+      "features": [
+        "avx2",
+        "kvm"
+      ],
+      "capacity": {
+        "cpu_units": 2,
+        "memory_bytes": 2147483648,
+        "scratch_bytes": 2147483648
+      },
+      "reservation_charge_units": 200,
+      "available": true,
+      "onixos_source_blake3": "ce9bdc96706f7b5c2e514ea33e65f897877e126c2ea75f2a70dc98184c7ccee8"
+    }
+  ],
+  "non_claim": "OnixOS inventory identity supplies declared machine-class provenance but does not prove worker availability, capacity, trust, or execution success"
+}

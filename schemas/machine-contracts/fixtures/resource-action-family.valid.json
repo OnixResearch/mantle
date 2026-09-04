@@ -1,0 +1,14 @@
+{
+  "schema": "mantle-resource-action-family-v1",
+  "identity_blake3": "6b9a3c6e8115b1aec2b48c05fb5f8789b9762330480de341d884d5fba347c448",
+  "request_kind": "derivation",
+  "system": "x86_64-linux",
+  "builder_class": "rust",
+  "sandbox_mode": "microvm",
+  "network_mode": "none",
+  "required_features": [
+    "avx2",
+    "kvm"
+  ],
+  "semantic_accelerator_classes": []
+}

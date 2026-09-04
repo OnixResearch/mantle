@@ -1553,6 +1553,8 @@ pub struct RemoteCoordinatorBuildRequest {
     pub resource_requirements: Option<RemoteResourceRequirements>,
     #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub locality_scope: Option<RemoteLocalityScope>,
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
+    pub resource_policy_selection: Option<crunch_resource_policy::ResourceSelectionRequest>,
     pub trusted_output_keys: Vec<String>,
     pub live_output_claims: Vec<String>,
     pub wait_for_worker: bool,
@@ -1602,6 +1604,8 @@ pub struct RemoteCoordinatorJobSummary {
     pub last_attempt_reason_code: Option<RemoteAttemptReasonCode>,
     #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub resource_requirements: Option<RemoteResourceRequirements>,
+    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
+    pub resource_policy_decision: Option<crunch_resource_policy::ResourceSelectionDecision>,
     #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub resource_lease_id_blake3: Option<String>,
     #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
@@ -1827,6 +1831,7 @@ pub struct RemoteCoordinatorJobStatus {
     pub attempt_phase: Option<RemoteAttemptPhase>,
     pub attempt_reason_code: Option<RemoteAttemptReasonCode>,
     pub resource_requirements: Option<RemoteResourceRequirements>,
+    pub resource_policy_decision: Option<crunch_resource_policy::ResourceSelectionDecision>,
     pub resource_lease_id_blake3: Option<String>,
     pub resource_fit: Option<crunch_build::ResourceFitClass>,
     pub locality: Option<RemoteVerifiedLocalitySummary>,
@@ -4799,6 +4804,9 @@ pub fn validate_coordinator_build_request(
     {
         return Err("remote-coordinator-locality-scope-invalid".to_string());
     }
+    if request.resource_policy_selection.is_some() {
+        effective_coordinator_resource_requirements(request)?;
+    }
     if request.request.upload_bytes > MAX_REMOTE_UPLOAD_BYTES {
         return Err("remote-coordinator-upload-byte-limit-exceeded".to_string());
     }
@@ -4810,6 +4818,80 @@ pub fn validate_coordinator_build_request(
     debug_assert_eq!(plan.request_id, request.request.request_id);
     debug_assert!(request.request.build_time_limit_secs <= MAX_REMOTE_BUILD_TIME_SECS);
     Ok(plan)
+}
+
+fn coordinator_resource_policy_decision(
+    request: &RemoteCoordinatorBuildRequest,
+) -> Result<Option<crunch_resource_policy::ResourceSelectionDecision>, String> {
+    let Some(selection) = &request.resource_policy_selection else {
+        return Ok(None);
+    };
+    let declared = request
+        .resource_requirements
+        .as_ref()
+        .ok_or_else(|| "resource-policy-declared-requirements-missing".to_string())?;
+    validate_resource_policy_request_binding(request, selection, declared)?;
+    let decision =
+        crunch_resource_policy::select_resource_class(selection.clone()).map_err(|error| error.code().to_string())?;
+    debug_assert_eq!(decision.action_family_blake3, selection.action_family.identity_blake3);
+    debug_assert_eq!(decision.policy_id, selection.policy.policy_id);
+    Ok(Some(decision))
+}
+
+fn effective_coordinator_resource_requirements(
+    request: &RemoteCoordinatorBuildRequest,
+) -> Result<Option<RemoteResourceRequirements>, String> {
+    if request.resource_policy_selection.is_none() {
+        return Ok(request.resource_requirements.clone());
+    }
+    let Some(mut effective) = request.resource_requirements.clone() else {
+        return Err("resource-policy-declared-requirements-missing".to_string());
+    };
+    let decision =
+        coordinator_resource_policy_decision(request)?.ok_or_else(|| "resource-policy-decision-missing".to_string())?;
+    effective.quantities.cpu_units = decision.effective_minima.cpu_units;
+    effective.quantities.memory_bytes = decision.effective_minima.memory_bytes;
+    effective.quantities.scratch_bytes = decision.effective_minima.scratch_bytes;
+    canonical_remote_resource_requirements(&effective).map_err(|reason| reason.as_str().to_string())?;
+    debug_assert!(effective.quantities.cpu_units >= decision.declared_minima.cpu_units);
+    debug_assert!(effective.quantities.memory_bytes >= decision.declared_minima.memory_bytes);
+    Ok(Some(effective))
+}
+
+fn validate_resource_policy_request_binding(
+    request: &RemoteCoordinatorBuildRequest,
+    selection: &crunch_resource_policy::ResourceSelectionRequest,
+    declared: &RemoteResourceRequirements,
+) -> Result<(), String> {
+    let policy_minima = selection.declared.minima;
+    if policy_minima.cpu_units != declared.quantities.cpu_units
+        || policy_minima.memory_bytes != declared.quantities.memory_bytes
+        || policy_minima.scratch_bytes != declared.quantities.scratch_bytes
+    {
+        return Err("resource-policy-request-binding-mismatch".to_string());
+    }
+    if selection.declared.platform.platform != request.required_system
+        || selection.declared.platform.isolation != request.required_sandbox_mode
+    {
+        return Err("resource-policy-request-binding-mismatch".to_string());
+    }
+    if selection.action_family.system != request.required_system
+        || selection.action_family.sandbox_mode != request.required_sandbox_mode
+        || selection.action_family.network_mode != request.required_network_mode
+    {
+        return Err("resource-policy-request-binding-mismatch".to_string());
+    }
+    let policy_features =
+        selection.declared.platform.required_features.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    if request.required_features.iter().any(|feature| !policy_features.contains(feature.as_str()))
+        || (request.required_features.iter().any(|feature| feature == "kvm")
+            && !selection.declared.platform.kvm_required)
+    {
+        return Err("resource-policy-hard-feature-binding-mismatch".to_string());
+    }
+    debug_assert_eq!(selection.action_family.system, request.required_system);
+    debug_assert!(request.required_features.iter().all(|feature| policy_features.contains(feature.as_str())));
+    Ok(())
 }
 
 pub fn normalized_remote_build_key(request: &RemoteCoordinatorBuildRequest) -> Result<String, String> {
@@ -5710,6 +5792,7 @@ fn production_coordinator_request(
         required_network_mode: "none".to_string(),
         resource_requirements: input.request.resource_requirements.clone(),
         locality_scope: input.request.locality_scope.clone(),
+        resource_policy_selection: None,
         trusted_output_keys: input.trusted_output_keys.to_vec(),
         live_output_claims,
         wait_for_worker: false,
@@ -6530,7 +6613,8 @@ fn queued_job_summary(input: QueuedJobSummaryInput<'_>) -> Result<RemoteCoordina
         transferred_bytes: 0,
         output_admission_completed: false,
         last_attempt_reason_code: None,
-        resource_requirements: request.resource_requirements.clone(),
+        resource_requirements: effective_coordinator_resource_requirements(request)?,
+        resource_policy_decision: coordinator_resource_policy_decision(request)?,
         resource_lease_id_blake3: None,
         resource_fit: None,
         locality: None,
@@ -6543,12 +6627,12 @@ fn queued_job_summary(input: QueuedJobSummaryInput<'_>) -> Result<RemoteCoordina
 fn install_job_resource_reservation(
     state: &mut RemoteCoordinatorState,
     summary: &mut RemoteCoordinatorJobSummary,
-    request: &RemoteCoordinatorBuildRequest,
+    _request: &RemoteCoordinatorBuildRequest,
     placement: &CoordinatorWorkerPlacement,
 ) -> Result<(), String> {
     summary.resource_fit = Some(placement.resource_fit);
     summary.locality = placement.locality.clone();
-    let Some(requirements) = &request.resource_requirements else {
+    let Some(requirements) = &summary.resource_requirements else {
         debug_assert_eq!(placement.resource_fit, crunch_build::ResourceFitClass::Unknown);
         debug_assert!(summary.resource_lease_id_blake3.is_none());
         return Ok(());
@@ -7462,6 +7546,23 @@ fn select_coordinator_worker(
     if placements.is_empty() {
         return Ok(None);
     }
+    if let Some(selection) = &request.resource_policy_selection {
+        let decision = crunch_resource_policy::select_resource_class(selection.clone())
+            .map_err(|error| error.code().to_string())?;
+        let static_endpoint_ids =
+            placements.iter().map(|placement| placement.worker_endpoint_id.clone()).collect::<Vec<_>>();
+        let policy_plan = crate::resource_policy::plan_coordinator_resource_policy(
+            decision,
+            selection.machine_classes.clone(),
+            static_endpoint_ids,
+        )?;
+        let selected = placements
+            .into_iter()
+            .find(|placement| placement.worker_endpoint_id == policy_plan.selected_worker_endpoint_id)
+            .ok_or_else(|| "resource-policy-selected-worker-placement-missing".to_string())?;
+        debug_assert_eq!(selected.worker_endpoint_id, policy_plan.selected_worker_endpoint_id);
+        return Ok(Some(selected));
+    }
     let facts = placements
         .iter()
         .map(|placement| RemoteWorkerPlacementFacts {
@@ -7505,6 +7606,7 @@ fn coordinator_worker_placement_candidates(
     request: &RemoteCoordinatorBuildRequest,
 ) -> Result<Vec<CoordinatorWorkerPlacement>, String> {
     let active_leases = state.resource_leases.values().cloned().collect::<Vec<_>>();
+    let effective_requirements = effective_coordinator_resource_requirements(request)?;
     let mut placements = Vec::with_capacity(state.workers.len());
     for worker in state.workers.values() {
         if worker_satisfies_request(worker, request).is_err()
@@ -7512,7 +7614,7 @@ fn coordinator_worker_placement_candidates(
         {
             continue;
         }
-        let resource_fit = match (&request.resource_requirements, &worker.resource_inventory) {
+        let resource_fit = match (&effective_requirements, &worker.resource_inventory) {
             (Some(requirements), Some(inventory)) => {
                 match plan_remote_resource_availability(&worker.endpoint_id, inventory, requirements, &active_leases) {
                     Ok(plan) => plan.resource_fit,
@@ -7907,6 +8009,7 @@ fn coordinator_job_status(
         attempt_phase: job.current_attempt.as_ref().map(|attempt| attempt.phase),
         attempt_reason_code: job.last_attempt_reason_code,
         resource_requirements: job.resource_requirements.clone(),
+        resource_policy_decision: job.resource_policy_decision.clone(),
         resource_lease_id_blake3: job.resource_lease_id_blake3.clone(),
         resource_fit: job.resource_fit,
         locality: job.locality.clone(),
@@ -13224,6 +13327,18 @@ mod tests {
     const TEST_RESOURCE_SCRATCH_BYTES: u64 = 32_768;
     const TEST_RESOURCE_ACCELERATOR_COUNT: u32 = 1;
     const TEST_RESOURCE_TOKEN_COUNT: u32 = 2;
+    const TEST_RESOURCE_POLICY_MEMORY_INCREMENT_BYTES: u64 = 4_096;
+    const TEST_RESOURCE_POLICY_LARGE_MEMORY_BYTES: u64 = 20_480;
+    const TEST_RESOURCE_POLICY_SMALL_CLASS_ORDINAL: u32 = 1;
+    const TEST_RESOURCE_POLICY_LARGE_CLASS_ORDINAL: u32 = 2;
+    const TEST_RESOURCE_POLICY_SAMPLE_COUNT_MIN: u32 = 1;
+    const TEST_RESOURCE_POLICY_EXECUTION_MS: u64 = 100;
+    const TEST_RESOURCE_POLICY_IO_BYTES: u64 = 64;
+    const TEST_RESOURCE_POLICY_SMALL_CHARGE_UNITS: u64 = 100;
+    const TEST_RESOURCE_POLICY_LARGE_CHARGE_UNITS: u64 = 200;
+    const TEST_RESOURCE_POLICY_QUOTA_UNITS: u64 = 1_000;
+    const TEST_RESOURCE_POLICY_NOW_UNIX_S: u64 = 10_000;
+    const TEST_RESOURCE_POLICY_OBSERVED_UNIX_S: u64 = 9_999;
     const TEST_WORKER_CONCURRENCY: u32 = 4;
     const TEST_EXTERNAL_BATCH_TIMEOUT_SECS: u64 = 10;
     const TEST_EXTERNAL_BATCH_MAX_ATTEMPTS: u32 = 3;
@@ -15784,6 +15899,43 @@ mod tests {
     }
 
     #[test]
+    fn evidence_policy_selects_and_reserves_the_larger_statically_eligible_worker() {
+        let mut state = RemoteCoordinatorState::default();
+        let mut small = fixture_worker_registration();
+        small.resource_inventory = Some(fixture_resource_inventory());
+        apply_worker_registration(&mut state, small).expect("small worker registers");
+        let mut large = fixture_worker_registration();
+        large.endpoint_id = "builder-2".to_string();
+        let mut large_inventory = fixture_resource_inventory();
+        large_inventory.total.memory_bytes = TEST_RESOURCE_MEMORY_BYTES
+            .checked_add(TEST_RESOURCE_POLICY_MEMORY_INCREMENT_BYTES)
+            .expect("large fixture memory fits");
+        large.resource_inventory = Some(large_inventory);
+        apply_worker_registration(&mut state, large).expect("large worker registers");
+        let mut request = fixture_quantified_coordinator_request("resource-policy-action", "resource-policy-claim");
+        request.resource_policy_selection = Some(fixture_resource_policy_selection());
+        let decision = admit_fixture_dispatch(&mut state, &request).expect("policy request dispatches");
+        let RemoteCoordinatorDispatchDecision::Dispatch {
+            worker_endpoint_id,
+            job_id,
+            ..
+        } = decision
+        else {
+            panic!("resource policy request must dispatch");
+        };
+        let summary = &state.jobs[&job_id];
+        let lease = &state.resource_leases[summary.resource_lease_id_blake3.as_ref().expect("lease id")];
+
+        assert_eq!(worker_endpoint_id, "builder-2");
+        assert_eq!(summary.resource_policy_decision.as_ref().expect("policy decision").scheduled_class_id, "large");
+        assert_eq!(
+            summary.resource_requirements.as_ref().expect("effective requirements").quantities.memory_bytes,
+            TEST_RESOURCE_POLICY_LARGE_MEMORY_BYTES
+        );
+        assert_eq!(lease.reserved.memory_bytes, TEST_RESOURCE_POLICY_LARGE_MEMORY_BYTES);
+    }
+
+    #[test]
     fn concurrent_resource_dispatches_commit_once_and_never_overcommit() {
         let temp = tempfile::tempdir().expect("temporary concurrent coordinator state");
         let mut initial = RemoteCoordinatorState {
@@ -17031,6 +17183,7 @@ mod tests {
             output_admission_completed: false,
             last_attempt_reason_code: Some(RemoteAttemptReasonCode::LegacyStateRejected),
             resource_requirements: None,
+            resource_policy_decision: None,
             resource_lease_id_blake3: None,
             resource_fit: None,
             locality: None,
@@ -17302,6 +17455,7 @@ mod tests {
             output_admission_completed: false,
             last_attempt_reason_code: None,
             resource_requirements: None,
+            resource_policy_decision: None,
             resource_lease_id_blake3: None,
             resource_fit: None,
             locality: None,
@@ -18047,6 +18201,161 @@ mod tests {
         }
     }
 
+    fn fixture_resource_policy_class(
+        class_id: &str,
+        endpoint_id: &str,
+        ordinal: u32,
+        memory_bytes: u64,
+        charge_units: u64,
+    ) -> crunch_resource_policy::MachineClass {
+        crunch_resource_policy::MachineClass {
+            class_id: class_id.to_string(),
+            endpoint_ids: vec![endpoint_id.to_string()],
+            ordinal,
+            architecture: "x86_64".to_string(),
+            platform: DEFAULT_REMOTE_ACTION_SYSTEM.to_string(),
+            kvm_available: true,
+            trust_tier: "trusted-builder".to_string(),
+            isolation: "bwrap".to_string(),
+            features: vec!["kvm".to_string()],
+            capacity: crunch_resource_policy::ResourceQuantities {
+                cpu_units: TEST_RESOURCE_CPU_UNITS,
+                memory_bytes,
+                scratch_bytes: TEST_RESOURCE_SCRATCH_BYTES,
+            },
+            reservation_charge_units: charge_units,
+            available: true,
+            onixos_source_blake3: blake3::hash(b"onixos-resource-class-fixture").to_hex().to_string(),
+        }
+    }
+
+    fn fixture_resource_policy_selection() -> crunch_resource_policy::ResourceSelectionRequest {
+        let family = crunch_resource_policy::derive_action_family_identity(crunch_resource_policy::ActionFamilyInput {
+            request_kind: "action".to_string(),
+            system: DEFAULT_REMOTE_ACTION_SYSTEM.to_string(),
+            builder_class: "remote".to_string(),
+            sandbox_mode: "bwrap".to_string(),
+            network_mode: "off".to_string(),
+            required_features: vec!["kvm".to_string()],
+            semantic_accelerator_classes: vec!["nvidia-sm90".to_string()],
+        })
+        .expect("fixture action family");
+        let policy = fixture_resource_selection_policy();
+        let observation = fixture_resource_policy_observation(&family, &policy);
+        crunch_resource_policy::ResourceSelectionRequest {
+            now_unix_s: TEST_RESOURCE_POLICY_NOW_UNIX_S,
+            action_family: family,
+            declared: crunch_resource_policy::DeclaredResourceRequirements {
+                minima: crunch_resource_policy::ResourceQuantities {
+                    cpu_units: TEST_RESOURCE_CPU_UNITS,
+                    memory_bytes: TEST_RESOURCE_MEMORY_BYTES,
+                    scratch_bytes: TEST_RESOURCE_SCRATCH_BYTES,
+                },
+                platform: crunch_resource_policy::PlatformRequirements {
+                    architecture: "x86_64".to_string(),
+                    platform: DEFAULT_REMOTE_ACTION_SYSTEM.to_string(),
+                    kvm_required: true,
+                    trust_tier: "trusted-builder".to_string(),
+                    isolation: "bwrap".to_string(),
+                    required_features: vec!["kvm".to_string()],
+                },
+            },
+            machine_classes: vec![
+                fixture_resource_policy_class(
+                    "small",
+                    "builder-1",
+                    TEST_RESOURCE_POLICY_SMALL_CLASS_ORDINAL,
+                    TEST_RESOURCE_MEMORY_BYTES,
+                    TEST_RESOURCE_POLICY_SMALL_CHARGE_UNITS,
+                ),
+                fixture_resource_policy_class(
+                    "large",
+                    "builder-2",
+                    TEST_RESOURCE_POLICY_LARGE_CLASS_ORDINAL,
+                    TEST_RESOURCE_POLICY_LARGE_MEMORY_BYTES,
+                    TEST_RESOURCE_POLICY_LARGE_CHARGE_UNITS,
+                ),
+            ],
+            quota: crunch_resource_policy::QuotaFacts {
+                project_remaining_units: TEST_RESOURCE_POLICY_QUOTA_UNITS,
+                account_remaining_units: TEST_RESOURCE_POLICY_QUOTA_UNITS,
+            },
+            observations: vec![observation],
+            policy,
+            controls: crunch_resource_policy::ResourceFeatureControls {
+                mode: crunch_resource_policy::ResourcePolicyMode::Enforce,
+                project_opted_in: true,
+                historical_selection_enabled: true,
+                oom_retry_enabled: false,
+                quota_enforcement_enabled: true,
+                result_sharing_enabled: false,
+            },
+        }
+    }
+
+    fn fixture_resource_selection_policy() -> crunch_resource_policy::ResourceSelectionPolicy {
+        crunch_resource_policy::ResourceSelectionPolicy {
+            schema: crunch_resource_policy::RESOURCE_SELECTION_POLICY_SCHEMA.to_string(),
+            policy_id: "resource-selection-test-v1".to_string(),
+            policy_version: "v1".to_string(),
+            sample_count_min: TEST_RESOURCE_POLICY_SAMPLE_COUNT_MIN,
+            observation_age_secs_max: crunch_resource_policy::DEFAULT_OBSERVATION_AGE_SECS_MAX,
+            memory_margin_basis_points: crunch_resource_policy::BASIS_POINTS_DENOMINATOR_U32,
+            scratch_margin_basis_points: crunch_resource_policy::BASIS_POINTS_DENOMINATOR_U32,
+            measurement_bytes_max: crunch_resource_policy::MAX_MEASUREMENT_BYTES,
+            fallback: crunch_resource_policy::SelectionFallbackRule::StaticOnInsufficientHistory,
+        }
+    }
+
+    fn fixture_resource_policy_observation(
+        family: &crunch_resource_policy::ActionFamilyIdentity,
+        policy: &crunch_resource_policy::ResourceSelectionPolicy,
+    ) -> crunch_resource_policy::ResourceObservation {
+        crunch_resource_policy::build_resource_observation(crunch_resource_policy::ResourceObservationInput {
+            attempt_id: "historical-attempt".to_string(),
+            action_family_blake3: family.identity_blake3.clone(),
+            platform_identity: DEFAULT_REMOTE_ACTION_SYSTEM.to_string(),
+            machine_class_id: "small".to_string(),
+            declared: crunch_resource_policy::ResourceQuantities {
+                cpu_units: TEST_RESOURCE_CPU_UNITS,
+                memory_bytes: TEST_RESOURCE_MEMORY_BYTES,
+                scratch_bytes: TEST_RESOURCE_SCRATCH_BYTES,
+            },
+            selected: crunch_resource_policy::ResourceQuantities {
+                cpu_units: TEST_RESOURCE_CPU_UNITS,
+                memory_bytes: TEST_RESOURCE_MEMORY_BYTES,
+                scratch_bytes: TEST_RESOURCE_SCRATCH_BYTES,
+            },
+            timing: crunch_resource_policy::ResourceTiming {
+                queue_ms: 0,
+                execution_ms: TEST_RESOURCE_POLICY_EXECUTION_MS,
+                terminal_ms: 1,
+            },
+            measurements: crunch_resource_policy::ResourceMeasurements {
+                cpu_time_ms: TEST_RESOURCE_POLICY_EXECUTION_MS,
+                peak_memory_bytes: TEST_RESOURCE_POLICY_LARGE_MEMORY_BYTES,
+                scratch_peak_bytes: TEST_RESOURCE_SCRATCH_BYTES,
+                io_bytes: TEST_RESOURCE_POLICY_IO_BYTES,
+                transfer_bytes: TEST_RESOURCE_POLICY_IO_BYTES,
+                wall_time_ms: TEST_RESOURCE_POLICY_EXECUTION_MS,
+            },
+            oom_evidence: crunch_resource_policy::OomEvidence {
+                category: crunch_resource_policy::OomEvidenceCategory::None,
+                platform: DEFAULT_REMOTE_ACTION_SYSTEM.to_string(),
+                evidence_ref: None,
+                trusted: false,
+            },
+            terminal_outcome: crunch_resource_policy::TerminalOutcome::Succeeded,
+            retry_predecessor_attempt_id: None,
+            collector_id: "mantle-worker".to_string(),
+            collector_version: "v1".to_string(),
+            compatibility_policy_id: policy.policy_id.clone(),
+            observed_at_unix_s: TEST_RESOURCE_POLICY_OBSERVED_UNIX_S,
+            trusted: true,
+        })
+        .expect("fixture resource observation")
+    }
+
     fn fixture_worker_registration() -> RemoteWorkerRegistration {
         RemoteWorkerRegistration {
             endpoint_id: "builder-1".to_string(),
@@ -18086,6 +18395,7 @@ mod tests {
             required_network_mode: "off".to_string(),
             resource_requirements: None,
             locality_scope: None,
+            resource_policy_selection: None,
             trusted_output_keys: vec!["builder-key".to_string()],
             live_output_claims: vec!["claim-out".to_string()],
             wait_for_worker: false,
@@ -18890,6 +19200,7 @@ mod tests {
             required_network_mode: "off".to_string(),
             resource_requirements: None,
             locality_scope: None,
+            resource_policy_selection: None,
             trusted_output_keys: vec!["builder-key".to_string()],
             live_output_claims: vec!["claim-out".to_string()],
             wait_for_worker: false,

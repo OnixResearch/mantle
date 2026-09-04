@@ -22,6 +22,8 @@ members = [
   "crates/crunch-build-planning-core",
   "crates/crunch-source-core",
   "crates/crunch-radiance-reference-core",
+  "crates/crunch-resource-policy-core",
+  "crates/crunch-resource-policy",
   "crates/crunch-pipeline",
   "crates/crunch-project",
   "crates/crunch-project-core",
@@ -79,6 +81,8 @@ default_scope = [
   "-p", "crunch-build-planning-core",
   "-p", "crunch-source-core",
   "-p", "crunch-radiance-reference-core",
+  "-p", "crunch-resource-policy-core",
+  "-p", "crunch-resource-policy",
   "-p", "crunch-delta",
   "-p", "crunch-delta-core",
   "-p", "crunch-eval",
@@ -205,6 +209,8 @@ crunch-build = { path = "crates/crunch-build" }
 crunch-build-planning-core = { path = "crates/crunch-build-planning-core" }
 crunch-source-core = { path = "crates/crunch-source-core" }
 crunch-radiance-reference-core = { path = "crates/crunch-radiance-reference-core" }
+crunch-resource-policy-core = { path = "crates/crunch-resource-policy-core" }
+crunch-resource-policy = { path = "crates/crunch-resource-policy" }
 crunch-store = { path = "crates/crunch-store" }
 crunch-wasm-component = { path = "crates/crunch-wasm-component" }
 crunch-project = { path = "crates/crunch-project" }

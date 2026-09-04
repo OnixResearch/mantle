@@ -1216,3 +1216,30 @@
 // Positive and negative tests cover DTO mapping, family dispatch, typed
 // failures, effect identity, observation mismatch, presentation failure, CLI
 // byte parity, forbidden inward authority, host builds, and WASM builds.
+
+// Evidence-driven remote resource-policy bridge.
+//
+// r[impl remote_builds.resource_observations]
+// r[impl remote_builds.replayable_resource_selection]
+// r[impl remote_builds.positive_oom_retry]
+// r[impl remote_builds.usage_reservation_and_reconciliation]
+// r[impl remote_builds.authorized_result_sharing]
+// r[impl remote_builds.resource_benchmark_evidence]
+// r[impl remote_builds.resource_policy_rollout]
+// Deterministic policy, identity, accounting, retry, sharing, benchmark, and
+// fault models live in `crates/crunch-resource-policy-core`. Application-owned
+// evidence and ledger ports live in `crates/crunch-resource-policy`. Existing
+// remote coordinator and result-admission shells retain all execution and trust
+// authority. Typed Nickel defaults keep every authority-changing feature off.
+//
+// r[verify remote_builds.resource_observations]
+// r[verify remote_builds.replayable_resource_selection]
+// r[verify remote_builds.positive_oom_retry]
+// r[verify remote_builds.usage_reservation_and_reconciliation]
+// r[verify remote_builds.authorized_result_sharing]
+// r[verify remote_builds.resource_benchmark_evidence]
+// r[verify remote_builds.resource_policy_rollout]
+// Positive, negative, replay, property, integration, machine-contract,
+// benchmark, ChaosControl, OnixOS, Valence, architecture, WASM, Nix, and
+// lifecycle checks bind the implementation without claiming future sufficiency,
+// fair billing, host isolation, opaque heuristic authority, or result trust.

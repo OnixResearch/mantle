@@ -6,6 +6,24 @@ Mantle already receives resource declarations and owns resource leases. The new 
 
 Every decision is a pure result over explicit inputs. The evidence records those inputs, the policy version, the result, and a reason code so that another process can replay the decision.
 
+## Component boundary
+
+`crunch-resource-policy-core` is the `no_std + alloc` functional core. It owns
+canonical action-family identity, observation filtering, class selection, OOM
+retry planning, usage transitions, sharing decisions, benchmark comparison,
+fault expectations, rollout controls, and non-claims.
+
+`crunch-resource-policy` owns application ports for compare-and-commit ledger
+storage and Valence publication. Root adapters map decisions to the existing
+remote coordinator, fenced-attempt core, lease core, and strong action-result
+core. Filesystem, store, clock, network, process, credential, CAS, and rendering
+authority remains outside the policy core.
+
+The Valence contract is pinned to revision
+`e40c76b4d2070a29636e00c85c0dff93f03dba2f`. OnixOS machine taxonomy is bound
+to revision `8c7f0155492118c98ada55162f984dc24c00e150`. ChaosControl fault fixtures bind
+revision `31300fa1a2d29c7496e8316f065c156f80343143`.
+
 ## Resource observations
 
 A terminal attempt can produce a bounded observation containing:

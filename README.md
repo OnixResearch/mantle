@@ -570,6 +570,7 @@ Useful documentation:
 - [Remote credential operations](docs/remote-credentials.md)
 - [Remote-build hexagon](docs/remote-build-hexagon.md)
 - [Remote service gateway](docs/remote-service-gateway.md)
+- [Evidence-driven remote resource policy](docs/resource-policy.md)
 - [CLI application architecture](docs/cli-application-architecture.md)
 - [Portable remote client](docs/portable-remote-client.md)
 - [Mantle naming rules](docs/mantle-naming.md)
@@ -620,3 +621,4 @@ notices.
 - [Radiance](https://code.radiant.computer/radiance), Git SHA-256 commit `0d8a2d4fe8d0ba488e22c8ed83df1e53a5d23d69489c5d9e7fa0646b1c29c444`, supplies the optional self-hosting compiler source and RV64 seed reference.
 - [radiance.s0](https://code.radiant.computer/radiance.s0), Git SHA-256 commit `7834d3a9d44fb48ae3d3c06da992922f3e46b580b3d92df36372081b2fe475c3`, supplies the optional C99 bootstrap route.
 - [Radiance emulator](https://code.radiant.computer/emulator), Git SHA-256 commit `92cdb0c5293447964be053214fac403b49193ac3ec07c902576346ebaa205535`, supplies the optional RV64 execution adapter. Mantle retains source admission, execution, evidence, and release authority.
+- [nixbuild/nixbench](https://github.com/nixbuild/nixbench), revision `b256cd275d8c79ba485be8d317005f973879825a`, provides an Apache-2.0 fixed-output workload-shape reference. Mantle copies no source or hosted-service policy and retains selection, execution, accounting, evidence, and release authority.

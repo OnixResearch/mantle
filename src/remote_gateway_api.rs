@@ -1207,6 +1207,7 @@ mod tests {
             required_network_mode: "none".into(),
             resource_requirements: None,
             locality_scope: None,
+            resource_policy_selection: None,
             trusted_output_keys: vec!["builder-key".into()],
             live_output_claims: vec![output_path],
             wait_for_worker: false,

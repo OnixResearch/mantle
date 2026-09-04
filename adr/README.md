@@ -124,3 +124,4 @@ compatibility surface, crate name, or historical decision.
 | [0115](0115-keep-the-cli-root-mechanical.md) | Keep the CLI root mechanical | Accepted |
 | [0116](0116-adapt-nix-remote-clients-without-transferring-authority.md) | Adapt Nix remote clients without transferring authority | Accepted |
 | [0117](0117-bound-radiance-as-an-optional-external-reference.md) | Bound Radiance as an optional external reference | Accepted |
+| [0118](0118-select-remote-resources-from-bounded-evidence.md) | Select remote resources from bounded evidence | Accepted |

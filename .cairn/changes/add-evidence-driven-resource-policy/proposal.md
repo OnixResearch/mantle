@@ -36,4 +36,4 @@ These mechanisms are safe only when decisions are deterministic, versioned, repl
 ## Impact
 
 - **Affected specs:** `remote-builds`
-- **Affected code:** observation schema, policy core, scheduler adapter, retry planner, quota ledger, result discovery, reports, benchmarks, and lifecycle gates
+- **Affected code:** `crunch-resource-policy-core`, `crunch-resource-policy`, coordinator and fenced-attempt adapters, action-result integration, machine contracts, Nickel policy, Valence projection, benchmarks, fault fixtures, documentation, and lifecycle gates

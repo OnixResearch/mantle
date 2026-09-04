@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/resource/resource-observation-v1",
+  "title": "Mantle remote resource observation",
+  "x-mantle-rust-owner": "crates/crunch-resource-policy-core/src/model.rs::ResourceObservation",
+  "$defs": {
+    "bounded_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 192,
+      "x-mantle-bound-name": { "minLength": "IDENTITY_BYTES_MIN", "maxLength": "MAX_ID_BYTES" },
+      "x-mantle-length-unit": "utf8-bytes"
+    },
+    "quantities": {
+      "type": "object",
+      "required": ["cpu_units", "memory_bytes", "scratch_bytes"],
+      "properties": {
+        "cpu_units": { "type": "integer", "minimum": 1, "maximum": 1048576, "x-mantle-bound-name": { "minimum": "RESOURCE_QUANTITY_MIN", "maximum": "MAX_CPU_UNITS" } },
+        "memory_bytes": { "type": "integer", "minimum": 1, "maximum": 1125899906842624, "x-mantle-bound-name": { "minimum": "RESOURCE_QUANTITY_MIN", "maximum": "MAX_RESOURCE_BYTES" } },
+        "scratch_bytes": { "type": "integer", "minimum": 1, "maximum": 1125899906842624, "x-mantle-bound-name": { "minimum": "RESOURCE_QUANTITY_MIN", "maximum": "MAX_RESOURCE_BYTES" } }
+      },
+      "additionalProperties": false
+    },
+    "timing": {
+      "type": "object",
+      "required": ["queue_ms", "execution_ms", "terminal_ms"],
+      "properties": {
+        "queue_ms": { "type": "integer", "minimum": 0, "maximum": 31536000000, "x-mantle-bound-name": { "minimum": "MEASUREMENT_MIN", "maximum": "MAX_MEASUREMENT_MILLISECONDS" } },
+        "execution_ms": { "type": "integer", "minimum": 0, "maximum": 31536000000, "x-mantle-bound-name": { "minimum": "MEASUREMENT_MIN", "maximum": "MAX_MEASUREMENT_MILLISECONDS" } },
+        "terminal_ms": { "type": "integer", "minimum": 0, "maximum": 31536000000, "x-mantle-bound-name": { "minimum": "MEASUREMENT_MIN", "maximum": "MAX_MEASUREMENT_MILLISECONDS" } }
+      },
+      "additionalProperties": false
+    },
+    "measurements": {
+      "type": "object",
+      "required": ["cpu_time_ms", "peak_memory_bytes", "scratch_peak_bytes", "io_bytes", "transfer_bytes", "wall_time_ms"],
+      "properties": {
+        "cpu_time_ms": { "type": "integer", "minimum": 0, "maximum": 31536000000, "x-mantle-bound-name": { "minimum": "MEASUREMENT_MIN", "maximum": "MAX_MEASUREMENT_MILLISECONDS" } },
+        "peak_memory_bytes": { "type": "integer", "minimum": 0, "maximum": 1125899906842624, "x-mantle-bound-name": { "minimum": "MEASUREMENT_MIN", "maximum": "MAX_MEASUREMENT_BYTES" } },
+        "scratch_peak_bytes": { "type": "integer", "minimum": 0, "maximum": 1125899906842624, "x-mantle-bound-name": { "minimum": "MEASUREMENT_MIN", "maximum": "MAX_MEASUREMENT_BYTES" } },
+        "io_bytes": { "type": "integer", "minimum": 0, "maximum": 1125899906842624, "x-mantle-bound-name": { "minimum": "MEASUREMENT_MIN", "maximum": "MAX_MEASUREMENT_BYTES" } },
+        "transfer_bytes": { "type": "integer", "minimum": 0, "maximum": 1125899906842624, "x-mantle-bound-name": { "minimum": "MEASUREMENT_MIN", "maximum": "MAX_MEASUREMENT_BYTES" } },
+        "wall_time_ms": { "type": "integer", "minimum": 0, "maximum": 31536000000, "x-mantle-bound-name": { "minimum": "MEASUREMENT_MIN", "maximum": "MAX_MEASUREMENT_MILLISECONDS" } }
+      },
+      "additionalProperties": false
+    },
+    "oom_evidence": {
+      "type": "object",
+      "required": ["category", "platform", "evidence_ref", "trusted"],
+      "properties": {
+        "category": { "type": "string", "enum": ["linux-cgroup-v2-oom-kill", "windows-job-object-memory-limit", "darwin-jetsam", "ambiguous-exit", "none"] },
+        "platform": { "$ref": "#/$defs/bounded_id" },
+        "evidence_ref": { "type": ["string", "null"], "minLength": 1, "maxLength": 192, "x-mantle-bound-name": { "minLength": "IDENTITY_BYTES_MIN", "maxLength": "MAX_ID_BYTES" }, "x-mantle-length-unit": "utf8-bytes" },
+        "trusted": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "type": "object",
+  "required": [
+    "schema",
+    "observation_blake3",
+    "attempt_id",
+    "action_family_blake3",
+    "platform_identity",
+    "machine_class_id",
+    "declared",
+    "selected",
+    "timing",
+    "measurements",
+    "oom_evidence",
+    "terminal_outcome",
+    "retry_predecessor_attempt_id",
+    "collector_id",
+    "collector_version",
+    "compatibility_policy_id",
+    "observed_at_unix_s",
+    "trusted",
+    "non_claim"
+  ],
+  "properties": {
+    "schema": { "type": "string", "const": "mantle-resource-observation-v1", "x-mantle-issue-class": "version" },
+    "observation_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "attempt_id": { "$ref": "#/$defs/bounded_id" },
+    "action_family_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "platform_identity": { "$ref": "#/$defs/bounded_id" },
+    "machine_class_id": { "$ref": "#/$defs/bounded_id" },
+    "declared": { "$ref": "#/$defs/quantities" },
+    "selected": { "$ref": "#/$defs/quantities" },
+    "timing": { "$ref": "#/$defs/timing" },
+    "measurements": { "$ref": "#/$defs/measurements" },
+    "oom_evidence": { "$ref": "#/$defs/oom_evidence" },
+    "terminal_outcome": { "type": "string", "enum": ["succeeded", "failed-oom", "failed-other", "cancelled", "worker-lost"] },
+    "retry_predecessor_attempt_id": { "type": ["string", "null"], "minLength": 1, "maxLength": 192, "x-mantle-bound-name": { "minLength": "IDENTITY_BYTES_MIN", "maxLength": "MAX_ID_BYTES" }, "x-mantle-length-unit": "utf8-bytes" },
+    "collector_id": { "$ref": "#/$defs/bounded_id" },
+    "collector_version": { "$ref": "#/$defs/bounded_id" },
+    "compatibility_policy_id": { "$ref": "#/$defs/bounded_id" },
+    "observed_at_unix_s": { "type": "integer", "minimum": 0, "maximum": 18446744073709551615, "x-mantle-bound-name": { "minimum": "UNIX_TIME_MIN", "maximum": "MAX_UNIX_SECONDS" } },
+    "trusted": { "type": "boolean" },
+    "non_claim": { "type": "string", "const": "resource-policy evidence records bounded decisions over supplied facts without proving future sufficiency build correctness host isolation fair billing or production performance" }
+  },
+  "additionalProperties": false
+}

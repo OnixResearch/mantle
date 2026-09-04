@@ -144,6 +144,8 @@ mod remote_credential_state;
 mod remote_credentials;
 mod remote_nominal;
 mod remote_service_secrets;
+#[allow(dead_code)]
+mod resource_policy;
 // Remote build messages retain complete protocol payloads; boxing would change established internal
 // handoff shapes.
 #[allow(dead_code, clippy::large_enum_variant)]

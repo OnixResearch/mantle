@@ -144,10 +144,12 @@
           artifactAuthShellManifest.dependencies.artifact-auth-core
           artifactAuthShellManifest.dependencies.artifact-auth-ed25519
         ];
-        artifactAuthLockPackages = builtins.filter (
-          package: builtins.elem package.name artifactAuthExpectedPackages
-        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
         artifactAuthExpectedLockSource = "git+${artifactAuthRepository}?rev=${artifactAuthRevision}#${artifactAuthRevision}";
+        artifactAuthLockPackages = builtins.filter (
+          package:
+          builtins.elem package.name artifactAuthExpectedPackages
+          && (package.source or null) == artifactAuthExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
         artifactAuthWorkspace = builtins.fromTOML (builtins.readFile (artifactAuthSource + "/Cargo.toml"));
         artifactAuthSourceAdmitted =
           assert pkgs.lib.assertMsg (
@@ -246,16 +248,20 @@
             transactionalReconciliationDependency.git == transactionalReconciliationRepository
             && transactionalReconciliationDependency.rev == transactionalReconciliationRevision
             && transactionalReconciliationSource.rev == transactionalReconciliationRevision
-            && map (package: package.name) transactionalReconciliationLockPackages == [
-              "transactional-reconciliation-core"
-            ]
+            &&
+              map (package: package.name) transactionalReconciliationLockPackages == [
+                "transactional-reconciliation-core"
+              ]
             && builtins.all (
               package: package.source == transactionalReconciliationExpectedLockSource
             ) transactionalReconciliationLockPackages
-            && transactionalReconciliationWorkspace.workspace.members == [
-              "crates/transactional-reconciliation-core"
-            ]
-            && transactionalReconciliationWorkspace.workspace.package.repository == transactionalReconciliationRepository
+            &&
+              transactionalReconciliationWorkspace.workspace.members == [
+                "crates/transactional-reconciliation-core"
+              ]
+            &&
+              transactionalReconciliationWorkspace.workspace.package.repository
+              == transactionalReconciliationRepository
             && transactionalReconciliationWorkspace.workspace.package.license == "MIT"
           ) "Mantle transactional reconciliation Cargo/Nix source identity, package, RID, or license drifted";
           true;
@@ -1122,7 +1128,10 @@
           pname = "mantle-cli-application-architecture-check";
           inherit src cargoVendorDir;
           cargoArtifacts = null;
-          nativeBuildInputs = nativeBuildInputs ++ [ rustToolchain nickelCli ];
+          nativeBuildInputs = nativeBuildInputs ++ [
+            rustToolchain
+            nickelCli
+          ];
           buildPhaseCargoCommand = ''
             cargo -Zscript --offline scripts/check-cli-application-architecture.rs --self-test
             cargo -Zscript --offline scripts/check-cli-application-architecture.rs --root .
@@ -1155,7 +1164,11 @@
           pname = "mantle-radiance-reference-architecture-check";
           inherit src cargoVendorDir;
           cargoArtifacts = null;
-          nativeBuildInputs = nativeBuildInputs ++ [ rustToolchain nickelCli pkgs.jq ];
+          nativeBuildInputs = nativeBuildInputs ++ [
+            rustToolchain
+            nickelCli
+            pkgs.jq
+          ];
           buildPhaseCargoCommand = ''
             cargo -Zscript --offline scripts/check-radiance-reference-architecture.rs --self-test
             cargo -Zscript --offline scripts/check-radiance-reference-architecture.rs --root .
@@ -1171,6 +1184,31 @@
           installPhaseCommand = ''
             mkdir -p "$out"
             printf '%s\n' 'radiance_reference_architecture_findings=0' > "$out/report.txt"
+          '';
+        };
+
+        resourcePolicyArchitectureCheck = craneLib.mkCargoDerivation {
+          pname = "mantle-resource-policy-architecture-check";
+          inherit src cargoVendorDir;
+          cargoArtifacts = null;
+          nativeBuildInputs = nativeBuildInputs ++ [
+            rustToolchain
+            nickelCli
+            pkgs.jq
+          ];
+          buildPhaseCargoCommand = ''
+            cargo -Zscript --offline scripts/check-resource-policy-architecture.rs --self-test
+            cargo -Zscript --offline scripts/check-resource-policy-architecture.rs --root .
+            nickel typecheck config/resource-policy.ncl
+            nickel export --format json config/resource-policy.ncl > "$TMPDIR/resource-policy.json"
+            jq --sort-keys . "$TMPDIR/resource-policy.json" > "$TMPDIR/actual.sorted.json"
+            jq --sort-keys . config/generated/resource-policy.json > "$TMPDIR/expected.sorted.json"
+            diff -u "$TMPDIR/expected.sorted.json" "$TMPDIR/actual.sorted.json"
+          '';
+          doInstallCargoArtifacts = false;
+          installPhaseCommand = ''
+            mkdir -p "$out"
+            printf '%s\n' 'resource_policy_architecture_findings=0' > "$out/report.txt"
           '';
         };
 
@@ -1473,6 +1511,7 @@
           cli-application-architecture = cliApplicationArchitectureCheck;
           source-observation-architecture = sourceObservationArchitectureCheck;
           radiance-reference-architecture = radianceReferenceArchitectureCheck;
+          resource-policy-architecture = resourcePolicyArchitectureCheck;
           content-bound-requirement-source-closure = contentBoundRequirementSourceClosure;
           content-bound-requirement-evidence = contentBoundRequirementEvidence;
           store-retention-policy =
@@ -1832,6 +1871,37 @@
               buildInputs
               ;
             cargoTestExtraArgs = "-p mantle --bin mantle radiance::";
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          };
+
+          resource-policy-core = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p crunch-resource-policy-core -p crunch-resource-policy --all-targets";
+          };
+
+          resource-policy-core-wasm = craneLib.cargoBuild {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoExtraArgs = "-p crunch-resource-policy-core --lib --target wasm32-unknown-unknown";
+          };
+
+          resource-policy-integration = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p mantle --test resource_policy_evidence";
             SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
           };
 

@@ -86,6 +86,8 @@ let Registry = {
     "radiance.radiance-source-cohort",
     "radiance.radiance-reference-receipt",
     "radiance.radiance-reference-proof-report",
+    "resource.action-family",
+    "resource.resource-observation",
     "mantlepkgs.package-impact-report",
     "mantlepkgs.update-plan"
   ],
@@ -442,7 +444,7 @@ let Registry = {
         "contract_blake3"= "440f27f17e164a74c1c7983ace734f7cd26298c910d36c8d0cdf3059786bb3c4",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "335d0fb384cefd4fb92e0894a7a3346265730cfec73cf4ca91a8d1e4423e57d0",
-        "producer_identity_blake3"= "dddb16c8552b5d6328c518dbd356451c04981e12a9120c29a128ba8473b82920",
+        "producer_identity_blake3"= "1ea18e8a6d4481f0392b6620faf718e92b3bc8e58beeed6060bad5588431e916",
         "consumer_policy_blake3"= "d4d7d58e21738c707f6071b435807382c28939a76da4cbb88e9c32c6b80af72b"
       },
       "non_claims"= [
@@ -1532,6 +1534,126 @@ let Registry = {
         "binding conformance proves typed identity and linkage plus supplied lifecycle-policy facts only; it does not prove Rust semantics, compiler correctness, build correctness, verifier soundness, or release eligibility"
       ],
       "rationale"= "The direct Mantle-to-Cairn release boundary requires a versioned receipt rather than smoke-specific wrapper fields."
+    },
+    {
+      "id"= "resource.action-family",
+      "class"= "contracted",
+      "rust_owner"= "crates/crunch-resource-policy-core/src/model.rs::ActionFamilyIdentity",
+      "producer"= {
+        "command_or_api"= "crunch_resource_policy_core::derive_action_family_identity",
+        "marker"= "resource.action-family",
+        "source_paths"= [
+          "crates/crunch-resource-policy-core/src/model.rs",
+          "crates/crunch-resource-policy-core/src/identity.rs"
+        ]
+      },
+      "consumers"= [
+        "resource observation admission",
+        "remote resource selection",
+        "Valence build-service evidence projection"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/resource-action-family.schema.json",
+        "generated_contract"= "schemas/machine-contracts/resource-action-family.contract.ncl",
+        "positive_fixtures"= [
+          "schemas/machine-contracts/fixtures/resource-action-family.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/resource-action-family.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-resource-action-family-v1",
+        "supported"= [
+          "mantle-resource-action-family-v1"
+        ],
+        "unknown_version_behavior"= "reject before observation admission, historical selection, or evidence linkage",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "cargo test -p crunch-resource-policy-core",
+        "cargo -Zscript scripts/check-machine-schema-contracts.rs"
+      ],
+      "fixture_coverage"= [
+        "schema",
+        "version",
+        "digest",
+        "bounds",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds schema, generated contract, shared prelude, fixtures, producer source, and consumer policy",
+      "freshness"= {
+        "schema_blake3"= "63b24ea13d97b33e2781c06676f3bed964dbef7dc09977b7c1195ca5711ab9d5",
+        "contract_blake3"= "ec7ab11b6b9ad1f6af5da91465cebd0e4f45370b0d760fae43084ae558c0238a",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "2d81423a975702ab39d551946894b93f4e2532365956928070c5af330a05a2af",
+        "producer_identity_blake3"= "a3993668d9bffdb9abb3e6665a54de52ba68db4beee0ec154743b1aa18a8783f",
+        "consumer_policy_blake3"= "1dd887971e0d22e05e2ddf629d094279a1989e03d855071a6a75ccabd2995f54"
+      },
+      "non_claims"= [
+        "action-family identity excludes secrets and does not prove build equivalence, source trust, or execution correctness"
+      ],
+      "rationale"= "A canonical public request projection makes historical observations comparable without admitting environment, token, or log content."
+    },
+    {
+      "id"= "resource.resource-observation",
+      "class"= "contracted",
+      "rust_owner"= "crates/crunch-resource-policy-core/src/model.rs::ResourceObservation",
+      "producer"= {
+        "command_or_api"= "crunch_resource_policy_core::build_resource_observation",
+        "marker"= "resource.resource-observation",
+        "source_paths"= [
+          "crates/crunch-resource-policy-core/src/model.rs",
+          "crates/crunch-resource-policy-core/src/observation.rs"
+        ]
+      },
+      "consumers"= [
+        "remote resource selection",
+        "OOM retry planning",
+        "Valence build-service evidence projection",
+        "resource benchmark reports"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/resource-observation.schema.json",
+        "generated_contract"= "schemas/machine-contracts/resource-observation.contract.ncl",
+        "positive_fixtures"= [
+          "schemas/machine-contracts/fixtures/resource-observation.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/resource-observation.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-resource-observation-v1",
+        "supported"= [
+          "mantle-resource-observation-v1"
+        ],
+        "unknown_version_behavior"= "reject before historical filtering, selection, retry, accounting, or evidence use",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "cargo test -p crunch-resource-policy-core",
+        "cargo test -p crunch-resource-policy",
+        "cargo -Zscript scripts/check-machine-schema-contracts.rs"
+      ],
+      "fixture_coverage"= [
+        "schema",
+        "version",
+        "digest",
+        "bounds",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds schema, generated contract, shared prelude, fixtures, producer source, and consumer policy",
+      "freshness"= {
+        "schema_blake3"= "2a191ab466d6f9142c572d7ce1760d1d7616e86f6e277772d221e5019190c752",
+        "contract_blake3"= "39b12dd0ad89c915252ea8ef9c71a692038db6cb654c5d1e49c04b1e17dfbed2",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "ffbadcaeb2591e07d37282dd5e041b1a6f79c8027d4bcff837135543b66b1dc9",
+        "producer_identity_blake3"= "b76b21ffe475d2ad4d17e7822b03fa24ef24e3894b5d88ad6b3faafb8facfad2",
+        "consumer_policy_blake3"= "586c3c18b8226fb950ca2db89c665deccec695184db9e7c6051ad9626a2de6e4"
+      },
+      "non_claims"= [
+        "resource observation conformance does not prove future sufficiency, collector correctness, fair billing, build correctness, or release eligibility"
+      ],
+      "rationale"= "Bounded observations remain recorded facts and cannot silently weaken declared resource or platform requirements."
     },
     {
       "id"= "remote.gateway-json-family",

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/resource/action-family-v1",
+  "title": "Mantle resource action-family identity",
+  "x-mantle-rust-owner": "crates/crunch-resource-policy-core/src/model.rs::ActionFamilyIdentity",
+  "$defs": {
+    "bounded_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 192,
+      "x-mantle-bound-name": { "minLength": "IDENTITY_BYTES_MIN", "maxLength": "MAX_ID_BYTES" },
+      "x-mantle-length-unit": "utf8-bytes"
+    },
+    "feature_set": {
+      "type": "array",
+      "maxItems": 64,
+      "x-mantle-bound-name": { "maxItems": "MAX_FEATURES" },
+      "items": { "$ref": "#/$defs/bounded_id" }
+    }
+  },
+  "type": "object",
+  "required": [
+    "schema",
+    "identity_blake3",
+    "request_kind",
+    "system",
+    "builder_class",
+    "sandbox_mode",
+    "network_mode",
+    "required_features",
+    "semantic_accelerator_classes"
+  ],
+  "properties": {
+    "schema": { "type": "string", "const": "mantle-resource-action-family-v1", "x-mantle-issue-class": "version" },
+    "identity_blake3": { "type": "string", "x-mantle-semantic": "blake3" },
+    "request_kind": { "$ref": "#/$defs/bounded_id" },
+    "system": { "$ref": "#/$defs/bounded_id" },
+    "builder_class": { "$ref": "#/$defs/bounded_id" },
+    "sandbox_mode": { "$ref": "#/$defs/bounded_id" },
+    "network_mode": { "$ref": "#/$defs/bounded_id" },
+    "required_features": { "$ref": "#/$defs/feature_set" },
+    "semantic_accelerator_classes": { "$ref": "#/$defs/feature_set" }
+  },
+  "additionalProperties": false
+}
