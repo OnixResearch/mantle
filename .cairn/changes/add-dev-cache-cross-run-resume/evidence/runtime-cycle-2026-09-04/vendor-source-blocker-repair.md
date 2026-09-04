@@ -59,6 +59,10 @@ Mantle manifests and lockfile were not changed.
 - Native vendor-root tests: 2 passed, including malformed-config rejection.
 - Source-built fixed-point tests: 84 passed and 3 long tests remained ignored.
 - Strict first-party Clippy and root-package formatting passed.
+- The pinned Tiger Style Nix gate passed. Its first invocation built the check,
+  then remained in post-build auto-GC after reporting 142.6 GiB of hard-link
+  savings. That invocation was stopped and preserved. The cached rerun passed
+  with automatic free-space work disabled.
 
 The repair proves exact offline Cargo-source availability for this lockfile. It
 does not change package semantics or make a promoted proof claim.
