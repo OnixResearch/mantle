@@ -33,14 +33,21 @@ pin_project! {
         #[pin]
         reader: R,
         state: State,
+        max_frame_bytes: u64,
     }
 }
 
 impl<R> NixFramedReader<R> {
     pub fn new(reader: R) -> Self {
+        Self::new_with_max_frame_bytes(reader, u64::MAX)
+    }
+
+    pub fn new_with_max_frame_bytes(reader: R, max_frame_bytes: u64) -> Self {
+        debug_assert!(max_frame_bytes > 0);
         Self {
             reader,
             state: State::Length { buf: [0; 8], filled: 0 },
+            max_frame_bytes,
         }
     }
 }
@@ -62,7 +69,11 @@ impl<R: AsyncRead> NixFramedReader<R> {
         loop {
             match this.state {
                 State::Length { buf, filled: 8 } => {
-                    *this.state = match NonZeroU64::new(u64::from_le_bytes(*buf)) {
+                    let frame_bytes = u64::from_le_bytes(*buf);
+                    if frame_bytes > *this.max_frame_bytes {
+                        return Err(io::Error::new(io::ErrorKind::InvalidData, "nix-frame-length-out-of-range"));
+                    }
+                    *this.state = match NonZeroU64::new(frame_bytes) {
                         None => State::Eof,
                         Some(remaining) => State::Chunk { remaining },
                     };
@@ -103,7 +114,11 @@ impl<R: AsyncRead> AsyncRead for NixFramedReader<R> {
                     return Ok(()).into();
                 }
                 State::Length { buf, filled: 8 } => {
-                    *this.state = match NonZeroU64::new(u64::from_le_bytes(*buf)) {
+                    let frame_bytes = u64::from_le_bytes(*buf);
+                    if frame_bytes > *this.max_frame_bytes {
+                        return Err(io::Error::new(io::ErrorKind::InvalidData, "nix-frame-length-out-of-range")).into();
+                    }
+                    *this.state = match NonZeroU64::new(frame_bytes) {
                         None => State::Eof,
                         Some(remaining) => State::Chunk { remaining },
                     };
@@ -183,6 +198,15 @@ mod nix_framed_tests {
     use tokio_test::io::Builder;
 
     use crate::nix_daemon::framing::NixFramedReader;
+
+    #[tokio::test]
+    async fn oversized_frame_is_rejected_before_payload_read() {
+        let mut mock = Builder::new().read(&5_u64.to_le_bytes()).build();
+        let mut reader = NixFramedReader::new_with_max_frame_bytes(&mut mock, 4);
+        let error = reader.read_to_end(&mut Vec::new()).await.unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(error.to_string(), "nix-frame-length-out-of-range");
+    }
 
     #[tokio::test(start_paused = true)]
     async fn read_unexpected_eof_after_frame() {

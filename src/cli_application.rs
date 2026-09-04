@@ -101,7 +101,13 @@ fn command_admission_facts(command: &Command) -> mantle_portable_client_core::Ad
         _ => false,
     };
     let remote_operation_is_client = match command {
-        Command::Remote { action } => !matches!(action, RemoteAction::Serve { .. }),
+        Command::Remote { action } => !matches!(
+            action,
+            RemoteAction::Serve { .. }
+                | RemoteAction::Gateway {
+                    action: RemoteGatewayAction::ApiDispatchStdioOnce { .. } | RemoteGatewayAction::NixStdioOnce { .. },
+                }
+        ),
         _ => false,
     };
     mantle_portable_client_core::AdmissionFacts {
@@ -413,6 +419,14 @@ fn bootstrap_command_label(action: Option<&BootstrapAction>) -> &'static str {
 
 fn remote_command_label(action: &RemoteAction) -> &'static str {
     match action {
+        RemoteAction::Gateway { action } => match action {
+            RemoteGatewayAction::Metadata => "remote.gateway.metadata",
+            RemoteGatewayAction::Plan { .. } => "remote.gateway.plan",
+            RemoteGatewayAction::Status { .. } => "remote.gateway.status",
+            RemoteGatewayAction::ApiStdioOnce => "remote.gateway.api-stdio-once",
+            RemoteGatewayAction::ApiDispatchStdioOnce { .. } => "remote.gateway.api-dispatch-stdio-once",
+            RemoteGatewayAction::NixStdioOnce { .. } => "remote.gateway.nix-stdio-once",
+        },
         RemoteAction::Ticket { action } => remote_ticket_command_label(action),
         RemoteAction::Status { .. } => "remote.status",
         RemoteAction::Debug { action } => match action {
@@ -6812,6 +6826,35 @@ mod tests {
 
         assert_eq!(endpoint_id, "builder-1");
         assert_eq!(concurrency, TEST_REMOTE_STATUS_CONCURRENCY);
+    }
+
+    #[test]
+    fn remote_gateway_cli_routes_client_and_server_actions_through_new_owners() {
+        let metadata = parse_args_with_cli_test_stack(Vec::from(["mantle", "remote", "gateway", "metadata"]))
+            .expect("gateway metadata parses");
+        assert_eq!(command_label(&metadata.command), "remote.gateway.metadata");
+        assert!(command_admission_facts(&metadata.command).remote_operation_is_client);
+        assert!(matches!(metadata.command, Command::Remote {
+            action: RemoteAction::Gateway {
+                action: RemoteGatewayAction::Metadata
+            }
+        }));
+
+        let nix_server = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "remote",
+            "gateway",
+            "nix-stdio-once",
+            "--authority",
+            "authority.json",
+            "--policy",
+            "policy.json",
+            "--trusted-store-key",
+            "cache.example-1:AA==",
+        ]))
+        .expect("gateway Nix server parses");
+        assert_eq!(command_label(&nix_server.command), "remote.gateway.nix-stdio-once");
+        assert!(!command_admission_facts(&nix_server.command).remote_operation_is_client);
     }
 
     #[test]

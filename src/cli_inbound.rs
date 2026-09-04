@@ -2327,6 +2327,11 @@ pub enum AttestVerifyAction {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum RemoteAction {
+    /// Nix compatibility and bounded asynchronous Build API gateway
+    Gateway {
+        #[command(subcommand)]
+        action: RemoteGatewayAction,
+    },
     /// Ticket management
     Ticket {
         #[command(subcommand)]
@@ -2385,6 +2390,54 @@ pub enum RemoteAction {
         /// Explicit bounded SecretSpec provider
         #[arg(long, default_value = remote_service_secrets::REMOTE_SYSTEMD_CREDENTIAL_PROVIDER)]
         secret_provider: String,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum RemoteGatewayAction {
+    /// Print supported versions, operations, bounds, and non-claims
+    Metadata,
+    /// Validate one saved API request and print a side-effect-free typed plan
+    Plan {
+        /// Versioned gateway API request JSON
+        request: PathBuf,
+    },
+    /// Validate gateway endpoint policy and print redacted operator status
+    Status {
+        /// Gateway policy JSON
+        policy: PathBuf,
+    },
+    /// Read one bounded API request from stdin and print a typed no-effect plan
+    ApiStdioOnce,
+    /// Execute one admitted asynchronous API operation against durable coordinator state
+    ApiDispatchStdioOnce {
+        /// Verifier-produced ticket or UCAN authority facts JSON
+        #[arg(long)]
+        authority: PathBuf,
+        /// Caller-owned descriptor containing exactly 32 cursor-MAC key bytes
+        #[arg(long)]
+        cursor_key_fd: i32,
+        /// SecretSpec metadata manifest for completion-event signing
+        #[arg(long, default_value = "secretspec.toml")]
+        secret_manifest: PathBuf,
+        /// Explicit SecretSpec profile
+        #[arg(long, default_value = remote_service_secrets::REMOTE_SECRET_PRODUCTION_PROFILE)]
+        secret_profile: String,
+        /// Explicit bounded SecretSpec provider
+        #[arg(long, default_value = remote_service_secrets::REMOTE_SYSTEMD_CREDENTIAL_PROVIDER)]
+        secret_provider: String,
+    },
+    /// Serve one Nix daemon-store session on stdin/stdout
+    NixStdioOnce {
+        /// Verified ticket or UCAN authority facts JSON
+        #[arg(long)]
+        authority: PathBuf,
+        /// Gateway policy JSON
+        #[arg(long)]
+        policy: PathBuf,
+        /// Trusted Nix store public key; repeat for key rotation overlap
+        #[arg(long = "trusted-store-key", required = true)]
+        trusted_store_keys: Vec<String>,
     },
 }
 

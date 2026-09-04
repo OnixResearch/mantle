@@ -150,6 +150,8 @@ mod remote_service_secrets;
 mod remote_build;
 mod remote_failure_debug;
 mod remote_farm_config;
+mod remote_gateway;
+mod remote_gateway_api;
 pub mod remote_hexagon;
 mod remote_telemetry_export;
 mod remote_trace_context;

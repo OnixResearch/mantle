@@ -490,6 +490,8 @@ pub struct RemoteBuildFarmConfig {
     pub trace_context: RemoteTraceContextConfig,
     #[serde(default = "default_failure_debug_policy")]
     pub failure_debug: RemoteFailureDebugPolicy,
+    #[serde(default)]
+    pub gateway: crunch_build::distributed::GatewayPolicy,
 }
 
 impl RemoteBuildFarmConfig {
@@ -511,6 +513,8 @@ impl RemoteBuildFarmConfig {
             ));
         }
         validate_remote_batch_dispatchers(&self.dispatchers)?;
+        crunch_build::distributed::validate_gateway_policy(&self.gateway)
+            .map_err(|error| format!("remote gateway policy {:?}: {}", error.code, error.message))?;
         for pool in &self.pools {
             if pool.endpoints.len() > Self::MAX_ENDPOINTS_PER_POOL {
                 return Err(format!(
@@ -1016,6 +1020,7 @@ mod tests {
             telemetry: RemoteTelemetryExportConfig::default(),
             trace_context: RemoteTraceContextConfig::default(),
             failure_debug: RemoteFailureDebugPolicy::default(),
+            gateway: crunch_build::distributed::GatewayPolicy::default(),
         }
     }
 
@@ -1539,6 +1544,7 @@ let remote = import "remote-builders.ncl" in
         assert_eq!(endpoint.profile.transfer_policy, RemoteTransferPolicy::default());
         assert!(!config.failure_debug.capture.enabled);
         assert!(!config.failure_debug.replay_enabled);
+        assert!(!config.gateway.public_endpoint_enabled);
     }
 
     #[test]

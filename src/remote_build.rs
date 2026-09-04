@@ -7846,7 +7846,7 @@ fn coordinator_log_cursor_status(
     })
 }
 
-fn bounded_untrusted_text(value: &str) -> String {
+pub(crate) fn bounded_untrusted_text(value: &str) -> String {
     if text_looks_secret_bearing(value) {
         return SECRET_REDACTION.to_string();
     }
@@ -12148,6 +12148,9 @@ pub fn cmd_remote(
     json_output: bool,
 ) -> Result<(), RunError> {
     match action {
+        crate::RemoteAction::Gateway { action } => {
+            crate::remote_gateway::cmd_remote_gateway(action, output_dir, state_dir, store_prefix, json_output)
+        }
         crate::RemoteAction::Ticket { action } => cmd_remote_ticket(action, state_dir, json_output),
         crate::RemoteAction::Status {
             endpoint_id,

@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::future::Future;
 
+use super::Error as _;
 use super::NixDeserialize;
 use super::NixRead;
 
@@ -12,7 +13,11 @@ where T: NixDeserialize + Send
     where R: ?Sized + NixRead + Send {
         async move {
             if let Some(len) = reader.try_read_value::<usize>().await? {
-                let mut ret = Vec::with_capacity(len);
+                if len > reader.collection_len_limit() {
+                    return Err(R::Error::invalid_data("collection length out of range"));
+                }
+                let mut ret = Vec::new();
+                ret.try_reserve(len).map_err(R::Error::invalid_data)?;
                 for _ in 0..len {
                     ret.push(reader.read_value().await?);
                 }
@@ -34,6 +39,9 @@ where
     where R: ?Sized + NixRead + Send {
         async move {
             if let Some(len) = reader.try_read_value::<usize>().await? {
+                if len > reader.collection_len_limit() {
+                    return Err(R::Error::invalid_data("collection length out of range"));
+                }
                 let mut ret = BTreeMap::new();
                 for _ in 0..len {
                     let key = reader.read_value().await?;
@@ -60,6 +68,15 @@ mod test {
     use crate::wire::de::NixDeserialize;
     use crate::wire::de::NixRead;
     use crate::wire::de::NixReader;
+
+    #[tokio::test]
+    async fn collection_limit_rejects_before_item_reads() {
+        let mock = Builder::new().read(&3_u64.to_le_bytes()).build();
+        let mut reader = NixReader::builder().set_max_collection_len(2).build(mock);
+        let error = reader.read_value::<Vec<usize>>().await.unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert_eq!(error.to_string(), "collection length out of range");
+    }
 
     #[rstest]
     #[case::empty(vec![], &hex!("0000 0000 0000 0000"))]

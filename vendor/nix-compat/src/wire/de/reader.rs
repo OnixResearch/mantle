@@ -26,6 +26,8 @@ pub struct NixReaderBuilder {
     buf: Option<BytesMut>,
     reserved_buf_size: usize,
     max_buf_size: usize,
+    max_collection_len: usize,
+    max_message_bytes: usize,
     version: ProtocolVersion,
 }
 
@@ -35,6 +37,8 @@ impl Default for NixReaderBuilder {
             buf: Default::default(),
             reserved_buf_size: 8192,
             max_buf_size: 8192,
+            max_collection_len: usize::MAX,
+            max_message_bytes: usize::MAX,
             version: Default::default(),
         }
     }
@@ -56,6 +60,16 @@ impl NixReaderBuilder {
         self
     }
 
+    pub fn set_max_collection_len(mut self, size: usize) -> Self {
+        self.max_collection_len = size;
+        self
+    }
+
+    pub fn set_max_message_bytes(mut self, size: usize) -> Self {
+        self.max_message_bytes = size;
+        self
+    }
+
     pub fn set_version(mut self, version: ProtocolVersion) -> Self {
         self.version = version;
         self
@@ -68,6 +82,9 @@ impl NixReaderBuilder {
             inner: reader,
             reserved_buf_size: self.reserved_buf_size,
             max_buf_size: self.max_buf_size,
+            max_collection_len: self.max_collection_len,
+            max_message_bytes: self.max_message_bytes,
+            message_bytes_read: 0,
             version: self.version,
         }
     }
@@ -80,6 +97,9 @@ pin_project! {
         buf: BytesMut,
         reserved_buf_size: usize,
         max_buf_size: usize,
+        max_collection_len: usize,
+        max_message_bytes: usize,
+        message_bytes_read: usize,
         version: ProtocolVersion,
     }
 }
@@ -146,6 +166,17 @@ where R: AsyncReadExt + Unpin
         let read = poll_fn(|cx| p.as_mut().poll_force_fill_buf(cx)).await?;
         Ok(read)
     }
+
+    fn charge_message_bytes(&mut self, amount: usize) -> io::Result<()> {
+        self.message_bytes_read = self
+            .message_bytes_read
+            .checked_add(amount)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "message byte count overflow"))?;
+        if self.message_bytes_read > self.max_message_bytes {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "message bytes out of range"));
+        }
+        Ok(())
+    }
 }
 
 impl<R> NixRead for NixReader<R>
@@ -157,7 +188,16 @@ where R: AsyncReadExt + Send + Unpin
         self.version
     }
 
+    fn collection_len_limit(&self) -> usize {
+        self.max_collection_len
+    }
+
+    fn reset_message_budget(&mut self) {
+        self.message_bytes_read = 0;
+    }
+
     async fn try_read_number(&mut self) -> Result<Option<u64>, Self::Error> {
+        self.charge_message_bytes(8)?;
         let mut buf = [0u8; 8];
         let read = self.read_buf(&mut &mut buf[..]).await?;
         if read == 0 {
@@ -188,6 +228,7 @@ where R: AsyncReadExt + Send + Unpin
                     .ok_or_else(|| Self::Error::invalid_data("bytes length out of range"))?
                     .try_into()
                     .map_err(Self::Error::invalid_data)?;
+                self.charge_message_bytes(aligned)?;
 
                 // Ensure that there is enough space in buffer for contents
                 if self.buf.len() + self.remaining_mut() < aligned {
@@ -257,6 +298,18 @@ mod test {
 
     use super::*;
     use crate::wire::de::NixRead;
+
+    #[tokio::test]
+    async fn message_budget_rejects_aggregate_metadata_and_can_reset() {
+        let mock = Builder::new().read(&1_u64.to_le_bytes()).read(&2_u64.to_le_bytes()).build();
+        let mut reader = NixReader::builder().set_max_message_bytes(8).build(mock);
+        assert_eq!(reader.read_number().await.unwrap(), 1);
+        let error = reader.read_number().await.unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(error.to_string(), "message bytes out of range");
+        reader.reset_message_budget();
+        assert_eq!(reader.read_number().await.unwrap(), 2);
+    }
 
     #[tokio::test(start_paused = true)]
     async fn test_read_u64() {

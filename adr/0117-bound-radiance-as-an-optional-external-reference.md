@@ -1,4 +1,4 @@
-# ADR 0116: Bound Radiance as an optional external reference
+# ADR 0117: Bound Radiance as an optional external reference
 
 ## Status
 
