@@ -88,6 +88,7 @@ let Registry = {
     "radiance.radiance-reference-proof-report",
     "resource.action-family",
     "resource.resource-observation",
+    "remote.trellis-admission-evidence",
     "mantlepkgs.package-impact-report",
     "mantlepkgs.update-plan"
   ],
@@ -1534,6 +1535,76 @@ let Registry = {
         "binding conformance proves typed identity and linkage plus supplied lifecycle-policy facts only; it does not prove Rust semantics, compiler correctness, build correctness, verifier soundness, or release eligibility"
       ],
       "rationale"= "The direct Mantle-to-Cairn release boundary requires a versioned receipt rather than smoke-specific wrapper fields."
+    },
+    {
+      "id"= "remote.trellis-admission-evidence",
+      "class"= "contracted",
+      "rust_owner"= "crates/crunch-release-core/src/trellis_admission_evidence.rs::TrellisRemoteAdmissionEvidenceReport",
+      "producer"= {
+        "command_or_api"= "cargo -Zscript tools/check-trellis-remote-admission.rs --write-report",
+        "marker"= "remote.trellis-admission-evidence",
+        "source_paths"= [
+          "tools/check-trellis-remote-admission.rs",
+          "crates/crunch-release-core/src/trellis_admission_evidence.rs",
+          "crates/crunch-release-core/src/trellis_admission_evidence/authorities.rs",
+          "crates/crunch-release-core/src/trellis_admission_evidence/checks.rs",
+          "crates/crunch-release-core/src/trellis_admission_evidence/contract.rs",
+          "crates/crunch-release-core/src/trellis_admission_evidence/validation.rs",
+          "crates/crunch-build/src/distributed/remote_attempt.rs",
+          "crates/crunch-build/src/distributed/remote_attempt_trellis.rs",
+          "crates/crunch-build/src/distributed/remote_attempt_trellis/model.rs",
+          "crates/crunch-build/src/distributed/remote_attempt_trellis/projection.rs",
+          "crates/crunch-build/src/distributed/remote_attempt_trellis/support.rs",
+          "crates/crunch-build/src/distributed/remote_attempt_trellis/outcome.rs"
+        ]
+      },
+      "consumers"= [
+        "remote admission proof review",
+        "Trellis evidence parity validation",
+        "Cairn lifecycle evidence"
+      ],
+      "artifacts"= {
+        "schema"= "schemas/machine-contracts/trellis-remote-admission-evidence.schema.json",
+        "generated_contract"= "schemas/machine-contracts/trellis-remote-admission-evidence.contract.ncl",
+        "positive_fixtures"= [
+          "schemas/machine-contracts/fixtures/trellis-remote-admission-evidence.valid.json"
+        ],
+        "negative_fixture_set"= "schemas/machine-contracts/fixtures/trellis-remote-admission-evidence.negatives.json"
+      },
+      "version_policy"= {
+        "current"= "mantle-trellis-remote-admission-evidence-v1",
+        "supported"= [
+          "mantle-trellis-remote-admission-evidence-v1"
+        ],
+        "unknown_version_behavior"= "reject before proof coverage or external evidence claims",
+        "compatibility_converter"= "",
+        "compatibility_fixtures"= []
+      },
+      "validation_commands"= [
+        "cargo test -p crunch-build --lib remote_attempt_trellis --offline",
+        "cargo -Zscript --offline tools/check-trellis-remote-admission.rs --self-test",
+        "cargo -Zscript --offline scripts/check-machine-schema-contracts.rs"
+      ],
+      "fixture_coverage"= [
+        "schema",
+        "version",
+        "digest",
+        "bounds",
+        "unknown-field"
+      ],
+      "freshness_strategy"= "BLAKE3 binds the projection source set, Trellis oracle, policy, proof IR, verifier receipt, Kamacite envelope, Valence receipt, schema, contract, and adversarial fixtures",
+      "freshness"= {
+        "schema_blake3"= "ebee83f64a28d1940bb423a11a30c4b65bea3d5dee648c42b8ec5bde9473be67",
+        "contract_blake3"= "d60f5624ab9bdc0599f80d2d80c3a34ad0853b8f2bef26ac10efa036cf456c8d",
+        "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+        "fixture_set_blake3"= "e64e263f0d3bb04a0805097bb40cc65865617583a91cac3887244de55c0a339b",
+        "producer_identity_blake3"= "0dfb67770c21e733ee11e80a2ec26a4c9602133f83de6aaa5213c8bbac1c7272",
+        "consumer_policy_blake3"= "b5acb2b223a57ed260f95c889e4c2f4540a6193c9667a02c947840a7e298b543"
+      },
+      "non_claims"= [
+        "conformance proves the named abstract model and recorded supported projection cases only; it does not prove implementation equivalence, persistence, transport, cryptography, workers, liveness, whole builds, or release eligibility"
+      ],
+      "rationale"= "A versioned report keeps external formal evidence reviewable without giving it runtime report or output authority."
     },
     {
       "id"= "resource.action-family",

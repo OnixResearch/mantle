@@ -1,0 +1,84 @@
+{
+  "evidence_profile": {
+    "kamacite_profile": "kamacite.trellis-proof-evidence-profile.v1",
+    "kamacite_revision": "de710a092d351e829abfb288d46124e2db8e5b7f",
+    "producer_role": "formal-proof-candidate",
+    "valence_revision": "27b8b2124e12b80718ded124274fec98bed7a581",
+    "valence_schema": "trellis.proof-evidence",
+    "validation_role": "property"
+  },
+  "modeled_report_fields": [
+    "job",
+    "run",
+    "epoch",
+    "event",
+    "payload",
+    "kind",
+    "worker",
+    "output",
+    "result"
+  ],
+  "modeled_state_fields": [
+    "job",
+    "run",
+    "epoch",
+    "phase",
+    "progress",
+    "events",
+    "result"
+  ],
+  "non_claims": [
+    "not full implementation equivalence",
+    "not persistence atomicity",
+    "not transport reliability",
+    "not cryptographic correctness",
+    "not remote worker correctness",
+    "not liveness or availability",
+    "not whole-build correctness",
+    "not release eligibility"
+  ],
+  "oracle": {
+    "case_count": 6720,
+    "matrix_blake3": "bd1e98e26dbd43f44189941c1eac22bd63139d031c2ea328f0c2d5ce8582aa32",
+    "record_bytes": 7,
+    "schema": "mantle-trellis-remote-admission-oracle-v1",
+    "unsupported_reasons": [
+      "authority-meaning-mismatch",
+      "authority-order-mismatch",
+      "history-order-mismatch",
+      "phase-report-mismatch",
+      "result-retention-mismatch"
+    ]
+  },
+  "property_ids": [
+    "current_epoch_required",
+    "reassignment_advances_epoch",
+    "duplicate_event_is_noop",
+    "event_conflict_rejected",
+    "terminal_phase_closed",
+    "completion_requires_linkage",
+    "rejection_preserves_state",
+    "exec_refines_spec"
+  ],
+  "requirement_ids": [
+    "r[fenced-attempt-admission.boundary]",
+    "r[fenced-attempt-admission.refinement]",
+    "r[fenced-attempt-admission.fence-safety]",
+    "r[fenced-attempt-admission.event-idempotence]",
+    "r[fenced-attempt-admission.terminal-closure]",
+    "r[fenced-attempt-admission.completion-linkage]",
+    "r[fenced-attempt-admission.rejection-preservation]",
+    "r[fenced-attempt-admission.evidence]"
+  ],
+  "schema": "mantle-trellis-remote-admission-profile-v1",
+  "source": {
+    "archive_blake3": "e13e9f71da4964ab4d4f04d9c29525b20f0e778997da5ada7b6caa0f1711f56c",
+    "archive_format": "git-archive-tar",
+    "model_tree_oid": "91dace31060cf5195beb72dba71640d9091e67bf",
+    "repository": "github.com/OnixResearch/trellis",
+    "revision": "8de4b24aa2d66cc2e6ec966d686df023492265d3",
+    "scope": [
+      "src/fenced_attempt"
+    ]
+  }
+}

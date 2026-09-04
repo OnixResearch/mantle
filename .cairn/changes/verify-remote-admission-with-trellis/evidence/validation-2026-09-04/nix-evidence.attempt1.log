@@ -1,0 +1,72 @@
+$ nix build .#checks.x86_64-linux.trellis-remote-admission-evidence --no-link -L --option secret-key-files
+this derivation will be built:
+  /nix/store/f4h535xqnfdqjpjqzh2g83vfr9aq0yjm-mantle-trellis-remote-admission-evidence-check-0.1.0.drv
+building '/nix/store/f4h535xqnfdqjpjqzh2g83vfr9aq0yjm-mantle-trellis-remote-admission-evidence-check-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...
+copying 1 paths...
+copying path '/nix/store/n344zhamv63yqbk0djf0nrq9m5yals87-source' to 'ssh-ng://root@aspen1.local'...
+building '/nix/store/f4h535xqnfdqjpjqzh2g83vfr9aq0yjm-mantle-trellis-remote-admission-evidence-check-0.1.0.drv'...
+mantle-trellis-remote-admission-evidence-check> cargoArtifacts not set, will not reuse any cargo artifacts
+mantle-trellis-remote-admission-evidence-check> Running phase: unpackPhase
+mantle-trellis-remote-admission-evidence-check> unpacking source archive /nix/store/n344zhamv63yqbk0djf0nrq9m5yals87-source
+mantle-trellis-remote-admission-evidence-check> source root is source
+mantle-trellis-remote-admission-evidence-check> Running phase: patchPhase
+mantle-trellis-remote-admission-evidence-check> Executing configureCargoCommonVars
+mantle-trellis-remote-admission-evidence-check> Running phase: updateAutotoolsGnuConfigScriptsPhase
+mantle-trellis-remote-admission-evidence-check> Running phase: configurePhase
+mantle-trellis-remote-admission-evidence-check> will append /build/source/.cargo-home/config.toml with contents of /nix/store/64gnhir3apzl283gjcpa4g4ga4snzvhl-vendor-cargo-deps/config.toml
+mantle-trellis-remote-admission-evidence-check> default configurePhase, nothing to do
+mantle-trellis-remote-admission-evidence-check> Running phase: buildPhase
+mantle-trellis-remote-admission-evidence-check> +++ command cargo --version
+mantle-trellis-remote-admission-evidence-check> cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+mantle-trellis-remote-admission-evidence-check> +++ command cargo -Zscript --offline tools/check-trellis-remote-admission.rs --self-test
+mantle-trellis-remote-admission-evidence-check> error: failed to get `artifact-auth-core` as a dependency of package `crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)`
+mantle-trellis-remote-admission-evidence-check>     ... which satisfies path dependency `crunch-release-core` of package `check-trellis-remote-admission v0.0.0 (/build/source/tools/check-trellis-remote-admission.rs)`
+mantle-trellis-remote-admission-evidence-check>
+mantle-trellis-remote-admission-evidence-check> Caused by:
+mantle-trellis-remote-admission-evidence-check>   failed to load source for dependency `artifact-auth-core`
+mantle-trellis-remote-admission-evidence-check>
+mantle-trellis-remote-admission-evidence-check> Caused by:
+mantle-trellis-remote-admission-evidence-check>   unable to update ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1
+mantle-trellis-remote-admission-evidence-check>
+mantle-trellis-remote-admission-evidence-check> Caused by:
+mantle-trellis-remote-admission-evidence-check>   the source ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1 requires a lock file to be present first before it can be
+mantle-trellis-remote-admission-evidence-check>   used against vendored source code
+mantle-trellis-remote-admission-evidence-check>
+mantle-trellis-remote-admission-evidence-check>   remove the source replacement configuration, generate a lock file, and then
+mantle-trellis-remote-admission-evidence-check>   restore the source replacement configuration to continue the build
+error: build of '/nix/store/f4h535xqnfdqjpjqzh2g83vfr9aq0yjm-mantle-trellis-remote-admission-evidence-check-0.1.0.drv' on 'ssh-ng://root@aspen1.local' failed: Cannot build '/nix/store/f4h535xqnfdqjpjqzh2g83vfr9aq0yjm-mantle-trellis-remote-admission-evidence-check-0.1.0.drv'.
+       Reason: builder failed with exit code 101.
+       Output paths:
+         /nix/store/g4d6cm890qn0hfai3ib3hvvbnvh4brya-mantle-trellis-remote-admission-evidence-check-0.1.0
+       Last 25 log lines:
+       > Running phase: patchPhase
+       > Executing configureCargoCommonVars
+       > Running phase: updateAutotoolsGnuConfigScriptsPhase
+       > Running phase: configurePhase
+       > will append /build/source/.cargo-home/config.toml with contents of /nix/store/64gnhir3apzl283gjcpa4g4ga4snzvhl-vendor-cargo-deps/config.toml
+       > default configurePhase, nothing to do
+       > Running phase: buildPhase
+       > +++ command cargo --version
+       > cargo 1.96.0-nightly (a357df4c2 2026-04-03)
+       > +++ command cargo -Zscript --offline tools/check-trellis-remote-admission.rs --self-test
+       > error: failed to get `artifact-auth-core` as a dependency of package `crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)`
+       >     ... which satisfies path dependency `crunch-release-core` of package `check-trellis-remote-admission v0.0.0 (/build/source/tools/check-trellis-remote-admission.rs)`
+       >
+       > Caused by:
+       >   failed to load source for dependency `artifact-auth-core`
+       >
+       > Caused by:
+       >   unable to update ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1
+       >
+       > Caused by:
+       >   the source ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1 requires a lock file to be present first before it can be
+       >   used against vendored source code
+       >
+       >   remove the source replacement configuration, generate a lock file, and then
+       >   restore the source replacement configuration to continue the build
+       For full logs, run:
+         nix log /nix/store/f4h535xqnfdqjpjqzh2g83vfr9aq0yjm-mantle-trellis-remote-admission-evidence-check-0.1.0.drv
+error: Cannot build '/nix/store/f4h535xqnfdqjpjqzh2g83vfr9aq0yjm-mantle-trellis-remote-admission-evidence-check-0.1.0.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/g4d6cm890qn0hfai3ib3hvvbnvh4brya-mantle-trellis-remote-admission-evidence-check-0.1.0

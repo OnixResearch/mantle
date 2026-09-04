@@ -1,0 +1,5 @@
+$ cargo deny check
+error: could not execute process `/home/brittonr/.cargo/bin/cargo-deny deny check` (never executed)
+
+Caused by:
+  No such file or directory (os error 2)

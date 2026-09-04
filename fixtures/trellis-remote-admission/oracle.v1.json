@@ -1,0 +1,61 @@
+{
+  "axis_cardinality": {
+    "event-class": 3,
+    "history-class": 2,
+    "identity-class": 5,
+    "mantle-report-variant": 8,
+    "output-scope": 2,
+    "phase": 7,
+    "worker-scope": 2
+  },
+  "axis_order": [
+    "phase",
+    "mantle-report-variant",
+    "identity-class",
+    "event-class",
+    "history-class",
+    "worker-scope",
+    "output-scope"
+  ],
+  "case_count": 6720,
+  "disposition_counts": {
+    "applied": 27,
+    "rejected": 6245,
+    "replayed": 448
+  },
+  "matrix_blake3": "bd1e98e26dbd43f44189941c1eac22bd63139d031c2ea328f0c2d5ce8582aa32",
+  "record_bytes": 7,
+  "projection_counts": {
+    "authority-meaning-mismatch": 42,
+    "authority-order-mismatch": 708,
+    "history-order-mismatch": 66,
+    "phase-report-mismatch": 20,
+    "result-retention-mismatch": 2,
+    "supported": 5882
+  },
+  "record_layout": [
+    "disposition",
+    "reject-class-or-255",
+    "next-phase",
+    "progress-delta",
+    "event-delta",
+    "result-effect",
+    "state-preserved"
+  ],
+  "rejection_counts": {
+    "event-conflict": 448,
+    "future-epoch": 1344,
+    "history-full": 27,
+    "invalid-transition": 160,
+    "output-denied": 4,
+    "result-mismatch": 2,
+    "stale-epoch": 1344,
+    "terminal-phase": 192,
+    "worker-denied": 36,
+    "wrong-job": 1344,
+    "wrong-run": 1344
+  },
+  "schema": "mantle-trellis-remote-admission-oracle-v1",
+  "trellis_revision": "8de4b24aa2d66cc2e6ec966d686df023492265d3",
+  "trellis_source_archive_blake3": "e13e9f71da4964ab4d4f04d9c29525b20f0e778997da5ada7b6caa0f1711f56c"
+}

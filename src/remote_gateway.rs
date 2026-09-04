@@ -35,6 +35,7 @@ use crunch_build::distributed::GatewayAdmissionInput;
 use crunch_build::distributed::GatewayBounds;
 use crunch_build::distributed::GatewayCommand;
 use crunch_build::distributed::GatewayEvidence;
+use crunch_build::distributed::GatewayEvidenceInput;
 use crunch_build::distributed::GatewayOperation;
 use crunch_build::distributed::GatewayPolicy;
 use crunch_build::distributed::GatewayRejection;
@@ -170,7 +171,10 @@ pub fn plan_gateway_api_request(request: RemoteGatewayApiRequest) -> Result<Remo
         code: crunch_build::distributed::GatewayRejectCode::RequestInvalid,
         message: "gateway-api-request-serialization-failed".to_string(),
     })?;
-    let request_byte_count = u32::try_from(request_bytes.len()).unwrap_or(u32::MAX);
+    let request_byte_count = u32::try_from(request_bytes.len()).map_err(|_| GatewayRejection {
+        code: crunch_build::distributed::GatewayRejectCode::RequestTooLarge,
+        message: "gateway-api-message-bound-exceeded".to_string(),
+    })?;
     if request_byte_count == 0 || request_byte_count > request.policy.bounds.message_bytes_max {
         return Err(GatewayRejection {
             code: crunch_build::distributed::GatewayRejectCode::RequestTooLarge,
@@ -188,14 +192,14 @@ pub fn plan_gateway_api_request(request: RemoteGatewayApiRequest) -> Result<Remo
         operation: request.operation.clone(),
     })?;
     let attempt_id = command_attempt_id(&command);
-    let evidence = gateway_evidence(
-        &request.policy,
-        &request.authority,
-        &request.operation,
+    let evidence = gateway_evidence(GatewayEvidenceInput {
+        policy: &request.policy,
+        authority: &request.authority,
+        operation: &request.operation,
         attempt_id,
-        0,
-        "planned-no-effect".to_string(),
-    )?;
+        transferred_bytes: 0,
+        stable_outcome: "planned-no-effect".to_string(),
+    })?;
     debug_assert_eq!(evidence.schema, GATEWAY_EVIDENCE_SCHEMA);
     debug_assert_eq!(evidence.operation_identity_blake3, operation_identity_blake3);
     Ok(RemoteGatewayApiPlan {

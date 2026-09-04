@@ -338,6 +338,7 @@
             || pkgs.lib.hasPrefix "${toString ./examples/transcripts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./schemas/machine-contracts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./crates/crunch-source-core/fixtures}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./crates/crunch-build/testdata}/" pathString
             || pkgs.lib.hasPrefix "${toString ./crates/crunch-release-core/fixtures}/" pathString
             || pkgs.lib.hasPrefix "${toString ./tests/fixtures}/" pathString
             || pkgs.lib.hasPrefix "${toString ./fixtures/nario-v2}/" pathString
@@ -346,6 +347,7 @@
             || pathString == toString ./nix/kernelscript-experiment.nix
             || pkgs.lib.hasPrefix "${toString ./docs}/" pathString
             || pkgs.lib.hasPrefix "${toString ./evidence/source}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./evidence/trellis}/" pathString
             || pkgs.lib.hasPrefix "${toString ./scripts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./openspec}/" pathString
           );
@@ -1212,6 +1214,31 @@
           '';
         };
 
+        trellisRemoteAdmissionEvidenceCheck = craneLib.mkCargoDerivation {
+          pname = "mantle-trellis-remote-admission-evidence-check";
+          inherit src cargoVendorDir;
+          cargoArtifacts = null;
+          nativeBuildInputs = nativeBuildInputs ++ [
+            rustToolchain
+            nickelCli
+            pkgs.jq
+          ];
+          buildPhaseCargoCommand = ''
+            cargo test -p crunch-release-core --lib trellis_admission --offline
+            cargo -Zscript --offline tools/check-trellis-remote-admission.rs --self-test
+            nickel typecheck config/trellis-remote-admission.ncl
+            nickel export --format json config/trellis-remote-admission.ncl > "$TMPDIR/trellis-remote-admission.json"
+            jq --sort-keys . "$TMPDIR/trellis-remote-admission.json" > "$TMPDIR/actual.sorted.json"
+            jq --sort-keys . config/generated/trellis-remote-admission.json > "$TMPDIR/expected.sorted.json"
+            diff -u "$TMPDIR/expected.sorted.json" "$TMPDIR/actual.sorted.json"
+          '';
+          doInstallCargoArtifacts = false;
+          installPhaseCommand = ''
+            mkdir -p "$out"
+            printf '%s\n' 'trellis_remote_admission_evidence=valid' > "$out/report.txt"
+          '';
+        };
+
         tigerstyleRunner = pkgs.writeShellApplication {
           name = "crunch-tigerstyle";
           runtimeInputs = nativeBuildInputs ++ [
@@ -1512,6 +1539,7 @@
           source-observation-architecture = sourceObservationArchitectureCheck;
           radiance-reference-architecture = radianceReferenceArchitectureCheck;
           resource-policy-architecture = resourcePolicyArchitectureCheck;
+          trellis-remote-admission-evidence = trellisRemoteAdmissionEvidenceCheck;
           content-bound-requirement-source-closure = contentBoundRequirementSourceClosure;
           content-bound-requirement-evidence = contentBoundRequirementEvidence;
           store-retention-policy =
@@ -1902,6 +1930,27 @@
               buildInputs
               ;
             cargoTestExtraArgs = "-p mantle --test resource_policy_evidence";
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          };
+
+          trellis-remote-admission = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p crunch-build --lib remote_attempt_trellis";
+          };
+
+          trellis-remote-admission-evidence-integration = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p mantle --test trellis_remote_admission_evidence";
             SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
           };
 

@@ -1,0 +1,118 @@
+{
+  "body": {
+    "input": {
+      "assumptions": [
+        {
+          "digest": "fa9220684c96b87c23fab225e98ef141adc70ba1b20a1c64922a800ae0fa1633",
+          "domain": "assumption"
+        },
+        {
+          "digest": "25e8de390ac8186844f3a24a2cac95c9d200603b949f1e2e06d59a69c57bc10f",
+          "domain": "assumption"
+        },
+        {
+          "digest": "a6cc8adfb1c2cba4b379cb1e864aef2eb13f4eec9e15b0cd0ac2e30e603f5955",
+          "domain": "assumption"
+        }
+      ],
+      "non_claims": [
+        "Trellis proof evidence preserves scoped proof identity and linkage only, not downstream correctness or release eligibility"
+      ],
+      "outcome": "accepted_formal_proof",
+      "policy_accepted": true,
+      "proof_ir": {
+        "digest": "36e6b3365a75ed56a79b86c4e141db5870328e7e3891fa0fee631a88991e49fb",
+        "domain": "proof-ir"
+      },
+      "property_ids": [
+        "current_epoch_required",
+        "reassignment_advances_epoch",
+        "duplicate_event_is_noop",
+        "event_conflict_rejected",
+        "terminal_phase_closed",
+        "completion_requires_linkage",
+        "rejection_preserves_state",
+        "exec_refines_spec"
+      ],
+      "requirement_ids": [
+        "r[fenced-attempt-admission.boundary]",
+        "r[fenced-attempt-admission.refinement]",
+        "r[fenced-attempt-admission.fence-safety]",
+        "r[fenced-attempt-admission.event-idempotence]",
+        "r[fenced-attempt-admission.terminal-closure]",
+        "r[fenced-attempt-admission.completion-linkage]",
+        "r[fenced-attempt-admission.rejection-preservation]",
+        "r[fenced-attempt-admission.evidence]"
+      ],
+      "source": {
+        "digest": "e13e9f71da4964ab4d4f04d9c29525b20f0e778997da5ada7b6caa0f1711f56c",
+        "domain": "source-envelope"
+      },
+      "spans": [
+        {
+          "end_byte": 5923,
+          "end_column": 12,
+          "end_line": 189,
+          "label": "fenced-attempt direct proof functions",
+          "source_id": "trellis:8de4b24aa2d66cc2e6ec966d686df023492265d3:e13e9f71da4964ab4d4f04d9c29525b20f0e778997da5ada7b6caa0f1711f56c",
+          "source_path": "src/fenced_attempt/proofs.rs",
+          "start_byte": 0,
+          "start_column": 1,
+          "start_line": 1
+        }
+      ],
+      "verification_role": "property",
+      "verifier_receipt": {
+        "digest": "70e5aaccfee0d4a5208032a7bc6da82124667744fc05b7afd3b95f97be368fee",
+        "domain": "verifier-receipt"
+      },
+      "verifier_status": "passed"
+    },
+    "report": {
+      "graph_rows": [
+        {
+          "edge_kind": "assumes",
+          "from_digest": "36e6b3365a75ed56a79b86c4e141db5870328e7e3891fa0fee631a88991e49fb",
+          "from_domain": "proof-ir",
+          "to_digest": "25e8de390ac8186844f3a24a2cac95c9d200603b949f1e2e06d59a69c57bc10f",
+          "to_domain": "assumption"
+        },
+        {
+          "edge_kind": "assumes",
+          "from_digest": "36e6b3365a75ed56a79b86c4e141db5870328e7e3891fa0fee631a88991e49fb",
+          "from_domain": "proof-ir",
+          "to_digest": "a6cc8adfb1c2cba4b379cb1e864aef2eb13f4eec9e15b0cd0ac2e30e603f5955",
+          "to_domain": "assumption"
+        },
+        {
+          "edge_kind": "assumes",
+          "from_digest": "36e6b3365a75ed56a79b86c4e141db5870328e7e3891fa0fee631a88991e49fb",
+          "from_domain": "proof-ir",
+          "to_digest": "fa9220684c96b87c23fab225e98ef141adc70ba1b20a1c64922a800ae0fa1633",
+          "to_domain": "assumption"
+        },
+        {
+          "edge_kind": "proved-from",
+          "from_digest": "36e6b3365a75ed56a79b86c4e141db5870328e7e3891fa0fee631a88991e49fb",
+          "from_domain": "proof-ir",
+          "to_digest": "e13e9f71da4964ab4d4f04d9c29525b20f0e778997da5ada7b6caa0f1711f56c",
+          "to_domain": "source-envelope"
+        },
+        {
+          "edge_kind": "verified",
+          "from_digest": "70e5aaccfee0d4a5208032a7bc6da82124667744fc05b7afd3b95f97be368fee",
+          "from_domain": "verifier-receipt",
+          "to_digest": "36e6b3365a75ed56a79b86c4e141db5870328e7e3891fa0fee631a88991e49fb",
+          "to_domain": "proof-ir"
+        }
+      ],
+      "issues": [],
+      "outcome": "accepted_formal_proof",
+      "valid": true
+    },
+    "schema": "trellis.proof-evidence",
+    "valence_revision": "27b8b2124e12b80718ded124274fec98bed7a581"
+  },
+  "receipt_hash_blake3": "3a0ebbeb89fdb5ad91516b6fa4d69d758d4b8811905f61340b34e02925ed411f",
+  "schema": "valence-trellis-proof-acceptance-receipt-v1"
+}

@@ -1,0 +1,677 @@
+$ nix build .#checks.x86_64-linux.tigerstyle --no-link -L --option secret-key-files '
+this derivation will be built:
+  /nix/store/3zgj9v06il8kvvm1ggingskpzk2yphc5-tigerstyle-consumer-check.drv
+building '/nix/store/3zgj9v06il8kvvm1ggingskpzk2yphc5-tigerstyle-consumer-check.drv' on 'ssh-ng://root@aspen1.local'...
+copying 1 paths...
+copying path '/nix/store/pygks2jnx0zqzqk3hd37nivqkw09z4dg-wv4zwwdvgi82vim1q2y11g88qjsx52q8-source' to 'ssh-ng://root@aspen1.local'...
+building '/nix/store/3zgj9v06il8kvvm1ggingskpzk2yphc5-tigerstyle-consumer-check.drv'...
+tigerstyle-consumer-check> warning: /build/source/Cargo.toml: file `/build/source/src/main.rs` found to be present in multiple build targets:
+tigerstyle-consumer-check>   * `bin` target `crunch`
+tigerstyle-consumer-check>   * `bin` target `mantle`
+tigerstyle-consumer-check>    Compiling proc-macro2 v1.0.106
+tigerstyle-consumer-check>    Compiling quote v1.0.45
+tigerstyle-consumer-check>    Compiling unicode-ident v1.0.24
+tigerstyle-consumer-check>     Checking cfg-if v1.0.4
+tigerstyle-consumer-check>    Compiling serde_core v1.0.228
+tigerstyle-consumer-check>    Compiling serde v1.0.228
+tigerstyle-consumer-check>     Checking memchr v2.8.0
+tigerstyle-consumer-check>    Compiling libc v0.2.186
+tigerstyle-consumer-check>    Compiling version_check v0.9.5
+tigerstyle-consumer-check>     Checking subtle v2.6.1
+tigerstyle-consumer-check>     Checking const-oid v0.9.6
+tigerstyle-consumer-check>     Checking typenum v1.20.1
+tigerstyle-consumer-check>     Checking itoa v1.0.18
+tigerstyle-consumer-check>    Compiling find-msvc-tools v0.1.9
+tigerstyle-consumer-check>    Compiling shlex v1.3.0
+tigerstyle-consumer-check>    Compiling crossbeam-utils v0.8.21
+tigerstyle-consumer-check>     Checking smallvec v1.15.1
+tigerstyle-consumer-check>    Compiling parking_lot_core v0.9.12
+tigerstyle-consumer-check>     Checking once_cell v1.21.4
+tigerstyle-consumer-check>     Checking regex-syntax v0.8.10
+tigerstyle-consumer-check>     Checking scopeguard v1.2.0
+tigerstyle-consumer-check>     Checking bitflags v2.11.0
+tigerstyle-consumer-check>     Checking allocator-api2 v0.2.21
+tigerstyle-consumer-check>     Checking equivalent v1.0.2
+tigerstyle-consumer-check>    Compiling thiserror v2.0.18
+tigerstyle-consumer-check>     Checking foldhash v0.2.0
+tigerstyle-consumer-check>     Checking arrayvec v0.7.6
+tigerstyle-consumer-check>    Compiling zmij v1.0.21
+tigerstyle-consumer-check>    Compiling serde_json v1.0.149
+tigerstyle-consumer-check>     Checking stable_deref_trait v1.2.1
+tigerstyle-consumer-check>    Compiling crossbeam-epoch v0.9.20
+tigerstyle-consumer-check>    Compiling rayon-core v1.13.0
+tigerstyle-consumer-check>     Checking lock_api v0.4.14
+tigerstyle-consumer-check>     Checking fastrand v2.4.1
+tigerstyle-consumer-check>     Checking arrayref v0.3.9
+tigerstyle-consumer-check>     Checking constant_time_eq v0.3.1
+tigerstyle-consumer-check>     Checking cpufeatures v0.2.17
+tigerstyle-consumer-check>    Compiling crc32fast v1.5.0
+tigerstyle-consumer-check>    Compiling rustix v1.1.4
+tigerstyle-consumer-check>     Checking linux-raw-sys v0.12.1
+tigerstyle-consumer-check>     Checking log v0.4.29
+tigerstyle-consumer-check>     Checking same-file v1.0.6
+tigerstyle-consumer-check>     Checking tinyvec_macros v0.1.1
+tigerstyle-consumer-check>     Checking gix-trace v0.1.18
+tigerstyle-consumer-check>     Checking pin-project-lite v0.2.17
+tigerstyle-consumer-check>     Checking futures-core v0.3.32
+tigerstyle-consumer-check>     Checking tinyvec v1.11.0
+tigerstyle-consumer-check>     Checking zeroize v1.8.2
+tigerstyle-consumer-check>     Checking human_format v1.2.1
+tigerstyle-consumer-check>     Checking bytesize v2.3.1
+tigerstyle-consumer-check>     Checking walkdir v2.5.0
+tigerstyle-consumer-check>     Checking zlib-rs v0.6.3
+tigerstyle-consumer-check>     Checking byteorder v1.5.0
+tigerstyle-consumer-check>     Checking rand_core v0.10.0
+tigerstyle-consumer-check>    Compiling heapless v0.8.0
+tigerstyle-consumer-check>    Compiling getrandom v0.4.2
+tigerstyle-consumer-check>    Compiling generic-array v0.14.7
+tigerstyle-consumer-check>     Checking futures-sink v0.3.32
+tigerstyle-consumer-check>     Checking futures-io v0.3.32
+tigerstyle-consumer-check>     Checking slab v0.4.12
+tigerstyle-consumer-check>     Checking futures-channel v0.3.32
+tigerstyle-consumer-check>     Checking jiff v0.2.23
+tigerstyle-consumer-check>    Compiling rustversion v1.0.22
+tigerstyle-consumer-check>     Checking futures-task v0.3.32
+tigerstyle-consumer-check>     Checking hashbrown v0.16.1
+tigerstyle-consumer-check>     Checking tracing-core v0.1.36
+tigerstyle-consumer-check>    Compiling fs_extra v1.3.0
+tigerstyle-consumer-check>     Checking hash32 v0.3.1
+tigerstyle-consumer-check>    Compiling dunce v1.0.5
+tigerstyle-consumer-check>     Checking fnv v1.0.7
+tigerstyle-consumer-check>    Compiling libm v0.2.16
+tigerstyle-consumer-check>     Checking percent-encoding v2.3.2
+tigerstyle-consumer-check>    Compiling aws-lc-rs v1.16.2
+tigerstyle-consumer-check>     Checking rustls-pki-types v1.14.0
+tigerstyle-consumer-check>     Checking litemap v0.8.2
+tigerstyle-consumer-check>     Checking writeable v0.6.3
+tigerstyle-consumer-check>     Checking foldhash v0.1.5
+tigerstyle-consumer-check>    Compiling unicode-xid v0.2.6
+tigerstyle-consumer-check>     Checking aho-corasick v1.1.4
+tigerstyle-consumer-check>     Checking winnow v0.7.15
+tigerstyle-consumer-check>     Checking base64 v0.22.1
+tigerstyle-consumer-check>     Checking encoding_rs v0.8.35
+tigerstyle-consumer-check>    Compiling strsim v0.11.1
+tigerstyle-consumer-check>     Checking untrusted v0.9.0
+tigerstyle-consumer-check>    Compiling httparse v1.10.1
+tigerstyle-consumer-check>     Checking hashbrown v0.15.5
+tigerstyle-consumer-check>    Compiling icu_normalizer_data v2.2.0
+tigerstyle-consumer-check>     Checking unicode-normalization v0.1.25
+tigerstyle-consumer-check>    Compiling ident_case v1.0.1
+tigerstyle-consumer-check>    Compiling icu_properties_data v2.2.0
+tigerstyle-consumer-check>    Compiling autocfg v1.5.0
+tigerstyle-consumer-check>     Checking utf8_iter v1.0.4
+tigerstyle-consumer-check>    Compiling pkg-config v0.3.32
+tigerstyle-consumer-check>     Checking ipnet v2.12.0
+tigerstyle-consumer-check>     Checking unicode-width v0.2.2
+tigerstyle-consumer-check>    Compiling rustls v0.23.37
+tigerstyle-consumer-check>     Checking either v1.15.0
+tigerstyle-consumer-check>    Compiling signal-hook v0.4.4
+tigerstyle-consumer-check>     Checking crossbeam-channel v0.5.15
+tigerstyle-consumer-check>     Checking atomic-waker v1.1.2
+tigerstyle-consumer-check>     Checking hashbrown v0.14.5
+tigerstyle-consumer-check>     Checking static_assertions v1.1.0
+tigerstyle-consumer-check>     Checking tower-service v0.3.3
+tigerstyle-consumer-check>     Checking try-lock v0.2.5
+tigerstyle-consumer-check>     Checking nonempty v0.12.0
+tigerstyle-consumer-check>     Checking ryu v1.0.23
+tigerstyle-consumer-check>     Checking form_urlencoded v1.2.2
+tigerstyle-consumer-check>    Compiling cfg_aliases v0.2.1
+tigerstyle-consumer-check>     Checking want v0.3.1
+tigerstyle-consumer-check>     Checking sync_wrapper v1.0.2
+tigerstyle-consumer-check>     Checking crossbeam-deque v0.8.6
+tigerstyle-consumer-check>     Checking openssl-probe v0.2.1
+tigerstyle-consumer-check>     Checking tower-layer v0.3.3
+tigerstyle-consumer-check>    Compiling num-traits v0.2.19
+tigerstyle-consumer-check>     Checking iri-string v0.7.12
+tigerstyle-consumer-check>     Checking data-encoding v2.10.0
+tigerstyle-consumer-check>     Checking colorchoice v1.0.5
+tigerstyle-consumer-check>     Checking spin v0.9.9
+tigerstyle-consumer-check>     Checking mime v0.3.17
+tigerstyle-consumer-check>     Checking unicode-bom v2.0.3
+tigerstyle-consumer-check>     Checking rustls-native-certs v0.8.3
+tigerstyle-consumer-check>     Checking faster-hex v0.10.0
+tigerstyle-consumer-check>    Compiling syn v2.0.117
+tigerstyle-consumer-check>     Checking lazy_static v1.5.0
+tigerstyle-consumer-check>     Checking adler2 v2.0.1
+tigerstyle-consumer-check>    Compiling semver v1.0.28
+tigerstyle-consumer-check>     Checking simd-adler32 v0.3.9
+tigerstyle-consumer-check>    Compiling indexmap v2.13.1
+tigerstyle-consumer-check>    Compiling unicode-segmentation v1.13.2
+tigerstyle-consumer-check>     Checking utf8parse v0.2.2
+tigerstyle-consumer-check>    Compiling heck v0.5.0
+tigerstyle-consumer-check>     Checking kstring v2.0.2
+tigerstyle-consumer-check>     Checking thread_local v1.1.9
+tigerstyle-consumer-check>    Compiling winnow v1.0.1
+tigerstyle-consumer-check>     Checking is_terminal_polyfill v1.70.2
+tigerstyle-consumer-check>     Checking anstyle-parse v1.0.0
+tigerstyle-consumer-check>     Checking miniz_oxide v0.8.9
+tigerstyle-consumer-check>     Checking anstyle v1.0.14
+tigerstyle-consumer-check>     Checking anstyle-query v1.1.5
+tigerstyle-consumer-check>    Compiling portable-atomic v1.13.1
+tigerstyle-consumer-check>     Checking shell-words v1.1.1
+tigerstyle-consumer-check>    Compiling toml_datetime v1.1.1+spec-1.1.0
+tigerstyle-consumer-check>    Compiling anyhow v1.0.102
+tigerstyle-consumer-check>    Compiling rustc_version v0.4.1
+tigerstyle-consumer-check>     Checking clap_lex v1.1.0
+tigerstyle-consumer-check>    Compiling memoffset v0.6.5
+tigerstyle-consumer-check>     Checking vte v0.15.0
+tigerstyle-consumer-check>     Checking block-buffer v0.10.4
+tigerstyle-consumer-check>     Checking crypto-common v0.1.7
+tigerstyle-consumer-check>     Checking anstream v1.0.0
+tigerstyle-consumer-check>    Compiling zstd-safe v7.2.4
+tigerstyle-consumer-check>    Compiling rustix v0.38.44
+tigerstyle-consumer-check>     Checking digest v0.10.7
+tigerstyle-consumer-check>    Compiling typeid v1.0.3
+tigerstyle-consumer-check>     Checking vt100 v0.16.2
+tigerstyle-consumer-check>     Checking arc-swap v1.9.1
+tigerstyle-consumer-check>    Compiling jobserver v0.1.34
+tigerstyle-consumer-check>    Compiling convert_case v0.10.0
+tigerstyle-consumer-check>     Checking sharded-slab v0.1.7
+tigerstyle-consumer-check>     Checking clap_builder v4.6.0
+tigerstyle-consumer-check>    Compiling nix v0.31.3
+tigerstyle-consumer-check>    Compiling curve25519-dalek v4.1.3
+tigerstyle-consumer-check>     Checking sha1 v0.10.6
+tigerstyle-consumer-check>     Checking sha2 v0.10.9
+tigerstyle-consumer-check>    Compiling n0-future v0.3.2
+tigerstyle-consumer-check>     Checking tracing-log v0.2.0
+tigerstyle-consumer-check>     Checking cpufeatures v0.3.0
+tigerstyle-consumer-check>    Compiling erased-serde v0.4.10
+tigerstyle-consumer-check>    Compiling cc v1.2.59
+tigerstyle-consumer-check>     Checking sha1-checked v0.10.0
+tigerstyle-consumer-check>    Compiling zerocopy v0.8.48
+tigerstyle-consumer-check>    Compiling thiserror v1.0.69
+tigerstyle-consumer-check>     Checking bitflags v1.3.2
+tigerstyle-consumer-check>     Checking nu-ansi-term v0.50.3
+tigerstyle-consumer-check>     Checking parking v2.2.1
+tigerstyle-consumer-check>     Checking cordyceps v0.3.4
+tigerstyle-consumer-check>     Checking unit-prefix v0.5.2
+tigerstyle-consumer-check>     Checking linux-raw-sys v0.4.15
+tigerstyle-consumer-check>     Checking diatomic-waker v0.2.3
+tigerstyle-consumer-check>     Checking spin v0.10.0
+tigerstyle-consumer-check>    Compiling siphasher v1.0.2
+tigerstyle-consumer-check>     Checking regex-automata v0.4.14
+tigerstyle-consumer-check>     Checking futures-lite v2.6.1
+tigerstyle-consumer-check>    Compiling parking_lot v0.12.5
+tigerstyle-consumer-check>     Checking chacha20 v0.10.0
+tigerstyle-consumer-check>     Checking md-5 v0.10.6
+tigerstyle-consumer-check>     Checking flate2 v1.1.9
+tigerstyle-consumer-check>     Checking nibble_vec v0.1.0
+tigerstyle-consumer-check>    Compiling nix-compat v0.1.0 (/build/source/vendor/nix-compat)
+tigerstyle-consumer-check>     Checking futures-buffered v0.2.13
+tigerstyle-consumer-check>    Compiling phf_shared v0.11.3
+tigerstyle-consumer-check>    Compiling fuse-backend-rs v0.12.0 (/build/source/vendor/fuse-backend-rs)
+tigerstyle-consumer-check>    Compiling fixedbitset v0.5.7
+tigerstyle-consumer-check>     Checking iana-time-zone v0.1.65
+tigerstyle-consumer-check>     Checking endian-type v0.1.2
+tigerstyle-consumer-check>     Checking matchit v0.8.4
+tigerstyle-consumer-check>    Compiling new_debug_unreachable v1.0.6
+tigerstyle-consumer-check>    Compiling bit-vec v0.8.0
+tigerstyle-consumer-check>    Compiling precomputed-hash v0.1.1
+tigerstyle-consumer-check>     Checking bytemuck v1.25.0
+tigerstyle-consumer-check>    Compiling keccak v0.1.6
+tigerstyle-consumer-check>    Compiling redb v3.1.3
+tigerstyle-consumer-check>    Compiling term v1.2.1
+tigerstyle-consumer-check>    Compiling petgraph v0.7.1
+tigerstyle-consumer-check>    Compiling string_cache v0.8.9
+tigerstyle-consumer-check>    Compiling ena v0.14.4
+tigerstyle-consumer-check>     Checking radix_trie v0.2.1
+tigerstyle-consumer-check>    Compiling proc-macro-error-attr2 v2.0.0
+tigerstyle-consumer-check>     Checking itertools v0.15.0
+tigerstyle-consumer-check>    Compiling bit-set v0.8.0
+tigerstyle-consumer-check>     Checking safe_arch v1.2.0
+tigerstyle-consumer-check>     Checking itertools v0.14.0
+tigerstyle-consumer-check>     Checking errno v0.3.14
+tigerstyle-consumer-check>     Checking mio v1.2.0
+tigerstyle-consumer-check>     Checking getrandom v0.2.17
+tigerstyle-consumer-check>     Checking socket2 v0.6.3
+tigerstyle-consumer-check>     Checking memmap2 v0.9.10
+tigerstyle-consumer-check>     Checking filetime v0.2.27
+tigerstyle-consumer-check>    Compiling toml_parser v1.1.2+spec-1.1.0
+tigerstyle-consumer-check>     Checking signal-hook-registry v1.4.8
+tigerstyle-consumer-check>     Checking console v0.16.3
+tigerstyle-consumer-check>     Checking gix-sec v0.13.2
+tigerstyle-consumer-check>     Checking rand_core v0.6.4
+tigerstyle-consumer-check>    Compiling ascii-canvas v4.0.0
+tigerstyle-consumer-check>     Checking rand v0.10.1
+tigerstyle-consumer-check>     Checking dashmap v6.1.0
+tigerstyle-consumer-check>     Checking caps v0.5.6
+tigerstyle-consumer-check>     Checking num_cpus v1.17.0
+tigerstyle-consumer-check>     Checking signature v2.2.0
+tigerstyle-consumer-check>     Checking nix v0.24.3
+tigerstyle-consumer-check>     Checking vm-memory v0.10.0
+tigerstyle-consumer-check>    Compiling cmake v0.1.58
+tigerstyle-consumer-check>     Checking vmm-sys-util v0.11.2
+tigerstyle-consumer-check>     Checking prodash v31.0.0
+tigerstyle-consumer-check>     Checking mio v0.8.11
+tigerstyle-consumer-check>     Checking nom v8.0.0
+tigerstyle-consumer-check>     Checking rustc-hash v2.1.2
+tigerstyle-consumer-check>     Checking ed25519 v2.2.3
+tigerstyle-consumer-check>     Checking indicatif v0.18.4
+tigerstyle-consumer-check>     Checking humantime v2.3.0
+tigerstyle-consumer-check>    Compiling snix-castore v0.1.0 (/build/source/vendor/snix-castore)
+tigerstyle-consumer-check>    Compiling malachite-nz v0.9.2
+tigerstyle-consumer-check>    Compiling toml_edit v0.25.10+spec-1.1.0
+tigerstyle-consumer-check>    Compiling pico-args v0.5.0
+tigerstyle-consumer-check>     Checking fixedbitset v0.4.2
+tigerstyle-consumer-check>     Checking wide v1.7.0
+tigerstyle-consumer-check>     Checking threadpool v1.8.1
+tigerstyle-consumer-check>     Checking serde_bytes v0.11.19
+tigerstyle-consumer-check>    Compiling nix v0.29.0
+tigerstyle-consumer-check>    Compiling proc-macro2-diagnostics v0.10.1
+tigerstyle-consumer-check>     Checking unicode-width v0.1.14
+tigerstyle-consumer-check>     Checking wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+tigerstyle-consumer-check>     Checking uuid v1.23.0
+tigerstyle-consumer-check>     Checking tempfile v3.27.0
+tigerstyle-consumer-check>     Checking xattr v1.6.1
+tigerstyle-consumer-check>    Compiling sha3 v0.10.8
+tigerstyle-consumer-check>     Checking toml_datetime v0.7.5+spec-1.1.0
+tigerstyle-consumer-check>     Checking strum v0.26.3
+tigerstyle-consumer-check>    Compiling snix-store v0.1.0 (/build/source/vendor/snix-store)
+tigerstyle-consumer-check>    Compiling yansi v1.0.1
+tigerstyle-consumer-check>    Compiling snix-build v0.1.0 (/build/source/vendor/snix-build)
+tigerstyle-consumer-check>     Checking toml_writer v1.1.1+spec-1.1.0
+tigerstyle-consumer-check>     Checking tar v0.4.45
+tigerstyle-consumer-check>     Checking lru v0.16.4
+tigerstyle-consumer-check>     Checking itertools v0.12.1
+tigerstyle-consumer-check>     Checking petgraph v0.6.5
+tigerstyle-consumer-check>    Compiling io-lifetimes v3.0.1
+tigerstyle-consumer-check>    Compiling blake3 v1.8.2
+tigerstyle-consumer-check>    Compiling aws-lc-sys v0.39.1
+tigerstyle-consumer-check>    Compiling ring v0.17.14
+tigerstyle-consumer-check>    Compiling zstd-sys v2.0.16+zstd.1.5.7
+tigerstyle-consumer-check>    Compiling libmimalloc-sys v0.1.44
+tigerstyle-consumer-check>    Compiling bzip2-sys v0.1.13+1.0.8
+tigerstyle-consumer-check>    Compiling lzma-sys v0.1.20
+tigerstyle-consumer-check>    Compiling heck v0.4.1
+tigerstyle-consumer-check>     Checking bitmaps v3.2.1
+tigerstyle-consumer-check>    Compiling proc-macro-crate v3.5.0
+tigerstyle-consumer-check>     Checking base64ct v1.8.3
+tigerstyle-consumer-check>     Checking malachite-base v0.9.2
+tigerstyle-consumer-check>     Checking count-write v0.1.0
+tigerstyle-consumer-check>    Compiling io-lifetimes v2.0.4
+tigerstyle-consumer-check>     Checking termcolor v1.4.1
+tigerstyle-consumer-check>     Checking serde_spanned v1.1.1
+tigerstyle-consumer-check>     Checking fs2 v0.4.3
+tigerstyle-consumer-check>     Checking imara-diff v0.2.0
+tigerstyle-consumer-check>     Checking imara-diff v0.1.8
+tigerstyle-consumer-check>     Checking hashlink v0.10.0
+tigerstyle-consumer-check>     Checking pem-rfc7468 v0.7.0
+tigerstyle-consumer-check>     Checking arraydeque v0.5.1
+tigerstyle-consumer-check>    Compiling paste v1.0.15
+tigerstyle-consumer-check>    Compiling object v0.37.3
+tigerstyle-consumer-check>    Compiling io-extras v0.19.0
+tigerstyle-consumer-check>     Checking aliasable v0.1.3
+tigerstyle-consumer-check>    Compiling signal-hook v0.3.18
+tigerstyle-consumer-check>     Checking typed-arena v2.0.2
+tigerstyle-consumer-check>    Compiling getrandom v0.3.4
+tigerstyle-consumer-check>     Checking imbl-sized-chunks v0.1.3
+tigerstyle-consumer-check>     Checking arrayvec v0.5.2
+tigerstyle-consumer-check>     Checking der v0.7.10
+tigerstyle-consumer-check>     Checking toml v0.9.12+spec-1.1.0
+tigerstyle-consumer-check>     Checking toml_edit v0.24.1+spec-1.1.0
+tigerstyle-consumer-check>     Checking saphyr-parser v0.0.6
+tigerstyle-consumer-check>     Checking clru v0.6.3
+tigerstyle-consumer-check>     Checking vte v0.14.1
+tigerstyle-consumer-check>     Checking uluru v3.1.0
+tigerstyle-consumer-check>     Checking gimli v0.32.3
+tigerstyle-consumer-check>     Checking unsafe-libyaml v0.2.11
+tigerstyle-consumer-check>     Checking bumpalo v3.20.2
+tigerstyle-consumer-check>    Compiling cap-primitives v4.0.2
+tigerstyle-consumer-check>     Checking pretty v0.12.5
+tigerstyle-consumer-check>     Checking simple-counter v0.1.0
+tigerstyle-consumer-check>     Checking strip-ansi-escapes v0.2.1
+tigerstyle-consumer-check>     Checking regex v1.12.3
+tigerstyle-consumer-check>     Checking matchers v0.2.0
+tigerstyle-consumer-check>     Checking lalrpop-util v0.22.2
+tigerstyle-consumer-check>     Checking fs-set-times v0.20.3
+tigerstyle-consumer-check>     Checking rustix-linux-procfs v0.1.1
+tigerstyle-consumer-check>     Checking crunch-overlay-core v0.1.0 (/build/source/crates/crunch-overlay-core)
+tigerstyle-consumer-check>     Checking crunch-repair-core v0.1.0 (/build/source/crates/crunch-repair-core)
+tigerstyle-consumer-check>     Checking crunch-gc-core v0.1.0 (/build/source/crates/crunch-gc-core)
+tigerstyle-consumer-check>     Checking io-close v0.3.7
+tigerstyle-consumer-check>     Checking num-integer v0.1.46
+tigerstyle-consumer-check>     Checking sha-1 v0.10.1
+tigerstyle-consumer-check>     Checking json_scanner v0.1.0
+tigerstyle-consumer-check>    Compiling num-bigint-dig v0.8.6
+tigerstyle-consumer-check>     Checking maybe-owned v0.3.4
+tigerstyle-consumer-check>    Compiling linkme-impl v0.3.37
+tigerstyle-consumer-check>    Compiling indoc v2.0.7
+tigerstyle-consumer-check>     Checking crc-catalog v2.4.0
+tigerstyle-consumer-check>    Compiling owo-colors v4.3.0
+tigerstyle-consumer-check>     Checking rustc-demangle v0.1.28
+tigerstyle-consumer-check>     Checking ambient-authority v0.0.2
+tigerstyle-consumer-check>    Compiling cap-std v4.0.2
+tigerstyle-consumer-check>    Compiling litrs v1.0.0
+tigerstyle-consumer-check>     Checking crc v3.4.0
+tigerstyle-consumer-check>     Checking num-iter v0.1.46
+tigerstyle-consumer-check>     Checking rand_core v0.9.5
+tigerstyle-consumer-check>     Checking signal-hook-mio v0.2.5
+tigerstyle-consumer-check>    Compiling syn v3.0.3
+tigerstyle-consumer-check>     Checking webpki-roots v1.0.6
+tigerstyle-consumer-check>     Checking hashbrown v0.17.1
+tigerstyle-consumer-check>     Checking utf8-zero v0.8.1
+tigerstyle-consumer-check>     Checking mimalloc v0.1.48
+tigerstyle-consumer-check>     Checking twox-hash v2.1.2
+tigerstyle-consumer-check>    Compiling cap-fs-ext v4.0.2
+tigerstyle-consumer-check>     Checking toml_write v0.1.2
+tigerstyle-consumer-check>    Compiling linkme v0.3.37
+tigerstyle-consumer-check>     Checking is_ci v1.2.0
+tigerstyle-consumer-check>     Checking unicode-linebreak v0.1.5
+tigerstyle-consumer-check>    Compiling synstructure v0.13.2
+tigerstyle-consumer-check>    Compiling darling_core v0.23.0
+tigerstyle-consumer-check>    Compiling darling_core v0.20.11
+tigerstyle-consumer-check>    Compiling proc-macro-error2 v2.0.1
+tigerstyle-consumer-check>     Checking spki v0.7.3
+tigerstyle-consumer-check>     Checking supports-color v3.0.2
+tigerstyle-consumer-check>     Checking ruzstd v0.8.2
+tigerstyle-consumer-check>     Checking lzma-rs v0.3.0
+tigerstyle-consumer-check>     Checking textwrap v0.16.2
+tigerstyle-consumer-check>     Checking gethostname v0.5.0
+tigerstyle-consumer-check>     Checking pkcs8 v0.10.2
+tigerstyle-consumer-check>     Checking terminal_size v0.4.4
+tigerstyle-consumer-check>     Checking fuzzy-matcher v0.3.7
+tigerstyle-consumer-check>     Checking bzip2-rs v0.1.2
+tigerstyle-consumer-check>     Checking supports-hyperlinks v3.2.0
+tigerstyle-consumer-check>    Compiling document-features v0.2.12
+tigerstyle-consumer-check>     Checking dyn-clone v1.0.20
+tigerstyle-consumer-check>     Checking bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+tigerstyle-consumer-check>     Checking supports-unicode v3.0.0
+tigerstyle-consumer-check>     Checking pkcs1 v0.7.5
+tigerstyle-consumer-check>     Checking crunch-evaluation-stream-core v0.1.0 (/build/source/crates/crunch-evaluation-stream-core)
+tigerstyle-consumer-check>     Checking etcetera v0.11.0
+tigerstyle-consumer-check>     Checking colored v3.1.1
+tigerstyle-consumer-check>     Checking crunch-delta-core v0.1.0 (/build/source/crates/crunch-delta-core)
+tigerstyle-consumer-check>     Checking detect-coding-agent v0.1.0
+tigerstyle-consumer-check>     Checking bzip2 v0.5.2
+tigerstyle-consumer-check>     Checking dotenvy v0.15.7
+tigerstyle-consumer-check>     Checking iddqd v0.4.6
+tigerstyle-consumer-check>     Checking bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+tigerstyle-consumer-check>     Checking chapter-tgz v0.1.0
+tigerstyle-consumer-check>     Checking durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+tigerstyle-consumer-check>    Compiling serde_derive v1.0.228
+tigerstyle-consumer-check>    Compiling thiserror-impl v2.0.18
+tigerstyle-consumer-check>    Compiling tokio-macros v2.7.0
+tigerstyle-consumer-check>    Compiling futures-macro v0.3.32
+tigerstyle-consumer-check>    Compiling zerofrom-derive v0.1.7
+tigerstyle-consumer-check>    Compiling yoke-derive v0.8.2
+tigerstyle-consumer-check>    Compiling zerovec-derive v0.11.3
+tigerstyle-consumer-check>    Compiling displaydoc v0.2.5
+tigerstyle-consumer-check>    Compiling tracing-attributes v0.1.31
+tigerstyle-consumer-check>    Compiling derive_more-impl v2.1.1
+tigerstyle-consumer-check>    Compiling curve25519-dalek-derive v0.1.1
+tigerstyle-consumer-check>    Compiling clap_derive v4.6.0
+tigerstyle-consumer-check>    Compiling async-trait v0.1.89
+tigerstyle-consumer-check>    Compiling pin-project-internal v1.1.11
+tigerstyle-consumer-check>    Compiling async-stream-impl v0.3.6
+tigerstyle-consumer-check>    Compiling spez v0.1.2
+tigerstyle-consumer-check>    Compiling num_enum_derive v0.7.6
+tigerstyle-consumer-check>    Compiling thiserror-impl v1.0.69
+tigerstyle-consumer-check>    Compiling n0-error-macros v0.1.3
+tigerstyle-consumer-check>    Compiling irpc-derive v0.10.0
+tigerstyle-consumer-check>    Compiling nix-compat-derive v0.1.0 (/build/source/vendor/nix-compat-derive)
+tigerstyle-consumer-check>     Checking ppv-lite86 v0.2.21
+tigerstyle-consumer-check>     Checking async-stream v0.3.6
+tigerstyle-consumer-check>     Checking futures-util v0.3.32
+tigerstyle-consumer-check>    Compiling auto_impl v1.3.0
+tigerstyle-consumer-check>    Compiling strum_macros v0.26.4
+tigerstyle-consumer-check>    Compiling getset v0.1.6
+tigerstyle-consumer-check>     Checking pin-project v1.1.11
+tigerstyle-consumer-check>    Compiling typed-builder-macro v0.22.0
+tigerstyle-consumer-check>    Compiling logos-codegen v0.16.1
+tigerstyle-consumer-check>     Checking zerofrom v0.1.7
+tigerstyle-consumer-check>    Compiling lalrpop v0.22.2
+tigerstyle-consumer-check>     Checking rand_chacha v0.3.1
+tigerstyle-consumer-check>     Checking num_enum v0.7.6
+tigerstyle-consumer-check>     Checking n0-error v0.1.3
+tigerstyle-consumer-check>     Checking tracing v0.1.44
+tigerstyle-consumer-check>    Compiling ouroboros_macro v0.18.5
+tigerstyle-consumer-check>     Checking yoke v0.8.2
+tigerstyle-consumer-check>     Checking addr2line v0.25.1
+tigerstyle-consumer-check>     Checking rand v0.8.6
+tigerstyle-consumer-check>    Compiling maybe-async v0.2.10
+tigerstyle-consumer-check>     Checking tracing-subscriber v0.3.23
+tigerstyle-consumer-check>     Checking zerovec v0.11.6
+tigerstyle-consumer-check>     Checking zerotrie v0.2.4
+tigerstyle-consumer-check>     Checking cobs v0.3.0
+tigerstyle-consumer-check>     Checking nix-archive v0.1.0
+tigerstyle-consumer-check>     Checking ed25519-dalek v2.2.0
+tigerstyle-consumer-check>     Checking rand_chacha v0.9.0
+tigerstyle-consumer-check>    Compiling miette-derive v7.6.0
+tigerstyle-consumer-check>     Checking nix-derivation v0.1.0
+tigerstyle-consumer-check>    Compiling darling_macro v0.20.11
+tigerstyle-consumer-check>     Checking rand v0.9.3
+tigerstyle-consumer-check>     Checking backtrace v0.3.76
+tigerstyle-consumer-check>    Compiling darling_macro v0.23.0
+tigerstyle-consumer-check>     Checking tinystr v0.8.3
+tigerstyle-consumer-check>     Checking potential_utf v0.1.5
+tigerstyle-consumer-check>     Checking icu_collections v2.2.0
+tigerstyle-consumer-check>    Compiling darling v0.20.11
+tigerstyle-consumer-check>     Checking derive_more v2.1.1
+tigerstyle-consumer-check>     Checking icu_locale_core v2.2.0
+tigerstyle-consumer-check>    Compiling derive_builder_core v0.20.2
+tigerstyle-consumer-check>     Checking crossterm v0.29.0
+tigerstyle-consumer-check>     Checking clap v4.6.0
+tigerstyle-consumer-check>    Compiling darling v0.23.0
+tigerstyle-consumer-check>     Checking clap-verbosity-flag v3.0.4
+tigerstyle-consumer-check>    Compiling serde_with_macros v3.18.0
+tigerstyle-consumer-check>     Checking backtrace-ext v0.2.1
+tigerstyle-consumer-check>     Checking typed-builder v0.22.0
+tigerstyle-consumer-check>    Compiling logos-derive v0.16.1
+tigerstyle-consumer-check>     Checking ouroboros v0.18.5
+tigerstyle-consumer-check>     Checking tracing-indicatif v0.3.14
+tigerstyle-consumer-check>     Checking logos v0.16.1
+tigerstyle-consumer-check>     Checking inquire v0.9.4
+tigerstyle-consumer-check>     Checking miette v7.6.0
+tigerstyle-consumer-check>     Checking icu_provider v2.2.0
+tigerstyle-consumer-check>    Compiling derive_builder_macro v0.20.2
+tigerstyle-consumer-check>     Checking rsa v0.9.10
+tigerstyle-consumer-check>     Checking serde_with v3.18.0
+tigerstyle-consumer-check>     Checking icu_properties v2.2.0
+tigerstyle-consumer-check>     Checking icu_normalizer v2.2.0
+tigerstyle-consumer-check>     Checking derive_builder v0.20.2
+tigerstyle-consumer-check>     Checking xz2 v0.1.7
+tigerstyle-consumer-check>     Checking bytes v1.11.1
+tigerstyle-consumer-check>     Checking bstr v1.12.1
+tigerstyle-consumer-check>     Checking crunch-attestation-core v0.1.0 (/build/source/crates/crunch-attestation-core)
+tigerstyle-consumer-check>     Checking serde_urlencoded v0.7.1
+tigerstyle-consumer-check>     Checking chrono v0.4.44
+tigerstyle-consumer-check>     Checking quick-xml v0.40.1
+tigerstyle-consumer-check>     Checking postcard v1.1.3
+tigerstyle-consumer-check>     Checking serde_tagged v0.3.0
+tigerstyle-consumer-check>     Checking artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+tigerstyle-consumer-check>     Checking serde_qs v0.12.0
+tigerstyle-consumer-check>     Checking oci-spec v0.7.1
+tigerstyle-consumer-check>     Checking codespan-reporting v0.13.1
+tigerstyle-consumer-check>     Checking crunch-composition-core v0.1.0 (/build/source/crates/crunch-composition-core)
+tigerstyle-consumer-check>     Checking nickel-lang-vector v0.2.0
+tigerstyle-consumer-check>     Checking serde_yaml v0.9.34+deprecated
+tigerstyle-consumer-check>     Checking toml_datetime v0.6.11
+tigerstyle-consumer-check>     Checking crunch-remote-core v0.1.0 (/build/source/crates/crunch-remote-core)
+tigerstyle-consumer-check>     Checking serde_spanned v0.6.9
+tigerstyle-consumer-check>     Checking crunch-source-core v0.1.0 (/build/source/crates/crunch-source-core)
+tigerstyle-consumer-check>     Checking artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be#e41340be)
+tigerstyle-consumer-check>     Checking crunch-rust-cache-core v0.1.0 (/build/source/crates/crunch-rust-cache-core)
+tigerstyle-consumer-check>     Checking crunch-build-planning-core v0.1.0 (/build/source/crates/crunch-build-planning-core)
+tigerstyle-consumer-check>     Checking mantle-rust-plan-core v0.1.0 (/build/source/crates/mantle-rust-plan-core)
+tigerstyle-consumer-check>     Checking crunch-shell-core v0.1.0 (/build/source/crates/crunch-shell-core)
+tigerstyle-consumer-check>     Checking mantle-application-core v0.1.0 (/build/source/crates/mantle-application-core)
+tigerstyle-consumer-check>     Checking crunch-wasm-component-core v0.1.0 (/build/source/crates/crunch-wasm-component-core)
+tigerstyle-consumer-check>     Checking secrecy v0.10.3
+tigerstyle-consumer-check>     Checking toml_edit v0.22.27
+tigerstyle-consumer-check>     Checking crunch-resource-policy-core v0.1.0 (/build/source/crates/crunch-resource-policy-core)
+tigerstyle-consumer-check>     Checking nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+tigerstyle-consumer-check>     Checking crunch-eval-budget-core v0.1.0 (/build/source/crates/crunch-eval-budget-core)
+tigerstyle-consumer-check>     Checking mantle-portable-client-core v0.1.0 (/build/source/crates/mantle-portable-client-core)
+tigerstyle-consumer-check>     Checking futures-executor v0.3.32
+tigerstyle-consumer-check>     Checking codespan v0.13.1
+tigerstyle-consumer-check>     Checking gix-validate v0.11.0
+tigerstyle-consumer-check>     Checking gix-utils v0.3.1
+tigerstyle-consumer-check>     Checking gix-error v0.2.1
+tigerstyle-consumer-check>     Checking tokio v1.51.0
+tigerstyle-consumer-check>     Checking http v1.4.0
+tigerstyle-consumer-check>     Checking futures v0.3.32
+tigerstyle-consumer-check>     Checking gix-path v0.11.2
+tigerstyle-consumer-check>     Checking gix-packetline v0.21.2
+tigerstyle-consumer-check>     Checking crunch-action-result-core v0.1.0 (/build/source/crates/crunch-action-result-core)
+tigerstyle-consumer-check>     Checking gix-date v0.15.1
+tigerstyle-consumer-check>     Checking gix-chunk v0.7.0
+tigerstyle-consumer-check>     Checking gix-quote v0.7.0
+tigerstyle-consumer-check>     Checking gix-bitmap v0.3.0
+tigerstyle-consumer-check>     Checking artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+tigerstyle-consumer-check>     Checking valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=e40c76b4d2070a29636e00c85c0dff93f03dba2f#e40c76b4)
+tigerstyle-consumer-check>     Checking crunch-radiance-reference-core v0.1.0 (/build/source/crates/crunch-radiance-reference-core)
+tigerstyle-consumer-check>     Checking crunch-release-core v0.1.0 (/build/source/crates/crunch-release-core)
+tigerstyle-consumer-check>     Checking mantle-application v0.1.0 (/build/source/crates/mantle-application)
+tigerstyle-consumer-check>     Checking crunch-shell v0.1.0 (/build/source/crates/crunch-shell)
+tigerstyle-consumer-check>     Checking gix-features v0.46.2
+tigerstyle-consumer-check>     Checking gix-config-value v0.17.1
+tigerstyle-consumer-check>     Checking idna_adapter v1.2.1
+tigerstyle-consumer-check>     Checking gix-command v0.8.0
+tigerstyle-consumer-check>     Checking gix-actor v0.40.0
+tigerstyle-consumer-check>     Checking idna v1.1.0
+tigerstyle-consumer-check>     Checking gix-url v0.35.2
+tigerstyle-consumer-check>     Checking crunch-kernelscript-core v0.1.0 (/build/source/crates/crunch-kernelscript-core)
+tigerstyle-consumer-check>     Checking crunch-bootstrap-core v0.1.0 (/build/source/crates/crunch-bootstrap-core)
+tigerstyle-consumer-check>     Checking mantlepkgs-core v0.1.0 (/build/source/crates/mantlepkgs-core)
+tigerstyle-consumer-check>     Checking gix-mailmap v0.32.0
+tigerstyle-consumer-check>     Checking crunch-spacewasm-core v0.1.0 (/build/source/crates/crunch-spacewasm-core)
+tigerstyle-consumer-check>     Checking gix-prompt v0.14.1
+tigerstyle-consumer-check>     Checking crunch-hardware-simulation-core v0.1.0 (/build/source/crates/crunch-hardware-simulation-core)
+tigerstyle-consumer-check>     Checking gix-hash v0.23.0
+tigerstyle-consumer-check>     Checking gix-fs v0.19.2
+tigerstyle-consumer-check>     Checking gix-glob v0.24.0
+tigerstyle-consumer-check>     Checking url v2.5.8
+tigerstyle-consumer-check>     Checking mantle-build-contract v0.1.0 (/build/source/crates/mantle-build-contract)
+tigerstyle-consumer-check>     Checking gix-credentials v0.37.1
+tigerstyle-consumer-check>     Checking http-body v1.0.1
+tigerstyle-consumer-check>     Checking ureq-proto v0.6.0
+tigerstyle-consumer-check>     Checking gix-hashtable v0.13.0
+tigerstyle-consumer-check>     Checking gix-commitgraph v0.35.0
+tigerstyle-consumer-check>     Checking gix-tempfile v21.0.2
+tigerstyle-consumer-check>     Checking gix-object v0.58.0
+tigerstyle-consumer-check>     Checking http-body-util v0.1.3
+tigerstyle-consumer-check>     Checking gix-attributes v0.31.0
+tigerstyle-consumer-check>     Checking gix-ignore v0.19.1
+tigerstyle-consumer-check>     Checking crunch-attestation v0.1.0 (/build/source/crates/crunch-attestation)
+tigerstyle-consumer-check>     Checking crunch-project-core v0.1.0 (/build/source/crates/crunch-project-core)
+tigerstyle-consumer-check>     Checking gix-lock v21.0.2
+tigerstyle-consumer-check>     Checking crunch-remote v0.1.0 (/build/source/crates/crunch-remote)
+tigerstyle-consumer-check>     Checking mantle-rust-plan v0.1.0 (/build/source/crates/mantle-rust-plan)
+tigerstyle-consumer-check>     Checking gix-shallow v0.10.0
+tigerstyle-consumer-check>     Checking toml v0.8.23
+tigerstyle-consumer-check>     Checking gix-pathspec v0.16.1
+tigerstyle-consumer-check>     Checking gix-revwalk v0.29.0
+tigerstyle-consumer-check>     Checking gix-ref v0.61.0
+tigerstyle-consumer-check>     Checking gix-filter v0.28.0
+tigerstyle-consumer-check>     Checking gix-pack v0.68.0
+tigerstyle-consumer-check>     Checking gix-traverse v0.55.0
+tigerstyle-consumer-check>     Checking gix-revision v0.43.0
+tigerstyle-consumer-check>     Checking gix-negotiate v0.29.0
+tigerstyle-consumer-check>     Checking gix-index v0.49.0
+tigerstyle-consumer-check>     Checking gix-worktree-stream v0.30.0
+tigerstyle-consumer-check>     Checking crunch-spacewasm v0.1.0 (/build/source/crates/crunch-spacewasm)
+tigerstyle-consumer-check>     Checking gix-refspec v0.39.0
+tigerstyle-consumer-check>     Checking zstd v0.13.3
+tigerstyle-consumer-check>     Checking gix-archive v0.30.0
+tigerstyle-consumer-check>     Checking crunch-hardware-simulation v0.1.0 (/build/source/crates/crunch-hardware-simulation)
+tigerstyle-consumer-check>     Checking gix-discover v0.49.0
+tigerstyle-consumer-check>     Checking gix-config v0.54.0
+tigerstyle-consumer-check>     Checking gix-odb v0.78.0
+tigerstyle-consumer-check>     Checking crunch-kernelscript-adapter v0.1.0 (/build/source/crates/crunch-kernelscript-adapter)
+tigerstyle-consumer-check>     Checking gix-worktree v0.50.0
+tigerstyle-consumer-check>     Checking gix-diff v0.61.0
+tigerstyle-consumer-check>     Checking gix-dir v0.23.0
+tigerstyle-consumer-check>     Checking gix-worktree-state v0.28.0
+tigerstyle-consumer-check>     Checking gix-submodule v0.28.0
+tigerstyle-consumer-check>     Checking crunch-wasm-component v0.1.0 (/build/source/crates/crunch-wasm-component)
+tigerstyle-consumer-check>     Checking gix-blame v0.11.0
+tigerstyle-consumer-check>     Checking gix-status v0.28.0
+tigerstyle-consumer-check>     Checking tokio-util v0.7.18
+tigerstyle-consumer-check>     Checking tower v0.5.3
+tigerstyle-consumer-check>     Checking tokio-stream v0.1.18
+tigerstyle-consumer-check>     Checking async-compression v0.4.19
+tigerstyle-consumer-check>     Checking secretspec v0.17.0
+tigerstyle-consumer-check>     Checking fastcdc v3.2.1
+tigerstyle-consumer-check>     Checking astral-tokio-tar v0.6.3
+tigerstyle-consumer-check>    Compiling nickel-lang-parser v0.3.0
+tigerstyle-consumer-check>    Compiling nickel-lang-core v0.18.0
+tigerstyle-consumer-check>     Checking tower-http v0.6.8
+tigerstyle-consumer-check>     Checking h2 v0.4.13
+tigerstyle-consumer-check>     Checking irpc v0.13.0
+tigerstyle-consumer-check>     Checking crunch-project v0.1.0 (/build/source/crates/crunch-project)
+tigerstyle-consumer-check>     Checking hyper v1.9.0
+tigerstyle-consumer-check>     Checking crunch-nar v0.1.0 (/build/source/crates/crunch-nar)
+tigerstyle-consumer-check>     Checking crunch-glue v0.1.0 (/build/source/crates/crunch-glue)
+tigerstyle-consumer-check>     Checking hyper-util v0.1.20
+tigerstyle-consumer-check>     Checking rustls-webpki v0.103.13
+tigerstyle-consumer-check>     Checking malachite-q v0.9.2
+tigerstyle-consumer-check>     Checking malachite-float v0.9.2
+tigerstyle-consumer-check>     Checking crunch-resource-policy v0.1.0 (/build/source/crates/crunch-resource-policy)
+tigerstyle-consumer-check>     Checking malachite v0.9.2
+tigerstyle-consumer-check>     Checking tokio-rustls v0.26.4
+tigerstyle-consumer-check>     Checking rustls-platform-verifier v0.6.2
+tigerstyle-consumer-check>     Checking ureq v3.3.0
+tigerstyle-consumer-check>     Checking hyper-rustls v0.27.7
+tigerstyle-consumer-check>     Checking reqwest v0.13.2
+tigerstyle-consumer-check>     Checking reqwest-middleware v0.5.1
+tigerstyle-consumer-check>     Checking object_store v0.14.0
+tigerstyle-consumer-check>     Checking gix-transport v0.55.1
+tigerstyle-consumer-check>     Checking reqwest-tracing v0.6.0
+tigerstyle-consumer-check>     Checking gix-protocol v0.59.0
+tigerstyle-consumer-check>     Checking snix-tracing v0.1.0 (/build/source/vendor/snix-tracing)
+tigerstyle-consumer-check>     Checking gix v0.81.0
+tigerstyle-consumer-check>     Checking crunch-store v0.1.0 (/build/source/crates/crunch-store)
+tigerstyle-consumer-check>     Checking crunch-rust-cache v0.1.0 (/build/source/crates/crunch-rust-cache)
+tigerstyle-consumer-check>     Checking crunch-build v0.1.0 (/build/source/crates/crunch-build)
+tigerstyle-consumer-check>     Checking crunch-delta v0.1.0 (/build/source/crates/crunch-delta)
+tigerstyle-consumer-check>     Checking crunch-rustc-wrapper v0.1.0 (/build/source/crates/crunch-rustc-wrapper)
+tigerstyle-consumer-check> error: `.expect()` in production code will panic on failure
+tigerstyle-consumer-check>     --> crates/crunch-build/src/distributed/remote_gateway.rs:1228:24
+tigerstyle-consumer-check>      |
+tigerstyle-consumer-check> 1228 |     let length_bytes = u64::try_from(value.len()).expect("string length fits in u64");
+tigerstyle-consumer-check>      |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tigerstyle-consumer-check>      |
+tigerstyle-consumer-check>      = help: Tiger Style (Error Handling): propagate or handle absence explicitly instead of panicking with `unwrap` or `expect` Example: let value = maybe?;
+tigerstyle-consumer-check>      = note: see Tiger Style guide: Error Handling
+tigerstyle-consumer-check>      = note: `-D tigerstyle::no-unwrap` implied by `-D no-unwrap`
+tigerstyle-consumer-check>      = help: to override `-D no-unwrap` add `#[allow(tigerstyle::no_unwrap)]`
+tigerstyle-consumer-check>
+tigerstyle-consumer-check>     Checking nickel-lang v2.2.0
+tigerstyle-consumer-check>     Checking crunch-eval v0.1.0 (/build/source/crates/crunch-eval)
+tigerstyle-consumer-check> error: could not compile `crunch-build` (lib) due to 1 previous error
+error: build of '/nix/store/3zgj9v06il8kvvm1ggingskpzk2yphc5-tigerstyle-consumer-check.drv' on 'ssh-ng://root@aspen1.local' failed: Cannot build '/nix/store/3zgj9v06il8kvvm1ggingskpzk2yphc5-tigerstyle-consumer-check.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/la7zmw89yhdcjil9fn4mdp0v56j8yg3x-tigerstyle-consumer-check
+       Last 25 log lines:
+       >     Checking object_store v0.14.0
+       >     Checking gix-transport v0.55.1
+       >     Checking reqwest-tracing v0.6.0
+       >     Checking gix-protocol v0.59.0
+       >     Checking snix-tracing v0.1.0 (/build/source/vendor/snix-tracing)
+       >     Checking gix v0.81.0
+       >     Checking crunch-store v0.1.0 (/build/source/crates/crunch-store)
+       >     Checking crunch-rust-cache v0.1.0 (/build/source/crates/crunch-rust-cache)
+       >     Checking crunch-build v0.1.0 (/build/source/crates/crunch-build)
+       >     Checking crunch-delta v0.1.0 (/build/source/crates/crunch-delta)
+       >     Checking crunch-rustc-wrapper v0.1.0 (/build/source/crates/crunch-rustc-wrapper)
+       > error: `.expect()` in production code will panic on failure
+       >     --> crates/crunch-build/src/distributed/remote_gateway.rs:1228:24
+       >      |
+       > 1228 |     let length_bytes = u64::try_from(value.len()).expect("string length fits in u64");
+       >      |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       >      |
+       >      = help: Tiger Style (Error Handling): propagate or handle absence explicitly instead of panicking with `unwrap` or `expect` Example: let value = maybe?;
+       >      = note: see Tiger Style guide: Error Handling
+       >      = note: `-D tigerstyle::no-unwrap` implied by `-D no-unwrap`
+       >      = help: to override `-D no-unwrap` add `#[allow(tigerstyle::no_unwrap)]`
+       >
+       >     Checking nickel-lang v2.2.0
+       >     Checking crunch-eval v0.1.0 (/build/source/crates/crunch-eval)
+       > error: could not compile `crunch-build` (lib) due to 1 previous error
+       For full logs, run:
+         nix log /nix/store/3zgj9v06il8kvvm1ggingskpzk2yphc5-tigerstyle-consumer-check.drv
+error: Cannot build '/nix/store/3zgj9v06il8kvvm1ggingskpzk2yphc5-tigerstyle-consumer-check.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/la7zmw89yhdcjil9fn4mdp0v56j8yg3x-tigerstyle-consumer-check

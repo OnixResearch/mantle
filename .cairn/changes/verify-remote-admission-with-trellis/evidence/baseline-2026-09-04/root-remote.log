@@ -1,0 +1,355 @@
+$ cargo test -p mantle --bin mantle remote_attempt --offline
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling subtle v2.6.1
+   Compiling const-oid v0.9.6
+   Compiling foldhash v0.2.0
+   Compiling regex-automata v0.4.14
+   Compiling serde_json v1.0.149
+   Compiling rustix v1.1.4
+   Compiling linux-raw-sys v0.12.1
+   Compiling mio v1.2.0
+   Compiling libm v0.2.16
+   Compiling indexmap v2.13.1
+   Compiling num-traits v0.2.19
+   Compiling unicode-segmentation v1.13.2
+   Compiling spin v0.9.9
+   Compiling memchr v2.8.0
+   Compiling itertools v0.14.0
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling smallvec v1.15.1
+   Compiling crypto-common v0.1.7
+   Compiling siphasher v1.0.2
+   Compiling log v0.4.29
+   Compiling digest v0.10.7
+   Compiling rustls v0.23.37
+   Compiling lazy_static v1.5.0
+   Compiling phf_shared v0.11.3
+   Compiling sharded-slab v0.1.7
+   Compiling bytemuck v1.25.0
+   Compiling hashbrown v0.16.1
+   Compiling parking_lot_core v0.9.12
+   Compiling bit-vec v0.8.0
+   Compiling fixedbitset v0.5.7
+   Compiling blake3 v1.8.2
+   Compiling sha1 v0.10.6
+   Compiling tokio v1.51.0
+   Compiling sha2 v0.10.9
+   Compiling convert_case v0.10.0
+   Compiling signature v2.2.0
+   Compiling curve25519-dalek v4.1.3
+   Compiling parking_lot v0.12.5
+   Compiling aho-corasick v1.1.4
+   Compiling sha1-checked v0.10.0
+   Compiling ed25519 v2.2.3
+   Compiling toml_edit v0.25.10+spec-1.1.0
+   Compiling derive_more-impl v2.1.1
+   Compiling md-5 v0.10.6
+   Compiling keccak v0.1.6
+   Compiling precomputed-hash v0.1.1
+   Compiling new_debug_unreachable v1.0.6
+   Compiling term v1.2.1
+   Compiling petgraph v0.7.1
+   Compiling sha3 v0.10.8
+   Compiling string_cache v0.8.9
+   Compiling bit-set v0.8.0
+   Compiling safe_arch v1.2.0
+   Compiling ena v0.14.4
+   Compiling pico-args v0.5.0
+   Compiling malachite-nz v0.9.2
+   Compiling ascii-canvas v4.0.0
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-attestation-core)
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/vendor/fuse-backend-rs)
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling proc-macro-crate v3.5.0
+   Compiling wide v1.7.0
+   Compiling malachite-base v0.9.2
+   Compiling proc-macro2-diagnostics v0.10.1
+   Compiling winnow v1.0.1
+   Compiling petgraph v0.6.5
+   Compiling unicode-width v0.1.14
+   Compiling num_enum_derive v0.7.6
+   Compiling uuid v1.23.0
+   Compiling ed25519-dalek v2.2.0
+   Compiling chrono v0.4.44
+   Compiling toml_datetime v0.7.5+spec-1.1.0
+   Compiling toml_writer v1.1.1+spec-1.1.0
+   Compiling lru v0.16.4
+   Compiling heck v0.4.1
+   Compiling derive_more v2.1.1
+   Compiling bitmaps v3.2.1
+   Compiling io-lifetimes v2.0.4
+   Compiling base64ct v1.8.3
+   Compiling num_enum v0.7.6
+   Compiling io-lifetimes v3.0.1
+   Compiling termcolor v1.4.1
+   Compiling ouroboros_macro v0.18.5
+   Compiling crunch-action-result-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-action-result-core)
+   Compiling crunch-repair-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-repair-core)
+   Compiling pem-rfc7468 v0.7.0
+   Compiling crunch-composition-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-composition-core)
+   Compiling crunch-overlay-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-overlay-core)
+   Compiling codespan-reporting v0.13.1
+   Compiling crunch-gc-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-gc-core)
+   Compiling hashlink v0.10.0
+   Compiling imbl-sized-chunks v0.1.3
+   Compiling serde_spanned v1.1.1
+   Compiling bstr v1.12.1
+   Compiling regex v1.12.3
+   Compiling matchers v0.2.0
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-attestation)
+   Compiling paste v1.0.15
+   Compiling tracing-subscriber v0.3.23
+   Compiling aliasable v0.1.3
+   Compiling tempfile v3.27.0
+   Compiling xattr v1.6.1
+   Compiling oci-spec v0.7.1
+   Compiling nix-archive v0.1.0
+   Compiling gix-validate v0.11.0
+   Compiling gix-utils v0.3.1
+   Compiling gix-error v0.2.1
+   Compiling gix-packetline v0.21.2
+   Compiling gix-path v0.11.2
+   Compiling tar v0.4.45
+   Compiling typed-arena v2.0.2
+   Compiling io-extras v0.19.0
+   Compiling gix-date v0.15.1
+   Compiling gix-chunk v0.7.0
+   Compiling gix-quote v0.7.0
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling gix-bitmap v0.3.0
+   Compiling signal-hook v0.3.18
+   Compiling arrayvec v0.5.2
+   Compiling gix-features v0.46.2
+   Compiling gix-config-value v0.17.1
+   Compiling gix-command v0.8.0
+   Compiling gix-actor v0.40.0
+   Compiling gix-url v0.35.2
+   Compiling arraydeque v0.5.1
+   Compiling object v0.37.3
+   Compiling pretty v0.12.5
+   Compiling saphyr-parser v0.0.6
+   Compiling gix-prompt v0.14.1
+   Compiling gix-hash v0.23.0
+   Compiling gix-fs v0.19.2
+   Compiling gix-glob v0.24.0
+   Compiling tracing-indicatif v0.3.14
+   Compiling lalrpop-util v0.22.2
+   Compiling logos-codegen v0.16.1
+   Compiling gix-credentials v0.37.1
+   Compiling gix-hashtable v0.13.0
+   Compiling gix-commitgraph v0.35.0
+   Compiling ouroboros v0.18.5
+   Compiling gix-tempfile v21.0.2
+   Compiling gix-attributes v0.31.0
+   Compiling gix-object v0.58.0
+   Compiling gix-ignore v0.19.1
+   Compiling codespan v0.13.1
+   Compiling nickel-lang-vector v0.2.0
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling lalrpop v0.22.2
+   Compiling der v0.7.10
+   Compiling gix-lock v21.0.2
+   Compiling tokio-util v0.7.18
+   Compiling tokio-rustls v0.26.4
+   Compiling tower v0.5.3
+   Compiling tokio-stream v0.1.18
+   Compiling async-compression v0.4.19
+   Compiling nix-compat v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/vendor/nix-compat)
+   Compiling gix-pathspec v0.16.1
+   Compiling toml_edit v0.24.1+spec-1.1.0
+   Compiling astral-tokio-tar v0.6.3
+   Compiling fastcdc v3.2.1
+   Compiling tower-http v0.6.8
+   Compiling clru v0.6.3
+   Compiling vte v0.14.1
+   Compiling unsafe-libyaml v0.2.11
+   Compiling h2 v0.4.13
+   Compiling n0-future v0.3.2
+   Compiling gimli v0.32.3
+   Compiling gix-revwalk v0.29.0
+   Compiling gix-filter v0.28.0
+   Compiling gix-ref v0.61.0
+   Compiling logos-derive v0.16.1
+   Compiling gix-traverse v0.55.0
+   Compiling gix-revision v0.43.0
+   Compiling bumpalo v3.20.2
+   Compiling simple-counter v0.1.0
+   Compiling logos v0.16.1
+   Compiling cap-primitives v4.0.2
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling gix-negotiate v0.29.0
+   Compiling spki v0.7.3
+   Compiling gix-pack v0.68.0
+   Compiling gix-index v0.49.0
+   Compiling gix-refspec v0.39.0
+   Compiling gix-worktree-stream v0.30.0
+   Compiling strip-ansi-escapes v0.2.1
+   Compiling fs-set-times v0.20.3
+   Compiling gix-shallow v0.10.0
+   Compiling gix-discover v0.49.0
+   Compiling gix-config v0.54.0
+   Compiling rustix-linux-procfs v0.1.1
+   Compiling num-integer v0.1.46
+   Compiling sha-1 v0.10.1
+   Compiling json_scanner v0.1.0
+   Compiling ambient-authority v0.0.2
+   Compiling gix-worktree v0.50.0
+   Compiling indoc v2.0.7
+   Compiling cap-std v4.0.2
+   Compiling rustc-demangle v0.1.28
+   Compiling irpc v0.13.0
+   Compiling owo-colors v4.3.0
+   Compiling litrs v1.0.0
+   Compiling maybe-owned v0.3.4
+   Compiling crunch-nar v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-nar)
+   Compiling gix-diff v0.61.0
+   Compiling gix-dir v0.23.0
+   Compiling num-bigint-dig v0.8.6
+   Compiling linkme-impl v0.3.37
+   Compiling gix-odb v0.78.0
+   Compiling addr2line v0.25.1
+   Compiling document-features v0.2.12
+   Compiling gix-worktree-state v0.28.0
+   Compiling num-iter v0.1.46
+   Compiling signal-hook-mio v0.2.5
+   Compiling gix-archive v0.30.0
+   Compiling pkcs8 v0.10.2
+   Compiling gix-submodule v0.28.0
+   Compiling gix-mailmap v0.32.0
+   Compiling crunch-remote-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-remote-core)
+   Compiling toml_datetime v0.6.11
+   Compiling serde_spanned v0.6.9
+   Compiling syn v3.0.3
+   Compiling hyper v1.9.0
+   Compiling hashbrown v0.17.1
+   Compiling cap-fs-ext v4.0.2
+   Compiling linkme v0.3.37
+   Compiling gix-blame v0.11.0
+   Compiling gix-status v0.28.0
+   Compiling toml_write v0.1.2
+   Compiling unicode-linebreak v0.1.5
+   Compiling is_ci v1.2.0
+   Compiling toml_edit v0.22.27
+   Compiling supports-color v3.0.2
+   Compiling ureq v3.3.0
+   Compiling crossterm v0.29.0
+   Compiling pkcs1 v0.7.5
+   Compiling textwrap v0.16.2
+   Compiling iddqd v0.4.6
+   Compiling rand_chacha v0.9.0
+   Compiling terminal_size v0.4.4
+   Compiling artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling crunch-rust-cache-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-rust-cache-core)
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-source-core)
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be#e41340be)
+   Compiling fuzzy-matcher v0.3.7
+   Compiling miette-derive v7.6.0
+   Compiling supports-unicode v3.0.0
+   Compiling supports-hyperlinks v3.2.0
+   Compiling hyper-util v0.1.20
+   Compiling predicates-core v1.0.10
+   Compiling dyn-clone v1.0.20
+   Compiling rand v0.9.3
+   Compiling valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=e40c76b4d2070a29636e00c85c0dff93f03dba2f#e40c76b4)
+   Compiling rsa v0.9.10
+   Compiling inquire v0.9.4
+   Compiling crunch-glue v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-glue)
+   Compiling crunch-project-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-project-core)
+   Compiling float-cmp v0.10.0
+   Compiling mantle-rust-plan-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/mantle-rust-plan-core)
+   Compiling crunch-shell-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-shell-core)
+   Compiling backtrace v0.3.76
+   Compiling crunch-build-planning-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-build-planning-core)
+   Compiling crunch-resource-policy-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-resource-policy-core)
+   Compiling toml v0.8.23
+   Compiling mantle-application-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/mantle-application-core)
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-wasm-component-core)
+   Compiling hyper-rustls v0.27.7
+   Compiling backtrace-ext v0.2.1
+   Compiling crunch-evaluation-stream-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-evaluation-stream-core)
+   Compiling secrecy v0.10.3
+   Compiling reqwest v0.13.2
+   Compiling miette v7.6.0
+   Compiling etcetera v0.11.0
+   Compiling normalize-line-endings v0.3.0
+   Compiling assert_cmd v2.2.0
+   Compiling difflib v0.4.0
+   Compiling detect-coding-agent v0.1.0
+   Compiling colored v3.1.1
+   Compiling dotenvy v0.15.7
+   Compiling termtree v0.5.1
+   Compiling crunch-delta-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-delta-core)
+   Compiling predicates v3.1.4
+   Compiling predicates-tree v1.0.13
+   Compiling mantle-rust-plan v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/mantle-rust-plan)
+   Compiling mantle-application v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/mantle-application)
+   Compiling crunch-shell v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-shell)
+   Compiling secretspec v0.17.0
+   Compiling crunch-radiance-reference-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-radiance-reference-core)
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-release-core)
+   Compiling bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+   Compiling crunch-remote v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-remote)
+   Compiling chapter-tgz v0.1.0
+   Compiling durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+   Compiling crunch-bootstrap-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-bootstrap-core)
+   Compiling mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/mantlepkgs-core)
+   Compiling nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+   Compiling crunch-hardware-simulation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-hardware-simulation-core)
+   Compiling nix-derivation v0.1.0
+   Compiling crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-eval-budget-core)
+   Compiling mantle-portable-client-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/mantle-portable-client-core)
+   Compiling crunch-kernelscript-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-kernelscript-core)
+   Compiling transactional-reconciliation-core v0.1.0 (https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9#606489b5)
+   Compiling reqwest-middleware v0.5.1
+   Compiling object_store v0.14.0
+   Compiling nickel-lang-parser v0.3.0
+   Compiling nickel-lang-core v0.18.0
+   Compiling gix-transport v0.55.1
+   Compiling reqwest-tracing v0.6.0
+   Compiling crunch-project v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-project)
+   Compiling crunch-wasm-component v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-wasm-component)
+   Compiling snix-tracing v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/vendor/snix-tracing)
+   Compiling crunch-hardware-simulation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-hardware-simulation)
+   Compiling gix-protocol v0.59.0
+   Compiling gix v0.81.0
+   Compiling snix-castore v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/vendor/snix-castore)
+   Compiling malachite-q v0.9.2
+   Compiling malachite-float v0.9.2
+   Compiling malachite v0.9.2
+   Compiling snix-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/vendor/snix-build)
+   Compiling snix-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/vendor/snix-store)
+   Compiling crunch-resource-policy v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-resource-policy)
+   Compiling crunch-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-store)
+   Compiling crunch-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-build)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-rustc-wrapper)
+   Compiling nickel-lang v2.2.0
+   Compiling crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-eval)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 50s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/tmp/mantle-trellis-admission-target/debug/deps/mantle-56e008977d3c9314)
+
+running 14 tests
+test remote_attempt_log_store::tests::committed_durability_unknown_is_neither_failure_nor_success ... ok
+test remote_attempt_log_store::tests::destination_creation_race_cannot_replace_immutable_winner ... ok
+test remote_attempt_log_store::tests::shared_corpus_preserves_all_mechanical_and_mapping_dispositions ... ok
+test remote_attempt_log_store::tests::destination_symlink_race_cannot_redirect_immutable_publish ... ok
+test remote_attempt_log_store::tests::legacy_backend_remains_explicit_without_automatic_fallback ... ok
+test remote_attempt_log_store::tests::immutable_temp_symlinks_are_never_followed ... ok
+test remote_attempt_log_store::tests::shared_backend_accepts_only_identical_existing_content ... ok
+test remote_attempt_log_store::tests::shared_backend_rejects_symlink_destination_and_parent ... ok
+test remote_attempt_log_store::tests::shared_backend_destination_race_keeps_one_immutable_winner ... ok
+test remote_attempt_log_store::tests::manifest_temp_symlinks_are_never_followed ... ok
+test remote_attempt_log_store::tests::symlinked_segment_is_rejected_without_reading_target_bytes ... ok
+test remote_attempt_log_store::tests::manifest_commit_replaces_destination_symlink_without_following_it ... ok
+test remote_attempt_log_store::tests::append_restart_replay_and_retention_use_durable_immutable_files ... ok
+test remote_attempt_log_store::tests::tampered_segment_and_anchor_fail_closed ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 2616 filtered out; finished in 0.05s

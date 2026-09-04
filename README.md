@@ -571,6 +571,7 @@ Useful documentation:
 - [Remote-build hexagon](docs/remote-build-hexagon.md)
 - [Remote service gateway](docs/remote-service-gateway.md)
 - [Evidence-driven remote resource policy](docs/resource-policy.md)
+- [Trellis remote-admission evidence](docs/trellis-remote-admission.md)
 - [CLI application architecture](docs/cli-application-architecture.md)
 - [Portable remote client](docs/portable-remote-client.md)
 - [Mantle naming rules](docs/mantle-naming.md)

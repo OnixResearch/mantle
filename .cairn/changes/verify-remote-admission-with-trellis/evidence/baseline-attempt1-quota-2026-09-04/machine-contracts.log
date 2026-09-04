@@ -1,0 +1,5 @@
+$ cargo -Zscript --offline scripts/check-machine-schema-contracts.rs
+error: failed to create directory `/tmp/mantle-trellis-admission-target/e02392728f0bfd42`
+
+Caused by:
+  Disk quota exceeded (os error 122)

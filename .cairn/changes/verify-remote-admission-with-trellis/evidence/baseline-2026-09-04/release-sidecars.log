@@ -1,0 +1,32 @@
+$ cargo test -p crunch-release-core --lib trellis_proof --offline
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.149
+   Compiling memchr v2.8.0
+   Compiling bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+   Compiling cc v1.2.59
+   Compiling blake3 v1.8.2
+   Compiling syn v2.0.117
+   Compiling serde_derive v1.0.228
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-source-core)
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-release-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.35s
+     Running unittests src/lib.rs (/tmp/mantle-trellis-admission-target/debug/deps/crunch_release_core-dfd4fbe8842e3c0d)
+
+running 7 tests
+test manifest::tests::trellis_proof_optional_mode_accepts_absence_without_observations ... ok
+test manifest::tests::trellis_proof_required_mode_fails_closed_without_accepted_upstream_authority ... ok
+test manifest::tests::trellis_proof_formal_candidate_remains_recorded_only_in_mantle ... ok
+test manifest::tests::validate_keeps_non_trellis_proof_profiles_on_the_generic_contract ... ok
+test manifest::tests::trellis_proof_required_accepted_formal_proof_fixture_passes ... ok
+test manifest::tests::trellis_proof_registered_fixture_is_optional_recorded_only ... ok
+test manifest::tests::trellis_proof_negative_fixture_matrix_fails_closed ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 262 filtered out; finished in 0.01s

@@ -1,0 +1,2 @@
+machine schema contract check failed: remote.trellis-admission-evidence fixtures rejected:
+  - remote.trellis-admission-evidence [schema] /negative-fixtures/4: negative case wrong-valence-role missed class=enum path=/valence/validation_role: actual=[Issue { surface_id: "remote.trellis-admission-evidence", class: "version", path: "/valence/validation_role", message: "expected exact value \"property\"" }]

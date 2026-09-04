@@ -1,0 +1,15 @@
+$ cargo clippy -p crunch-release-core --all-targets --no-deps --offline -- -D warnings
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+    Checking memchr v2.8.0
+    Checking bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103)
+    Checking serde_core v1.0.228
+    Checking blake3 v1.8.2
+    Checking serde v1.0.228
+    Checking serde_json v1.0.149
+    Checking artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+    Checking crunch-source-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-source-core)
+    Checking crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/crates/crunch-release-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.59s

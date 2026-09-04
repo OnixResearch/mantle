@@ -1243,3 +1243,24 @@
 // benchmark, ChaosControl, OnixOS, Valence, architecture, WASM, Nix, and
 // lifecycle checks bind the implementation without claiming future sufficiency,
 // fair billing, host isolation, opaque heuristic authority, or result trust.
+
+// Trellis remote-admission evidence bridge.
+//
+// r[impl remote_builds.trellis_admission_model]
+// r[impl remote_builds.trellis_admission_safety]
+// r[impl remote_builds.trellis_admission_projection]
+// r[impl remote_builds.trellis_admission_evidence_boundary]
+// r[impl remote_builds.trellis_admission_claim_boundary]
+// The pure projection and outcome normalization live under
+// `crates/crunch-build/src/distributed/remote_attempt_trellis/`. The compact
+// oracle records all 6,720 cases from Trellis revision `8de4b24`. Unsupported
+// semantic differences reject before proof coverage. Runtime admission still
+// calls `plan_remote_attempt_report` without reading formal evidence.
+//
+// r[verify remote_builds.trellis_admission_model]
+// r[verify remote_builds.trellis_admission_safety]
+// r[verify remote_builds.trellis_admission_projection]
+// r[verify remote_builds.trellis_admission_evidence_boundary]
+// r[verify remote_builds.trellis_admission_claim_boundary]
+// Matrix, drift, mutation, source, claim, machine-contract, Kamacite, Valence,
+// Trellis, Nix, and lifecycle checks retain the bounded claim.

@@ -1,0 +1,77 @@
+{
+  "schema": "mantle-trellis-verifier-receipt-v1",
+  "producer": "github.com/OnixResearch/trellis",
+  "repository_revision": "8de4b24aa2d66cc2e6ec966d686df023492265d3",
+  "verification_status": "passed",
+  "commands": [
+    "cargo test fenced_attempt_admission -- --nocapture",
+    "./scripts/verus.sh src/lib.rs",
+    "./scripts/verify.rs"
+  ],
+  "focused": {
+    "verus_verified": 23,
+    "verus_errors": 0,
+    "tests_passed": 17,
+    "tests_failed": 0
+  },
+  "full": {
+    "verus_verified": 10992,
+    "verus_errors": 0,
+    "tests_passed": 5118,
+    "tracey_uncovered": 0,
+    "tracey_untested": 0
+  },
+  "proof_gap_inventory": {
+    "external_body": 16,
+    "assume_specification": 0,
+    "no_ensures": 0,
+    "runtime_exempt": 0,
+    "assume_call": 0,
+    "fenced_attempt_external_body": 0
+  },
+  "consumer_profile": {
+    "modules": 39,
+    "artifacts": 42,
+    "fixtures": 10,
+    "status": "passed"
+  },
+  "toolchain": {
+    "octet_revision": "374bd16b26cee2af34211a29bfa531c016811f51",
+    "profile_id": "octet-verus-0.2026.05.17.e479cce",
+    "verifier_release": "0.2026.05.17.e479cce",
+    "verifier_source_revision": "e479cce36490b8fa4b0fd7755aa742aec354372c",
+    "rustc": "/nix/store/gbrj4zlys951xy55wqwr74m0kmiz6xr1-rust-default-1.96.0-nightly-2026-03-21/bin/rustc",
+    "proof_source": "/nix/store/n2m6cr94fg56zqhj3hw82xjci322d0sk-trellis-verus-proof-source"
+  },
+  "artifacts": [
+    {
+      "role": "focused-verus-log",
+      "blake3": "14b4b3d41fc4fe07a4e4ddc25eda4432d27a456653abb5155e3150c6d0b8b5c8"
+    },
+    {
+      "role": "focused-test-log",
+      "blake3": "57d53ec8002f1e044005b37e6248736072f5285cd77ef94576811a9e5d88b83b"
+    },
+    {
+      "role": "full-verification-log",
+      "blake3": "02a1d975e4c3383f82321339a709c166b21c3953929f00678c8ce8d43095a4fd"
+    },
+    {
+      "role": "consumer-profile-log",
+      "blake3": "cfca683c757da617a989dc0919d8ee7f662aae658ae9ae8dab64ee324ade63e9"
+    },
+    {
+      "role": "verification-summary",
+      "blake3": "2193ad5d232573af07ee1d9cf6c9dc331a37d2524fe147377d32e1027755b15f"
+    }
+  ],
+  "assumptions": [
+    "The reported commands used the source at the recorded Trellis revision.",
+    "The Verus verifier, Z3 solver, Rust compiler, vstd library, and Nix evaluation are trusted boundaries."
+  ],
+  "non_claims": [
+    "This receipt does not prove verifier soundness.",
+    "This receipt does not prove Mantle source equivalence.",
+    "This receipt does not prove transport, persistence, cryptography, worker behavior, liveness, build correctness, or release eligibility."
+  ]
+}

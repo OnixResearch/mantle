@@ -46,6 +46,7 @@ pub const MAX_GATEWAY_CAPABILITIES: u32 = 16;
 pub const MAX_GATEWAY_EVIDENCE_REFS: u32 = 32;
 pub const MAX_GATEWAY_USAGE_ITEMS: u32 = 4_096;
 const BLAKE3_HEX_LENGTH: usize = 64;
+const NIX_STORE_DIGEST_HEX_LENGTH: usize = 40;
 const CURSOR_PART_COUNT: usize = 5;
 const COMPLETION_EVENT_DOMAIN: &[u8] = b"mantle-remote-completion-event-v1";
 const ATTEMPT_ID_DOMAIN: &[u8] = b"mantle-remote-gateway-attempt-v1";
@@ -373,6 +374,8 @@ pub fn validate_gateway_policy(policy: &GatewayPolicy) -> Result<(), GatewayReje
             ));
         }
     }
+    debug_assert!(is_blake3_hex(&policy.policy_identity_blake3));
+    debug_assert!(bounded_text(&policy.audience));
     Ok(())
 }
 
@@ -397,6 +400,8 @@ fn validate_bounds(bounds: GatewayBounds) -> Result<(), GatewayRejection> {
     {
         return Err(reject(GatewayRejectCode::PolicyInvalid, "gateway-policy-transfer-bound-invalid"));
     }
+    debug_assert!(fixed_u32.iter().all(|(value, maximum)| *value > 0 && value <= maximum));
+    debug_assert!(bounds.idle_secs_max > 0 && bounds.idle_secs_max <= MAX_GATEWAY_IDLE_SECS);
     Ok(())
 }
 
@@ -436,8 +441,10 @@ pub fn validate_gateway_authority(
     if authority.expires_unix_s <= now_unix_s {
         return Err(reject(GatewayRejectCode::AuthorityExpired, "gateway-authority-expired"));
     }
-    let capability_count = u32::try_from(authority.capabilities.len()).unwrap_or(u32::MAX);
-    let evidence_count = u32::try_from(authority.evidence_refs_blake3.len()).unwrap_or(u32::MAX);
+    let capability_count = u32::try_from(authority.capabilities.len())
+        .map_err(|_| reject(GatewayRejectCode::AuthorityInvalid, "gateway-authority-capability-count-invalid"))?;
+    let evidence_count = u32::try_from(authority.evidence_refs_blake3.len())
+        .map_err(|_| reject(GatewayRejectCode::AuthorityInvalid, "gateway-authority-evidence-count-invalid"))?;
     if capability_count == 0 || capability_count > MAX_GATEWAY_CAPABILITIES {
         return Err(reject(GatewayRejectCode::AuthorityInvalid, "gateway-authority-capability-count-invalid"));
     }
@@ -449,6 +456,8 @@ pub fn validate_gateway_authority(
     {
         return Err(reject(GatewayRejectCode::AuthorityInvalid, "gateway-authority-capability-or-evidence-invalid"));
     }
+    debug_assert_eq!(authority.audience, policy.audience);
+    debug_assert!(authority.expires_unix_s > now_unix_s);
     Ok(())
 }
 
@@ -499,7 +508,7 @@ fn translate_operation(
             concrete_derivation_path,
             input_paths,
             expected_output_paths,
-        } => translate_submit(
+        } => translate_submit(GatewaySubmitTranslation {
             request_identity_blake3,
             idempotency_key,
             concrete_derivation_path,
@@ -507,7 +516,7 @@ fn translate_operation(
             expected_output_paths,
             authority,
             policy,
-        ),
+        }),
         GatewayOperation::ReadStatus { attempt_id } => Ok(GatewayCommand::ReadAttemptStatus {
             attempt_id: parse_attempt_id(attempt_id)?,
         }),
@@ -537,7 +546,9 @@ fn translate_operation(
             result_identity_blake3,
         } => translate_publish(attempt_id, result_identity_blake3),
         GatewayOperation::AdministerService { action } => {
-            require_bounded_text(&action, "gateway-administration-action-invalid")?;
+            if !bounded_text(&action) || looks_sensitive(&action) {
+                return Err(reject(GatewayRejectCode::RequestInvalid, "gateway-administration-action-invalid"));
+            }
             Ok(GatewayCommand::AdministerService { action })
         }
         GatewayOperation::Unsupported { .. } => {
@@ -580,36 +591,39 @@ fn translate_upload(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
-fn translate_submit(
+struct GatewaySubmitTranslation<'a> {
     request_identity_blake3: String,
     idempotency_key: String,
     concrete_derivation_path: String,
     input_paths: Vec<String>,
     expected_output_paths: Vec<String>,
-    authority: &RemoteGatewayAuthority,
-    policy: &GatewayPolicy,
-) -> Result<GatewayCommand, GatewayRejection> {
-    if !is_blake3_hex(&request_identity_blake3) || !bounded_text(&idempotency_key) {
+    authority: &'a RemoteGatewayAuthority,
+    policy: &'a GatewayPolicy,
+}
+
+fn translate_submit(input: GatewaySubmitTranslation<'_>) -> Result<GatewayCommand, GatewayRejection> {
+    if !is_blake3_hex(&input.request_identity_blake3) || !bounded_text(&input.idempotency_key) {
         return Err(reject(GatewayRejectCode::RequestInvalid, "gateway-build-identity-or-idempotency-invalid"));
     }
-    require_store_path(&concrete_derivation_path)?;
-    if !concrete_derivation_path.ends_with(".drv") {
+    require_store_path(&input.concrete_derivation_path)?;
+    if !input.concrete_derivation_path.ends_with(".drv") {
         return Err(reject(GatewayRejectCode::RequestInvalid, "gateway-build-concrete-derivation-required"));
     }
-    validate_path_set(&input_paths, policy.bounds.paths_max)?;
-    validate_path_set(&expected_output_paths, policy.bounds.paths_max)?;
-    let attempt_id = derive_gateway_attempt_id(
-        &authority.subject,
-        &authority.account_scope,
-        &idempotency_key,
-        &request_identity_blake3,
-    )?;
+    validate_path_set(&input.input_paths, input.policy.bounds.paths_max)?;
+    validate_path_set(&input.expected_output_paths, input.policy.bounds.paths_max)?;
+    debug_assert!(is_blake3_hex(&input.request_identity_blake3));
+    debug_assert!(input.concrete_derivation_path.ends_with(".drv"));
+    let attempt_id = derive_gateway_attempt_id(GatewayAttemptIdentityInput {
+        subject: &input.authority.subject,
+        account_scope: &input.authority.account_scope,
+        idempotency_key: &input.idempotency_key,
+        request_identity_blake3: &input.request_identity_blake3,
+    })?;
     Ok(GatewayCommand::SubmitRemoteAttempt {
         attempt_id,
-        request_identity_blake3,
-        idempotency_key,
-        concrete_derivation_path,
+        request_identity_blake3: input.request_identity_blake3,
+        idempotency_key: input.idempotency_key,
+        concrete_derivation_path: input.concrete_derivation_path,
     })
 }
 
@@ -722,12 +736,14 @@ pub fn decide_gateway_submission(
             attempt_id: attempt_id.clone(),
         });
     };
-    let exact = existing.attempt_id == *attempt_id
+    debug_assert!(matches!(command, GatewayCommand::SubmitRemoteAttempt { .. }));
+    debug_assert!(!attempt_id.as_str().is_empty());
+    let is_exact = existing.attempt_id == *attempt_id
         && existing.subject == authority.subject
         && existing.account_scope == authority.account_scope
         && existing.idempotency_key == *idempotency_key
         && existing.request_identity_blake3 == *request_identity_blake3;
-    if !exact {
+    if !is_exact {
         return Err(reject(GatewayRejectCode::IdempotencyConflict, "gateway-idempotency-conflict"));
     }
     Ok(GatewaySubmissionDecision::Recover {
@@ -780,21 +796,24 @@ pub struct GatewayCursor {
     pub expires_unix_s: u64,
 }
 
-pub fn seal_gateway_cursor(
-    scope: GatewayCursorScope<'_>,
-    next_sequence: u64,
-    expires_unix_s: u64,
-    key: &[u8; 32],
-) -> Result<String, GatewayRejection> {
-    if next_sequence == 0 || expires_unix_s == 0 {
+#[derive(Debug)]
+pub struct GatewayCursorSealInput<'a> {
+    pub scope: GatewayCursorScope<'a>,
+    pub next_sequence: u64,
+    pub expires_unix_s: u64,
+    pub key: &'a [u8; 32],
+}
+
+pub fn seal_gateway_cursor(input: GatewayCursorSealInput<'_>) -> Result<String, GatewayRejection> {
+    if input.next_sequence == 0 || input.expires_unix_s == 0 {
         return Err(reject(GatewayRejectCode::CursorInvalid, "gateway-cursor-sequence-or-expiry-invalid"));
     }
-    let scope_digest = gateway_cursor_scope_digest(&scope)?;
-    let material = format!("{GATEWAY_CURSOR_SCHEMA}.{next_sequence}.{expires_unix_s}.{scope_digest}");
-    let mac = gateway_cursor_mac(key, &material);
+    let scope_digest = gateway_cursor_scope_digest(&input.scope)?;
+    let material = format!("{GATEWAY_CURSOR_SCHEMA}.{}.{}.{}", input.next_sequence, input.expires_unix_s, scope_digest);
+    let mac = gateway_cursor_mac(input.key, &material);
     let token = format!("{material}.{mac}");
     debug_assert!(token.starts_with(GATEWAY_CURSOR_SCHEMA));
-    debug_assert!(!token.contains(scope.subject));
+    debug_assert!(!token.contains(input.scope.subject));
     Ok(token)
 }
 
@@ -804,7 +823,9 @@ pub fn verify_gateway_cursor(
     now_unix_s: u64,
     key: &[u8; 32],
 ) -> Result<GatewayCursor, GatewayRejection> {
-    if token.len() > usize::try_from(MAX_GATEWAY_CURSOR_BYTES).unwrap_or(usize::MAX) {
+    let cursor_bytes_max = usize::try_from(MAX_GATEWAY_CURSOR_BYTES)
+        .map_err(|_| reject(GatewayRejectCode::CursorInvalid, "gateway-cursor-bound-invalid"))?;
+    if token.len() > cursor_bytes_max {
         return Err(reject(GatewayRejectCode::CursorInvalid, "gateway-cursor-too-large"));
     }
     let parts = token.split('.').collect::<Vec<_>>();
@@ -828,6 +849,8 @@ pub fn verify_gateway_cursor(
     if next_sequence == 0 || expires_unix_s <= now_unix_s {
         return Err(reject(GatewayRejectCode::CursorExpired, "gateway-cursor-expired"));
     }
+    debug_assert!(next_sequence > 0);
+    debug_assert!(expires_unix_s > now_unix_s);
     Ok(GatewayCursor {
         next_sequence,
         expires_unix_s,
@@ -840,10 +863,10 @@ fn gateway_cursor_scope_digest(scope: &GatewayCursorScope<'_>) -> Result<String,
     }
     let mut hasher = blake3::Hasher::new();
     hasher.update(CURSOR_SCOPE_DOMAIN);
-    hash_text(&mut hasher, scope.subject);
-    hash_text(&mut hasher, scope.account_scope);
-    hash_text(&mut hasher, scope.attempt_id.as_str());
-    hash_text(&mut hasher, scope.stream);
+    hash_text(&mut hasher, scope.subject)?;
+    hash_text(&mut hasher, scope.account_scope)?;
+    hash_text(&mut hasher, scope.attempt_id.as_str())?;
+    hash_text(&mut hasher, scope.stream)?;
     Ok(hasher.finalize().to_hex().to_string())
 }
 
@@ -883,38 +906,41 @@ pub struct SignedGatewayCompletionEvent {
     pub signature: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GatewayCompletionPlanInput {
+    pub attempt_id: RemoteAttemptId,
+    pub request_identity_blake3: String,
+    pub terminal_class: GatewayTerminalClass,
+    pub result_evidence_identity_blake3: Option<String>,
+    pub policy_identity_blake3: String,
+    pub sequence: u64,
+}
+
 // r[impl remote_builds.idempotent_completion_events]
 pub fn plan_gateway_completion_event(
-    attempt_id: RemoteAttemptId,
-    request_identity_blake3: String,
-    terminal_class: GatewayTerminalClass,
-    result_evidence_identity_blake3: Option<String>,
-    policy_identity_blake3: String,
-    sequence: u64,
+    input: GatewayCompletionPlanInput,
 ) -> Result<GatewayCompletionEvent, GatewayRejection> {
-    if !is_blake3_hex(&request_identity_blake3) || !is_blake3_hex(&policy_identity_blake3) || sequence == 0 {
+    if !is_blake3_hex(&input.request_identity_blake3)
+        || !is_blake3_hex(&input.policy_identity_blake3)
+        || input.sequence == 0
+    {
         return Err(reject(GatewayRejectCode::CompletionEventInvalid, "gateway-completion-base-facts-invalid"));
     }
-    if result_evidence_identity_blake3.as_deref().is_some_and(|value| !is_blake3_hex(value)) {
+    if input.result_evidence_identity_blake3.as_deref().is_some_and(|value| !is_blake3_hex(value)) {
         return Err(reject(GatewayRejectCode::CompletionEventInvalid, "gateway-completion-result-evidence-invalid"));
     }
-    let identity = completion_event_identity(
-        &attempt_id,
-        &request_identity_blake3,
-        terminal_class,
-        result_evidence_identity_blake3.as_deref(),
-        &policy_identity_blake3,
-        sequence,
-    );
+    debug_assert!(is_blake3_hex(&input.request_identity_blake3));
+    debug_assert!(is_blake3_hex(&input.policy_identity_blake3));
+    let identity = completion_event_identity(&input)?;
     Ok(GatewayCompletionEvent {
         schema: GATEWAY_COMPLETION_EVENT_SCHEMA.to_string(),
         event_identity_blake3: identity,
-        attempt_id,
-        request_identity_blake3,
-        terminal_class,
-        result_evidence_identity_blake3,
-        policy_identity_blake3,
-        sequence,
+        attempt_id: input.attempt_id,
+        request_identity_blake3: input.request_identity_blake3,
+        terminal_class: input.terminal_class,
+        result_evidence_identity_blake3: input.result_evidence_identity_blake3,
+        policy_identity_blake3: input.policy_identity_blake3,
+        sequence: input.sequence,
     })
 }
 
@@ -933,23 +959,16 @@ pub fn bind_gateway_completion_signature(
     })
 }
 
-fn completion_event_identity(
-    attempt_id: &RemoteAttemptId,
-    request_identity_blake3: &str,
-    terminal_class: GatewayTerminalClass,
-    result_evidence_identity_blake3: Option<&str>,
-    policy_identity_blake3: &str,
-    sequence: u64,
-) -> String {
+fn completion_event_identity(input: &GatewayCompletionPlanInput) -> Result<String, GatewayRejection> {
     let mut hasher = blake3::Hasher::new();
     hasher.update(COMPLETION_EVENT_DOMAIN);
-    hash_text(&mut hasher, attempt_id.as_str());
-    hash_text(&mut hasher, request_identity_blake3);
-    hash_text(&mut hasher, terminal_class_label(terminal_class));
-    hash_text(&mut hasher, result_evidence_identity_blake3.unwrap_or("none"));
-    hash_text(&mut hasher, policy_identity_blake3);
-    hasher.update(&sequence.to_le_bytes());
-    hasher.finalize().to_hex().to_string()
+    hash_text(&mut hasher, input.attempt_id.as_str())?;
+    hash_text(&mut hasher, &input.request_identity_blake3)?;
+    hash_text(&mut hasher, terminal_class_label(input.terminal_class))?;
+    hash_text(&mut hasher, input.result_evidence_identity_blake3.as_deref().unwrap_or("none"))?;
+    hash_text(&mut hasher, &input.policy_identity_blake3)?;
+    hasher.update(&input.sequence.to_le_bytes());
+    Ok(hasher.finalize().to_hex().to_string())
 }
 
 fn terminal_class_label(class: GatewayTerminalClass) -> &'static str {
@@ -992,53 +1011,56 @@ pub struct GatewayEvidence {
     pub non_claims: Vec<String>,
 }
 
-pub fn gateway_evidence(
-    policy: &GatewayPolicy,
-    authority: &RemoteGatewayAuthority,
-    operation: &GatewayOperation,
-    attempt_id: Option<&RemoteAttemptId>,
-    transferred_bytes: u64,
-    stable_outcome: String,
-) -> Result<GatewayEvidence, GatewayRejection> {
-    validate_gateway_policy(policy)?;
-    if !bounded_text(&stable_outcome) || looks_sensitive(&stable_outcome) {
+#[derive(Debug)]
+pub struct GatewayEvidenceInput<'a> {
+    pub policy: &'a GatewayPolicy,
+    pub authority: &'a RemoteGatewayAuthority,
+    pub operation: &'a GatewayOperation,
+    pub attempt_id: Option<&'a RemoteAttemptId>,
+    pub transferred_bytes: u64,
+    pub stable_outcome: String,
+}
+
+pub fn gateway_evidence(input: GatewayEvidenceInput<'_>) -> Result<GatewayEvidence, GatewayRejection> {
+    validate_gateway_policy(input.policy)?;
+    if !bounded_text(&input.stable_outcome) || looks_sensitive(&input.stable_outcome) {
         return Err(reject(GatewayRejectCode::SensitiveEvidenceRejected, "gateway-evidence-outcome-sensitive"));
     }
-    let operation_identity_blake3 = gateway_operation_identity(operation)?;
-    let operation_class = operation_class(operation).to_string();
-    let attempt = attempt_id.map(|value| value.as_str().to_string());
-    let identity = evidence_identity(
-        &policy.policy_identity_blake3,
-        &authority.evidence_refs_blake3,
-        &operation_identity_blake3,
-        attempt.as_deref(),
-        transferred_bytes,
-        &stable_outcome,
-    );
+    let operation_identity_blake3 = gateway_operation_identity(input.operation)?;
+    let operation_class = operation_class(input.operation).to_string();
+    let attempt = input.attempt_id.map(|value| value.as_str().to_string());
+    let identity = evidence_identity(EvidenceIdentityInput {
+        policy_identity: &input.policy.policy_identity_blake3,
+        authority_refs: &input.authority.evidence_refs_blake3,
+        operation_identity: &operation_identity_blake3,
+        attempt_id: attempt.as_deref(),
+        transferred_bytes: input.transferred_bytes,
+        outcome: &input.stable_outcome,
+    })?;
     let non_claims = GATEWAY_NON_CLAIMS.iter().map(|value| (*value).to_string()).collect::<Vec<_>>();
     let valence_observation = GatewayValenceObservation {
         schema: GATEWAY_VALENCE_OBSERVATION_SCHEMA.to_string(),
         profile_id: VALENCE_BUILD_SERVICE_PROFILE_ID.to_string(),
         source_evidence_identity_blake3: identity.clone(),
-        producer_policy_identity_blake3: policy.policy_identity_blake3.clone(),
-        authority_evidence_refs_blake3: authority.evidence_refs_blake3.clone(),
+        producer_policy_identity_blake3: input.policy.policy_identity_blake3.clone(),
+        authority_evidence_refs_blake3: input.authority.evidence_refs_blake3.clone(),
         operation_class: operation_class.clone(),
         attempt_id: attempt.clone(),
-        transferred_bytes,
-        stable_outcome: stable_outcome.clone(),
+        transferred_bytes: input.transferred_bytes,
+        stable_outcome: input.stable_outcome.clone(),
         role: VALENCE_BUILD_SERVICE_RECORDED_ONLY_ROLE.to_string(),
         non_claims: vec![VALENCE_BUILD_SERVICE_REQUIRED_NON_CLAIM.to_string()],
     };
     let evidence = GatewayEvidence {
         schema: GATEWAY_EVIDENCE_SCHEMA.to_string(),
         evidence_identity_blake3: identity,
-        policy_identity_blake3: policy.policy_identity_blake3.clone(),
-        authority_evidence_refs_blake3: authority.evidence_refs_blake3.clone(),
+        policy_identity_blake3: input.policy.policy_identity_blake3.clone(),
+        authority_evidence_refs_blake3: input.authority.evidence_refs_blake3.clone(),
         operation_identity_blake3,
         operation_class,
         attempt_id: attempt,
-        transferred_bytes,
-        stable_outcome,
+        transferred_bytes: input.transferred_bytes,
+        stable_outcome: input.stable_outcome,
         valence_observation,
         non_claims,
     };
@@ -1047,13 +1069,16 @@ pub fn gateway_evidence(
     if looks_sensitive(&encoded) {
         return Err(reject(GatewayRejectCode::SensitiveEvidenceRejected, "gateway-evidence-sensitive-content"));
     }
+    debug_assert_eq!(evidence.schema, GATEWAY_EVIDENCE_SCHEMA);
+    debug_assert!(is_blake3_hex(&evidence.evidence_identity_blake3));
     Ok(evidence)
 }
 
 pub fn gateway_operation_identity(operation: &GatewayOperation) -> Result<String, GatewayRejection> {
     let bytes = serde_json::to_vec(operation)
         .map_err(|_| reject(GatewayRejectCode::RequestInvalid, "gateway-operation-serialization-failed"))?;
-    let byte_count = u32::try_from(bytes.len()).unwrap_or(u32::MAX);
+    let byte_count = u32::try_from(bytes.len())
+        .map_err(|_| reject(GatewayRejectCode::RequestTooLarge, "gateway-operation-serialized-size-invalid"))?;
     if byte_count == 0 || byte_count > MAX_GATEWAY_MESSAGE_BYTES {
         return Err(reject(GatewayRejectCode::RequestTooLarge, "gateway-operation-serialized-size-invalid"));
     }
@@ -1063,25 +1088,27 @@ pub fn gateway_operation_identity(operation: &GatewayOperation) -> Result<String
     Ok(hasher.finalize().to_hex().to_string())
 }
 
-fn evidence_identity(
-    policy_identity: &str,
-    authority_refs: &[String],
-    operation_identity: &str,
-    attempt_id: Option<&str>,
+struct EvidenceIdentityInput<'a> {
+    policy_identity: &'a str,
+    authority_refs: &'a [String],
+    operation_identity: &'a str,
+    attempt_id: Option<&'a str>,
     transferred_bytes: u64,
-    outcome: &str,
-) -> String {
+    outcome: &'a str,
+}
+
+fn evidence_identity(input: EvidenceIdentityInput<'_>) -> Result<String, GatewayRejection> {
     let mut hasher = blake3::Hasher::new();
     hasher.update(EVIDENCE_IDENTITY_DOMAIN);
-    hash_text(&mut hasher, policy_identity);
-    for reference in authority_refs {
-        hash_text(&mut hasher, reference);
+    hash_text(&mut hasher, input.policy_identity)?;
+    for reference in input.authority_refs {
+        hash_text(&mut hasher, reference)?;
     }
-    hash_text(&mut hasher, operation_identity);
-    hash_text(&mut hasher, attempt_id.unwrap_or("none"));
-    hasher.update(&transferred_bytes.to_le_bytes());
-    hash_text(&mut hasher, outcome);
-    hasher.finalize().to_hex().to_string()
+    hash_text(&mut hasher, input.operation_identity)?;
+    hash_text(&mut hasher, input.attempt_id.unwrap_or("none"))?;
+    hasher.update(&input.transferred_bytes.to_le_bytes());
+    hash_text(&mut hasher, input.outcome)?;
+    Ok(hasher.finalize().to_hex().to_string())
 }
 
 fn operation_class(operation: &GatewayOperation) -> &'static str {
@@ -1103,18 +1130,21 @@ fn operation_class(operation: &GatewayOperation) -> &'static str {
     }
 }
 
-pub fn derive_gateway_attempt_id(
-    subject: &str,
-    account_scope: &str,
-    idempotency_key: &str,
-    request_identity_blake3: &str,
-) -> Result<RemoteAttemptId, GatewayRejection> {
+#[derive(Debug, Clone, Copy)]
+pub struct GatewayAttemptIdentityInput<'a> {
+    pub subject: &'a str,
+    pub account_scope: &'a str,
+    pub idempotency_key: &'a str,
+    pub request_identity_blake3: &'a str,
+}
+
+pub fn derive_gateway_attempt_id(input: GatewayAttemptIdentityInput<'_>) -> Result<RemoteAttemptId, GatewayRejection> {
     let mut hasher = blake3::Hasher::new();
     hasher.update(ATTEMPT_ID_DOMAIN);
-    hash_text(&mut hasher, subject);
-    hash_text(&mut hasher, account_scope);
-    hash_text(&mut hasher, idempotency_key);
-    hash_text(&mut hasher, request_identity_blake3);
+    hash_text(&mut hasher, input.subject)?;
+    hash_text(&mut hasher, input.account_scope)?;
+    hash_text(&mut hasher, input.idempotency_key)?;
+    hash_text(&mut hasher, input.request_identity_blake3)?;
     RemoteAttemptId::new(format!("gateway-{}", hasher.finalize().to_hex()))
         .map_err(|_| reject(GatewayRejectCode::RequestInvalid, "gateway-attempt-identity-invalid"))
 }
@@ -1125,7 +1155,8 @@ fn parse_attempt_id(value: String) -> Result<RemoteAttemptId, GatewayRejection> 
 }
 
 fn validate_path_set(paths: &[String], maximum: u32) -> Result<(), GatewayRejection> {
-    let count = u32::try_from(paths.len()).unwrap_or(u32::MAX);
+    let count = u32::try_from(paths.len())
+        .map_err(|_| reject(GatewayRejectCode::RequestTooLarge, "gateway-path-count-invalid"))?;
     if count == 0 || count > maximum {
         return Err(reject(GatewayRejectCode::RequestTooLarge, "gateway-path-count-invalid"));
     }
@@ -1142,31 +1173,33 @@ fn validate_cursor_size(cursor: Option<&str>, maximum: u32) -> Result<(), Gatewa
     let Some(cursor) = cursor else {
         return Ok(());
     };
-    let length = u32::try_from(cursor.len()).unwrap_or(u32::MAX);
-    if length == 0 || length > maximum {
+    let length_bytes = u32::try_from(cursor.len())
+        .map_err(|_| reject(GatewayRejectCode::CursorInvalid, "gateway-cursor-size-invalid"))?;
+    if length_bytes == 0 || length_bytes > maximum {
         return Err(reject(GatewayRejectCode::CursorInvalid, "gateway-cursor-size-invalid"));
     }
     Ok(())
 }
 
 fn require_store_path(path: &str) -> Result<(), GatewayRejection> {
-    let valid_prefix = path.starts_with("/nix/store/") || path.starts_with("/mantle/store/");
-    if !valid_prefix || !bounded_text(path) || path.contains("..") || path.chars().any(char::is_whitespace) {
+    let is_valid_prefix = path.starts_with("/nix/store/") || path.starts_with("/mantle/store/");
+    if !is_valid_prefix {
+        return Err(reject(GatewayRejectCode::RequestInvalid, "gateway-store-path-invalid"));
+    }
+    if !bounded_text(path) || path.contains("..") {
+        return Err(reject(GatewayRejectCode::RequestInvalid, "gateway-store-path-invalid"));
+    }
+    if path.chars().any(char::is_whitespace) {
         return Err(reject(GatewayRejectCode::RequestInvalid, "gateway-store-path-invalid"));
     }
     Ok(())
 }
 
-fn require_bounded_text(value: &str, message: &str) -> Result<(), GatewayRejection> {
-    if !bounded_text(value) || looks_sensitive(value) {
-        return Err(reject(GatewayRejectCode::RequestInvalid, message));
-    }
-    Ok(())
-}
-
 fn bounded_text(value: &str) -> bool {
-    let length = u32::try_from(value.len()).unwrap_or(u32::MAX);
-    length > 0 && length <= MAX_GATEWAY_TEXT_BYTES && !value.chars().any(char::is_control)
+    let Ok(length_bytes) = u32::try_from(value.len()) else {
+        return false;
+    };
+    length_bytes > 0 && length_bytes <= MAX_GATEWAY_TEXT_BYTES && !value.chars().any(char::is_control)
 }
 
 fn sorted_unique<T: Ord>(values: &[T]) -> bool {
@@ -1182,7 +1215,8 @@ fn is_sha256_hex(value: &str) -> bool {
 }
 
 fn is_store_digest_hex(value: &str) -> bool {
-    value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    value.len() == NIX_STORE_DIGEST_HEX_LENGTH
+        && value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn looks_sensitive(value: &str) -> bool {
@@ -1190,10 +1224,12 @@ fn looks_sensitive(value: &str) -> bool {
     SECRET_MARKERS.iter().any(|marker| lower.contains(marker))
 }
 
-fn hash_text(hasher: &mut blake3::Hasher, value: &str) {
-    let length = u64::try_from(value.len()).unwrap_or(u64::MAX);
-    hasher.update(&length.to_le_bytes());
+fn hash_text(hasher: &mut blake3::Hasher, value: &str) -> Result<(), GatewayRejection> {
+    let length_bytes = u64::try_from(value.len())
+        .map_err(|_| reject(GatewayRejectCode::RequestTooLarge, "gateway-text-length-overflow"))?;
+    hasher.update(&length_bytes.to_le_bytes());
     hasher.update(value.as_bytes());
+    Ok(())
 }
 
 fn reject(code: GatewayRejectCode, message: &str) -> GatewayRejection {
@@ -1606,7 +1642,13 @@ mod tests {
             attempt_id: &attempt,
             stream: "events",
         };
-        let token = seal_gateway_cursor(scope(), 2, NOW + 60, &key).unwrap();
+        let token = seal_gateway_cursor(GatewayCursorSealInput {
+            scope: scope(),
+            next_sequence: 2,
+            expires_unix_s: NOW + 60,
+            key: &key,
+        })
+        .unwrap();
         let verified = verify_gateway_cursor(&token, scope(), NOW, &key).unwrap();
         assert_eq!(verified.next_sequence, 2);
         assert!(!token.contains("subject-a"));
@@ -1622,7 +1664,13 @@ mod tests {
             attempt_id: &attempt,
             stream,
         };
-        let token = seal_gateway_cursor(scope("events"), 2, NOW + 60, &key).unwrap();
+        let token = seal_gateway_cursor(GatewayCursorSealInput {
+            scope: scope("events"),
+            next_sequence: 2,
+            expires_unix_s: NOW + 60,
+            key: &key,
+        })
+        .unwrap();
         let forged = format!("{}0", &token[..token.len() - 1]);
         assert_eq!(
             verify_gateway_cursor(&forged, scope("events"), NOW, &key).unwrap_err().code,
@@ -1640,24 +1688,24 @@ mod tests {
 
     #[test]
     fn completion_event_identity_is_stable_and_sequence_sensitive() {
-        let first = plan_gateway_completion_event(
-            attempt(),
-            digest("request"),
-            GatewayTerminalClass::Completed,
-            Some(digest("result")),
-            policy().policy_identity_blake3,
-            3,
-        )
+        let first = plan_gateway_completion_event(GatewayCompletionPlanInput {
+            attempt_id: attempt(),
+            request_identity_blake3: digest("request"),
+            terminal_class: GatewayTerminalClass::Completed,
+            result_evidence_identity_blake3: Some(digest("result")),
+            policy_identity_blake3: policy().policy_identity_blake3,
+            sequence: 3,
+        })
         .unwrap();
         let duplicate = first.clone();
-        let next = plan_gateway_completion_event(
-            attempt(),
-            digest("request"),
-            GatewayTerminalClass::Completed,
-            Some(digest("result")),
-            policy().policy_identity_blake3,
-            4,
-        )
+        let next = plan_gateway_completion_event(GatewayCompletionPlanInput {
+            attempt_id: attempt(),
+            request_identity_blake3: digest("request"),
+            terminal_class: GatewayTerminalClass::Completed,
+            result_evidence_identity_blake3: Some(digest("result")),
+            policy_identity_blake3: policy().policy_identity_blake3,
+            sequence: 4,
+        })
         .unwrap();
         assert_eq!(first.event_identity_blake3, duplicate.event_identity_blake3);
         assert_ne!(first.event_identity_blake3, next.event_identity_blake3);
@@ -1665,14 +1713,14 @@ mod tests {
 
     #[test]
     fn completion_event_requires_external_signature_binding() {
-        let event = plan_gateway_completion_event(
-            attempt(),
-            digest("request"),
-            GatewayTerminalClass::Failed,
-            None,
-            policy().policy_identity_blake3,
-            1,
-        )
+        let event = plan_gateway_completion_event(GatewayCompletionPlanInput {
+            attempt_id: attempt(),
+            request_identity_blake3: digest("request"),
+            terminal_class: GatewayTerminalClass::Failed,
+            result_evidence_identity_blake3: None,
+            policy_identity_blake3: policy().policy_identity_blake3,
+            sequence: 1,
+        })
         .unwrap();
         assert!(bind_gateway_completion_signature(event.clone(), "gateway-key".into(), "signature".into()).is_ok());
         assert_eq!(
@@ -1685,7 +1733,15 @@ mod tests {
     fn evidence_is_redacted_bounded_and_keeps_non_claims() {
         let auth = authority(GatewayAuthoritySource::VerifiedUcan);
         let operation = build_operation();
-        let evidence = gateway_evidence(&policy(), &auth, &operation, Some(&attempt()), 42, "admitted".into()).unwrap();
+        let evidence = gateway_evidence(GatewayEvidenceInput {
+            policy: &policy(),
+            authority: &auth,
+            operation: &operation,
+            attempt_id: Some(&attempt()),
+            transferred_bytes: 42,
+            stable_outcome: "admitted".into(),
+        })
+        .unwrap();
         let encoded = serde_json::to_string(&evidence).unwrap();
         assert_eq!(evidence.non_claims.len(), GATEWAY_NON_CLAIMS.len());
         assert_eq!(evidence.valence_observation.profile_id, VALENCE_BUILD_SERVICE_PROFILE_ID);
@@ -1699,8 +1755,15 @@ mod tests {
     #[test]
     fn sensitive_evidence_outcome_is_rejected() {
         let auth = authority(GatewayAuthoritySource::VerifiedUcan);
-        let error = gateway_evidence(&policy(), &auth, &build_operation(), None, 0, "Bearer secret-material".into())
-            .unwrap_err();
+        let error = gateway_evidence(GatewayEvidenceInput {
+            policy: &policy(),
+            authority: &auth,
+            operation: &build_operation(),
+            attempt_id: None,
+            transferred_bytes: 0,
+            stable_outcome: "Bearer secret-material".into(),
+        })
+        .unwrap_err();
         assert_eq!(error.code, GatewayRejectCode::SensitiveEvidenceRejected);
     }
 

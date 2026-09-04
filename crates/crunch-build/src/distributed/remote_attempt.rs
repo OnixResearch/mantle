@@ -272,6 +272,8 @@ pub struct RemoteAttemptState {
     pub assignment_nonce: RemoteAssignmentNonce,
     pub fence_generation: RemoteFenceGeneration,
     pub phase: RemoteAttemptPhase,
+    #[serde(default)]
+    pub progress_events_applied: u32,
     pub attempts_started: u32,
     pub started_unix_s: u64,
     pub deadline_unix_s: u64,
@@ -550,6 +552,7 @@ pub fn plan_remote_attempt_assignment_from_input(
         assignment_nonce: input.assignment_nonce,
         fence_generation,
         phase: RemoteAttemptPhase::Queued,
+        progress_events_applied: 0,
         attempts_started,
         started_unix_s: input.time.now_unix_s,
         deadline_unix_s,
@@ -684,6 +687,9 @@ pub fn plan_remote_attempt_report(
     if let Some(reason_code) = validate_report_payload(report) {
         return rejected_plan(current, reason_code);
     }
+    if let Some(reason_code) = validate_remote_attempt_state(current) {
+        return rejected_plan(current, reason_code);
+    }
     if let Err(reason_code) = authorize_remote_attempt_report(current, report, authorization) {
         return rejected_plan(current, reason_code);
     }
@@ -709,7 +715,7 @@ pub fn plan_remote_attempt_report(
     accepted_plan(current, report, next_phase, transition.reason_code)
 }
 
-fn validate_report_identity(report: &RemoteAttemptReport) -> Option<RemoteAttemptReasonCode> {
+pub(super) fn validate_report_identity(report: &RemoteAttemptReport) -> Option<RemoteAttemptReasonCode> {
     if RemoteJobId::new(report.identity.job_id.as_str().to_string()).is_err()
         || RemoteAttemptId::new(report.identity.attempt_id.as_str().to_string()).is_err()
         || RemoteEventId::new(report.identity.event_id.as_str().to_string()).is_err()
@@ -751,7 +757,7 @@ pub fn authorize_remote_attempt_report(
     Ok(())
 }
 
-fn validate_report_payload(report: &RemoteAttemptReport) -> Option<RemoteAttemptReasonCode> {
+pub(super) fn validate_report_payload(report: &RemoteAttemptReport) -> Option<RemoteAttemptReasonCode> {
     let digest = match canonical_remote_attempt_payload_digest(&report.payload) {
         Ok(digest) => digest,
         Err(reason_code) => return Some(reason_code),
@@ -767,7 +773,7 @@ fn validate_report_payload(report: &RemoteAttemptReport) -> Option<RemoteAttempt
     None
 }
 
-fn validate_payload_linkage(
+pub(super) fn validate_payload_linkage(
     current: &RemoteAttemptState,
     payload: &RemoteAttemptReportPayload,
 ) -> Option<RemoteAttemptReasonCode> {
@@ -828,8 +834,13 @@ fn accepted_plan(
     next_phase: RemoteAttemptPhase,
     reason_code: RemoteAttemptReasonCode,
 ) -> RemoteAttemptApplyPlan {
+    let progress_events_applied = match next_progress_event_count(current.progress_events_applied, &report.payload) {
+        Ok(value) => value,
+        Err(reason_code) => return rejected_plan(current, reason_code),
+    };
     let mut next_state = current.clone();
     next_state.phase = next_phase;
+    next_state.progress_events_applied = progress_events_applied;
     match &report.payload {
         RemoteAttemptReportPayload::ResultReady { output_digest_blake3 } => {
             next_state.result_digest_blake3 = Some(output_digest_blake3.clone());
@@ -893,6 +904,36 @@ fn rejected_retry(reason_code: RemoteAttemptReasonCode) -> RemoteAttemptRetryDec
         not_before_unix_s: None,
         reason_code,
     }
+}
+
+fn next_progress_event_count(
+    current: u32,
+    payload: &RemoteAttemptReportPayload,
+) -> Result<u32, RemoteAttemptReasonCode> {
+    let is_progress_event = matches!(
+        payload,
+        RemoteAttemptReportPayload::Heartbeat { .. }
+            | RemoteAttemptReportPayload::LogAppend { .. }
+            | RemoteAttemptReportPayload::TransferCheckpoint { .. }
+    );
+    if is_progress_event {
+        current.checked_add(1).ok_or(RemoteAttemptReasonCode::DurableStateInvalid)
+    } else {
+        Ok(current)
+    }
+}
+
+fn validate_remote_attempt_state(current: &RemoteAttemptState) -> Option<RemoteAttemptReasonCode> {
+    let Ok(event_count) = u32::try_from(current.applied_events.len()) else {
+        return Some(RemoteAttemptReasonCode::DurableStateInvalid);
+    };
+    if current.applied_events.len() > MAX_REMOTE_ATTEMPT_EVENTS {
+        return Some(RemoteAttemptReasonCode::EventRetentionExhausted);
+    }
+    if current.progress_events_applied > event_count {
+        return Some(RemoteAttemptReasonCode::DurableStateInvalid);
+    }
+    None
 }
 
 fn report_requires_output_admission(payload: &RemoteAttemptReportPayload) -> bool {

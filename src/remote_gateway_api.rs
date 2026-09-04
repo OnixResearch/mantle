@@ -19,9 +19,13 @@ use std::os::fd::FromRawFd as _;
 use std::path::Path;
 
 use crunch_build::distributed::ExistingGatewaySubmission;
+use crunch_build::distributed::GatewayAttemptIdentityInput;
 use crunch_build::distributed::GatewayCommand;
 use crunch_build::distributed::GatewayCompletionEvent;
+use crunch_build::distributed::GatewayCompletionPlanInput;
+use crunch_build::distributed::GatewayCursorSealInput;
 use crunch_build::distributed::GatewayEvidence;
+use crunch_build::distributed::GatewayEvidenceInput;
 use crunch_build::distributed::GatewayOperation;
 use crunch_build::distributed::GatewayReconnectFacts;
 use crunch_build::distributed::GatewaySubmissionDecision;
@@ -790,17 +794,17 @@ fn next_cursor(
         .now_unix_s
         .checked_add(GATEWAY_CURSOR_TTL_SECS)
         .ok_or_else(|| RunError::Internal("gateway-cursor-expiry-overflow".to_string()))?;
-    let cursor = seal_gateway_cursor(
-        crunch_build::distributed::GatewayCursorScope {
+    let cursor = seal_gateway_cursor(GatewayCursorSealInput {
+        scope: crunch_build::distributed::GatewayCursorScope {
             subject: &api.authority.subject,
             account_scope: &api.authority.account_scope,
             attempt_id: &stored.public_attempt_id,
             stream,
         },
         next_sequence,
-        expires,
-        cursor_key,
-    )
+        expires_unix_s: expires,
+        key: cursor_key,
+    })
     .map_err(gateway_rejection)?;
     if u32::try_from(cursor.len()).unwrap_or(u32::MAX) > api.policy.bounds.cursor_bytes_max {
         return Err(RunError::Internal("gateway-cursor-selected-bound-exceeded".to_string()));
@@ -827,14 +831,14 @@ fn reconcile_completion(
         RemoteCoordinatorJobPhase::Queued | RemoteCoordinatorJobPhase::Running => return Ok(None),
     };
     let result = job.current_attempt.as_ref().and_then(|attempt| attempt.result_digest_blake3.clone());
-    let event = plan_gateway_completion_event(
-        stored.public_attempt_id.clone(),
-        stored.request_identity_blake3.clone(),
+    let event = plan_gateway_completion_event(GatewayCompletionPlanInput {
+        attempt_id: stored.public_attempt_id.clone(),
+        request_identity_blake3: stored.request_identity_blake3.clone(),
         terminal_class,
-        result,
-        stored.policy_identity_blake3.clone(),
-        state.next_completion_sequence,
-    )
+        result_evidence_identity_blake3: result,
+        policy_identity_blake3: stored.policy_identity_blake3.clone(),
+        sequence: state.next_completion_sequence,
+    })
     .map_err(gateway_rejection)?;
     let signed = sign_completion_event(event, signing_key)?;
     state.next_completion_sequence = state
@@ -864,14 +868,14 @@ fn response_evidence(
     transferred_bytes: u64,
     outcome: &str,
 ) -> Result<GatewayEvidence, RunError> {
-    let evidence = gateway_evidence(
-        &api.policy,
-        &api.authority,
-        &api.operation,
+    let evidence = gateway_evidence(GatewayEvidenceInput {
+        policy: &api.policy,
+        authority: &api.authority,
+        operation: &api.operation,
         attempt_id,
         transferred_bytes,
-        outcome.to_string(),
-    )
+        stable_outcome: outcome.to_string(),
+    })
     .map_err(gateway_rejection)?;
     if evidence.operation_identity_blake3 != plan.operation_identity_blake3 {
         return Err(RunError::Internal("gateway-response-operation-identity-mismatch".to_string()));
@@ -901,12 +905,12 @@ fn validate_gateway_state(state: &GatewayAdapterState) -> Result<(), RunError> {
     }
     let mut idempotency = BTreeSet::new();
     for (public_id, stored) in &state.submissions {
-        let expected_public_id = derive_gateway_attempt_id(
-            &stored.subject,
-            &stored.account_scope,
-            &stored.idempotency_key,
-            &stored.request_identity_blake3,
-        )
+        let expected_public_id = derive_gateway_attempt_id(GatewayAttemptIdentityInput {
+            subject: &stored.subject,
+            account_scope: &stored.account_scope,
+            idempotency_key: &stored.idempotency_key,
+            request_identity_blake3: &stored.request_identity_blake3,
+        })
         .map_err(gateway_rejection)?;
         if public_id != stored.public_attempt_id.as_str()
             || expected_public_id != stored.public_attempt_id
@@ -928,14 +932,14 @@ fn validate_gateway_state(state: &GatewayAdapterState) -> Result<(), RunError> {
         let Some(stored) = state.submissions.get(attempt_id) else {
             return Err(RunError::Internal("gateway-adapter-completion-linkage-invalid".to_string()));
         };
-        let expected = plan_gateway_completion_event(
-            stored.public_attempt_id.clone(),
-            stored.request_identity_blake3.clone(),
-            completion.event.terminal_class,
-            completion.event.result_evidence_identity_blake3.clone(),
-            stored.policy_identity_blake3.clone(),
-            completion.event.sequence,
-        )
+        let expected = plan_gateway_completion_event(GatewayCompletionPlanInput {
+            attempt_id: stored.public_attempt_id.clone(),
+            request_identity_blake3: stored.request_identity_blake3.clone(),
+            terminal_class: completion.event.terminal_class,
+            result_evidence_identity_blake3: completion.event.result_evidence_identity_blake3.clone(),
+            policy_identity_blake3: stored.policy_identity_blake3.clone(),
+            sequence: completion.event.sequence,
+        })
         .map_err(gateway_rejection)?;
         let parsed_signature = Signature::<String>::parse(&completion.signature)
             .map_err(|_| RunError::Internal("gateway-adapter-completion-signature-invalid".to_string()))?;

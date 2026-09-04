@@ -1,0 +1,12 @@
+[package]
+name = "mantle-trellis-evidence-generator"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+blake3 = "=1.8.2"
+kamacite-core = { path = "/tmp/kamacite-trellis-proof-v1/crates/kamacite-core" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+valence-core = { path = "/tmp/valence-trellis-proof-acceptance/crates/valence-core" }
