@@ -1,0 +1,10 @@
+started_at=2026-09-04T13:33:07-04:00
+wrapper_pid=2966796
+source_commit=6cd690ca5ee31eb0bccef31799d593044bb640f5
+orchestrator_blake3=116bd661a1c6b98a8318c0888728b315e48cdc6395f73946d17c72a711818a6e
+from=/home/brittonr/mantle-runs/dev-resume-20260904/authority/source-built-fixed-point-sources-v98-base.json
+to=/home/brittonr/mantle-runs/dev-resume-20260904/authority/source-built-fixed-point-sources-6cd690ca.json
+finished_at=2026-09-04T13:33:07-04:00
+refresh_exit_code=3
+verify_exit_code=125
+profile_blake3=
