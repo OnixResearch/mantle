@@ -1,0 +1,40 @@
+$ nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- archive verify-remote-admission-with-trellis --root .
+{
+  "actions": [
+    {
+      "description": "move active change to archive: verify-remote-admission-with-trellis",
+      "kind": "archive_change",
+      "path": "./.cairn/changes/verify-remote-admission-with-trellis"
+    }
+  ],
+  "blocked": false,
+  "change": "verify-remote-admission-with-trellis",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "0c9d8ce2dd523de14496e45af2117118ea53827153b9a0bd6cf11bb5e88835ad",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+    "receipt_hash": "b476b08a11456e26e76cb472af0963a1356f795be02cec5ae6de482246164bc1",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": true,
+  "input_hash": "06c64ca933f6c78107cba8a936e3426a6d145ad1e551c873feb50a0ebddf79cc",
+  "layout": "cairn",
+  "mutated": false,
+  "mutation_manifest": null,
+  "plan_hash": "60a9518fcb9dba4a6814f8f2289a4f473d1cddccd45f7c2c48ec22fdab7b42f2",
+  "policy": "mantle-default",
+  "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+  "reasons": [],
+  "receipt_hash": "4c9ce857c7ab1b157a7c916a21459d69bddae7261435e76660fa3df0261ff8e7"
+}
