@@ -6823,6 +6823,35 @@ mod tests {
     }
 
     #[test]
+    fn remote_gateway_cli_routes_client_and_server_actions_through_new_owners() {
+        let metadata = parse_args_with_cli_test_stack(Vec::from(["mantle", "remote", "gateway", "metadata"]))
+            .expect("gateway metadata parses");
+        assert_eq!(command_label(&metadata.command), "remote.gateway.metadata");
+        assert!(command_admission_facts(&metadata.command).remote_operation_is_client);
+        assert!(matches!(metadata.command, Command::Remote {
+            action: RemoteAction::Gateway {
+                action: RemoteGatewayAction::Metadata
+            }
+        }));
+
+        let nix_server = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "remote",
+            "gateway",
+            "nix-stdio-once",
+            "--authority",
+            "authority.json",
+            "--policy",
+            "policy.json",
+            "--trusted-store-key",
+            "cache.example-1:AA==",
+        ]))
+        .expect("gateway Nix server parses");
+        assert_eq!(command_label(&nix_server.command), "remote.gateway.nix-stdio-once");
+        assert!(!command_admission_facts(&nix_server.command).remote_operation_is_client);
+    }
+
+    #[test]
     fn remote_client_json_report_uses_build_report_schema_and_substitution_fields() {
         let report = remote_client_report_fixture();
         let json = remote_client_build_json_report(
