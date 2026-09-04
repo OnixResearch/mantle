@@ -1,0 +1,3 @@
+post-archive-validation=FAIL
+exit=101
+blocker=required clang path absent from command environment
