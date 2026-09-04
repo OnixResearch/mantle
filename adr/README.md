@@ -125,3 +125,4 @@ compatibility surface, crate name, or historical decision.
 | [0116](0116-adapt-nix-remote-clients-without-transferring-authority.md) | Adapt Nix remote clients without transferring authority | Accepted |
 | [0117](0117-bound-radiance-as-an-optional-external-reference.md) | Bound Radiance as an optional external reference | Accepted |
 | [0118](0118-select-remote-resources-from-bounded-evidence.md) | Select remote resources from bounded evidence | Accepted |
+| [0119](0119-keep-builder-protocols-at-the-nix-adapter-edge.md) | Keep builder protocols at the Nix adapter edge | Proposed |
