@@ -3001,8 +3001,13 @@ mod tests {
         let package_dir = source_root.join(VENDOR_RELATIVE_PATH).join("vendor-fixture");
         fs::create_dir_all(package_dir.join("src")).unwrap();
         fs::create_dir_all(&cargo_dir).unwrap();
-        fs::write(cargo_dir.join("vendor-config.toml"), "[source.vendored-sources]\ndirectory = \"vendor-deps\"\n")
-            .unwrap();
+        fs::write(
+            cargo_dir.join("vendor-config.toml"),
+            format!(
+                "[source.\"git+https://example.invalid/vendor-fixture?rev={VENDOR_FIXTURE_REVISION}\"]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"vendor-deps\"\n"
+            ),
+        )
+        .unwrap();
         fs::write(
             source_root.join("Cargo.lock"),
             format!(

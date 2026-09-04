@@ -3325,7 +3325,11 @@ fn declared_vendor_roots(root: &Path, blockers: &mut Vec<NativeRegistrySourceBlo
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut roots = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    for config_path in [root.join(".cargo/config.toml"), root.join(".cargo/config")] {
+    for config_path in [
+        root.join(".cargo/config.toml"),
+        root.join(".cargo/config"),
+        root.join(".cargo/vendor-config.toml"),
+    ] {
         if !config_path.is_file() {
             continue;
         }
@@ -24963,6 +24967,40 @@ unix_dep = { path = "../unix-dep" }
         assert_eq!(package_planning.packages.len(), 2);
         let app = package_planning.packages.iter().find(|package| package.name == "app").unwrap();
         assert_eq!(app.path_dependencies[0].manifest_path, normalize_path_string(&dep_dir.join("Cargo.toml")));
+    }
+
+    #[test]
+    fn declared_vendor_roots_reads_dedicated_vendor_config() {
+        let dir = TempDir::new().unwrap();
+        let main = dir.path().join("vendor-deps");
+        let alternate = main.join(".alternate-source");
+        std::fs::create_dir_all(dir.path().join(".cargo")).unwrap();
+        std::fs::create_dir_all(&alternate).unwrap();
+        std::fs::write(
+            dir.path().join(".cargo/vendor-config.toml"),
+            "[source.crates-io]\nreplace-with = \"main\"\n\n[source.\"git+https://example.invalid/repo.git?rev=abc\"]\nreplace-with = \"alternate\"\n\n[source.main]\ndirectory = \"vendor-deps\"\n\n[source.alternate]\ndirectory = \"vendor-deps/.alternate-source\"\n",
+        )
+        .unwrap();
+        let mut blockers = Vec::new();
+
+        let roots = declared_vendor_roots(dir.path(), &mut blockers);
+
+        assert!(blockers.is_empty(), "{blockers:#?}");
+        assert_eq!(roots, vec![main.canonicalize().unwrap(), alternate.canonicalize().unwrap()]);
+    }
+
+    #[test]
+    fn declared_vendor_roots_reports_malformed_dedicated_vendor_config() {
+        let dir = TempDir::new().unwrap();
+        std::fs::create_dir_all(dir.path().join(".cargo")).unwrap();
+        std::fs::write(dir.path().join(".cargo/vendor-config.toml"), "[source.invalid\n").unwrap();
+        let mut blockers = Vec::new();
+
+        let roots = declared_vendor_roots(dir.path(), &mut blockers);
+
+        assert!(roots.is_empty());
+        assert_eq!(blockers.len(), 1);
+        assert_eq!(blockers[0].class, "invalid-cargo-source-config");
     }
 
     #[test]

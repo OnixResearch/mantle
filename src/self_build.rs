@@ -57,8 +57,11 @@ const MAX_STAGE_SOURCE_DEPTH: usize = 64;
 /// Maximum locked packages parsed from Cargo.lock during vendor validation.
 const MAX_CARGO_LOCK_PACKAGE_COUNT: usize = 20_000;
 
-/// Maximum top-level package directories accepted under vendor-deps/.
+/// Maximum top-level package directories accepted across vendor source roots.
 const MAX_VENDOR_PACKAGE_COUNT: usize = 20_000;
+
+/// Maximum directory-source roots accepted from Cargo's vendor configuration.
+const MAX_VENDOR_SOURCE_ROOT_COUNT: usize = 32;
 
 /// Maximum files accepted inside one vendored package checksum manifest.
 const MAX_VENDOR_PACKAGE_FILE_COUNT: usize = 200_000;
@@ -1155,6 +1158,24 @@ struct VendoredPackage {
 }
 
 #[derive(Debug, Deserialize)]
+struct CargoVendorConfig {
+    source: BTreeMap<String, CargoVendorSource>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct CargoVendorSource {
+    replace_with: Option<String>,
+    directory: Option<String>,
+}
+
+#[derive(Debug)]
+struct VendorSourceRoot {
+    path: PathBuf,
+    source_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct VendorChecksumManifest {
     files: BTreeMap<String, String>,
     package: Option<String>,
@@ -1174,26 +1195,148 @@ pub(crate) fn require_checked_vendor_inputs(src_dir: &Path) -> Result<(), RunErr
         return Err(RunError::Internal(format!("source-tree vendor-deps/ missing: {}", vendor_dir.display())));
     }
     let vendor_config_text = std::fs::read_to_string(&vendor_config)
-        .map_err(|e| RunError::Internal(format!("read {}: {e}", vendor_config.display())))?;
-    if !vendor_config_text.contains("directory = \"vendor-deps\"") {
-        return Err(RunError::Internal(format!(
-            "vendor config must point at source-tree vendor-deps/: {}",
-            vendor_config.display(),
-        )));
-    }
-    verify_checked_vendor_freshness(src_dir, &vendor_dir)
+        .map_err(|error| RunError::Internal(format!("read {}: {error}", vendor_config.display())))?;
+    let source_roots = parse_vendor_source_roots(src_dir, &vendor_config_text)?;
+    verify_checked_vendor_freshness(src_dir, &source_roots)
 }
 
-fn verify_checked_vendor_freshness(src_dir: &Path, vendor_dir: &Path) -> Result<(), RunError> {
+fn verify_checked_vendor_freshness(src_dir: &Path, source_roots: &[VendorSourceRoot]) -> Result<(), RunError> {
     assert!(src_dir.is_dir(), "source dir must exist: {}", src_dir.display());
-    assert!(vendor_dir.is_dir(), "vendor dir must exist: {}", vendor_dir.display());
+    assert!(!source_roots.is_empty(), "vendor source roots must not be empty");
     let lock_path = src_dir.join("Cargo.lock");
     let lock_text = std::fs::read_to_string(&lock_path)
-        .map_err(|e| RunError::Internal(format!("read {}: {e}", lock_path.display())))?;
+        .map_err(|error| RunError::Internal(format!("read {}: {error}", lock_path.display())))?;
     let locked_packages = parse_cargo_lock_packages(&lock_text)?;
-    let expected = expected_vendor_packages(&locked_packages)?;
-    let actual = load_vendored_packages(vendor_dir)?;
-    verify_vendor_package_set(&expected, &actual)
+    validate_vendor_source_coverage(&locked_packages, source_roots)?;
+    for source_root in source_roots {
+        let packages = locked_packages
+            .iter()
+            .filter(|package| package.source.as_ref().is_some_and(|source| source_root_matches(source_root, source)))
+            .cloned()
+            .collect::<Vec<_>>();
+        let expected = expected_vendor_packages(&packages)?;
+        let nested_roots = source_roots
+            .iter()
+            .filter(|candidate| candidate.path != source_root.path && candidate.path.starts_with(&source_root.path))
+            .map(|candidate| candidate.path.clone())
+            .collect::<Vec<_>>();
+        let actual = load_vendored_packages(&source_root.path, &nested_roots)?;
+        verify_vendor_package_set(&expected, &actual)?;
+    }
+    debug_assert!(source_roots.len() <= MAX_VENDOR_SOURCE_ROOT_COUNT);
+    Ok(())
+}
+
+fn parse_vendor_source_roots(src_dir: &Path, text: &str) -> Result<Vec<VendorSourceRoot>, RunError> {
+    let config: CargoVendorConfig =
+        toml::from_str(text).map_err(|error| RunError::Internal(format!("parse Cargo vendor config: {error}")))?;
+    let mut alias_paths = BTreeMap::new();
+    for (alias, source) in &config.source {
+        let Some(directory) = source.directory.as_deref() else {
+            continue;
+        };
+        if alias_paths.len() >= MAX_VENDOR_SOURCE_ROOT_COUNT {
+            return Err(RunError::Internal(format!("vendor source root count exceeds {MAX_VENDOR_SOURCE_ROOT_COUNT}")));
+        }
+        let path = validate_vendor_source_root(src_dir, directory)?;
+        if alias_paths.insert(alias.clone(), path).is_some() {
+            return Err(RunError::Internal(format!("duplicate Cargo vendor source alias: {alias}")));
+        }
+    }
+    let mut roots = alias_paths
+        .iter()
+        .map(|(alias, path)| {
+            (alias.clone(), VendorSourceRoot {
+                path: path.clone(),
+                source_ids: Vec::new(),
+            })
+        })
+        .collect::<BTreeMap<_, _>>();
+    for (source_id, source) in &config.source {
+        let Some(alias) = source.replace_with.as_ref() else {
+            continue;
+        };
+        validate_vendor_source_id(source_id)?;
+        let root = roots.get_mut(alias).ok_or_else(|| {
+            RunError::Internal(format!("Cargo vendor source {source_id} references missing replacement {alias}"))
+        })?;
+        root.source_ids.push(source_id.clone());
+    }
+    let mut values = roots.into_values().collect::<Vec<_>>();
+    values.sort_by(|left, right| left.path.cmp(&right.path));
+    if values.is_empty() || values.iter().any(|root| root.source_ids.is_empty()) {
+        return Err(RunError::Internal("Cargo vendor config has an unused or missing directory source".to_string()));
+    }
+    if values.windows(2).any(|pair| pair[0].path == pair[1].path) {
+        return Err(RunError::Internal("Cargo vendor config repeats one directory source path".to_string()));
+    }
+    assert!(values.len() <= MAX_VENDOR_SOURCE_ROOT_COUNT);
+    debug_assert!(values.windows(2).all(|pair| pair[0].path < pair[1].path));
+    Ok(values)
+}
+
+fn validate_vendor_source_root(src_dir: &Path, directory: &str) -> Result<PathBuf, RunError> {
+    let relative = Path::new(directory);
+    let safe = !relative.is_absolute()
+        && relative.components().all(|component| matches!(component, Component::Normal(_)))
+        && relative.starts_with("vendor-deps");
+    if !safe {
+        return Err(RunError::Internal(format!(
+            "vendor config directory must stay under source-tree vendor-deps/: {directory}"
+        )));
+    }
+    let path = src_dir.join(relative);
+    let metadata = std::fs::symlink_metadata(&path)
+        .map_err(|error| RunError::Internal(format!("inspect Cargo vendor source {}: {error}", path.display())))?;
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return Err(RunError::Internal(format!(
+            "Cargo vendor source is not a non-symlink directory: {}",
+            path.display()
+        )));
+    }
+    assert!(path.starts_with(src_dir));
+    debug_assert!(path.is_dir());
+    Ok(path)
+}
+
+fn validate_vendor_source_id(source_id: &str) -> Result<(), RunError> {
+    if source_id == "crates-io" || source_id.starts_with("git+") {
+        return Ok(());
+    }
+    Err(RunError::Internal(format!("unsupported Cargo vendor source mapping: {source_id}")))
+}
+
+fn validate_vendor_source_coverage(
+    packages: &[LockedPackage],
+    source_roots: &[VendorSourceRoot],
+) -> Result<(), RunError> {
+    for package in packages {
+        let Some(source) = package.source.as_ref() else {
+            continue;
+        };
+        if !is_supported_vendor_source(source) {
+            return Err(RunError::Internal(format!("unsupported vendored Cargo source for {}: {source}", package.key)));
+        }
+        let match_count = source_roots.iter().filter(|root| source_root_matches(root, source)).count();
+        if match_count != 1 {
+            return Err(RunError::Internal(format!(
+                "Cargo.lock source for {} maps to {match_count} vendor roots: {source}",
+                package.key
+            )));
+        }
+    }
+    assert!(!source_roots.is_empty());
+    debug_assert!(source_roots.iter().all(|root| !root.source_ids.is_empty()));
+    Ok(())
+}
+
+fn source_root_matches(root: &VendorSourceRoot, lock_source: &str) -> bool {
+    root.source_ids.iter().any(|source_id| {
+        if source_id == "crates-io" {
+            return is_registry_vendor_source(lock_source);
+        }
+        lock_source.split('#').next() == Some(source_id.as_str())
+    })
 }
 
 fn parse_cargo_lock_packages(lock_text: &str) -> Result<Vec<LockedPackage>, RunError> {
@@ -1308,18 +1451,28 @@ fn expected_vendor_packages(
     Ok(expected)
 }
 
-fn load_vendored_packages(vendor_dir: &Path) -> Result<BTreeMap<PackageKey, VendoredPackage>, RunError> {
+fn load_vendored_packages(
+    vendor_dir: &Path,
+    nested_source_roots: &[PathBuf],
+) -> Result<BTreeMap<PackageKey, VendoredPackage>, RunError> {
     let mut children: Vec<PathBuf> = Vec::new();
     let entries = std::fs::read_dir(vendor_dir)
-        .map_err(|e| RunError::Internal(format!("read_dir {}: {e}", vendor_dir.display())))?;
+        .map_err(|error| RunError::Internal(format!("read_dir {}: {error}", vendor_dir.display())))?;
     for entry in entries {
         if children.len() >= MAX_VENDOR_PACKAGE_COUNT {
             return Err(RunError::Internal(format!("vendor-deps package count exceeds {MAX_VENDOR_PACKAGE_COUNT}")));
         }
-        let entry = entry.map_err(|e| RunError::Internal(format!("read_dir entry {}: {e}", vendor_dir.display())))?;
-        children.push(entry.path());
+        let entry =
+            entry.map_err(|error| RunError::Internal(format!("read_dir entry {}: {error}", vendor_dir.display())))?;
+        let path = entry.path();
+        let contains_nested_root =
+            nested_source_roots.iter().any(|nested| nested == &path || nested.starts_with(&path));
+        if !contains_nested_root {
+            children.push(path);
+        }
     }
     children.sort();
+    debug_assert!(children.len() <= MAX_VENDOR_PACKAGE_COUNT);
     vendored_package_index(&children)
 }
 
@@ -4024,7 +4177,7 @@ mod tests {
         .unwrap();
 
         let err = require_checked_vendor_inputs(repo.path()).unwrap_err();
-        assert!(err.to_string().contains("must point at source-tree vendor-deps"), "unexpected error: {err}");
+        assert!(err.to_string().contains("must stay under source-tree vendor-deps"), "unexpected error: {err}");
     }
 
     #[test]
@@ -4033,6 +4186,68 @@ mod tests {
         write_stageable_checkout(repo.path());
 
         require_checked_vendor_inputs(repo.path()).unwrap();
+    }
+
+    #[test]
+    fn require_checked_vendor_inputs_accepts_duplicate_name_version_in_separate_source_roots() {
+        const SOURCE_A: &str = "git+https://example.invalid/source-a.git?rev=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const SOURCE_B: &str = "git+https://example.invalid/source-b.git?rev=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let repo = tempfile::tempdir().unwrap();
+        write_stageable_checkout(repo.path());
+        let source_a = repo.path().join("vendor-deps").join("dep-a");
+        let source_b_root = repo.path().join("vendor-deps").join(".source-b");
+        let source_b = source_b_root.join("dep-a");
+        std::fs::create_dir_all(&source_b).unwrap();
+        std::fs::write(source_b.join("Cargo.toml"), "[package]\nname=\"dep-a\"\nversion=\"0.0.0\"\n").unwrap();
+        std::fs::write(source_b.join("lib.rs"), "pub fn dep_a_from_b() {}\n").unwrap();
+        write_vendor_checksum_manifest(&source_a, None);
+        write_vendor_checksum_manifest(&source_b, None);
+        std::fs::write(
+            repo.path().join("Cargo.lock"),
+            format!(
+                "[[package]]\nname = \"dep-a\"\nversion = \"0.0.0\"\nsource = \"{SOURCE_A}#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n\n[[package]]\nname = \"dep-a\"\nversion = \"0.0.0\"\nsource = \"{SOURCE_B}#bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"\n"
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            repo.path().join(".cargo").join("vendor-config.toml"),
+            format!(
+                "[source.\"{SOURCE_A}\"]\nreplace-with = \"source-a\"\n\n[source.\"{SOURCE_B}\"]\nreplace-with = \"source-b\"\n\n[source.source-a]\ndirectory = \"vendor-deps\"\n\n[source.source-b]\ndirectory = \"vendor-deps/.source-b\"\n"
+            ),
+        )
+        .unwrap();
+
+        require_checked_vendor_inputs(repo.path()).unwrap();
+        assert!(source_a.is_dir());
+        assert!(source_b.is_dir());
+    }
+
+    #[test]
+    fn require_checked_vendor_inputs_rejects_duplicate_name_version_in_one_source_root() {
+        const SOURCE_A: &str = "git+https://example.invalid/source-a.git?rev=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const SOURCE_B: &str = "git+https://example.invalid/source-b.git?rev=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let repo = tempfile::tempdir().unwrap();
+        write_stageable_checkout(repo.path());
+        let source_a = repo.path().join("vendor-deps").join("dep-a");
+        write_vendor_checksum_manifest(&source_a, None);
+        std::fs::write(
+            repo.path().join("Cargo.lock"),
+            format!(
+                "[[package]]\nname = \"dep-a\"\nversion = \"0.0.0\"\nsource = \"{SOURCE_A}#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n\n[[package]]\nname = \"dep-a\"\nversion = \"0.0.0\"\nsource = \"{SOURCE_B}#bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"\n"
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            repo.path().join(".cargo").join("vendor-config.toml"),
+            format!(
+                "[source.\"{SOURCE_A}\"]\nreplace-with = \"vendored\"\n\n[source.\"{SOURCE_B}\"]\nreplace-with = \"vendored\"\n\n[source.vendored]\ndirectory = \"vendor-deps\"\n"
+            ),
+        )
+        .unwrap();
+
+        let error = require_checked_vendor_inputs(repo.path()).unwrap_err();
+        assert!(error.to_string().contains("duplicate vendored package"), "unexpected error: {error}");
+        assert!(source_a.is_dir());
     }
 
     #[test]
@@ -4086,9 +4301,17 @@ mod tests {
         write_stageable_checkout(repo.path());
         let dep_dir = repo.path().join("vendor-deps").join("dep-a");
         write_vendor_checksum_manifest(&dep_dir, None);
+        const SOURCE: &str = "git+https://example.invalid/dep-a.git";
         std::fs::write(
             repo.path().join("Cargo.lock"),
-            "[[package]]\nname = \"dep-a\"\nversion = \"0.0.0\"\nsource = \"git+https://example.invalid/dep-a.git#0123456789abcdef\"\n",
+            format!("[[package]]\nname = \"dep-a\"\nversion = \"0.0.0\"\nsource = \"{SOURCE}#0123456789abcdef\"\n"),
+        )
+        .unwrap();
+        std::fs::write(
+            repo.path().join(".cargo").join("vendor-config.toml"),
+            format!(
+                "[source.\"{SOURCE}\"]\nreplace-with = \"vendored-sources\"\n\n[source.vendored-sources]\ndirectory = \"vendor-deps\"\n"
+            ),
         )
         .unwrap();
 

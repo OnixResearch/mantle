@@ -126,3 +126,4 @@ compatibility surface, crate name, or historical decision.
 | [0117](0117-bound-radiance-as-an-optional-external-reference.md) | Bound Radiance as an optional external reference | Accepted |
 | [0118](0118-select-remote-resources-from-bounded-evidence.md) | Select remote resources from bounded evidence | Accepted |
 | [0119](0119-restore-dev-stages-from-remeasured-content.md) | Restore dev stages from remeasured content | Accepted |
+| [0120](0120-separate-cargo-directory-sources-by-immutable-source.md) | Separate Cargo directory sources by immutable source | Accepted |

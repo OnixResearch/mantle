@@ -28,7 +28,20 @@ replace-with = "vendored-sources"
 [source."git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1"]
 git = "ssh://git@github.com/OnixResearch/onix-artifact.git"
 rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1"
+replace-with = "artifact-auth-c932"
+
+[source."git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be"]
+git = "ssh://git@github.com/OnixResearch/onix-artifact.git"
+rev = "e41340bec587b6d049b5cc518ec7db925dde84be"
+replace-with = "vendored-sources"
+
+[source."git+ssh://git@github.com/OnixResearch/valence.git?rev=e40c76b4d2070a29636e00c85c0dff93f03dba2f"]
+git = "ssh://git@github.com/OnixResearch/valence.git"
+rev = "e40c76b4d2070a29636e00c85c0dff93f03dba2f"
 replace-with = "vendored-sources"
 
 [source.vendored-sources]
 directory = "vendor-deps"
+
+[source.artifact-auth-c932]
+directory = "vendor-deps/.artifact-auth-c932"

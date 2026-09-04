@@ -1,0 +1,7 @@
+$ CARGO_HOME=<empty> CARGO_NET_OFFLINE=true cargo metadata --offline --locked --format-version 1 --config .cargo/vendor-config.toml
+cargo_metadata_status=0
+guard_reached_source_bundle_read=true
+metadata_bytes=3664088
+vendor_bytes=846041532
+primary_artifact_revision=e41340bec587b6d049b5cc518ec7db925dde84be
+nested_artifact_revision=c932138d880ddf4c2967f4c024b489b5c0022bf1
