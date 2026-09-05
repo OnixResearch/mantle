@@ -36,16 +36,7 @@ pub(crate) fn prepare_dev_resume(
         .ok_or_else(|| proof_error("dev resume requires the dev provider cache".to_string()))?;
     let checkpoint_store = publish::checkpoint_store(cache);
     let limits = crate::source_built_fixed_point_checkpoint_shell::provider_checkpoint_limits(options.disk_bytes_max);
-    let admitted = match crate::source_built_fixed_point_checkpoint_shell::admit_dev_provider_checkpoint_store(
-        &checkpoint_store,
-        &prepared.plan,
-        STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST,
-        limits,
-    ) {
-        Ok(Some(admitted)) => admitted,
-        Ok(None) | Err(_) => return Ok(cold_preparation()),
-    };
-    let loaded = match candidates::load_candidates(cache, prepared, &admitted, limits.preserved_tree) {
+    let loaded = match candidates::load_candidates(cache, prepared, limits) {
         Ok(loaded) => loaded,
         Err(_) => return Ok(cold_preparation()),
     };
@@ -116,6 +107,12 @@ fn restore_selected_plan(
         context.prepared,
         context.checkpoint_store,
         completed_stage,
+        &selected
+            .payloads
+            .iter()
+            .find(|payload| payload.payload_id == crunch_dev_resume_core::PROVIDER_CHECKPOINT_PAYLOAD_ID)
+            .ok_or_else(|| proof_error("selected dev resume checkpoint reference is missing".to_string()))?
+            .digest_blake3,
     ) {
         Ok(Some(resume)) => resume,
         Ok(None) => {

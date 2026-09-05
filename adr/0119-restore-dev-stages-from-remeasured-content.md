@@ -20,7 +20,17 @@ The core will select only a contiguous stage prefix. Its plan will list restored
 
 The shell will publish one content-addressed manifest for each completed stage. Shared payload objects will use BLAKE3 identities. The shell will remeasure each selected object before restore.
 
-The shell can reuse bounded checkpoint observation and copy mechanisms. Dev manifests and promoted checkpoint manifests keep distinct origins and namespaces.
+The shell reuses bounded checkpoint observation and copy mechanisms. Dev prefixes use `mantle-dev-provider-prefix-v1` and a separate namespace. The promoted four-stage format remains unchanged.
+
+Each provider prefix requires its exact payload set: 1, 2, 14, or 17 payloads. The native boundary includes the Rust host tools and their evidence. The Rust provider, toolchain closure, and Rust action evidence enter only at the fourth boundary.
+
+Shared objects use the payload kind and BLAKE3 digest as their key. Prefix manifests refer to those objects instead of copying earlier trees again. Restore selects the exact checkpoint reference from the chosen resume manifest.
+
+Mantle stage 1 has an explicit publication callback. The callback must finish before stage 2 starts. Publication failure prevents continuation. Each attempt records only the manifests that it publishes.
+
+Dev native evidence can retain missing action events from cached derivations. Deterministic replay must reproduce those observations exactly. Promoted admission still requires complete reconciliation.
+
+Binding relocation modifies only payloads that the restore created. Identical pre-existing payloads remain unchanged. Native-prefix host paths refer to restored tools and evidence, not an earlier attempt.
 
 A promoted run will reject dev resume options before it reads any dev cache path.
 

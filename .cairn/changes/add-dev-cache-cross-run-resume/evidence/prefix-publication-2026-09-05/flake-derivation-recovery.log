@@ -1,0 +1,4 @@
+Certificate invalid: name is not a listed principal
+don't know how to build these paths:
+  /nix/store/666qf3k9djcfzv6lwcp4l4v7fgck77ng-source.drv
+error: path '/nix/store/666qf3k9djcfzv6lwcp4l4v7fgck77ng-source.drv' is required, but there is no substituter that can build it

@@ -783,6 +783,9 @@ fn plan_error(kind: EagerDerivationActionPlanErrorKind, message: &str) -> EagerD
 }
 
 #[cfg(test)]
+pub(crate) use tests::two_action_plan as eager_action_test_plan;
+
+#[cfg(test)]
 mod tests {
     use nix_compat::derivation::Output;
 
@@ -894,7 +897,7 @@ mod tests {
         assert_eq!(unbound_error.kind, EagerDerivationActionPlanErrorKind::UnboundExecutable);
     }
 
-    fn two_action_plan() -> EagerDerivationActionPlan {
+    pub(crate) fn two_action_plan() -> EagerDerivationActionPlan {
         let source = entry(SOURCE_NAME, builtin_derivation(SOURCE_NAME), false, Vec::new());
         let source_drv = source.drv_path.clone();
         let build = entry(BUILD_NAME, shell_derivation(BUILD_NAME, Some(source_drv)), false, Vec::new());

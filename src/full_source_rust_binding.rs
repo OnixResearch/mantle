@@ -1240,6 +1240,9 @@ fn binding_error(kind: FullSourceRustBindingErrorKind, message: impl Into<String
 }
 
 #[cfg(test)]
+pub(crate) use tests::valid_host_tool_manifest as host_tool_test_manifest;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_ID;
@@ -1808,7 +1811,7 @@ mod tests {
         }
     }
 
-    fn valid_host_tool_manifest() -> FullSourceRustHostToolManifest {
+    pub(crate) fn valid_host_tool_manifest() -> FullSourceRustHostToolManifest {
         FullSourceRustHostToolManifest {
             schema: FULL_SOURCE_RUST_HOST_TOOL_SCHEMA.to_string(),
             source_policy: FULL_SOURCE_POLICY.to_string(),

@@ -10,8 +10,8 @@ pub(super) struct CandidateLoad {
 struct CandidateContext<'a> {
     cache: &'a Path,
     prepared: &'a PreparedAttempt,
-    admitted: &'a crate::source_built_fixed_point_checkpoint_shell::AdmittedProviderCheckpoint,
-    provider_payload: &'a crunch_dev_resume_core::ResumePayloadBinding,
+    checkpoint_store: &'a Path,
+    checkpoint_limits: crate::source_built_fixed_point_checkpoint_shell::ProviderCheckpointLimits,
     current_producer: &'a str,
     policy_digest: &'a str,
     tree_limits: crate::preserved_evidence_tree::PreservedEvidenceTreeLimits,
@@ -20,8 +20,7 @@ struct CandidateContext<'a> {
 pub(super) fn load_candidates(
     cache: &Path,
     prepared: &PreparedAttempt,
-    admitted: &crate::source_built_fixed_point_checkpoint_shell::AdmittedProviderCheckpoint,
-    tree_limits: crate::preserved_evidence_tree::PreservedEvidenceTreeLimits,
+    checkpoint_limits: crate::source_built_fixed_point_checkpoint_shell::ProviderCheckpointLimits,
 ) -> Result<CandidateLoad, RunError> {
     let manifests_root = publish::manifests_root(cache, &prepared.plan.plan_digest_blake3);
     if !require_candidate_directory(&manifests_root)? {
@@ -31,16 +30,16 @@ pub(super) fn load_candidates(
         });
     }
     let policy_digest = publish::resume_policy_digest(&prepared.plan)?;
-    let provider_payload = publish::provider_checkpoint_binding(admitted)?;
+    let checkpoint_store = publish::checkpoint_store(cache);
     let current_producer = publish::current_executable_digest()?;
     let context = CandidateContext {
         cache,
         prepared,
-        admitted,
-        provider_payload: &provider_payload,
+        checkpoint_store: &checkpoint_store,
+        checkpoint_limits,
         current_producer: &current_producer,
         policy_digest: &policy_digest,
-        tree_limits,
+        tree_limits: checkpoint_limits.preserved_tree,
     };
     let candidate_items_max =
         crunch_dev_resume_core::ResumeStage::ALL.len().saturating_mul(DEV_RESUME_STAGE_CANDIDATES_MAX);
@@ -70,6 +69,7 @@ fn load_stage_candidates(
     }
     let mut entries = fs::read_dir(&stage_root)
         .map_err(|error| proof_error(format!("reading dev resume candidates {}: {error}", stage_root.display())))?
+        .take(DEV_RESUME_STAGE_CANDIDATES_MAX.saturating_add(1))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| proof_error(format!("reading dev resume candidate: {error}")))?;
     entries.sort_by_key(fs::DirEntry::file_name);
@@ -113,17 +113,23 @@ fn observe_candidate(
 ) -> Result<crunch_dev_resume_core::ResumeCandidateObservation, crunch_dev_resume_core::ResumeRejectReason> {
     let manifest = read_manifest_candidate(path, stage)
         .map_err(|_| crunch_dev_resume_core::ResumeRejectReason::ManifestInvalid)?;
-    let observed_payloads =
-        observe_manifest_payloads(context.cache, &manifest, context.provider_payload, context.tree_limits)
-            .map_err(|_| crunch_dev_resume_core::ResumeRejectReason::PayloadMismatch)?;
-    let current_stage = current_stage_binding(
-        context.cache,
-        &manifest,
-        context.admitted,
-        context.current_producer,
-        context.tree_limits,
-    )
-    .map_err(|_| crunch_dev_resume_core::ResumeRejectReason::StageMismatch)?;
+    crunch_dev_resume_core::validate_resume_manifest(&manifest)
+        .map_err(|_| crunch_dev_resume_core::ResumeRejectReason::ManifestInvalid)?;
+    let checkpoint_digest = manifest
+        .payloads
+        .iter()
+        .find(|payload| payload.payload_id == crunch_dev_resume_core::PROVIDER_CHECKPOINT_PAYLOAD_ID)
+        .map(|payload| payload.digest_blake3.as_str())
+        .ok_or(crunch_dev_resume_core::ResumeRejectReason::ManifestInvalid)?;
+    let admitted = admit_candidate_checkpoint(context, checkpoint_digest)
+        .map_err(|_| crunch_dev_resume_core::ResumeRejectReason::PayloadMismatch)?;
+    let provider_payload = publish::provider_checkpoint_binding(&admitted)
+        .map_err(|_| crunch_dev_resume_core::ResumeRejectReason::PayloadMismatch)?;
+    let observed_payloads = observe_manifest_payloads(context.cache, &manifest, &provider_payload, context.tree_limits)
+        .map_err(|_| crunch_dev_resume_core::ResumeRejectReason::PayloadMismatch)?;
+    let current_stage =
+        current_stage_binding(context.cache, &manifest, &admitted, context.current_producer, context.tree_limits)
+            .map_err(|_| crunch_dev_resume_core::ResumeRejectReason::StageMismatch)?;
     Ok(crunch_dev_resume_core::ResumeCandidateObservation {
         manifest,
         current_source_authority_digest_blake3: context.prepared.plan.source_authority_digest_blake3.clone(),
@@ -132,6 +138,19 @@ fn observe_candidate(
         current_stage,
         observed_payloads,
     })
+}
+
+fn admit_candidate_checkpoint(
+    context: &CandidateContext<'_>,
+    digest: &str,
+) -> Result<crate::source_built_fixed_point_checkpoint_shell::AdmittedProviderCheckpoint, RunError> {
+    super::super::checkpoint_integration::admit_dev_checkpoint_identity(
+        context.checkpoint_store,
+        &context.prepared.plan,
+        digest,
+        context.checkpoint_limits,
+    )?
+    .ok_or_else(|| proof_error("dev resume provider checkpoint is missing".to_string()))
 }
 
 fn rejected_cache_entry(

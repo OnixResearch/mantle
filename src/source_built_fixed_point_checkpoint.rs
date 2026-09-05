@@ -22,6 +22,7 @@ use crate::source_built_fixed_point::SourceBuiltFixedPointResourceBounds;
 use crate::source_built_fixed_point::StageAuthorityInput;
 
 pub(crate) const PROVIDER_CHECKPOINT_SCHEMA: &str = "mantle-source-built-provider-checkpoint-v2";
+pub(crate) const DEV_PROVIDER_PREFIX_SCHEMA: &str = "mantle-dev-provider-prefix-v1";
 pub(crate) const PROVIDER_CHECKPOINT_STAGE_COUNT: usize = 4;
 pub(crate) const PROVIDER_CHECKPOINT_PAYLOAD_COUNT: usize = 17;
 #[cfg(test)]
@@ -31,6 +32,7 @@ const NATIVE_PROVIDER_STAGE_INDEX: usize = 2;
 const PROVIDER_CHECKPOINT_LOOKUP_CONTEXT: &str = "mantle-source-built-provider-checkpoint-lookup-v3";
 const PROVIDER_CHECKPOINT_STAGE_CONTEXT: &str = "mantle-source-built-provider-checkpoint-stage-v2";
 const PROVIDER_CHECKPOINT_MANIFEST_CONTEXT: &str = "mantle-source-built-provider-checkpoint-manifest-v2";
+const DEV_PROVIDER_PREFIX_MANIFEST_CONTEXT: &str = "mantle-dev-provider-prefix-manifest-v1";
 const PROVIDER_ACTION_TRUST_POLICY_ID: &str = "mantle-provider-action-trust-v2";
 const RESOURCE_BOUNDS_CONTEXT: &str = "mantle-source-built-provider-checkpoint-resource-bounds-v1";
 const BLAKE3_HEX_LENGTH: usize = 64;
@@ -211,6 +213,56 @@ pub(crate) fn build_provider_checkpoint_manifest(
     Ok(manifest)
 }
 
+pub(crate) fn build_dev_provider_prefix_manifest(
+    plan: &SourceBuiltFixedPointPlan,
+    observations: Vec<ProviderCheckpointStageObservation>,
+    payloads: Vec<CheckpointPayloadIdentity>,
+) -> Result<ProviderCheckpointManifest, CheckpointError> {
+    let completed_count = observations.len();
+    let required = dev_provider_prefix_payload_ids(completed_count)?;
+    validate_payload_roles(&payloads, &required)?;
+    let resource_bounds_digest_blake3 = resource_bounds_digest(&plan.resource_bounds)?;
+    let lookup_key_blake3 = provider_checkpoint_lookup_key(plan)?;
+    let stages = build_stage_records(plan, observations, &resource_bounds_digest_blake3)?;
+    let manifest = ProviderCheckpointManifest {
+        schema: DEV_PROVIDER_PREFIX_SCHEMA.to_string(),
+        origin: ProofCheckpointOrigin::DevExecution,
+        lookup_key_blake3,
+        resource_bounds_digest_blake3,
+        stages,
+        payloads,
+    };
+    validate_manifest_shape(&manifest)?;
+    validate_stage_payload_links(&manifest.stages, &manifest.payloads)?;
+    assert_eq!(manifest.stages.len(), completed_count);
+    assert_eq!(manifest.payloads.len(), required.len());
+    Ok(manifest)
+}
+
+pub(crate) fn dev_provider_prefix_payload_ids(completed_count: usize) -> Result<Vec<&'static str>, CheckpointError> {
+    validate_prefix_stage_count(completed_count)?;
+    Ok(REQUIRED_PAYLOAD_IDS
+        .into_iter()
+        .filter(|payload_id| match completed_count {
+            1 => *payload_id == PAYLOAD_STAGEX_TRANSITION,
+            count if count == STAGEX_PROVIDER_STAGE_INDEX + 1 => {
+                matches!(*payload_id, PAYLOAD_STAGEX_TRANSITION | PAYLOAD_STAGEX_PROVIDER)
+            }
+            count if count == NATIVE_PROVIDER_STAGE_INDEX + 1 => {
+                !matches!(*payload_id, PAYLOAD_RUST_PROVIDER | PAYLOAD_TOOLCHAIN_CLOSURE | PAYLOAD_RUST_ACTION_TRUST)
+            }
+            _ => true,
+        })
+        .collect())
+}
+
+fn validate_prefix_stage_count(completed_count: usize) -> Result<(), CheckpointError> {
+    if completed_count == 0 || completed_count > PROVIDER_CHECKPOINT_STAGE_COUNT {
+        return Err(checkpoint_error("dev provider prefix stage count is outside bounds"));
+    }
+    Ok(())
+}
+
 pub(crate) fn admit_promoted_provider_checkpoint(
     plan: &SourceBuiltFixedPointPlan,
     manifest: &ProviderCheckpointManifest,
@@ -267,14 +319,16 @@ fn admit_provider_checkpoint(
     validate_stage_records(plan, &manifest.stages, &expected_resource_bounds)?;
     validate_semantic_provider_outputs(plan, &manifest.stages, expected_stagex_provider_digest_blake3)?;
     validate_stage_payload_links(&manifest.stages, &manifest.payloads)?;
-    validate_payloads(observed_payloads)?;
+    // Shape validation already checked the manifest payloads. Exact equality
+    // also requires every observed role, bound, kind, and digest to match.
     if manifest.payloads != observed_payloads {
         return Err(checkpoint_error("provider checkpoint payload observations do not match the manifest"));
     }
     let checkpoint_digest_blake3 = provider_checkpoint_manifest_digest(manifest)?;
     let completed_stage_count = u32::try_from(manifest.stages.len())
         .map_err(|_| checkpoint_error("provider checkpoint stage count does not fit u32"))?;
-    assert_eq!(usize::try_from(completed_stage_count).ok(), Some(PROVIDER_CHECKPOINT_STAGE_COUNT));
+    assert!(completed_stage_count > 0);
+    assert!(usize::try_from(completed_stage_count).is_ok_and(|count| count <= PROVIDER_CHECKPOINT_STAGE_COUNT));
     assert_eq!(checkpoint_digest_blake3.len(), BLAKE3_HEX_LENGTH);
     Ok(ProviderCheckpointAdmission {
         checkpoint_digest_blake3,
@@ -320,7 +374,12 @@ pub(crate) fn provider_checkpoint_manifest_digest(
     manifest: &ProviderCheckpointManifest,
 ) -> Result<String, CheckpointError> {
     validate_manifest_shape(manifest)?;
-    digest_serialized(PROVIDER_CHECKPOINT_MANIFEST_CONTEXT, manifest)
+    let context = if manifest.schema == DEV_PROVIDER_PREFIX_SCHEMA {
+        DEV_PROVIDER_PREFIX_MANIFEST_CONTEXT
+    } else {
+        PROVIDER_CHECKPOINT_MANIFEST_CONTEXT
+    };
+    digest_serialized(context, manifest)
 }
 
 fn build_stage_records(
@@ -328,9 +387,11 @@ fn build_stage_records(
     observations: Vec<ProviderCheckpointStageObservation>,
     resource_bounds_digest_blake3: &str,
 ) -> Result<Vec<ProviderCheckpointStageRecord>, CheckpointError> {
+    let completed_count = observations.len();
+    validate_prefix_stage_count(completed_count)?;
     let mut outputs = BTreeMap::new();
-    let mut records = Vec::with_capacity(PROVIDER_CHECKPOINT_STAGE_COUNT);
-    for (stage, observation) in plan.stages.iter().take(PROVIDER_CHECKPOINT_STAGE_COUNT).zip(observations) {
+    let mut records = Vec::with_capacity(completed_count);
+    for (stage, observation) in plan.stages.iter().take(completed_count).zip(observations) {
         validate_stage_observation(stage.output, &observation)?;
         let stage_authority_digest_blake3 =
             stage_authority_digest(plan, stage, &outputs, resource_bounds_digest_blake3)?;
@@ -348,7 +409,7 @@ fn build_stage_records(
             fallback_events: Vec::new(),
         });
     }
-    assert_eq!(records.len(), PROVIDER_CHECKPOINT_STAGE_COUNT);
+    assert_eq!(records.len(), completed_count);
     Ok(records)
 }
 
@@ -357,11 +418,9 @@ fn validate_stage_records(
     records: &[ProviderCheckpointStageRecord],
     resource_bounds_digest_blake3: &str,
 ) -> Result<(), CheckpointError> {
-    if records.len() != PROVIDER_CHECKPOINT_STAGE_COUNT {
-        return Err(checkpoint_error("provider checkpoint does not contain the exact provider-stage prefix"));
-    }
+    validate_prefix_stage_count(records.len())?;
     let mut outputs = BTreeMap::new();
-    for (stage, record) in plan.stages.iter().take(PROVIDER_CHECKPOINT_STAGE_COUNT).zip(records) {
+    for (stage, record) in plan.stages.iter().take(records.len()).zip(records) {
         validate_stage_record(stage.stage_id.as_str(), stage.output, record)?;
         let expected = stage_authority_digest(plan, stage, &outputs, resource_bounds_digest_blake3)?;
         if record.stage_authority_digest_blake3 != expected {
@@ -369,7 +428,7 @@ fn validate_stage_records(
         }
         outputs.insert(record.output_role, record.output_digest_blake3.clone());
     }
-    assert_eq!(outputs.len(), PROVIDER_CHECKPOINT_STAGE_COUNT);
+    assert_eq!(outputs.len(), records.len());
     Ok(())
 }
 
@@ -426,20 +485,18 @@ fn validate_semantic_provider_outputs(
     records: &[ProviderCheckpointStageRecord],
     expected_stagex_provider_digest_blake3: &str,
 ) -> Result<(), CheckpointError> {
-    let stagex_record = records
-        .get(STAGEX_PROVIDER_STAGE_INDEX)
-        .ok_or_else(|| checkpoint_error("checkpoint is missing the StageX provider stage"))?;
-    if stagex_record.semantic_output_digest_blake3 != expected_stagex_provider_digest_blake3 {
-        return Err(checkpoint_error("checkpoint StageX provider semantic identity mismatch"));
+    if let Some(record) = records.get(STAGEX_PROVIDER_STAGE_INDEX) {
+        if record.semantic_output_digest_blake3 != expected_stagex_provider_digest_blake3 {
+            return Err(checkpoint_error("checkpoint StageX provider semantic identity mismatch"));
+        }
+        assert_eq!(record.output_role, ProofOutputRole::StagexProvider);
     }
-    let native_record = records
-        .get(NATIVE_PROVIDER_STAGE_INDEX)
-        .ok_or_else(|| checkpoint_error("checkpoint is missing the native provider stage"))?;
-    if native_record.semantic_output_digest_blake3 != plan.policies.expected_native_provider_digest_blake3 {
-        return Err(checkpoint_error("checkpoint native provider semantic identity mismatch"));
+    if let Some(record) = records.get(NATIVE_PROVIDER_STAGE_INDEX) {
+        if record.semantic_output_digest_blake3 != plan.policies.expected_native_provider_digest_blake3 {
+            return Err(checkpoint_error("checkpoint native provider semantic identity mismatch"));
+        }
+        assert_eq!(record.output_role, ProofOutputRole::FullSourceNativeProvider);
     }
-    assert_eq!(stagex_record.output_role, ProofOutputRole::StagexProvider);
-    assert_eq!(native_record.output_role, ProofOutputRole::FullSourceNativeProvider);
     Ok(())
 }
 
@@ -462,7 +519,8 @@ fn validate_stage_payload_links(
             return Err(checkpoint_error(format!("checkpoint stage output is not bound to payload {payload_id}")));
         }
     }
-    assert_eq!(records.len(), PROVIDER_CHECKPOINT_STAGE_COUNT);
+    assert!(!records.is_empty());
+    assert!(records.len() <= PROVIDER_CHECKPOINT_STAGE_COUNT);
     debug_assert!(records.iter().all(|record| !record.payload_digest_blake3.is_empty()));
     Ok(())
 }
@@ -480,15 +538,24 @@ fn payload_id_for_output(role: ProofOutputRole) -> Result<&'static str, Checkpoi
 }
 
 fn validate_manifest_shape(manifest: &ProviderCheckpointManifest) -> Result<(), CheckpointError> {
-    if manifest.schema != PROVIDER_CHECKPOINT_SCHEMA {
-        return Err(checkpoint_error("provider checkpoint schema mismatch"));
+    match manifest.schema.as_str() {
+        PROVIDER_CHECKPOINT_SCHEMA => {
+            if manifest.stages.len() != PROVIDER_CHECKPOINT_STAGE_COUNT {
+                return Err(checkpoint_error("provider checkpoint stage count mismatch"));
+            }
+            validate_payloads(&manifest.payloads)?;
+        }
+        DEV_PROVIDER_PREFIX_SCHEMA => {
+            if manifest.origin != ProofCheckpointOrigin::DevExecution {
+                return Err(checkpoint_error("dev provider prefix cannot carry promoted origin"));
+            }
+            let required = dev_provider_prefix_payload_ids(manifest.stages.len())?;
+            validate_payload_roles(&manifest.payloads, &required)?;
+        }
+        _ => return Err(checkpoint_error("provider checkpoint schema mismatch")),
     }
     validate_digest("checkpoint lookup key", &manifest.lookup_key_blake3)?;
     validate_digest("checkpoint resource bounds", &manifest.resource_bounds_digest_blake3)?;
-    if manifest.stages.len() != PROVIDER_CHECKPOINT_STAGE_COUNT {
-        return Err(checkpoint_error("provider checkpoint stage count mismatch"));
-    }
-    validate_payloads(&manifest.payloads)?;
     Ok(())
 }
 
@@ -543,10 +610,14 @@ fn validate_observation_count(observations: &[ProviderCheckpointStageObservation
 }
 
 fn validate_payloads(payloads: &[CheckpointPayloadIdentity]) -> Result<(), CheckpointError> {
-    if payloads.len() != PROVIDER_CHECKPOINT_PAYLOAD_COUNT {
+    validate_payload_roles(payloads, &REQUIRED_PAYLOAD_IDS)
+}
+
+fn validate_payload_roles(payloads: &[CheckpointPayloadIdentity], required: &[&str]) -> Result<(), CheckpointError> {
+    if payloads.len() != required.len() {
         return Err(checkpoint_error("provider checkpoint payload count mismatch"));
     }
-    let required = REQUIRED_PAYLOAD_IDS.into_iter().collect::<BTreeSet<_>>();
+    let required = required.iter().copied().collect::<BTreeSet<_>>();
     let mut observed = BTreeSet::new();
     for payload in payloads {
         validate_text("checkpoint payload id", &payload.payload_id)?;
@@ -819,6 +890,8 @@ fn checkpoint_test_source_kind(role: SourceAuthorityRole) -> crate::source_built
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod dev_prefix;
 
     const DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";

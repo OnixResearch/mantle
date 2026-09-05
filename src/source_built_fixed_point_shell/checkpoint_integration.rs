@@ -1,5 +1,9 @@
 use super::*;
 
+mod dev_prefix;
+pub(super) use dev_prefix::ProviderPrefix;
+pub(super) use dev_prefix::publish_dev_provider_boundary;
+
 const CHECKPOINT_ORIGIN_TOOLCHAIN_CLOSURE_FILE: &str = "source-built-toolchain-closure.json";
 const CHECKPOINT_CLOSURE_RELOCATION_REPORT_FILE: &str = "provider-checkpoint-closure-relocation.json";
 const CHECKPOINT_CLOSURE_RELOCATION_REPORT_SCHEMA: &str = "mantle-source-built-checkpoint-closure-relocation-v1";
@@ -513,30 +517,62 @@ pub(super) enum DevProviderResume {
     Complete(Box<ConstructedProviders>),
 }
 
+pub(super) fn admit_dev_checkpoint_identity(
+    store: &Path,
+    plan: &SourceBuiltFixedPointPlan,
+    digest: &str,
+    limits: crate::source_built_fixed_point_checkpoint_shell::ProviderCheckpointLimits,
+) -> Result<Option<crate::source_built_fixed_point_checkpoint_shell::AdmittedProviderCheckpoint>, RunError> {
+    if let Some(admitted) = crate::source_built_fixed_point_checkpoint_shell::admit_dev_provider_prefix(
+        store,
+        plan,
+        digest,
+        STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST,
+        limits,
+    )? {
+        return Ok(Some(admitted));
+    }
+    let legacy = crate::source_built_fixed_point_checkpoint_shell::admit_dev_provider_checkpoint_store(
+        store,
+        plan,
+        STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST,
+        limits,
+    )?;
+    if legacy.as_ref().is_some_and(|admitted| admitted.admission.checkpoint_digest_blake3 != digest) {
+        return Err(proof_error("dev checkpoint does not match the selected content reference".to_string()));
+    }
+    Ok(legacy)
+}
+
 pub(super) fn restore_dev_provider_stage(
     options: &SourceBuiltFixedPointOptions<'_>,
     prepared: &PreparedAttempt,
     checkpoint_store: &Path,
     completed_stage: crunch_dev_resume_core::ResumeStage,
+    checkpoint_digest: &str,
 ) -> Result<Option<DevProviderResume>, crate::source_built_fixed_point_checkpoint_shell::DevRestoreError> {
+    const UNUSED_NATIVE_BASENAME: &str = "not-restored-native-provider";
     let limits = crate::source_built_fixed_point_checkpoint_shell::provider_checkpoint_limits(options.disk_bytes_max);
-    let Some(admitted) = crate::source_built_fixed_point_checkpoint_shell::admit_dev_provider_checkpoint_store(
-        checkpoint_store,
-        &prepared.plan,
-        STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST,
-        limits,
-    )?
+    let Some(admitted) = admit_dev_checkpoint_identity(checkpoint_store, &prepared.plan, checkpoint_digest, limits)?
     else {
         return Ok(None);
     };
-    let stagex_basename = checkpoint_payload_basename(
-        &admitted.manifest,
-        crate::source_built_fixed_point_checkpoint::PAYLOAD_STAGEX_PROVIDER,
-    )?;
-    let native_basename = checkpoint_payload_basename(
-        &admitted.manifest,
-        crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_PROVIDER,
-    )?;
+    let stagex_basename = if completed_stage == crunch_dev_resume_core::ResumeStage::StagexTransition {
+        STAGEX_PROVIDER_STORE_BASENAME
+    } else {
+        checkpoint_payload_basename(
+            &admitted.manifest,
+            crate::source_built_fixed_point_checkpoint::PAYLOAD_STAGEX_PROVIDER,
+        )?
+    };
+    let native_basename = if completed_stage < crunch_dev_resume_core::ResumeStage::FullSourceNativeProvider {
+        UNUSED_NATIVE_BASENAME
+    } else {
+        checkpoint_payload_basename(
+            &admitted.manifest,
+            crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_PROVIDER,
+        )?
+    };
     let paths = RestoredProviderPaths::new(prepared, stagex_basename, native_basename)?;
     let result = restore_dev_provider_payloads(options, prepared, paths, admitted, completed_stage);
     let origin = prepared.staging_dir.join(CHECKPOINT_ORIGIN_EVIDENCE_DIR);
@@ -837,6 +873,7 @@ fn validate_restored_native_prefix(
     paths: &RestoredProviderPaths,
     restored: &crate::source_built_fixed_point_checkpoint_shell::RestoredProviderCheckpoint,
 ) -> Result<NativeProviderPrefix, RunError> {
+    require_owned_relocation_payload(restored, &paths.rust_host_evidence)?;
     let stagex_logical =
         register_adopted_provider(&paths.stagex_provider, &prepared.native_store_dir, &prepared.native_state_dir)?;
     if stagex_logical != STAGEX_PROVIDER_LOGICAL_PATH {
@@ -856,12 +893,13 @@ fn validate_restored_native_prefix(
     let host_manifest = paths
         .rust_host_evidence
         .join(crate::full_source_rust_binding_shell::FULL_SOURCE_RUST_HOST_TOOL_MANIFEST_FILE);
+    relocate_restored_host_manifest(paths, &host_manifest)?;
     let host_observation = crate::full_source_rust_binding_shell::observe_full_source_rust_host_tools(
         &host_manifest,
         &native_admission.output_digest_blake3,
     )
     .map_err(|error| proof_error(format!("validating resumed Rust host-tool evidence: {error}")))?;
-    let rust_host_tools = resumed_host_tool_observations(&host_observation.manifest)?;
+    let rust_host_tools = resumed_host_tool_observations(&host_observation.manifest, paths)?;
     let native_provider = restored_native_provider_observation(
         prepared,
         &paths.native_provider,
@@ -873,7 +911,7 @@ fn validate_restored_native_prefix(
         stagex_transition_execution_dir: paths.stagex_transition.clone(),
         stagex_provider_report: restored_stagex_provider_report(&paths.stagex_provider, restored)?,
         native_provider,
-        native_action_trust: Some(restored_native_action_trust(paths)?),
+        native_action_trust: Some(restored_native_action_trust(paths, restored.manifest.origin)?),
         native_admission,
         native_admission_report_path,
         rust_host_tools,
@@ -887,13 +925,15 @@ fn validate_restored_native_prefix(
 
 fn resumed_host_tool_observations(
     manifest: &crate::full_source_rust_binding::FullSourceRustHostToolManifest,
+    paths: &RestoredProviderPaths,
 ) -> Result<BTreeMap<String, BuildObservation>, RunError> {
     let mut observations = BTreeMap::new();
     for tool in &manifest.tools {
         let label = rust_host_tool_name(tool.role).to_string();
+        let root = path_to_utf8(paths.rust_host_tool(&label), "restored host-tool root")?;
         let observation = resumed_build_observation(
             &label,
-            &tool.path,
+            &root,
             &tool.construction_receipt_path,
             &tool.construction_receipt_digest_blake3,
         )?;
@@ -951,6 +991,8 @@ fn validate_restored_provider_checkpoint(
     paths: RestoredProviderPaths,
     restored: crate::source_built_fixed_point_checkpoint_shell::RestoredProviderCheckpoint,
 ) -> Result<ConstructedProviders, RunError> {
+    require_owned_relocation_payload(&restored, &paths.rust_provider)?;
+    require_owned_relocation_payload(&restored, &paths.rust_host_evidence)?;
     let stagex_logical =
         register_adopted_provider(&paths.stagex_provider, &prepared.native_store_dir, &prepared.native_state_dir)?;
     if stagex_logical != STAGEX_PROVIDER_LOGICAL_PATH {
@@ -986,7 +1028,7 @@ fn validate_restored_provider_checkpoint(
         .map_err(|error| proof_error(format!("validating restored Rust provider: {error}")))?;
     let recipe_digest = crate::protected_exec::blake3_file_hex(&prepared.source_root.join(RUST_RECIPE_NCL))
         .map_err(|error| proof_error(format!("hashing restored Rust provider recipe: {error}")))?;
-    let native_action_trust = restored_native_action_trust(&paths)?;
+    let native_action_trust = restored_native_action_trust(&paths, restored.manifest.origin)?;
     materialize_relocated_toolchain_closure(prepared, &paths, &restored, &rust_binding_relocation)?;
     let native_provider = restored_native_provider_observation(
         prepared,
@@ -1051,32 +1093,7 @@ fn relocate_restored_rust_binding(paths: &RestoredProviderPaths) -> Result<RustB
         require_relocated_binding_path(&relocated, "native artifact")?;
         artifact.path = relative.to_string();
     }
-    for tool in &mut binding.host_tools {
-        let name = rust_host_tool_name(tool.role);
-        let relative =
-            crate::full_source_rust_binding_shell::full_source_rust_host_tool_executable_relative_path(tool.role)
-                .ok_or_else(|| {
-                    proof_error(format!("restored Rust binding has unsupported host-tool role {:?}", tool.role))
-                })?;
-        let executable = paths.rust_host_tool(name).join(relative);
-        require_relocated_binding_path(&executable, "host tool")?;
-        let executable_path = path_to_utf8(&executable, "host tool")?;
-        let (receipt_path, receipt_digest_blake3) =
-            relocate_host_tool_receipt(&paths.rust_host_evidence, &tool.construction_receipt_path, &executable_path)?;
-        tool.path = executable_path;
-        tool.construction_receipt_path = receipt_path;
-        tool.construction_receipt_digest_blake3 = receipt_digest_blake3;
-    }
-    for input in &mut binding.host_support_inputs {
-        if input.id != "linux-headers" {
-            return Err(proof_error(format!("restored Rust binding has unsupported host support input {}", input.id)));
-        }
-        let headers = paths.rust_host_tool("linux-headers");
-        require_relocated_binding_path(headers, "Linux headers")?;
-        input.path = path_to_utf8(headers, "Linux headers")?;
-        input.attestation_path =
-            relocate_evidence_file(&paths.rust_host_evidence, &input.attestation_path, "Linux headers attestation")?;
-    }
+    relocate_host_bindings(paths, &mut binding.host_tools, &mut binding.host_support_inputs)?;
     let relocated_bytes = crate::full_source_rust_binding::canonical_full_source_rust_binding_bytes(&binding)
         .map_err(|error| proof_error(format!("serializing relocated Rust binding: {error}")))?;
     fs::write(&binding_path, &relocated_bytes)
@@ -1085,6 +1102,66 @@ fn relocate_restored_rust_binding(paths: &RestoredProviderPaths) -> Result<RustB
         observe_rust_binding_relocation(paths, origin_sysroot_digest_blake3, &origin_bytes, &relocated_bytes)?;
     write_rust_binding_relocation_report(paths, &binding, &binding_path, &observation)?;
     Ok(observation)
+}
+
+fn require_owned_relocation_payload(
+    restored: &crate::source_built_fixed_point_checkpoint_shell::RestoredProviderCheckpoint,
+    path: &Path,
+) -> Result<(), RunError> {
+    if !restored.owns_payload(path) {
+        return Err(proof_error("binding relocation cannot modify a pre-existing restore payload".to_string()));
+    }
+    Ok(())
+}
+
+fn relocate_restored_host_manifest(paths: &RestoredProviderPaths, manifest_path: &Path) -> Result<(), RunError> {
+    let bytes =
+        fs::read(manifest_path).map_err(|error| proof_error(format!("reading resumed host manifest: {error}")))?;
+    let mut manifest: crate::full_source_rust_binding::FullSourceRustHostToolManifest = serde_json::from_slice(&bytes)
+        .map_err(|error| proof_error(format!("parsing resumed host manifest: {error}")))?;
+    crate::full_source_rust_binding::validate_full_source_rust_host_tool_manifest(&manifest)
+        .map_err(|error| proof_error(format!("validating resumed host manifest: {error}")))?;
+    relocate_host_bindings(paths, &mut manifest.tools, &mut manifest.support_inputs)?;
+    crate::full_source_rust_binding::validate_full_source_rust_host_tool_manifest(&manifest)
+        .map_err(|error| proof_error(format!("validating relocated host manifest: {error}")))?;
+    let relocated = serde_json::to_vec_pretty(&manifest)
+        .map_err(|error| proof_error(format!("serializing relocated host manifest: {error}")))?;
+    fs::write(manifest_path, relocated)
+        .map_err(|error| proof_error(format!("writing relocated host manifest: {error}")))
+}
+
+fn relocate_host_bindings(
+    paths: &RestoredProviderPaths,
+    tools: &mut [crate::full_source_rust_binding::FullSourceRustHostToolBinding],
+    support_inputs: &mut [crate::full_source_rust_binding::FullSourceRustHostSupportInputBinding],
+) -> Result<(), RunError> {
+    for tool in tools {
+        let name = rust_host_tool_name(tool.role);
+        let relative =
+            crate::full_source_rust_binding_shell::full_source_rust_host_tool_executable_relative_path(tool.role)
+                .ok_or_else(|| {
+                    proof_error(format!("restored binding has unsupported host-tool role {:?}", tool.role))
+                })?;
+        let executable = paths.rust_host_tool(name).join(relative);
+        require_relocated_binding_path(&executable, "host tool")?;
+        let executable_path = path_to_utf8(&executable, "host tool")?;
+        let (receipt_path, receipt_digest) =
+            relocate_host_tool_receipt(&paths.rust_host_evidence, &tool.construction_receipt_path, &executable_path)?;
+        tool.path = executable_path;
+        tool.construction_receipt_path = receipt_path;
+        tool.construction_receipt_digest_blake3 = receipt_digest;
+    }
+    for input in support_inputs {
+        if input.id != "linux-headers" {
+            return Err(proof_error(format!("restored binding has unsupported host support input {}", input.id)));
+        }
+        let headers = paths.rust_host_tool("linux-headers");
+        require_relocated_binding_path(headers, "Linux headers")?;
+        input.path = path_to_utf8(headers, "Linux headers")?;
+        input.attestation_path =
+            relocate_evidence_file(&paths.rust_host_evidence, &input.attestation_path, "Linux headers attestation")?;
+    }
+    Ok(())
 }
 
 fn observe_rust_binding_relocation(
@@ -1270,7 +1347,10 @@ fn rust_host_tool_name(role: crate::full_source_rust_binding::FullSourceRustHost
     }
 }
 
-fn restored_native_action_trust(paths: &RestoredProviderPaths) -> Result<NativeBuildActionTrustEvidence, RunError> {
+fn restored_native_action_trust(
+    paths: &RestoredProviderPaths,
+    origin: crate::source_built_fixed_point_checkpoint::ProofCheckpointOrigin,
+) -> Result<NativeBuildActionTrustEvidence, RunError> {
     let plan: crate::source_built_derivation_action_plan::EagerDerivationActionPlan = serde_json::from_slice(
         &fs::read(&paths.origin_native_action_plan)
             .map_err(|error| proof_error(format!("reading restored native action plan: {error}")))?,
@@ -1284,21 +1364,39 @@ fn restored_native_action_trust(paths: &RestoredProviderPaths) -> Result<NativeB
                 .map_err(|error| proof_error(format!("reading restored native action reconciliation: {error}")))?,
         )
         .map_err(|error| proof_error(format!("parsing restored native action reconciliation: {error}")))?;
-    crate::source_built_derivation_action_plan::require_complete_eager_derivation_reconciliation(&reconciliation)
-        .map_err(|error| proof_error(format!("validating restored native action reconciliation: {error}")))?;
-    if reconciliation.action_plan_digest_blake3 != plan.plan_digest_blake3
-        || reconciliation.planned_action_count != plan.action_count
-    {
-        return Err(proof_error("restored native action plan and reconciliation linkage mismatch".to_string()));
-    }
-    assert!(reconciliation.is_complete());
-    debug_assert_eq!(reconciliation.matched_action_count, plan.action_count);
+    validate_checkpoint_native_reconciliation(&plan, &reconciliation, origin)?;
+    debug_assert_eq!(reconciliation.action_plan_digest_blake3, plan.plan_digest_blake3);
+    debug_assert!(reconciliation.matched_action_count <= plan.action_count);
     Ok(NativeBuildActionTrustEvidence {
         plan_path: paths.origin_native_action_plan.clone(),
         reconciliation_path: paths.origin_native_action_reconciliation.clone(),
         plan,
         reconciliation,
     })
+}
+
+fn validate_checkpoint_native_reconciliation(
+    plan: &crate::source_built_derivation_action_plan::EagerDerivationActionPlan,
+    reconciliation: &crate::source_built_derivation_action_plan::EagerDerivationReconciliation,
+    origin: crate::source_built_fixed_point_checkpoint::ProofCheckpointOrigin,
+) -> Result<(), RunError> {
+    let expected = crate::source_built_derivation_action_plan::reconcile_eager_derivation_actions(
+        plan,
+        &reconciliation.observed_event_ids_blake3,
+    )
+    .map_err(|error| proof_error(format!("replaying restored native action evidence: {error}")))?;
+    if expected != *reconciliation {
+        return Err(proof_error("restored native action evidence does not match deterministic replay".to_string()));
+    }
+    match origin {
+        crate::source_built_fixed_point_checkpoint::ProofCheckpointOrigin::PromotedExecution => {
+            crate::source_built_derivation_action_plan::require_complete_eager_derivation_reconciliation(reconciliation)
+                .map_err(|error| proof_error(format!("validating restored native action reconciliation: {error}")))
+        }
+        crate::source_built_fixed_point_checkpoint::ProofCheckpointOrigin::DevExecution => {
+            validate_native_build_reconciliation("restored dev prefix", reconciliation)
+        }
+    }
 }
 
 fn materialize_relocated_toolchain_closure(
@@ -1455,25 +1553,6 @@ fn write_checkpoint_restore_transcript(
         restored.admission.completed_stage_count,
     );
     write_bytes_create_new(&transcript, text.as_bytes())
-}
-
-pub(super) fn publish_dev_resume_provider_checkpoint(
-    options: &SourceBuiltFixedPointOptions<'_>,
-    prepared: &PreparedAttempt,
-    providers: &ConstructedProviders,
-    checkpoint_store: &Path,
-) -> Result<crate::source_built_fixed_point_checkpoint_shell::PublishedProviderCheckpoint, RunError> {
-    let limits = crate::source_built_fixed_point_checkpoint_shell::provider_checkpoint_limits(options.disk_bytes_max);
-    let stage_observations = provider_checkpoint_stage_observations(prepared, providers, limits)?;
-    let payload_sources = provider_checkpoint_payload_sources(providers)?;
-    crate::source_built_fixed_point_checkpoint_shell::publish_dev_provider_checkpoint(
-        checkpoint_store,
-        &prepared.plan,
-        stage_observations,
-        &payload_sources,
-        STAGEX_PROVIDER_EXPECTED_NORMALIZED_DIGEST,
-        limits,
-    )
 }
 
 pub(super) fn publish_constructed_provider_checkpoint(
@@ -1842,6 +1921,8 @@ fn write_checkpoint_publication_transcript(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod dev_native;
 
     const DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 

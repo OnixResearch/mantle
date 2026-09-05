@@ -9,7 +9,8 @@ edition = "2024"
 
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 const CORE_ROOT: &str = "crates/crunch-dev-resume-core/src";
@@ -44,8 +45,27 @@ const NEGATIVE_FIXTURES: &[(&str, &str)] = &[
 ];
 const REQUIRED_SHELL_MARKERS: &[&str] = &[
     "prepare_dev_resume",
-    "publish_dev_resume_bundles",
+    "publish_provider_prefix_manifest",
+    "publish_fixed_point_complete",
+    "FixedPointPublication",
+    "published_bundle_identities",
     "write_dev_resume_report",
+];
+const REQUIRED_PUBLICATION_SITES: &[(&str, &[&str])] = &[
+    (ROOT_SHELL, &[
+        "ProviderPrefix::Transition",
+        "ProviderPrefix::Stagex",
+        "ProviderPrefix::Native",
+        "ProviderPrefix::Complete",
+        "cmd_cargo_free_fixed_point_self_build_with_publisher",
+        "publish_fixed_point_complete",
+    ]),
+    ("src/cargo_free_self_build.rs", &[
+        "FixedPointStage1Publisher",
+        "publish_stage1_before_continuation",
+        "publisher.publish_stage1()?",
+        "continuation()",
+    ]),
 ];
 const REQUIRED_PROMOTED_GUARDS: &[&str] = &[
     "promoted proof checkpoints conflict with dev cache, resume, and fast-fail state",
@@ -64,10 +84,7 @@ fn main() -> ExitCode {
     let findings = inspect_repository(&root).unwrap_or_else(|error| fail("repository", &error));
     inspect_fixtures(&root).unwrap_or_else(|error| fail("fixtures", &error));
     if findings.is_empty() {
-        println!(
-            "dev-resume architecture verified: findings=0 negative-fixtures={}",
-            NEGATIVE_FIXTURES.len()
-        );
+        println!("dev-resume architecture verified: findings=0 negative-fixtures={}", NEGATIVE_FIXTURES.len());
         return ExitCode::SUCCESS;
     }
     for finding in findings {
@@ -103,10 +120,9 @@ fn inspect_repository(root: &Path) -> Result<Vec<Finding>, String> {
         scan(relative.to_string_lossy().as_ref(), &read_bounded(&source)?, &mut findings);
     }
     let shell = read_bounded(&root.join(SHELL_ROOT).join("../dev_resume.rs"))?;
-    for marker in REQUIRED_SHELL_MARKERS {
-        if !shell.contains(marker) {
-            findings.push(finding(SHELL_ROOT, "shell-shape", *marker));
-        }
+    require_markers(SHELL_ROOT, &shell, REQUIRED_SHELL_MARKERS, &mut findings);
+    for (path, markers) in REQUIRED_PUBLICATION_SITES {
+        require_markers(path, &read_bounded(&root.join(path))?, markers, &mut findings);
     }
     let root_shell = read_bounded(&root.join(ROOT_SHELL))?;
     for marker in REQUIRED_PROMOTED_GUARDS {
@@ -120,6 +136,10 @@ fn inspect_repository(root: &Path) -> Result<Vec<Finding>, String> {
 }
 
 fn inspect_fixtures(root: &Path) -> Result<(), String> {
+    inspect_marker_controls(REQUIRED_SHELL_MARKERS)?;
+    for (_, markers) in REQUIRED_PUBLICATION_SITES {
+        inspect_marker_controls(markers)?;
+    }
     let mut positive = Vec::new();
     scan(POSITIVE_FIXTURE, &read_bounded(&root.join(POSITIVE_FIXTURE))?, &mut positive);
     if !positive.is_empty() {
@@ -130,6 +150,32 @@ fn inspect_fixtures(root: &Path) -> Result<(), String> {
         scan(name, &read_bounded(&root.join(NEGATIVE_ROOT).join(name))?, &mut findings);
         if !findings.iter().any(|finding| finding.authority == *expected) {
             return Err(format!("negative fixture {name} did not report {expected}"));
+        }
+    }
+    Ok(())
+}
+
+fn require_markers(path: &str, text: &str, markers: &[&str], findings: &mut Vec<Finding>) {
+    for marker in markers {
+        if !text.contains(marker) {
+            findings.push(finding(path, "shell-shape", *marker));
+        }
+    }
+}
+
+fn inspect_marker_controls(markers: &[&str]) -> Result<(), String> {
+    let positive = markers.join("\n");
+    let mut findings = Vec::new();
+    require_markers("positive-marker-control", &positive, markers, &mut findings);
+    if !findings.is_empty() {
+        return Err("positive shell marker control failed".to_string());
+    }
+    for missing in markers {
+        let negative = markers.iter().filter(|marker| *marker != missing).copied().collect::<Vec<_>>().join("\n");
+        let mut findings = Vec::new();
+        require_markers("negative-marker-control", &negative, markers, &mut findings);
+        if !findings.iter().any(|finding| finding.marker == *missing) {
+            return Err(format!("negative shell marker control did not reject {missing}"));
         }
     }
     Ok(())

@@ -1440,7 +1440,31 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
     Ok(())
 }
 
+#[cfg(test)]
+mod prefix_publication_tests;
+
+pub(crate) trait FixedPointStage1Publisher {
+    fn publish_stage1(&self) -> Result<(), RunError>;
+}
+
+fn publish_stage1_before_continuation<T>(
+    publisher: Option<&dyn FixedPointStage1Publisher>,
+    continuation: impl FnOnce() -> Result<T, RunError>,
+) -> Result<T, RunError> {
+    if let Some(publisher) = publisher {
+        publisher.publish_stage1()?;
+    }
+    continuation()
+}
+
 pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildOptions<'_>) -> Result<(), RunError> {
+    cmd_cargo_free_fixed_point_self_build_with_publisher(options, None)
+}
+
+pub(crate) fn cmd_cargo_free_fixed_point_self_build_with_publisher(
+    options: CargoFreeSelfBuildOptions<'_>,
+    publisher: Option<&dyn FixedPointStage1Publisher>,
+) -> Result<(), RunError> {
     let root = canonicalize_root(options.root)?;
     let bundle_dir = absolutize(&root, options.out_dir);
     ensure_outside_root(&bundle_dir, &root)?;
@@ -1509,18 +1533,25 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildO
         let stage1 = blocked_fixed_point_stage(stage1, "stage1 succeeded without produced binary path".to_string());
         return finish_fixed_point(&finish_context, stage1, None, BLOCKED_STATUS);
     };
-    let stage2 = execute_fixed_point_stage(
-        &plan.stages[FIXED_POINT_STAGE2_INDEX],
-        stage1_binary,
-        &compatibility.summary.stage_rustc,
-        &loaded_toolchain_closure,
-        loaded_rust_provider.source_built_shell.as_ref(),
-        &loaded_rust_provider.source_built_host_tools,
-        &loaded_rust_provider.source_built_native_artifacts,
-        loaded_rust_provider.source_built_action_trust.as_ref(),
-        options.rust_action_resources.as_ref(),
-        stage_policy_digest,
-    )?;
+    let publisher = if options.resume == CargoFreeFixedPointResume::None {
+        publisher
+    } else {
+        None
+    };
+    let stage2 = publish_stage1_before_continuation(publisher, || {
+        execute_fixed_point_stage(
+            &plan.stages[FIXED_POINT_STAGE2_INDEX],
+            stage1_binary,
+            &compatibility.summary.stage_rustc,
+            &loaded_toolchain_closure,
+            loaded_rust_provider.source_built_shell.as_ref(),
+            &loaded_rust_provider.source_built_host_tools,
+            &loaded_rust_provider.source_built_native_artifacts,
+            loaded_rust_provider.source_built_action_trust.as_ref(),
+            options.rust_action_resources.as_ref(),
+            stage_policy_digest,
+        )
+    })?;
     if !stage2.success {
         return finish_fixed_point(&finish_context, stage1, Some(stage2), BLOCKED_STATUS);
     }

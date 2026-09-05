@@ -3,6 +3,8 @@
 //! This module observes, publishes, loads, admits, and restores checkpoint
 //! payloads. The pure checkpoint core owns every authority decision.
 
+mod dev_prefix;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read as _;
@@ -16,6 +18,9 @@ use std::os::unix::fs::PermissionsExt as _;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
+
+pub(crate) use dev_prefix::admit_dev_provider_prefix;
+pub(crate) use dev_prefix::publish_dev_provider_prefix;
 
 use crate::errors::RunError;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPlan;
@@ -90,6 +95,12 @@ pub(crate) struct RestoredProviderCheckpoint {
     pub(crate) admission: ProviderCheckpointAdmission,
     /// Only payload paths created by this restore permit rollback removal.
     created_payload_paths: Vec<PathBuf>,
+}
+
+impl RestoredProviderCheckpoint {
+    pub(crate) fn owns_payload(&self, path: &Path) -> bool {
+        self.created_payload_paths.iter().any(|created| created == path)
+    }
 }
 
 #[derive(Debug)]
@@ -169,6 +180,7 @@ pub(crate) fn publish_provider_checkpoint(
     )
 }
 
+#[cfg(test)]
 pub(crate) fn publish_dev_provider_checkpoint(
     checkpoint_store: &Path,
     plan: &SourceBuiltFixedPointPlan,
@@ -329,7 +341,7 @@ fn restore_one_payload(
     allow_existing_identical: bool,
 ) -> Result<bool, RunError> {
     let payload = payload_by_id(&admitted.manifest, &request.payload_id)?;
-    let source = admitted.checkpoint_root.join(&payload.relative_path);
+    let source = dev_prefix::payload_path(&admitted.checkpoint_root, &admitted.manifest, payload)?;
     if request.destination_path.exists() {
         if !allow_existing_identical {
             return Err(checkpoint_error(format!(
@@ -608,7 +620,8 @@ fn observe_manifest_payloads(
         .map(|payload| {
             let relative = Path::new(&payload.relative_path);
             validate_relative_path(relative)?;
-            observe_payload(&checkpoint_root.join(relative), &payload.payload_id, relative, payload.kind, limits)
+            let source = dev_prefix::payload_path(checkpoint_root, manifest, payload)?;
+            observe_payload(&source, &payload.payload_id, relative, payload.kind, limits)
         })
         .collect::<Result<Vec<_>, _>>()?;
     payloads.sort_by(|left, right| left.payload_id.cmp(&right.payload_id));

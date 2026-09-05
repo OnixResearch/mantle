@@ -1,0 +1,31 @@
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-dev-cache-cross-run-resume/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-dev-cache-cross-run-resume)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 00s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/tmp/mantle-dev-resume-recovery-target/debug/deps/mantle-86e9c4c3f72fa002)
+
+running 18 tests
+test source_built_fixed_point_checkpoint::tests::dev_prefix::dev_prefix_rejects_empty_and_reordered_stages ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_rejects_legacy_schema_without_action_payloads ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_rejects_changed_relevant_policy_and_forbidden_events ... ok
+test source_built_fixed_point_checkpoint::tests::dev_prefix::dev_prefix_cannot_relabel_itself_as_promoted_or_legacy_complete ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_rejects_wrong_semantic_provider_identity ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_accepts_exact_stage_authority_and_payloads ... ok
+test source_built_fixed_point_checkpoint::tests::dev_prefix::dev_prefix_rejects_gaps_extra_payloads_and_changed_observations ... ok
+test source_built_fixed_point_checkpoint::tests::promoted_checkpoint_rejects_dev_origin_and_changed_payload ... ok
+test source_built_fixed_point_checkpoint::tests::provider_lookup_ignores_later_mantle_source_but_tracks_provider_sources ... ok
+test source_built_fixed_point_checkpoint::tests::dev_prefix::dev_prefix_round_trips_each_completed_provider_boundary ... ok
+test source_built_fixed_point_checkpoint_shell::tests::dev_checkpoint_keeps_origin_separate_and_restores_a_transition_subset ... ok
+test source_built_fixed_point_checkpoint_shell::tests::dev_restore_cleanup_failure_is_not_a_restartable_rejection ... ok
+test source_built_fixed_point_checkpoint_shell::tests::dev_restore_validation_failure_removes_only_created_payloads ... ok
+test source_built_fixed_point_checkpoint_shell::tests::dev_restore_copy_rejection_preserves_reused_payloads ... ok
+test source_built_fixed_point_checkpoint_shell::tests::dev_restore_validation_preserves_new_and_reused_payloads_on_success ... ok
+test source_built_fixed_point_checkpoint_shell::tests::promoted_checkpoint_rejects_modified_payload_and_partial_candidate ... ok
+test source_built_fixed_point_checkpoint_shell::tests::promoted_checkpoint_rejects_semantically_conflicting_candidates ... ok
+test source_built_fixed_point_checkpoint_shell::tests::promoted_checkpoint_publishes_idempotently_and_restores_into_fresh_paths ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 2647 filtered out; finished in 0.04s

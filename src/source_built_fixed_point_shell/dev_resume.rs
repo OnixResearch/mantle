@@ -9,7 +9,12 @@ mod publish;
 pub(super) use load::FixedPointResume;
 pub(super) use load::PreparedDevResume;
 pub(super) use load::prepare_dev_resume;
-pub(super) use publish::publish_dev_resume_bundles;
+pub(super) use publish::FixedPointPublication;
+pub(super) use publish::checkpoint_store;
+pub(super) use publish::current_executable_digest;
+pub(super) use publish::publish_fixed_point_complete;
+pub(super) use publish::publish_provider_prefix_manifest;
+pub(super) use publish::published_bundle_identities;
 
 const DEV_RESUME_REPORT_FILE: &str = "dev-resume-report.json";
 const DEV_RESUME_STATUS: &str = "dev-only";

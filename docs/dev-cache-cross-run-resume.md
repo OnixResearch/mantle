@@ -13,9 +13,9 @@ Use both options on a source-built fixed-point development run:
 
 `--dev-resume` without `--dev-provider-cache` fails before execution.
 
-The first run executes the cold stage graph. After the full cold run succeeds, it publishes one content-addressed manifest per stage. Large provider payloads use one shared checkpoint reference.
+The first run executes the cold stage graph. Each completed stage publishes its content-addressed manifest before the next stage starts. Provider prefixes share immutable payload objects.
 
-Publication during an incomplete first run remains unsupported. An interrupted first run does not yet provide earlier stage manifests.
+An interrupted run can supply its published prefix to a new staging directory. The native prefix includes the host tools needed by the Rust provider. Mantle stage 1 publishes before stage 2 starts. Publication failure stops continuation.
 
 A later run creates a new staging directory. It remeasures cache content before the pure resume core selects a stage prefix.
 
@@ -35,7 +35,9 @@ A candidate must match all these facts:
 
 A missing, stale, modified, partial, conflicting, or unknown candidate does not authorize a skip. Mantle executes from an earlier admitted boundary.
 
-After restore validation fails, cleanup removes only payloads that the attempt created. Identical payloads that already existed remain unchanged. Failed cleanup stops the attempt instead of permitting cold fallback.
+After restore validation fails, cleanup removes only payloads that the attempt created. Identical payloads that already existed remain unchanged. Binding relocation also requires an owned restore copy. Failed cleanup stops the attempt instead of permitting cold fallback.
+
+Dev native action evidence retains missing events from cached derivations. Replay must reproduce the recorded observations. Those missing events never become fresh execution or promoted proof evidence.
 
 ## Report
 
@@ -46,7 +48,10 @@ Each successful dev attempt writes `dev-resume-report.json` in its staging direc
 - the first incomplete stage;
 - rejected cache identities and reasons;
 - the provider-cache adoption disposition;
+- bundle identities published by this attempt;
 - explicit false values for promoted receipt and release-alias writes.
+
+Before final success, `dev-resume-publications/<stage>/manifest.json` records each successful publication in the attempt directory. The cache manifest remains usable if a later stage fails.
 
 The machine schema is `schemas/machine-contracts/dev-resume-report.schema.json`.
 

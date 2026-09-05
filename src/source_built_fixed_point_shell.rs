@@ -1085,7 +1085,7 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         publish_constructed_provider_checkpoint(options, prepared, &providers)?;
         validate_runtime_bounds(options, prepared)?;
     }
-    run_cargo_free_fixed_point(options, prepared, &providers, &fixed_point_resume)?;
+    run_cargo_free_fixed_point(options, prepared, &providers, &fixed_point_resume, &resume_plan)?;
     validate_runtime_bounds(options, prepared)?;
     if is_dev {
         finish_dev_attempt(options, prepared, &providers, &resume_plan, adopt)?;
@@ -1201,6 +1201,11 @@ fn prepare_stagex_transition(
         let replay_digest = transition_input_replay_digest(prepared)?;
         write_stage_marker(prepared, "stagex-transition", &replay_digest)?;
     }
+    checkpoint_integration::publish_dev_provider_boundary(
+        options,
+        prepared,
+        checkpoint_integration::ProviderPrefix::Transition(&execution_dir),
+    )?;
     debug_assert!(execution_dir.is_dir());
     debug_assert!(event_count <= options.protected_exec_events_max);
     Ok(execution_dir)
@@ -1259,6 +1264,11 @@ fn build_stagex_provider(
     }
     validate_runtime_bounds(options, prepared)?;
     admit_restored_stagex_prefix(prepared, transition, &report)?;
+    checkpoint_integration::publish_dev_provider_boundary(
+        options,
+        prepared,
+        checkpoint_integration::ProviderPrefix::Stagex(transition, &report),
+    )?;
     debug_assert!(provider_root.is_dir());
     Ok(report)
 }
@@ -1298,18 +1308,7 @@ fn finish_dev_attempt(
     resume_plan: &crunch_dev_resume_core::ResumePlan,
     adopted: bool,
 ) -> Result<(), RunError> {
-    let is_cold_resume_source =
-        options.dev_resume && resume_plan.disposition == crunch_dev_resume_core::ResumeDisposition::ExecuteCold;
-    let published_bundle_identities = if is_cold_resume_source {
-        dev_resume::publish_dev_resume_bundles(
-            options,
-            prepared,
-            providers,
-            &prepared.staging_dir.join(FIXED_POINT_DIR),
-        )?
-    } else {
-        Vec::new()
-    };
+    let published_bundle_identities = dev_resume::published_bundle_identities(prepared)?;
     if !adopted && providers.provider_checkpoint.is_none() {
         write_dev_provider_cache(options, prepared, providers)?;
     }
@@ -2059,7 +2058,7 @@ fn construct_native_provider_prefix(
         },
     )
     .map_err(|error| proof_error(format!("constructing full-source Rust host-tool evidence: {error}")))?;
-    Ok(NativeProviderPrefix {
+    let prefix = NativeProviderPrefix {
         stagex_transition_execution_dir,
         stagex_provider_report,
         native_provider,
@@ -2069,7 +2068,13 @@ fn construct_native_provider_prefix(
         rust_host_tools: host_tools,
         rust_host_tool_evidence_dir: host_tool_manifest_dir,
         rust_host_tool_manifest_path: host_tool_manifest,
-    })
+    };
+    checkpoint_integration::publish_dev_provider_boundary(
+        options,
+        prepared,
+        checkpoint_integration::ProviderPrefix::Native(&prefix),
+    )?;
+    Ok(prefix)
 }
 
 fn construct_rust_provider_from_native_prefix(
@@ -2125,7 +2130,7 @@ fn construct_rust_provider_from_native_prefix(
         target_root: &native_provider.output.path,
         output: &toolchain_closure_path,
     })?;
-    Ok(ConstructedProviders {
+    let providers = ConstructedProviders {
         stagex_transition_execution_dir,
         stagex_provider_report,
         native_provider,
@@ -2137,7 +2142,13 @@ fn construct_rust_provider_from_native_prefix(
         rust_host_tool_evidence_dir: host_tool_manifest_dir,
         toolchain_closure_path,
         provider_checkpoint: None,
-    })
+    };
+    checkpoint_integration::publish_dev_provider_boundary(
+        options,
+        prepared,
+        checkpoint_integration::ProviderPrefix::Complete(&providers),
+    )?;
+    Ok(providers)
 }
 
 fn aggregate_native_build_action_trust(
@@ -2176,11 +2187,13 @@ fn aggregate_native_build_action_trust(
     if options.dev_provider_cache.is_none() {
         crate::source_built_derivation_action_plan::require_complete_eager_derivation_reconciliation(&reconciliation)
             .map_err(|error| proof_error(format!("native provider action reconciliation: {error}")))?;
-    } else if !reconciliation.is_complete() {
-        return Ok(None);
+    } else {
+        // Dev stages can observe cached derivations. Retain their exact action
+        // evidence without promoting missing events to fresh execution.
+        validate_native_build_reconciliation("dev native prefix", &reconciliation)?;
     }
-    assert!(reconciliation.is_complete());
-    debug_assert_eq!(plan.action_count, reconciliation.matched_action_count);
+    assert!(reconciliation.matched_action_count <= plan.action_count);
+    debug_assert_eq!(reconciliation.action_plan_digest_blake3, plan.plan_digest_blake3);
     Ok(Some(NativeBuildActionTrustEvidence {
         plan_path,
         reconciliation_path,
@@ -2421,6 +2434,7 @@ fn run_cargo_free_fixed_point(
     prepared: &PreparedAttempt,
     providers: &ConstructedProviders,
     resume: &dev_resume::FixedPointResume,
+    resume_plan: &crunch_dev_resume_core::ResumePlan,
 ) -> Result<(), RunError> {
     let target = TARGET_TRIPLE.to_string();
     let fixed_point_dir = prepared.staging_dir.join(FIXED_POINT_DIR);
@@ -2436,25 +2450,36 @@ fn run_cargo_free_fixed_point(
         storage_bytes_max: options.disk_bytes_max,
         exec_events_per_action_max: options.protected_exec_events_max,
     };
-    crate::cargo_free_self_build::cmd_cargo_free_fixed_point_self_build(CargoFreeSelfBuildOptions {
-        root: &prepared.source_root,
-        out_dir: &fixed_point_dir,
-        rustc: &providers.rust_provider.output_path.join(RUSTC_RELATIVE_PATH),
-        targets: &[target],
-        toolchain_closure: Some(&providers.toolchain_closure_path),
-        rust_source_provider: Some(&providers.rust_provider.output_path),
-        rust_action_resources: Some(rust_action_resources),
-        hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
-        resume: match resume {
-            dev_resume::FixedPointResume::None => crate::cargo_free_self_build::CargoFreeFixedPointResume::None,
-            dev_resume::FixedPointResume::Stage1 => crate::cargo_free_self_build::CargoFreeFixedPointResume::Stage1,
-            dev_resume::FixedPointResume::Complete => {
-                return Err(proof_error("complete fixed-point resume reached execution".to_string()));
-            }
+    let publication = dev_resume::FixedPointPublication {
+        options,
+        prepared,
+        resume_plan,
+    };
+    let publisher: Option<&dyn crate::cargo_free_self_build::FixedPointStage1Publisher> =
+        options.dev_resume.then_some(&publication);
+    crate::cargo_free_self_build::cmd_cargo_free_fixed_point_self_build_with_publisher(
+        CargoFreeSelfBuildOptions {
+            root: &prepared.source_root,
+            out_dir: &fixed_point_dir,
+            rustc: &providers.rust_provider.output_path.join(RUSTC_RELATIVE_PATH),
+            targets: &[target],
+            toolchain_closure: Some(&providers.toolchain_closure_path),
+            rust_source_provider: Some(&providers.rust_provider.output_path),
+            rust_action_resources: Some(rust_action_resources),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
+            resume: match resume {
+                dev_resume::FixedPointResume::None => crate::cargo_free_self_build::CargoFreeFixedPointResume::None,
+                dev_resume::FixedPointResume::Stage1 => crate::cargo_free_self_build::CargoFreeFixedPointResume::Stage1,
+                dev_resume::FixedPointResume::Complete => {
+                    return Err(proof_error("complete fixed-point resume reached execution".to_string()));
+                }
+            },
+            json: options.json,
         },
-        json: options.json,
-    })?;
-    validate_completed_fixed_point(options, providers, &fixed_point_dir)
+        publisher,
+    )?;
+    validate_completed_fixed_point(options, providers, &fixed_point_dir)?;
+    dev_resume::publish_fixed_point_complete(&publication)
 }
 
 fn validate_completed_fixed_point(
@@ -3825,7 +3850,7 @@ mod tests {
         assert!(!report.release_alias_updated);
     }
 
-    fn prepared_fixture(temp: &tempfile::TempDir, staging: PathBuf) -> PreparedAttempt {
+    pub(super) fn prepared_fixture(temp: &tempfile::TempDir, staging: PathBuf) -> PreparedAttempt {
         fs::create_dir_all(&staging).unwrap();
         fs::create_dir_all(staging.join(NATIVE_STORE_DIR)).unwrap();
         fs::create_dir_all(staging.join(NATIVE_STATE_DIR)).unwrap();
@@ -3848,7 +3873,7 @@ mod tests {
         }
     }
 
-    fn options_fixture<'a>(
+    pub(super) fn options_fixture<'a>(
         source_profile: &'a Path,
         output_dir: &'a Path,
         executable: &'a Path,
@@ -3984,6 +4009,10 @@ mod tests {
     }
 
     fn test_plan() -> SourceBuiltFixedPointPlan {
+        test_plan_with_disk_bytes(1)
+    }
+
+    pub(super) fn test_plan_with_disk_bytes(disk_bytes_max: u64) -> SourceBuiltFixedPointPlan {
         let source_inputs = [
             ("seed", SourceAuthorityRole::StagexSeed, SourceContentKind::RegularFile, 'a'),
             ("lineage", SourceAuthorityRole::StagexLineage, SourceContentKind::RegularFile, 'b'),
@@ -4029,7 +4058,7 @@ mod tests {
             },
             resource_bounds: SourceBuiltFixedPointResourceBounds {
                 elapsed_seconds_max: 1,
-                disk_bytes_max: 1,
+                disk_bytes_max,
                 open_file_descriptors_max: OPEN_FILE_LIMIT_TEST_MAX,
                 protected_exec_events_max: 1,
                 source_records_max: 1,

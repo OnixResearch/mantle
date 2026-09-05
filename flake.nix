@@ -1992,6 +1992,17 @@
             SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
           };
 
+          dev-resume-stage-publication = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p mantle --bin mantle prefix_publication_tests";
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          };
+
           dev-resume-integration = craneLib.cargoTest {
             inherit
               src

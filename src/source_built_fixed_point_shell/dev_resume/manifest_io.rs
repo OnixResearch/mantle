@@ -39,7 +39,7 @@ pub(super) fn read_manifest(root: &Path) -> Result<crunch_dev_resume_core::Resum
     Ok(manifest)
 }
 
-fn require_manifest_root(root: &Path) -> Result<(), RunError> {
+pub(super) fn require_manifest_root(root: &Path) -> Result<(), RunError> {
     let metadata = fs::symlink_metadata(root)
         .map_err(|error| proof_error(format!("reading dev resume manifest root {}: {error}", root.display())))?;
     if !metadata.is_dir() || metadata.file_type().is_symlink() {

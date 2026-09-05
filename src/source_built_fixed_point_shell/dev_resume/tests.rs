@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::Path;
 
+mod prefix;
+
 #[test]
 fn restore_race_cleanup_removes_partial_fixed_point_state() {
     let temp = tempfile::tempdir().unwrap();
