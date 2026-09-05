@@ -1,5 +1,8 @@
 # Package test fixtures
 
+[ADR 0119](../adr/0119-isolate-evaluator-fault-fixtures-from-release.md)
+records the test isolation decision and rejected alternatives.
+
 ## Scope
 
 The package builds the production CLI with the release profile. Its ordinary

@@ -870,6 +870,8 @@
           MANTLE_TEST_OFFLINE = "1";
           inherit nativeCheckInputs;
           preCheck = prepareEvaluatorTestBinary;
+          # Report every failing target without weakening Cargo's failing exit status.
+          cargoTestExtraArgs = "--no-fail-fast";
         };
 
         rustcWrapper = craneLib.buildPackage {
