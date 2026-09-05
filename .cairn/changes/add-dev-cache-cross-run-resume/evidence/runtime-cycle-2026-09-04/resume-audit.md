@@ -18,13 +18,13 @@ Valid outcomes are validated, blocked, or exhausted. A code repair requires a se
 
 | Family | Mechanism | State | Next check |
 |---|---|---|---|
-| Publication timing | Trace manifest publication from the completion path | Blocked | Publish completed prefixes before later stages run |
+| Publication timing | Publish exact prefixes before later stages run | Validated for implementation | Confirm all runtime boundaries in V2 |
 | Restore destinations | Compare restored payload destinations with persistent dev storage | Validated for the repair scope | Retain the new runtime source identity |
 | Promoted separation | Inspect mode admission and dev-state access | Static boundary inspected | Run V3 with the final committed binary |
 
-## Current runtime observation
+## Historical runtime observation
 
-Pueue task `252` still watches `dev-cold-97f47ae2`. Task `1642` observed root process `3039000` after `08:21:02`, without a `finished_at` field. The Rust provider log showed Cargo compilation through the source-built `rustc_proxy.sh`.
+The following observation predates the terminal failure. Pueue task `252` still watches `dev-cold-97f47ae2`. Task `1642` observed root process `3039000` after `08:21:02`, without a `finished_at` field. The Rust provider log showed Cargo compilation through the source-built `rustc_proxy.sh`.
 
 This observation proves progress only. It does not prove cold-run success, resumed execution, provider adoption, or promoted completion.
 
@@ -34,7 +34,9 @@ This observation proves progress only. It does not prove cold-run success, resum
 
 Thus, an interrupted first cold run cannot supply an earlier resume manifest. `publication-timing-observation.txt` records completed-stage artifacts but no manifest directory during the running cold attempt.
 
-The implementation supports manifests from a successful full run. It does not yet publish each prefix before the next stage starts. I3 remains open for that missing behavior. The current cold run remains useful diagnostic evidence, not completion authority for this gap.
+This description applies to the original `97f47ae2` attempt. That attempt ended on September 5 with exit 1 before Mantle stage-1 compilation. The retained planning diagnosis and repair are in `lock-source-repair-2026-09-05/`.
+
+Commit `8e941df2` replaces success-only publication with dev-only prefix manifests and shared objects. It publishes each provider boundary and Mantle stage 1 before its successor. A fresh-directory test removes the original transition attempt before restore. The focused Nix integration passed 108 tests, with three ignored proofs. The publication-order check passed three tests. I3 is complete for implementation. V2 and V3 remain open for runtime confirmation.
 
 ## Restore ownership finding and repair
 

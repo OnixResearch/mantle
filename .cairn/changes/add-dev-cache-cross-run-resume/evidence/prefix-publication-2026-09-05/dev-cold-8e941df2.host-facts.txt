@@ -1,0 +1,11 @@
+captured_at=2026-09-05T19:07:04-04:00
+host=leviathan.cymric-daggertooth.ts.net
+architecture=x86_64
+kernel=6.18.44
+source_commit=8e941df20b7d888929692ad5330b76ffcdb7cfa9
+orchestrator_blake3=db1ee54cfaa4be553525434f7e8d601e18d644a3c30a9d2cb92fec5d4cb1e2f2
+profile_blake3=2f9c4a8f18e3e966e3b31b1b63f15193f3a513c396918a8930a66589f1c36197
+free_bytes_before=409250521088
+proof_disk_bytes_max=200000000000
+proof_jobs=16
+cache_initially_absent=true
