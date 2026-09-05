@@ -425,6 +425,12 @@
             pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
           ];
 
+        # Test scripts require an explicit Python interpreter in every check entrypoint.
+        nativeCheckInputs = [
+          pkgs.git
+          pkgs.python3
+        ];
+
         astGrepVersion = "0.42.1";
         astGrepUpstream = pkgs.ast-grep;
         astGrepToolchain =
@@ -853,7 +859,7 @@
           MANTLE_WASM_COMPONENT_TOOLCHAIN = "${wasmComponentToolchain}";
           CRUNCH_NO_FUSE = "1";
           MANTLE_TEST_OFFLINE = "1";
-          nativeCheckInputs = [ pkgs.git ];
+          inherit nativeCheckInputs;
         };
 
         rustcWrapper = craneLib.buildPackage {
@@ -2006,12 +2012,8 @@
 
           # Run tests with nextest
           nextest = craneLib.cargoNextest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
+            inherit src cargoArtifacts buildInputs;
+            nativeBuildInputs = nativeBuildInputs ++ nativeCheckInputs;
             partitions = 1;
             partitionType = "count";
             SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
@@ -2069,6 +2071,7 @@
               cargo-watch
               rust-analyzer
             ]
+            ++ nativeCheckInputs
             ++ [
               nickelCli
               astGrepToolchain
