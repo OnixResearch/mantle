@@ -1,0 +1,5 @@
+/home/brittonr/mantle-runs/dev-resume-20260904/.dev-cold-97f47ae2.source-built-fixed-point-staging-3039000/inputs/mantle-source/Cargo.toml: OK
+/home/brittonr/mantle-runs/dev-resume-20260904/.dev-cold-97f47ae2.source-built-fixed-point-staging-3039000/inputs/mantle-source/Cargo.lock: OK
+/home/brittonr/mantle-runs/dev-resume-20260904/.dev-cold-97f47ae2.source-built-fixed-point-staging-3039000/inputs/mantle-source/.cargo/vendor-config.toml: OK
+/home/brittonr/mantle-runs/dev-resume-20260904/.dev-cold-97f47ae2.source-built-fixed-point-staging-3039000/inputs/mantle-source/vendor-deps/bounded-tree-cap-0.1.0/Cargo.toml: OK
+/home/brittonr/mantle-runs/dev-resume-20260904/.dev-cold-97f47ae2.source-built-fixed-point-staging-3039000/inputs/mantle-source/vendor-deps/bounded-tree-core-0.1.0/Cargo.toml: OK

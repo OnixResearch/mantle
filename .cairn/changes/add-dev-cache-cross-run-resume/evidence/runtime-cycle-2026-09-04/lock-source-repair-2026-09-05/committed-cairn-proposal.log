@@ -1,0 +1,54 @@
+command=cairn gate proposal add-dev-cache-cross-run-resume --root .
+{
+  "acceptance_ids": [],
+  "change": "add-dev-cache-cross-run-resume",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "a57d0fb1a76ea6e8939269b7b7f8c3a7a9e0d1f631ab3b94b688d203dc369c1e",
+  "issues": [],
+  "layout": "cairn",
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "policy": "mantle-default",
+  "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+  "probe_evidence": null,
+  "profile_identity_hash": "8494122474c1447d9707e1555d7cdc32f02dc1ebc035273d4aae19b016c5d7ad",
+  "receipt_hash": "36d427913f5b984e6e30c50b5eeef4e65249980d8c290e816cea6100ba62fbfe",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "stage": "proposal",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-dev-cache-cross-run-resume/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 13,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    }
+  ],
+  "task_ordering": null,
+  "valid": true,
+  "verdict": "PASS",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

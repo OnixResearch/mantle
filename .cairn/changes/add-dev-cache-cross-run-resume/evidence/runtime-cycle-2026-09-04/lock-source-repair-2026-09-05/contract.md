@@ -12,7 +12,7 @@ The owner is Mantle's Cargo input adapter in `src/rust_plan.rs`. The CLI shell o
 - A regression first fails on the old matcher, then passes on the repaired matcher.
 - Two same-name, same-version Git packages retain distinct resolved commits, vendor paths, and content digests.
 - Wrong repositories, selectors, commits, missing mapped payloads, and conflicting mappings reject.
-- A blocked graph retains the original blockers without compiler or child-action effects.
+- A blocked graph retains the original blockers without unit compilation or child-action runtime effects.
 - A planning-only replay checks the full source snapshot with its unchanged lockfile and vendor inputs.
 - Formatting, first-party Clippy, the machine contracts, and the focused Nix gate pass, or record an exact blocker.
 
@@ -36,6 +36,12 @@ The full replay exposed a separate relocation error after the original blockers 
 
 | Family | Mechanism | State | Next check |
 |---|---|---|---|
-| Source identity | Match unresolved Git references to exact resolved lock entries | active | Source-qualified positive and negative regressions |
-| Vendor binding | Preserve explicit source-to-directory routing | active | Two-revision fixture with distinct content |
-| Effect ordering | Reject blocked plans before runtime startup | active | CLI receipt and absent-effect checks |
+| Source identity | Match unresolved Git references to exact resolved lock entries | validated | Source-qualified positive and negative regressions passed |
+| Vendor binding | Preserve explicit source-to-directory routing | validated | Distinct revision fixtures and captured sibling lookup passed |
+| Effect ordering | Reject blocked plans before runtime startup | validated | CLI receipt and absent-effect checks passed |
+
+## Final outcome
+
+The final planning-only replay produced a ready graph with 800 derivations and no planning blockers. The captured Git facts, lockfile facts, and source closure matched the preceding replay. No topology execution record or execution, store, or state directory appeared.
+
+The outcome is validated within this repair's scope. The three review passes share one reviewer and are correlated. This outcome does not authorize a bootstrap restart or establish compilation, fixed-point, or release success. `summary.md` records the evidence and remaining work.

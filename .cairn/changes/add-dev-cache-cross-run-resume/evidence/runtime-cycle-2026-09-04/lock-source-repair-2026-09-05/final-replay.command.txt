@@ -1,0 +1,41 @@
+set -eu
+RUN=/home/brittonr/mantle-runs/dev-resume-20260904
+STAGING="$RUN/.dev-cold-97f47ae2.source-built-fixed-point-staging-3039000"
+SOURCE="$STAGING/inputs/mantle-source"
+REPLAY="$RUN/root-cause-20260905/planning-da2c7fb6"
+BINARY="$REPLAY/mantle-da2c7fb6-release-planner"
+RUSTC="$STAGING/cargo-free-fixed-point/toolchain/rustc-receipt-bound-runtime"
+HASHER=/home/brittonr/mantle-runs/receipt-fix-v31/b3sum-1.8.5-operator
+EXPECTED_BINARY_BLAKE3=4b69f987464387d4aceb6156e8acb5826b544522fd139bd44c9fe770b7edecbe
+PLANNING_LIMIT_SECONDS=300
+TERMINATION_GRACE_SECONDS=5
+EXECUTION="$REPLAY/execution-must-stay-absent"
+STORE="$REPLAY/store-must-stay-absent"
+STATE="$REPLAY/state-must-stay-absent"
+CARGO="$REPLAY/cargo-must-not-exist"
+test -x "$BINARY"
+test -x "$RUSTC"
+test ! -e "$EXECUTION"
+test ! -e "$STORE"
+test ! -e "$STATE"
+test ! -e "$CARGO"
+test ! -e "$REPLAY/receipt.json"
+printf '%s  %s\n' "$EXPECTED_BINARY_BLAKE3" "$BINARY" > "$REPLAY/binary.blake3"
+"$HASHER" --check "$REPLAY/binary.blake3"
+"$HASHER" "$SOURCE/Cargo.toml" "$SOURCE/Cargo.lock" "$SOURCE/.cargo/vendor-config.toml" "$SOURCE/vendor-deps/bounded-tree-cap-0.1.0/Cargo.toml" "$SOURCE/vendor-deps/bounded-tree-core-0.1.0/Cargo.toml" > "$REPLAY/inputs.before.blake3"
+date -Iseconds > "$REPLAY/started-at.txt"
+set +e
+timeout --signal=TERM --kill-after="$TERMINATION_GRACE_SECONDS" "$PLANNING_LIMIT_SECONDS" "$BINARY" --json --store "$STORE" --state-dir "$STATE" rust-plan --root "$SOURCE" --cargo "$CARGO" --rustc "$RUSTC" --target x86_64-unknown-linux-musl --profile dev --no-cargo-oracle --deterministic-release-paths --execution-output-root "$EXECUTION" > "$REPLAY/receipt.json" 2> "$REPLAY/stderr.txt"
+STATUS=$?
+set -e
+printf '%s\n' "$STATUS" > "$REPLAY/status.txt"
+date -Iseconds > "$REPLAY/finished-at.txt"
+"$HASHER" --check "$REPLAY/inputs.before.blake3" > "$REPLAY/inputs.after-check.txt"
+test ! -e "$EXECUTION"
+test ! -e "$STORE"
+test ! -e "$STATE"
+test ! -e "$CARGO"
+printf 'planning_exit_code=%s\nexecution_store_state_and_cargo_absent=true\n' "$STATUS"
+"$HASHER" "$REPLAY/receipt.json" > "$REPLAY/receipt.blake3"
+stat -c 'receipt_bytes=%s' "$REPLAY/receipt.json"
+exit "$STATUS"
