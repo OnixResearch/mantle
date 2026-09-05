@@ -30,6 +30,16 @@ exactly one directory root and validates each package and checksum in that
 root. The native Rust planner also reads `.cargo/vendor-config.toml` so both
 roots are explicit planning inputs.
 
+The native planner matches Cargo dependency references without the resolved
+Git fragment against the full locked package source. Package keys retain the
+resolved commit. Explicit vendor routes select one directory for that source.
+A missing payload cannot fall back to another directory. Without an explicit
+route, a package lookup must find exactly one matching directory.
+
+The bounded config reader accepts direct directory sources and one replacement
+alias within the same file. It rejects conflicting routes, missing aliases,
+config files above 65,536 bytes, and more than 1,024 source routes.
+
 ## Consequences
 
 - Mantle preserves both accepted revisions without a patch, mutable reference,

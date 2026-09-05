@@ -4970,6 +4970,20 @@ fn execute_host_artifact_topology_rust_plan(request: RustPlanExecutionRequest<'_
 
 fn execute_topology_rust_plan(request: RustPlanExecutionRequest<'_>) -> Result<(), RunError> {
     let options = rust_plan_execution_options(&request, "--execute-topology")?;
+    if let Some(blocked) = rust_plan::blocked_rust_unit_topology_receipt(
+        &request.receipt.native_registry_source_planning,
+        &request.receipt.native_host_unit_graph_planning,
+        &request.receipt.unit_derivation_graph,
+    )? {
+        return print_blocked_topology_rust_plan(request, blocked);
+    }
+    execute_ready_topology_rust_plan(request, options)
+}
+
+fn execute_ready_topology_rust_plan(
+    request: RustPlanExecutionRequest<'_>,
+    options: rust_plan::RustUnitExecutionOptions,
+) -> Result<(), RunError> {
     #[cfg(target_os = "linux")]
     let action_runtime = match (request.child_action_authority, request.child_action_evidence_dir) {
         (Some(authority), Some(evidence_dir)) => {
@@ -5043,6 +5057,29 @@ fn execute_topology_rust_plan(request: RustPlanExecutionRequest<'_>) -> Result<(
         },
         request.json,
     )
+}
+
+fn print_blocked_topology_rust_plan(
+    request: RustPlanExecutionRequest<'_>,
+    blocked: rust_plan::RustUnitTopologyExecutionReceipt,
+) -> Result<(), RunError> {
+    assert_eq!(blocked.execution_status, "blocked");
+    assert!(blocked.unit_executions.is_empty());
+    let requires_authority = request.child_action_authority.is_some();
+    let summary = rust_topology_blocker_summary(&blocked);
+    rust_plan::print_rust_plan_topology_execution_receipt(
+        &rust_plan::RustPlanTopologyExecutionReceipt {
+            rust_plan: request.receipt,
+            topology_execution: blocked,
+        },
+        request.json,
+    )?;
+    if requires_authority {
+        return Err(RunError::Build(format!(
+            "Rust topology planning blocked before child-action admission: {summary}"
+        )));
+    }
+    Ok(())
 }
 
 fn rust_topology_blocker_summary(execution: &rust_plan::RustUnitTopologyExecutionReceipt) -> String {

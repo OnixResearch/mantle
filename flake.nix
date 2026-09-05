@@ -1970,6 +1970,28 @@
             cargoExtraArgs = "-p crunch-dev-resume-core --lib --target wasm32-unknown-unknown";
           };
 
+          rust-plan-source-admission = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p mantle --bin mantle rust_plan::";
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          };
+
+          rust-plan-child-action-preflight = craneLib.cargoTest {
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
+            cargoTestExtraArgs = "-p mantle --test rust_plan_cli child_action_preflight";
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          };
+
           dev-resume-integration = craneLib.cargoTest {
             inherit
               src

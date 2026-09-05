@@ -1,4 +1,6 @@
 // machine-artifact-public: rust-plan.receipts
+mod vendor_sources;
+
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
@@ -2375,7 +2377,11 @@ fn lock_dependency_matching_keys(
         .iter()
         .filter(|package| package.name == dependency.name)
         .filter(|package| dependency.version.as_ref().is_none_or(|version| package.version == *version))
-        .filter(|package| dependency.source.as_ref().is_none_or(|source| package.source.as_ref() == Some(source)))
+        .filter(|package| {
+            dependency.source.as_deref().is_none_or(|source| {
+                package.source.as_deref().is_some_and(|resolved| lock_dependency_source_matches(source, resolved))
+            })
+        })
         .map(|package| {
             lock_package_key(LockPackageKeyInputs {
                 name: &package.name,
@@ -2387,6 +2393,27 @@ fn lock_dependency_matching_keys(
     keys.sort();
     keys.dedup();
     keys
+}
+
+// Cargo dependency references omit the precise Git fragment. Only comparison
+// ignores that omitted fragment. Package keys retain the full resolved source.
+fn lock_dependency_source_matches(reference: &str, resolved: &str) -> bool {
+    if reference == resolved {
+        return true;
+    }
+    if !reference.starts_with("git+") {
+        return false;
+    }
+    if reference.contains('#') {
+        return false;
+    }
+    let Some((source, revision)) = resolved.split_once('#') else {
+        return false;
+    };
+    if revision.is_empty() || revision.contains('#') {
+        return false;
+    }
+    source == reference
 }
 
 struct LockPackageKeyInputs<'a> {
@@ -2403,10 +2430,10 @@ fn native_lock_source_cargo_packages(root: &Path, lock_packages: &[LockPackage])
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut vendor_blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    let vendor_roots = declared_vendor_roots(root, &mut vendor_blockers);
+    let vendor_sources = vendor_sources::read_declared_vendor_sources(root, &mut vendor_blockers);
     let mut packages = lock_packages
         .iter()
-        .filter_map(|package| native_lock_source_cargo_package(&vendor_roots, package))
+        .filter_map(|package| native_lock_source_cargo_package(&vendor_sources, package))
         .collect::<Vec<_>>();
     packages.sort_by(|left, right| left.id.cmp(&right.id));
     packages.dedup_by(|left, right| left.id == right.id);
@@ -2417,7 +2444,7 @@ fn cargo_packages_with_declared_git_manifests(root: &Path, packages: &[CargoPack
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut vendor_blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    let vendor_roots = declared_vendor_roots(root, &mut vendor_blockers);
+    let vendor_sources = vendor_sources::read_declared_vendor_sources(root, &mut vendor_blockers);
     debug_assert!(vendor_blockers.len() <= MAX_SOURCE_TREE_ENTRIES);
     packages
         .iter()
@@ -2425,22 +2452,26 @@ fn cargo_packages_with_declared_git_manifests(root: &Path, packages: &[CargoPack
             if source_kind(package.source.as_deref()) != SourceKind::Git {
                 return package.clone();
             }
+            let source = package.source.as_deref().expect("Git packages have a source identity");
             let manifest_path = locate_declared_vendor_manifest(DeclaredVendorManifestInputs {
-                vendor_roots: &vendor_roots,
+                vendor_roots: vendor_sources.roots_for(source),
                 name: &package.name,
                 version: &package.version,
             });
-            let Some(manifest_path) = manifest_path else {
+            if manifest_path.is_none() && !vendor_sources.has_binding(source) {
                 return package.clone();
-            };
+            }
             let mut normalized = package.clone();
-            normalized.manifest_path = normalize_path_string(&manifest_path);
+            normalized.manifest_path = manifest_path.map(|path| normalize_path_string(&path)).unwrap_or_default();
             normalized
         })
         .collect()
 }
 
-fn native_lock_source_cargo_package(vendor_roots: &[PathBuf], package: &LockPackage) -> Option<CargoPackage> {
+fn native_lock_source_cargo_package(
+    vendor_sources: &vendor_sources::DeclaredVendorSources,
+    package: &LockPackage,
+) -> Option<CargoPackage> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let source = package.source.as_ref()?;
@@ -2449,7 +2480,7 @@ fn native_lock_source_cargo_package(vendor_roots: &[PathBuf], package: &LockPack
         return None;
     }
     let manifest_path = locate_declared_vendor_manifest(DeclaredVendorManifestInputs {
-        vendor_roots,
+        vendor_roots: vendor_sources.roots_for(source),
         name: &package.name,
         version: &package.version,
     })
@@ -2511,17 +2542,25 @@ fn locate_declared_vendor_manifest(inputs: DeclaredVendorManifestInputs<'_>) -> 
         name,
         version,
     } = inputs;
+    let mut selected = None;
     for vendor_root in vendor_roots {
         let versioned = vendor_root.join(format!("{name}-{version}")).join("Cargo.toml");
-        if versioned.is_file() {
-            return Some(versioned);
-        }
         let unversioned = vendor_root.join(name).join("Cargo.toml");
-        if unversioned.is_file() {
-            return Some(unversioned);
+        let candidate = if versioned.is_file() {
+            Some(versioned)
+        } else if unversioned.is_file() {
+            Some(unversioned)
+        } else {
+            None
+        };
+        if let Some(candidate) = candidate {
+            if selected.is_some() {
+                return None;
+            }
+            selected = Some(candidate);
         }
     }
-    None
+    selected
 }
 
 struct CargoSourcePackageIdInputs<'a> {
@@ -3322,66 +3361,7 @@ fn append_native_patch_sources(
 }
 
 fn declared_vendor_roots(root: &Path, blockers: &mut Vec<NativeRegistrySourceBlocker>) -> Vec<PathBuf> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    let mut roots = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    for config_path in [
-        root.join(".cargo/config.toml"),
-        root.join(".cargo/config"),
-        root.join(".cargo/vendor-config.toml"),
-    ] {
-        if !config_path.is_file() {
-            continue;
-        }
-        let config_text = match fs::read_to_string(&config_path) {
-            Ok(text) => text,
-            Err(err) => {
-                blockers.push(native_registry_blocker(NativeRegistryBlockerInputs {
-                    package_id: None,
-                    class: "unreadable-cargo-source-config",
-                    message: &format!("reading declared Cargo source config {}: {err}", config_path.display()),
-                }));
-                continue;
-            }
-        };
-        let config: CargoConfigToml = match toml::from_str(&config_text) {
-            Ok(config) => config,
-            Err(err) => {
-                blockers.push(native_registry_blocker(NativeRegistryBlockerInputs {
-                    package_id: None,
-                    class: "invalid-cargo-source-config",
-                    message: &format!("parsing declared Cargo source config {}: {err}", config_path.display()),
-                }));
-                continue;
-            }
-        };
-        for source in config.source.values() {
-            let declared_directory = source.directory.as_deref().or_else(|| {
-                source
-                    .replace_with
-                    .as_ref()
-                    .and_then(|replace_with| config.source.get(replace_with))
-                    .and_then(|replacement| replacement.directory.as_deref())
-            });
-            let Some(directory) = declared_directory else {
-                continue;
-            };
-            let path = Path::new(directory);
-            let vendor_root = if path.is_absolute() {
-                path.to_path_buf()
-            } else {
-                root.join(path)
-            };
-            roots.push(fs::canonicalize(&vendor_root).unwrap_or(vendor_root));
-        }
-    }
-    let conventional_vendor_deps = root.join("vendor-deps");
-    if conventional_vendor_deps.is_dir() {
-        roots.push(fs::canonicalize(&conventional_vendor_deps).unwrap_or(conventional_vendor_deps));
-    }
-    roots.sort();
-    roots.dedup();
-    roots
+    vendor_sources::read_declared_vendor_sources(root, blockers).into_roots()
 }
 
 fn bind_declared_vendor_source(
@@ -12593,6 +12573,43 @@ pub(crate) fn execute_rust_unit_topology_with_action_port(
     execute_rust_unit_topology_inner(native_registry_sources, native_host_graph, graph, options, Some(action_port))
 }
 
+pub(crate) fn blocked_rust_unit_topology_receipt(
+    native_registry_sources: &NativeRegistrySourcePlanningSummary,
+    native_host_graph: &NativeHostUnitGraphPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+) -> Result<Option<RustUnitTopologyExecutionReceipt>, RunError> {
+    match plan_rust_unit_topology(native_registry_sources, native_host_graph, graph) {
+        Ok(_) => Ok(None),
+        Err(blocker) => topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)).map(Some),
+    }
+}
+
+fn plan_rust_unit_topology(
+    native_registry_sources: &NativeRegistrySourcePlanningSummary,
+    native_host_graph: &NativeHostUnitGraphPlanningSummary,
+    graph: &UnitDerivationGraphSummary,
+) -> Result<Vec<usize>, RustUnitExecutionBlocker> {
+    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
+    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    if let Some(blocker) = validate_native_registry_topology_inputs(native_registry_sources, graph) {
+        return Err(blocker);
+    }
+    if let Some(blocker) = validate_native_host_artifact_topology_inputs(native_host_graph, graph, "topology") {
+        return Err(blocker);
+    }
+    if !graph.ready {
+        return Err(RustUnitExecutionBlocker {
+            class: "unit-derivation-graph-blocked".to_string(),
+            message: "unit_derivation_graph is not ready; resolve planning blockers before topology execution"
+                .to_string(),
+        });
+    }
+    if let Some(blocker) = validate_role_sensitive_artifact_graph(graph) {
+        return Err(blocker);
+    }
+    combined_topology_execution_order(graph)
+}
+
 fn execute_rust_unit_topology_inner(
     native_registry_sources: &NativeRegistrySourcePlanningSummary,
     native_host_graph: &NativeHostUnitGraphPlanningSummary,
@@ -12600,30 +12617,7 @@ fn execute_rust_unit_topology_inner(
     options: &RustUnitExecutionOptions,
     action_port: Option<&dyn RustChildActionExecutionPort>,
 ) -> Result<RustUnitTopologyExecutionReceipt, RunError> {
-    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
-    if let Some(blocker) = validate_native_registry_topology_inputs(native_registry_sources, graph) {
-        return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
-    }
-    if let Some(blocker) = validate_native_host_artifact_topology_inputs(native_host_graph, graph, "topology") {
-        return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
-    }
-    if !graph.ready {
-        return topology_receipt(
-            "blocked",
-            Vec::new(),
-            Vec::new(),
-            Some(RustUnitExecutionBlocker {
-                class: "unit-derivation-graph-blocked".to_string(),
-                message: "unit_derivation_graph is not ready; resolve planning blockers before topology execution"
-                    .to_string(),
-            }),
-        );
-    }
-    if let Some(blocker) = validate_role_sensitive_artifact_graph(graph) {
-        return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
-    }
-    let ordered_indices = match combined_topology_execution_order(graph) {
+    let ordered_indices = match plan_rust_unit_topology(native_registry_sources, native_host_graph, graph) {
         Ok(indices) => indices,
         Err(blocker) => return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)),
     };
@@ -18735,6 +18729,8 @@ fn normalize_path_string(path: &Path) -> String {
 #[cfg(test)]
 #[allow(clippy::cloned_ref_to_slice_refs)]
 mod tests {
+    mod lock_sources;
+
     use std::ffi::OsStr;
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;

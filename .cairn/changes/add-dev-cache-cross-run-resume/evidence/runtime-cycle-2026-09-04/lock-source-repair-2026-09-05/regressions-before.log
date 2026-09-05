@@ -1,0 +1,47 @@
+warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-dev-cache-cross-run-resume/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+warning: `mantle` (manifest) generated 1 warning
+   Compiling mantle v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-dev-cache-cross-run-resume)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 20s
+warning: the following packages contain code that will be rejected by a future version of Rust: n0-future v0.3.2, nix v0.29.0, nix v0.31.3, proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/tmp/mantle-dev-resume-recovery-target/debug/deps/mantle-86e9c4c3f72fa002)
+
+running 5 tests
+
+thread 'rust_plan::tests::lock_sources::qualified_edges_preserve_each_exact_resolved_source' (2889468) panicked at src/rust_plan/tests/lock_sources.rs:64:9:
+assertion `left == right` failed: qualified reference must retain one exact source
+  left: 0
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test rust_plan::tests::lock_sources::bare_edges_keep_both_resolved_identities_without_merging_them ... ok
+test rust_plan::tests::lock_sources::qualified_edges_reject_wrong_source_selectors_and_commits ... ok
+test rust_plan::tests::lock_sources::qualified_edges_preserve_each_exact_resolved_source ... FAILED
+
+thread 'rust_plan::tests::lock_sources::missing_mapped_payload_cannot_use_another_revision' (2889466) panicked at src/rust_plan/tests/lock_sources.rs:164:5:
+assertion failed: !receipt.native_git_source_planning.ready
+
+thread 'rust_plan::tests::lock_sources::native_plan_binds_both_revisions_to_their_own_vendor_payloads' (2889467) panicked at src/rust_plan/tests/lock_sources.rs:145:5:
+[
+    NativePackagePlanningBlocker {
+        package_id: Some(
+            "path+native#source-reference-probe@0.1.0",
+        ),
+        class: "missing-captured-git-source-fact",
+        message: "git dependency `first` has no captured source fact for package `git-dep` at https://example.invalid/git-dep",
+    },
+]
+test rust_plan::tests::lock_sources::missing_mapped_payload_cannot_use_another_revision ... FAILED
+test rust_plan::tests::lock_sources::native_plan_binds_both_revisions_to_their_own_vendor_payloads ... FAILED
+
+failures:
+
+failures:
+    rust_plan::tests::lock_sources::missing_mapped_payload_cannot_use_another_revision
+    rust_plan::tests::lock_sources::native_plan_binds_both_revisions_to_their_own_vendor_payloads
+    rust_plan::tests::lock_sources::qualified_edges_preserve_each_exact_resolved_source
+
+test result: FAILED. 2 passed; 3 failed; 0 ignored; 0 measured; 2646 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p mantle --bin mantle`
