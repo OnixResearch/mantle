@@ -34,7 +34,13 @@ The native planner matches Cargo dependency references without the resolved
 Git fragment against the full locked package source. Package keys retain the
 resolved commit. Explicit vendor routes select one directory for that source.
 A missing payload cannot fall back to another directory. Without an explicit
-route, a package lookup must find exactly one matching directory.
+route, a package lookup must find exactly one matching directory source.
+
+Relative normal and build dependencies inside a Git package use captured
+package facts from the same full Git source identity. They do not depend on
+the original sibling directory spelling after Cargo creates versioned vendor
+directories. Missing, ambiguous, cross-revision, and incompatible-version
+candidates reject. Absolute Git dependency paths also reject.
 
 The bounded config reader accepts direct directory sources and one replacement
 alias within the same file. It rejects conflicting routes, missing aliases,

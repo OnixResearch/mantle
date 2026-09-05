@@ -1,4 +1,5 @@
 // machine-artifact-public: rust-plan.receipts
+mod git_paths;
 mod vendor_sources;
 
 use std::collections::BTreeMap;
@@ -5567,7 +5568,20 @@ fn native_path_dependencies(
             continue;
         }
         let manifest_path = if let Some(path) = dependency_path(value) {
-            source_root.join(path).join("Cargo.toml")
+            let captured = git_paths::captured_git_path_manifest(git_paths::GitPathDependencyInputs {
+                parent_package_id: package_id.as_deref(),
+                name,
+                value,
+                sources: native_git_source_planning,
+            })
+            .map_err(|error| {
+                native_blocker(NativePackageBlockerInputs {
+                    package_id: package_id.clone(),
+                    class: error.class,
+                    message: &error.message,
+                })
+            })?;
+            captured.map(PathBuf::from).unwrap_or_else(|| source_root.join(path).join("Cargo.toml"))
         } else {
             let resolved =
                 native_dependency_source(name, value, native_registry_source_planning, native_git_source_planning)

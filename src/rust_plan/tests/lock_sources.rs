@@ -255,6 +255,134 @@ fn unmapped_duplicate_payloads_reject_instead_of_using_directory_order() {
     assert!(receipt.unit_derivation_graph.derivations.is_empty());
 }
 
+fn add_relocated_git_sibling(root: &Path, sibling_revision: &str) {
+    let parent_manifest = root.join("vendor-deps/git-dep/Cargo.toml");
+    let text = std::fs::read_to_string(&parent_manifest).unwrap();
+    std::fs::write(&parent_manifest, format!(
+        "{text}\n[dependencies]\nsibling = {{ package = \"git-sibling\", path = \"../git-sibling\", version = \"{PACKAGE_VERSION}\" }}\n",
+    )).unwrap();
+    let parent_source = format!("source = \"{}\"\n", resolved(FIRST_REVISION));
+    let mut lock = lock_text().replacen(
+        &parent_source,
+        &format!(
+            "{parent_source}dependencies = [\"git-sibling {PACKAGE_VERSION} ({})\"]\n",
+            reference(sibling_revision),
+        ),
+        1,
+    );
+    lock.push_str(&format!(
+        "\n[[package]]\nname = \"git-sibling\"\nversion = \"{PACKAGE_VERSION}\"\nsource = \"{}\"\n",
+        resolved(sibling_revision),
+    ));
+    std::fs::write(root.join("Cargo.lock"), lock).unwrap();
+    let vendor = if sibling_revision == FIRST_REVISION {
+        "vendor-deps"
+    } else {
+        "vendor-deps/.second"
+    };
+    let sibling = root.join(vendor).join(format!("git-sibling-{PACKAGE_VERSION}"));
+    std::fs::create_dir_all(sibling.join("src")).unwrap();
+    std::fs::write(
+        sibling.join("Cargo.toml"),
+        format!("[package]\nname = \"git-sibling\"\nversion = \"{PACKAGE_VERSION}\"\nedition = \"2021\"\n",),
+    )
+    .unwrap();
+    std::fs::write(sibling.join("src/lib.rs"), "pub struct Sibling;\n").unwrap();
+}
+
+#[test]
+fn relocated_git_path_dependency_uses_its_captured_sibling() {
+    let dir = TempDir::new().unwrap();
+    write_fixture(dir.path());
+    add_relocated_git_sibling(dir.path(), FIRST_REVISION);
+    let receipt = capture_fixture(dir.path());
+    assert!(
+        receipt.native_package_target_planning.ready,
+        "{:#?}",
+        receipt.native_package_target_planning.blockers
+    );
+    assert!(receipt.unit_derivation_graph.ready, "{:#?}", receipt.unit_derivation_graph.blockers);
+    assert_eq!(receipt.unit_derivation_graph.derivation_count, EXPECTED_DERIVATIONS_COUNT + 1);
+    let parent = receipt
+        .native_package_target_planning
+        .packages
+        .iter()
+        .find(|package| package.package_id.contains(FIRST_REVISION) && package.name == "git-dep")
+        .unwrap();
+    let sibling = parent.path_dependencies.iter().find(|dependency| dependency.name == "sibling").unwrap();
+    assert_eq!(
+        sibling.manifest_path,
+        normalize_path_string(&dir.path().join(format!("vendor-deps/git-sibling-{PACKAGE_VERSION}/Cargo.toml"),))
+    );
+}
+
+#[test]
+fn relocated_git_path_dependency_rejects_a_different_revision() {
+    let dir = TempDir::new().unwrap();
+    write_fixture(dir.path());
+    add_relocated_git_sibling(dir.path(), SECOND_REVISION);
+    let receipt = capture_fixture(dir.path());
+    assert!(!receipt.unit_derivation_graph.ready);
+    assert!(
+        receipt
+            .native_package_target_planning
+            .blockers
+            .iter()
+            .any(|blocker| blocker.class == "missing-captured-git-path-dependency")
+    );
+}
+
+#[test]
+fn relocated_git_path_dependency_rejects_ambiguous_captured_facts() {
+    let dir = TempDir::new().unwrap();
+    write_fixture(dir.path());
+    add_relocated_git_sibling(dir.path(), FIRST_REVISION);
+    let mut sources = capture_fixture(dir.path()).native_git_source_planning;
+    let sibling = sources.sources.iter().find(|source| source.name == "git-sibling").unwrap().clone();
+    sources.sources.push(sibling);
+    let parent = sources
+        .sources
+        .iter()
+        .find(|source| source.name == "git-dep" && source.resolved_revision == FIRST_REVISION)
+        .unwrap();
+    let value = toml::from_str("package = \"git-sibling\"\npath = \"../git-sibling\"\n").unwrap();
+    let error = git_paths::captured_git_path_manifest(git_paths::GitPathDependencyInputs {
+        parent_package_id: Some(&parent.package_id),
+        name: "sibling",
+        value: &value,
+        sources: &sources,
+    })
+    .unwrap_err();
+    assert_eq!(error.class, "ambiguous-captured-git-path-dependency");
+    assert!(error.message.contains("sibling"));
+}
+
+#[test]
+fn relocated_git_path_dependency_rejects_absolute_paths_and_invalid_versions() {
+    let dir = TempDir::new().unwrap();
+    write_fixture(dir.path());
+    add_relocated_git_sibling(dir.path(), FIRST_REVISION);
+    let manifest = dir.path().join("vendor-deps/git-dep/Cargo.toml");
+    let original = std::fs::read_to_string(&manifest).unwrap();
+    let clause = format!("path = \"../git-sibling\", version = \"{PACKAGE_VERSION}\"");
+    let cases = [
+        ("path = \"/outside/git-sibling\", version = \"0.1.0\"", "unsupported-git-path-dependency"),
+        ("path = \"../git-sibling\", version = 1", "invalid-git-path-dependency-version"),
+        ("path = \"../git-sibling\", version = \"\"", "invalid-git-path-dependency-version"),
+        ("path = \"../git-sibling\", version = \"9.0.0\"", "missing-captured-git-path-dependency"),
+    ];
+    for (replacement, class) in cases {
+        std::fs::write(&manifest, original.replace(&clause, replacement)).unwrap();
+        let receipt = capture_fixture(dir.path());
+        assert!(!receipt.unit_derivation_graph.ready);
+        assert!(
+            receipt.native_package_target_planning.blockers.iter().any(|blocker| blocker.class == class),
+            "expected {class}: {:#?}",
+            receipt.native_package_target_planning.blockers
+        );
+    }
+}
+
 #[test]
 fn registry_sources_and_explicit_git_fragments_remain_exact() {
     const REGISTRY: &str = "registry+https://example.invalid/index";

@@ -30,6 +30,8 @@ Use three serial, correlated review passes: source identity, vendor binding, and
 
 Allowed outcomes are validated, blocked, exhausted, or user-decision-required. A ready planning receipt does not prove successful compilation or a fixed point.
 
+The full replay exposed a separate relocation error after the original blockers disappeared. `bounded-tree-cap` retains a relative sibling path, but Cargo stores the sibling in a versioned vendor directory. This new counterexample extends the vendor-binding review by one repair cycle and one five-minute planning replay. The repair must use the parent Git source identity, not a cross-revision filename fallback. The failed debug replay and the failed release launch remain evidence.
+
 ## Approach registry
 
 | Family | Mechanism | State | Next check |

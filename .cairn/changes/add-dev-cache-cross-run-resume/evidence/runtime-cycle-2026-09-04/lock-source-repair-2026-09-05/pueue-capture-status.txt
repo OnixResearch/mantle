@@ -1,0 +1,23 @@
+The export of Pueue tasks 574, 626, 638, and 655 found no retained records.
+Pueue printed: There are no finished tasks for your specified ids
+The resulting empty files are not execution evidence:
+- debug-replay.log
+- release-copy-failure.log
+- release-launch-failure.log
+- release-replay-5833ede3.log
+A later native status query for ids=604,626,655 also returned zero tasks.
+The exact release-copy command transcript is unavailable.
+
+The following direct replay captures remain available:
+- plan-after-5833ede3.status and plan-after-5833ede3.stderr.txt: debug attempt
+- plan-after-release-5833ede3.status and plan-after-release-5833ede3.stderr.txt: failed launch
+- plan-after-release-executable-5833ede3.status and plan-after-release-executable-5833ede3.stderr.txt: completed planning replay
+- plan-after-5833ede3.json.zst: completed release-planner receipt, not the empty debug output
+- plan-after-5833ede3.blake3: BLAKE3 of that uncompressed release-planner receipt
+
+The live native log for task 655 was inspected before it disappeared:
+mantle-5833ede3-release-planner: OK
+planning_exit_code=0
+execution_store_and_state_absent=true
+
+This note records the earlier observation. It is not a replacement for the missing raw task records.
