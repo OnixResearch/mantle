@@ -1,0 +1,19 @@
++ cargo -Zscript --offline scripts/check-machine-schema-contracts.rs --generate
+machine schema contract generation: PASS (34 contracted, 68 classified)
++ cargo -Zscript --offline scripts/check-machine-schema-contracts.rs
+machine schema contract check: PASS (34 contracted, 68 classified)
++ git diff -- schemas/machine-contracts/inventory.ncl
+diff --git a/schemas/machine-contracts/inventory.ncl b/schemas/machine-contracts/inventory.ncl
+index 91138443..7d800a93 100644
+--- a/schemas/machine-contracts/inventory.ncl
++++ b/schemas/machine-contracts/inventory.ncl
+@@ -1666,7 +1666,7 @@ let Registry = {
+         "contract_blake3"= "da93927fdd716060b6194c24078efb374a993299dc83d50e37aac0133e0e26c8",
+         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
+         "fixture_set_blake3"= "b114829e0a36c84a92da558377b95b0ece311107390acff70d44f51de5a2fddc",
+-        "producer_identity_blake3"= "ced6db4cdf472e513859dda845488a4668e18ab970a3ec66d3f6d86ab0918acb",
++        "producer_identity_blake3"= "f7d3195f0c1c3ebddd2d802fee26fff82ebe5366fba6ff9b7b21d4319d898204",
+         "consumer_policy_blake3"= "127fb0de77183b9d49f89506a72a42208092e2a73ada034d2b63b48e80db47de"
+       },
+       "non_claims"= [
++ git diff --check

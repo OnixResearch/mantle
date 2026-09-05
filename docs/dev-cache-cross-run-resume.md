@@ -13,7 +13,9 @@ Use both options on a source-built fixed-point development run:
 
 `--dev-resume` without `--dev-provider-cache` fails before execution.
 
-The first run executes the cold stage graph. It publishes a content-addressed manifest for each completed stage. Large provider payloads use one shared checkpoint reference.
+The first run executes the cold stage graph. After the full cold run succeeds, it publishes one content-addressed manifest per stage. Large provider payloads use one shared checkpoint reference.
+
+Publication during an incomplete first run remains unsupported. An interrupted first run does not yet provide earlier stage manifests.
 
 A later run creates a new staging directory. It remeasures cache content before the pure resume core selects a stage prefix.
 
@@ -33,9 +35,11 @@ A candidate must match all these facts:
 
 A missing, stale, modified, partial, conflicting, or unknown candidate does not authorize a skip. Mantle executes from an earlier admitted boundary.
 
+After restore validation fails, cleanup removes only payloads that the attempt created. Identical payloads that already existed remain unchanged. Failed cleanup stops the attempt instead of permitting cold fallback.
+
 ## Report
 
-Each dev attempt writes `dev-resume-report.json` in its staging directory. The report lists:
+Each successful dev attempt writes `dev-resume-report.json` in its staging directory. The report lists:
 
 - stages restored from validated content;
 - stages executed in the current attempt;

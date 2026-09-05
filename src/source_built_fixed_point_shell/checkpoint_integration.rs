@@ -518,7 +518,7 @@ pub(super) fn restore_dev_provider_stage(
     prepared: &PreparedAttempt,
     checkpoint_store: &Path,
     completed_stage: crunch_dev_resume_core::ResumeStage,
-) -> Result<Option<DevProviderResume>, RunError> {
+) -> Result<Option<DevProviderResume>, crate::source_built_fixed_point_checkpoint_shell::DevRestoreError> {
     let limits = crate::source_built_fixed_point_checkpoint_shell::provider_checkpoint_limits(options.disk_bytes_max);
     let Some(admitted) = crate::source_built_fixed_point_checkpoint_shell::admit_dev_provider_checkpoint_store(
         checkpoint_store,
@@ -538,43 +538,49 @@ pub(super) fn restore_dev_provider_stage(
         crate::source_built_fixed_point_checkpoint::PAYLOAD_NATIVE_PROVIDER,
     )?;
     let paths = RestoredProviderPaths::new(prepared, stagex_basename, native_basename)?;
+    let result = restore_dev_provider_payloads(options, prepared, paths, admitted, completed_stage);
+    let origin = prepared.staging_dir.join(CHECKPOINT_ORIGIN_EVIDENCE_DIR);
+    result.map(Some).map_err(|error| {
+        error.with_cleanup(crate::source_built_fixed_point_checkpoint_shell::cleanup_restores(&[origin]))
+    })
+}
+
+fn restore_dev_provider_payloads(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    paths: RestoredProviderPaths,
+    admitted: crate::source_built_fixed_point_checkpoint_shell::AdmittedProviderCheckpoint,
+    completed_stage: crunch_dev_resume_core::ResumeStage,
+) -> Result<DevProviderResume, crate::source_built_fixed_point_checkpoint_shell::DevRestoreError> {
+    let limits = crate::source_built_fixed_point_checkpoint_shell::provider_checkpoint_limits(options.disk_bytes_max);
     let requests = dev_provider_restore_requests(&paths, completed_stage)?;
     let restored =
         crate::source_built_fixed_point_checkpoint_shell::restore_dev_provider_checkpoint(admitted, &requests, limits)?;
-    let result = match completed_stage {
-        crunch_dev_resume_core::ResumeStage::StagexTransition => Ok(DevProviderResume::Transition {
-            execution_dir: paths.stagex_transition,
-        }),
-        crunch_dev_resume_core::ResumeStage::StagexProvider => {
-            restored_stagex_provider_report(&paths.stagex_provider, &restored).map(|provider_report| {
-                DevProviderResume::Stagex {
-                    execution_dir: paths.stagex_transition,
-                    provider_report,
-                }
-            })
-        }
-        crunch_dev_resume_core::ResumeStage::FullSourceNativeProvider => {
-            validate_restored_native_prefix(options, prepared, &paths, &restored)
-                .map(|native| DevProviderResume::Native(Box::new(native)))
-        }
-        crunch_dev_resume_core::ResumeStage::FullSourceRustProvider
-        | crunch_dev_resume_core::ResumeStage::MantleStage1
-        | crunch_dev_resume_core::ResumeStage::MantleStage2 => {
-            validate_restored_provider_checkpoint(options, prepared, paths, restored)
-                .map(|providers| DevProviderResume::Complete(Box::new(providers)))
-        }
-    };
-    match result {
-        Ok(resume) => Ok(Some(resume)),
-        Err(error) => {
-            let mut destinations = requests.iter().map(|request| request.destination_path.clone()).collect::<Vec<_>>();
-            destinations.push(prepared.staging_dir.join(CHECKPOINT_ORIGIN_EVIDENCE_DIR));
-            if let Err(cleanup) = crate::source_built_fixed_point_checkpoint_shell::cleanup_restores(&destinations) {
-                return Err(proof_error(format!("{error}; dev resume cleanup failed: {cleanup}")));
+    crate::source_built_fixed_point_checkpoint_shell::validate_dev_provider_restore(restored, |restored| {
+        match completed_stage {
+            crunch_dev_resume_core::ResumeStage::StagexTransition => Ok(DevProviderResume::Transition {
+                execution_dir: paths.stagex_transition,
+            }),
+            crunch_dev_resume_core::ResumeStage::StagexProvider => {
+                restored_stagex_provider_report(&paths.stagex_provider, &restored).map(|provider_report| {
+                    DevProviderResume::Stagex {
+                        execution_dir: paths.stagex_transition,
+                        provider_report,
+                    }
+                })
             }
-            Err(error)
+            crunch_dev_resume_core::ResumeStage::FullSourceNativeProvider => {
+                validate_restored_native_prefix(options, prepared, &paths, &restored)
+                    .map(|native| DevProviderResume::Native(Box::new(native)))
+            }
+            crunch_dev_resume_core::ResumeStage::FullSourceRustProvider
+            | crunch_dev_resume_core::ResumeStage::MantleStage1
+            | crunch_dev_resume_core::ResumeStage::MantleStage2 => {
+                validate_restored_provider_checkpoint(options, prepared, paths, restored)
+                    .map(|providers| DevProviderResume::Complete(Box::new(providers)))
+            }
         }
-    }
+    })
 }
 
 pub(super) fn restore_constructed_provider_checkpoint(

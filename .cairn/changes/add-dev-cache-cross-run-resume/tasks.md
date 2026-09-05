@@ -3,8 +3,8 @@
 - [x] [depends:dev-cache-source-built-fixed-point] [serial] I1 Record the current marker, provider-adoption, persistent-store, and staging-directory behavior before implementation. r[source_built_fixed_point_improved_iteration.dev_cross_run_resume]
 - [x] [serial] I2 Add a pure bounded resume planner that revalidates source, plan, policy, stage, producer, and output identities. r[source_built_fixed_point_improved_iteration.dev_cross_run_resume]
   Evidence: `crunch-dev-resume-core` is `no_std + alloc`; 15 positive and negative tests pass, including stale identity, conflicting candidate, candidate bound, and malformed report cases.
-- [x] [serial] I3 Publish and restore content-addressed stage bundles that include the required transition execution tree and stage outputs. r[source_built_fixed_point_improved_iteration.dev_cross_run_resume]
-  Evidence: dev-only checkpoint, object, and manifest namespaces use BLAKE3, no-replace publication, bounded no-follow reads, remeasurement, and exact payload restoration.
+- [ ] [serial] I3 Publish and restore content-addressed stage bundles that include the required transition execution tree and stage outputs. r[source_built_fixed_point_improved_iteration.dev_cross_run_resume]
+  Partial evidence: dev-only checkpoint, object, and manifest namespaces use BLAKE3, no-replace publication, bounded no-follow reads, remeasurement, and exact payload restoration. The runtime audit found that publication waits for full cold-run success. Publication at each completed prefix remains open. See `evidence/runtime-cycle-2026-09-04/resume-audit.md`.
 - [x] [serial] I4 Continue from the first incomplete stage in a fresh staging directory and report restored and executed stages separately. r[source_built_fixed_point_improved_iteration.dev_cross_run_resume]
   Evidence: provider continuation handles transition, StageX, native, and full-provider prefixes; fixed-point continuation handles restored stage 1 and complete validation; `bootstrap.dev-resume-report` separates restored, executed, published, and rejected identities.
 

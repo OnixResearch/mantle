@@ -1977,7 +1977,7 @@
               nativeBuildInputs
               buildInputs
               ;
-            cargoTestExtraArgs = "-p mantle --bin mantle source_built_fixed_point_shell";
+            cargoTestExtraArgs = "-p mantle --bin mantle source_built_fixed_point";
             SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
           };
 

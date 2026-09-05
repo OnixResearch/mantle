@@ -128,7 +128,7 @@ fn restore_selected_plan(
                 error,
             );
         }
-        Err(error) => {
+        Err(crate::source_built_fixed_point_checkpoint_shell::DevRestoreError::Rejected(error)) => {
             return restore_fallback(
                 context.prepared,
                 &fixed_point_resume,
@@ -136,6 +136,9 @@ fn restore_selected_plan(
                 crunch_dev_resume_core::ResumeRejectReason::StageMismatch,
                 error,
             );
+        }
+        Err(error @ crate::source_built_fixed_point_checkpoint_shell::DevRestoreError::CleanupFailed { .. }) => {
+            return Err(error.into_run_error());
         }
     };
     debug_assert_eq!(plan.completed_stage, Some(completed_stage));

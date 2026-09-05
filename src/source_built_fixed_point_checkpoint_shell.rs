@@ -88,6 +88,52 @@ pub(crate) struct RestoredProviderCheckpoint {
     pub(crate) checkpoint_root: PathBuf,
     pub(crate) manifest: ProviderCheckpointManifest,
     pub(crate) admission: ProviderCheckpointAdmission,
+    /// Only payload paths created by this restore permit rollback removal.
+    created_payload_paths: Vec<PathBuf>,
+}
+
+#[derive(Debug)]
+pub(crate) enum DevRestoreError {
+    Rejected(RunError),
+    CleanupFailed { cause: RunError, cleanup: RunError },
+}
+
+impl DevRestoreError {
+    pub(crate) fn with_cleanup(self, cleanup: Result<(), RunError>) -> Self {
+        match cleanup {
+            Ok(()) => self,
+            Err(cleanup) => Self::CleanupFailed {
+                cause: self.into_run_error(),
+                cleanup,
+            },
+        }
+    }
+
+    pub(crate) fn into_run_error(self) -> RunError {
+        match self {
+            Self::Rejected(error) => error,
+            Self::CleanupFailed { cause, cleanup } => {
+                checkpoint_error(format!("{cause}; dev resume cleanup failed: {cleanup}"))
+            }
+        }
+    }
+}
+
+impl From<RunError> for DevRestoreError {
+    fn from(error: RunError) -> Self {
+        Self::Rejected(error)
+    }
+}
+
+pub(crate) fn validate_dev_provider_restore<T>(
+    restored: RestoredProviderCheckpoint,
+    validate: impl FnOnce(RestoredProviderCheckpoint) -> Result<T, RunError>,
+) -> Result<T, DevRestoreError> {
+    let created = restored.created_payload_paths.clone();
+    debug_assert!(!restored.manifest.payloads.is_empty());
+    debug_assert!(created.len() <= restored.manifest.payloads.len());
+    let result = validate(restored);
+    result.map_err(|error| DevRestoreError::Rejected(error).with_cleanup(cleanup_restores(&created)))
 }
 
 pub(crate) fn provider_checkpoint_limits(total_file_bytes_max: u64) -> ProviderCheckpointLimits {
@@ -241,14 +287,14 @@ pub(crate) fn restore_provider_checkpoint(
     limits: ProviderCheckpointLimits,
 ) -> Result<RestoredProviderCheckpoint, RunError> {
     validate_restore_requests(restores, &admitted.manifest, true)?;
-    restore_selected_provider_checkpoint(admitted, restores, limits, false)
+    restore_selected_provider_checkpoint(admitted, restores, limits, false).map_err(DevRestoreError::into_run_error)
 }
 
 pub(crate) fn restore_dev_provider_checkpoint(
     admitted: AdmittedProviderCheckpoint,
     restores: &[CheckpointPayloadRestore],
     limits: ProviderCheckpointLimits,
-) -> Result<RestoredProviderCheckpoint, RunError> {
+) -> Result<RestoredProviderCheckpoint, DevRestoreError> {
     validate_restore_requests(restores, &admitted.manifest, false)?;
     restore_selected_provider_checkpoint(admitted, restores, limits, true)
 }
@@ -258,13 +304,13 @@ fn restore_selected_provider_checkpoint(
     restores: &[CheckpointPayloadRestore],
     limits: ProviderCheckpointLimits,
     allow_existing_identical: bool,
-) -> Result<RestoredProviderCheckpoint, RunError> {
-    let mut created = Vec::new();
+) -> Result<RestoredProviderCheckpoint, DevRestoreError> {
+    let mut created = Vec::with_capacity(restores.len());
     for request in restores {
         match restore_one_payload(&admitted, request, limits, allow_existing_identical) {
             Ok(true) => created.push(request.destination_path.to_path_buf()),
             Ok(false) => {}
-            Err(error) => return Err(add_cleanup_result(error, cleanup_restores(&created))),
+            Err(error) => return Err(DevRestoreError::Rejected(error).with_cleanup(cleanup_restores(&created))),
         }
     }
     debug_assert!(created.len() <= restores.len());
@@ -272,6 +318,7 @@ fn restore_selected_provider_checkpoint(
         checkpoint_root: admitted.checkpoint_root,
         manifest: admitted.manifest,
         admission: admitted.admission,
+        created_payload_paths: created,
     })
 }
 
@@ -988,6 +1035,115 @@ mod tests {
 
         assert!(error.to_string().contains("conflicting promoted provider checkpoints"));
         assert!(!error.to_string().contains("payload observations"));
+    }
+
+    #[test]
+    fn dev_restore_validation_preserves_new_and_reused_payloads_on_success() {
+        let fixture = CheckpointFixture::new();
+        let (restored, reused, created) = dev_restore_with_reused_native(&fixture);
+        assert_eq!(restored.created_payload_paths, vec![created.clone()]);
+
+        let digest =
+            validate_dev_provider_restore(restored, |restored| Ok(restored.admission.checkpoint_digest_blake3))
+                .unwrap();
+
+        assert_eq!(digest.len(), DIGEST_A.len());
+        assert_eq!(fs::read(reused.join("cc")).unwrap(), b"native-provider");
+        assert_eq!(fs::read(created.join("report")).unwrap(), b"transition");
+    }
+
+    #[test]
+    fn dev_restore_validation_failure_removes_only_created_payloads() {
+        let fixture = CheckpointFixture::new();
+        let (restored, reused, created) = dev_restore_with_reused_native(&fixture);
+        let mut validation_called = false;
+        let error = validate_dev_provider_restore(restored, |_| {
+            validation_called = true;
+            Err::<(), _>(checkpoint_error("fixture validation rejected"))
+        })
+        .unwrap_err();
+
+        assert!(validation_called);
+        assert!(matches!(error, DevRestoreError::Rejected(_)));
+        assert_eq!(
+            error.into_run_error().to_string(),
+            "error: source-built provider checkpoint: fixture validation rejected"
+        );
+        assert!(!created.exists());
+        assert_eq!(fs::read(reused.join("cc")).unwrap(), b"native-provider");
+    }
+
+    #[test]
+    fn dev_restore_cleanup_failure_is_not_a_restartable_rejection() {
+        let fixture = CheckpointFixture::new();
+        let (restored, reused, created) = dev_restore_with_reused_native(&fixture);
+        let owned_parent = created.parent().unwrap();
+        let error = validate_dev_provider_restore(restored, |_| {
+            fs::remove_dir_all(&created).unwrap();
+            fs::remove_dir(owned_parent).unwrap();
+            fs::write(owned_parent, b"blocked cleanup parent").unwrap();
+            Err::<(), _>(checkpoint_error("fixture validation rejected"))
+        })
+        .unwrap_err();
+
+        assert!(matches!(error, DevRestoreError::CleanupFailed { .. }));
+        assert!(error.into_run_error().to_string().contains("dev resume cleanup failed"));
+        assert_eq!(fs::read(reused.join("cc")).unwrap(), b"native-provider");
+        assert_eq!(fs::read(owned_parent).unwrap(), b"blocked cleanup parent");
+    }
+
+    #[test]
+    fn dev_restore_copy_rejection_preserves_reused_payloads() {
+        let fixture = CheckpointFixture::new();
+        let published = fixture.publish_dev();
+        let admitted = admit_dev_provider_checkpoint_store(&fixture.store, &fixture.plan, DIGEST_B, fixture.limits)
+            .unwrap()
+            .unwrap();
+        let reused = fixture.restore_root.join("native-store/native-provider");
+        copy_payload(
+            &fixture.source_root.join("native-provider"),
+            &reused,
+            CheckpointPayloadKind::Directory,
+            fixture.limits,
+        )
+        .unwrap();
+        let created = fixture.restore_root.join("transition");
+        let payload = payload_by_id(&admitted.manifest, PAYLOAD_STAGEX_TRANSITION).unwrap();
+        fs::write(published.checkpoint_root.join(&payload.relative_path).join("report"), b"changed after admission")
+            .unwrap();
+        let restores = [
+            restore(PAYLOAD_NATIVE_PROVIDER, &reused, CheckpointPayloadKind::Directory),
+            restore(PAYLOAD_STAGEX_TRANSITION, &created, CheckpointPayloadKind::PreservedTree),
+        ];
+
+        let error = restore_dev_provider_checkpoint(admitted, &restores, fixture.limits).unwrap_err();
+
+        assert!(matches!(error, DevRestoreError::Rejected(_)));
+        assert!(!created.exists());
+        assert_eq!(fs::read(reused.join("cc")).unwrap(), b"native-provider");
+    }
+
+    fn dev_restore_with_reused_native(fixture: &CheckpointFixture) -> (RestoredProviderCheckpoint, PathBuf, PathBuf) {
+        fixture.publish_dev();
+        let admitted = admit_dev_provider_checkpoint_store(&fixture.store, &fixture.plan, DIGEST_B, fixture.limits)
+            .unwrap()
+            .unwrap();
+        let reused = fixture.restore_root.join("native-store/native-provider");
+        copy_payload(
+            &fixture.source_root.join("native-provider"),
+            &reused,
+            CheckpointPayloadKind::Directory,
+            fixture.limits,
+        )
+        .unwrap();
+        let created = fixture.restore_root.join("owned/transition");
+        fs::create_dir(created.parent().unwrap()).unwrap();
+        let restores = [
+            restore(PAYLOAD_NATIVE_PROVIDER, &reused, CheckpointPayloadKind::Directory),
+            restore(PAYLOAD_STAGEX_TRANSITION, &created, CheckpointPayloadKind::PreservedTree),
+        ];
+        let restored = restore_dev_provider_checkpoint(admitted, &restores, fixture.limits).unwrap();
+        (restored, reused, created)
     }
 
     struct CheckpointFixture {

@@ -1,0 +1,14 @@
+observed_at=2026-09-04T23:29:28-04:00
+source_commit=97f47ae2a644651734324f44991cd4cae847499a
+present=stagex-transition-execution/transition-report.json
+present=transcripts/full-source-native-provider.json
+present=rust-provider-scratch/mrustc-first-stage-build.json
+dev_resume_manifests=absent
+1:started_at=2026-09-04T14:53:38-04:00
+2:wrapper_pid=3038717
+3:mode=dev-resume
+4:source_commit=97f47ae2a644651734324f44991cd4cae847499a
+5:profile_blake3=23d48a82ace18957fc18a7ab1973172aff499dd440d9b4dcfff34b236f38af07
+6:orchestrator_blake3=3a8e1b46c634cb31f44b8f63ecd9d675dce2a1c236d051b91a938697e2f8f40c
+7:output=/home/brittonr/mantle-runs/dev-resume-20260904/dev-cold-97f47ae2
+8:dev_cache=/home/brittonr/mantle-runs/dev-resume-20260904/dev-provider-cache
