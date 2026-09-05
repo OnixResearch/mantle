@@ -431,6 +431,15 @@
           pkgs.python3
         ];
 
+        # Keep fault injection in a separate debug executable, never the installed CLI.
+        prepareEvaluatorTestBinary = ''
+          fixture_target_dir="$TMPDIR/mantle-evaluator-fixture-target"
+          CARGO_TARGET_DIR="$fixture_target_dir" cargo build --locked --profile dev \
+            --bin mantle --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget}
+          export MANTLE_TEST_EVALUATOR_BINARY="$fixture_target_dir/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/debug/mantle"
+          test -x "$MANTLE_TEST_EVALUATOR_BINARY"
+        '';
+
         astGrepVersion = "0.42.1";
         astGrepUpstream = pkgs.ast-grep;
         astGrepToolchain =
@@ -860,6 +869,7 @@
           CRUNCH_NO_FUSE = "1";
           MANTLE_TEST_OFFLINE = "1";
           inherit nativeCheckInputs;
+          preCheck = prepareEvaluatorTestBinary;
         };
 
         rustcWrapper = craneLib.buildPackage {
@@ -2014,6 +2024,7 @@
           nextest = craneLib.cargoNextest {
             inherit src cargoArtifacts buildInputs;
             nativeBuildInputs = nativeBuildInputs ++ nativeCheckInputs;
+            preBuild = prepareEvaluatorTestBinary;
             partitions = 1;
             partitionType = "count";
             SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;

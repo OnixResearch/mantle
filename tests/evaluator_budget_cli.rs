@@ -13,6 +13,24 @@ fn mantle() -> Command {
     Command::new(cargo_bin("mantle"))
 }
 
+// Fault injection is intentionally absent from the production release binary.
+// Release test runners must supply a separately built debug fixture executable.
+fn fixture_mantle() -> Command {
+    let path = std::env::var_os("MANTLE_TEST_EVALUATOR_BINARY").map(std::path::PathBuf::from).unwrap_or_else(|| {
+        #[cfg(debug_assertions)]
+        {
+            cargo_bin("mantle")
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            panic!("release tests require MANTLE_TEST_EVALUATOR_BINARY")
+        }
+    });
+    assert!(path.is_absolute(), "the evaluator fixture path must be absolute");
+    assert!(path.is_file(), "the evaluator fixture executable must exist");
+    Command::new(path)
+}
+
 fn report(path: &Path) -> Value {
     let bytes = fs::read(path).expect("report must exist");
     serde_json::from_slice(&bytes).expect("report must be valid JSON")
@@ -345,7 +363,7 @@ fn process_fixtures_classify_crash_signal_protocol_overflow_and_memory() {
     for (behavior, disposition) in cases {
         let temporary = tempfile::tempdir().unwrap();
         let report_path = temporary.path().join(format!("{behavior}-report.json"));
-        let output = mantle()
+        let output = fixture_mantle()
             .env("MANTLE_TEST_EVALUATOR_WORKER_FIXTURE", behavior)
             .args([
                 "eval",
@@ -368,7 +386,7 @@ fn process_fixtures_classify_crash_signal_protocol_overflow_and_memory() {
 fn cpu_exhaustion_reaches_the_enforced_cpu_terminal_class() {
     let temporary = tempfile::tempdir().unwrap();
     let report_path = temporary.path().join("cpu-report.json");
-    let output = mantle()
+    let output = fixture_mantle()
         .env("MANTLE_TEST_EVALUATOR_WORKER_FIXTURE", "cpu-exhaustion")
         .args([
             "eval",
@@ -391,7 +409,7 @@ fn cpu_exhaustion_reaches_the_enforced_cpu_terminal_class() {
 fn process_fixtures_bound_stderr_and_make_late_results_terminal() {
     let temporary = tempfile::tempdir().unwrap();
     let stderr_report_path = temporary.path().join("stderr-report.json");
-    let stderr_output = mantle()
+    let stderr_output = fixture_mantle()
         .env("MANTLE_TEST_EVALUATOR_WORKER_FIXTURE", "stderr-flood")
         .args([
             "eval",
@@ -411,7 +429,7 @@ fn process_fixtures_bound_stderr_and_make_late_results_terminal() {
     assert_eq!(stderr_report["bounded_stderr"].as_str().unwrap().len(), 4096);
 
     let redaction_report_path = temporary.path().join("redaction-report.json");
-    let redaction_output = mantle()
+    let redaction_output = fixture_mantle()
         .env("MANTLE_TEST_EVALUATOR_WORKER_FIXTURE", "stderr-path")
         .args([
             "eval",
@@ -430,7 +448,7 @@ fn process_fixtures_bound_stderr_and_make_late_results_terminal() {
 
     for (behavior, kill_expected) in [("late-success", false), ("ignore-terminate", true)] {
         let report_path = temporary.path().join(format!("{behavior}-report.json"));
-        let output = mantle()
+        let output = fixture_mantle()
             .env("MANTLE_TEST_EVALUATOR_WORKER_FIXTURE", behavior)
             .args([
                 "eval",
@@ -455,7 +473,7 @@ fn process_fixtures_bound_stderr_and_make_late_results_terminal() {
 fn simulated_reap_failure_blocks_a_clean_terminal_claim() {
     let temporary = tempfile::tempdir().unwrap();
     let report_path = temporary.path().join("reap-failure-report.json");
-    let output = mantle()
+    let output = fixture_mantle()
         .env("MANTLE_TEST_EVALUATOR_FORCE_REAP_FAILURE", "1")
         .args([
             "eval",
@@ -478,7 +496,7 @@ fn simulated_reap_failure_blocks_a_clean_terminal_claim() {
 fn cancellation_is_terminal_and_reaps_a_late_worker() {
     let temporary = tempfile::tempdir().unwrap();
     let report_path = temporary.path().join("cancel-report.json");
-    let output = mantle()
+    let output = fixture_mantle()
         .env("MANTLE_TEST_EVALUATOR_WORKER_FIXTURE", "late-success")
         .env("MANTLE_TEST_EVALUATOR_CANCEL_AFTER_MS", "10")
         .args([
@@ -497,6 +515,32 @@ fn cancellation_is_terminal_and_reaps_a_late_worker() {
     assert_eq!(report["teardown"]["cancellation_requested"], true);
     assert_eq!(report["teardown"]["reaped"], true);
     assert_eq!(report["teardown"]["response_present"], false);
+}
+
+#[cfg(not(debug_assertions))]
+#[test]
+fn release_binary_ignores_fault_injection_environment() {
+    let temporary = tempfile::tempdir().unwrap();
+    let report_path = temporary.path().join("release-report.json");
+    let output = mantle()
+        .env("MANTLE_TEST_EVALUATOR_WORKER_FIXTURE", "panic")
+        .env("MANTLE_TEST_EVALUATOR_CANCEL_AFTER_MS", "1")
+        .env("MANTLE_TEST_EVALUATOR_FORCE_REAP_FAILURE", "1")
+        .args([
+            "eval",
+            POSITIVE_SOURCE,
+            "--budget-policy",
+            STRICT_POLICY,
+            "--budget-report",
+            report_path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let report = report(&report_path);
+    assert_eq!(report["terminal_disposition"], "success");
+    assert_eq!(report["teardown"]["reaped"], true);
+    assert_eq!(report["teardown"]["cancellation_requested"], false);
 }
 
 #[test]
