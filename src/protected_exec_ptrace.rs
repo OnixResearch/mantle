@@ -28,24 +28,24 @@ mod linux {
     use std::process::ExitStatus;
     use std::process::Output;
     use std::process::Stdio;
-    use std::sync::Arc;
-    use std::sync::Mutex;
-    use std::sync::RwLock;
     use std::sync::atomic::AtomicU64;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use std::sync::RwLock;
     use std::thread;
     use std::time::Duration;
 
+    use crate::protected_exec::blake3_file_hex;
     use crate::protected_exec::ExecRequest;
     use crate::protected_exec::OutputPromotionRecord;
-    use crate::protected_exec::PHASE_PROTECTED;
     use crate::protected_exec::PlannedProducedExecutableRoot;
     use crate::protected_exec::PromotedExecutable;
     use crate::protected_exec::ProtectedExecError;
     use crate::protected_exec::ProtectedExecPolicy;
     use crate::protected_exec::ProtectedSeccompAuditEvent;
-    use crate::protected_exec::blake3_file_hex;
+    use crate::protected_exec::PHASE_PROTECTED;
 
     const AUDIT_ARCH_X86_64: u32 = 0xC000_003E;
     const AUDIT_ARCH_AARCH64: u32 = 0xC000_00B7;
@@ -91,6 +91,8 @@ mod linux {
     const QUIESCENCE_POLL_COUNT_MAX: u32 = 6_000;
     const QUIESCENCE_STABLE_POLL_COUNT: u32 = 2;
     const QUIESCENCE_POLL_INTERVAL_MS: u64 = 5;
+    const EXEC_OBSERVATION_RETRY_MAX: usize = 8;
+    const EXEC_OBSERVATION_RETRY_SLEEP_MS: u64 = 2;
     const PID_BYTES: usize = std::mem::size_of::<libc::pid_t>();
     const ROOT_HANDSHAKE_TOKEN_BYTES: usize = std::mem::size_of::<u64>();
     const ROOT_HANDSHAKE_BYTES: usize = PID_BYTES + ROOT_HANDSHAKE_TOKEN_BYTES;
@@ -1156,7 +1158,7 @@ mod linux {
                 false,
             );
         }
-        let resolved_host_path = match resolve_tracee_exec_path(pid_u32, &tracee_path) {
+        let resolved_host_path = match resolve_tracee_exec_path_with_retry(pid_u32, &tracee_path) {
             Ok(path) => path,
             Err(error) => {
                 return denied_decision(
@@ -1315,6 +1317,33 @@ mod linux {
         Ok(resolved)
     }
 
+    fn resolve_tracee_exec_path_with_retry(pid: u32, tracee_path: &Path) -> Result<PathBuf, String> {
+        with_bounded_retry(EXEC_OBSERVATION_RETRY_MAX, EXEC_OBSERVATION_RETRY_SLEEP_MS, || {
+            resolve_tracee_exec_path(pid, tracee_path)
+        })
+    }
+
+    fn with_bounded_retry<T>(
+        attempts: usize,
+        sleep_ms: u64,
+        mut attempt: impl FnMut() -> Result<T, String>,
+    ) -> Result<T, String> {
+        assert!(attempts >= 1, "bounded retry requires at least one attempt");
+        let mut last_error = String::new();
+        for attempt_index in 0..attempts {
+            match attempt() {
+                Ok(value) => return Ok(value),
+                Err(error) => {
+                    last_error = error;
+                    if attempt_index + 1 < attempts {
+                        thread::sleep(Duration::from_millis(sleep_ms));
+                    }
+                }
+            }
+        }
+        Err(last_error)
+    }
+
     fn join_tracee_root_path(tracee_root: &Path, tracee_path: &Path) -> Result<PathBuf, String> {
         if !tracee_root.is_absolute() {
             return Err(format!("tracee root is not absolute: {}", tracee_root.display()));
@@ -1398,7 +1427,15 @@ mod linux {
         if result == 0 {
             return Ok(());
         }
-        Err(PtraceSupervisorError::TracerLoop(last_error("PTRACE_CONT")))
+        let error = io::Error::last_os_error();
+        if error.raw_os_error() == Some(libc::ESRCH) {
+            // A vanished tracee needs no continuation. The next waitpid in the
+            // drain loop observes ECHILD and removes it from the tracee set.
+            // Treating this as benign keeps a single lost tracee from failing
+            // the supervised build.
+            return Ok(());
+        }
+        Err(PtraceSupervisorError::TracerLoop(format!("PTRACE_CONT: {error}")))
     }
 
     fn get_event_pid(pid: i32) -> Result<i32, PtraceSupervisorError> {
@@ -1671,6 +1708,37 @@ mod linux {
             let memory_error = read_tracee_memory(u32::MAX, 1, &mut buffer).unwrap_err();
             assert!(register_error.to_string().contains("PTRACE_GETREGS"));
             assert_eq!(memory_error, format!("target pid exceeds pid_t: {}", u32::MAX));
+        }
+
+        #[test]
+        fn bounded_retry_recovers_within_budget() {
+            let mut attempts = 0_usize;
+            let outcome = with_bounded_retry(3, 0, || {
+                attempts = attempts.saturating_add(1);
+                if attempts < 2 {
+                    Err("transient".to_string())
+                } else {
+                    Ok("recovered".to_string())
+                }
+            });
+            assert_eq!(outcome, Ok("recovered".to_string()));
+            assert_eq!(attempts, 2);
+        }
+
+        #[test]
+        fn bounded_retry_exhausts_budget_and_preserves_error() {
+            let mut attempts = 0_usize;
+            let outcome: Result<String, String> = with_bounded_retry(3, 0, || {
+                attempts = attempts.saturating_add(1);
+                Err("persistent".to_string())
+            });
+            assert_eq!(outcome, Err("persistent".to_string()));
+            assert_eq!(attempts, 3);
+        }
+
+        #[test]
+        fn cont_on_vanished_tracee_is_benign() {
+            assert!(cont_with_signal(i32::MAX, 0).is_ok());
         }
 
         #[test]

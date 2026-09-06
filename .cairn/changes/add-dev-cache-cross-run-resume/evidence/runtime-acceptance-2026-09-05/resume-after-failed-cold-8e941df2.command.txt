@@ -1,4 +1,12 @@
 set -eu
+# Resume after the cold attempt dev-cold-8e941df2 terminated with exit_code=1
+# at the full-source Rust provider (protected-exec ptrace supervisor lost one
+# tracee under 16-way exec load; fixed binary 75dac661...1461 carries bounded
+# retry and ESRCH-tolerant continuation). The dev cache holds the published
+# stage bundles (stagex-transition, stagex-provider-publication,
+# full-source-native-provider) plus checkpoints, so this run restores completed
+# providers and continues from the first incomplete stage. This command gates on
+# cold TERMINATION (finished_at=), not cold success (exit_code=0).
 RUN=/home/brittonr/mantle-runs/dev-resume-20260904
 NAME=dev-cached-8e941df2
 BINARY="$RUN/mantle-8e941df2-release"
@@ -17,7 +25,7 @@ STAGEX_LINEAGE_BLAKE3=e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766c
 NATIVE_PROVIDER_BLAKE3=63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9
 PROOF_DISK_BYTES_MAX=200000000000
 PROOF_JOBS=16
-grep -Fx 'exit_code=0' "$RUN/evidence/dev-cold-8e941df2.status.txt"
+grep -q '^finished_at=' "$RUN/evidence/dev-cold-8e941df2.status.txt"
 test -d "$CACHE"
 test ! -L "$CACHE"
 test -f "$PROFILE"
