@@ -4,6 +4,7 @@
 
 The package check now continues after a failing target. Nine later targets expose drift that the former fail-fast run did not reach.
 The failure inventory is evidence of symptoms, not a complete diagnosis.
+ADR 0120 records the selected enumeration, diagnostic framing, generator, and scan-budget decisions.
 Focused baselines must separate invalid fixtures from actual implementation defects before each repair.
 
 ## Decisions
@@ -34,6 +35,21 @@ The functional core retains deterministic ordering, validation, and decisions ov
 Callers retain narrow capabilities. No new raw service accessor or mutable base capability is permitted.
 Positive tests must exercise reads after reopening state and assert no backfill. Negative tests must retain trust, writable-base, prefix, generation, and shadow rejection.
 
+### Decision: Gateway store authority is operation-specific
+
+**Choice:** Replace the gateway's broad handle and raw services with a `crunch-store`-owned `GatewayStore` capability.
+It exposes exact path/hash reads, bounded NAR ingest observations, and imported-output persistence. It cannot expose services, GC, source admission, signing, or root registration.
+
+**Rationale:** The unchanged architecture guard finds six violations at the published prerequisite and in the current branch.
+Existing borrowed transfer operations are reused inside the store shell. A new owned capability keeps their lifetime inside the gateway actor without giving it build or administration authority.
+
+The existing remote core retains request authority and limits. The application retains explicit trusted keys and signature verification before imported-output persistence.
+The store adapter forces non-root, castore-only persistence with no invented provenance or physical export.
+It binds imported metadata to the observed NAR node, digest, size, and owning open store instance. An actor-local opaque token cannot cross stores or survive reopening as admission.
+Fresh authority is checked again before final persistence. Rejection may leave unindexed received blobs, but cannot publish an admitted path or output.
+Tests cover accepted import and reopened query, incorrect hash/size/signature, denied authority before reads, trust-override rejection, and compile-time capability denial.
+The unchanged global architecture guard and its positive/negative self-tests must pass; no file or identifier exception is added.
+
 ### Decision: Worker and coordinator diagnostic facts remain distinct
 
 **Choice:** Trace the existing worker bundle reference and capture status through the failure shell and status projection.
@@ -50,6 +66,9 @@ First run focused baselines for `foreign_import_cli`, `integration_build`, and `
 Then run each other target before changing its boundary. Add accepted and rejected controls for every changed policy or adapter boundary.
 Run strict Clippy for changed first-party scope and the pinned Nix Tiger Style check.
 Run generator freshness checks for each changed generated artifact.
+The NAR guard must follow Rust-cache delegation through `RustCacheStore::render_nar` to the existing Snix writer, rather than require the removed direct call.
+Test both missing delegation edges. Keep source commit and package checksum checks unchanged.
+Prepare the exact locked `nix-archive` crate through Cargo vendoring for that source check; sparse guard input does not prove complete self-build vendoring.
 
 Commit source before the exact native package run. Use `cargo test --release --locked --no-fail-fast` through the existing default package.
 The operator cap is 60 minutes, two cores, one job, no remote builders, and a 30-second termination grace.

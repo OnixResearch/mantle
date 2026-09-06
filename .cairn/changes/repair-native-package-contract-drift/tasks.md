@@ -18,6 +18,8 @@
 - [ ] [serial] Run and extend unsafe-base, signature, shadow, prefix, generation, and authority controls for the changed seam. r[native_package_parity.overlay]
 - [ ] [serial] Preserve worker capture status through coordinator reporting. Cover allowed capture, unavailable capture, rejected artifacts, cleanup, and unchanged build failure. r[native_package_parity.capture]
 
+- [ ] [serial] Replace gateway broad store authority with bounded import/query capability values. Verify import identity, signature and authority rejection, reopened reads, compile-time denials, and the unchanged global store-capability guard. r[native_package_parity.gateway]
+
 ## Acceptance
 
 - [ ] [serial] Run the nine focused targets, changed-boundary controls, generator freshness, strict scoped Clippy, Rust/Nix formatting, pinned Tiger Style, and git diff --check. r[native_package_parity.verification]

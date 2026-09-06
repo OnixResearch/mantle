@@ -126,3 +126,4 @@ compatibility surface, crate name, or historical decision.
 | [0117](0117-bound-radiance-as-an-optional-external-reference.md) | Bound Radiance as an optional external reference | Accepted |
 | [0118](0118-select-remote-resources-from-bounded-evidence.md) | Select remote resources from bounded evidence | Accepted |
 | [0119](0119-isolate-evaluator-fault-fixtures-from-release.md) | Isolate evaluator fault fixtures from the release CLI | Proposed |
+| [0120](0120-restore-native-package-contract-parity.md) | Restore native package contract parity | Proposed |

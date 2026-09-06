@@ -196,6 +196,8 @@ These commands inspect local build evidence. They are not release or witness pro
 
 | File | What it shows | Validation |
 |---|---|---|
+| `examples/distributed_eval_assess.rs` | Bounded stdio worker assessment, not production distributed execution. | `cargo run -p mantle --example distributed_eval_assess -- --self-test` |
+| `examples/picolibc_compare.rs` | Supplied-evidence comparison, not a libc build or provider admission. | `cargo run -p mantle --example picolibc_compare -- --self-test` |
 | `examples/benchmark_eval_smoke.rs` | Cheap evaluation benchmark bundle. | `tests/benchmark_harness.rs` |
 | `examples/benchmark_suite.rs` | Full checked-in benchmark workload matrix. | `tests/benchmark_harness.rs` |
 | `examples/benchmark_compare.rs` | Compares two benchmark bundles. | `tests/benchmark_harness.rs` |

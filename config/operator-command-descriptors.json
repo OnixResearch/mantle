@@ -638,6 +638,99 @@
     "supports_json": true
   },
   {
+    "path": "bootstrap radiance-reference",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Prepare, run, or verify the optional offline Radiance reference proof",
+    "supports_json": true
+  },
+  {
+    "path": "bootstrap radiance-reference prepare",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--bootstrap-compiler-checkout",
+      "--cohort-out",
+      "--emulator-checkout",
+      "--git",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--radiance-checkout",
+      "--source-bundle-out",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Authenticate three connected Git SHA-256 checkouts and publish one offline bundle",
+    "supports_json": true
+  },
+  {
+    "path": "bootstrap radiance-reference prove",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--cc",
+      "--cc-driver",
+      "--cohort",
+      "--crt-dir",
+      "--expected-cohort-blake3",
+      "--expected-source-bundle-blake3",
+      "--help",
+      "--json",
+      "--libgcc-dir",
+      "--linker",
+      "--log-level",
+      "--nix-compat",
+      "--output",
+      "--source-bundle",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Run both routes from one authenticated offline source bundle",
+    "supports_json": true
+  },
+  {
+    "path": "bootstrap radiance-reference verify",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--output",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Replay receipt, protected-audit, and publication checks without execution",
+    "supports_json": true
+  },
+  {
     "path": "bootstrap rust-source-provider",
     "aliases": [],
     "flags": [
@@ -2332,6 +2425,7 @@
       "--requirement-evidence-input",
       "--requirement-evidence-root",
       "--source-acquisition-url",
+      "--source-review-attachment",
       "--stack-provenance-binary",
       "--stack-provenance-sidecar",
       "--stack-provenance-valence-receipt",
@@ -2660,10 +2754,19 @@
       "--require-reproducible",
       "--require-stagex-no-quorum",
       "--requirement-coverage",
+      "--review-author-key",
+      "--review-claim-root",
+      "--review-preset",
+      "--review-producer-id",
+      "--review-threshold",
+      "--reviewed-source",
+      "--revoked-reviewer",
+      "--source-review",
       "--stack-provenance",
       "--state-dir",
       "--store",
       "--store-prefix",
+      "--trusted-reviewer",
       "--verbose",
       "-h",
       "-v"
@@ -2842,6 +2945,147 @@
       "-v"
     ],
     "help": "Validate and render a side-effect-free replay plan",
+    "supports_json": true
+  },
+  {
+    "path": "remote gateway",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Nix compatibility and bounded asynchronous Build API gateway",
+    "supports_json": true
+  },
+  {
+    "path": "remote gateway api-dispatch-stdio-once",
+    "aliases": [],
+    "flags": [
+      "--authority",
+      "--base-store",
+      "--cursor-key-fd",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--secret-manifest",
+      "--secret-profile",
+      "--secret-provider",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Execute one admitted asynchronous API operation against durable coordinator state",
+    "supports_json": true
+  },
+  {
+    "path": "remote gateway api-stdio-once",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Read one bounded API request from stdin and print a typed no-effect plan",
+    "supports_json": true
+  },
+  {
+    "path": "remote gateway metadata",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Print supported versions, operations, bounds, and non-claims",
+    "supports_json": true
+  },
+  {
+    "path": "remote gateway nix-stdio-once",
+    "aliases": [],
+    "flags": [
+      "--authority",
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--policy",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--trusted-store-key",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Serve one Nix daemon-store session on stdin/stdout",
+    "supports_json": true
+  },
+  {
+    "path": "remote gateway plan",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Validate one saved API request and print a side-effect-free typed plan",
+    "supports_json": true
+  },
+  {
+    "path": "remote gateway status",
+    "aliases": [],
+    "flags": [
+      "--base-store",
+      "--help",
+      "--json",
+      "--log-level",
+      "--nix-compat",
+      "--state-dir",
+      "--store",
+      "--store-prefix",
+      "--verbose",
+      "-h",
+      "-v"
+    ],
+    "help": "Validate gateway endpoint policy and print redacted operator status",
     "supports_json": true
   },
   {

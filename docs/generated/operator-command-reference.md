@@ -1,6 +1,6 @@
 # Mantle command reference
 
-Catalog BLAKE3: `c7767e46f9d96b23370a6fd0c16e9813340cc452f1ce239a78c354806d8f401d`
+Catalog BLAKE3: `ed688d648bef472a8093aba2cec663a8daa3318acbd3f07bd927bfb054d7ffa0`
 
 ## Daily commands
 
@@ -312,6 +312,42 @@ Produce the deterministic whole-bootstrap parity gap report
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
 
+### `mantle bootstrap radiance-reference`
+
+Prepare, run, or verify the optional offline Radiance reference proof
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle bootstrap radiance-reference prepare`
+
+Authenticate three connected Git SHA-256 checkouts and publish one offline bundle
+
+- Mutation: `project-files`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle bootstrap radiance-reference prove`
+
+Run both routes from one authenticated offline source bundle
+
+- Mutation: `project-files`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle bootstrap radiance-reference verify`
+
+Replay receipt, protected-audit, and publication checks without execution
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
 ### `mantle bootstrap rust-source-provider`
 
 Materialize or import a source-built Rust provider after validation
@@ -326,7 +362,7 @@ Materialize or import a source-built Rust provider after validation
 Verify and render the bounded source-built proof trust result
 
 - Mutation: `none`
-- Network: `none`
+- Network: `optional`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
 
@@ -722,7 +758,7 @@ Verify one complete catalog generation and every bound artifact
 Resolve historical package versions before ordinary Mantlepkgs production
 
 - Mutation: `none`
-- Network: `optional`
+- Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
 
@@ -730,8 +766,8 @@ Resolve historical package versions before ordinary Mantlepkgs production
 
 Observe one exact revision cohort and publish a compact per-system index
 
-- Mutation: `project-files`
-- Network: `optional`
+- Mutation: `none`
+- Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
 
@@ -739,8 +775,8 @@ Observe one exact revision cohort and publish a compact per-system index
 
 Recheck selected revisions and emit existing Mantlepkgs manifests
 
-- Mutation: `project-files`
-- Network: `optional`
+- Mutation: `none`
+- Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
 
@@ -748,7 +784,7 @@ Recheck selected revisions and emit existing Mantlepkgs manifests
 
 Replay a saved index and publish deterministic receipts and revision groups
 
-- Mutation: `project-files`
+- Mutation: `none`
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
@@ -1113,6 +1149,69 @@ Validate and render a side-effect-free replay plan
 - Exit classes: `policy-rejection, success, usage`
 - JSON schema: `mantle-command-json-v1`
 
+### `mantle remote gateway`
+
+Nix compatibility and bounded asynchronous Build API gateway
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway api-dispatch-stdio-once`
+
+Execute one admitted asynchronous API operation against durable coordinator state
+
+- Mutation: `store-state`
+- Network: `optional`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway api-stdio-once`
+
+Read one bounded API request from stdin and print a typed no-effect plan
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway metadata`
+
+Print supported versions, operations, bounds, and non-claims
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway nix-stdio-once`
+
+Serve one Nix daemon-store session on stdin/stdout
+
+- Mutation: `store-state`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway plan`
+
+Validate one saved API request and print a side-effect-free typed plan
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle remote gateway status`
+
+Validate gateway endpoint policy and print redacted operator status
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
 ### `mantle remote serve`
 
 Print remote server protocol metadata or serve one framed stdio session
@@ -1417,16 +1516,16 @@ Validate a bounded generic projection and report canonical identities
 - Mutation: `none`
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
-- JSON schema: `mantle-composition-plan-v1`
+- JSON schema: `mantle-command-json-v1`
 
 ### `mantle store composition realize`
 
 Realize a validated composition from complete local castore roots
 
-- Mutation: `store-state`
+- Mutation: `none`
 - Network: `none`
 - Exit classes: `policy-rejection, success, usage`
-- JSON schema: `mantle-composition-receipt-v1`
+- JSON schema: `mantle-command-json-v1`
 
 ### `mantle store gc`
 

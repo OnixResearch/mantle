@@ -26,6 +26,8 @@ Repairs MUST preserve deterministic rejection categories, absence of protected e
 r[native_package_parity.inventories] Mantle MUST derive generated operator artifacts and machine-contract cohort coverage from their declared owners.
 The example catalog and architecture scan MUST cover their complete required surface within explicit bounds.
 Documentation assertions MUST preserve each accepted non-claim.
+A reviewed fixture-source reference MAY be recognized as data only by exact owner path, complete source line, and one occurrence.
+Every other source line and every additional occurrence MUST remain subject to the module-coupling guard.
 
 #### Scenario: The declared inventory grows
 
@@ -58,6 +60,26 @@ Reads MUST NOT mutate or backfill a base or writable overlay. Writes MUST remain
 - WHEN the composed store reads or prepares an effect
 - THEN it MUST reject before the protected effect
 - AND it MUST NOT borrow lower-layer trust or expose mutable service authority.
+
+### Requirement: Gateway store authority remains narrow
+
+r[native_package_parity.gateway] Mantle MUST limit gateway store access to admitted object query, bounded NAR ingest, and imported-output persistence.
+The gateway MUST NOT receive a broad store handle, raw services, GC, source admission, signing, or arbitrary root authority.
+Persistence MUST bind metadata to the observed NAR node, size, digest, and owning store instance, with valid signatures and current request authority.
+
+#### Scenario: Admitted import reaches persistence
+
+- GIVEN explicit current authority, trusted signature, and matching NAR identity
+- WHEN the gateway imports and later reopens the store
+- THEN exact path and digest queries MUST return the admitted object
+- AND the import MUST NOT create a retained root or grant unrelated store authority.
+
+#### Scenario: Import lacks authority or identity
+
+- GIVEN authority, signature, digest, size, or transport trust flags are invalid
+- WHEN the gateway handles the request
+- THEN it MUST reject without publishing an admitted path or exported output
+- AND initial authority or trust-override rejection MUST occur before reading the NAR.
 
 ### Requirement: Remote status preserves the observed capture source
 

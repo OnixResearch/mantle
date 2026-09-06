@@ -1083,12 +1083,20 @@ impl StoreHandle {
         path: &StorePath<String>,
     ) -> Result<Option<crate::layer::Layered<PathInfo>>, Error> {
         self.revalidate_overlay_bases()?;
+        let selected = self.lookup_layered_path_info(path).await?;
+        self.revalidate_overlay_bases()?;
+        Ok(selected)
+    }
+
+    async fn lookup_layered_path_info(
+        &self,
+        path: &StorePath<String>,
+    ) -> Result<Option<crate::layer::Layered<PathInfo>>, Error> {
         let read = self
             .pathinfo_service
             .get_with_layer(*path.digest())
             .await
             .map_err(|error| Error::Store(format!("PathInfo lookup for {path}: {error}")))?;
-        self.revalidate_overlay_bases()?;
         let Some(read) = read else {
             return Ok(None);
         };
@@ -1158,38 +1166,46 @@ impl StoreHandle {
     }
 
     pub async fn list_pathinfos_with_layer(&self) -> Result<Vec<crate::layer::Layered<PathInfo>>, Error> {
+        // r[impl native_package_parity.overlay]
         self.revalidate_overlay_bases()?;
-        let mut stream = self.pathinfo_service.list_with_layer();
+        let candidates = self.listed_path_candidates(MAX_LAYERED_PATHINFOS).await?;
+        assert!(candidates.len() <= MAX_LAYERED_PATHINFOS);
         let mut pathinfos = Vec::with_capacity(INITIAL_LAYERED_PATHINFO_CAPACITY);
-        for _pathinfo_index in 0..MAX_LAYERED_PATHINFOS {
-            let Some(read) = stream.next().await else {
-                break;
-            };
-            let read = read.map_err(|error| Error::Store(format!("listing composed PathInfos: {error}")))?;
-            if self.overlay_state.is_some() && read.layer_index == 0 {
-                let trusted_keys = crate::overlay::load_layer_trust_keys(&self.state_dir)?;
-                crate::overlay::verify_pathinfo_trust(&read.value, &trusted_keys).map_err(|error| {
-                    Error::Store(format!("overlay-layer-trust-failure for {}: {error}", read.value.store_path))
-                })?;
-            }
-            let shadows = self.pathinfo_shadow_observations(read.layer_index, &read.value).await?;
-            let mut layered = crate::layer::Layered::from_service_index(read.value, read.layer_index)
-                .map_err(|error| Error::Store(format!("mapping listed PathInfo layer: {error}")))?;
-            layered.shadows = shadows;
-            pathinfos.push(layered);
+        for path in candidates {
+            // Cache listings intentionally cover only near. Enumerate admitted
+            // layers here, but reuse ordinary lookup for precedence and trust.
+            let selected = self
+                .lookup_layered_path_info(&path)
+                .await?
+                .ok_or_else(|| Error::Store(format!("listed PathInfo disappeared before composed lookup: {path}")))?;
+            pathinfos.push(selected);
         }
-        let extra_path_info = if pathinfos.len() == MAX_LAYERED_PATHINFOS {
-            stream.next().await
-        } else {
-            None
-        };
-        if let Some(read) = extra_path_info {
-            read.map_err(|error| Error::Store(format!("listing composed PathInfos: {error}")))?;
-            return Err(Error::Store(format!("layered PathInfo list exceeds {MAX_LAYERED_PATHINFOS} entries")));
-        }
-        pathinfos.sort_by(|left, right| left.value.store_path.cmp(&right.value.store_path));
+        assert!(pathinfos.len() <= MAX_LAYERED_PATHINFOS);
         self.revalidate_overlay_bases()?;
         Ok(pathinfos)
+    }
+
+    async fn listed_path_candidates(&self, maximum_entries: usize) -> Result<BTreeSet<StorePath<String>>, Error> {
+        assert!(maximum_entries > 0);
+        assert!(maximum_entries <= MAX_LAYERED_PATHINFOS);
+        let mut candidates = BTreeSet::new();
+        let mut observed_count = 0_usize;
+        let services = std::iter::once(&self.overlay_pathinfo).chain(self.base_pathinfo_inspection_services.iter());
+        for service in services {
+            let mut stream = service.list();
+            for _entry_index in 0..=maximum_entries {
+                let Some(entry) = stream.next().await else {
+                    break;
+                };
+                let entry = entry.map_err(|error| Error::Store(format!("listing composed PathInfos: {error}")))?;
+                if observed_count == maximum_entries {
+                    return Err(Error::Store(format!("layered PathInfo scan exceeds {maximum_entries} entries")));
+                }
+                observed_count = observed_count.saturating_add(1);
+                candidates.insert(entry.store_path);
+            }
+        }
+        Ok(candidates)
     }
 
     pub async fn discover_action_results(&self, action_ref: &str) -> ActionResultDiscoveryReport {
@@ -6693,6 +6709,74 @@ mod tests {
         })
         .await
         .unwrap()
+    }
+
+    #[tokio::test]
+    async fn overlay_listing_includes_reopened_base_without_backfill() {
+        // r[verify native_package_parity.overlay]
+        let overlay = tempfile::tempdir().unwrap();
+        let base = tempfile::tempdir().unwrap();
+        let path = test_output("listed-base", 71);
+        let expected = create_base_store(base.path(), "/nix/store", &path).await;
+        let before = blake3::hash(&std::fs::read(base.path().join("pathinfo.redb")).unwrap());
+        let handle = create_overlay_handle(overlay.path(), base.path(), "/nix/store").await;
+        for _attempt in 0..2 {
+            let entries = handle.list_pathinfos_with_layer().await.unwrap();
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0].value, expected);
+            assert_eq!(entries[0].layer, crate::layer::StoreLayer::Base { index: 1 });
+            assert!(handle.overlay_pathinfo.get(*path.digest()).await.unwrap().is_none());
+        }
+        assert_eq!(before, blake3::hash(&std::fs::read(base.path().join("pathinfo.redb")).unwrap()));
+    }
+
+    #[tokio::test]
+    async fn overlay_listing_keeps_selected_shadow_once() {
+        // r[verify native_package_parity.overlay]
+        let overlay = tempfile::tempdir().unwrap();
+        let base = tempfile::tempdir().unwrap();
+        let path = test_output("listed-shadow", 72);
+        create_base_store(base.path(), "/nix/store", &path).await;
+        let handle = create_overlay_handle(overlay.path(), base.path(), "/nix/store").await;
+        let selected = signed_pathinfo(path);
+        handle.overlay_pathinfo.put(selected.clone()).await.unwrap();
+        let entries = handle.list_pathinfos_with_layer().await.unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].value, selected);
+        assert_eq!(entries[0].layer, crate::layer::StoreLayer::Overlay);
+        assert_eq!(entries[0].shadows.len(), 1);
+        assert_eq!(entries[0].shadows[0].layer, crate::layer::StoreLayer::Base { index: 1 });
+    }
+
+    #[tokio::test]
+    async fn overlay_listing_scan_budget_counts_shadows_before_deduplication() {
+        // r[verify native_package_parity.overlay]
+        let overlay = tempfile::tempdir().unwrap();
+        let base = tempfile::tempdir().unwrap();
+        let path = test_output("listed-budget", 74);
+        create_base_store(base.path(), "/nix/store", &path).await;
+        let handle = create_overlay_handle(overlay.path(), base.path(), "/nix/store").await;
+        handle.overlay_pathinfo.put(signed_pathinfo(path.clone())).await.unwrap();
+        let exact = handle.listed_path_candidates(2).await.unwrap();
+        assert_eq!(exact, BTreeSet::from([path]));
+        let error = handle.listed_path_candidates(1).await.unwrap_err();
+        assert!(error.to_string().contains("layered PathInfo scan exceeds 1 entries"));
+    }
+
+    #[tokio::test]
+    async fn overlay_listing_rejects_untrusted_shadow_without_base_fallback() {
+        // r[verify native_package_parity.overlay]
+        let overlay = tempfile::tempdir().unwrap();
+        let base = tempfile::tempdir().unwrap();
+        let path = test_output("listed-untrusted-shadow", 73);
+        create_base_store(base.path(), "/nix/store", &path).await;
+        let handle = create_overlay_handle(overlay.path(), base.path(), "/nix/store").await;
+        let mut shadow = signed_pathinfo(path.clone());
+        shadow.signatures.clear();
+        handle.overlay_pathinfo.put(shadow.clone()).await.unwrap();
+        let error = handle.list_pathinfos_with_layer().await.unwrap_err();
+        assert!(error.to_string().contains("overlay-layer-trust-failure"));
+        assert_eq!(handle.overlay_pathinfo.get(*path.digest()).await.unwrap(), Some(shadow));
     }
 
     #[tokio::test]

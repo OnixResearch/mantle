@@ -2764,11 +2764,26 @@ struct RemoteFailureFieldQuery<'a> {
 }
 
 fn remote_failure_debug_report_field(query: RemoteFailureFieldQuery<'_>) -> Option<String> {
-    query
+    // r[impl native_package_parity.capture]
+    const REPORT_BYTES_MAX: usize = 65_536;
+    if query.reason.len() > REPORT_BYTES_MAX {
+        return None;
+    }
+    debug_assert!(!query.prefix.is_empty());
+    debug_assert!(query.reason.len() <= REPORT_BYTES_MAX);
+    // Child stderr can append multiline remediation after the worker record.
+    // Lines frame diagnostic fields just as semicolons do. Duplicates are not
+    // a choice of observations: reject them instead of selecting the first.
+    let mut fields = query
         .reason
-        .split(';')
+        .split([';', '\n', '\r'])
         .map(str::trim)
-        .find_map(|field| field.strip_prefix(query.prefix).map(str::to_string))
+        .filter_map(|field| field.strip_prefix(query.prefix));
+    let value = fields.next()?;
+    if fields.next().is_some() {
+        return None;
+    }
+    Some(value.to_string())
 }
 
 fn valid_remote_failure_status_code(value: &str) -> bool {
@@ -6314,6 +6329,29 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn worker_capture_decoder_preserves_line_framing_and_rejects_duplicates() {
+        // r[verify native_package_parity.capture]
+        let record = format!(
+            "error: remote-local-executor-build: failed; worker_bundle_ref=remote-failure-debug:{}; worker_capture_outcome=captured; worker_cleanup_status=cleanup-attempted-after-capture",
+            "a".repeat(REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS),
+        );
+        let plain = parse_remote_worker_failure_debug_report(&record).unwrap();
+        let rendered = format!("{record}\n\nremediation: mantle.build.nonzero-exit\nphase: Build\n");
+        assert_eq!(parse_remote_worker_failure_debug_report(&rendered), Some(plain));
+        assert!(
+            parse_remote_worker_failure_debug_report(&format!("{record}; worker_capture_outcome=metadata-only"))
+                .is_none()
+        );
+        assert!(
+            parse_remote_worker_failure_debug_report(&format!("{record}; worker_capture_outcome=captured")).is_none()
+        );
+        assert!(
+            parse_remote_worker_failure_debug_report(&record.replace("outcome=captured", "outcome=CAPTURED")).is_none()
+        );
+        assert!(parse_remote_worker_failure_debug_report(&format!("{}\n{record}", "x".repeat(65_536))).is_none());
     }
 
     #[cfg(unix)]
