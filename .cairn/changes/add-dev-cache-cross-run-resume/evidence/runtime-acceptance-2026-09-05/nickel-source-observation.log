@@ -1,0 +1,5 @@
+2026-09-05T19:55:27-04:00
+previously_missing_derivation_valid=true
+/nix/store/666qf3k9djcfzv6lwcp4l4v7fgck77ng-source.drv
+warning: '--json' without '--json-format' is deprecated; please specify '--json-format 1' or '--json-format 2'. This will become an error in a future release.
+{"/nix/store/lm8nl097aagikzqh7pbj7m1n3cq0jigx-source":{"ca":null,"deriver":"/nix/store/666qf3k9djcfzv6lwcp4l4v7fgck77ng-source.drv","narHash":"sha256-wWwvSMKoP4Q0PkcnWbuJEcLxuiKRoykStWo5E42jjiU=","narSize":276032,"references":["/nix/store/42hc4rsy1y8nb8j3kcp9dwfdcghxv3wv-dummyBuild.rs"],"registrationTime":1788652394,"signatures":["aspen1-1:W9+x7D61Iq8vip+H3cpVT0m/kSBnswle5gvJS0RYqwEqlO3MQy7yHA4nzmCFX6gh7AN9VCMGV+KGePdfXq7eDw=="],"storeDir":"/nix/store","ultimate":false,"version":1}}

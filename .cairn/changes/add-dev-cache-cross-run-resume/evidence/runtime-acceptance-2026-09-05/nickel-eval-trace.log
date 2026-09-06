@@ -1,0 +1,3 @@
+command=nix eval --raw .#packages.x86_64-linux.nickel.drvPath --show-trace --no-eval-cache --option min-free 0 --option max-free 0
+copying path '/nix/store/lm8nl097aagikzqh7pbj7m1n3cq0jigx-source' from 'http://100.100.103.95:5000'...
+/nix/store/mgf4mizpx3zngjhbqpj4cdz6zn1wp7f3-nickel-lang-rev-fixup-1.17.0.drv

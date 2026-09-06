@@ -1,0 +1,13 @@
+;; The caller must bound stdin before this report-only adapter reads it.
+(require "dev-report-review.scm")
+(define input-bytes-max 69632)
+(define input-text (read-port-to-string (current-input-port)))
+(unless (<= (utf8-length input-text) input-bytes-max)
+  (error "report review input exceeds its byte bound"))
+(define outcome (review-dev-report (string->jsexpr input-text)))
+(unless (hash-ref outcome 'accepted)
+  (display (hash-ref outcome 'errors))
+  (newline)
+  (error "report review rejected the declared expectation"))
+(display "report_review=accepted runtime_proven=false scope=report-only")
+(newline)

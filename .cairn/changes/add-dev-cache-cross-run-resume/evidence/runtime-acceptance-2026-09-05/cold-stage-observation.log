@@ -1,0 +1,52 @@
+2026-09-05T20:19:42-04:00
+source-built-fixed-point-plan.json f
+native-source-closure.json f
+transcripts d
+.stage-markers d
+inputs d
+attempt-status.json f
+stagex-transition-execution d
+    PID     TID STAT     TIME %CPU WCHAN
+1624266 1624266 Dl   00:06:50  9.4 jbd2_log_wait_commit
+1624266 1624544 Sl   00:00:16  0.4 recv_wait_event
+kaem-0 f
+oyacc-stage d
+tcc-musl-stage d
+kaem-minimal.hex0 f
+musl-stage d
+kaem-0.stderr f
+tcc-musl-v2-stage d
+stage0-mini d
+hex0-seed f
+gnu-patch-stage d
+gzip-stage d
+gawk-stage d
+tinycc27-stage d
+binutils-stage d
+hex0-reproduced f
+hex0-seed.stderr f
+tinycc-stage d
+mes-stage d
+protected-exec-audit.json f
+musl-native-stage d
+make-stage d
+hex0-reproduced.stderr f
+musl-pass2-stage d
+bison-stage d
+tcc-musl-selfhost-stage d
+bash-stage d
+grep-stage d
+flex-stage d
+kaem-smoke.txt f
+transition-plan.json f
+kaem-smoke.kaem f
+transition-report.json f
+coreutils-stage d
+bash-full-stage d
+sed-stage d
+tcc-musl-prep-stage d
+m4-stage d
+diffutils-stage d
+hex0_AMD64.hex0 f
+bzip2-stage d
+tar-stage d

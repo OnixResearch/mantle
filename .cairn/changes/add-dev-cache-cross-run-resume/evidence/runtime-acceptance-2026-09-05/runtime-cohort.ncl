@@ -1,0 +1,76 @@
+let digest_hex_length = 64 in
+let git_oid_hex_length = 40 in
+let Hex = fun length => std.contract.from_predicate (fun value =>
+  std.is_string value
+  && std.string.length value == length
+  && std.string.is_match "^[0-9a-f]+$" value
+) in
+let Blake3 = Hex digest_hex_length in
+let GitOid = Hex git_oid_hex_length in
+let AbsolutePath = std.contract.from_predicate (fun value =>
+  std.is_string value && std.string.is_match "^/[^\n]+$" value
+) in
+let root = "/home/brittonr/mantle-runs/dev-resume-20260904" in
+let cache_path = "%{root}/dev-provider-cache-8e941df2" in
+let LaterDev = {
+  name | String,
+  mode | [| 'resume, 'adopt |],
+  predecessor | String,
+  cache | AbsolutePath,
+  requires_prior_report_review | Bool,
+  requires_empty_output | Bool,
+} in
+{
+  schema | String = "mantle-dev-resume-runtime-cohort-v1",
+  status | String = "prepared-not-executed",
+  source_commit | GitOid = "8e941df20b7d888929692ad5330b76ffcdb7cfa9",
+  source_git_object_format | [| 'sha1 |] = 'sha1,
+  source_path | AbsolutePath = "%{root}/source-8e941df2",
+  source_record_blake3 | Blake3 = "943e7f24a8224c296e23848476923b8c50c1e3868b0b3ff2a0525e726e282da8",
+  vendor_record_blake3 | Blake3 = "2a34c833f27a7e2a6a509b466f414969d8b50ecfca8a1555c6845ddfc1298572",
+  binary | AbsolutePath = "%{root}/mantle-8e941df2-release",
+  binary_blake3 | Blake3 = "db1ee54cfaa4be553525434f7e8d601e18d644a3c30a9d2cb92fec5d4cb1e2f2",
+  source_profile | AbsolutePath = "%{root}/authority/source-built-fixed-point-sources-8e941df2.json",
+  source_profile_blake3 | Blake3 = "2f9c4a8f18e3e966e3b31b1b63f15193f3a513c396918a8930a66589f1c36197",
+  dev_plan_blake3 | Blake3 = "d05e4e9085f02ee96b40a5b135ba8f930f92faf79a4287a0683a9a49a34cfa02",
+  stagex_lineage_blake3 | Blake3 = "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d",
+  native_provider_blake3 | Blake3 = "63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9",
+  cold_attempt | String = "dev-cold-8e941df2",
+  dev_cache | AbsolutePath = cache_path,
+  report_bytes_max | Number = 65536,
+  proof_disk_bytes_max | Number = 200000000000,
+  proof_jobs | Number = 16,
+  follow_up_runs | Array LaterDev = [
+    {
+      name = "dev-cached-8e941df2", mode = 'resume,
+      predecessor = "dev-cold-8e941df2", cache = cache_path,
+      requires_prior_report_review = true, requires_empty_output = true,
+    },
+    {
+      name = "dev-adopt-8e941df2", mode = 'adopt,
+      predecessor = "dev-cached-8e941df2", cache = cache_path,
+      requires_prior_report_review = true, requires_empty_output = true,
+    },
+  ],
+  prefix_checks | Array { report_stage | String, stage_id | String } = [
+    { report_stage = "stagex-transition", stage_id = "stagex-transition" },
+    { report_stage = "stagex-provider", stage_id = "stagex-provider-publication" },
+    { report_stage = "full-source-native-provider", stage_id = "full-source-native-provider" },
+    { report_stage = "full-source-rust-provider", stage_id = "full-source-rust-provider" },
+    { report_stage = "mantle-stage1", stage_id = "mantle-stage1" },
+    { report_stage = "mantle-stage2", stage_id = "mantle-stage2" },
+  ],
+  promoted = {
+    name | String = "promoted-cold-8e941df2",
+    source_cohort_must_match | Bool = true,
+    requires_separate_plan_review | Bool = true,
+    requires_empty_authority | Bool = true,
+    permits_dev_cache_access | Bool = false,
+    permits_checkpoint_import | Bool = false,
+  },
+  non_claims | Array String = [
+    "This descriptor is not a launch receipt or execution permission.",
+    "The dev plan identity is not the promoted plan identity.",
+    "Report review does not verify payload bytes, source authority, runtime behavior, or alias state.",
+  ],
+}
