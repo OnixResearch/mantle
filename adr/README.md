@@ -128,4 +128,4 @@ compatibility surface, crate name, or historical decision.
 | [0119](0119-isolate-evaluator-fault-fixtures-from-release.md) | Isolate evaluator fault fixtures from the release CLI | Proposed |
 | [0120](0120-restore-native-package-contract-parity.md) | Restore native package contract parity | Proposed |
 | [0121](0121-migrate-legacy-archive-representations-without-resigning.md) | Migrate legacy archive representations without re-signing | Accepted |
-| [0122](0122-separate-contract-hash-range-from-store-traits.md) | Separate the contract hash range from store traits | Proposed |
+| [0122](0122-separate-contract-hash-range-from-store-traits.md) | Separate the contract hash range from store traits | Accepted |

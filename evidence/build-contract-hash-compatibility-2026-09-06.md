@@ -166,6 +166,20 @@ This establishes linked contract compatibility, not the missing native
 request-to-observation adapter. Neural materialization remains 5/11. No training,
 content reader, runtime decoder, native CLI update, or promotion was activated.
 
+## Lifecycle completion
+
+All five tasks are complete. The reviewed sync added only the three
+hash-compatibility requirements to `.cairn/specs/build-interchange/spec.md`.
+The unblocked archive execution moved the change to
+`.cairn/archive/2026-09-06-allow-build-contract-hash-compatibility/`.
+Its evidence directory retains the raw plans, executions, and successful
+post-archive validation output. Later evidence and archive commits are not
+new native CLI package results.
+
+Neural Stream evidence tip `6eac54eae5f887b097207d765ac745de2655bc6c` also passed
+its committed-tip full gate in 39.9 seconds. Its native activation gate remains
+unchanged. That consumer change is active, not archived.
+
 ## Evidence retention and non-claims
 
 Raw baseline, pre-fix failure, focused, matrix, and Tiger Style logs remain in

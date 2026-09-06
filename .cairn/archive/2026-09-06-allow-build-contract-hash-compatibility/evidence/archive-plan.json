@@ -1,0 +1,53 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: allow-build-contract-hash-compatibility",
+      "kind": "archive_change",
+      "path": "/home/brittonr/git/OnixResearch/mantle-worktrees/fix-build-contract-hash-compat-20260906/.cairn/changes/allow-build-contract-hash-compatibility"
+    }
+  ],
+  "blocked": false,
+  "change": "allow-build-contract-hash-compatibility",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "0c9d8ce2dd523de14496e45af2117118ea53827153b9a0bd6cf11bb5e88835ad",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+    "receipt_hash": "b476b08a11456e26e76cb472af0963a1356f795be02cec5ae6de482246164bc1",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": true,
+  "input_hash": "b3634d19677bb0f1d034aafc81bd5e7cfc3938241c1c7466277aa019da6c1ded",
+  "layout": "cairn",
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "8a95d4040d727d35d1b324d6301b489686a2c3b6c7ecdf7f803c34721257ec79",
+  "policy": "mantle-default",
+  "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+  "profile_identity_hash": "46cc5f876af3d4febf98aee265348a47763f4d6f5c82fe9701af6a6906019127",
+  "reasons": [],
+  "receipt_hash": "61036303924a772f8bf4066e4efcb0e06d1eef122ee6ac50e0c6d0847faae03c",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
