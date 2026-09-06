@@ -2,11 +2,10 @@
 //! The adapter supplies cryptographically checked observations of the SAME NAR.
 
 extern crate alloc;
-use self::alloc::{
-    collections::{BTreeMap, BTreeSet},
-    string::String,
-    vec::Vec,
-};
+use self::alloc::collections::BTreeMap;
+use self::alloc::collections::BTreeSet;
+use self::alloc::string::String;
+use self::alloc::vec::Vec;
 
 pub struct ClosureRecord {
     pub identity: String,
@@ -25,11 +24,10 @@ pub enum ClosureRejection {
 }
 
 pub fn validate_closed_archive(roots: Vec<String>, records: Vec<ClosureRecord>) -> Result<(), ClosureRejection> {
-    if roots.is_empty()
-        || roots.len() > 64
-        || records.len() > 64
-        || roots.iter().collect::<BTreeSet<_>>().len() != roots.len()
-    {
+    if roots.is_empty() || roots.len() > 64 || records.len() > 64 {
+        return Err(ClosureRejection::Bounds);
+    }
+    if roots.iter().collect::<BTreeSet<_>>().len() != roots.len() {
         return Err(ClosureRejection::Bounds);
     }
     let mut by_name = BTreeMap::new();
@@ -59,6 +57,8 @@ pub fn validate_closed_archive(roots: Vec<String>, records: Vec<ClosureRecord>) 
     if seen.len() != records.len() {
         return Err(ClosureRejection::UnreachableMember);
     }
+    debug_assert_eq!(seen.len(), by_name.len());
+    debug_assert_eq!(by_name.len(), records.len());
     Ok(())
 }
 
@@ -121,6 +121,8 @@ pub fn plan_directory_migration(facts: MigrationFacts) -> Result<Disposition, Re
         CaEvidence::Rejected | CaEvidence::MarkerNar { replacements: 0 } => return Err(Rejection::CaMismatch),
         _ => {}
     }
+    debug_assert!(facts.trusted_signature);
+    debug_assert!(facts.payload_blake3_matches);
     if facts.recorded == facts.current {
         return Ok(Disposition::Unchanged);
     }
