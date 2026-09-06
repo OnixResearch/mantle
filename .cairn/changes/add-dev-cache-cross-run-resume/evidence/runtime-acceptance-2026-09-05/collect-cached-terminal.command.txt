@@ -2,8 +2,12 @@ set -eu
 HOST=leviathan.cymric-daggertooth.ts.net
 RUN=/home/brittonr/mantle-runs/dev-resume-20260904
 NAME=dev-cached-8e941df2
-PROOF_PID=3347698
-STAGING="$RUN/.$NAME.source-built-fixed-point-staging-$PROOF_PID"
+STAGING=""
+for CANDIDATE in "$RUN"/.dev-cached-8e941df2.source-built-fixed-point-staging-*; do
+  STAGING=$CANDIDATE
+done
+test -n "$STAGING"
+test -d "$STAGING"
 ROOT=/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-dev-cache-cross-run-resume
 OUTPUT="$ROOT/.cairn/changes/add-dev-cache-cross-run-resume/evidence/runtime-acceptance-2026-09-05/cached-terminal-8e941df2"
 SSH_CONNECT_TIMEOUT_SECONDS=15
