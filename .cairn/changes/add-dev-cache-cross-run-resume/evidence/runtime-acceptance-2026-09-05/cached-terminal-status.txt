@@ -1,8 +1,8 @@
-started_at=2026-09-06T13:58:38-04:00
-wrapper_pid=3473887
+started_at=2026-09-06T15:29:43-04:00
+wrapper_pid=3762741
 source_commit=8e941df20b7d888929692ad5330b76ffcdb7cfa9
 mode=dev-resume
 output=/home/brittonr/mantle-runs/dev-resume-20260904/dev-cached-8e941df2
 dev_cache=/home/brittonr/mantle-runs/dev-resume-20260904/dev-provider-cache-8e941df2
-finished_at=2026-09-06T15:15:29-04:00
+finished_at=2026-09-06T16:48:57-04:00
 exit_code=1
