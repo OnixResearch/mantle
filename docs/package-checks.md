@@ -2,6 +2,8 @@
 
 [ADR 0119](../adr/0119-isolate-evaluator-fault-fixtures-from-release.md)
 records the test isolation decision and rejected alternatives.
+[The repair evidence](../evidence/package-test-fixtures-2026-09-05.md)
+records the remaining blockers. A passing default package is not yet established.
 
 ## Scope
 

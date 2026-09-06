@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed. The focused debug checks pass. Full package verification is pending.
+Proposed. The native evaluator target passes, including its release guard.
+The full package remains blocked by nine other integration targets.
+See `evidence/package-test-fixtures-2026-09-05.md` for the scoped observations.
 
 ## Context
 
