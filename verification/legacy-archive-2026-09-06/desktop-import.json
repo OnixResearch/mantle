@@ -1,0 +1,62 @@
+{
+  "imported_count": 11,
+  "skipped_already_present_count": 0,
+  "total_payload_bytes": 380573392,
+  "paths": [
+    {
+      "store_path": "3d8wkbjlp6nr98ak6wnrqr8fy81720dl-gmp-6.2.1-gcc40-v1",
+      "nar_size": 1954112,
+      "nar_sha256_hex": "eaf517ef718487206a3e8833858baf8ed063c594901b2d61e0afa3d31a119387"
+    },
+    {
+      "store_path": "7h6bc2mc252lpcc27ll1whsrc783qsq4-busybox-1.37.0-full-source-gcc10-v1",
+      "nar_size": 1379240,
+      "nar_sha256_hex": "e17f6a1722a915085959d3790823129ecdd2c4c2ffd447d3a6c5f601c3651f53"
+    },
+    {
+      "store_path": "9229ybqv8249h60nx6nzxy6ywc6y1ybw-musl-1.2.5-gcc10-v1",
+      "nar_size": 4206800,
+      "nar_sha256_hex": "958183f4a31cd3cd4257dabfd67fddb6a9e489d8b969c20cf7e95bfe60de8e8e"
+    },
+    {
+      "store_path": "dmpds84ypag60347bb4zfsy9y437ripn-mpfr-4.1.0-gcc40-v1",
+      "nar_size": 1551744,
+      "nar_sha256_hex": "b74f5346401607fd0b377934328d876072b293e8b0544822d4dd9a217384c327"
+    },
+    {
+      "store_path": "g8k9qfw7wi18shxf22nh554194dpam5r-mpc-1.2.1-gcc40-v1",
+      "nar_size": 363936,
+      "nar_sha256_hex": "f4facb13fc4e6ab69c2eed2318f20cbe37d0d080c676fd6fe2983af714d6e648"
+    },
+    {
+      "store_path": "g8y9afm03yv58g0kxjz39qgj540kf04i-musl-1.1.24-gcc-pass5-v1",
+      "nar_size": 3301360,
+      "nar_sha256_hex": "91d797c339699e76c0048e66d011d8a239d5c641e6055c6a8f23274208fc8311"
+    },
+    {
+      "store_path": "hj8bb4v3r6a891jy17r144a5103cx6ml-binutils-2.41-gcc10-v1",
+      "nar_size": 50611560,
+      "nar_sha256_hex": "e5186dcdb8fab731014dc56675dcc199580cd9242700ad0e3a506233e4b410cd"
+    },
+    {
+      "store_path": "hr87acr9pypbwa5fjfvpiqcdshkc5kgq-make-4.4.1-full-source-gcc10-v1",
+      "nar_size": 350024,
+      "nar_sha256_hex": "6ac88ca3ee73e56d54bf1c1519a2295c09607762aa6969c0a6a2af7ac83a27cb"
+    },
+    {
+      "store_path": "n7zzy3yh90wfb64cdqxw67gkfw8zl4kw-binutils-2.30-gcc-pass4-v17",
+      "nar_size": 49508120,
+      "nar_sha256_hex": "7df2a18c860a3a5f65d556b038acdb835091d6b12b1d300bccd1967667a0f743"
+    },
+    {
+      "store_path": "s1ph5d6kkl2p091ss124j6dq05x772fz-full-source-seed-toolchain",
+      "nar_size": 154245920,
+      "nar_sha256_hex": "c86afeb7ba62b1c24b2581819ee84b67b1f01ac6258e2deca60768410f865219"
+    },
+    {
+      "store_path": "s7g75y3h6n3l2z76rbigzni3jc4614hf-gcc-10.5.0-musl-final-v1",
+      "nar_size": 113100576,
+      "nar_sha256_hex": "ceb1b9548dc5c0ba47d3febb407c6f0d6d9ae87b2523d70e723eab7462df7929"
+    }
+  ]
+}

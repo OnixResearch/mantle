@@ -1,0 +1,11 @@
+{
+  "schema": "mantle-legacy-archive-migration-request-v1",
+  "expected_input_blake3": "6b1d99205f585513974d15ec70b4ccb28de6b8f025361ad5cb3d99b7d009906b",
+  "store_prefix": "/mantle/store",
+  "roots": [
+    "7h6bc2mc252lpcc27ll1whsrc783qsq4-busybox-1.37.0-full-source-gcc10-v1",
+    "hr87acr9pypbwa5fjfvpiqcdshkc5kgq-make-4.4.1-full-source-gcc10-v1",
+    "s1ph5d6kkl2p091ss124j6dq05x772fz-full-source-seed-toolchain"
+  ],
+  "trusted_public_keys": ["crunch-britton-desktop-1:913onE1x8N2z1n2xFA9bbpmhNCfsWrwUnoV9ESvy+RM="]
+}
