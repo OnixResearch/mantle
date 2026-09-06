@@ -19,10 +19,10 @@ use crate::cargo_free_self_build::CargoFreeSelfBuildOptions;
 use crate::errors::RunError;
 use crate::full_source_rust_binding_shell::FullSourceRustHostToolMaterializationRequest;
 use crate::native_toolchain_closure::NativeToolchainClosureOptions;
+use crate::source_built_fixed_point::plan_source_built_fixed_point;
 use crate::source_built_fixed_point::InitialOutputAuthorityState;
 use crate::source_built_fixed_point::ProofHermeticityMode;
 use crate::source_built_fixed_point::ProofOutputRole;
-use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
 use crate::source_built_fixed_point::SourceAuthorityInput;
 use crate::source_built_fixed_point::SourceAuthorityRole;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPlan;
@@ -30,24 +30,24 @@ use crate::source_built_fixed_point::SourceBuiltFixedPointPlanInput;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPolicies;
 use crate::source_built_fixed_point::SourceBuiltFixedPointResourceBounds;
 use crate::source_built_fixed_point::SourceContentKind;
-use crate::source_built_fixed_point::plan_source_built_fixed_point;
-use crate::source_built_fixed_point_dev_cache::DEV_CACHE_ENTRY_FILE;
-use crate::source_built_fixed_point_dev_cache::DevCachePolicies;
-use crate::source_built_fixed_point_dev_cache::DevProviderCacheEntry;
-use crate::source_built_fixed_point_dev_cache::DevProviderCacheLookup;
-use crate::source_built_fixed_point_dev_cache::FAST_FAIL_SCHEMA;
-use crate::source_built_fixed_point_dev_cache::FastFailDecision;
-use crate::source_built_fixed_point_dev_cache::StageCompletionMarker;
-use crate::source_built_fixed_point_dev_cache::StageMarkerValidation;
+use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
 use crate::source_built_fixed_point_dev_cache::dev_provider_cache_key;
 use crate::source_built_fixed_point_dev_cache::evaluate_fast_fail;
 use crate::source_built_fixed_point_dev_cache::evaluate_provider_cache_lookup;
 use crate::source_built_fixed_point_dev_cache::validate_stage_marker;
-use crate::source_bundle::SourceBuiltFixedPointProfileRecords;
-use crate::source_bundle::SourceRecord;
+use crate::source_built_fixed_point_dev_cache::DevCachePolicies;
+use crate::source_built_fixed_point_dev_cache::DevProviderCacheEntry;
+use crate::source_built_fixed_point_dev_cache::DevProviderCacheLookup;
+use crate::source_built_fixed_point_dev_cache::FastFailDecision;
+use crate::source_built_fixed_point_dev_cache::StageCompletionMarker;
+use crate::source_built_fixed_point_dev_cache::StageMarkerValidation;
+use crate::source_built_fixed_point_dev_cache::DEV_CACHE_ENTRY_FILE;
+use crate::source_built_fixed_point_dev_cache::FAST_FAIL_SCHEMA;
 use crate::source_bundle::assemble_source_bundle;
 use crate::source_bundle::materialize_source_record_payload;
 use crate::source_bundle::source_built_fixed_point_profile_records;
+use crate::source_bundle::SourceBuiltFixedPointProfileRecords;
+use crate::source_bundle::SourceRecord;
 use crate::stagex_provider::StagexProviderRequest;
 use crate::stagex_transition::StagexTransitionRequest;
 
@@ -1281,8 +1281,19 @@ fn admit_restored_stagex_prefix(
     if !transition.is_dir() || !report.output_path.is_dir() {
         return Err(proof_error("restored StageX prefix is incomplete".to_string()));
     }
+    let provider_root = prepared.native_store_dir.join(STAGEX_PROVIDER_STORE_BASENAME);
+    // When the StageX provider is replayed into the attempt staging tree its
+    // basename ("stagex-provider-replay") is not a valid store path name.
+    // Admission must target the persistent store copy under the pinned store
+    // basename; the replay's normalized identity check has already bound the
+    // fresh run to that store payload.
+    let admitted_root = if report.output_path != provider_root && provider_root.is_dir() {
+        &provider_root
+    } else {
+        &report.output_path
+    };
     let logical = crate::full_source_provider::adopt_verified_local_provider_path_strict(
-        &report.output_path,
+        admitted_root,
         &prepared.native_store_dir,
         &prepared.native_state_dir,
         LOGICAL_STORE_PREFIX,
@@ -1292,12 +1303,12 @@ fn admit_restored_stagex_prefix(
     }
     crate::source_bundle::import_constructed_store_path_source(
         &logical,
-        &report.output_path,
+        admitted_root,
         &prepared.native_state_dir,
         LOGICAL_STORE_PREFIX,
     )?;
     debug_assert!(transition.is_dir());
-    debug_assert!(report.output_path.is_dir());
+    debug_assert!(admitted_root.is_dir());
     Ok(())
 }
 
