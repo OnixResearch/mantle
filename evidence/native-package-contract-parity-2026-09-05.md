@@ -4,7 +4,9 @@
 
 Source `7126fc98b86c6b49ff1247aeaf39bf92e0fb89ac` is published on `fix/package-contract-drift-20260905`.
 The full native package check passed for that exact source. The installed output is valid.
-Lifecycle completion remains pending. Package acceptance does not grant downstream admission.
+Cairn completed all 13 tasks and synced six accepted requirements.
+Archive: `.cairn/archive/2026-09-06-repair-native-package-contract-drift/`.
+Package acceptance does not grant downstream admission.
 
 Prerequisite: `5dfb37becbd09b895e84b8ba4af911a7f7513d91`.
 The historical complete failure inventory remains in `evidence/package-test-fixtures-2026-09-05.md`.
