@@ -21,8 +21,11 @@ versions that meet the requirements `=1.8.2` are: 1.8.2
 previously selected package `blake3 v1.8.7`
 ```
 
-The final linked consumer must use a published immutable source. That proof
-remains pending in this source checkpoint. No native executor is admitted here.
+Published contract source: `5884354802f4d87dfb25dfe0b3f978e1bf7f134b`.
+Neural Stream fetched that exact source through authenticated Nix and Cargo Git.
+Its source NAR is `sha256-olB+d6ShR1Q6dSj+BwimmDxjdHABZJpyslK1BcbkuQQ=`.
+The actual linked consumer proof passed, as recorded in the final section.
+No native executor is admitted here.
 
 ## Focused owner and independent consumer results
 
@@ -117,6 +120,51 @@ nix build .#checks.x86_64-linux.tigerstyle --no-link --print-out-paths --builder
 Output: `/nix/store/cw4zf8lzzxq405jdwaihgl5cg1nnji9j-tigerstyle-consumer-check`.
 The check used a 20-minute outer timeout and a 30-second termination grace.
 It completed normally, not through timeout.
+
+## Exact committed-source and linked consumer evidence
+
+The matrix, Nickel, and full Tiger Style Nix checks ran again at exact local
+Git source `5884354802f4d87dfb25dfe0b3f978e1bf7f134b`, already published on the
+change branch. All four checks passed. The two matrix lanes each returned:
+
+```text
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+Committed-source outputs:
+
+```text
+/nix/store/jswpkgysihm61bwg84zs1qr4x3wb49xw-mantle-build-contract-hash-minimum-test-1
+/nix/store/i8mb187bjcv95n729wavlp3mrvdhrvs0-mantle-build-contract-hash-current-test-1
+/nix/store/g263gsiwarr2pcnbvvpy1rxaw9f1cz9w-mantle-build-contract-nickel
+```
+
+The full Tiger Style output is `/nix/store/zchccg440ydhvdl8d014ijc5654l5xyz-tigerstyle-consumer-check`.
+The maintained owner lifecycle validation also passed.
+
+Neural Stream source `4d0396cdefbdd7a9c1bae6ebb6f7154983942fe7` pins the
+published contract in the real Memory IR shell graph. Cargo added only the
+contract package and dependency edge. Animus `4f08f89d...`, BLAKE3 1.8.7,
+Serde 1.0.228, and serde_json 1.0.151 remain selected. No override or sibling
+product dependency was used. A source-only Nix input binds the same revision.
+
+The linked consumer returned:
+
+```text
+test result: ok. 54 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+```
+
+Four new linked controls preserve producer identities and rejection behavior.
+Eleven registry tests, ten negative self-controls, strict shell Clippy, and all
+four zero-finding Octet profiles passed. All eleven existing campaigns replayed
+after the source commit. The consumer's full `devenv test` passed in 40.7 seconds,
+with FCIS 118 Rust core files, three Python core files, and four shell bindings.
+The consumer retains separate native CLI and inspection-library source roles.
+
+This establishes linked contract compatibility, not the missing native
+request-to-observation adapter. Neural materialization remains 5/11. No training,
+content reader, runtime decoder, native CLI update, or promotion was activated.
 
 ## Evidence retention and non-claims
 
