@@ -313,17 +313,20 @@ fn adopt_verified_local_provider_path_with_mode(
     })?;
     let canonical_output = fs::canonicalize(output_dir)
         .map_err(|error| admission_error(format!("canonicalizing output store {}: {error}", output_dir.display())))?;
-    if canonical_parent != canonical_output {
-        return Err(admission_error(format!(
-            "admitted provider parent {} does not match current output store {}",
-            canonical_parent.display(),
-            canonical_output.display()
-        )));
-    }
     let provider_basename = provider_path
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| admission_error("admitted provider basename is not UTF-8".to_string()))?;
+    let admitted_import_needed = canonical_parent != canonical_output;
+    // A dev resume may admit a provider tree that lives outside the output
+    // store (for example a stage replayed under the attempt staging dir). The
+    // store admission path requires the adopted local output to live inside
+    // the output store, so import an out-of-store provider first (matching the
+    // proof-checkpoint import precedent) and verify the copied identity.
+    if admitted_import_needed {
+        let imported_path = output_dir.join(provider_basename);
+        import_provider_tree_into_store(provider_path, &imported_path)?;
+    }
     let logical_store_path = format!("{store_dir}/{provider_basename}");
     let _mutation_guard = crunch_store::StoreMutationGuard::acquire_wait(state_dir)
         .map_err(|error| admission_error(format!("acquiring provider adoption mutation lock: {error}")))?;
@@ -349,6 +352,50 @@ fn adopt_verified_local_provider_path_with_mode(
         Ok::<(), RunError>(())
     })?;
     Ok(logical_store_path)
+}
+
+fn import_provider_tree_into_store(source: &Path, destination: &Path) -> Result<(), RunError> {
+    let source_identity = crate::release_tree_copy::hash_directory_tree(source)
+        .map_err(|error| {
+            admission_error(format!("hashing out-of-store admitted provider {}: {error}", source.display()))
+        })?
+        .1;
+    match fs::symlink_metadata(destination) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            crate::release_tree_copy::copy_directory_tree(source, destination).map_err(|error| {
+                admission_error(format!("importing out-of-store provider into {}: {error}", destination.display()))
+            })?;
+            let copied_identity = crate::release_tree_copy::hash_directory_tree(destination)
+                .map_err(|error| {
+                    admission_error(format!("hashing imported provider {}: {error}", destination.display()))
+                })?
+                .1;
+            if copied_identity != source_identity {
+                return Err(admission_error(format!(
+                    "imported provider copy changed identity: expected {source_identity}, observed {copied_identity}"
+                )));
+            }
+            Ok(())
+        }
+        Err(error) => Err(admission_error(format!(
+            "inspecting imported provider destination {}: {error}",
+            destination.display()
+        ))),
+        Ok(_) => {
+            let existing_identity = crate::release_tree_copy::hash_directory_tree(destination)
+                .map_err(|error| {
+                    admission_error(format!("hashing existing provider {}: {error}", destination.display()))
+                })?
+                .1;
+            if existing_identity != source_identity {
+                return Err(admission_error(format!(
+                    "imported provider destination {} conflicts with admitted provider identity",
+                    destination.display()
+                )));
+            }
+            Ok(())
+        }
+    }
 }
 
 pub(crate) fn admit_full_source_provider(
@@ -1108,6 +1155,53 @@ mod tests {
 
     const DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    #[test]
+    fn import_out_of_store_provider_into_empty_store() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("staging-provider");
+        fs::create_dir(&source).unwrap();
+        fs::write(source.join("payload"), b"provider-tree").unwrap();
+        let store = temp.path().join("output-store");
+        fs::create_dir(&store).unwrap();
+        let destination = store.join("provider");
+
+        import_provider_tree_into_store(&source, &destination).unwrap();
+
+        let expected = crate::release_tree_copy::hash_directory_tree(&source).unwrap();
+        let observed = crate::release_tree_copy::hash_directory_tree(&destination).unwrap();
+        assert_eq!(observed.1, expected.1);
+    }
+
+    #[test]
+    fn import_provider_skips_identical_destination() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("staging-provider");
+        fs::create_dir(&source).unwrap();
+        fs::write(source.join("payload"), b"provider-tree").unwrap();
+        let store = temp.path().join("output-store");
+        let destination = store.join("provider");
+        fs::create_dir_all(&destination).unwrap();
+        fs::write(destination.join("payload"), b"provider-tree").unwrap();
+
+        import_provider_tree_into_store(&source, &destination).unwrap();
+        assert!(destination.join("payload").is_file());
+    }
+
+    #[test]
+    fn import_provider_rejects_conflicting_destination() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("staging-provider");
+        fs::create_dir(&source).unwrap();
+        fs::write(source.join("payload"), b"provider-tree").unwrap();
+        let store = temp.path().join("output-store");
+        let destination = store.join("provider");
+        fs::create_dir_all(&destination).unwrap();
+        fs::write(destination.join("payload"), b"different-provider-tree").unwrap();
+
+        let error = import_provider_tree_into_store(&source, &destination).unwrap_err();
+        assert!(error.to_string().contains("conflicts"));
+    }
     const EXECUTABLE_SIZE_BYTES: u64 = 8;
     const RUNTIME_SIZE_BYTES: u64 = 16;
     const SOURCE_CLOSURE_RECORD_COUNT: usize = 1;
