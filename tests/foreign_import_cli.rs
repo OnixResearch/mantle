@@ -42,7 +42,7 @@ const STALE_RECEIPT: &str = "stale-raw-graph-digest";
 const EMBEDDED_REWRITE: &str = "undeclared-embedded-source-rewrite";
 const UNTRUSTED_CACHE: &str = "untrusted-cache-hint";
 const SANDBOX_CAPABILITY: &str = "undeclared-sandbox-capability";
-const MALFORMED_NIX_DERIVATION: &str = "malformed-nix-derivation";
+const MALFORMED_NIX_DERIVATION: &str = "malformed-foreign-aterm";
 const FAKE_PATH_DIR: &str = "fake-path";
 const ATERM_GRAPH_FILE: &str = "foreign-aterm.graph.json";
 const ATERM_INDEX_FILE: &str = "foreign-aterm.index.json";
@@ -923,7 +923,7 @@ fn foreign_import_cli_rejects_drv_dir_missing_reachable_input_without_partial_ar
         .get_output()
         .clone();
 
-    assert_rejected_class(output.stdout, "missing-nix-input-derivation");
+    assert_rejected_class(output.stdout, "missing-foreign-input-derivation");
     assert!(output.stderr.is_empty());
     assert!(!out_dir.join("nixpkgs.graph.json").exists());
     assert!(!out_dir.join("nixpkgs.index.json").exists());
@@ -931,12 +931,25 @@ fn foreign_import_cli_rejects_drv_dir_missing_reachable_input_without_partial_ar
 
 #[test]
 fn foreign_import_cli_rejects_malformed_drv_without_partial_artifacts() {
+    assert_rejected_nix_derivation("not a derivation", MALFORMED_NIX_DERIVATION);
+}
+
+#[test]
+fn foreign_import_cli_rejects_output_environment_mismatch_without_partial_artifacts() {
+    // r[verify native_package_parity.fixtures]
+    let source = fs::read_to_string(fixture_path(NIXPKGS_SOURCE_DRV_FILE)).unwrap();
+    // Binding the hello-source ATerm to hello.drv changes its out-of-band name.
+    // The existing adapter must reject its now inconsistent fixed-output path.
+    assert_rejected_nix_derivation(&source, "invalid-nix-derivation-semantics");
+}
+
+fn assert_rejected_nix_derivation(source: &str, expected_class: &str) {
     let temp = TempDir::new().expect("tempdir should be created");
     let fake_path = temp.path().join(FAKE_PATH_DIR);
     let out_dir = temp.path().join("malformed-artifacts");
     let malformed_drv = temp.path().join("malformed.drv");
     fs::create_dir(&fake_path).expect("fake PATH should be created");
-    fs::write(&malformed_drv, "not a derivation").expect("malformed drv should be written");
+    fs::write(&malformed_drv, source).expect("invalid drv should be written");
 
     let drv_arg = format!("{NIXPKGS_HELLO_DRV}={}", path_str(&malformed_drv));
     let output = mantle_cmd()
@@ -963,7 +976,7 @@ fn foreign_import_cli_rejects_malformed_drv_without_partial_artifacts() {
         .get_output()
         .clone();
 
-    assert_rejected_class(output.stdout, MALFORMED_NIX_DERIVATION);
+    assert_rejected_class(output.stdout, expected_class);
     assert!(output.stderr.is_empty());
     assert!(!out_dir.join("nixpkgs.graph.json").exists());
     assert!(!out_dir.join("nixpkgs.index.json").exists());
@@ -1575,7 +1588,7 @@ fn write_guix_drv_dir_fixture(drv_dir: &Path, include_source: bool) {
 fn write_drv_dir_fixture(drv_dir: &Path, include_source: bool) {
     fs::create_dir(drv_dir).expect("drv dir should be created");
     copy_drv_fixture(drv_dir, NIXPKGS_HELLO_DRV, NIXPKGS_ROOT_DRV_FILE);
-    copy_drv_fixture(drv_dir, NIXPKGS_UNRELATED_DRV, NIXPKGS_SOURCE_DRV_FILE);
+    copy_drv_fixture(drv_dir, NIXPKGS_UNRELATED_DRV, "nixpkgs-unrelated.drv");
     if include_source {
         copy_drv_fixture(drv_dir, NIXPKGS_SOURCE_DRV, NIXPKGS_SOURCE_DRV_FILE);
     }

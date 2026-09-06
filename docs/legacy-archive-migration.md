@@ -1,6 +1,6 @@
 # Checked legacy archive migration
 
-The migration preserves package bytes and signed facts. It changes only a proven legacy castore node representation. See [ADR 0119](../adr/0119-migrate-legacy-archive-representations-without-resigning.md).
+The migration preserves package bytes and signed facts. It changes only a proven legacy castore node representation. See [ADR 0121](../adr/0121-migrate-legacy-archive-representations-without-resigning.md).
 
 ## Interface
 

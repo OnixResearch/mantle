@@ -469,9 +469,9 @@ fn production_workflow_projects_evaluate_and_keep_negative_paths() {
     }
 
     let cache = std::fs::read_to_string(project_root(SIGNED_CACHE_PROJECT).join("README.md")).unwrap();
-    assert!(cache.contains("unknown signer is skipped"));
+    assert!(cache.contains("Mantle skips an unknown signer"));
     assert!(cache.contains("wrong key material fails signature verification"));
-    assert!(cache.contains("corrupted NAR is rejected"));
+    assert!(cache.contains("a corrupt NAR fails its declared hash check"));
     let cross = std::fs::read_to_string(project_root(CROSS_COMPILED_PROJECT).join("mantle-project.ncl")).unwrap();
     assert!(cross.contains("host/target role mismatch"));
     assert!(cross.contains("-x c -std=c11"));
@@ -495,7 +495,7 @@ fn production_workflow_projects_evaluate_and_keep_negative_paths() {
     assert!(developer_loop.contains("usage: operator-demo NAME"));
     let provenance = std::fs::read_to_string(project_root(ARTIFACT_PROVENANCE_PROJECT).join("README.md")).unwrap();
     assert!(provenance.contains("not release or witness proofs"));
-    assert!(provenance.contains("canonical verification fails"));
+    assert!(provenance.contains("Canonical verification then fails"));
     let hermetic = std::fs::read_to_string(project_root(HERMETIC_PLAN_REBUILD_PROJECT).join("README.md")).unwrap();
     assert!(hermetic.contains("matching BLAKE3 child-environment digests"));
     assert!(hermetic.contains("does not prove compiler correctness"));

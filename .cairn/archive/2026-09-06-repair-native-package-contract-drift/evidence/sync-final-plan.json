@@ -1,0 +1,141 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: /home/brittonr/git/OnixResearch/mantle-worktrees/fix-package-contract-drift-20260905/.cairn/changes/repair-native-package-contract-drift/specs/native-package-contract-parity/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "/home/brittonr/git/OnixResearch/mantle-worktrees/fix-package-contract-drift-20260905/.cairn/changes/repair-native-package-contract-drift/specs/native-package-contract-parity/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "repair-native-package-contract-drift",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "0c9d8ce2dd523de14496e45af2117118ea53827153b9a0bd6cf11bb5e88835ad",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+    "receipt_hash": "b476b08a11456e26e76cb472af0963a1356f795be02cec5ae6de482246164bc1",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "/home/brittonr/git/OnixResearch/mantle-worktrees/fix-package-contract-drift-20260905/.cairn/changes/repair-native-package-contract-drift/specs/native-package-contract-parity/spec.md"
+  ],
+  "dry_run": true,
+  "input_hash": "5443f9cb6a605232c114dff401b881c72ee60d7fc1c2836ddc75902b9a85d90d",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": false,
+        "accepted_before_hash": "06d88994d52ef9d9f337d62ab851547dff76c2226fd3463f23de31e81a177d8f",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "0a59ffae59c5350b9c616a7fb270fd63c8dbada9c530e9eeb314e3eada664dbd",
+        "destination": ".cairn/specs/native-package-contract-parity/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "44b9a398e3f40b48cfd2b02bf2e50312871883b93a03da54f49ab0ee7ce5cb92",
+        "operations": [
+          {
+            "block_hash": "3b14f505bb6d6d1439f4fb896eec4bd9732561b6927e5f0e595ecc8a3389de7f",
+            "heading": "### Requirement: Fixtures reach their intended admission boundary",
+            "kind": "added",
+            "requirement_id": "native_package_parity.fixtures"
+          },
+          {
+            "block_hash": "9991548cfe9ebf369be85ec6725cc6b6e9a832798ac201a08f7cd0da3033f196",
+            "heading": "### Requirement: Inventories preserve complete bounded coverage",
+            "kind": "added",
+            "requirement_id": "native_package_parity.inventories"
+          },
+          {
+            "block_hash": "61f0f8a5b2cefe8d9436b1d8163420cecc597a681087cdbf02f5bcbaa1da4489",
+            "heading": "### Requirement: Narrow store capabilities preserve composed observations",
+            "kind": "added",
+            "requirement_id": "native_package_parity.overlay"
+          },
+          {
+            "block_hash": "806b4ea4f8608152e842b334d3ec9b96db5cc13e2bfeefa33fe295e9f2ff8f5e",
+            "heading": "### Requirement: Gateway store authority remains narrow",
+            "kind": "added",
+            "requirement_id": "native_package_parity.gateway"
+          },
+          {
+            "block_hash": "ef97a3ee51a4e057ad687974b8d8921a36db6d60af7bf3e36fb395842e63e14d",
+            "heading": "### Requirement: Remote status preserves the observed capture source",
+            "kind": "added",
+            "requirement_id": "native_package_parity.capture"
+          },
+          {
+            "block_hash": "a1f17424eb369d882548ff304920c9247bb44a3e297c078b80970a2eba1fc057",
+            "heading": "### Requirement: Native package acceptance uses complete bounded evidence",
+            "kind": "added",
+            "requirement_id": "native_package_parity.verification"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "native_package_parity.fixtures",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "native_package_parity.inventories",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "native_package_parity.overlay",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "native_package_parity.gateway",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "native_package_parity.capture",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "native_package_parity.verification",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/repair-native-package-contract-drift/specs/native-package-contract-parity/spec.md"
+      }
+    ]
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "bc0b0aeafc12932b0dd4ac8cf786adcea749b96c86e38ab72bf9bc8002186cf6",
+  "policy": "mantle-default",
+  "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+  "profile_identity_hash": "d6eb564760af6046b14a3079372a13adff32375a51b01d4a61c3cf26f7c723fc",
+  "reasons": [],
+  "receipt_hash": "7d0496b25916c15dbdcbaea3075edf267ab13b67846bbe699920438dc857b39a",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

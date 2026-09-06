@@ -1518,8 +1518,58 @@ mod linux {
         const SEQUENTIAL_STAGE_COUNT: usize = 2;
         const INVALID_SEIZE_ACK: u8 = 2;
         const BLAKE3_HEX_LENGTH: usize = 64;
-        const TEST_SHELL_PATH: &str = "/run/current-system/sw/bin/sh";
+        const TEST_SHELL_ENV: &str = "MANTLE_TEST_SCRIPT_SHELL";
         const OUTPUT_SENTINEL: &str = "ptrace-output-ok";
+
+        fn resolve_test_shell(configured: Option<std::ffi::OsString>) -> io::Result<std::path::PathBuf> {
+            let selected = configured.map_or_else(|| std::path::PathBuf::from("/bin/sh"), std::path::PathBuf::from);
+            if !selected.is_absolute() {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "test shell path must be absolute"));
+            }
+            let executable = std::fs::canonicalize(selected)?;
+            let metadata = std::fs::metadata(&executable)?;
+            if !metadata.is_file() {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "test shell must be a regular file"));
+            }
+            if metadata.permissions().mode() & 0o111 == 0 {
+                return Err(io::Error::new(io::ErrorKind::PermissionDenied, "test shell must be executable"));
+            }
+            debug_assert!(executable.is_absolute());
+            debug_assert!(!executable.as_os_str().is_empty());
+            Ok(executable)
+        }
+
+        fn test_shell() -> std::path::PathBuf {
+            resolve_test_shell(std::env::var_os(TEST_SHELL_ENV)).expect("the selected test shell must be usable")
+        }
+
+        #[test]
+        fn explicit_test_shell_is_bound_without_fallback() {
+            let selected = test_shell();
+            assert_eq!(resolve_test_shell(Some(selected.clone().into_os_string())).unwrap(), selected);
+            let directory = tempfile::tempdir().unwrap();
+            let missing = directory.path().join("missing-shell");
+            assert_eq!(resolve_test_shell(Some(missing.into_os_string())).unwrap_err().kind(), io::ErrorKind::NotFound);
+            assert_eq!(
+                resolve_test_shell(Some("relative-shell".into())).unwrap_err().kind(),
+                io::ErrorKind::InvalidInput
+            );
+            assert_eq!(resolve_test_shell(Some("".into())).unwrap_err().kind(), io::ErrorKind::InvalidInput);
+        }
+
+        #[test]
+        fn test_shell_rejects_directories_and_non_executable_files() {
+            let directory = tempfile::tempdir().unwrap();
+            let selected = directory.path().to_path_buf().into_os_string();
+            assert_eq!(resolve_test_shell(Some(selected)).unwrap_err().kind(), io::ErrorKind::InvalidInput);
+            let file = directory.path().join("not-executable");
+            std::fs::write(&file, b"not a shell").unwrap();
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+            assert_eq!(
+                resolve_test_shell(Some(file.into_os_string())).unwrap_err().kind(),
+                io::ErrorKind::PermissionDenied
+            );
+        }
 
         fn executable_policy(path: &Path, digest_hex: String) -> ProtectedExecPolicy {
             ProtectedExecPolicy::from_action_plan(&["ptrace-test".to_string()], &[PlannedExecutable {
@@ -1579,10 +1629,10 @@ mod linux {
 
         #[test]
         fn ptrace_supervisor_allows_declared_exec_and_records_exact_bytes() {
-            let executable = std::fs::canonicalize(TEST_SHELL_PATH).unwrap();
+            let executable = test_shell();
             let digest = blake3_file_hex(&executable).unwrap();
             let supervisor = install_exec_supervisor(executable_policy(&executable, digest.clone())).unwrap();
-            let mut command = Command::new(TEST_SHELL_PATH);
+            let mut command = Command::new(&executable);
             command.args(["-c", ":"]);
             let status = supervisor.status(&mut command).unwrap();
             assert!(status.success());
@@ -1596,10 +1646,10 @@ mod linux {
 
         #[test]
         fn ptrace_supervisor_denies_digest_mismatch_before_exec() {
-            let executable = std::fs::canonicalize(TEST_SHELL_PATH).unwrap();
+            let executable = test_shell();
             let supervisor =
                 install_exec_supervisor(executable_policy(&executable, "0".repeat(BLAKE3_HEX_LENGTH))).unwrap();
-            let mut command = Command::new(TEST_SHELL_PATH);
+            let mut command = Command::new(&executable);
             command.args(["-c", ":"]);
             let error = supervisor.status(&mut command).unwrap_err();
             assert_eq!(error.raw_os_error(), Some(libc::EACCES));
@@ -1612,11 +1662,14 @@ mod linux {
 
         #[test]
         fn ptrace_supervisor_auto_attaches_descendant_and_forwards_sigchld() {
-            let executable = std::fs::canonicalize(TEST_SHELL_PATH).unwrap();
+            let directory = tempfile::tempdir().unwrap();
+            let shell = directory.path().join("shell with 'quotes'");
+            std::fs::copy(test_shell(), &shell).unwrap();
+            let executable = resolve_test_shell(Some(shell.into_os_string())).unwrap();
             let digest = blake3_file_hex(&executable).unwrap();
             let supervisor = install_exec_supervisor(executable_policy(&executable, digest)).unwrap();
-            let mut command = Command::new(TEST_SHELL_PATH);
-            command.args(["-c", "/run/current-system/sw/bin/sh -c ':' & wait"]);
+            let mut command = Command::new(&executable);
+            command.args(["-c", "\"$1\" -c ':' & wait \"$!\"", "ptrace-descendant"]).arg(&executable);
             let status = supervisor.status(&mut command).unwrap();
             assert!(status.success());
             supervisor.wait_for_audit_quiescence().unwrap();
@@ -1628,10 +1681,10 @@ mod linux {
 
         #[test]
         fn ptrace_supervisor_output_captures_bytes_without_command_wait() {
-            let executable = std::fs::canonicalize(TEST_SHELL_PATH).unwrap();
+            let executable = test_shell();
             let digest = blake3_file_hex(&executable).unwrap();
             let supervisor = install_exec_supervisor(executable_policy(&executable, digest)).unwrap();
-            let mut command = Command::new(TEST_SHELL_PATH);
+            let mut command = Command::new(&executable);
             command.args(["-c", "printf ptrace-output-ok"]);
             let output = supervisor.output(&mut command).unwrap();
             assert!(output.status.success());
@@ -1645,7 +1698,7 @@ mod linux {
         fn ptrace_supervisor_fails_closed_when_exec_bytes_disappear() {
             let directory = tempfile::tempdir().unwrap();
             let executable = directory.path().join("vanishing-exec");
-            std::fs::write(&executable, "#!/run/current-system/sw/bin/sh\nexit 0\n").unwrap();
+            std::fs::copy(test_shell(), &executable).unwrap();
             let mut permissions = std::fs::metadata(&executable).unwrap().permissions();
             permissions.set_mode(0o755);
             std::fs::set_permissions(&executable, permissions).unwrap();
@@ -1691,11 +1744,11 @@ mod linux {
 
         #[test]
         fn ptrace_supervisor_handles_sequential_roots_after_quiescence() {
-            let executable = std::fs::canonicalize(TEST_SHELL_PATH).unwrap();
+            let executable = test_shell();
             let digest = blake3_file_hex(&executable).unwrap();
             let supervisor = install_exec_supervisor(executable_policy(&executable, digest)).unwrap();
             for stage_index in 0..SEQUENTIAL_STAGE_COUNT {
-                let mut command = Command::new(TEST_SHELL_PATH);
+                let mut command = Command::new(&executable);
                 command.args(["-c", ":"]);
                 assert!(supervisor.status(&mut command).unwrap().success());
                 let event_count = supervisor.wait_for_audit_quiescence().unwrap();
@@ -1706,15 +1759,16 @@ mod linux {
 
         #[test]
         fn ptrace_supervisor_handles_concurrent_declared_execs() {
-            let executable = std::fs::canonicalize(TEST_SHELL_PATH).unwrap();
+            let executable = test_shell();
             let digest = blake3_file_hex(&executable).unwrap();
             let supervisor = install_exec_supervisor(executable_policy(&executable, digest)).unwrap();
             thread::scope(|scope| {
                 for _ in 0..CONCURRENT_WORKERS {
                     let supervisor = &supervisor;
+                    let executable = &executable;
                     scope.spawn(move || {
                         for _ in 0..CONCURRENT_EXECS_PER_WORKER {
-                            let mut command = Command::new(TEST_SHELL_PATH);
+                            let mut command = Command::new(executable);
                             command.args(["-c", ":"]);
                             assert!(supervisor.status(&mut command).unwrap().success());
                         }

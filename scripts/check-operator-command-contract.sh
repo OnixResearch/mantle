@@ -12,6 +12,13 @@ cargo run -q -p mantle --bin mantle -- \
 cmp config/operator-command-descriptors.json "$scratch_root/descriptors.json"
 
 cargo run -q -p mantle --bin generate-operator-command-contract -- --self-test
+{
+  printf '{\n'
+  cargo run -q -p mantle --bin generate-portable-platform-profiles
+  printf '}\n'
+} > "$scratch_root/portable-platform-profiles.ncl"
+cmp config/portable-platform-profiles.ncl "$scratch_root/portable-platform-profiles.ncl"
+
 nickel typecheck config/operator-surfaces.ncl
 nickel export --format json config/operator-surfaces.ncl > "$scratch_root/operator-surfaces.json"
 cmp config/operator-surfaces.json "$scratch_root/operator-surfaces.json"

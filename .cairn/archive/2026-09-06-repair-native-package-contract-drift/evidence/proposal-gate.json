@@ -1,0 +1,52 @@
+{
+  "acceptance_ids": [],
+  "change": "repair-native-package-contract-drift",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "d7a495a0f719753a729de692ff7854f26fa6de6943a46269fd58e9967d7b1b89",
+  "issues": [],
+  "layout": "cairn",
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "policy": "mantle-default",
+  "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+  "probe_evidence": null,
+  "profile_identity_hash": "891462dbda356586eaa77901e2081453b6ebed769043c8cdb56f22a9375a3b53",
+  "receipt_hash": "ce8cd9914eb1455faa2830de2dd4db041686bceff5512ea16734dd45ce9827d1",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "stage": "proposal",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "/home/brittonr/git/OnixResearch/mantle-worktrees/fix-package-contract-drift-20260905/.cairn/changes/repair-native-package-contract-drift/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 18,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    }
+  ],
+  "valid": true,
+  "verdict": "PASS",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

@@ -1,4 +1,4 @@
-# ADR 0119: Migrate legacy archive representations without re-signing
+# ADR 0121: Migrate legacy archive representations without re-signing
 
 ## Status
 
