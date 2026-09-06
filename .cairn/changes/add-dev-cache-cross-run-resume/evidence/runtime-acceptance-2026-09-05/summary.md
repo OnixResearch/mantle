@@ -62,6 +62,10 @@ The existing attempt is `dev-cold-8e941df2`, with Mantle PID `1624266` and watch
 
 The thread snapshot recorded `jbd2_log_wait_commit`. This is an I/O observation, not a deadlock diagnosis or proof result.
 
+At `2026-09-05T21:04:01-04:00`, the active attempt had published the transition and StageX provider manifests. Their bundle identities are `ab3128b159d5bae377837625be9617a00f1621ceabe933a19750c4627c287971` and `ea3db1964745186097d558d14ca97ff204cc5b64bde443eb8b67d539d8e888c9`. Both bind the expected dev plan and the `db1ee54c...` orchestrator. Local and remote file hashes matched. `live-provider-prefixes/` retains the exact manifests and the active-attempt observation.
+
+This proves that these two manifests became visible before the cold attempt finished. It does not prove a later restore, full cold success, or the complete dev cycle.
+
 The alias snapshot at `2026-09-05T20:27:57-04:00` found both `latest` and `latest-source-built-fixed-point` absent. It is explicitly a mid-cold baseline, not a retroactive pre-launch observation.
 
 Terminal metadata collection is queued as Pueue `1526`, after the existing watcher. The collector has a five-minute bound. It copies only bounded report and manifest observations, never provider payloads or cache state. It records failed terminal attempts too. Its syntax check passed. The active-attempt negative control returned the expected rejection and created no observation directory.
