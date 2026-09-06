@@ -2,8 +2,8 @@
 
 ## Status
 
-Proposed. The change remains active until its selected gates pass.
-See `.cairn/changes/repair-native-package-contract-drift/`.
+Accepted. Source `7126fc98b86c6b49ff1247aeaf39bf92e0fb89ac` passed the focused and full native package gates.
+See `evidence/native-package-contract-parity-2026-09-05.md` for scope and non-claims.
 
 ## Context
 
