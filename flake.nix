@@ -844,6 +844,27 @@
           printf '%s\n' "$actualDigest" > "$out/binary.blake3"
         '';
 
+        # Independent consumers retain their own exact hash selections. Do not
+        # reuse the native workspace's dependency artifacts or digest traits.
+        buildContractHashCheck =
+          lane:
+          let
+            manifest = "fixtures/mantle-build-contract/hash-compat/${lane}/Cargo.toml";
+            lock = ./. + "/fixtures/mantle-build-contract/hash-compat/${lane}/Cargo.lock";
+          in
+          craneLib.cargoTest {
+            pname = "mantle-build-contract-hash-${lane}";
+            version = "1";
+            inherit src nativeBuildInputs;
+            cargoArtifacts = null;
+            cargoVendorDir = craneLib.vendorCargoDeps { cargoLock = lock; };
+            cargoExtraArgs = "--manifest-path ${manifest}";
+            cargoTestExtraArgs = "--all-targets";
+            postCheck = ''
+              cargo check --locked --manifest-path ${manifest} --lib --target wasm32-unknown-unknown
+            '';
+          };
+
         # Build just the cargo dependencies for caching
         cargoArtifacts = craneLib.buildDepsOnly {
           inherit src nativeBuildInputs buildInputs;
@@ -1991,6 +2012,9 @@
               ;
             cargoExtraArgs = "-p mantle-build-contract --lib --target wasm32-unknown-unknown";
           };
+
+          mantle-build-contract-hash-minimum = buildContractHashCheck "minimum";
+          mantle-build-contract-hash-current = buildContractHashCheck "current";
 
           mantle-build-contract-nickel =
             pkgs.runCommand "mantle-build-contract-nickel"
