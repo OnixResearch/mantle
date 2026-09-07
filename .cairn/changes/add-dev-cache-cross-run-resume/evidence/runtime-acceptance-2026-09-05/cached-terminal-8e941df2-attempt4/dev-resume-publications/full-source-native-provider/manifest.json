@@ -1,0 +1,24 @@
+{
+  "schema": "mantle-dev-stage-resume-bundle-v1",
+  "bundle_identity_blake3": "6d5dd6dcd26038e60b46c23bad35f37135d0883ae9604b61aced6457d04049c0",
+  "source_authority_digest_blake3": "b6df881349d5aa6dcb227fb385229d8f2d1127cb7331d93c639fa0fdcf5710eb",
+  "plan_digest_blake3": "d05e4e9085f02ee96b40a5b135ba8f930f92faf79a4287a0683a9a49a34cfa02",
+  "policy_digest_blake3": "0960110834c1cace6cc782289f8cda5f5caed8ae32c636bdc1b672139d7a7a2a",
+  "completed_stage": {
+    "stage": "full-source-native-provider",
+    "stage_id": "full-source-native-provider",
+    "producer_executable_digest_blake3": "6776dbe60e12b35d354282dd3565ca56925e6d8c51407e57552f155f1f74a74e",
+    "output_digest_blake3": "63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9",
+    "execution_evidence_digest_blake3": "554d8f3b4271526096698b851b05a5da8bcfec686c1122c2a5eadd40ce7fa102"
+  },
+  "payloads": [
+    {
+      "payload_id": "provider-checkpoint",
+      "destination_relative_path": "provider-checkpoint",
+      "kind": "content-reference",
+      "digest_blake3": "87675cadb68c945b6ac6165b7285751faf57eb998769e84a4f063e00227d1ca7",
+      "total_file_bytes": 1587758298,
+      "entry_count": 96264
+    }
+  ]
+}
