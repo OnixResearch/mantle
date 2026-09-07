@@ -6636,6 +6636,30 @@ mod tests {
         assert!(!manifest.records.iter().any(|record| record.identity.contains("imported-provider")));
     }
 
+    #[test]
+    fn source_built_mantle_source_record_keeps_compile_time_fixtures() {
+        const REMOTE_FIXTURE: &str = "fixtures/remote-hexagon-architecture/negative/vendor-port-compile-fail.md";
+        const RUST_PLAN_FIXTURE: &str = "fixtures/rust-plan-hexagon-architecture/negative/vendor-port-compile-fail.md";
+        const EXCLUDED_FILE: &str = "target/ignored.txt";
+
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("mantle-source");
+        let remote_fixture = source.join(REMOTE_FIXTURE);
+        let rust_plan_fixture = source.join(RUST_PLAN_FIXTURE);
+        std::fs::create_dir_all(remote_fixture.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(rust_plan_fixture.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(source.join("target")).unwrap();
+        std::fs::write(&remote_fixture, "remote fixture\n").unwrap();
+        std::fs::write(&rust_plan_fixture, "rust-plan fixture\n").unwrap();
+        std::fs::write(source.join(EXCLUDED_FILE), "excluded\n").unwrap();
+
+        let record = source_built_mantle_source_record(&source, "mantle-source", "/mantle/store").unwrap();
+
+        assert!(record.files.iter().any(|file| file.path == REMOTE_FIXTURE));
+        assert!(record.files.iter().any(|file| file.path == RUST_PLAN_FIXTURE));
+        assert!(!record.files.iter().any(|file| file.path == EXCLUDED_FILE));
+    }
+
     // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
     #[test]
     fn source_profile_vendor_pair_accepts_checked_tree_and_rejects_external_tree() {

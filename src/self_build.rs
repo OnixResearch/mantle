@@ -99,6 +99,7 @@ pub(crate) const STAGED_SOURCE_TOP_LEVEL_ENTRIES: &[&str] = &[
     "builders",
     "config",
     "crates",
+    "fixtures",
     "lib",
     "mantlepkgs",
     "rust-toolchain.toml",
@@ -3677,6 +3678,8 @@ mod tests {
         std::fs::create_dir_all(dir.join("builders")).unwrap();
         std::fs::create_dir_all(dir.join("config").join("action-result-policy").join("generated")).unwrap();
         std::fs::create_dir_all(dir.join("crates").join("crate-a")).unwrap();
+        std::fs::create_dir_all(dir.join("fixtures").join("remote-hexagon-architecture").join("negative")).unwrap();
+        std::fs::create_dir_all(dir.join("fixtures").join("rust-plan-hexagon-architecture").join("negative")).unwrap();
         std::fs::create_dir_all(dir.join("lib")).unwrap();
         std::fs::create_dir_all(dir.join("mantlepkgs")).unwrap();
         std::fs::create_dir_all(dir.join("src")).unwrap();
@@ -3708,6 +3711,22 @@ mod tests {
         )
         .unwrap();
         std::fs::write(dir.join("crates").join("crate-a").join("lib.rs"), "pub fn x() {}\n").unwrap();
+        std::fs::write(
+            dir.join("fixtures")
+                .join("remote-hexagon-architecture")
+                .join("negative")
+                .join("vendor-port-compile-fail.md"),
+            "remote fixture\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("fixtures")
+                .join("rust-plan-hexagon-architecture")
+                .join("negative")
+                .join("vendor-port-compile-fail.md"),
+            "rust-plan fixture\n",
+        )
+        .unwrap();
         std::fs::write(dir.join("lib").join("lib.ncl"), "{}").unwrap();
         std::fs::write(dir.join("src").join("main.rs"), "fn main() {}\n").unwrap();
         std::fs::write(dir.join(TEST_ROOT_TOOL_RELATIVE_PATH), "fn main() {}\n").unwrap();
@@ -4109,6 +4128,24 @@ mod tests {
         assert!(
             stage
                 .path()
+                .join("fixtures")
+                .join("remote-hexagon-architecture")
+                .join("negative")
+                .join("vendor-port-compile-fail.md")
+                .is_file()
+        );
+        assert!(
+            stage
+                .path()
+                .join("fixtures")
+                .join("rust-plan-hexagon-architecture")
+                .join("negative")
+                .join("vendor-port-compile-fail.md")
+                .is_file()
+        );
+        assert!(
+            stage
+                .path()
                 .join("config")
                 .join("action-result-policy")
                 .join("generated")
@@ -4129,6 +4166,7 @@ mod tests {
     fn staged_source_inventory_covers_root_compile_time_inputs() {
         assert!(STAGED_SOURCE_TOP_LEVEL_ENTRIES.contains(&"mantlepkgs"));
         assert!(STAGED_SOURCE_TOP_LEVEL_ENTRIES.contains(&"config"));
+        assert!(STAGED_SOURCE_TOP_LEVEL_ENTRIES.contains(&"fixtures"));
         assert!(STAGED_SOURCE_TOP_LEVEL_ENTRIES.contains(&"tools"));
         assert!(!STAGED_SOURCE_TOP_LEVEL_ENTRIES.contains(&"target"));
     }
