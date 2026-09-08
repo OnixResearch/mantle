@@ -1,0 +1,9 @@
+cargo
+test
+--locked
+--offline
+-p
+mantle
+--bin
+mantle
+protected_exec_ptrace

@@ -51,8 +51,12 @@ See `promoted-authority-review.md` and `promoted-launch-a7841aea/`. The local so
 
 Successful publication moves staging into the final output directory. The corrected collector selects exactly one terminal evidence directory and reads `deterministic-build-proof.json`. Its selector passed two positive and four negative cases. Collection of the active run rejects before creating a terminal evidence directory.
 
+## V4 verdict
+
+Local verification passed for Rust source `e5cf7fdb`. Focused tests, formatting, first-party Clippy, pinned Cairn validation, Tracey, all three gates, and five relevant Nix checks passed. See `../local-verification-2026-09-08/summary.md` for exact scopes and captured results. Observer `4587` waits for remote termination before collection. It cannot accept the runtime result.
+
 ## Non-claims
 
-Report reviews prove report shape and declared expectations only. The dev cycle does not satisfy a promoted fixed-point proof. V3 and V4 remain open.
+Report reviews prove report shape and declared expectations only. The dev cycle does not satisfy a promoted fixed-point proof. V3 remains open.
 
 The runtime cohort remains `a7841aea`. Local formatting commit `e5cf7fdb` does not change that recorded authority. Runtime results do not prove the newer source bytes.

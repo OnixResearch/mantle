@@ -1,0 +1,11 @@
+source_parent=7673661e52986ecf74372ad68b9b755a5c8bf9ce
+recorded_at=2026-09-08T18:52:09-04:00
+## drain/add-dev-cache-cross-run-resume-20260904...origin/drain/add-dev-cache-cross-run-resume-20260904 [ahead 20]
+ M .cairn/changes/add-dev-cache-cross-run-resume/evidence/runtime-successor-2026-09-07/summary.md
+ M .cairn/changes/add-dev-cache-cross-run-resume/tasks.md
+?? .cairn/changes/add-dev-cache-cross-run-resume/evidence/local-verification-2026-09-08/
+tested_product_inputs_unchanged_from=e5cf7fdb
+acb077251f7486b8600c409bf2f5d5e8f349ba7edb3b23cffc87757de38e6fed  .cairn/changes/add-dev-cache-cross-run-resume/tasks.md
+1fa7b804d893c588e4eb349c409dcec330ac6d6cce72ee43368c7bbbebb9ba1a  .cairn/changes/add-dev-cache-cross-run-resume/proposal.md
+1c1b81d30a8407402eba7ade365511a0e05894972fc56ad424b5783991fbb9ba  .cairn/changes/add-dev-cache-cross-run-resume/design.md
+a6622605e3d32f48364035deef3347b0ee119530c76efaa26131a3fcc0c3e29d  .cairn/changes/add-dev-cache-cross-run-resume/specs/source-built-fixed-point-improved-iteration/spec.md

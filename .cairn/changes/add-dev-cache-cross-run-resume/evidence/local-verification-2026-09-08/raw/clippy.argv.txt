@@ -1,0 +1,13 @@
+cargo
+clippy
+--locked
+--offline
+-p
+mantle
+-p
+crunch-dev-resume-core
+--all-targets
+--no-deps
+--
+-D
+warnings

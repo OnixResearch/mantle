@@ -1,0 +1,7 @@
+cargo
+test
+--locked
+--offline
+-p
+crunch-dev-resume-core
+--all-targets

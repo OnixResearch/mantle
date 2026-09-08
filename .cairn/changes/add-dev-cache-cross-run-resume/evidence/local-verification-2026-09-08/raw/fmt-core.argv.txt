@@ -1,0 +1,5 @@
+cargo
+fmt
+--check
+-p
+crunch-dev-resume-core

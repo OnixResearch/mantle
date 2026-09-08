@@ -1,0 +1,10 @@
+rustfmt
+--edition
+2024
+--check
+src/self_build.rs
+src/source_bundle.rs
+src/full_source_provider.rs
+src/protected_exec_ptrace.rs
+src/source_built_fixed_point_shell.rs
+src/stagex_transition.rs

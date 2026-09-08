@@ -1,0 +1,6 @@
+nix
+build
+--dry-run
+--no-link
+--no-eval-cache
+.#spacewasm-reference-bundler
