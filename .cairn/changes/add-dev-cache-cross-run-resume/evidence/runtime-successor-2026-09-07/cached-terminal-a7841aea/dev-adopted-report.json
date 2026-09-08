@@ -1,0 +1,7 @@
+{
+  "notice": "dev-only: cached providers adopted; no promoted receipt, no release alias",
+  "output": "/home/brittonr/mantle-runs/dev-resume-20260904/dev-cached-a7841aea",
+  "plan_digest_blake3": "ddb30a9b18d0015110cde3cc69003403deeb71d8b706b803be38795f554ec6f7",
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "dev-cache-adopted"
+}
