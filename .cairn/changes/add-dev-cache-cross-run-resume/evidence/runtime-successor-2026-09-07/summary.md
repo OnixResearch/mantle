@@ -25,15 +25,21 @@ Source commit `a7841aea055bf643cc473164b98a2442014f080b`. Binary `mantle-a7841ae
 - dev-only discipline held: no promoted receipt, no release alias
 - report review accepted for mode `resume`, completed stage `mantle-stage2`
 
-## Leg 3: adopt — running
+## Leg 3: adopt — complete
 
-`dev-adopt-a7841aea` started `2026-09-08T01:59:16-04:00`, wrapper PID 3783718.
+`dev-adopt-a7841aea` ran from `2026-09-08T01:59:16-04:00` to `15:47:18-04:00` (13h48m), exit 0.
 
-- gates: cached run exit 0 plus both report reviews accepted; cache entry present
-- flags: `--dev-provider-cache` without `--dev-resume`, so the shell adopts cached providers instead of resuming stage bundles
-- `native-provider.adopted.txt` transcript proves the cache adoption path executed
-- the Rust provider chain rebuilds fresh: 1.91.1 and 1.92.0 stage-1 products ready; 1.93.1 in progress; then 1.94.0 final, stage1, stage2
-- expected executed set: `full-source-rust-provider`, `mantle-stage1`, `mantle-stage2`
+- gates: cached run exit 0 plus both prior report reviews accepted; cache entry present
+- flags: `--dev-provider-cache` without `--dev-resume`, so the shell adopted cached providers instead of resuming stage bundles
+- `native-provider.adopted.txt` transcript proves the cache adoption path executed; the Rust provider chain rebuilt fresh (1.91.1, 1.92.0, 1.93.1, 1.94.0 final) and the 17-member closure materialized with adoption provenance
+- disposition `provider-cache-adopted`; executed exactly `full-source-rust-provider`, `mantle-stage1`, `mantle-stage2`
+- `fixed_point: true`; stage1 and stage2 binaries byte-identical `0d2b6ad6b0a14f5e2767a32998979ffbd2cac2551050d0767f00889f01a511cb`; 800 units each; smoke exit 0
+- dev-only discipline held: no promoted receipt, no release alias
+- report review accepted for mode `adopt`
+
+## V2 verdict
+
+The cold-to-cached-to-adopt dev cycle is complete with exact source, plan, provider, store, stage, report, and alias evidence recorded under this directory. All three dispositions (`cold-executed`, `resume-restored`, `provider-cache-adopted`) were observed with accepted report reviews and unchanged release aliases.
 
 ## Non-claims
 
