@@ -1,0 +1,16 @@
+copied attempt-status.json
+copied dev-resume-report.json
+copied dev-adopted-report.json
+copied cargo-free-fixed-point/meta.json
+copied cargo-free-fixed-point/stage1/status.txt
+copied cargo-free-fixed-point/stage1/stderr.txt
+copied cargo-free-fixed-point/stage2/status.txt
+copied cargo-free-fixed-point/stage2/stderr.txt
+receipt cargo-free-fixed-point/stage1/receipt.json bytes_blake3=18043535 1efc7e7efd069cadac9d292d7ae8aa3dbe80260b45da892fb491b7ba910116c6
+receipt cargo-free-fixed-point/stage2/receipt.json bytes_blake3=18043535 7497c8724be67952d2728179042df4721e1c9beeece288a0da57decd67a452df
+absent-or-not-regular dev-resume-publications/stagex-transition/manifest.json
+absent-or-not-regular dev-resume-publications/stagex-provider-publication/manifest.json
+absent-or-not-regular dev-resume-publications/full-source-native-provider/manifest.json
+absent-or-not-regular dev-resume-publications/full-source-rust-provider/manifest.json
+absent-or-not-regular dev-resume-publications/mantle-stage1/manifest.json
+absent-or-not-regular dev-resume-publications/mantle-stage2/manifest.json

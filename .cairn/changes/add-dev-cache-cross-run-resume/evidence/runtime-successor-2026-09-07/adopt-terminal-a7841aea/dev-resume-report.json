@@ -1,0 +1,24 @@
+{
+  "schema": "mantle-dev-stage-resume-report-v1",
+  "status": "dev-only",
+  "mode": "dev",
+  "plan_digest_blake3": "ddb30a9b18d0015110cde3cc69003403deeb71d8b706b803be38795f554ec6f7",
+  "selected_bundle_identity_blake3": null,
+  "published_bundle_identities_blake3": [],
+  "restored_stages": [],
+  "executed_stages": [
+    "full-source-rust-provider",
+    "mantle-stage1",
+    "mantle-stage2"
+  ],
+  "first_incomplete_stage": "full-source-rust-provider",
+  "rejected_candidates": [],
+  "cache_adoption_disposition": "provider-cache-adopted",
+  "promoted_receipt_written": false,
+  "release_alias_updated": false,
+  "non_claims": [
+    "restored stages were not executed again in this attempt",
+    "dev resume does not satisfy a promoted fixed-point proof",
+    "runtime confirmation is bounded to the recorded source profile, host, plan, and policy"
+  ]
+}

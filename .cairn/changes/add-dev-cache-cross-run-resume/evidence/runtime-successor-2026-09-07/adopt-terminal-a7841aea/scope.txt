@@ -1,0 +1,2 @@
+collection_scope=terminal-metadata-and-receipt-digests
+runtime_acceptance=not-evaluated

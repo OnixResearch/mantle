@@ -1,0 +1,9 @@
+started_at=2026-09-08T01:59:16-04:00
+wrapper_pid=3783718
+source_commit=a7841aea055bf643cc473164b98a2442014f080b
+mode=dev-adopt
+predecessor=dev-cached-a7841aea
+output=/home/brittonr/mantle-runs/dev-resume-20260904/dev-adopt-a7841aea
+dev_cache=/home/brittonr/mantle-runs/dev-resume-20260904/dev-provider-cache-a7841aea
+finished_at=2026-09-08T15:47:18-04:00
+exit_code=0
