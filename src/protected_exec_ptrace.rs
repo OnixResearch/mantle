@@ -28,24 +28,24 @@ mod linux {
     use std::process::ExitStatus;
     use std::process::Output;
     use std::process::Stdio;
-    use std::sync::atomic::AtomicU64;
-    use std::sync::atomic::AtomicUsize;
-    use std::sync::atomic::Ordering;
     use std::sync::Arc;
     use std::sync::Mutex;
     use std::sync::RwLock;
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
     use std::thread;
     use std::time::Duration;
 
-    use crate::protected_exec::blake3_file_hex;
     use crate::protected_exec::ExecRequest;
     use crate::protected_exec::OutputPromotionRecord;
+    use crate::protected_exec::PHASE_PROTECTED;
     use crate::protected_exec::PlannedProducedExecutableRoot;
     use crate::protected_exec::PromotedExecutable;
     use crate::protected_exec::ProtectedExecError;
     use crate::protected_exec::ProtectedExecPolicy;
     use crate::protected_exec::ProtectedSeccompAuditEvent;
-    use crate::protected_exec::PHASE_PROTECTED;
+    use crate::protected_exec::blake3_file_hex;
 
     const AUDIT_ARCH_X86_64: u32 = 0xC000_003E;
     const AUDIT_ARCH_AARCH64: u32 = 0xC000_00B7;
