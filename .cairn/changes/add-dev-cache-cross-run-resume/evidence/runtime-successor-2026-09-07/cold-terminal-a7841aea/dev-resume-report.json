@@ -1,0 +1,34 @@
+{
+  "schema": "mantle-dev-stage-resume-report-v1",
+  "status": "dev-only",
+  "mode": "dev",
+  "plan_digest_blake3": "ddb30a9b18d0015110cde3cc69003403deeb71d8b706b803be38795f554ec6f7",
+  "selected_bundle_identity_blake3": null,
+  "published_bundle_identities_blake3": [
+    "8cb99f4e1b7e7055e0a345f9aa38697581ed1312397d27c9f39fddfa71d5e934",
+    "1a20776f2a9f21f28caec00096eb7bd3eb38947fd5aed68eed64363926830541",
+    "e95f5c51aaa5c82ba5643ec3e4dfdbea840c1b5c3c500f31b989118afaf653e4",
+    "10f8922174e852f4bdd29b8da38afc7ea6ac3ffda642f27746fe9da449b12d71",
+    "b3221305063a059a7c67676cc1794ad4b0678e3db246ac25c2860470bbae801d",
+    "720a396f883c84e9d1c826ce1b850f97459a56e7461a0829c0d897f7aeba9112"
+  ],
+  "restored_stages": [],
+  "executed_stages": [
+    "stagex-transition",
+    "stagex-provider",
+    "full-source-native-provider",
+    "full-source-rust-provider",
+    "mantle-stage1",
+    "mantle-stage2"
+  ],
+  "first_incomplete_stage": "stagex-transition",
+  "rejected_candidates": [],
+  "cache_adoption_disposition": "cold-executed",
+  "promoted_receipt_written": false,
+  "release_alias_updated": false,
+  "non_claims": [
+    "restored stages were not executed again in this attempt",
+    "dev resume does not satisfy a promoted fixed-point proof",
+    "runtime confirmation is bounded to the recorded source profile, host, plan, and policy"
+  ]
+}

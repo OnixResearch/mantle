@@ -38,10 +38,22 @@ copy_observation dev-adopted-report.json "$REPORT_BYTES_MAX"
 copy_observation cargo-free-fixed-point/meta.json "$OBSERVATION_BYTES_MAX"
 copy_observation cargo-free-fixed-point/stage1/status.txt "$REPORT_BYTES_MAX"
 copy_observation cargo-free-fixed-point/stage1/stderr.txt "$REPORT_BYTES_MAX"
-copy_observation cargo-free-fixed-point/stage1/receipt.json "$REPORT_BYTES_MAX"
 copy_observation cargo-free-fixed-point/stage2/status.txt "$REPORT_BYTES_MAX"
 copy_observation cargo-free-fixed-point/stage2/stderr.txt "$REPORT_BYTES_MAX"
-copy_observation cargo-free-fixed-point/stage2/receipt.json "$REPORT_BYTES_MAX"
+record_receipt_digest() {
+  RELATIVE=$1
+  if ssh -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT_SECONDS" "$HOST" "test -f '$STAGING/$RELATIVE' && test ! -L '$STAGING/$RELATIVE'"; then
+    DIGEST_LINE=$(ssh -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT_SECONDS" "$HOST" "printf '%s ' \"\$(stat -c %s '$STAGING/$RELATIVE')\"; /home/brittonr/mantle-runs/receipt-fix-v31/b3sum-1.8.5-operator --no-names '$STAGING/$RELATIVE'")
+    printf 'receipt %s bytes_blake3=%s\n' "$RELATIVE" "$DIGEST_LINE" >> "$OUTPUT/observations.txt"
+  else
+    OBSERVATION_STATUS=$?
+    EXPECTED_ABSENCE_STATUS=1
+    test "$OBSERVATION_STATUS" -eq "$EXPECTED_ABSENCE_STATUS"
+    printf 'receipt absent-or-not-regular %s\n' "$RELATIVE" >> "$OUTPUT/observations.txt"
+  fi
+}
+record_receipt_digest cargo-free-fixed-point/stage1/receipt.json
+record_receipt_digest cargo-free-fixed-point/stage2/receipt.json
 for STAGE in stagex-transition stagex-provider-publication full-source-native-provider full-source-rust-provider mantle-stage1 mantle-stage2; do
   copy_observation "dev-resume-publications/$STAGE/manifest.json" "$REPORT_BYTES_MAX"
 done

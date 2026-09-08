@@ -1,0 +1,24 @@
+{
+  "schema": "mantle-dev-stage-resume-bundle-v1",
+  "bundle_identity_blake3": "e95f5c51aaa5c82ba5643ec3e4dfdbea840c1b5c3c500f31b989118afaf653e4",
+  "source_authority_digest_blake3": "4b410f9aa8e97853400b38a5b0344a32741f85868e5ca5419491ad6f809064d5",
+  "plan_digest_blake3": "ddb30a9b18d0015110cde3cc69003403deeb71d8b706b803be38795f554ec6f7",
+  "policy_digest_blake3": "0960110834c1cace6cc782289f8cda5f5caed8ae32c636bdc1b672139d7a7a2a",
+  "completed_stage": {
+    "stage": "full-source-native-provider",
+    "stage_id": "full-source-native-provider",
+    "producer_executable_digest_blake3": "4819141a7c7452c1824cddf72b5f1b4d79965d5c6d5155e8feaa4e42dcc1ab6c",
+    "output_digest_blake3": "63d9bc23cfcc232726527c141132ea35bc7ef9adf4ed7a952b5baa62bd466ed9",
+    "execution_evidence_digest_blake3": "a4687a278a382c08946e7e78bae50688a061019e1f71730c7f10e20546e011ed"
+  },
+  "payloads": [
+    {
+      "payload_id": "provider-checkpoint",
+      "destination_relative_path": "provider-checkpoint",
+      "kind": "content-reference",
+      "digest_blake3": "182d8e6fe945701edab9d766dcf83d5a4b5cb1df46f2e0f4da23d018736bc519",
+      "total_file_bytes": 1586138649,
+      "entry_count": 96264
+    }
+  ]
+}

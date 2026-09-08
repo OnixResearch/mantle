@@ -1,0 +1,32 @@
+{
+  "schema": "mantle-dev-stage-resume-bundle-v1",
+  "bundle_identity_blake3": "b3221305063a059a7c67676cc1794ad4b0678e3db246ac25c2860470bbae801d",
+  "source_authority_digest_blake3": "4b410f9aa8e97853400b38a5b0344a32741f85868e5ca5419491ad6f809064d5",
+  "plan_digest_blake3": "ddb30a9b18d0015110cde3cc69003403deeb71d8b706b803be38795f554ec6f7",
+  "policy_digest_blake3": "0960110834c1cace6cc782289f8cda5f5caed8ae32c636bdc1b672139d7a7a2a",
+  "completed_stage": {
+    "stage": "mantle-stage1",
+    "stage_id": "mantle-stage1",
+    "producer_executable_digest_blake3": "4819141a7c7452c1824cddf72b5f1b4d79965d5c6d5155e8feaa4e42dcc1ab6c",
+    "output_digest_blake3": "d00466cc45777412cb070d08778471eba2cf58cff1440929a60f1ff6956ab0fe",
+    "execution_evidence_digest_blake3": "3ba6cb50fc43149c784fb7a8cd4d311eb79f9a95af61c11abc706973f47db151"
+  },
+  "payloads": [
+    {
+      "payload_id": "mantle-stage1",
+      "destination_relative_path": "fixed-point/stage1",
+      "kind": "preserved-tree",
+      "digest_blake3": "f31aca072e809148fe9808b662a9ea60f27a4aa75add044d23a87f988bb182a2",
+      "total_file_bytes": 1297155108,
+      "entry_count": 36
+    },
+    {
+      "payload_id": "provider-checkpoint",
+      "destination_relative_path": "provider-checkpoint",
+      "kind": "content-reference",
+      "digest_blake3": "ecb9cb64618f26e75658aeddaea0839a6b8a9fff1b2166b89603e6c67ccc0c91",
+      "total_file_bytes": 5121337266,
+      "entry_count": 96518
+    }
+  ]
+}
