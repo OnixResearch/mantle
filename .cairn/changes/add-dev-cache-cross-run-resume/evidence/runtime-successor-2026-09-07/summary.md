@@ -41,6 +41,18 @@ Source commit `a7841aea055bf643cc473164b98a2442014f080b`. Binary `mantle-a7841ae
 
 The cold-to-cached-to-adopt dev cycle is complete with exact source, plan, provider, store, stage, report, and alias evidence recorded under this directory. All three dispositions (`cold-executed`, `resume-restored`, `provider-cache-adopted`) were observed with accepted report reviews and unchanged release aliases.
 
+## Leg 4: promoted cold — active
+
+`promoted-cold-a7841aea` started at `2026-09-08T17:16:57-04:00`. The remote process survived loss of the local Pueue connection. No second proof was launched.
+
+The launch used source cohort `a7841aea`, without dev-cache, resume, fast-fail, or checkpoint options. The promoted plan digest equals the dev plan digest. Explicit options, not that shared digest, select cache authority.
+
+See `promoted-authority-review.md` and `promoted-launch-a7841aea/`. The local source review supports the selected cold path. The independent reviewer timed out without a result. Terminal receipts, fixed-point equality, and both success aliases still need review.
+
+Successful publication moves staging into the final output directory. The corrected collector selects exactly one terminal evidence directory and reads `deterministic-build-proof.json`. Its selector passed two positive and four negative cases. Collection of the active run rejects before creating a terminal evidence directory.
+
 ## Non-claims
 
-Report reviews prove report shape and declared expectations only. The dev cycle does not satisfy a promoted fixed-point proof. V3 (promoted cold, empty authority, no dev state) and V4 gates remain open.
+Report reviews prove report shape and declared expectations only. The dev cycle does not satisfy a promoted fixed-point proof. V3 and V4 remain open.
+
+The runtime cohort remains `a7841aea`. Local formatting commit `e5cf7fdb` does not change that recorded authority. Runtime results do not prove the newer source bytes.

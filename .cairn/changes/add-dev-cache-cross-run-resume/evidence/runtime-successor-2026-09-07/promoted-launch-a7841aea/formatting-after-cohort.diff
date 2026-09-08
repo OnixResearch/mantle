@@ -1,0 +1,176 @@
+diff --git a/src/protected_exec_ptrace.rs b/src/protected_exec_ptrace.rs
+index 4f572048..c3f1201f 100644
+--- a/src/protected_exec_ptrace.rs
++++ b/src/protected_exec_ptrace.rs
+@@ -31,3 +30,0 @@ mod linux {
+-    use std::sync::atomic::AtomicU64;
+-    use std::sync::atomic::AtomicUsize;
+-    use std::sync::atomic::Ordering;
+@@ -36,0 +34,3 @@ mod linux {
++    use std::sync::atomic::AtomicU64;
++    use std::sync::atomic::AtomicUsize;
++    use std::sync::atomic::Ordering;
+@@ -40 +39,0 @@ mod linux {
+-    use crate::protected_exec::blake3_file_hex;
+@@ -42,0 +42 @@ mod linux {
++    use crate::protected_exec::PHASE_PROTECTED;
+@@ -48 +48 @@ mod linux {
+-    use crate::protected_exec::PHASE_PROTECTED;
++    use crate::protected_exec::blake3_file_hex;
+diff --git a/src/source_built_fixed_point_shell.rs b/src/source_built_fixed_point_shell.rs
+index 223b5b9c..ea533278 100644
+--- a/src/source_built_fixed_point_shell.rs
++++ b/src/source_built_fixed_point_shell.rs
+@@ -22 +21,0 @@ use crate::native_toolchain_closure::NativeToolchainClosureOptions;
+-use crate::source_built_fixed_point::plan_source_built_fixed_point;
+@@ -25,0 +25 @@ use crate::source_built_fixed_point::ProofOutputRole;
++use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
+@@ -33,5 +33,2 @@ use crate::source_built_fixed_point::SourceContentKind;
+-use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX;
+-use crate::source_built_fixed_point_dev_cache::dev_provider_cache_key;
+-use crate::source_built_fixed_point_dev_cache::evaluate_fast_fail;
+-use crate::source_built_fixed_point_dev_cache::evaluate_provider_cache_lookup;
+-use crate::source_built_fixed_point_dev_cache::validate_stage_marker;
++use crate::source_built_fixed_point::plan_source_built_fixed_point;
++use crate::source_built_fixed_point_dev_cache::DEV_CACHE_ENTRY_FILE;
+@@ -40,0 +38 @@ use crate::source_built_fixed_point_dev_cache::DevProviderCacheLookup;
++use crate::source_built_fixed_point_dev_cache::FAST_FAIL_SCHEMA;
+@@ -44,2 +42,6 @@ use crate::source_built_fixed_point_dev_cache::StageMarkerValidation;
+-use crate::source_built_fixed_point_dev_cache::DEV_CACHE_ENTRY_FILE;
+-use crate::source_built_fixed_point_dev_cache::FAST_FAIL_SCHEMA;
++use crate::source_built_fixed_point_dev_cache::dev_provider_cache_key;
++use crate::source_built_fixed_point_dev_cache::evaluate_fast_fail;
++use crate::source_built_fixed_point_dev_cache::evaluate_provider_cache_lookup;
++use crate::source_built_fixed_point_dev_cache::validate_stage_marker;
++use crate::source_bundle::SourceBuiltFixedPointProfileRecords;
++use crate::source_bundle::SourceRecord;
+@@ -49,2 +50,0 @@ use crate::source_bundle::source_built_fixed_point_profile_records;
+-use crate::source_bundle::SourceBuiltFixedPointProfileRecords;
+-use crate::source_bundle::SourceRecord;
+diff --git a/src/stagex_transition.rs b/src/stagex_transition.rs
+index e6f45fd7..2a6378ec 100644
+--- a/src/stagex_transition.rs
++++ b/src/stagex_transition.rs
+@@ -15,2 +14,0 @@ use std::time::Instant;
+-use crunch_bootstrap_core::stagex_plan_digest_blake3;
+-use crunch_bootstrap_core::validate_stagex_plan;
+@@ -17,0 +16,2 @@ use crunch_bootstrap_core::LineageManifest;
++use crunch_bootstrap_core::STAGEX_PLAN_SCHEMA_V1;
++use crunch_bootstrap_core::STAGEX_SEED_SOURCE_STAGE_ID;
+@@ -21,2 +21,2 @@ use crunch_bootstrap_core::StagexStagePlan;
+-use crunch_bootstrap_core::STAGEX_PLAN_SCHEMA_V1;
+-use crunch_bootstrap_core::STAGEX_SEED_SOURCE_STAGE_ID;
++use crunch_bootstrap_core::stagex_plan_digest_blake3;
++use crunch_bootstrap_core::validate_stagex_plan;
+@@ -25 +24,0 @@ use serde::Serialize;
+-use crate::protected_exec::blake3_file_hex;
+@@ -31 +30 @@ use crate::protected_exec::ProtectedSeccompAuditEvent;
+-use crate::protected_exec_seccomp::install_current_thread_exec_supervisor;
++use crate::protected_exec::blake3_file_hex;
+@@ -32,0 +32 @@ use crate::protected_exec_seccomp::ProtectedSeccompSupervisor;
++use crate::protected_exec_seccomp::install_current_thread_exec_supervisor;
+@@ -4917,3 +4917,5 @@ fn binutils_generated_executable_authorizations(
+-    assert!(authorizations
+-        .iter()
+-        .all(|authorization| authorization.source_stage_id == BINUTILS_GENERATOR_BUILD_STAGE_ID));
++    assert!(
++        authorizations
++            .iter()
++            .all(|authorization| authorization.source_stage_id == BINUTILS_GENERATOR_BUILD_STAGE_ID)
++    );
+@@ -9953,6 +9955,10 @@ mod tests {
+-        assert!(BINUTILS_INSTALL_SMOKE_EXECUTED_TOOL_NAMES
+-            .iter()
+-            .all(|tool| { smoke_ids.contains(format!("exec:{BINUTILS_INSTALL_SMOKE_STAGE_ID}:{tool}").as_str()) }));
+-        assert!(!["size", "strings", "strip"]
+-            .iter()
+-            .any(|tool| { smoke_ids.contains(format!("exec:{BINUTILS_INSTALL_SMOKE_STAGE_ID}:{tool}").as_str()) }));
++        assert!(
++            BINUTILS_INSTALL_SMOKE_EXECUTED_TOOL_NAMES
++                .iter()
++                .all(|tool| { smoke_ids.contains(format!("exec:{BINUTILS_INSTALL_SMOKE_STAGE_ID}:{tool}").as_str()) })
++        );
++        assert!(
++            !["size", "strings", "strip"]
++                .iter()
++                .any(|tool| { smoke_ids.contains(format!("exec:{BINUTILS_INSTALL_SMOKE_STAGE_ID}:{tool}").as_str()) })
++        );
+@@ -9975,3 +9981,5 @@ mod tests {
+-        assert!(additional
+-            .iter()
+-            .all(|entry| !existing.iter().any(|old| old.path == entry.path && old.digest_hex == entry.digest_hex)));
++        assert!(
++            additional
++                .iter()
++                .all(|entry| !existing.iter().any(|old| old.path == entry.path && old.digest_hex == entry.digest_hex))
++        );
+@@ -10108,4 +10116,6 @@ mod tests {
+-        assert!(validation
+-            .errors
+-            .iter()
+-            .any(|error| error.to_string().contains("invalid source stage binutils-component-materialization")));
++        assert!(
++            validation
++                .errors
++                .iter()
++                .any(|error| error.to_string().contains("invalid source stage binutils-component-materialization"))
++        );
+@@ -10411,2 +10421,4 @@ mod tests {
+-        assert!(validate_bzip2_event(&event, &expected_path, crate::stagex_bzip2::BZIP2_FINAL_BLAKE3, inventory_id)
+-            .is_err());
++        assert!(
++            validate_bzip2_event(&event, &expected_path, crate::stagex_bzip2::BZIP2_FINAL_BLAKE3, inventory_id)
++                .is_err()
++        );
+@@ -10415,2 +10427,4 @@ mod tests {
+-        assert!(validate_bzip2_event(&event, &expected_path, crate::stagex_bzip2::BZIP2_FINAL_BLAKE3, inventory_id)
+-            .is_err());
++        assert!(
++            validate_bzip2_event(&event, &expected_path, crate::stagex_bzip2::BZIP2_FINAL_BLAKE3, inventory_id)
++                .is_err()
++        );
+@@ -10614,7 +10628,9 @@ mod tests {
+-        assert!(validate_make_event(
+-            &event,
+-            &expected_path,
+-            crate::stagex_make::MAKE_FINAL_BLAKE3,
+-            "planned:make-materialization:exec:make-smoke:make",
+-        )
+-        .is_err());
++        assert!(
++            validate_make_event(
++                &event,
++                &expected_path,
++                crate::stagex_make::MAKE_FINAL_BLAKE3,
++                "planned:make-materialization:exec:make-smoke:make",
++            )
++            .is_err()
++        );
+@@ -10623,7 +10639,9 @@ mod tests {
+-        assert!(validate_make_event(
+-            &event,
+-            &expected_path,
+-            crate::stagex_make::MAKE_FINAL_BLAKE3,
+-            "planned:make-materialization:exec:make-smoke:make",
+-        )
+-        .is_err());
++        assert!(
++            validate_make_event(
++                &event,
++                &expected_path,
++                crate::stagex_make::MAKE_FINAL_BLAKE3,
++                "planned:make-materialization:exec:make-smoke:make",
++            )
++            .is_err()
++        );
+@@ -10717,4 +10735,6 @@ mod tests {
+-        assert!(report
+-            .stage0_full
+-            .as_ref()
+-            .is_none_or(|stage0| { stage0.protected_exec_enforced && stage0.mini.protected_exec_enforced }));
++        assert!(
++            report
++                .stage0_full
++                .as_ref()
++                .is_none_or(|stage0| { stage0.protected_exec_enforced && stage0.mini.protected_exec_enforced })
++        );

@@ -1,0 +1,26 @@
+set -eu
+HOST=leviathan.cymric-daggertooth.ts.net
+REMOTE_STATUS=/home/brittonr/mantle-runs/dev-resume-20260904/evidence/promoted-cold-a7841aea.status.txt
+ROOT=/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-dev-cache-cross-run-resume
+EVIDENCE="$ROOT/.cairn/changes/add-dev-cache-cross-run-resume/evidence/runtime-successor-2026-09-07"
+SSH_CONNECT_TIMEOUT_SECONDS=15
+PROBE_TIMEOUT_SECONDS=60
+POLL_SECONDS=300
+POLL_COUNT_MAX=288
+POLL_COUNT=0
+# This observer cannot launch or restart a proof. Only the remote terminal record permits collection.
+while test "$POLL_COUNT" -lt "$POLL_COUNT_MAX"; do
+  POLL_COUNT=$((POLL_COUNT + 1))
+  if timeout "$PROBE_TIMEOUT_SECONDS" ssh -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT_SECONDS" "$HOST" "test -f '$REMOTE_STATUS' && test ! -L '$REMOTE_STATUS' && grep -q '^finished_at=' '$REMOTE_STATUS'"; then
+    printf 'terminal_record_observed_at=%s\n' "$(date -Iseconds)"
+    sh "$EVIDENCE/collect-promoted-a7841aea.command.txt"
+    printf 'collection_finished_at=%s\nruntime_acceptance=not-evaluated\n' "$(date -Iseconds)"
+    exit 0
+  else
+    PROBE_STATUS=$?
+    printf 'observed_at=%s\npoll=%s\nterminal_probe_exit=%s\n' "$(date -Iseconds)" "$POLL_COUNT" "$PROBE_STATUS"
+  fi
+  sleep "$POLL_SECONDS"
+done
+printf 'observer_budget_exhausted=true\nruntime_acceptance=not-evaluated\n'
+exit 1

@@ -1,0 +1,37 @@
+set -eu
+EVIDENCE=.cairn/changes/add-dev-cache-cross-run-resume/evidence/runtime-successor-2026-09-07
+SELECTOR="$PWD/$EVIDENCE/select-promoted-root.command.txt"
+RUN_DIR=/home/brittonr/.cache/mantle-v4-20260908
+NAME=promoted-cold-a7841aea
+FIXTURE_ROOT=$(mktemp -d "$RUN_DIR/collector-fixtures.XXXXXX")
+sh -n "$SELECTOR"
+sh -n "$EVIDENCE/collect-promoted-a7841aea.command.txt"
+for CASE in published failed-staging running missing-root ambiguous symlink-root; do
+  CASE_ROOT="$FIXTURE_ROOT/$CASE"
+  mkdir -p "$CASE_ROOT/evidence"
+  printf 'finished_at=fixture\nexit_code=0\n' > "$CASE_ROOT/evidence/$NAME.status.txt"
+  case "$CASE" in
+    published) mkdir "$CASE_ROOT/$NAME";;
+    failed-staging) mkdir "$CASE_ROOT/.$NAME.source-built-fixed-point-staging-fixture"; printf 'finished_at=fixture\nexit_code=1\n' > "$CASE_ROOT/evidence/$NAME.status.txt";;
+    running) mkdir "$CASE_ROOT/$NAME"; printf 'started_at=fixture\n' > "$CASE_ROOT/evidence/$NAME.status.txt";;
+    missing-root) :;;
+    ambiguous) mkdir "$CASE_ROOT/$NAME" "$CASE_ROOT/.$NAME.source-built-fixed-point-staging-fixture";;
+    symlink-root) mkdir "$CASE_ROOT/target"; ln -s target "$CASE_ROOT/$NAME";;
+  esac
+  if SELECTED=$(sh "$SELECTOR" "$CASE_ROOT" "$NAME"); then
+    case "$CASE" in
+      published) test "$SELECTED" = "$CASE_ROOT/$NAME";;
+      failed-staging) test "$SELECTED" = "$CASE_ROOT/.$NAME.source-built-fixed-point-staging-fixture";;
+      *) printf 'unexpected acceptance: %s\n' "$CASE"; exit 1;;
+    esac
+    printf 'positive %s accepted exact root\n' "$CASE"
+  else
+    RESULT=$?
+    case "$CASE" in published|failed-staging) exit "$RESULT";; esac
+    EXPECTED_REJECTION_STATUS=1
+    test "$RESULT" -eq "$EXPECTED_REJECTION_STATUS"
+    test -z "$SELECTED"
+    printf 'negative %s rejected with no root\n' "$CASE"
+  fi
+done
+printf 'selector fixtures passed\n'

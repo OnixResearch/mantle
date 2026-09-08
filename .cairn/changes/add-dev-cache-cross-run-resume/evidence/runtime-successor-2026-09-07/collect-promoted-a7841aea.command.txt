@@ -6,13 +6,21 @@ SSH_CONNECT_TIMEOUT_SECONDS=15
 OBSERVATION_BYTES_MAX=1048576
 REPORT_BYTES_MAX=65536
 ROOT=/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-dev-cache-cross-run-resume
-OUTPUT="$ROOT/.cairn/changes/add-dev-cache-cross-run-resume/evidence/runtime-successor-2026-09-07/promoted-terminal-a7841aea"
-STAGING=$(ssh -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT_SECONDS" "$HOST" "set -- '$RUN'/.promoted-cold-a7841aea.source-built-fixed-point-staging-*; test \"\$#\" -eq 1; test -d \"\$1\"; printf '%s\\n' \"\$1\"")
+EVIDENCE="$ROOT/.cairn/changes/add-dev-cache-cross-run-resume/evidence/runtime-successor-2026-09-07"
+OUTPUT="$EVIDENCE/promoted-terminal-a7841aea"
+LOG_TAIL_LINES=128
+# Success moves staging to the final path. Failed publication can retain staging.
+STAGING=$(ssh -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT_SECONDS" "$HOST" "sh -s -- '$RUN' '$NAME'" < "$EVIDENCE/select-promoted-root.command.txt")
 test -n "$STAGING"
-ssh -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT_SECONDS" "$HOST" "grep -q '^finished_at=' '$RUN/evidence/$NAME.status.txt'"
 test ! -e "$OUTPUT"
+test ! -L "$OUTPUT"
 mkdir "$OUTPUT"
-scp -q -p -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT_SECONDS" "$HOST:$RUN/evidence/$NAME.status.txt" "$OUTPUT/wrapper-status.txt"
+printf 'collected_at=%s\nremote_evidence_root=%s\n' "$(date -Iseconds)" "$STAGING" > "$OUTPUT/collection.txt"
+for SUFFIX in status.txt argv.txt host-facts.txt; do
+  REMOTE="$RUN/evidence/$NAME.$SUFFIX"
+  ssh -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT_SECONDS" "$HOST" "test -f '$REMOTE' && test ! -L '$REMOTE' && test \"\$(stat -c %s '$REMOTE')\" -le '$REPORT_BYTES_MAX'"
+  scp -q -p -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT_SECONDS" "$HOST:$REMOTE" "$OUTPUT/wrapper-$SUFFIX"
+done
 
 copy_observation() {
   RELATIVE=$1
@@ -45,7 +53,12 @@ record_receipt_digest() {
 
 copy_observation attempt-status.json "$REPORT_BYTES_MAX"
 copy_observation source-built-fixed-point-plan.json "$OBSERVATION_BYTES_MAX"
-copy_observation source-built-fixed-point-receipt.json "$REPORT_BYTES_MAX"
+copy_observation deterministic-build-proof.json "$OBSERVATION_BYTES_MAX"
+copy_observation proof-bundle-blake3.txt "$REPORT_BYTES_MAX"
+copy_observation provider-kind-linkage.json "$OBSERVATION_BYTES_MAX"
+copy_observation release-evidence-inputs.json "$OBSERVATION_BYTES_MAX"
+copy_observation dev-resume-report.json "$REPORT_BYTES_MAX"
+copy_observation native-provider.adopted.txt "$REPORT_BYTES_MAX"
 copy_observation cargo-free-fixed-point/meta.json "$OBSERVATION_BYTES_MAX"
 copy_observation cargo-free-fixed-point/stage1/status.txt "$REPORT_BYTES_MAX"
 copy_observation cargo-free-fixed-point/stage1/stderr.txt "$REPORT_BYTES_MAX"
@@ -56,7 +69,7 @@ record_receipt_digest cargo-free-fixed-point/stage2/receipt.json
 for STAGE in stagex-transition stagex-provider-publication full-source-native-provider full-source-rust-provider mantle-stage1 mantle-stage2; do
   copy_observation "dev-resume-publications/$STAGE/manifest.json" "$REPORT_BYTES_MAX"
 done
-ssh -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT_SECONDS" "$HOST" "tail -n 128 '$RUN/evidence/$NAME.log'" > "$OUTPUT/log-tail.txt"
+ssh -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT_SECONDS" "$HOST" "tail -n '$LOG_TAIL_LINES' '$RUN/evidence/$NAME.log'" > "$OUTPUT/log-tail.txt"
 ssh -o BatchMode=yes -o ConnectTimeout="$SSH_CONNECT_TIMEOUT_SECONDS" "$HOST" "set -eu; date -Iseconds; for ALIAS_NAME in latest latest-source-built-fixed-point; do ALIAS='$RUN'/\$ALIAS_NAME; if test -L \"\$ALIAS\"; then printf '%s symlink ' \"\$ALIAS_NAME\"; readlink -- \"\$ALIAS\"; elif test -e \"\$ALIAS\"; then printf '%s unexpected-non-symlink\n' \"\$ALIAS_NAME\"; else printf '%s absent\n' \"\$ALIAS_NAME\"; fi; done" > "$OUTPUT/alias-after.log"
 printf 'collection_scope=terminal-metadata-and-receipt-digests\nruntime_acceptance=not-evaluated\npromoted_run=true\n' > "$OUTPUT/scope.txt"
 grep -E '^' "$OUTPUT/wrapper-status.txt" "$OUTPUT/observations.txt" "$OUTPUT/scope.txt"

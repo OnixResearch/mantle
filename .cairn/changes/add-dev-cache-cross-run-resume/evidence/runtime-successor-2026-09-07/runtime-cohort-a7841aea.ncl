@@ -22,7 +22,7 @@ let LaterDev = {
 } in
 {
   schema | String = "mantle-dev-resume-runtime-cohort-v1",
-  status | String = "cold-running",
+  status | String = "promoted-running",
   source_commit | GitOid = "a7841aea055bf643cc473164b98a2442014f080b",
   source_git_object_format | [| 'sha1 |] = 'sha1,
   source_path | AbsolutePath = "%{root}/source-a7841aea",
@@ -72,7 +72,7 @@ let LaterDev = {
   },
   non_claims | Array String = [
     "This descriptor is not a launch receipt or execution permission.",
-    "The dev plan identity is not the promoted plan identity.",
+    "A shared plan digest does not grant dev-state authority to the promoted run.",
     "Report review does not verify payload bytes, source authority, runtime behavior, or alias state.",
   ],
 }
