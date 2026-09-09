@@ -3218,14 +3218,12 @@ async fn prepare_remote_input_nar_artifact(
         }
         Err(reason) => return Err(reason),
     };
-    let node = snix_castore::import::fs::ingest_path::<_, _, _, &[u8]>(
-        context.store.blob_service(),
-        context.store.directory_service(),
-        &host_path,
-        None,
-    )
-    .await
-    .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
+    let node = context
+        .store
+        .transfer_objects()
+        .ingest_host_path(&host_path)
+        .await
+        .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
     let artifact = crate::remote_transfer::prepare_nar_node_transfer_artifact(
         &context.store.transfer_objects(),
         &node,
@@ -3803,14 +3801,11 @@ async fn render_remote_input_nar_payload(
     store: &crunch_store::StoreHandle,
     host_path: &Path,
 ) -> Result<Vec<u8>, String> {
-    let node = snix_castore::import::fs::ingest_path::<_, _, _, &[u8]>(
-        store.blob_service(),
-        store.directory_service(),
-        host_path,
-        None,
-    )
-    .await
-    .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
+    let node = store
+        .transfer_objects()
+        .ingest_host_path(host_path)
+        .await
+        .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
     let mut writer = BoundedAsyncVecWriter::new(MAX_REMOTE_INLINE_NAR_PAYLOAD_BYTES);
     store
         .render_nar(&node, &mut writer)
@@ -3855,10 +3850,11 @@ async fn materialize_remote_input_artifact(
 ) -> Result<(), String> {
     let store_path = parse_remote_output_store_path(&artifact.input_ref, store_prefix)?;
     let mut reader = std::io::Cursor::new(artifact.payload.as_slice());
-    let (node, _nar_sha256, nar_size) =
-        snix_store::nar::ingest_nar_and_hash(store.blob_service(), store.directory_service(), &mut reader, &None)
-            .await
-            .map_err(|err| format!("remote-input-nar-ingest-failed: {err}"))?;
+    let (node, _nar_sha256, nar_size) = store
+        .transfer_objects()
+        .ingest_nar(&mut reader, &None)
+        .await
+        .map_err(|err| format!("remote-input-nar-ingest-failed: {err}"))?;
     if nar_size != artifact.size_bytes {
         return Err("remote-input-nar-size-mismatch".to_string());
     }
@@ -3899,10 +3895,11 @@ async fn materialize_streamed_remote_inputs(
         let reader = crate::remote_transfer::open_remote_transfer_received_artifact(receiver_root, &artifact_id)
             .map_err(|err| format!("remote-streamed-input-open-failed: {err}"))?;
         let mut reader = tokio::fs::File::from_std(reader);
-        let (node, nar_sha256, nar_size) =
-            snix_store::nar::ingest_nar_and_hash(store.blob_service(), store.directory_service(), &mut reader, &None)
-                .await
-                .map_err(|err| format!("remote-streamed-input-nar-ingest-failed: {err}"))?;
+        let (node, nar_sha256, nar_size) = store
+            .transfer_objects()
+            .ingest_nar(&mut reader, &None)
+            .await
+            .map_err(|err| format!("remote-streamed-input-nar-ingest-failed: {err}"))?;
         if nar_size != descriptor.size_bytes {
             return Err("remote-streamed-input-nar-size-mismatch".to_string());
         }
@@ -3926,13 +3923,11 @@ async fn export_remote_input_node(
     store_path: &StorePath<String>,
     node: &snix_castore::Node,
 ) -> Result<(), String> {
-    let host_path = store_path.to_absolute_path_with_prefix(store.output_dir_str());
-    if !Path::new(&host_path).exists() {
-        crunch_store::export_castore_to_disk(node, &host_path, &store.blob_service(), &store.directory_service())
-            .await
-            .map_err(|err| format!("remote-input-export-failed: {err}"))?;
-    }
-    Ok(())
+    store
+        .transfer_objects()
+        .export_node_to_output(node, store_path.to_absolute_path_with_prefix(store.store_dir()).as_str())
+        .await
+        .map_err(|err| format!("remote-input-export-failed: {err}"))
 }
 
 struct PreparedRemoteProductionOutput {
@@ -11046,26 +11041,15 @@ async fn ingest_remote_output_nar_payload(
     if action.nar_payload.is_some() && action.nar_path.is_some() {
         return Err("remote-output-nar-source-ambiguous".to_string());
     }
+    let transfers = store.transfer_objects();
     let result = if let Some(payload) = &action.nar_payload {
         let mut reader = std::io::Cursor::new(payload.as_slice());
-        snix_store::nar::ingest_nar_and_hash(
-            store.blob_service(),
-            store.directory_service(),
-            &mut reader,
-            &action.path_info.ca,
-        )
-        .await
+        transfers.ingest_nar(&mut reader, &action.path_info.ca).await
     } else if let Some(path) = &action.nar_path {
         let reader = crate::remote_transfer::open_remote_transfer_authority_file(path)
             .map_err(|err| format!("remote-output-streamed-nar-open-failed: {err}"))?;
         let mut reader = tokio::fs::File::from_std(reader);
-        snix_store::nar::ingest_nar_and_hash(
-            store.blob_service(),
-            store.directory_service(),
-            &mut reader,
-            &action.path_info.ca,
-        )
-        .await
+        transfers.ingest_nar(&mut reader, &action.path_info.ca).await
     } else {
         return Ok(());
     };

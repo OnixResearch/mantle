@@ -83,7 +83,7 @@ use crate::overlay::StoreOverlayState;
 use crate::path_identity::require_requested_path_identity;
 use crate::roots;
 
-const NAR_SHA256_BYTES: usize = 32;
+pub(crate) const NAR_SHA256_BYTES: usize = 32;
 const MAX_REMOTE_TRUSTED_PUBLIC_KEYS: usize = 16;
 const OVERLAY_DIRECTORY_READ_LIMIT: usize = 1_000_000;
 const MAX_LAYERED_CLOSURE_PATHS: usize = 1_000_000;
@@ -620,7 +620,7 @@ pub struct StoreHandle {
     remote_delta_http_client: Option<reqwest::Client>,
     state_dir: PathBuf,
     /// Physical output dir string (from `--store`).
-    output_dir_str: String,
+    pub(crate) output_dir_str: String,
     /// Logical store prefix (e.g. "/crunch/store" or "/nix/store").
     store_dir: String,
     /// Startup-time degraded store facts recorded while opening services.

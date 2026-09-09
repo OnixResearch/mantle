@@ -27,6 +27,8 @@ use crate::StoreAuditEvent;
 use crate::StoreFallbackMode;
 use crate::StoreHandle;
 use crate::VerifiedSourceIngestRequest;
+use crate::export::export_castore_to_disk;
+use crate::handle::NAR_SHA256_BYTES;
 use crate::roots;
 
 /// Build-realization authority with private store services and session state.
@@ -137,10 +139,12 @@ pub struct BuildServiceStore {
     directory_service: Arc<dyn DirectoryService>,
 }
 
-/// Transfer-object read authority for remote transfer spooling.
+/// Transfer-object authority for remote transfer spooling and admitted
+/// remote-input/output ingestion.
 ///
-/// Exposes NAR rendering, bounded castore blob reads, and canonical directory
-/// bytes without leaking raw blob, directory, or PathInfo services.
+/// Exposes NAR rendering, bounded castore blob reads, canonical directory
+/// bytes, host-path/NAR ingestion, and output export without leaking raw
+/// blob, directory, or PathInfo services.
 ///
 /// ```compile_fail
 /// fn denied(store: &crunch_store::TransferObjectStore<'_>) {
@@ -241,6 +245,63 @@ impl TransferObjectStore<'_> {
             "castore directory bytes must hash to the requested digest"
         );
         Ok(bytes)
+    }
+
+    /// Ingest a host filesystem path into the castore and return its node.
+    pub async fn ingest_host_path(&self, path: &Path) -> Result<Node, Error> {
+        snix_castore::import::fs::ingest_path::<_, _, _, &[u8]>(
+            self.handle.blob_service.clone(),
+            self.handle.directory_service.clone(),
+            path,
+            None,
+        )
+        .await
+        .map_err(|err| Error::Export(format!("ingesting host path {}: {err}", path.display())))
+    }
+
+    /// Ingest a NAR stream into the castore.
+    ///
+    /// Returns the root node, the Nix-interoperability SHA-256, and the NAR
+    /// size in bytes.
+    pub async fn ingest_nar<R: tokio::io::AsyncRead + Unpin + Send>(
+        &self,
+        reader: &mut R,
+        expected_ca_hash: &Option<nix_compat::nixhash::CAHash>,
+    ) -> Result<(Node, [u8; NAR_SHA256_BYTES], u64), Error> {
+        snix_store::nar::ingest_nar_and_hash(
+            self.handle.blob_service.clone(),
+            self.handle.directory_service.clone(),
+            reader,
+            expected_ca_hash,
+        )
+        .await
+        .map_err(|err| Error::Export(format!("ingesting NAR: {err}")))
+    }
+
+    /// Export a castore node to its physical output location.
+    ///
+    /// `logical_path` is the absolute logical store path under the configured
+    /// store prefix; the shell strips the prefix and resolves the remainder
+    /// against the physical output directory.
+    pub async fn export_node_to_output(&self, node: &Node, logical_path: &str) -> Result<(), Error> {
+        let relative = logical_path
+            .strip_prefix(self.handle.store_dir())
+            .unwrap_or_else(|| {
+                assert!(
+                    logical_path.starts_with('/'),
+                    "export logical path must be absolute under the store prefix"
+                );
+                logical_path
+            });
+        let host_path = std::path::Path::new(&self.handle.output_dir_str).join(relative.trim_start_matches('/'));
+        assert!(!host_path.exists() || host_path.is_file() || host_path.is_dir());
+        if host_path.exists() {
+            return Ok(());
+        }
+        let dest = host_path.to_string_lossy().into_owned();
+        export_castore_to_disk(node, &dest, &self.handle.blob_service, &self.handle.directory_service)
+            .await
+            .map_err(|err| Error::Export(format!("exporting output {logical_path}: {err}")))
     }
 }
 
