@@ -44,3 +44,14 @@ Gates: proposal PASS, design PASS, tasks PASS (after strict concurrency markers)
   `PKG_CONFIG_PATH=<openssl-dev>/lib/pkgconfig`, `CARGO_TARGET_DIR=/tmp/mantle-drain-target`.
 - The final `nix flake check -L` gate (V4) will need the crates.io fetch issue
   resolved (UA or mirror) or a warmed store.
+
+## Update 2026-09-09 (2)
+
+- Slice 3 (partial): store_cmd PathInfo listing moved behind bounded shell op (6a108cf9).
+- I5: tools/check_store_capability_boundary.rs added. Self-test covers positive
+  fixture, raw-service/writable/construction negative fixtures, and test-region
+  exemption. Full-tree run: 0 raw-service escapes, 0 writable-authority escapes,
+  0 handle-construction escapes beyond declared owners. Declared owners are
+  recorded in the checker and must be mirrored into ADR 0058 (I6).
+- crunch-rust-cache declared as store-backed adapter owning a private store
+  instance; crunch-build orchestrate declared writable owner for CA mappings.
