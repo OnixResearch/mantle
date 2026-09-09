@@ -30,6 +30,78 @@ pub trait Publisher: Send + Sync + fmt::Debug {
     async fn publish(&self, path_info: &PathInfo) -> Result<(), String>;
 }
 
+/// Ordered, bounded publication work requested by output admission.
+///
+/// An effect plan requests publication work. It does not prove that
+/// publication occurred; observations carry that evidence.
+#[derive(Debug, Default)]
+pub struct PublicationEffectPlan {
+    pub steps: Vec<PublicationEffectStep>,
+}
+
+impl PublicationEffectPlan {
+    pub fn is_empty(&self) -> bool {
+        self.steps.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.steps.len()
+    }
+}
+
+/// One requested publication effect: one publisher for one admitted output.
+#[derive(Debug)]
+pub struct PublicationEffectStep {
+    pub publisher_index: u32,
+    pub logical_path: String,
+    pub path_info: std::sync::Arc<PathInfo>,
+    publisher: std::sync::Arc<dyn Publisher>,
+}
+
+impl PublicationEffectStep {
+    pub(crate) fn new(
+        publisher_index: u32,
+        logical_path: String,
+        path_info: std::sync::Arc<PathInfo>,
+        publisher: std::sync::Arc<dyn Publisher>,
+    ) -> Self {
+        Self {
+            publisher_index,
+            logical_path,
+            path_info,
+            publisher,
+        }
+    }
+
+    /// Execute this effect and return a typed observation.
+    ///
+    /// Execution never panics on publisher failure; failures are observed.
+    pub async fn execute(&self) -> PublicationObservation {
+        let outcome = self.publisher.publish(&self.path_info).await;
+        PublicationObservation {
+            publisher_index: self.publisher_index,
+            logical_path: self.logical_path.clone(),
+            outcome,
+        }
+    }
+}
+
+/// A typed success or failure observation for one publication effect.
+///
+/// A failed observation does not erase the underlying output admission.
+#[derive(Debug, Clone)]
+pub struct PublicationObservation {
+    pub publisher_index: u32,
+    pub logical_path: String,
+    pub outcome: Result<(), String>,
+}
+
+impl PublicationObservation {
+    pub fn is_success(&self) -> bool {
+        self.outcome.is_ok()
+    }
+}
+
 /// A no-op publisher that skips all outputs.
 /// Used as the default when no publishers are configured.
 #[derive(Debug)]

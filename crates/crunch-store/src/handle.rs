@@ -84,6 +84,7 @@ use crate::path_identity::require_requested_path_identity;
 use crate::roots;
 
 pub(crate) const NAR_SHA256_BYTES: usize = 32;
+const MAX_PENDING_PUBLICATION_STEPS: usize = 65_536;
 const MAX_REMOTE_TRUSTED_PUBLIC_KEYS: usize = 16;
 const OVERLAY_DIRECTORY_READ_LIMIT: usize = 1_000_000;
 const MAX_LAYERED_CLOSURE_PATHS: usize = 1_000_000;
@@ -651,6 +652,7 @@ pub struct StoreHandle {
     root_registration: Option<crate::retention::RootRegistration>,
     /// Output publication adapters called after successful admission.
     publishers: Vec<Arc<dyn Publisher>>,
+    pending_publication_steps: Vec<crate::PublicationEffectStep>,
 }
 
 impl StoreHandle {
@@ -769,6 +771,7 @@ impl StoreHandle {
             overlay_state: None,
             root_registration: None,
             publishers: Vec::new(),
+            pending_publication_steps: Vec::new(),
         })
     }
 
@@ -943,6 +946,7 @@ impl StoreHandle {
             overlay_state: Some(overlay_state),
             root_registration: None,
             publishers: Vec::new(),
+            pending_publication_steps: Vec::new(),
         })
     }
 
@@ -984,10 +988,40 @@ impl StoreHandle {
             overlay_state: None,
             root_registration: None,
             publishers: services.publishers,
+            pending_publication_steps: Vec::new(),
         }
     }
 
     /// Arc-cloned blob service.
+    /// Drain the pending publication effect plan.
+    ///
+    /// Admission records effects; the application shell owns execution.
+    pub fn take_publication_effect_plan(&mut self) -> crate::PublicationEffectPlan {
+        crate::PublicationEffectPlan {
+            steps: std::mem::take(&mut self.pending_publication_steps),
+        }
+    }
+
+    /// Execute a publication effect plan and return typed observations.
+    ///
+    /// Failed publication is observed and logged; it never erases the
+    /// underlying output admission.
+    pub async fn execute_publication_plan(
+        &self,
+        plan: crate::PublicationEffectPlan,
+    ) -> Vec<crate::PublicationObservation> {
+        const PUBLISHER_WARN_PREFIX: &str = "output publication failed (admitted anyway)";
+        let mut observations = Vec::with_capacity(plan.steps.len());
+        for step in &plan.steps {
+            let observation = step.execute().await;
+            if let Err(err) = &observation.outcome {
+                tracing::warn!(path = %step.logical_path, err = %err, PUBLISHER_WARN_PREFIX);
+            }
+            observations.push(observation);
+        }
+        observations
+    }
+
     pub fn blob_service(&self) -> Arc<dyn BlobService> {
         self.blob_service.clone()
     }
@@ -3024,17 +3058,21 @@ impl StoreHandle {
             self.register_retained_root(req.output_path, source).await?;
         }
 
-        // Run output publication adapters after successful admission.
-        // Errors are diagnostic warnings, not build failures.
+        // Record a publication effect plan instead of executing publishers
+        // inline. The application shell drains the plan and executes it, and
+        // observations carry the success or failure evidence.
         // r[impl remote_builds.production_verified_publication]
-        for publisher in &self.publishers {
-            if let Err(err) = publisher.publish(&req.path_info).await {
-                tracing::warn!(
-                    path = %req.output_path,
-                    err = %err,
-                    "output publication failed (admitted anyway)"
-                );
-            }
+        for (publisher_index, publisher) in self.publishers.iter().enumerate() {
+            assert!(
+                self.pending_publication_steps.len() < MAX_PENDING_PUBLICATION_STEPS,
+                "pending publication steps exceed bounded plan capacity"
+            );
+            self.pending_publication_steps.push(crate::PublicationEffectStep::new(
+                u32::try_from(publisher_index).expect("publisher index fits u32"),
+                req.output_path.to_string(),
+                std::sync::Arc::new(req.path_info.clone()),
+                publisher.clone(),
+            ));
         }
 
         Ok(req.path_info)
@@ -4955,7 +4993,8 @@ mod tests {
 
     #[tokio::test]
     async fn persistent_output_calls_configured_publisher() {
-        // V9: a configured publisher is called after successful output admission.
+        // V9: admission records a publication effect plan; the shell executes
+        // it and observations carry the success or failure evidence.
         // r[verify remote_builds.production_verified_publication]
         use std::sync::Arc;
 
@@ -4982,7 +5021,13 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(publisher.call_count(), 1, "publisher should be called once");
+        assert_eq!(publisher.call_count(), 0, "admission must not execute publishers inline");
+        let plan = handle.take_publication_effect_plan();
+        assert_eq!(plan.len(), 1, "admission must record one publication effect");
+        let observations = handle.execute_publication_plan(plan).await;
+        assert_eq!(observations.len(), 1);
+        assert!(observations[0].is_success(), "publication observation must record success");
+        assert_eq!(publisher.call_count(), 1, "publisher should be called once by execution");
         assert!(publisher.calls()[0].contains("published-output"), "publisher should receive the output path");
     }
 

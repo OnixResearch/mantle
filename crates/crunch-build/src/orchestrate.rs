@@ -1339,7 +1339,8 @@ where BServ: BuildService + 'static
 
         signing::sign_pathinfo_with_store_dir(&mut path_info, &self.keypair.signing_key, self.store.store_dir());
 
-        self.store
+        let admitted = self
+            .store
             .persist_and_export_signed_output(crunch_store::PersistOutputRequest {
                 output_name,
                 output_path,
@@ -1350,7 +1351,19 @@ where BServ: BuildService + 'static
                 root_source: self.root_retention_source,
             })
             .await
-            .map_err(|e| Error::Store(format!("{e}")))
+            .map_err(|e| Error::Store(format!("{e}")));
+
+        // The application shell owns publisher execution: drain the effect
+        // plan recorded by admission and execute it, keeping typed
+        // observations separate from the admitted output result.
+        let plan = self.store.take_publication_effect_plan();
+        if !plan.is_empty() {
+            let step_count = plan.len();
+            let observations = self.store.execute_publication_plan(plan).await;
+            assert_eq!(observations.len(), step_count, "each publication effect must yield one observation");
+        }
+
+        admitted
     }
 
     async fn check_shared_action_result(

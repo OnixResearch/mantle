@@ -377,6 +377,19 @@ impl StoreHandle {
 }
 
 impl BuildStore {
+    /// Drain the publication effect plan recorded by output admission.
+    pub fn take_publication_effect_plan(&mut self) -> crate::PublicationEffectPlan {
+        self.handle.take_publication_effect_plan()
+    }
+
+    /// Execute a publication effect plan; observations carry the evidence.
+    pub async fn execute_publication_plan(
+        &self,
+        plan: crate::PublicationEffectPlan,
+    ) -> Vec<crate::PublicationObservation> {
+        self.handle.execute_publication_plan(plan).await
+    }
+
     #[must_use]
     pub fn store_dir(&self) -> &str {
         self.handle.store_dir()
