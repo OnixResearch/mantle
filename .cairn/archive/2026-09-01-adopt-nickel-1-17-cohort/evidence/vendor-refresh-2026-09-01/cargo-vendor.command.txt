@@ -1,1 +1,0 @@
-nix develop -c cargo vendor --locked --versioned-dirs vendor-deps

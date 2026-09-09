@@ -1,3 +1,0 @@
-makeTerminated:
- *** Deleting file `arparse.c'
-make: *** [arparse.c] Terminated

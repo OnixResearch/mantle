@@ -1,4 +1,0 @@
-- [x] [serial] Record current `thiserror` wrong-version proc-macro blocker. Evidence: `evidence/current-blocker.md`. r[rust_package_planning.native_registry_dependency_version_resolution]
-- [x] [serial] Add positive and negative registry source resolution tests for same-name packages. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_registry_dependency_version_resolution]
-- [x] [serial] Implement bounded version-aware registry dependency source resolution. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_registry_dependency_version_resolution]
-- [x] [serial] Run focused tests, clean self-probe, Cairn validation, and archive readiness checks. Evidence: `evidence/verification.md`. r[rust_package_planning.native_registry_dependency_version_resolution]

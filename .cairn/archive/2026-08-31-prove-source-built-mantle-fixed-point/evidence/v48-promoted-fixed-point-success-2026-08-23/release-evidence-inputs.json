@@ -1,8 +1,0 @@
-{
-  "schema": "mantle-source-built-fixed-point-release-inputs-v1",
-  "deterministic_proof": "deterministic-build-proof.json",
-  "provider_kind_linkage": "provider-kind-linkage.json",
-  "source_built_plan": "source-built-fixed-point-plan.json",
-  "toolchain_closure": "source-built-toolchain-closure.json",
-  "proof_bundle_digest": "proof-bundle-blake3.txt"
-}

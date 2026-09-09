@@ -1,1 +1,0 @@
-nix develop -c cargo test -p mantle-rust-plan-core -p mantle-rust-plan

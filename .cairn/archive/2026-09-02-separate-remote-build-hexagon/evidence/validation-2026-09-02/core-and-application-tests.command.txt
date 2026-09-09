@@ -1,1 +1,0 @@
-nix develop -c cargo test -p crunch-remote-core -p crunch-remote

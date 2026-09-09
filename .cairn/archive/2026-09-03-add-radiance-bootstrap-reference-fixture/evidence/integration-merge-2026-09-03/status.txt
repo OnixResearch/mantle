@@ -1,4 +1,0 @@
-integration-merge-validation=PASS
-merge-head=62940810416e5cd061c9af6b79826c12b08e1158
-origin-main=50120c1dff95c654e8823cf9ae09edb8e03b9661
-machine-surfaces=64

@@ -1,3 +1,0 @@
-configure: WARNING: unrecognized options: --enable-deterministic-archives, --enable-64-bit-bfd, --disable-shared, --disable-plugins, --disable-werror, --with-sysroot, --enable-compressed-debug-sections
-Broken pipe
-configure: WARNING: unrecognized options: --enable-deterministic-archives, --enable-64-bit-bfd, --disable-shared, --disable-plugins, --disable-werror, --with-sysroot, --enable-compressed-debug-sections

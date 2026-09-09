@@ -1,6 +1,0 @@
-{
-  "schema": "mantle-source-built-fixed-point-attempt-v1",
-  "status": "failed",
-  "plan_digest_blake3": "ca0a5f56569dae378ce8e456a6f596f6a4829137344748a5531fda0e4945faeb",
-  "blocker": "error: build failed\nstage1 blocked: rust-plan exited with 1"
-}

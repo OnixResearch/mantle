@@ -1,1 +1,0 @@
-$ cargo fmt --check -p crunch-build -p crunch-release-core

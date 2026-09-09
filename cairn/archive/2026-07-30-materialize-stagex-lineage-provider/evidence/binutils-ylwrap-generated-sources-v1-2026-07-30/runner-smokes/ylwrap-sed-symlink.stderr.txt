@@ -1,1 +1,0 @@
-stagex-ylwrap-sed: rejected input

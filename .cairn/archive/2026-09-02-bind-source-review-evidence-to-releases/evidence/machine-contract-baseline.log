@@ -1,2 +1,0 @@
-machine schema contract check failed: build.build-json-report freshness rejected:
-  - build.build-json-report [digest] /freshness/producer_identity_blake3: stale BLAKE3 binding: recorded=4d5ee78ebc73f30447edd8e95a4e7024e26df416d1bfd4cddea8deec4779c9d5 expected=ee342ea93bf8f868c2377853fee7ff6011bbebfda0a9ab14b90306a8e5c237df

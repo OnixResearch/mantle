@@ -1,4 +1,0 @@
-cargo test -p mantle --bin mantle source_built_parity_promotion -- --test-threads=1
-cargo test -p mantle --bin mantle bootstrap_parity::tests:: -- --test-threads=1
-cargo test -p mantle --test bootstrap_parity_cli -- --test-threads=1
-cargo test -p mantle --test release_cli release_exports_full_bootstrap_parity_without_witness_quorum -- --test-threads=1

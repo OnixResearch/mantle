@@ -1,5 +1,0 @@
-warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-remote-build-hexagon/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-remote-build-hexagon/src/main.rs` found to be present in multiple build targets:
-  * `bin` target `crunch`
-  * `bin` target `mantle`
-    Checking crunch-remote-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-separate-remote-build-hexagon/crates/crunch-remote-core)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.26s

@@ -1,2 +1,0 @@
-:-14456: error: identifier expected
-:-14456: error: identifier expected

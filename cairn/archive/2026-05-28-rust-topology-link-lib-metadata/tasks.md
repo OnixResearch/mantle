@@ -1,4 +1,0 @@
-- [x] [serial] Record current `rustc-link-lib` metadata parser blocker. Evidence: `evidence/current-blocker.md`. r[rust_package_planning.native_link_lib_metadata]
-- [x] [serial] Add positive and negative parser tests for bounded modifier-bearing `rustc-link-lib` metadata. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_link_lib_metadata]
-- [x] [serial] Implement fail-closed parsing for supported `rustc-link-lib` kind/modifier/name forms. Evidence: `src/rust_plan.rs`. r[rust_package_planning.native_link_lib_metadata]
-- [x] [serial] Run focused tests, clean self-probe, Cairn validation, and archive readiness checks. Evidence: `evidence/verification.md`. r[rust_package_planning.native_link_lib_metadata]

@@ -1,1 +1,0 @@
-nix develop -c cargo test -p mantle --lib source_built_root_action_trust -- --test-threads=1

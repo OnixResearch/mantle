@@ -1,7 +1,0 @@
-+ test '!' -e vendor-deps
-+ ln -s /home/brittonr/git/OnixResearch/mantle/vendor-deps vendor-deps
-+ trap 'rm -f vendor-deps' EXIT
-+ nix develop -c cargo metadata --offline --locked --format-version 1 --config .cargo/vendor-config.toml
-+ printf 'vendor_offline_metadata=passed\n'
-vendor_offline_metadata=passed
-+ rm -f vendor-deps

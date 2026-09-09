@@ -1,6 +1,0 @@
-## fix/repair-crunch-store-tigerstyle-20260901...origin/main [ahead 3]
- M .cairn/changes/repair-crunch-store-tigerstyle/evidence/validation.md
- M .cairn/changes/repair-crunch-store-tigerstyle/tasks.md
- M adr/README.md
-?? .cairn/changes/repair-crunch-store-tigerstyle/evidence/store-repair-2026-09-01/
-?? adr/0105-repair-store-structure-without-changing-authority.md

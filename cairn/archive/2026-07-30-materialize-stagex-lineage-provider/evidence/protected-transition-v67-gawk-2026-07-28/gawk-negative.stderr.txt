@@ -1,2 +1,0 @@
-gawk: cmd. line:2: (END OF FILE)
-gawk: cmd. line:2: parse error

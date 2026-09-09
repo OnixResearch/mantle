@@ -1,4 +1,0 @@
-continuation_syntax=PASS
-missing_terminal_evidence_rejected=true
-active_cold_attempt_rejected=true
-cached_run_not_started=true

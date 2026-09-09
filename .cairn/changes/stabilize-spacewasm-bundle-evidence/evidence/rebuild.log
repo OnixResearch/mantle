@@ -1,0 +1,4 @@
+checking outputs of '/nix/store/pqdh5xf8y0k76h7pjvaskxbq289crkwg-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-unit-tests.drv'...
+note: keeping build directory "/nix/var/nix/builds/nix-3754005-1604823500/build"
+error: derivation '/nix/store/pqdh5xf8y0k76h7pjvaskxbq289crkwg-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-unit-tests.drv' may not be deterministic:
+         output 'out' ("/nix/store/lg5j86fnp7nsn623gsr4ylncqx38833p-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-unit-tests") differs from "/nix/store/lg5j86fnp7nsn623gsr4ylncqx38833p-spacewasm-e24cf09355a90497148eb5029fdb8e3400bd63e3-unit-tests.check"

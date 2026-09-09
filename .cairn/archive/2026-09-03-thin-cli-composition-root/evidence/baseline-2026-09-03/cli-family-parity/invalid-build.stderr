@@ -1,7 +1,0 @@
-error: unexpected argument '--definitely-invalid' found
-
-  tip: to pass '--definitely-invalid' as a value, use '-- --definitely-invalid'
-
-Usage: mantle build [OPTIONS] [FILE]
-
-For more information, try '--help'.

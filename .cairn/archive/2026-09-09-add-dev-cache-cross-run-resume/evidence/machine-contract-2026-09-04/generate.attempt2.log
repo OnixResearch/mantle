@@ -1,8 +1,0 @@
-$ cargo -Zscript --offline scripts/check-machine-schema-contracts.rs --generate
-machine schema contract check failed: bootstrap.dev-resume-report fixtures rejected:
-  - bootstrap.dev-resume-report [schema] /fixture_coverage: declared fixture class cold execution has no negative case
-  - bootstrap.dev-resume-report [schema] /fixture_coverage: declared fixture class malformed digest has no negative case
-  - bootstrap.dev-resume-report [schema] /fixture_coverage: declared fixture class stage bound has no negative case
-  - bootstrap.dev-resume-report [schema] /fixture_coverage: declared fixture class unknown field has no negative case
-  - bootstrap.dev-resume-report [schema] /fixture_coverage: declared fixture class unknown version has no negative case
-  - bootstrap.dev-resume-report [schema] /fixture_coverage: declared fixture class validated resume has no negative case

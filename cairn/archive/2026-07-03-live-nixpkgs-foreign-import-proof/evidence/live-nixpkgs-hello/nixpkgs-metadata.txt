@@ -1,6 +1,0 @@
-[1mResolved URL:[0m  path:/nix/store/j2r11kxv91yl5xqppy3vy84klwxjbz1i-source
-[1mLocked URL:[0m    path:/nix/store/j2r11kxv91yl5xqppy3vy84klwxjbz1i-source?lastModified=1782148047&narHash=sha256-rxO%2Buc/KFbSJp%2BpgyXRuAX6QlG9hJdnt0BXpEQRXY%2BU%3D
-[1mDescription:[0m   A collection of packages for the Nix package manager
-[1mPath:[0m          /nix/store/j2r11kxv91yl5xqppy3vy84klwxjbz1i-source
-[1mLast modified:[0m 2026-06-22 13:07:27
-[1mFingerprint:[0m   89e12ac8bef0c7dea76de94d0ce6e42c8e13c5a2ffa106331f0b20de564f9f5c

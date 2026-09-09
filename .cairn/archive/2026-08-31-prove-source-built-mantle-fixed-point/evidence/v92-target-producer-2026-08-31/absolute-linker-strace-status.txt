@@ -1,4 +1,0 @@
-status=0
-missing_sysroot_linker_attempts=0
-bound_linker_execs=2
-binary_present=true

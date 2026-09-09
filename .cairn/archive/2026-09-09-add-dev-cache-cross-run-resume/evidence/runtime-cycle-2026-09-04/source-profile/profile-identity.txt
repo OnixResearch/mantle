@@ -1,4 +1,0 @@
-profile_path=/home/brittonr/mantle-runs/dev-resume-20260904/authority/source-built-fixed-point-sources-97f47ae2.json
-profile_size_bytes=10334969789
-profile_file_blake3=435bb9a850c02947013a5ddcf17d835c318c5e5efe987a1d29c6f50d308c136b
-manifest_blake3=23d48a82ace18957fc18a7ab1973172aff499dd440d9b4dcfff34b236f38af07

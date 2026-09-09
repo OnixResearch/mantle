@@ -1,2 +1,0 @@
-nix develop -c cargo fmt --check -p crunch-build-planning-core -p crunch-pipeline -p mantle
-git diff --check

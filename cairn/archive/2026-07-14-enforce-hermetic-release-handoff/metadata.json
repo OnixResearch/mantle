@@ -1,5 +1,0 @@
-{
-  "depends_on": ["opaque-evidence-sidecar-binding"],
-  "groups": ["current"],
-  "status": "current"
-}

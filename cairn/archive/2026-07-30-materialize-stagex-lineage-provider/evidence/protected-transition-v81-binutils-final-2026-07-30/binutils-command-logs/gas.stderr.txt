@@ -1,2 +1,0 @@
-configure: WARNING: unrecognized options: --enable-deterministic-archives, --enable-64-bit-bfd, --with-sysroot
-configure: WARNING: unrecognized options: --enable-deterministic-archives, --enable-64-bit-bfd, --with-sysroot

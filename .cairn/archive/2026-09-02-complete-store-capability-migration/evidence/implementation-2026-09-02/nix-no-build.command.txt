@@ -1,1 +1,0 @@
-nix flake check path:/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-complete-store-capability-migration --no-build -L

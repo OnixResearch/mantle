@@ -1,0 +1,210 @@
+diff -ru /home/brittonr/git/OnixResearch/campaign/.pi/complete-20260906/spacewasm-test-output-baseline/receipt.json /home/brittonr/git/OnixResearch/campaign/.pi/complete-20260906/spacewasm-test-output-rebuilt/receipt.json
+--- /home/brittonr/git/OnixResearch/campaign/.pi/complete-20260906/spacewasm-test-output-baseline/receipt.json	2026-09-08 00:22:43.454880017 -0400
++++ /home/brittonr/git/OnixResearch/campaign/.pi/complete-20260906/spacewasm-test-output-rebuilt/receipt.json	2026-09-08 00:25:35.933411774 -0400
+@@ -1,6 +1,6 @@
+ {
+   "command": "cargo test --locked --offline --no-default-features --lib",
+   "status": "passed",
+-  "stderr_blake3": "24c7bf4451d094dabbe91d3a14c1b719233fef83627780b3c1f130a34eb37c1b",
+-  "stdout_blake3": "3a80a1c8b8a31e107ad724cfa00adf367ddf0773c6f98da8345b7f97983e8717"
++  "stderr_blake3": "eafdc9676796a73426bdb7108f3d4c6bdd1cd1cd2f2fa40c94ac4a41ba04be05",
++  "stdout_blake3": "8b482341987064143dd806a87f7c3fdf4ecb832fd52740ccc7faa61d1105d73f"
+ }
+diff -ru /home/brittonr/git/OnixResearch/campaign/.pi/complete-20260906/spacewasm-test-output-baseline/stderr.txt /home/brittonr/git/OnixResearch/campaign/.pi/complete-20260906/spacewasm-test-output-rebuilt/stderr.txt
+--- /home/brittonr/git/OnixResearch/campaign/.pi/complete-20260906/spacewasm-test-output-baseline/stderr.txt	2026-09-08 00:22:43.454880017 -0400
++++ /home/brittonr/git/OnixResearch/campaign/.pi/complete-20260906/spacewasm-test-output-rebuilt/stderr.txt	2026-09-08 00:25:35.934411771 -0400
+@@ -1,15 +1,15 @@
+    Compiling proc-macro2 v1.0.106
+-   Compiling quote v1.0.45
+    Compiling unicode-ident v1.0.24
++   Compiling quote v1.0.45
+    Compiling serde_core v1.0.228
+    Compiling zmij v1.0.21
+    Compiling libm v0.2.16
+-   Compiling serde v1.0.228
+    Compiling serde_json v1.0.150
+-   Compiling memchr v2.8.2
++   Compiling serde v1.0.228
+    Compiling itoa v1.0.18
++   Compiling memchr v2.8.2
+    Compiling syn v2.0.118
+    Compiling spacewasm v0.0.0 (/build/source)
+    Compiling serde_derive v1.0.228
+-    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.74s
++    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.76s
+      Running unittests src/lib.rs (/build/target/debug/deps/spacewasm-98f74fb312c0795d)
+diff -ru /home/brittonr/git/OnixResearch/campaign/.pi/complete-20260906/spacewasm-test-output-baseline/stdout.txt /home/brittonr/git/OnixResearch/campaign/.pi/complete-20260906/spacewasm-test-output-rebuilt/stdout.txt
+--- /home/brittonr/git/OnixResearch/campaign/.pi/complete-20260906/spacewasm-test-output-baseline/stdout.txt	2026-09-08 00:22:43.453880019 -0400
++++ /home/brittonr/git/OnixResearch/campaign/.pi/complete-20260906/spacewasm-test-output-rebuilt/stdout.txt	2026-09-08 00:25:35.933411774 -0400
+@@ -1,12 +1,12 @@
+ 
+ running 231 tests
+-test interpreter::interpreter_tests::tests::test_f32_abs_negative ... ok
+ test interpreter::interpreter_tests::tests::test_drop ... ok
++test interpreter::interpreter_tests::tests::test_f32_abs_negative ... ok
+ test interpreter::interpreter_tests::tests::test_f32_abs_positive ... ok
+-test interpreter::interpreter_tests::tests::test_f32_convert_i32_s ... ok
+-test interpreter::interpreter_tests::tests::test_f32_ceil ... ok
+ test interpreter::interpreter_tests::tests::test_f32_add ... ok
++test interpreter::interpreter_tests::tests::test_f32_ceil ... ok
+ test interpreter::interpreter_tests::tests::test_f32_const ... ok
++test interpreter::interpreter_tests::tests::test_f32_convert_i32_s ... ok
+ test interpreter::interpreter_tests::tests::test_f32_convert_i32_u ... ok
+ test interpreter::interpreter_tests::tests::test_f32_convert_i64_s ... ok
+ test interpreter::interpreter_tests::tests::test_f32_demote_f64 ... ok
+@@ -14,14 +14,14 @@
+ test interpreter::interpreter_tests::tests::test_f32_eq ... ok
+ test interpreter::interpreter_tests::tests::test_f32_floor ... ok
+ test interpreter::interpreter_tests::tests::test_f32_lt ... ok
+-test interpreter::interpreter_tests::tests::test_f32_mul ... ok
+ test interpreter::interpreter_tests::tests::test_f32_ne ... ok
+-test interpreter::interpreter_tests::tests::test_f32_neg ... ok
+ test interpreter::interpreter_tests::tests::test_f32_sqrt ... ok
++test interpreter::interpreter_tests::tests::test_f32_neg ... ok
++test interpreter::interpreter_tests::tests::test_f32_mul ... ok
+ test interpreter::interpreter_tests::tests::test_f32_sub ... ok
+ test interpreter::interpreter_tests::tests::test_f32_trunc ... ok
+-test interpreter::interpreter_tests::tests::test_f64_abs_positive ... ok
+ test interpreter::interpreter_tests::tests::test_f64_abs_negative ... ok
++test interpreter::interpreter_tests::tests::test_f64_abs_positive ... ok
+ test interpreter::interpreter_tests::tests::test_f64_add ... ok
+ test interpreter::interpreter_tests::tests::test_f64_ceil ... ok
+ test interpreter::interpreter_tests::tests::test_f64_const ... ok
+@@ -55,15 +55,15 @@
+ test interpreter::interpreter_tests::tests::test_i32_le_s_true ... ok
+ test interpreter::interpreter_tests::tests::test_i32_load ... ok
+ test interpreter::interpreter_tests::tests::test_i32_load16_s ... ok
+-test interpreter::interpreter_tests::tests::test_i32_load8_s ... ok
+ test interpreter::interpreter_tests::tests::test_i32_load16_u ... ok
++test interpreter::interpreter_tests::tests::test_i32_load8_s ... ok
+ test interpreter::interpreter_tests::tests::test_i32_load8_u ... ok
+ test interpreter::interpreter_tests::tests::test_i32_load_with_offset ... ok
+ test interpreter::interpreter_tests::tests::test_i32_lt_s_false ... ok
+ test interpreter::interpreter_tests::tests::test_i32_lt_s_true ... ok
+ test interpreter::interpreter_tests::tests::test_i32_lt_u_false ... ok
+-test interpreter::interpreter_tests::tests::test_i32_mul ... ok
+ test interpreter::interpreter_tests::tests::test_i32_lt_u_true ... ok
++test interpreter::interpreter_tests::tests::test_i32_mul ... ok
+ test interpreter::interpreter_tests::tests::test_i32_ne_false ... ok
+ test interpreter::interpreter_tests::tests::test_i32_ne_true ... ok
+ test interpreter::interpreter_tests::tests::test_i32_or ... ok
+@@ -73,8 +73,8 @@
+ test interpreter::interpreter_tests::tests::test_i32_rotl ... ok
+ test interpreter::interpreter_tests::tests::test_i32_rotr ... ok
+ test interpreter::interpreter_tests::tests::test_i32_shl ... ok
+-test interpreter::interpreter_tests::tests::test_i32_shr_u ... ok
+ test interpreter::interpreter_tests::tests::test_i32_shr_s ... ok
++test interpreter::interpreter_tests::tests::test_i32_shr_u ... ok
+ test interpreter::interpreter_tests::tests::test_i32_store ... ok
+ test interpreter::interpreter_tests::tests::test_i32_store16 ... ok
+ test interpreter::interpreter_tests::tests::test_i32_store8 ... ok
+@@ -83,8 +83,8 @@
+ test interpreter::interpreter_tests::tests::test_i32_trunc_f32_s ... ok
+ test interpreter::interpreter_tests::tests::test_i32_trunc_f32_u ... ok
+ test interpreter::interpreter_tests::tests::test_i32_trunc_f64_s ... ok
+-test interpreter::interpreter_tests::tests::test_i32_wrap_i64 ... ok
+ test interpreter::interpreter_tests::tests::test_i32_xor ... ok
++test interpreter::interpreter_tests::tests::test_i32_wrap_i64 ... ok
+ test interpreter::interpreter_tests::tests::test_i64_add ... ok
+ test interpreter::interpreter_tests::tests::test_i64_add_wrapping ... ok
+ test interpreter::interpreter_tests::tests::test_i64_and ... ok
+@@ -93,9 +93,9 @@
+ test interpreter::interpreter_tests::tests::test_i64_ctz ... ok
+ test interpreter::interpreter_tests::tests::test_i64_div_s ... ok
+ test interpreter::interpreter_tests::tests::test_i64_eq_true ... ok
++test interpreter::interpreter_tests::tests::test_i64_eqz_nonzero ... ok
+ test interpreter::interpreter_tests::tests::test_i64_eqz_zero ... ok
+ test interpreter::interpreter_tests::tests::test_i64_extend_i32_s ... ok
+-test interpreter::interpreter_tests::tests::test_i64_eqz_nonzero ... ok
+ test interpreter::interpreter_tests::tests::test_i64_extend_i32_u ... ok
+ test interpreter::interpreter_tests::tests::test_i64_load ... ok
+ test interpreter::interpreter_tests::tests::test_i64_load32_u ... ok
+@@ -110,15 +110,15 @@
+ test interpreter::interpreter_tests::tests::test_i64_store ... ok
+ test interpreter::interpreter_tests::tests::test_i64_store32 ... ok
+ test interpreter::interpreter_tests::tests::test_i64_store8 ... ok
+-test interpreter::interpreter_tests::tests::test_i64_trunc_f32_s ... ok
+ test interpreter::interpreter_tests::tests::test_i64_sub ... ok
++test interpreter::interpreter_tests::tests::test_i64_trunc_f32_s ... ok
+ test interpreter::interpreter_tests::tests::test_i64_trunc_f64_s ... ok
+ test interpreter::interpreter_tests::tests::test_i64_xor ... ok
+ test interpreter::interpreter_tests::tests::test_memory_size ... ok
+ test interpreter::interpreter_tests::tests::test_select_false ... ok
++test interpreter::interpreter_tests::tests::test_select_true ... ok
+ test util::alloc::tests::test_alloc_error_from_u32 ... ok
+ test util::alloc::tests::test_alloc_error_into_u32 ... ok
+-test interpreter::interpreter_tests::tests::test_select_true ... ok
+ test util::alloc::tests::test_alloc_error_round_trip ... ok
+ test util::alloc::tests::test_global_allocator_alloc_dealloc ... ok
+ test util::alloc::tests::test_global_allocator_alloc_error ... ok
+@@ -127,8 +127,8 @@
+ test util::alloc::tests::test_memory_statistics_sub ... ok
+ test util::alloc::tests::test_reference_allocator_delegates ... ok
+ test util::alloc::tests::test_static_allocator_memory_statistics ... ok
+-test util::alloc::tests::test_static_allocator_alloc_wrong_size_panics - should panic ... ok
+ test util::alloc::tests::test_static_allocator_dealloc_wrong_ptr_panics - should panic ... ok
++test util::alloc::tests::test_static_allocator_alloc_wrong_size_panics - should panic ... ok
+ test util::alloc::tests::test_static_allocator_new ... ok
+ test util::alloc::tests::test_static_allocator_new_from_ptr ... ok
+ test util::box_::tests::test_box_slice ... ok
+@@ -136,20 +136,20 @@
+ test util::box_::tests::test_deref ... ok
+ test util::box_::tests::test_deref_mut ... ok
+ test util::box_::tests::test_equality ... ok
+-test util::box_::tests::test_new ... ok
+-test util::box_::tests::test_ordering ... ok
+ test util::box_::tests::test_drop ... ok
+-test util::circular_buffer::tests::test_drop_cleans_up ... ok
++test util::box_::tests::test_new ... ok
+ test util::circular_buffer::tests::test_clear ... ok
++test util::box_::tests::test_ordering ... ok
+ test util::circular_buffer::tests::test_default ... ok
++test util::circular_buffer::tests::test_drop_cleans_up ... ok
+ test util::circular_buffer::tests::test_drop_with_overflow ... ok
+-test util::circular_buffer::tests::test_front_mut_and_back_mut ... ok
+ test util::circular_buffer::tests::test_exact_size_iterator ... ok
+ test util::circular_buffer::tests::test_front_and_back ... ok
++test util::circular_buffer::tests::test_front_mut_and_back_mut ... ok
++test util::circular_buffer::tests::test_get ... ok
+ test util::circular_buffer::tests::test_get_after_wrap ... ok
+ test util::circular_buffer::tests::test_get_mut ... ok
+ test util::circular_buffer::tests::test_into_iter_mut ... ok
+-test util::circular_buffer::tests::test_get ... ok
+ test util::circular_buffer::tests::test_into_iter_ref ... ok
+ test util::circular_buffer::tests::test_iter ... ok
+ test util::circular_buffer::tests::test_iter_after_wrap ... ok
+@@ -159,8 +159,8 @@
+ test util::circular_buffer::tests::test_new_buffer_is_empty ... ok
+ test util::circular_buffer::tests::test_overflow_multiple_times ... ok
+ test util::circular_buffer::tests::test_overflow_overwrites_oldest ... ok
+-test util::circular_buffer::tests::test_push_and_pop_back ... ok
+ test util::circular_buffer::tests::test_push_and_pop_front ... ok
++test util::circular_buffer::tests::test_push_and_pop_back ... ok
+ test util::circular_buffer::tests::test_single_element_buffer ... ok
+ test util::inner_vec::tests::test_deref_empty ... ok
+ test util::inner_vec::tests::test_deref_mut_empty ... ok
+@@ -181,8 +181,8 @@
+ test util::rc::tests::test_rc_is_unique ... ok
+ test util::rc::tests::test_rc_multiple_clones ... ok
+ test util::rc::tests::test_rc_new_slice ... ok
+-test util::rc::tests::test_rc_new_slice_empty ... ok
+ test util::rc::tests::test_rc_new_slice_clone ... ok
++test util::rc::tests::test_rc_new_slice_empty ... ok
+ test util::rc::tests::test_rc_new_slice_with_default ... ok
+ test util::rc::tests::test_rc_new_slice_with_default_empty ... ok
+ test util::rc::tests::test_rc_new_slice_with_default_string ... ok
+@@ -226,11 +226,11 @@
+ test util::vec::tests::test_new_from_with_alloc ... ok
+ test util::vec::tests::test_new_in_zero_capacity ... ok
+ test util::vec::tests::test_partial_eq ... ok
+-test util::vec::tests::test_push_pop ... ok
+ test util::vec::tests::test_push_exceeds_capacity - should panic ... ok
+-test util::vec::tests::test_ref_into_iter ... ok
++test util::vec::tests::test_push_pop ... ok
+ test util::vec::tests::test_ref_mut_into_iter ... ok
+ test util::vec::tests::test_zero ... ok
++test util::vec::tests::test_ref_into_iter ... ok
+ 
+-test result: ok. 231 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
++test result: ok. 231 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+ 

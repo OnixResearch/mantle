@@ -1,9 +1,0 @@
-machine schema contract check failed: registry rejected:
-  - remote.trellis-admission-evidence [digest] /surfaces/25/freshness/consumer_policy_blake3: freshness binding must be lowercase BLAKE3 hex
-  - remote.trellis-admission-evidence [digest] /surfaces/25/freshness/contract_blake3: freshness binding must be lowercase BLAKE3 hex
-  - remote.trellis-admission-evidence [digest] /surfaces/25/freshness/fixture_set_blake3: freshness binding must be lowercase BLAKE3 hex
-  - remote.trellis-admission-evidence [digest] /surfaces/25/freshness/prelude_blake3: freshness binding must be lowercase BLAKE3 hex
-  - remote.trellis-admission-evidence [digest] /surfaces/25/freshness/producer_identity_blake3: freshness binding must be lowercase BLAKE3 hex
-  - remote.trellis-admission-evidence [digest] /surfaces/25/freshness/schema_blake3: freshness binding must be lowercase BLAKE3 hex
-  - remote.trellis-admission-evidence [reference] /surfaces/25/artifacts: contract artifact path is outside an allowed review fixture root: evidence/trellis/remote-admission-v1/report.json
-  - remote.trellis-admission-evidence [reference] /surfaces/25/producer/source_paths: producer source must be a safe Rust path under src, crates, or tools: scripts/check-trellis-remote-admission.rs

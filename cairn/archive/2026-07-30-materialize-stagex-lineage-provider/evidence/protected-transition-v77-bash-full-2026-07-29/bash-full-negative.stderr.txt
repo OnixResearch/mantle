@@ -1,2 +1,0 @@
-bash-full: -c: line 1: syntax error near unexpected token `then'
-bash-full: -c: line 1: `if then'

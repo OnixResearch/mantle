@@ -1,1 +1,0 @@
-nix build "path:$PWD#checks.x86_64-linux.rust-plan-core" --no-link -L --builders ''

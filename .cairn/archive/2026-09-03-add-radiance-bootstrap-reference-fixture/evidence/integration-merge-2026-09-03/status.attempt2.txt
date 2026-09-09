@@ -1,3 +1,0 @@
-integration-merge-validation=FAIL
-exit=1
-blocker=merged gateway JSON producers lacked inventory classification and refreshed dependent producer hashes

@@ -1,1 +1,0 @@
-nix build .#checks.x86_64-linux.nextest --no-link -L --builders '' --max-jobs 1

@@ -1,7 +1,0 @@
-8 crates/crunch-pipeline/src/lib.rs
-
-2 assertion-density
-2 unbounded-collection-growth
-2 too-many-parameters
-1 bool-naming
-1 ambiguous-params

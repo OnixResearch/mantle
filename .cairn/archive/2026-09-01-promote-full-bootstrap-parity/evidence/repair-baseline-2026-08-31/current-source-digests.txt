@@ -1,5 +1,0 @@
-f90eef8c64b3331d2d8f5b11a3dbd06ed518e68fc7efb3b0e109d49171fcf414  bootstrap/tcc-musl-native.ncl
-5336b1cb396306a56477b614f2623256dec5268cf80e1cffe7a79ae509ce7ee7  bootstrap/gcc-4.0-musl-cxx.ncl
-4137e047d012d26cc38d8e009cd15aabd741ae2468afc21a9f88ea75cd7ea338  bootstrap/gcc-4.7.ncl
-7a54fe87b3e0611e07976b33e12988b43dd8f290a70ce43718d31f95d32b8ae0  bootstrap/gcc-10.ncl
-312aa4dbf4422d91bb38ba0a78a70761077428d6f94d1becce70310d662b4e93  bootstrap/gcc-10-final.ncl

@@ -1,7 +1,0 @@
-## fix/close-mantle-full-check-blockers-20260901...origin/main [ahead 5]
- M .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-gate-design.log
- M .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-gate-proposal.log
- M .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-gate-tasks.log
- M .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/cairn-validate.log
- M .cairn/changes/close-full-check-blockers/tasks.md
-?? .cairn/changes/close-full-check-blockers/evidence/full-check-2026-09-01/git-status-before-archive.log

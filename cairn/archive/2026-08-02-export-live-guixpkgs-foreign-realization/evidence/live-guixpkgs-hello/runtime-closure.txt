@@ -1,4 +1,0 @@
-/nix/store/y7d6l50mnhy92w81k48k7was6kzaip1p-bash-static-5.2.37
-/nix/store/6f1n9cmgsbm5s1nhjgsw8xghphrkh9vc-glibc-2.41
-/nix/store/nqlk596879spw2h2rlapajbs4b12da5v-gcc-14.3.0-lib
-/nix/store/23afiym7dlgh1lxk1lyx6xrzplwnwhsk-hello-2.12.2

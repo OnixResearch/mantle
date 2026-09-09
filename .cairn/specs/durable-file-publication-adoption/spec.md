@@ -28,11 +28,11 @@ Mantle MUST consume `durable-file-publication` from RID `rad:z3tAR4For7qw8ZirkJz
 
 r[mantle.durable_file_publication.mapping]
 
-Mantle MUST map one validated immutable remote-attempt segment, remote-attempt anchor, source record, source observation, or source pin to the exact destination leaf, payload byte count, payload limit, final mode, collision bound, no-replace behavior, and durability requirement without moving product policy into the shared crate.
+Mantle MUST map one validated immutable remote-attempt segment or anchor to the exact destination leaf, payload byte count, payload limit, final mode, collision bound, no-replace behavior, and durability requirement without moving product policy into the shared crate.
 
 #### Scenario: Valid immutable object maps losslessly
 
-- GIVEN canonical bounded remote-attempt or source-state bytes and a validated destination
+- GIVEN canonical bounded segment or anchor bytes and a validated destination
 - WHEN Mantle builds the shared publication request
 - THEN every mechanical field MUST match the Mantle-owned facts.
 
@@ -88,11 +88,11 @@ Mantle MUST preserve every shared commit, primary-failure, and cleanup distincti
 
 r[mantle.durable_file_publication.authority]
 
-Mantle MUST retain canonical JSON, object identity, limits, existing-content equivalence, source-ingest policy, source readiness, manifest replacement, chain validation, retention, deletion, receipts, retry policy, and diagnostics. The existing local publisher MUST remain an explicit rollback backend, and production MUST NOT fall back automatically after a shared-path failure.
+Mantle MUST retain canonical JSON, object identity, limits, existing-content equivalence, manifest replacement, chain validation, retention, deletion, receipts, retry policy, and diagnostics. The existing local publisher MUST remain an explicit rollback backend, and production MUST NOT fall back automatically after a shared-path failure.
 
 #### Scenario: Shared immutable publication is selected
 
-- GIVEN production immutable remote-attempt or source-state publication
+- GIVEN production immutable segment or anchor publication
 - WHEN the adapter is selected
 - THEN the shared backend MUST run and Mantle-owned policy MUST remain unchanged.
 
@@ -106,19 +106,13 @@ Mantle MUST retain canonical JSON, object identity, limits, existing-content equ
 
 r[mantle.durable_file_publication.validation]
 
-Mantle MUST replay all 17 producer corpus rows and run positive and negative Linux integration tests for request mapping, commit state, existing-content interpretation, race resistance, no-follow behavior, bounds, cleanup, and source-state ingest.
+Mantle MUST replay all 17 producer corpus rows and run positive and negative Linux integration tests for request mapping, commit state, existing-content interpretation, race resistance, no-follow behavior, bounds, and cleanup.
 
 #### Scenario: Shared corpus is replayed
 
 - GIVEN the immutable producer corpus at the reviewed revision
 - WHEN Mantle's consumer mapping test runs
 - THEN all rows MUST preserve their expected mechanical disposition and cleanup facts.
-
-#### Scenario: Source-state adapter is tested
-
-- GIVEN admitted add, identical-reuse, conflict, invalid, interruption, collision, and no-follow cases
-- WHEN the source-state integration tests run
-- THEN each case MUST preserve the shared result and Mantle-owned ingest policy.
 
 #### Scenario: A mapped outcome or source fact drifts
 
@@ -130,7 +124,7 @@ Mantle MUST replay all 17 producer corpus rows and run positive and negative Lin
 
 r[mantle.durable_file_publication.evidence]
 
-Mantle MUST emit typed Nickel and deterministic JSON with a BLAKE3 sidecar that binds the source, Cargo and Nix locks, mapping profile, remote-attempt and source-state test observations, rollback boundary, authority boundary, and platform non-claims.
+Mantle MUST emit typed Nickel and deterministic JSON with a BLAKE3 sidecar that binds the source, Cargo and Nix locks, mapping profile, test observations, rollback boundary, authority boundary, and platform non-claims.
 
 #### Scenario: Complete evidence matches implementation
 
@@ -140,6 +134,6 @@ Mantle MUST emit typed Nickel and deterministic JSON with a BLAKE3 sidecar that 
 
 #### Scenario: Evidence omits a boundary
 
-- GIVEN missing source identity, source-state surface, outcome mapping, rollback, authority, platform limit, or test observation
+- GIVEN missing source identity, outcome mapping, rollback, authority, platform limit, or test observation
 - WHEN evidence validation runs
 - THEN the evidence MUST fail closed.

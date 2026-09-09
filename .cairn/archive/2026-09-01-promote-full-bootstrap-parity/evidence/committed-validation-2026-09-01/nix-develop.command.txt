@@ -1,3 +1,0 @@
-nix develop --option builders '' -c cargo test -p mantle --bin mantle bootstrap_parity -- --test-threads=1
-nix develop --option builders '' -c cargo test -p mantle --test bootstrap_parity_cli -- --test-threads=1
-nix develop --option builders '' -c cargo fmt --check -p mantle -v

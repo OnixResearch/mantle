@@ -1,7 +1,0 @@
-Tool: steel with file=dev-report-review-tests.scm
-Outcome: exit code 1 before fixture execution.
-
-error[E08]: Io
-Attempting to load module from: "/nix/store/5fa55ca4462mff909kgjy72ifjg6pbl9-steel-0.8.2/lib/steel/cogs/dev-report-review.scm" No such file or directory (os error 2)
-
-The Pi file runner copied the test text into its temporary script. The relative require did not resolve to the evidence directory. The next invocation required the test module by absolute path. The direct installed Steel CLI also resolves the checked-in relative module correctly.

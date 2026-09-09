@@ -1,7 +1,0 @@
-+ nix develop -c env CARGO_TARGET_DIR=target/cargo-script cargo -Zscript scripts/check-nix-derivation-boundary.rs --self-test
-nix-derivation boundary self-test: PASS
-+ nix develop -c env CARGO_TARGET_DIR=target/cargo-script cargo -Zscript scripts/check-nix-derivation-boundary.rs --root . --package-root /home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/nix-derivation-0.1.0 --upstream-root /tmp/nix-derivation-upstream-2cfc0f90ed83ea3cc983e5c305f89494a6df073e --crate-archive /home/brittonr/.cargo/registry/cache/index.crates.io-1949cf8c6b5b557f/nix-derivation-0.1.0.crate
-nix-derivation boundary: PASS
-+ nix develop -c nickel export config/nix-derivation-admission.ncl
-+ printf 'nix_derivation_source_admission=passed\n'
-nix_derivation_source_admission=passed

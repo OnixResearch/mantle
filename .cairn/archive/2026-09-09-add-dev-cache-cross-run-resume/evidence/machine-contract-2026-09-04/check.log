@@ -1,2 +1,0 @@
-$ cargo -Zscript --offline scripts/check-machine-schema-contracts.rs
-machine schema contract check: PASS (34 contracted, 68 classified)

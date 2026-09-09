@@ -1,6 +1,0 @@
-{
-  "schema": "mantle-source-built-fixed-point-attempt-v1",
-  "status": "failed",
-  "plan_digest_blake3": "690473faf83f50a16bc9015d9c0ab048762c4ec3262230b8199108a58fdd2da0",
-  "blocker": "error: build failed\nstage1 blocked: topology execution status was blocked; classification=topology-level-blocker; topology-level blocker class native-host-unit-graph-blocked; nested /rust_plan/native_git_source_planning/blockers/0 class missing-git-source-manifest: captured git source manifest  is not readable; package=git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=b0fd0103bc9eed2c1b6d852045959462d105d8f1#b0fd0103bc9eed2c1b6d852045959462d105d8f1#bounded-tree-cap@0.1.0; blocker_class=missing-git-source-manifest"
-}

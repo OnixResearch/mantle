@@ -1,3 +1,0 @@
-b8abb366a886bb79314411a3d479a97fe8481173334c238333b9118fe7ab8030  cairn/archive/2026-08-02-prove-live-nixpkgs-foreign-realization/evidence/live-nixpkgs-hello/source-bundle.json
-7542a0e84ee03d5b2c0dd7f3adb5662487aafeec0ab10ca932ccd52045f3f515  src/source_bundle.rs
-b0a6c968c0459b9b52a6f764e862ed070e80e48f4644c88b3385a26c17a3275b  crates/crunch-release-core/src/manifest.rs

@@ -1,2 +1,0 @@
-nix flake check --no-build -L
-nix build -L .#checks.x86_64-linux.source-core .#checks.x86_64-linux.source-core-wasm .#checks.x86_64-linux.source-observation-architecture .#checks.x86_64-linux.durable-file-publication-adoption .#checks.x86_64-linux.fmt .#checks.x86_64-linux.clippy .#checks.x86_64-linux.tigerstyle

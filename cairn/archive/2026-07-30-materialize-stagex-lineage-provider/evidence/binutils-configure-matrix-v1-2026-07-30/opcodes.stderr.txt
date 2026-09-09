@@ -1,2 +1,0 @@
-configure: WARNING: unrecognized options: --enable-deterministic-archives, --enable-64-bit-bfd, --disable-plugins, --with-sysroot, --enable-compressed-debug-sections
-configure: WARNING: unrecognized options: --enable-deterministic-archives, --enable-64-bit-bfd, --disable-plugins, --with-sysroot, --enable-compressed-debug-sections

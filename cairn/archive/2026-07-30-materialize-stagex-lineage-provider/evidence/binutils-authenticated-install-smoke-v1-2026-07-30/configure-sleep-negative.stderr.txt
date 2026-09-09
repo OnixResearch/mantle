@@ -1,1 +1,0 @@
-stagex-configure-sleep: rejected arguments

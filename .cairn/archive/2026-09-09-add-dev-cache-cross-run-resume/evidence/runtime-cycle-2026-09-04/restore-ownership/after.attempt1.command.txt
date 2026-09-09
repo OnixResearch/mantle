@@ -1,1 +1,0 @@
-cargo test -p mantle --bin mantle --offline source_built_fixed_point -- --nocapture

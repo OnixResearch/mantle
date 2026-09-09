@@ -1,2 +1,0 @@
-/home/brittonr/.cargo-target/stagex-protected-transition-v81-binutils-final-20260730/binutils-stage/runtime/install-destdir/mantle/stagex/binutils-probe-output/bin/ld:rejected.o: file format not recognized; treating as linker script
-/home/brittonr/.cargo-target/stagex-protected-transition-v81-binutils-final-20260730/binutils-stage/runtime/install-destdir/mantle/stagex/binutils-probe-output/bin/ld:rejected.o:0: syntax error

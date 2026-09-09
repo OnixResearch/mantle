@@ -1,1 +1,0 @@
-error: source-built profile vendor preflight failed: error: duplicate vendored package in Cargo.lock: artifact-auth-core 0.1.0

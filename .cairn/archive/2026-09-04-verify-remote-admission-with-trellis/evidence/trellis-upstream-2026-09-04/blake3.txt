@@ -1,7 +1,0 @@
-cfca683c757da617a989dc0919d8ee7f662aae658ae9ae8dab64ee324ade63e9  .cairn/changes/verify-remote-admission-with-trellis/evidence/trellis-upstream-2026-09-04/consumer-profile.log
-57d53ec8002f1e044005b37e6248736072f5285cd77ef94576811a9e5d88b83b  .cairn/changes/verify-remote-admission-with-trellis/evidence/trellis-upstream-2026-09-04/focused-cargo-test.log
-14b4b3d41fc4fe07a4e4ddc25eda4432d27a456653abb5155e3150c6d0b8b5c8  .cairn/changes/verify-remote-admission-with-trellis/evidence/trellis-upstream-2026-09-04/focused-verus.log
-02a1d975e4c3383f82321339a709c166b21c3953929f00678c8ce8d43095a4fd  .cairn/changes/verify-remote-admission-with-trellis/evidence/trellis-upstream-2026-09-04/full-verify.log
-68aca16d8edaed535b2fe916b214ba728b523e6b690e5c9ef76d38ef96733ad4  .cairn/changes/verify-remote-admission-with-trellis/evidence/trellis-upstream-2026-09-04/octet-summary.log
-f5119ae40fcfd64e1357333a1aa79197069b7b68db026729241e94d4864c967c  .cairn/changes/verify-remote-admission-with-trellis/evidence/trellis-upstream-2026-09-04/trellis-spec.md
-2193ad5d232573af07ee1d9cf6c9dc331a37d2524fe147377d32e1027755b15f  .cairn/changes/verify-remote-admission-with-trellis/evidence/trellis-upstream-2026-09-04/trellis-verification.md

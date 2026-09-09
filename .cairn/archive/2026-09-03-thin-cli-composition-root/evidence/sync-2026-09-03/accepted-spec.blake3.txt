@@ -1,1 +1,0 @@
-52d28c143e62c4f1f73fc02c1b330dd22d96c8faa4b0f00c791e27e7fd2dfb43  .cairn/specs/application-architecture/spec.md

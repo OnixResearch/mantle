@@ -1,2 +1,0 @@
-collection_scope=terminal-metadata-only
-runtime_acceptance=not-evaluated

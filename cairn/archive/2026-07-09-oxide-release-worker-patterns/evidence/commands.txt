@@ -1,7 +1,0 @@
-# Focused Oxide release/worker evidence profile validation
-nix develop -c rustfmt --check --config skip_children=true crates/crunch-release-core/src/lib.rs crates/crunch-release-core/src/oxide_worker.rs
-nix develop -c cargo test -p crunch-release-core oxide_release_worker --lib
-nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- validate --root .
-nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- gate proposal oxide-release-worker-patterns --root .
-nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- gate design oxide-release-worker-patterns --root .
-nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- gate tasks oxide-release-worker-patterns --root .

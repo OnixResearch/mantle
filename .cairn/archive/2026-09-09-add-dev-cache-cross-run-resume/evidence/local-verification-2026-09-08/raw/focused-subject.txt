@@ -1,9 +1,0 @@
-source_commit=e5cf7fdb3c581635a6e1ab9fec3a021abcc9b959
-rustc 1.96.0-nightly (c75612477 2026-04-07)
-binary: rustc
-commit-hash: c756124775121dea0e640652c5ee3c89e3dd0eb4
-commit-date: 2026-04-07
-host: x86_64-unknown-linux-gnu
-release: 1.96.0-nightly
-LLVM version: 22.1.2
-rustfmt 1.9.0-nightly (c756124775 2026-04-07)

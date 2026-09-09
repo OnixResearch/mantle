@@ -1,4 +1,0 @@
-commit=33d25bed
-binary_blake3=62f104fac95018a3e073954de2a2679baf5466fa3817a2e5f90819e3ab11edfd
-rsync_checksum_parity=exact
-root_anchored_excludes=true

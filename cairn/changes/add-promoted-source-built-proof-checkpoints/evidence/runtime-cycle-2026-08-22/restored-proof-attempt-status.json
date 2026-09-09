@@ -1,6 +1,0 @@
-{
-  "schema": "mantle-source-built-fixed-point-attempt-v1",
-  "status": "failed",
-  "plan_digest_blake3": "590c9a07d9fdc1c2550bb5c8818689b1c3f101c4301b2a378947b353fb49059d",
-  "blocker": "error: build failed\nexternal-wrapper: rustc /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v42-checkpoint-restored-20260822.source-built-fixed-point-staging-4127284/rust-provider/bin/rustc is not a declared source-built toolchain closure member"
-}

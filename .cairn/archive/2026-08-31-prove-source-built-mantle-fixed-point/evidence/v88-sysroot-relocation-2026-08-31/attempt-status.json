@@ -1,6 +1,0 @@
-{
-  "schema": "mantle-source-built-fixed-point-attempt-v1",
-  "status": "failed",
-  "plan_digest_blake3": "a1f39c8000ae5cdcb71a4c0de03672c5aa79ebb6a972835e1688373c655bfe76",
-  "blocker": "error: build failed\nsource-built toolchain closure blocked: rustc compatibility probe failed under receipt-bound toolchain PATH"
-}

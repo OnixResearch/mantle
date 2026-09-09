@@ -1,6 +1,0 @@
-{
-  "schema": "mantle-source-built-fixed-point-attempt-v1",
-  "status": "failed",
-  "plan_digest_blake3": "cd2850d161590a37daf2b239f65ae3be9b4de817bb758b006008c01b6b45a0cd",
-  "blocker": "error: build failed\nsource-built fixed-point blocked: constructing full-source Rust provider: build: Rust provider action authority blocked: Rust provider aggregate exec event count 391207 exceeds 262144"
-}

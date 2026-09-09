@@ -1,8 +1,0 @@
-(99.7% 1r,0w,0b,392c/393t): cargo v0.91.0 [bin cargo]
-/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/q366f9q6n1silgmv8w0c2ypxxw4p4yw3-full-source-seed-toolchain/bin/ld: libcrypto.a(libcommon-lib-ciphercommon_gcm.o): in function `ossl_gcm_get_ctx_params':
-ciphercommon_gcm.c:(.text.ossl_gcm_get_ctx_params+0x21): undefined reference to `ossl_param_find_pidx'
-/home/brittonr/.cache/mantle-full-source-20260718/gcc40-store/q366f9q6n1silgmv8w0c2ypxxw4p4yw3-full-source-seed-toolchain/bin/ld: libcrypto.a(libcommon-lib-ciphercommon_gcm.o): in function `ossl_gcm_set_ctx_params':
-ciphercommon_gcm.c:(.text.ossl_gcm_set_ctx_params+0x31): undefined reference to `ossl_param_find_pidx'
-collect2: error: ld returned 1 exit status
-C Compiler failed to execute - error code 256
-Process exited with non-zero exit status 1

@@ -1,3 +1,0 @@
-755 /home/brittonr/.cargo-target/stagex-protected-transition-v64-grep-final-20260728/grep-stage/runtime/output/bin/grep
-644 /home/brittonr/.cargo-target/stagex-protected-transition-v64-grep-final-20260728/grep-stage/runtime/output/share/grep-2.4/bootstrap-bridge.sh
-644 /home/brittonr/.cargo-target/stagex-protected-transition-v64-grep-final-20260728/grep-stage/runtime/grep-2.4/stagex-grep-bridge-runner.o

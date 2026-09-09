@@ -1,1 +1,0 @@
-binutils-tcc-wrapper: configure preprocess rejected: non-conftest-source

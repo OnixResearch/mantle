@@ -1,5 +1,0 @@
-warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/src/main.rs` found to be present in multiple build targets:
-  * `bin` target `crunch`
-  * `bin` target `mantle`
-    Checking crunch-radiance-reference-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-radiance-bootstrap-reference/crates/crunch-radiance-reference-core)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.28s

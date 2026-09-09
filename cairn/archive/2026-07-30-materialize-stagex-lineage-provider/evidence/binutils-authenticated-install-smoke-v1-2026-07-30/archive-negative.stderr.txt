@@ -1,1 +1,0 @@
-/home/brittonr/.cargo-target/stagex-binutils-install-smoke-probe11-triplet-final-20260730/install-destdir/mantle/stagex/binutils-probe-output/bin/ar: rejected.a: File format not recognized

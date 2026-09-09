@@ -1,8 +1,0 @@
-validated_at=2026-08-21T21:55:21-04:00
-profile_blake3=3cffb96f2d7a51a13b2c2d1e4131771edee340d72213c949ebd761defd0a84a1
-refresh_verify_parity=exact
-readiness=Ready
-initial_refresh_task=270
-initial_refresh_task_result=operator-postcondition-field-name-mismatch
-profile_generation_result=success
-profile_verification_result=success

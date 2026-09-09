@@ -1,5 +1,0 @@
-/nix/store/zddawm6d27cgvic58y2jipgnqfh395n0-cairn-0.1.0/bin/cairn
-tracey
-coverage
---root
-.

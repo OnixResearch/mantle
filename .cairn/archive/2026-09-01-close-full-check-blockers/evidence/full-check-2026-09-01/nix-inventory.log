@@ -1,8 +1,0 @@
-copying path '/nix/store/hhccdmpa2bhqbagn2zgmgrwjbcdinn55-source' from 'http://100.100.103.95:5000'...
-warning: file 'nar/1pzq6dhayzd6kgyhjwqr1bwq468z36vp0al101havv6d0pw1fa40.nar?hash=hhccdmpa2bhqbagn2zgmgrwjbcdinn55' does not exist in binary cache 'http://100.100.103.95:5000'
-this derivation will be built:
-  /nix/store/pim32n1mbbvw4iy5y98j4jx8w3zyi6l0-bootstrap-blocker-inventory.drv
-building '/nix/store/pim32n1mbbvw4iy5y98j4jx8w3zyi6l0-bootstrap-blocker-inventory.drv'...
-bootstrap-blocker-inventory> gcc40 configure preprocess bridge: PASS (classes=3, source_spellings=2, source_bytes_max=65536, invocation_count_max=4096)
-bootstrap-blocker-inventory> bootstrap blocker inventory: 0 findings across 0 classes, 472 evidence-backed suppressions, 0 promotion claims, enforce=true
-/nix/store/4mi08wj62zp09610bsh1kgx5c0kg5v8m-bootstrap-blocker-inventory

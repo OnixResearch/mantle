@@ -1,3 +1,0 @@
-a9853abd851b70d41c08de68353fde075864c8e1b641cc239288e85b66ee847e  /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v31-final-receipt-20260821.source-built-fixed-point-staging-3433806/stagex-transition-execution/protected-exec-audit.json
-5540d65291c56b335a83e3ad3d767603a7851322adb56621b40e92b5c4f221e6  /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v31-final-receipt-20260821.source-built-fixed-point-staging-3433806/stagex-transition-execution/binutils-stage/runtime/binutils-inventory.json
-934f94365b06be1c0730f878ec026710a9fa2e7244eefcc4024f227b15b35cc8  /home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v31-final-receipt-20260821.source-built-fixed-point-staging-3433806/attempt-status.json

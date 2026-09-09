@@ -1,6 +1,0 @@
-status=0
-total 0
--rw-r--r-- 1 brittonr brittonr     0 Jul 30 01:15 direct.stderr.txt
--rw-r--r-- 1 brittonr brittonr     0 Jul 30 01:15 direct.stdout.txt
--rw-r--r-- 1 brittonr brittonr 50168 Jul 30 01:15 y.tab.c
--rw-r--r-- 1 brittonr brittonr  2949 Jul 30 01:15 y.tab.h

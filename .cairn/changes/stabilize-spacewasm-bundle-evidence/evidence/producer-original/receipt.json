@@ -1,0 +1,6 @@
+{
+  "command": "cargo test --locked --offline --no-default-features --lib",
+  "status": "passed",
+  "stderr_blake3": "24c7bf4451d094dabbe91d3a14c1b719233fef83627780b3c1f130a34eb37c1b",
+  "stdout_blake3": "3a80a1c8b8a31e107ad724cfa00adf367ddf0773c6f98da8345b7f97983e8717"
+}

@@ -1,1 +1,0 @@
-nix develop -c cargo check -p crunch-remote-core --target wasm32-unknown-unknown

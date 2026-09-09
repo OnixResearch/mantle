@@ -1,5 +1,0 @@
-dabb7fae2b1f9de161ffa08b6237af460f82485c89bde039586c81efc1ab0e4b  .cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v98-ptrace-request-abi-2026-08-31/deterministic-build-proof.json
-2fbd10e2374f8d2342962f0e3f447de20b8368b081dc3436e11ef0dc87fa25ce  .cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v98-ptrace-request-abi-2026-08-31/root-action-trust-plan.json
-e134a481118373526cf3dfdbd97fc00d3b6c2d7a8e3fef6073a50e341545f10f  .cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v98-ptrace-request-abi-2026-08-31/root-action-trust-reconciliation.json
-d48728409158ee368923e3bd59934518cfb90a018482b177f34b73d7bf36bfcc  .cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v98-ptrace-request-abi-2026-08-31/v98-bootstrap-trust-report.json
-d99b6df0c87dab86538b1dbf5237386013c349288a1eca870f67374867b9f255  .cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v98-ptrace-request-abi-2026-08-31/summary.md

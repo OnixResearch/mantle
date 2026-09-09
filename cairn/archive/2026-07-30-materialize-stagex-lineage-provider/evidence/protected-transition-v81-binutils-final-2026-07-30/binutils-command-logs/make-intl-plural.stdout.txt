@@ -1,4 +1,0 @@
-make: Entering directory `/home/brittonr/.cargo-target/stagex-protected-transition-v81-binutils-final-20260730/binutils-stage/runtime/source/intl'
-bison -y -d --name-prefix=__gettext --output plural.c plural.y
-rm -f plural.h
-make: Leaving directory `/home/brittonr/.cargo-target/stagex-protected-transition-v81-binutils-final-20260730/binutils-stage/runtime/source/intl'

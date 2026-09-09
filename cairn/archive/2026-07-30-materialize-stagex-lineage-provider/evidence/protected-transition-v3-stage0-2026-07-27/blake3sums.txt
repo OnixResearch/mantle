@@ -1,6 +1,0 @@
-af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v3-stage0-2026-07-27/blake3sums.txt
-79fd7d8f8a258375fe8cfc59532b071ccded5cdff620a387a01e89c7d58f1850  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v3-stage0-2026-07-27/stage0-mini/mescc-tools-mini-absolute.kaem
-87153a0f4a65049bc0c94ad33e093064ebb965a02707c29714d9fcf1e1678c27  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v3-stage0-2026-07-27/stage0-mini/stage0-mini-inventory.json
-10733f31293e2b4edf2a48296dde7ec174b8273d86fc80294d38523554fa7132  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v3-stage0-2026-07-27/stage0-mini/stage0-mini.stderr.txt.gz
-9461aa4ca27eb8c835bafd401a4d54ae98dec52ca1120c250873a4d701dd8b31  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v3-stage0-2026-07-27/summary.md
-ac0e9b48950f2f962d950c0e2f5dd9ba93d099f8b7178b0a5189e69c047c0eda  cairn/changes/materialize-stagex-lineage-provider/evidence/protected-transition-v3-stage0-2026-07-27/transition-plan.json

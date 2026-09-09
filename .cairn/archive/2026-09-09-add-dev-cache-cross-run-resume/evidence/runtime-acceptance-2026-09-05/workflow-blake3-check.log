@@ -1,9 +1,0 @@
-dev-report-review.scm: OK
-dev-report-review-tests.scm: OK
-review-dev-report-stdin.scm: OK
-runtime-cohort.ncl: OK
-runtime-cohort.json: OK
-collect-cold-terminal.command.txt: OK
-cached-run.command.txt: OK
-continue-after-cold.command.txt: OK
-report-review-cold.input.json: OK

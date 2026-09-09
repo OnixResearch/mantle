@@ -1,7 +1,0 @@
-started_at=2026-08-21T18:17:17-04:00
-source_commit=1c2e1e57
-orchestrator_blake3=f0cae9784bca97267bd38e40559b3b88f75d97fc3abca5385e5242e8a5bd48ca
-reused_v30_rust_provider=/home/brittonr/mantle-runs/receipt-fix-v30/.source-built-fixed-point-v30-binutils-middle-closure-20260821.source-built-fixed-point-staging-3659374/rust-provider
-output=/home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point-feature-fix
-finished_at=2026-08-21T18:51:06-04:00
-exit_code=1

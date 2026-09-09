@@ -1,1 +1,0 @@
-nix build .#checks.x86_64-linux.tigerstyle .#checks.x86_64-linux.dev-resume-integration .#checks.x86_64-linux.dev-resume-architecture --no-link -L --option min-free 0 --option max-free 0

@@ -1,8 +1,0 @@
-{
-  "current_plan_digest_blake3": "cd2850d161590a37daf2b239f65ae3be9b4de817bb758b006008c01b6b45a0cd",
-  "imported_attempt": "/home/brittonr/mantle-runs/receipt-fix-v31/source-built-native-prefix-v61-repaired-20260828",
-  "imported_plan_digest_blake3": "6af6bce72c1531b55e5a20ca5a8a5f7b9ebe3ccab68d90cecd92a0f80f9a7d93",
-  "non_claim": "native-prefix reuse validates StageX, native, host-tool, and action evidence; it does not claim Rust-provider completion",
-  "schema": "mantle-source-built-native-prefix-reuse-v1",
-  "status": "complete"
-}

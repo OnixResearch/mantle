@@ -1,2 +1,0 @@
-:-8408: error: identifier expected
-:-8408: error: identifier expected

@@ -1,5 +1,0 @@
-$ git diff --check
-.cairn/changes/verify-remote-admission-with-trellis/evidence/validation-2026-09-04/nix-matrix.log:484: trailing whitespace.
-+mantle-test>
-.cairn/changes/verify-remote-admission-with-trellis/evidence/validation-2026-09-04/nix-matrix.log:498: trailing whitespace.
-+mantle-test>

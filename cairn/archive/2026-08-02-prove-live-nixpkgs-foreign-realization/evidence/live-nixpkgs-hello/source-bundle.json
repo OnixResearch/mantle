@@ -1,9 +1,0 @@
-{
-  "format": "mantle-source-bundle-v1",
-  "version": 1,
-  "store_prefix": "/nix/store",
-  "roots": [],
-  "records": [],
-  "manifest_blake3": "8ed1103b5de3054ee13ea391af805e276e3cc3b6ceaa50b2149193adb1ff1777",
-  "non_claim": "source bundle evidence proves declared source/input availability and identity only"
-}

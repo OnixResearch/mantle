@@ -1,4 +1,0 @@
-commit=6cd690ca5ee31eb0bccef31799d593044bb640f5
-binary=/tmp/mantle-dev-resume-runtime/mantle-6cd690ca-release
-binary_blake3=116bd661a1c6b98a8318c0888728b315e48cdc6395f73946d17c72a711818a6e
-binary_size_bytes=123425064

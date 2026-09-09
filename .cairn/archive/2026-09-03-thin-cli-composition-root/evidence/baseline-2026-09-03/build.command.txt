@@ -1,1 +1,0 @@
-nix develop -c cargo build -p mantle --bin mantle

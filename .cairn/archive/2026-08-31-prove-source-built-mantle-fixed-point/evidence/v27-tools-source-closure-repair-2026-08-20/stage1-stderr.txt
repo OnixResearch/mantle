@@ -1,1 +1,0 @@
-{"error":"Cargo-free native target planning failed: target `generate-operator-command-contract` source /home/brittonr/mantle-runs/receipt-fix-v27/.source-built-fixed-point-v27-receipt-finalization-20260820.source-built-fixed-point-staging-3264569/inputs/mantle-source/tools/generate_operator_command_contract.rs is not readable","code":3,"kind":"internal"}

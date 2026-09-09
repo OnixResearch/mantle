@@ -1,2 +1,0 @@
-bootstrap blocker inventory: 71 findings across 3 classes, 401 evidence-backed suppressions, 0 promotion claims, enforce=true
-FAIL: bootstrap blocker inventory is not clean; expected 0 findings and 0 promotion claims

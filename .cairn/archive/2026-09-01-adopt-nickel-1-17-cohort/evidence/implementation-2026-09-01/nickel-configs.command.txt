@@ -1,1 +1,0 @@
-nix run .#check-nickel-configs

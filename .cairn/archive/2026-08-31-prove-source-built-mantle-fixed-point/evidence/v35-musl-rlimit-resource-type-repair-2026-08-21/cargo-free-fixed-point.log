@@ -1,6 +1,0 @@
-Cargo-free fixed-point: blocked
-bundle: /home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point-syscall-fix
-hermeticity_mode: strict
-strict_proof_admission: true
-error: build failed
-stage1 blocked: topology execution status was blocked; classification=blocked-unit; blocked unit classified with blocker class rustc-failed; unit=native:965f11195b72426e31e7b405bb0f621b0e00ad84f5b644ebf7aa4999769a0cab:path+native#mantle@0.1.0:mantle:bin:build; package=path+native#mantle@0.1.0; role=target; triple=x86_64-unknown-linux-musl; target_kind=bin; predecessor_status=success; blocker_class=rustc-failed

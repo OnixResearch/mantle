@@ -1,1 +1,0 @@
-{"error":"foreign realization receipt digest mismatch","code":3,"kind":"internal"}

@@ -1,5 +1,0 @@
-2026-08-29T00:00:20-04:00
-mode=555 uid=1555 gid=100 size=20081040 path=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v61-runtime-shim-prefix-cold-20260825.source-built-fixed-point-staging-3637585/native-store/b6nwg3slq2ka850yz7h9r8qd7s8dn31q-cmake-3.31.8-full-source-gcc10-v1/bin/cmake
-mode=555 uid=1555 gid=100 size=2073752 path=/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v81-native-prefix-isolated-checksum-20260828.source-built-fixed-point-staging-874303/imported-native-prefix/native-store/kcvijyh0sibqcc4g9sqk694xyslzhpsx-full-source-seed-toolchain/bin/as
-cmake version 3.31.8
-GNU assembler (GNU Binutils) 2.41

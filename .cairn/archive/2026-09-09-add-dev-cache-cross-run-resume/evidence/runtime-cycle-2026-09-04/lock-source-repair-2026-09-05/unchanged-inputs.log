@@ -1,2 +1,0 @@
-command=git diff --exit-code 5833ede3^ HEAD -- Cargo.toml Cargo.lock flake.lock .cargo/vendor-config.toml
-production_manifest_lock_and_vendor_config_unchanged=true

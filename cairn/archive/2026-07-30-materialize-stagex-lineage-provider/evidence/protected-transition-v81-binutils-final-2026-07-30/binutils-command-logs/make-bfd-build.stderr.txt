@@ -1,9 +1,0 @@
-make: the `-l' option requires a positive integral argument
-/home/brittonr/.cargo-target/stagex-protected-transition-v81-binutils-final-20260730/bash-full-stage/runtime/output/bin/bash-full: line 1: date: command not found
-make: the `-l' option requires a positive integral argument
-make: the `-l' option requires a positive integral argument
-make: the `-l' option requires a positive integral argument
-make: the `-l' option requires a positive integral argument
-make: the `-l' option requires a positive integral argument
-make: the `-l' option requires a positive integral argument
-make: the `-l' option requires a positive integral argument

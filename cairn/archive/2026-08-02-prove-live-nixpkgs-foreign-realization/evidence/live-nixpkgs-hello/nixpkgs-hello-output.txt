@@ -1,1 +1,0 @@
-/nix/store/nm7p8wxflggcwxfzayhysq4z6a1wg373-hello-2.12.3

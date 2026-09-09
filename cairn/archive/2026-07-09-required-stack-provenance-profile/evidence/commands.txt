@@ -1,6 +1,0 @@
-# Focused stack-provenance release-profile validation
-nix develop -c rustfmt --check --config skip_children=true crates/crunch-release-core/src/lib.rs crates/crunch-release-core/src/manifest.rs src/main.rs src/release_cmd.rs
-nix develop -c cargo test -p crunch-release-core release_profile --lib
-nix develop -c cargo test -p crunch-release-core stack_provenance --lib
-nix develop -c cargo test -p mantle --bin mantle release_verify_accepts_onix_stack_release_profile
-nix develop -c cargo test -p mantle --bin mantle stack_provenance

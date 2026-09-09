@@ -1,7 +1,0 @@
-positive published accepted exact root
-positive failed-staging accepted exact root
-negative running rejected with no root
-negative missing-root rejected with no root
-negative ambiguous rejected with no root
-negative symlink-root rejected with no root
-selector fixtures passed

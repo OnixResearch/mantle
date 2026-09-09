@@ -1,1 +1,0 @@
-cargo test -p mantle --bin mantle bootstrap_parity -- --test-threads=1

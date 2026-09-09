@@ -1,1 +1,0 @@
-nix develop -c cargo check -p mantle --all-targets

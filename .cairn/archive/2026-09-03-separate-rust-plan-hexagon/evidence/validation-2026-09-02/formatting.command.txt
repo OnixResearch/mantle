@@ -1,2 +1,0 @@
-nix develop -c cargo fmt --check -p mantle-rust-plan-core -p mantle-rust-plan -p mantle
-git diff --check

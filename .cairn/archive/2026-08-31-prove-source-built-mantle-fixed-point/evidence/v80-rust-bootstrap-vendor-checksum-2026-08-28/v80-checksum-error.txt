@@ -1,9 +1,0 @@
-7780-    rustc installed.
-7781-
-7782-Building stage2 cargo (stage1 -> stage2, x86_64-unknown-linux-musl)
-7783:error: the listed checksum of `/home/brittonr/mantle-runs/receipt-fix-v31/.source-built-fixed-point-v80-native-prefix-isolated-20260828.source-built-fixed-point-staging-738158/rust-provider-scratch/rustc-stage1-sources/rust-1.91.1/vendor/openssl-src-300.5.2+3.5.2/src/lib.rs` has changed:
-7784-expected: d29d6f116de18db723e93d74b4387eb0a672c574c8435526c71acbf00ca368ec
-7785-actual:   ba030b6661a9c6db0943955346c77f42cc76452826dabc6b75a256f6b4810404
-7786-
-7787-directory sources are not intended to be edited, if modifications are required then it is recommended that `[patch]` is used with a forked copy of the source
-7788-Build completed unsuccessfully in 1:28:46

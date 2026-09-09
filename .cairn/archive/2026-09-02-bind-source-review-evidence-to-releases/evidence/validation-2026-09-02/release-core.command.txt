@@ -1,1 +1,0 @@
-nix develop -c cargo test -p crunch-release-core

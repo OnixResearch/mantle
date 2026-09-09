@@ -1,7 +1,0 @@
-started_at=2026-09-08T17:16:57-04:00
-wrapper_pid=67855
-source_commit=a7841aea055bf643cc473164b98a2442014f080b
-mode=promoted-cold
-output=/home/brittonr/mantle-runs/dev-resume-20260904/promoted-cold-a7841aea
-finished_at=2026-09-09T10:30:56-04:00
-exit_code=0

@@ -1,1 +1,0 @@
-stagex-configure-file: rejected symlink

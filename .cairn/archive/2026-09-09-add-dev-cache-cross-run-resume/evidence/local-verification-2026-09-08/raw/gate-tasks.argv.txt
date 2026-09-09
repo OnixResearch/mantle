@@ -1,6 +1,0 @@
-/nix/store/zddawm6d27cgvic58y2jipgnqfh395n0-cairn-0.1.0/bin/cairn
-gate
-tasks
-add-dev-cache-cross-run-resume
---root
-.

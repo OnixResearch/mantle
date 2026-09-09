@@ -1,6 +1,0 @@
-{
-  "schema": "mantle-source-built-fixed-point-attempt-v1",
-  "status": "failed",
-  "plan_digest_blake3": "06fe629ffb13bebcb918a19ec200bb019d750518398699b37e3cd8187489abb6",
-  "blocker": "error: build failed\nstage1 blocked: topology execution status was blocked; classification=blocked-unit; blocked unit classified with blocker class rustc-failed; unit=native:23519c95622cc3b6f710c2cfcc65f674a3fdb2fb4c2b2c8bf2677c9ee61569da:path+native#mantle@0.1.0:mantle:bin:build; package=path+native#mantle@0.1.0; role=target; triple=x86_64-unknown-linux-musl; target_kind=bin; predecessor_status=success; blocker_class=rustc-failed"
-}

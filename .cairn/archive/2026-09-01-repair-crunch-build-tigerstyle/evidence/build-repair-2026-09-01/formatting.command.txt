@@ -1,1 +1,0 @@
-nix develop -c cargo fmt --check -p crunch-build -p crunch-rustc-wrapper -p mantle

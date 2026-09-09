@@ -1,5 +1,0 @@
-configure: WARNING: unrecognized options: --enable-deterministic-archives, --enable-64-bit-bfd, --disable-shared, --disable-plugins, --disable-werror, --with-sysroot, --enable-compressed-debug-sections
-gawk: ./conf2305037-23779/subs.awk:3: S["LTLIBOBJS"]=
-gawk: ./conf2305037-23779/subs.awk:3:                ^ unexpected newline
-Broken pipe
-config.status: error: could not create Makefile

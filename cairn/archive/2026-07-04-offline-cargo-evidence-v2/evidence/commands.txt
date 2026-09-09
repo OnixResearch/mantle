@@ -1,6 +1,0 @@
-# Focused implementation checks for offline-cargo-evidence-v2.
-nix develop -c cargo fmt --check -p mantle
-nix develop -c cargo test -p mantle --bin mantle offline_cargo::tests::
-nix develop -c cargo test -p mantle --bin mantle build_report::tests::
-nix develop -c cargo test -p mantle --test offline_cargo_project
-grep -n "digest-bound" README.md docs/operator-workflows.md

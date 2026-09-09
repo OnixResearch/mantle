@@ -1,1 +1,0 @@
-cargo test -p mantle --bin mantle operator_contract:: -- --test-threads=1

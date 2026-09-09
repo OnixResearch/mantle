@@ -1,7 +1,0 @@
-# Oracle checkpoint: Cargo-free fixed-point planning core
-
-- Question: Does the completed planning-core task have reviewable evidence that a pure fixed-point planner exists for stage paths, guard paths, execution roots, evidence paths, and command descriptors?
-- Inspected evidence: `src/cargo_free_self_build.rs` symbols `FixedPointPlan`, `FixedPointStagePlan`, `FixedPointStageCommandPlan`, `FixedPointMantleBinary`, `plan_fixed_point_paths`, `fixed_point_stage_plan`, and `rust_plan_args`; focused tests `fixed_point_plan_describes_stage_paths_and_commands`, `fixed_point_plan_rejects_bundle_inside_source_root`, and `fixed_point_plan_rejects_relative_source_root`; task evidence in `cairn/changes/cargo-free-fixed-point-command/tasks.md`.
-- Decision: The first-slice planning core is present and pure. It computes bundle-level evidence paths, shared execution root, two stage directories, per-stage Cargo guard paths, binary/smoke/status/receipt paths, and rust-plan command descriptors as data. It does not execute processes or perform filesystem mutation; those remain for later unchecked implementation tasks.
-- Owner: Mantle maintainer/reviewer for `cargo-free-fixed-point-command`.
-- Next action: Keep execution/toolchain/test/proof tasks unchecked until the command shell consumes this planner to run stage1/stage2, materialize binaries, compare BLAKE3 digests, and write final proof evidence.

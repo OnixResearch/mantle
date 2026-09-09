@@ -1,7 +1,0 @@
-# Focused vendor source manifest validation
-nix develop -c rustfmt --check --config skip_children=true src/main.rs src/vendor_source_manifest.rs
-nix develop -c cargo test -p mantle --bin mantle vendor_source_manifest
-nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- validate --root .
-nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- gate proposal vendor-source-manifests --root .
-nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- gate design vendor-source-manifests --root .
-nix run path:${ONIX_RESEARCH_ROOT:-$HOME/git/OnixResearch}/cairn#cairn -- gate tasks vendor-source-manifests --root .

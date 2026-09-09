@@ -1,2 +1,0 @@
-$ cargo -Zscript --offline scripts/check-machine-schema-contracts.rs --generate
-machine schema contract generation: PASS (34 contracted, 68 classified)

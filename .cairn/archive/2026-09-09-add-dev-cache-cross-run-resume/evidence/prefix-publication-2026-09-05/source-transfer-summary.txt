@@ -1,6 +1,0 @@
-commit=8e941df20b7d888929692ad5330b76ffcdb7cfa9
-binary_blake3=db1ee54cfaa4be553525434f7e8d601e18d644a3c30a9d2cb92fec5d4cb1e2f2
-binary_roundtrip_parity=exact
-rsync_checksum_parity=exact
-vendor_input_parity=exact
-vendor_copy=private-byte-copy-from-unchanged-97f47ae2-source

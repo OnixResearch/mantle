@@ -1,9 +1,0 @@
-cargo
-test
---locked
---offline
--p
-mantle
---bin
-mantle
-source_built_fixed_point

@@ -1,1 +1,0 @@
-nix develop -c cargo test -p mantle --test evaluator_budget_cli --test examples_eval

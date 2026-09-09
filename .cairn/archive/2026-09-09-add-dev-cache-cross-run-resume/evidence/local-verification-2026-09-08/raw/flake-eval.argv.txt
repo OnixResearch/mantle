@@ -1,5 +1,0 @@
-nix
-flake
-check
---no-build
---no-eval-cache

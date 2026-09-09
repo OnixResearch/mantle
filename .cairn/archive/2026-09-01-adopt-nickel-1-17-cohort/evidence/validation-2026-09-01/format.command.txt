@@ -1,1 +1,0 @@
-nix develop -c cargo fmt --check -p crunch-eval -p mantle

@@ -1,1 +1,0 @@
-/nix/store/nad8x3j7m2nz1x19678i2arv2g1g4k99-hello-2.12.2.drv

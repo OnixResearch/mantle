@@ -1,9 +1,0 @@
-$ cargo test -p mantle --bin mantle remote_attempt --offline
-warning: Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-verify-remote-admission-with-trellis/src/main.rs` found to be present in multiple build targets:
-  * `bin` target `crunch`
-  * `bin` target `mantle`
-warning: `mantle` (manifest) generated 1 warning
-error: failed to create directory `/tmp/mantle-trellis-admission-target/debug/.fingerprint/mantle-56e008977d3c9314`
-
-Caused by:
-  Disk quota exceeded (os error 122)

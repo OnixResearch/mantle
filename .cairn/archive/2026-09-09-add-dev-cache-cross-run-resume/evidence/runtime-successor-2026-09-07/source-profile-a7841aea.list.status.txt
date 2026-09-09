@@ -1,5 +1,0 @@
-started_at=2026-09-07T07:36:38-04:00
-profile=/home/brittonr/mantle-runs/dev-resume-20260904/authority/source-built-fixed-point-sources-a7841aea.json
-expected_manifest_blake3=d507f1dd17104c43789b9a29df6656249027904ab3f161c3fee96870e4d10461
-finished_at=2026-09-07T07:39:25-04:00
-exit_code=0

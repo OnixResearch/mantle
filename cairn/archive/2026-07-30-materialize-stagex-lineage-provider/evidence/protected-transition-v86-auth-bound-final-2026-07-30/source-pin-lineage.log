@@ -1,4 +1,0 @@
-warning: `package.edition` is unspecified, defaulting to the latest edition (currently `2024`)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
-     Running `/home/brittonr/.cargo-target/debug/check-bootstrap-source-pins bootstrap/stagex-transition-lineage.ncl`
-source-pin audit: 1 files, 0 fetch blocks, 0 issues

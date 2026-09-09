@@ -1,2 +1,0 @@
-machine schema contract check failed: remote.trellis-admission-evidence schema rejected:
-  - remote.trellis-admission-evidence [schema] #/$defs/revision/pattern: unsupported schema construct pattern

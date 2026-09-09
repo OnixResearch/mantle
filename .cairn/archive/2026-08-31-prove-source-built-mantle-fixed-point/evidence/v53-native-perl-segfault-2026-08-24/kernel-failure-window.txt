@@ -1,3 +1,0 @@
-Aug 24 11:18:19 leviathan kernel: show_signal_msg: 1 callbacks suppressed
-Aug 24 11:18:19 leviathan kernel: perl[3362831]: segfault at 0 ip 000000000042435c sp 00007ffed65e7e70 error 4 in perl[2435c,400000+101000] likely on CPU 191 (core 63, socket 0)
-Aug 24 11:18:19 leviathan kernel: Code: 2e 00 eb bb 66 2e 0f 1f 84 00 00 00 00 00 41 55 41 54 55 48 89 fd 53 48 83 ec 08 48 63 05 2c ce 2d 00 48 8b 04 c5 60 70 70 00 <8b> 10 85 d2 0f 84 9a 00 00 00 83 fa 3b 0f 84 7e 00 00 00 4c 8b 05

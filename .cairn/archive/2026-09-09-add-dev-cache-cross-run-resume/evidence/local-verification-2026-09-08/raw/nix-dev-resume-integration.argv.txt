@@ -1,9 +1,0 @@
-nix
-build
---no-link
--L
---max-jobs
-2
---cores
-4
-.#checks.x86_64-linux.dev-resume-integration

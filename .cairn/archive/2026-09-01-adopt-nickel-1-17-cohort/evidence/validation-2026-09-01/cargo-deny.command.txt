@@ -1,1 +1,0 @@
-nix develop -c cargo deny check

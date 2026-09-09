@@ -1,1 +1,0 @@
-nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design extract-build-planning-core --root .

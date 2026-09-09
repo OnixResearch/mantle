@@ -1,1 +1,0 @@
-Cairn emitted .cairn/archive/1970-01-01-extract-build-planning-core. The operator renamed it to .cairn/archive/2026-09-03-extract-build-planning-core before post-archive validation.

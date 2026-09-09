@@ -1,7 +1,0 @@
-verdict=self-rebuild-match
-receipt_blake3=698e0eea069c7ba2fbe7531d3dea214a841d63e33d85a508545fad21cf71193e
-stage_binary_blake3=2403feed4dba0959d1dbb1a202777827e82361492f19a7fc8c642f3b138f599c
-stages=6 restored=4 executed=2
-strict_admission=true closure_members=17 seed_exceptions=0
-authority_violations=0 fallback_events=0 substitutions=0
-negative_wrong_digest=rejected

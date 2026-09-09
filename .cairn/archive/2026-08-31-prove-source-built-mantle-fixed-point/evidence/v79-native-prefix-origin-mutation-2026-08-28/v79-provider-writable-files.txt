@@ -1,6 +1,0 @@
-644 1016 x86_64-linux-musl/lib/crti.o
-644 1584 x86_64-linux-musl/lib/crt1.o
-644 1632 x86_64-linux-musl/lib/Scrt1.o
-644 2416 x86_64-linux-musl/lib/rcrt1.o
-644 2825672 x86_64-linux-musl/lib/libc.a
-644 960 x86_64-linux-musl/lib/crtn.o

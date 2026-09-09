@@ -1,2 +1,0 @@
-$ cairn validate
-error: failed to parse policy cairn-policy/generated/cairn-policy.json: policy has invalid field task_marker_policy.markers

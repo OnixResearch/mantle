@@ -1,5 +1,0 @@
-error[E11]: Generic
-  ┌─ /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/drain-dev-cache-cross-run-resume/.cairn/changes/add-dev-cache-cross-run-resume/evidence/runtime-acceptance-2026-09-05/review-dev-report-stdin.scm:7:37
-  │
-7 │ (define outcome (review-dev-report (string->jsexpr input-text)))
-  │                                     ^^^^^^^^^^^^^^ string->jsexpr failed: expected ident at line 1 column 2

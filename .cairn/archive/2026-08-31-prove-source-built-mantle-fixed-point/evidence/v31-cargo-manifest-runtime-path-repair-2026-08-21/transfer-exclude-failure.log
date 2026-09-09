@@ -1,6 +1,0 @@
-Cargo-free fixed-point: blocked
-bundle: /home/brittonr/mantle-runs/receipt-fix-v31/diagnostic/cargo-free-fixed-point
-hermeticity_mode: strict
-strict_proof_admission: true
-error: build failed
-stage1 blocked: topology execution status was blocked; classification=topology-level-blocker; topology-level blocker class native-host-unit-graph-blocked; nested /rust_plan/native_registry_source_planning/blockers/0 class missing-vendor-file-material: vendor checksum manifest names a file that is not present; package=registry+https://github.com/rust-lang/crates.io-index#cc@1.2.59; blocker_class=missing-vendor-file-material

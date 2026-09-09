@@ -1,0 +1,18 @@
+# Tasks: Separate the remote-build hexagon
+
+## Phase 1: Core and contracts
+
+- [ ] [depends:complete-store-capability-migration] I1 Create the strict `no_std + alloc` remote core and application contract crates. Define bounded commands, admitted values, states, events, blockers, effects, observations, outcomes, and receipt preimages. r[remote_builds.hexagonal_core] r[remote_builds.application_owned_ports]
+- [ ] I2 Move protocol admission, normalized identities, fencing, retry, resource, transfer, output-admission inputs, transition, and receipt logic from `src/remote_build.rs` and `crunch-build::distributed` into the core without changing behavior. r[remote_builds.hexagonal_core]
+- [ ] I3 Add application-owned ports for transport, attempt persistence, executor, store admission, credential verification, clock observation, random identifiers, and telemetry. Split stdio, SSH, local, external-batch, store, and telemetry adapters. r[remote_builds.application_owned_ports] r[remote_builds.remote_effect_plans]
+- [ ] I4 Replace Snix `PathInfo`, build request, build result, substitution report, provider SDK, transport, and CLI error values in application contracts with Mantle-owned facts and adapter projections. r[remote_builds.application_owned_ports]
+- [ ] I5 Implement the transition loop that executes typed effects through ports, returns typed observations to the core, and preserves effect, authority, limit, and attempt identities. r[remote_builds.remote_effect_plans]
+- [ ] I6 Keep active gateway, resource-policy, nominal-type, and Trellis requirements attached to their existing owners. Update their adapters and trace links without redefining behavior. r[remote_builds.hexagonal_compatibility]
+
+## Phase 2: Compatibility and verification
+
+- [ ] V1 Add positive transition, transport, execution, transfer, output-admission, and replay tests. Add negative malformed request, stale fence, untrusted output, exceeded limit, wrong effect identity, adapter failure, and unknown observation tests. r[remote_builds.hexagonal_core] r[remote_builds.remote_effect_plans]
+- [ ] V2 Add wire and receipt golden fixtures plus dual-path compatibility tests for accepted and rejected remote sessions. Prove stable bytes, identities, states, events, effects, outcomes, and diagnostics. r[remote_builds.hexagonal_compatibility]
+- [ ] V3 Add dependency, API-shape, compile-fail, host, and `wasm32-unknown-unknown` checks. Include negative fixtures for Snix, store, Tokio, filesystem, process, environment, clock, random, network, credential, CLI, and rendering authority in the core. r[remote_builds.hexagonal_core] r[remote_builds.application_owned_ports]
+- [ ] V4 Run `nix develop -c cargo test -p crunch-remote-core`, focused remote application and adapter tests, `nix develop -c cargo test -p crunch-build distributed`, and `nix develop -c cargo test -p mantle --bin mantle remote_build::`. Preserve exact output in `cairn/changes/separate-remote-build-hexagon/evidence/focused-validation.md`. r[remote_builds.hexagonal_core] r[remote_builds.hexagonal_compatibility]
+- [ ] V5 Run `nix develop -c cargo check -p crunch-remote-core --target wasm32-unknown-unknown`, focused first-party Clippy with `-D warnings`, `git diff --check`, `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root .`, `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate proposal separate-remote-build-hexagon --root .`, `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate design separate-remote-build-hexagon --root .`, `nix run path:/home/brittonr/git/OnixResearch/cairn#cairn -- gate tasks separate-remote-build-hexagon --root .`, and `nix flake check -L`. r[remote_builds.hexagonal_core] r[remote_builds.application_owned_ports]

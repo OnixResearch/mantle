@@ -1,7 +1,0 @@
-error: failed to sync
-
-Caused by:
-  found duplicate version of package `artifact-auth-core v0.1.0` vendored from two sources:
-
-	source 1: ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d
-	source 2: ssh://git@github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be#e41340be

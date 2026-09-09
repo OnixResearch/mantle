@@ -1,3 +1,0 @@
-execution_status=blocked
-unit_execution_count=9
-blocker={"class":"stale-cached-output","message":"prior execution receipt does not match current explicit inputs, compiler-policy identity, or output artifact digests"}

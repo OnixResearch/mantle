@@ -1,1 +1,0 @@
-nix build -L .#checks.x86_64-linux.tigerstyle .#checks.x86_64-linux.clippy
