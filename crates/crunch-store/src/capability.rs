@@ -856,6 +856,16 @@ impl StoreAdmin<'_> {
         self.handle.list_retained_roots()
     }
 
+    /// Collect stored PathInfo records through the shell-owned admin view.
+    pub async fn store_list_pathinfos_bounded(&self, max_entries: usize) -> Result<Vec<PathInfo>, Error> {
+        self.handle.store_list_pathinfos_bounded(max_entries).await
+    }
+
+    /// Collect stored PathInfo records, bounded inside the store shell.
+    pub async fn list_pathinfos_bounded(&self, max_entries: usize) -> Result<Vec<PathInfo>, Error> {
+        self.handle.store_list_pathinfos_bounded(max_entries).await
+    }
+
     pub fn migrate_legacy_root_registry(&self) -> Result<Vec<GcRootRecord>, Error> {
         roots::migrate_legacy_registry(self.handle.state_dir())
     }

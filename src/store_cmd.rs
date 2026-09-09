@@ -1702,53 +1702,29 @@ fn is_stdio_path(path: &Path) -> bool {
     path == Path::new("-")
 }
 
-async fn collect_all_pathinfos(
-    store: &crunch_store::StoreHandle,
-) -> Result<Vec<snix_store::path_info::PathInfo>, RunError> {
-    use futures::StreamExt;
-    use snix_store::pathinfoservice::PathInfoService;
-
-    let mut stream = store.pathinfo_service().list();
-    let mut results = Vec::with_capacity(PATHINFO_INITIAL_CAPACITY);
-    for _ in 0..PATHINFO_SCAN_COUNT_MAX {
-        let Some(result) = stream.next().await else {
-            return Ok(results);
-        };
-        let path_info = result.map_err(|e| RunError::Internal(format!("listing pathinfo: {e}")))?;
-        results.push(path_info);
-    }
-    if stream.next().await.is_none() {
-        return Ok(results);
-    }
-    Err(RunError::Internal(format!("pathinfo scan exceeds {PATHINFO_SCAN_COUNT_MAX} entries")))
+async fn collect_all_pathinfos(store: &crunch_store::StoreHandle) -> Result<Vec<snix_store::path_info::PathInfo>, RunError> {
+    store
+        .store_list_pathinfos_bounded(usize::try_from(PATHINFO_SCAN_COUNT_MAX).expect("scan bound fits usize"))
+        .await
+        .map_err(|err| RunError::Internal(err.to_string()))
 }
 
 async fn collect_matching_pathinfos(
     store: &crunch_store::StoreHandle,
     selectors: &[String],
 ) -> Result<Vec<snix_store::path_info::PathInfo>, RunError> {
-    use futures::StreamExt;
-    use snix_store::pathinfoservice::PathInfoService;
-
     if selectors.is_empty() || selectors.iter().any(String::is_empty) {
         return Err(RunError::Internal("matching path selectors must be non-empty".to_string()));
     }
     debug_assert!(!selectors.is_empty());
     debug_assert!(selectors.iter().all(|selector| !selector.is_empty()));
-    let mut stream = store.pathinfo_service().list();
-    let mut results = Vec::with_capacity(selectors.len());
-    for _ in 0..PATHINFO_SCAN_COUNT_MAX {
-        let Some(result) = stream.next().await else {
-            return Ok(results);
-        };
-        let path_info = result.map_err(|e| RunError::Internal(format!("listing pathinfo: {e}")))?;
-        let store_path = path_info.store_path.to_string();
-        if selectors.iter().any(|selector| store_path.contains(selector.as_str())) {
-            results.push(path_info);
-        }
-    }
-    if stream.next().await.is_none() {
-        return Ok(results);
-    }
-    Err(RunError::Internal(format!("pathinfo scan exceeds {PATHINFO_SCAN_COUNT_MAX} entries")))
+    let all = collect_all_pathinfos(store).await?;
+    let results = all
+        .into_iter()
+        .filter(|path_info| {
+            let store_path = path_info.store_path.to_string();
+            selectors.iter().any(|selector| store_path.contains(selector.as_str()))
+        })
+        .collect();
+    Ok(results)
 }

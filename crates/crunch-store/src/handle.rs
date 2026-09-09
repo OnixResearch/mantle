@@ -1338,6 +1338,29 @@ impl StoreHandle {
     ///
     /// Streams the archive without buffering the full content in memory.
     /// The writer receives the raw (uncompressed) NAR byte stream.
+    /// Collect stored PathInfo records, bounded inside the store shell.
+    ///
+    /// Named administration operation; raw PathInfo services stay private.
+    pub async fn store_list_pathinfos_bounded(&self, max_entries: usize) -> Result<Vec<PathInfo>, Error> {
+        use futures::StreamExt;
+        use snix_store::pathinfoservice::PathInfoService;
+
+        assert!(max_entries > 0, "pathinfo scan bound must be positive");
+        let mut stream = self.pathinfo_service().list();
+        let mut results = Vec::new();
+        for _ in 0..max_entries {
+            let Some(result) = stream.next().await else {
+                return Ok(results);
+            };
+            let path_info = result.map_err(|err| Error::PathInfoService(format!("listing pathinfo: {err}")))?;
+            results.push(path_info);
+        }
+        if stream.next().await.is_none() {
+            return Ok(results);
+        }
+        Err(Error::Store(format!("pathinfo scan exceeds {max_entries} entries")))
+    }
+
     pub async fn render_nar<W: tokio::io::AsyncWrite + Unpin + Send>(
         &self,
         node: &Node,
