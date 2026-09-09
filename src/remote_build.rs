@@ -3227,7 +3227,7 @@ async fn prepare_remote_input_nar_artifact(
     .await
     .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
     let artifact = crate::remote_transfer::prepare_nar_node_transfer_artifact(
-        context.store,
+        &context.store.transfer_objects(),
         &node,
         remote_input_nar_artifact_id(input_ref)?,
         context.spool_dir,
@@ -3962,7 +3962,7 @@ async fn prepare_remote_production_output(
             policy,
         )?;
         let nar = crate::remote_transfer::prepare_nar_transfer_artifact(
-            &store,
+            &store.transfer_objects(),
             path_info,
             remote_output_nar_artifact_id(&output.name, &output.logical_path)?,
             &spool_dir,

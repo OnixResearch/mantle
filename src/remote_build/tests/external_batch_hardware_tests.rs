@@ -163,12 +163,12 @@ impl HardwareCompositionCounts {
 fn tracked_hardware_fixture() -> TrackedHardwareFixture {
     let bundle: HardwareEvidenceBundle = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/cairn/archive/2026-07-14-prove-hardware-simulation-build-flow/evidence/hardware-evidence.json"
+        "/.cairn/archive/2026-07-14-prove-hardware-simulation-build-flow/evidence/hardware-evidence.json"
     )))
     .expect("tracked hardware evidence parses");
     let runtime: HardwareRuntimeSummary = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/cairn/archive/2026-07-14-prove-hardware-simulation-build-flow/evidence/hardware-runtime-summary.json"
+        "/.cairn/archive/2026-07-14-prove-hardware-simulation-build-flow/evidence/hardware-runtime-summary.json"
     )))
     .expect("tracked hardware runtime summary parses");
     validate_tracked_hardware_fixture(&bundle, &runtime).expect("tracked hardware fixture remains admissible");

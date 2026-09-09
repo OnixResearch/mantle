@@ -1798,6 +1798,7 @@ dependencies = [
  "futures",
  "md-5 0.10.6",
  "nix-compat",
+ "postcard",
  "pretty_assertions",
  "proptest",
  "reqwest 0.13.2",

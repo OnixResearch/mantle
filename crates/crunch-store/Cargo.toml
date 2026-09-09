@@ -27,6 +27,7 @@ snix-castore = { path = "../../vendor/snix-castore" }
 snix-store = { path = "../../vendor/snix-store" }
 blake3 = "=1.8.2"
 data-encoding = "2.6"
+postcard = { version = "1", default-features = false, features = ["use-std"] }
 digest = "=0.10.7"
 futures = "0.3"
 fs2 = "0.4"

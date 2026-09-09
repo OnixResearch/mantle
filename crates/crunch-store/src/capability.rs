@@ -137,6 +137,48 @@ pub struct BuildServiceStore {
     directory_service: Arc<dyn DirectoryService>,
 }
 
+/// Transfer-object read authority for remote transfer spooling.
+///
+/// Exposes NAR rendering, bounded castore blob reads, and canonical directory
+/// bytes without leaking raw blob, directory, or PathInfo services.
+///
+/// ```compile_fail
+/// fn denied(store: &crunch_store::TransferObjectStore<'_>) {
+///     let _ = store.blob_service();
+///     let _ = store.directory_service();
+///     let _ = store.pathinfo_service();
+/// }
+/// ```
+///
+/// Signing is not part of transfer-object authority.
+///
+/// ```compile_fail
+/// fn denied(store: &crunch_store::TransferObjectStore<'_>) {
+///     let _ = store.sign_outputs();
+/// }
+/// ```
+#[derive(Clone)]
+pub struct TransferObjectStore<'a> {
+    handle: &'a StoreHandle,
+}
+
+/// Mantle-owned reader over a stored castore blob.
+///
+/// The vendored reader trait stays private to the store shell.
+pub struct TransferBlobReader {
+    inner: Box<dyn snix_castore::blobservice::BlobReader>,
+}
+
+impl tokio::io::AsyncRead for TransferBlobReader {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.inner).poll_read(cx, buf)
+    }
+}
+
 /// Capability values retained by pipeline orchestration and the builder.
 pub struct PipelineStoreParts {
     pub build_store: BuildStore,
@@ -150,6 +192,63 @@ pub struct PipelineStoreParts {
 pub struct BuilderStoreParts {
     pub build_store: BuildStore,
     pub action_results: ActionResultPort,
+}
+
+impl TransferObjectStore<'_> {
+    /// Render a castore node as a NAR stream.
+    pub async fn render_nar<W: tokio::io::AsyncWrite + Unpin + Send>(
+        &self,
+        node: &Node,
+        dest: &mut W,
+    ) -> Result<(), Error> {
+        self.handle.render_nar(node, dest).await
+    }
+
+    /// Open a stored castore blob for reading.
+    ///
+    /// Returns `Ok(None)` when the blob is absent.
+    pub async fn open_blob(&self, digest: &snix_castore::B3Digest) -> Result<Option<TransferBlobReader>, Error> {
+        let reader = self
+            .handle
+            .blob_service
+            .open_read(digest)
+            .await
+            .map_err(|err| Error::Export(format!("opening castore blob: {err}")))?;
+        Ok(reader.map(|inner| TransferBlobReader { inner }))
+    }
+
+    /// Read the canonical postcard-encoded directory payload for a digest.
+    ///
+    /// The store shell verifies that the encoded bytes hash back to the
+    /// requested digest before returning them.
+    pub async fn read_directory_canonical_bytes(
+        &self,
+        digest: &snix_castore::B3Digest,
+    ) -> Result<Vec<u8>, Error> {
+        let digest_hex = data_encoding::HEXLOWER.encode(digest.as_ref());
+        let directory = self
+            .handle
+            .directory_service
+            .get(digest)
+            .await
+            .map_err(|err| Error::Export(format!("reading castore directory {digest_hex}: {err}")))?
+            .ok_or_else(|| Error::Export(format!("castore directory missing: {digest_hex}")))?;
+        let bytes = postcard::to_stdvec(&snix_castore::proto::Directory::from(directory))
+            .map_err(|err| Error::Export(format!("serializing castore directory: {err}")))?;
+        assert_eq!(
+            blake3::hash(&bytes).to_hex().as_str(),
+            digest_hex,
+            "castore directory bytes must hash to the requested digest"
+        );
+        Ok(bytes)
+    }
+}
+
+impl StoreHandle {
+    /// Borrow the transfer-object read authority.
+    pub fn transfer_objects(&self) -> TransferObjectStore<'_> {
+        TransferObjectStore { handle: self }
+    }
 }
 
 impl StoreHandle {

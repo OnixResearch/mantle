@@ -86,6 +86,8 @@ pub use capability::PipelineStoreParts;
 pub use capability::RootRegistry;
 pub use capability::SourceAdmission;
 pub use capability::StoreAdmin;
+pub use capability::TransferBlobReader;
+pub use capability::TransferObjectStore;
 pub use closure::ClosureResolution;
 pub use closure::MAX_CLOSURE_DEPTH;
 pub use closure::resolve_closure;

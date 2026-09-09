@@ -28,8 +28,6 @@ use crunch_build::distributed::*;
 use fs2::FileExt;
 use serde::Deserialize;
 use serde::Serialize;
-use snix_castore::blobservice::BlobService;
-use snix_castore::directoryservice::DirectoryService;
 use snix_store::path_info::PathInfo;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncReadExt;
@@ -505,7 +503,7 @@ fn prepare_inline_transfer_artifact(
 }
 
 pub struct NarNodeTransferArtifactRequest<'a> {
-    store: &'a crunch_store::StoreHandle,
+    store: &'a crunch_store::TransferObjectStore<'a>,
     node: &'a snix_castore::Node,
     artifact_id: RemoteTransferArtifactId,
     spool_dir: &'a Path,
@@ -520,7 +518,7 @@ pub struct NarNodeTransferArtifactRequest<'a> {
     reason = "stable NAR shell API delegates immediately to the named node artifact request"
 )]
 pub async fn prepare_nar_node_transfer_artifact(
-    store: &crunch_store::StoreHandle,
+    store: &crunch_store::TransferObjectStore<'_>,
     node: &snix_castore::Node,
     artifact_id: RemoteTransferArtifactId,
     spool_dir: &Path,
@@ -568,7 +566,7 @@ async fn prepare_nar_node_transfer_artifact_request(
 }
 
 pub struct NarTransferArtifactRequest<'a> {
-    store: &'a crunch_store::StoreHandle,
+    store: &'a crunch_store::TransferObjectStore<'a>,
     path_info: &'a PathInfo,
     artifact_id: RemoteTransferArtifactId,
     spool_dir: &'a Path,
@@ -583,7 +581,7 @@ pub struct NarTransferArtifactRequest<'a> {
     reason = "stable PathInfo NAR API delegates immediately to the named artifact request"
 )]
 pub async fn prepare_nar_transfer_artifact(
-    store: &crunch_store::StoreHandle,
+    store: &crunch_store::TransferObjectStore<'_>,
     path_info: &PathInfo,
     artifact_id: RemoteTransferArtifactId,
     spool_dir: &Path,
@@ -624,7 +622,7 @@ async fn prepare_nar_transfer_artifact_request(
 }
 
 pub async fn prepare_castore_blob_transfer_artifact(
-    store: &crunch_store::StoreHandle,
+    store: &crunch_store::TransferObjectStore<'_>,
     digest: snix_castore::B3Digest,
     spool_dir: &Path,
     is_required_for_completion: bool,
@@ -636,8 +634,7 @@ pub async fn prepare_castore_blob_transfer_artifact(
     let id = RemoteTransferArtifactId::new(format!("castore-blob:{digest_hex}")).map_err(reason)?;
     let path = safe_spool_path(spool_dir, id.as_str(), "blob")?;
     let reader = store
-        .blob_service()
-        .open_read(&digest)
+        .open_blob(&digest)
         .await
         .map_err(|err| format!("opening castore blob {digest_hex}: {err}"))?
         .ok_or_else(|| format!("castore blob missing: {digest_hex}"))?;
@@ -657,7 +654,7 @@ pub async fn prepare_castore_blob_transfer_artifact(
 }
 
 pub async fn prepare_castore_directory_transfer_artifact(
-    store: &crunch_store::StoreHandle,
+    store: &crunch_store::TransferObjectStore<'_>,
     digest: snix_castore::B3Digest,
     spool_dir: &Path,
     is_required_for_completion: bool,
@@ -666,14 +663,10 @@ pub async fn prepare_castore_directory_transfer_artifact(
     let digest_hex = data_encoding::HEXLOWER.encode(digest.as_ref());
     debug_assert!(!digest_hex.is_empty());
     debug_assert!(!spool_dir.as_os_str().is_empty());
-    let directory = store
-        .directory_service()
-        .get(&digest)
+    let bytes = store
+        .read_directory_canonical_bytes(&digest)
         .await
-        .map_err(|err| format!("reading castore directory {digest_hex}: {err}"))?
-        .ok_or_else(|| format!("castore directory missing: {digest_hex}"))?;
-    let bytes = postcard::to_stdvec(&snix_castore::proto::Directory::from(directory))
-        .map_err(|err| format!("serializing castore directory: {err}"))?;
+        .map_err(|err| format!("reading castore directory {digest_hex}: {err}"))?;
     if blake3::hash(&bytes).to_hex().as_str() != digest_hex {
         return Err("castore-directory-transfer-digest-mismatch".to_string());
     }
@@ -2795,13 +2788,14 @@ mod tests {
             ca: None,
         };
         let spool = root.path().join("spool");
+        let transfers = store.transfer_objects();
         let policy = RemoteTransferPolicy::default();
-        let blob = prepare_castore_blob_transfer_artifact(&store, blob_digest, &spool, true, policy).await.unwrap();
-        let directory = prepare_castore_directory_transfer_artifact(&store, directory_digest, &spool, true, policy)
+        let blob = prepare_castore_blob_transfer_artifact(&transfers, blob_digest, &spool, true, policy).await.unwrap();
+        let directory = prepare_castore_directory_transfer_artifact(&transfers, directory_digest, &spool, true, policy)
             .await
             .unwrap();
         let nar = prepare_nar_transfer_artifact(
-            &store,
+            &transfers,
             &path_info,
             RemoteTransferArtifactId::new("nar:fixture").unwrap(),
             &spool,

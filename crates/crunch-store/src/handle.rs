@@ -605,8 +605,8 @@ fn configured_action_result_stores(
 /// Dynamic dispatch via trait objects. Store operations are I/O-bound so
 /// the vtable cost is irrelevant.
 pub struct StoreHandle {
-    blob_service: Arc<dyn BlobService>,
-    directory_service: Arc<dyn DirectoryService>,
+    pub(crate) blob_service: Arc<dyn BlobService>,
+    pub(crate) directory_service: Arc<dyn DirectoryService>,
     pathinfo_service: Arc<dyn PathInfoService>,
     /// Raw writable-overlay services retained for mutation and GC isolation.
     overlay_blob_service: Arc<dyn BlobService>,
