@@ -55,3 +55,33 @@ Rejected because concrete local roles are easier to review and do not add a repo
 - Pipeline and builder construction change, while wire formats stay stable.
 - Compile-fail and source-policy tests become part of the authority boundary.
 - The type split proves API reachability only. It does not prove filesystem or sandbox confinement.
+
+## Update 2026-09-09: completed migration boundary
+
+The store capability migration (change `complete-store-capability-migration`)
+closed the remaining application-shell escapes and defined the final owners:
+
+- `TransferObjectStore` is the transfer-object authority: NAR rendering,
+  bounded blob reads, digest-verified canonical directory bytes, host-path
+  and NAR ingestion, and output export. Remote transfer and remote build
+  shells no longer call raw blob/directory/PathInfo accessors.
+- Administration listing is a bounded shell operation
+  (`store_list_pathinfos_bounded`); raw PathInfo services stay private.
+- Output admission records a bounded, ordered `PublicationEffectPlan`
+  instead of running publishers inline. The build orchestrator, as the
+  application shell, drains and executes the plan and receives typed
+  `PublicationObservation`s. A failed observation never changes the admitted
+  output result.
+- `tools/check_store_capability_boundary.rs` is the deterministic guard:
+  zero raw-service escapes, zero writable-authority uses, and zero handle
+  constructions outside the declared owners (CLI command shells, remote and
+  foreign shells, pipeline orchestration, rust-cache adapter; builder
+  orchestrator owns CA-mapping writes). `crunch-rust-cache` is recorded as a
+  store-backed adapter that owns a private store instance.
+- Migration removal: external `StoreHandle` broad consumers were reduced to
+  declared owners; no external module reaches Snix blob, directory, or
+  PathInfo services in production code.
+
+Evidence scope and non-claims are unchanged: capability reachability and
+observed effects only, not filesystem confinement, publisher honesty, or
+release eligibility.

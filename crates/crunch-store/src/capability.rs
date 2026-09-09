@@ -225,10 +225,7 @@ impl TransferObjectStore<'_> {
     ///
     /// The store shell verifies that the encoded bytes hash back to the
     /// requested digest before returning them.
-    pub async fn read_directory_canonical_bytes(
-        &self,
-        digest: &snix_castore::B3Digest,
-    ) -> Result<Vec<u8>, Error> {
+    pub async fn read_directory_canonical_bytes(&self, digest: &snix_castore::B3Digest) -> Result<Vec<u8>, Error> {
         let digest_hex = data_encoding::HEXLOWER.encode(digest.as_ref());
         let directory = self
             .handle
@@ -284,15 +281,10 @@ impl TransferObjectStore<'_> {
     /// store prefix; the shell strips the prefix and resolves the remainder
     /// against the physical output directory.
     pub async fn export_node_to_output(&self, node: &Node, logical_path: &str) -> Result<(), Error> {
-        let relative = logical_path
-            .strip_prefix(self.handle.store_dir())
-            .unwrap_or_else(|| {
-                assert!(
-                    logical_path.starts_with('/'),
-                    "export logical path must be absolute under the store prefix"
-                );
-                logical_path
-            });
+        let relative = logical_path.strip_prefix(self.handle.store_dir()).unwrap_or_else(|| {
+            assert!(logical_path.starts_with('/'), "export logical path must be absolute under the store prefix");
+            logical_path
+        });
         let host_path = std::path::Path::new(&self.handle.output_dir_str).join(relative.trim_start_matches('/'));
         assert!(!host_path.exists() || host_path.is_file() || host_path.is_dir());
         if host_path.exists() {

@@ -5062,7 +5062,11 @@ mod tests {
             .await;
 
         assert!(result.is_ok(), "admission should succeed even if publisher fails");
-        assert_eq!(publisher.call_count(), 0, "publisher failure should not count as a call");
+        let plan = handle.take_publication_effect_plan();
+        assert_eq!(plan.len(), 1, "failed publication must still be planned for shell execution");
+        let observations = handle.execute_publication_plan(plan).await;
+        assert_eq!(observations.len(), 1);
+        assert!(!observations[0].is_success(), "publisher failure must be a typed failed observation");
     }
 
     #[tokio::test]

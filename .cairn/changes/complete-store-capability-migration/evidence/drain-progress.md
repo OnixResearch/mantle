@@ -55,3 +55,17 @@ Gates: proposal PASS, design PASS, tasks PASS (after strict concurrency markers)
   recorded in the checker and must be mirrored into ADR 0058 (I6).
 - crunch-rust-cache declared as store-backed adapter owning a private store
   instance; crunch-build orchestrate declared writable owner for CA mappings.
+
+## Update 2026-09-09 (3) — drain state
+
+- I1-I6, V1-V3 implemented and verified; see focused-validation.md and
+  architecture-validation.md for exact outputs.
+- Publication split landed: admission records PublicationEffectPlan; the build
+  orchestrator drains/executes and gets typed observations; positive and
+  negative (publisher failure) tests updated in crunch-store.
+- V4 partially run (fmt, clippy no-deps, git diff --check, focused tests).
+  BLOCKED leg: `nix flake check -L` — crates.io 403 blocks Nix fetchurl in this
+  worktree. The change stays active until that leg passes; archive is not
+  attempted.
+- Pre-existing clippy debt recorded (not caused by this branch):
+  src/remote_nominal.rs:55 unused `as_str` in bin target.

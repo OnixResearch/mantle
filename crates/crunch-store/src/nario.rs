@@ -834,8 +834,10 @@ mod tests {
 
     #[test]
     fn state_core_rejects_marker_duplicate_and_limit() {
-        let mut limits = NarioV2Limits::default();
-        limits.records_max = 1;
+        let limits = NarioV2Limits {
+            records_max: 1,
+            ..NarioV2Limits::default()
+        };
         let seen = BTreeSet::from(["abc-path".to_string()]);
         assert!(
             validate_nario_record_state(2, 0, &seen, None, &limits)
