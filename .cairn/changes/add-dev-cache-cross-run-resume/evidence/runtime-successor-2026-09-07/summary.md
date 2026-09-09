@@ -41,22 +41,28 @@ Source commit `a7841aea055bf643cc473164b98a2442014f080b`. Binary `mantle-a7841ae
 
 The cold-to-cached-to-adopt dev cycle is complete with exact source, plan, provider, store, stage, report, and alias evidence recorded under this directory. All three dispositions (`cold-executed`, `resume-restored`, `provider-cache-adopted`) were observed with accepted report reviews and unchanged release aliases.
 
-## Leg 4: promoted cold — active
+## Leg 4: promoted cold — complete
 
-`promoted-cold-a7841aea` started at `2026-09-08T17:16:57-04:00`. The remote process survived loss of the local Pueue connection. No second proof was launched.
+`promoted-cold-a7841aea` ran `2026-09-08T17:16:57-04:00` to `2026-09-09T10:30:56-04:00` (17h14m), exit 0. The remote process survived loss of the local Pueue connection. No second proof was launched.
 
-The launch used source cohort `a7841aea`, without dev-cache, resume, fast-fail, or checkpoint options. The promoted plan digest equals the dev plan digest. Explicit options, not that shared digest, select cache authority.
+The launch used source cohort `a7841aea`, without dev-cache, resume, fast-fail, or checkpoint options. The promoted plan digest equals the dev plan digest. Explicit options, not that shared digest, select cache authority. See `promoted-authority-review.md` and `promoted-launch-a7841aea/`.
 
-See `promoted-authority-review.md` and `promoted-launch-a7841aea/`. The local source review supports the selected cold path. The independent reviewer timed out without a result. Terminal receipts, fixed-point equality, and both success aliases still need review.
+Terminal evidence: attempt `complete`, no blocker. `fixed_point: true`. Stage1 and stage2 binaries byte-identical `829d6bbbcf901d50b217e9bad8efd5bcf4f63a50c09b84d9e58236709e75a3b4`; 800 units each, zero failed units, smoke exit 0, cargo marker absent. Promoted receipt `deterministic-build-proof.json` reports `verdict: self-rebuild-match` and strict proof admission `admitted`. The receipt shows clean-namespace-per-run store isolation, no substitution, and no authority violations. Final proof-bundle digest `1178303b…` matches the collected `proof-bundle-blake3.txt`.
 
-Successful publication moves staging into the final output directory. The corrected collector selects exactly one terminal evidence directory and reads `deterministic-build-proof.json`. Its selector passed two positive and four negative cases. Collection of the active run rejects before creating a terminal evidence directory.
+No cache-adoption disposition: `native-provider.adopted.txt` and `dev-resume-report.json` are absent. Both aliases `latest` and `latest-source-built-fixed-point` resolve to `promoted-cold-a7841aea`. Staging was published into the final output directory and is gone.
+
+See `promoted-terminal-a7841aea/` for the collected records, receipt digests, and observations.
 
 ## V4 verdict
 
-Local verification passed for Rust source `e5cf7fdb`. Focused tests, formatting, first-party Clippy, pinned Cairn validation, Tracey, all three gates, and five relevant Nix checks passed. See `../local-verification-2026-09-08/summary.md` for exact scopes and captured results. Observer `4587` waits for remote termination before collection. It cannot accept the runtime result.
+Local verification passed for Rust source `e5cf7fdb`. Focused tests, formatting, first-party Clippy, pinned Cairn validation, Tracey, all three gates, and five relevant Nix checks passed. See `../local-verification-2026-09-08/summary.md` for exact scopes and captured results.
+
+## Overall verdict
+
+Legs 1 through 4 are complete. The dev cycle (cold, cached resume, adopt) and the promoted cold proof all recorded exact source, plan, provider, store, stage, receipt, and alias evidence. Both the dev cycle and the promoted proof reached a byte-identical stage1==stage2 fixed point with strict eligibility admitted. The promoted run emitted no cache-adoption disposition and published both success aliases.
 
 ## Non-claims
 
-Report reviews prove report shape and declared expectations only. The dev cycle does not satisfy a promoted fixed-point proof. V3 remains open.
+Report reviews prove report shape and declared expectations only. The promoted proof shows self-rebuild match under its recorded authorities. It does not prove compiler correctness, seed correctness, deployment success, independent rebuild agreement, or bit-for-bit release reproducibility beyond this host and run.
 
 The runtime cohort remains `a7841aea`. Local formatting commit `e5cf7fdb` does not change that recorded authority. Runtime results do not prove the newer source bytes.

@@ -106,4 +106,4 @@ Owner: Mantle maintainers and the operator for `add-dev-cache-cross-run-resume`.
 
 Immediate result: checked local resume, provider-admission, ptrace, staging, and publication behavior. Durable contribution: reproducible check commands and bound evidence for later regression review.
 
-V3 stays open until the existing promoted run terminates and its runtime receipts pass review. Observer task `4587` can collect terminal evidence. It cannot launch a proof or accept its result.
+The promoted run `promoted-cold-a7841aea` terminated successfully on `2026-09-09T10:30:56-04:00`, exit 0. Its terminal evidence passed review: fixed point stage1==stage2 `829d6bbb…`, no cache-adoption disposition, both aliases published. See `../runtime-successor-2026-09-07/promoted-terminal-a7841aea/`.

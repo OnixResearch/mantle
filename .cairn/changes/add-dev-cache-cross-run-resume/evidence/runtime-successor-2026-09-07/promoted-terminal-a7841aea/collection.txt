@@ -1,0 +1,2 @@
+collected_at=2026-09-09T10:33:54-04:00
+remote_evidence_root=/home/brittonr/mantle-runs/dev-resume-20260904/promoted-cold-a7841aea
