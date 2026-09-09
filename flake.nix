@@ -79,7 +79,8 @@
           inherit system;
           overlays = [
             (import rust-overlay)
-            (final: prev:
+            (
+              final: prev:
               let
                 # crates.io returns HTTP 403 for the nixpkgs fetchurl
                 # User-Agent on the crates.io API download endpoint. The
@@ -88,7 +89,8 @@
                 cratesApi = "https://crates.io/api/v1/crates";
                 cratesCdn = "https://static.crates.io/crates";
                 rewriteUrl = url: prev.lib.replaceStrings [ cratesApi ] [ cratesCdn ] url;
-                rewriteArgs = args:
+                rewriteArgs =
+                  args:
                   if prev.lib.isString args then
                     args
                   else if prev.lib.isList (args.url or null) then
@@ -100,7 +102,8 @@
               in
               {
                 fetchurl = args: prev.fetchurl (rewriteArgs args);
-              })
+              }
+            )
           ];
         };
         onixPkgs = import onix-nixpkgs { inherit system; };
@@ -139,7 +142,8 @@
               dl = "https://static.crates.io/crates";
               indexUrl = "https://github.com/rust-lang/crates.io-index";
             })
-          ]).overrideToolchain rustToolchain;
+          ]).overrideToolchain
+            rustToolchain;
         cargoManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         artifactAuthRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1";
         artifactAuthRepository = "ssh://git@github.com/OnixResearch/onix-artifact.git";
@@ -264,16 +268,20 @@
             transactionalReconciliationDependency.git == transactionalReconciliationRepository
             && transactionalReconciliationDependency.rev == transactionalReconciliationRevision
             && transactionalReconciliationSource.rev == transactionalReconciliationRevision
-            && map (package: package.name) transactionalReconciliationLockPackages == [
-              "transactional-reconciliation-core"
-            ]
+            &&
+              map (package: package.name) transactionalReconciliationLockPackages == [
+                "transactional-reconciliation-core"
+              ]
             && builtins.all (
               package: package.source == transactionalReconciliationExpectedLockSource
             ) transactionalReconciliationLockPackages
-            && transactionalReconciliationWorkspace.workspace.members == [
-              "crates/transactional-reconciliation-core"
-            ]
-            && transactionalReconciliationWorkspace.workspace.package.repository == transactionalReconciliationRepository
+            &&
+              transactionalReconciliationWorkspace.workspace.members == [
+                "crates/transactional-reconciliation-core"
+              ]
+            &&
+              transactionalReconciliationWorkspace.workspace.package.repository
+              == transactionalReconciliationRepository
             && transactionalReconciliationWorkspace.workspace.package.license == "MIT"
           ) "Mantle transactional reconciliation Cargo/Nix source identity, package, RID, or license drifted";
           true;

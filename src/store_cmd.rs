@@ -1701,7 +1701,9 @@ fn is_stdio_path(path: &Path) -> bool {
     path == Path::new("-")
 }
 
-async fn collect_all_pathinfos(store: &crunch_store::StoreHandle) -> Result<Vec<snix_store::path_info::PathInfo>, RunError> {
+async fn collect_all_pathinfos(
+    store: &crunch_store::StoreHandle,
+) -> Result<Vec<snix_store::path_info::PathInfo>, RunError> {
     store
         .store_list_pathinfos_bounded(usize::try_from(PATHINFO_SCAN_COUNT_MAX).expect("scan bound fits usize"))
         .await
