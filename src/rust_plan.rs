@@ -1,7 +1,4 @@
 // machine-artifact-public: rust-plan.receipts
-mod git_paths;
-mod vendor_sources;
-
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
@@ -59,11 +56,6 @@ use crate::cargo_profile_manifest::resolve_profile;
 use crate::cargo_profile_manifest::select_command_profile;
 use crate::cargo_profile_manifest::select_unit_profile;
 use crate::errors::RunError;
-use crate::rust_plan_hexagon::ProcessObservation as CargoOutput;
-use crate::rust_plan_hexagon::RustPlanAdapterError;
-use crate::rust_plan_hexagon::cargo_adapter::CargoProcessAdapter as CargoOracle;
-use crate::rust_plan_hexagon::cargo_adapter::ProcessRustPlanTools as ProcessCargoOracle;
-use crate::rust_plan_hexagon::compiler_adapter::CompilerProcessAdapter;
 
 const RECEIPT_SCHEMA_VERSION: u32 = 1;
 const RUST_UNIT_EXECUTION_RECEIPT_FILE: &str = ".mantle-rust-unit-execution.json";
@@ -88,9 +80,6 @@ const PATH_SOURCE_DIGEST_SKIP_AT_ROOT: &[&str] = &["cairn"];
 const RUST_TOPOLOGY_TOOL_PATH_ENV: &str = "PATH";
 const SNIX_BUILD_SANDBOX_SHELL_ENV: &str = "SNIX_BUILD_SANDBOX_SHELL";
 const RUSTC_BOOTSTRAP_ENV: &str = "RUSTC_BOOTSTRAP";
-const GCC_COMPILER_FAMILY: &str = "gcc";
-const GCC_EXEC_PREFIX_ENV: &str = "GCC_EXEC_PREFIX";
-const GCC_SUBPROGRAM_PREFIX_RELATIVE_PATH: &str = "libexec/gcc/x86_64-unknown-linux-musl/10.5.0";
 const RUST_TOPOLOGY_COMPILE_ENV_ALLOWLIST: &[&str] = &[SNIX_BUILD_SANDBOX_SHELL_ENV, RUSTC_BOOTSTRAP_ENV];
 const BUILD_SCRIPT_OUT_DIR_ENV: &str = "OUT_DIR";
 const BUILD_SCRIPT_OUT_DIR_NAME: &str = "out-dir";
@@ -201,7 +190,6 @@ const RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES: usize =
     RUST_UNIT_REPLAY_EVIDENCE_MAX_KIBIBYTES.saturating_mul(BYTES_PER_KIBIBYTE);
 const RUST_UNIT_REPLAY_EVIDENCE_MAX_BOUNDARY_ITEMS: u32 = 4096;
 const DETERMINISTIC_RELEASE_SOURCE_PREFIX: &str = "/mantle/release/source";
-const DETERMINISTIC_COMPILE_CWD_PREFIX: &str = "/proc/self/cwd";
 const DETERMINISTIC_RELEASE_EXECUTION_PREFIX: &str = "/mantle/release/execution";
 const DETERMINISTIC_RELEASE_PROVIDER_C_TOOLCHAIN_PREFIX: &str = "/mantle/release/provider/c-toolchain";
 const DETERMINISTIC_RELEASE_SANDBOX_SHELL: &str = "/mantle/release/provider/sandbox-shell";
@@ -210,16 +198,8 @@ const PROVIDER_BIN_DIR_NAME: &str = "bin";
 const CFLAGS_ENV: &str = "CFLAGS";
 const CXXFLAGS_ENV: &str = "CXXFLAGS";
 const CPPFLAGS_ENV: &str = "CPPFLAGS";
-const LDFLAGS_ENV: &str = "LDFLAGS";
 const TARGET_CFLAGS_ENV: &str = "TARGET_CFLAGS";
 const TARGET_CXXFLAGS_ENV: &str = "TARGET_CXXFLAGS";
-const GCC_SUBPROGRAM_PREFIX_ENV_KEYS: &[&str] = &[
-    CFLAGS_ENV,
-    CXXFLAGS_ENV,
-    LDFLAGS_ENV,
-    TARGET_CFLAGS_ENV,
-    TARGET_CXXFLAGS_ENV,
-];
 const C_PREFIX_MAP_ENV_KEYS: &[&str] = &[
     CFLAGS_ENV,
     CXXFLAGS_ENV,
@@ -929,34 +909,6 @@ impl std::fmt::Debug for RustUnitSharedCacheSelection {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RustChildActionExecutionPhase {
-    CompileUnit,
-    RunBuildScript,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RustChildActionExecutionScope {
-    pub(crate) action_id: String,
-    pub(crate) audit_event_start: usize,
-}
-
-pub(crate) trait RustChildActionExecutionPort: std::fmt::Debug + Send + Sync {
-    fn run_output(&self, command: &mut Command) -> Result<std::process::Output, RunError> {
-        command.output().map_err(|error| RunError::Internal(format!("running Rust child action: {error}")))
-    }
-
-    fn begin_action(
-        &self,
-        unit_id: &str,
-        phase: RustChildActionExecutionPhase,
-    ) -> Result<RustChildActionExecutionScope, RunError>;
-
-    fn end_action(&self, scope: RustChildActionExecutionScope) -> Result<(), RunError>;
-
-    fn promote_build_script(&self, unit_id: &str, executable: &Path) -> Result<(), RunError>;
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct RustUnitExecutionOptions {
     pub(crate) rustc: PathBuf,
@@ -1318,6 +1270,47 @@ pub(crate) struct RustPlanPatchSourceTopologyExecutionReceipt {
     pub(crate) native_registry_patch_source_topology_execution: RustPatchSourceTopologyExecutionReceipt,
 }
 
+#[derive(Debug, Clone)]
+struct CargoOutput {
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+    status_code: i32,
+}
+
+trait CargoOracle {
+    fn run_cargo(&self, root: &Path, cargo: &Path, args: &[String]) -> Result<CargoOutput, RunError>;
+    fn run_tool_version(&self, tool: &Path, args: &[&str]) -> Result<CargoOutput, RunError>;
+}
+
+struct ProcessCargoOracle;
+
+impl CargoOracle for ProcessCargoOracle {
+    fn run_cargo(&self, root: &Path, cargo: &Path, args: &[String]) -> Result<CargoOutput, RunError> {
+        let output = Command::new(cargo)
+            .args(args)
+            .current_dir(root)
+            .output()
+            .map_err(|err| RunError::Internal(format!("failed to run {}: {err}", cargo.display())))?;
+        Ok(CargoOutput {
+            stdout: output.stdout,
+            stderr: output.stderr,
+            status_code: output.status.code().unwrap_or(1),
+        })
+    }
+
+    fn run_tool_version(&self, tool: &Path, args: &[&str]) -> Result<CargoOutput, RunError> {
+        let output = Command::new(tool)
+            .args(args)
+            .output()
+            .map_err(|err| RunError::Internal(format!("failed to run {}: {err}", tool.display())))?;
+        Ok(CargoOutput {
+            stdout: output.stdout,
+            stderr: output.stderr,
+            status_code: output.status.code().unwrap_or(1),
+        })
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct CargoMetadata {
     packages: Vec<CargoPackage>,
@@ -1610,22 +1603,9 @@ enum NativeFeatureEntry {
 
 pub(crate) fn capture_rust_plan(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
     if options.no_cargo_oracle {
-        return capture_rust_plan_without_cargo(options, None);
+        return capture_rust_plan_without_cargo(options);
     }
     capture_rust_plan_with_oracle(options, &ProcessCargoOracle)
-}
-
-pub(crate) fn capture_rust_plan_with_bound_rustc_identity(
-    options: &RustPlanOptions,
-    rustc_identity: String,
-) -> Result<RustPlanReceipt, RunError> {
-    if !options.no_cargo_oracle {
-        return Err(RunError::Build("receipt-bound rustc identity requires --no-cargo-oracle".to_string()));
-    }
-    if rustc_identity.trim().is_empty() {
-        return Err(RunError::Build("receipt-bound rustc identity is empty".to_string()));
-    }
-    capture_rust_plan_without_cargo(options, Some(rustc_identity))
 }
 
 fn rust_plan_cargo_mode(no_cargo_oracle: bool, blockers: Vec<String>) -> RustPlanCargoModeSummary {
@@ -1671,19 +1651,56 @@ fn rust_plan_surface_matrix(
 }
 
 fn rust_plan_surface_matrix_status(no_cargo_oracle: bool, blockers: &[String]) -> &'static str {
-    mantle_rust_plan_core::compatibility_status(no_cargo_oracle, blockers)
+    if !no_cargo_oracle {
+        return "oracle";
+    }
+    if blockers.is_empty() {
+        return "supported";
+    }
+    "blocked"
 }
 
 fn rust_plan_surface_ids(no_cargo_oracle: bool, blockers: &[String]) -> Vec<String> {
-    mantle_rust_plan_core::compatibility_surface_ids(no_cargo_oracle, blockers)
+    if !no_cargo_oracle {
+        return vec![RUST_COMPATIBILITY_SURFACE_CARGO_ORACLE.to_string()];
+    }
+    if !blockers.is_empty() {
+        return vec![RUST_COMPATIBILITY_SURFACE_BLOCKED_UNSUPPORTED.to_string()];
+    }
+    vec![
+        RUST_COMPATIBILITY_SURFACE_BASIC_PATH_WORKSPACE.to_string(),
+        RUST_COMPATIBILITY_SURFACE_LOCAL_PATH_DEPENDENCY.to_string(),
+        RUST_COMPATIBILITY_SURFACE_WORKSPACE_INHERITANCE.to_string(),
+        RUST_COMPATIBILITY_SURFACE_SOURCE_CLOSURE_DIGEST.to_string(),
+        RUST_COMPATIBILITY_SURFACE_UNIT_GRAPH_FACTS.to_string(),
+    ]
 }
 
 fn rust_plan_compatibility_class(no_cargo_oracle: bool, blockers: &[String]) -> &'static str {
-    mantle_rust_plan_core::compatibility_class(no_cargo_oracle, blockers)
+    if !no_cargo_oracle {
+        return RUST_PLAN_CLASS_CARGO_ORACLE_EVIDENCE;
+    }
+    if blockers.is_empty() {
+        return RUST_PLAN_CLASS_CARGO_FREE_BOUNDED_TOPOLOGY;
+    }
+    RUST_PLAN_CLASS_BLOCKED_UNSUPPORTED_SURFACE
 }
 
 fn rust_plan_non_claims(no_cargo_oracle: bool) -> Vec<String> {
-    mantle_rust_plan_core::compatibility_non_claims(no_cargo_oracle)
+    let mut non_claims = if no_cargo_oracle {
+        vec![
+            "bounded-path-workspace-only".to_string(),
+            "not-full-cargo-feature-resolution".to_string(),
+            "declared-vendor-and-captured-git-only".to_string(),
+            "not-network-or-ambient-cargo-source-resolution".to_string(),
+        ]
+    } else {
+        vec!["cargo-used-for-oracle-metadata-and-unit-graph".to_string()]
+    };
+    non_claims.extend(RUST_PLAN_COMMON_NON_CLAIMS.iter().map(|claim| (*claim).to_string()));
+    non_claims.sort();
+    non_claims.dedup();
+    non_claims
 }
 
 struct NativePlanningLayers {
@@ -1804,8 +1821,10 @@ fn build_rust_plan_receipt(
     Ok(receipt)
 }
 
-fn capture_rust_plan_with_oracle<T>(options: &RustPlanOptions, oracle: &T) -> Result<RustPlanReceipt, RunError>
-where T: CargoOracle + CompilerProcessAdapter {
+fn capture_rust_plan_with_oracle(
+    options: &RustPlanOptions,
+    oracle: &impl CargoOracle,
+) -> Result<RustPlanReceipt, RunError> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     validate_options(options)?;
@@ -1875,18 +1894,13 @@ fn cargo_free_planning_blockers(layers: &NativePlanningLayers) -> Vec<String> {
     blockers
 }
 
-fn capture_rust_plan_without_cargo(
-    options: &RustPlanOptions,
-    rustc_identity: Option<String>,
-) -> Result<RustPlanReceipt, RunError> {
+fn capture_rust_plan_without_cargo(options: &RustPlanOptions) -> Result<RustPlanReceipt, RunError> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     validate_options(options)?;
 
-    let rustc_version_verbose = match rustc_identity {
-        Some(identity) => identity,
-        None => run_checked_text(ProcessCargoOracle.run_tool_version(&options.rustc, &["-vV"]), "rustc -vV")?,
-    };
+    let rustc_version_verbose =
+        run_checked_text(ProcessCargoOracle.run_tool_version(&options.rustc, &["-vV"]), "rustc -vV")?;
     let lockfile_facts = parse_lockfile_facts(&options.root)?;
     let lock_packages = lock_packages_from_facts(&lockfile_facts);
     let native_path_packages = native_path_cargo_packages(&options.root, options)?;
@@ -2378,11 +2392,7 @@ fn lock_dependency_matching_keys(
         .iter()
         .filter(|package| package.name == dependency.name)
         .filter(|package| dependency.version.as_ref().is_none_or(|version| package.version == *version))
-        .filter(|package| {
-            dependency.source.as_deref().is_none_or(|source| {
-                package.source.as_deref().is_some_and(|resolved| lock_dependency_source_matches(source, resolved))
-            })
-        })
+        .filter(|package| dependency.source.as_ref().is_none_or(|source| package.source.as_ref() == Some(source)))
         .map(|package| {
             lock_package_key(LockPackageKeyInputs {
                 name: &package.name,
@@ -2394,27 +2404,6 @@ fn lock_dependency_matching_keys(
     keys.sort();
     keys.dedup();
     keys
-}
-
-// Cargo dependency references omit the precise Git fragment. Only comparison
-// ignores that omitted fragment. Package keys retain the full resolved source.
-fn lock_dependency_source_matches(reference: &str, resolved: &str) -> bool {
-    if reference == resolved {
-        return true;
-    }
-    if !reference.starts_with("git+") {
-        return false;
-    }
-    if reference.contains('#') {
-        return false;
-    }
-    let Some((source, revision)) = resolved.split_once('#') else {
-        return false;
-    };
-    if revision.is_empty() || revision.contains('#') {
-        return false;
-    }
-    source == reference
 }
 
 struct LockPackageKeyInputs<'a> {
@@ -2431,10 +2420,10 @@ fn native_lock_source_cargo_packages(root: &Path, lock_packages: &[LockPackage])
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut vendor_blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    let vendor_sources = vendor_sources::read_declared_vendor_sources(root, &mut vendor_blockers);
+    let vendor_roots = declared_vendor_roots(root, &mut vendor_blockers);
     let mut packages = lock_packages
         .iter()
-        .filter_map(|package| native_lock_source_cargo_package(&vendor_sources, package))
+        .filter_map(|package| native_lock_source_cargo_package(&vendor_roots, package))
         .collect::<Vec<_>>();
     packages.sort_by(|left, right| left.id.cmp(&right.id));
     packages.dedup_by(|left, right| left.id == right.id);
@@ -2445,7 +2434,7 @@ fn cargo_packages_with_declared_git_manifests(root: &Path, packages: &[CargoPack
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let mut vendor_blockers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    let vendor_sources = vendor_sources::read_declared_vendor_sources(root, &mut vendor_blockers);
+    let vendor_roots = declared_vendor_roots(root, &mut vendor_blockers);
     debug_assert!(vendor_blockers.len() <= MAX_SOURCE_TREE_ENTRIES);
     packages
         .iter()
@@ -2453,26 +2442,22 @@ fn cargo_packages_with_declared_git_manifests(root: &Path, packages: &[CargoPack
             if source_kind(package.source.as_deref()) != SourceKind::Git {
                 return package.clone();
             }
-            let source = package.source.as_deref().expect("Git packages have a source identity");
             let manifest_path = locate_declared_vendor_manifest(DeclaredVendorManifestInputs {
-                vendor_roots: vendor_sources.roots_for(source),
+                vendor_roots: &vendor_roots,
                 name: &package.name,
                 version: &package.version,
             });
-            if manifest_path.is_none() && !vendor_sources.has_binding(source) {
+            let Some(manifest_path) = manifest_path else {
                 return package.clone();
-            }
+            };
             let mut normalized = package.clone();
-            normalized.manifest_path = manifest_path.map(|path| normalize_path_string(&path)).unwrap_or_default();
+            normalized.manifest_path = normalize_path_string(&manifest_path);
             normalized
         })
         .collect()
 }
 
-fn native_lock_source_cargo_package(
-    vendor_sources: &vendor_sources::DeclaredVendorSources,
-    package: &LockPackage,
-) -> Option<CargoPackage> {
+fn native_lock_source_cargo_package(vendor_roots: &[PathBuf], package: &LockPackage) -> Option<CargoPackage> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     let source = package.source.as_ref()?;
@@ -2481,7 +2466,7 @@ fn native_lock_source_cargo_package(
         return None;
     }
     let manifest_path = locate_declared_vendor_manifest(DeclaredVendorManifestInputs {
-        vendor_roots: vendor_sources.roots_for(source),
+        vendor_roots,
         name: &package.name,
         version: &package.version,
     })
@@ -2543,25 +2528,17 @@ fn locate_declared_vendor_manifest(inputs: DeclaredVendorManifestInputs<'_>) -> 
         name,
         version,
     } = inputs;
-    let mut selected = None;
     for vendor_root in vendor_roots {
         let versioned = vendor_root.join(format!("{name}-{version}")).join("Cargo.toml");
+        if versioned.is_file() {
+            return Some(versioned);
+        }
         let unversioned = vendor_root.join(name).join("Cargo.toml");
-        let candidate = if versioned.is_file() {
-            Some(versioned)
-        } else if unversioned.is_file() {
-            Some(unversioned)
-        } else {
-            None
-        };
-        if let Some(candidate) = candidate {
-            if selected.is_some() {
-                return None;
-            }
-            selected = Some(candidate);
+        if unversioned.is_file() {
+            return Some(unversioned);
         }
     }
-    selected
+    None
 }
 
 struct CargoSourcePackageIdInputs<'a> {
@@ -2676,13 +2653,13 @@ fn validate_options(options: &RustPlanOptions) -> Result<(), RunError> {
     Ok(())
 }
 
-fn run_checked_text(result: Result<CargoOutput, RustPlanAdapterError>, label: &str) -> Result<String, RunError> {
+fn run_checked_text(result: Result<CargoOutput, RunError>, label: &str) -> Result<String, RunError> {
     let bytes = run_checked_bytes(result, label)?;
     String::from_utf8(bytes).map_err(|err| RunError::Internal(format!("{label} emitted non-UTF-8 output: {err}")))
 }
 
-fn run_checked_bytes(result: Result<CargoOutput, RustPlanAdapterError>, label: &str) -> Result<Vec<u8>, RunError> {
-    let output = result.map_err(|error| RunError::Internal(error.to_string()))?;
+fn run_checked_bytes(result: Result<CargoOutput, RunError>, label: &str) -> Result<Vec<u8>, RunError> {
+    let output = result?;
     if output.status_code != 0 {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(RunError::Build(format!(
@@ -3362,7 +3339,62 @@ fn append_native_patch_sources(
 }
 
 fn declared_vendor_roots(root: &Path, blockers: &mut Vec<NativeRegistrySourceBlocker>) -> Vec<PathBuf> {
-    vendor_sources::read_declared_vendor_sources(root, blockers).into_roots()
+    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
+    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
+    let mut roots = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
+    for config_path in [root.join(".cargo/config.toml"), root.join(".cargo/config")] {
+        if !config_path.is_file() {
+            continue;
+        }
+        let config_text = match fs::read_to_string(&config_path) {
+            Ok(text) => text,
+            Err(err) => {
+                blockers.push(native_registry_blocker(NativeRegistryBlockerInputs {
+                    package_id: None,
+                    class: "unreadable-cargo-source-config",
+                    message: &format!("reading declared Cargo source config {}: {err}", config_path.display()),
+                }));
+                continue;
+            }
+        };
+        let config: CargoConfigToml = match toml::from_str(&config_text) {
+            Ok(config) => config,
+            Err(err) => {
+                blockers.push(native_registry_blocker(NativeRegistryBlockerInputs {
+                    package_id: None,
+                    class: "invalid-cargo-source-config",
+                    message: &format!("parsing declared Cargo source config {}: {err}", config_path.display()),
+                }));
+                continue;
+            }
+        };
+        for source in config.source.values() {
+            let declared_directory = source.directory.as_deref().or_else(|| {
+                source
+                    .replace_with
+                    .as_ref()
+                    .and_then(|replace_with| config.source.get(replace_with))
+                    .and_then(|replacement| replacement.directory.as_deref())
+            });
+            let Some(directory) = declared_directory else {
+                continue;
+            };
+            let path = Path::new(directory);
+            let vendor_root = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                root.join(path)
+            };
+            roots.push(fs::canonicalize(&vendor_root).unwrap_or(vendor_root));
+        }
+    }
+    let conventional_vendor_deps = root.join("vendor-deps");
+    if conventional_vendor_deps.is_dir() {
+        roots.push(fs::canonicalize(&conventional_vendor_deps).unwrap_or(conventional_vendor_deps));
+    }
+    roots.sort();
+    roots.dedup();
+    roots
 }
 
 fn bind_declared_vendor_source(
@@ -5568,20 +5600,7 @@ fn native_path_dependencies(
             continue;
         }
         let manifest_path = if let Some(path) = dependency_path(value) {
-            let captured = git_paths::captured_git_path_manifest(git_paths::GitPathDependencyInputs {
-                parent_package_id: package_id.as_deref(),
-                name,
-                value,
-                sources: native_git_source_planning,
-            })
-            .map_err(|error| {
-                native_blocker(NativePackageBlockerInputs {
-                    package_id: package_id.clone(),
-                    class: error.class,
-                    message: &error.message,
-                })
-            })?;
-            captured.map(PathBuf::from).unwrap_or_else(|| source_root.join(path).join("Cargo.toml"))
+            source_root.join(path).join("Cargo.toml")
         } else {
             let resolved =
                 native_dependency_source(name, value, native_registry_source_planning, native_git_source_planning)
@@ -6390,13 +6409,12 @@ fn active_rust_target(options: &RustPlanOptions) -> String {
 }
 
 fn selected_triple_for_execution_kind(execution_kind: &str, options: &RustPlanOptions) -> String {
-    let host_triple = host_target_triple();
-    let target_triple = active_rust_target(options);
-    mantle_rust_plan_core::selected_triple(mantle_rust_plan_core::TripleSelectionInput {
-        execution_kind,
-        host_triple: &host_triple,
-        target_triple: &target_triple,
-    })
+    debug_assert!(!execution_kind.is_empty());
+    if execution_kind == TARGET_EXECUTION_KIND {
+        active_rust_target(options)
+    } else {
+        host_target_triple()
+    }
 }
 
 fn host_target_triple() -> String {
@@ -7066,12 +7084,6 @@ fn resolve_native_features(request: NativeFeatureResolutionRequest) -> NativeFea
                     }
                 }
                 Ok(NativeFeatureEntry::DependencyFeature(edge)) => {
-                    if !edge.weak && request.optional_dependencies.contains(&edge.dependency) {
-                        activated_optional_dependencies.insert(edge.dependency.clone());
-                        if optional_dependency_exposes_implicit_feature(&request.feature_defs, &edge.dependency) {
-                            push_native_feature(&edge.dependency, &mut selected_features, &mut queue);
-                        }
-                    }
                     dependency_feature_edges.insert(edge);
                 }
                 Err(blocker) => {
@@ -7095,15 +7107,6 @@ fn resolve_native_feature_roles(request: NativeFeatureRoleResolutionRequest) -> 
         build: resolve_native_features(request.build),
         host: resolve_native_features(request.host),
     }
-}
-
-fn optional_dependency_exposes_implicit_feature(
-    feature_defs: &BTreeMap<String, Vec<String>>,
-    dependency: &str,
-) -> bool {
-    debug_assert!(!dependency.is_empty());
-    let explicit_dependency_entry = format!("dep:{dependency}");
-    !feature_defs.values().flatten().any(|entry| entry == &explicit_dependency_entry)
 }
 
 fn seed_native_feature_queue(
@@ -7645,21 +7648,33 @@ struct NativeRustUnitIdInputs<'a> {
 fn native_rust_unit_id(inputs: NativeRustUnitIdInputs<'_>) -> String {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    mantle_rust_plan_core::native_unit_identity(&mantle_rust_plan_core::NativeUnitIdentityInput {
-        package_id: inputs.package.package_id.clone(),
-        target_name: inputs.target.name.clone(),
-        target_kind: inputs.target.kind.clone(),
-        mode: inputs.mode.to_string(),
-        profile: inputs.profile.to_string(),
-        source_algorithm: inputs.package.source_digest.algorithm.clone(),
-        source_value: inputs.package.source_digest.value.clone(),
-        features: inputs.package.selected_features.clone(),
-        dependencies: inputs
-            .dependency_artifacts
-            .iter()
-            .map(|dependency| (dependency.package_id.clone(), dependency.name.clone()))
-            .collect(),
-    })
+    let NativeRustUnitIdInputs {
+        package,
+        target,
+        mode,
+        profile,
+        dependency_artifacts,
+    } = inputs;
+    let features = package.selected_features.join(",");
+    let dependencies = dependency_artifacts
+        .iter()
+        .map(|dependency| format!("{}:{}", dependency.package_id, dependency.name))
+        .collect::<Vec<_>>()
+        .join(",");
+    let material = [
+        package.package_id.as_str(),
+        target.name.as_str(),
+        target.kind.as_str(),
+        mode,
+        profile,
+        package.source_digest.algorithm.as_str(),
+        package.source_digest.value.as_str(),
+        features.as_str(),
+        dependencies.as_str(),
+    ]
+    .join("\0");
+    let digest = blake3::hash(material.as_bytes()).to_hex().to_string();
+    format!("native:{digest}:{}:{}:{}:{mode}", package.package_id, target.name, target.kind)
 }
 
 fn add_missing_native_producer_blockers(
@@ -9397,10 +9412,8 @@ fn replace_profile_codegen_args_with_settings(args: &mut [String], settings: &Ca
     debug_assert!(!args.is_empty());
     debug_assert!(!settings.opt_level.is_empty());
     let replacements = profile_codegen_args(settings);
-    let (replacement_pairs, remainder) = replacements.as_chunks::<RUSTC_CODEGEN_ARGUMENT_PAIR_WIDTH>();
-    debug_assert!(remainder.is_empty());
     let mut replaced_count = 0usize;
-    for replacement in replacement_pairs {
+    for replacement in replacements.chunks_exact(RUSTC_CODEGEN_ARGUMENT_PAIR_WIDTH) {
         debug_assert_eq!(replacement[0], RUSTC_CODEGEN_OPTION_FLAG);
         let key = replacement[1].split_once('=').expect("profile codegen argument has a key").0;
         for arg in args.iter_mut() {
@@ -9610,13 +9623,8 @@ fn compile_time_manifest_dir(inputs: CompileTimeManifestDirInputs<'_>) -> String
     if target_kind == "custom-build" {
         return normalize_path_string(path);
     }
-    if options.deterministic_release_paths
-        && let Ok(relative) = path.strip_prefix(&options.root)
-    {
-        let runtime_path = Path::new(DETERMINISTIC_COMPILE_CWD_PREFIX).join(relative);
-        debug_assert!(runtime_path.is_absolute());
-        debug_assert!(runtime_path.starts_with(DETERMINISTIC_COMPILE_CWD_PREFIX));
-        return normalize_path_string(&runtime_path);
+    if options.deterministic_release_paths {
+        return remap_normalized_path_string(path, &options.path_remaps);
     }
     normalize_path_string(path)
 }
@@ -10828,7 +10836,27 @@ fn select_supported_target_kind(
 }
 
 fn classify_supported_cargo_target_kind(kinds: &[String], crate_types: &[String]) -> Option<&'static str> {
-    mantle_rust_plan_core::classify_target_kind(kinds, crate_types)
+    let is_proc_macro_crate_type = crate_types.iter().any(|crate_type| crate_type == "proc-macro");
+    let is_lib_shaped_kind = kinds.iter().any(|kind| kind == "lib" || kind == "rlib");
+    let classified = [
+        (kinds.iter().any(|kind| kind == "custom-build"), "custom-build"),
+        (
+            kinds.iter().any(|kind| kind == "proc-macro") || (is_proc_macro_crate_type && is_lib_shaped_kind),
+            "proc-macro",
+        ),
+        (is_lib_shaped_kind, "lib"),
+        (kinds.iter().any(|kind| kind == "bin"), "bin"),
+    ]
+    .into_iter()
+    .find_map(|(is_kind, kind)| is_kind.then_some(kind));
+    if is_proc_macro_crate_type && is_lib_shaped_kind {
+        debug_assert_ne!(classified, Some("lib"));
+        debug_assert_ne!(classified, Some("bin"));
+    }
+    if let Some(kind) = classified {
+        debug_assert!(!kind.is_empty());
+    }
+    classified
 }
 
 fn host_artifacts_by_package(units: &[Value]) -> BTreeMap<String, Vec<RustHostArtifact>> {
@@ -10966,7 +10994,7 @@ fn build_script_metadata_summary(inputs: BuildScriptMetadataKeyInputs<'_>) -> Bu
 }
 
 fn is_host_target_kind(target_kind: &str) -> bool {
-    mantle_rust_plan_core::target_kind_uses_host(target_kind)
+    matches!(target_kind, "custom-build" | "proc-macro")
 }
 
 fn unit_dependency_artifacts(unit: &Value, units: &[Value]) -> Vec<RustDependencyArtifact> {
@@ -11137,7 +11165,7 @@ fn derivation_name(target_name: &str, index: usize) -> String {
 }
 
 fn rust_crate_name(name: &str) -> String {
-    mantle_rust_plan_core::rust_crate_name(name)
+    name.replace('-', "_")
 }
 
 fn required_unit_string(unit: &Value, field: &str, index: usize) -> Result<String, UnitDerivationBlocker> {
@@ -12323,50 +12351,6 @@ fn combined_topology_execution_order(
     })
 }
 
-pub(crate) fn combined_topology_execution_unit_order(
-    graph: &UnitDerivationGraphSummary,
-) -> Result<Vec<String>, RustUnitExecutionBlocker> {
-    let ordered_indices = combined_topology_execution_order(graph)?;
-    let mut seen = BTreeSet::new();
-    let mut unit_ids = Vec::with_capacity(ordered_indices.len());
-    for index in ordered_indices {
-        let unit = graph.derivations.get(index).ok_or_else(|| RustUnitExecutionBlocker {
-            class: "invalid-combined-topology-index".to_string(),
-            message: format!("combined topology index {index} is outside the derivation graph"),
-        })?;
-        if !seen.insert(unit.unit_id.clone()) {
-            return Err(RustUnitExecutionBlocker {
-                class: "duplicate-combined-topology-unit".to_string(),
-                message: format!("combined topology selected unit {} more than once", unit.unit_id),
-            });
-        }
-        unit_ids.push(unit.unit_id.clone());
-    }
-    if unit_ids.is_empty() {
-        return Err(RustUnitExecutionBlocker {
-            class: "empty-combined-topology".to_string(),
-            message: "combined topology selected no executable units".to_string(),
-        });
-    }
-    assert!(unit_ids.len() <= graph.derivations.len());
-    Ok(unit_ids)
-}
-
-pub(crate) fn combined_topology_execution_unit_ids(
-    graph: &UnitDerivationGraphSummary,
-) -> Result<BTreeSet<String>, RustUnitExecutionBlocker> {
-    let order = combined_topology_execution_unit_order(graph)?;
-    let unit_ids = order.into_iter().collect::<BTreeSet<_>>();
-    if unit_ids.is_empty() {
-        return Err(RustUnitExecutionBlocker {
-            class: "empty-combined-topology".to_string(),
-            message: "combined topology selected no executable units".to_string(),
-        });
-    }
-    assert!(unit_ids.len() <= graph.derivations.len());
-    Ok(unit_ids)
-}
-
 #[derive(Default)]
 struct RustUnitTopologyExecutionState {
     executions: Vec<RustUnitExecutionReceipt>,
@@ -12395,7 +12379,6 @@ fn topology_unit_failed_blocker(
 struct TopologyUnitExecutionInputs<'a> {
     graph: &'a UnitDerivationGraphSummary,
     options: &'a RustUnitExecutionOptions,
-    action_port: Option<&'a dyn RustChildActionExecutionPort>,
     unit: &'a RustUnitDerivationSummary,
     state: &'a mut RustUnitTopologyExecutionState,
 }
@@ -12429,7 +12412,7 @@ fn execute_host_dependency_topology_unit(
     {
         return Ok(Some(blocker));
     }
-    let receipt = execute_rust_unit_with_action_port(&executable, inputs.options, inputs.action_port)?;
+    let receipt = execute_rust_unit(&executable, inputs.options)?;
     let blocker = topology_unit_failed_blocker(
         &receipt,
         "host-dependency-unit-failed",
@@ -12456,8 +12439,7 @@ fn record_host_topology_outputs(
     debug_assert!(is_supported_host_unit(inputs.unit));
     debug_assert!(!inputs.unit.unit_id.is_empty());
     if inputs.unit.target_kind == "custom-build" {
-        match run_build_script_metadata_with_action_port(executable, inputs.options, &output_path, inputs.action_port)?
-        {
+        match run_build_script_metadata(executable, inputs.options, &output_path)? {
             Ok(metadata_run) => {
                 inputs
                     .state
@@ -12504,7 +12486,7 @@ fn execute_host_topology_unit(
         Ok(unit) => unit,
         Err(blocker) => return Ok(Some(blocker)),
     };
-    let receipt = execute_rust_unit_with_action_port(&executable, inputs.options, inputs.action_port)?;
+    let receipt = execute_rust_unit(&executable, inputs.options)?;
     let blocker = topology_unit_failed_blocker(
         &receipt,
         "host-unit-failed",
@@ -12549,7 +12531,7 @@ fn execute_target_topology_unit(
     {
         return Ok(Some(blocker));
     }
-    let receipt = execute_rust_unit_with_action_port(&executable, inputs.options, inputs.action_port)?;
+    let receipt = execute_rust_unit(&executable, inputs.options)?;
     let blocker = topology_unit_failed_blocker(
         &receipt,
         "target-unit-failed",
@@ -12574,64 +12556,30 @@ pub(crate) fn execute_rust_unit_topology(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitTopologyExecutionReceipt, RunError> {
-    execute_rust_unit_topology_inner(native_registry_sources, native_host_graph, graph, options, None)
-}
-
-pub(crate) fn execute_rust_unit_topology_with_action_port(
-    native_registry_sources: &NativeRegistrySourcePlanningSummary,
-    native_host_graph: &NativeHostUnitGraphPlanningSummary,
-    graph: &UnitDerivationGraphSummary,
-    options: &RustUnitExecutionOptions,
-    action_port: &dyn RustChildActionExecutionPort,
-) -> Result<RustUnitTopologyExecutionReceipt, RunError> {
-    execute_rust_unit_topology_inner(native_registry_sources, native_host_graph, graph, options, Some(action_port))
-}
-
-pub(crate) fn blocked_rust_unit_topology_receipt(
-    native_registry_sources: &NativeRegistrySourcePlanningSummary,
-    native_host_graph: &NativeHostUnitGraphPlanningSummary,
-    graph: &UnitDerivationGraphSummary,
-) -> Result<Option<RustUnitTopologyExecutionReceipt>, RunError> {
-    match plan_rust_unit_topology(native_registry_sources, native_host_graph, graph) {
-        Ok(_) => Ok(None),
-        Err(blocker) => topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)).map(Some),
-    }
-}
-
-fn plan_rust_unit_topology(
-    native_registry_sources: &NativeRegistrySourcePlanningSummary,
-    native_host_graph: &NativeHostUnitGraphPlanningSummary,
-    graph: &UnitDerivationGraphSummary,
-) -> Result<Vec<usize>, RustUnitExecutionBlocker> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
     if let Some(blocker) = validate_native_registry_topology_inputs(native_registry_sources, graph) {
-        return Err(blocker);
+        return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
     }
     if let Some(blocker) = validate_native_host_artifact_topology_inputs(native_host_graph, graph, "topology") {
-        return Err(blocker);
+        return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
     }
     if !graph.ready {
-        return Err(RustUnitExecutionBlocker {
-            class: "unit-derivation-graph-blocked".to_string(),
-            message: "unit_derivation_graph is not ready; resolve planning blockers before topology execution"
-                .to_string(),
-        });
+        return topology_receipt(
+            "blocked",
+            Vec::new(),
+            Vec::new(),
+            Some(RustUnitExecutionBlocker {
+                class: "unit-derivation-graph-blocked".to_string(),
+                message: "unit_derivation_graph is not ready; resolve planning blockers before topology execution"
+                    .to_string(),
+            }),
+        );
     }
     if let Some(blocker) = validate_role_sensitive_artifact_graph(graph) {
-        return Err(blocker);
+        return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
     }
-    combined_topology_execution_order(graph)
-}
-
-fn execute_rust_unit_topology_inner(
-    native_registry_sources: &NativeRegistrySourcePlanningSummary,
-    native_host_graph: &NativeHostUnitGraphPlanningSummary,
-    graph: &UnitDerivationGraphSummary,
-    options: &RustUnitExecutionOptions,
-    action_port: Option<&dyn RustChildActionExecutionPort>,
-) -> Result<RustUnitTopologyExecutionReceipt, RunError> {
-    let ordered_indices = match plan_rust_unit_topology(native_registry_sources, native_host_graph, graph) {
+    let ordered_indices = match combined_topology_execution_order(graph) {
         Ok(indices) => indices,
         Err(blocker) => return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)),
     };
@@ -12642,7 +12590,6 @@ fn execute_rust_unit_topology_inner(
         let inputs = TopologyUnitExecutionInputs {
             graph,
             options,
-            action_port,
             unit,
             state: &mut state,
         };
@@ -14989,66 +14936,6 @@ fn inherited_rust_topology_compile_env() -> BTreeMap<String, OsString> {
     allowed_rust_topology_compile_env(&candidates)
 }
 
-fn receipt_bound_gcc_subprogram_prefix_flag(
-    selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
-) -> Result<Option<String>, RunError> {
-    let Some(route) = selected_c_compiler else {
-        return Ok(None);
-    };
-    if route.compiler_family != GCC_COMPILER_FAMILY {
-        return Ok(None);
-    }
-    let compiler = Path::new(&route.execution_path);
-    let path_is_normalized = compiler.is_absolute()
-        && compiler
-            .components()
-            .all(|component| matches!(component, std::path::Component::RootDir | std::path::Component::Normal(_)));
-    if !path_is_normalized {
-        return Err(RunError::Build(format!(
-            "receipt-bound GCC path is not absolute and normalized: {}",
-            compiler.display()
-        )));
-    }
-    let bin_dir = compiler
-        .parent()
-        .filter(|path| path.file_name() == Some(OsStr::new("bin")))
-        .ok_or_else(|| RunError::Build(format!("receipt-bound GCC path has no bin root: {}", compiler.display())))?;
-    let provider_root = bin_dir.parent().ok_or_else(|| {
-        RunError::Build(format!("receipt-bound GCC bin path has no provider root: {}", bin_dir.display()))
-    })?;
-    let prefix = provider_root.join(GCC_SUBPROGRAM_PREFIX_RELATIVE_PATH);
-    let flag = format!("-B{}/", prefix.display());
-    assert!(flag.starts_with("-B/"));
-    assert!(prefix.is_absolute());
-    Ok(Some(flag))
-}
-
-fn append_receipt_bound_gcc_subprogram_env(
-    env: &mut BTreeMap<String, String>,
-    selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
-) -> Result<(), RunError> {
-    let Some(flag) = receipt_bound_gcc_subprogram_prefix_flag(selected_c_compiler)? else {
-        return Ok(());
-    };
-    for key in GCC_SUBPROGRAM_PREFIX_ENV_KEYS {
-        append_env_flags(AppendEnvFlagsInputs { env, key, flags: &flag });
-    }
-    assert!(GCC_SUBPROGRAM_PREFIX_ENV_KEYS.len() <= env.len());
-    assert!(env.values().any(|value| value.contains(&flag)));
-    Ok(())
-}
-
-fn append_receipt_bound_gcc_subprogram_rustc_arg(
-    command: &mut Command,
-    selected_c_compiler: Option<&crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
-) -> Result<(), RunError> {
-    let Some(flag) = receipt_bound_gcc_subprogram_prefix_flag(selected_c_compiler)? else {
-        return Ok(());
-    };
-    command.arg(RUSTC_CODEGEN_OPTION_FLAG).arg(format!("link-arg={flag}"));
-    Ok(())
-}
-
 fn apply_rust_topology_child_env(command: &mut Command, explicit_env: &BTreeMap<String, String>) {
     command.env_clear();
     for (key, value) in rust_topology_child_env(
@@ -15181,15 +15068,6 @@ fn run_build_script_metadata(
     options: &RustUnitExecutionOptions,
     executable: &Path,
 ) -> Result<Result<BuildScriptMetadataRunReceipt, RustUnitExecutionBlocker>, RunError> {
-    run_build_script_metadata_with_action_port(unit, options, executable, None)
-}
-
-fn run_build_script_metadata_with_action_port(
-    unit: &RustUnitDerivationSummary,
-    options: &RustUnitExecutionOptions,
-    executable: &Path,
-    action_port: Option<&dyn RustChildActionExecutionPort>,
-) -> Result<Result<BuildScriptMetadataRunReceipt, RustUnitExecutionBlocker>, RunError> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
     if !executable.is_file() {
@@ -15216,29 +15094,15 @@ fn run_build_script_metadata_with_action_port(
     let executable_path = executable.canonicalize().unwrap_or_else(|_| executable.to_path_buf());
     let package_root = build_script_package_root(unit);
     let mut command = Command::new(&executable_path);
-    let mut child_env =
+    let child_env =
         build_script_child_env(unit, options, &out_dir, package_root.as_deref(), selected_c_compiler.as_ref());
-    append_receipt_bound_gcc_subprogram_env(&mut child_env, selected_c_compiler.as_ref())?;
     apply_rust_topology_child_env(&mut command, &child_env);
     if let Some(root) = &package_root {
         command.current_dir(root);
     }
-    let scope = if let Some(port) = action_port {
-        port.promote_build_script(&unit.unit_id, &executable_path)?;
-        Some(port.begin_action(&unit.unit_id, RustChildActionExecutionPhase::RunBuildScript)?)
-    } else {
-        None
-    };
-    let output = match action_port {
-        Some(port) => port.run_output(&mut command),
-        None => command
-            .output()
-            .map_err(|error| RunError::Internal(format!("running build-script unit {}: {error}", unit.unit_id))),
-    };
-    if let (Some(port), Some(scope)) = (action_port, scope) {
-        port.end_action(scope)?;
-    }
-    let output = output?;
+    let output = command
+        .output()
+        .map_err(|err| RunError::Internal(format!("running build-script unit {}: {err}", unit.unit_id)))?;
     if !output.status.success() {
         let diagnostic = redacted_diagnostic(&output.stderr);
         return Ok(Err(build_script_run_failure_blocker(unit, &diagnostic, selected_c_compiler.as_ref())));
@@ -16342,7 +16206,6 @@ fn execute_rust_compiler_command(
     options: &RustUnitExecutionOptions,
     unit_output_dir: &Path,
     compiler_policy: Option<&RustCompilerPolicyInvocation>,
-    action_port: Option<&dyn RustChildActionExecutionPort>,
 ) -> Result<std::process::Output, RunError> {
     const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
     const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
@@ -16364,9 +16227,6 @@ fn execute_rust_compiler_command(
     };
     command.args(rust_topology_runtime_args(&unit.derivation.args));
     command.arg("--out-dir").arg(unit_output_dir);
-    let selected_c_compiler = source_built_c_compiler_route_from_env()
-        .map_err(|blocker| RunError::Build(format!("{}: {}", blocker.class, blocker.message)))?;
-    append_receipt_bound_gcc_subprogram_rustc_arg(&mut command, selected_c_compiler.as_ref())?;
     apply_rust_topology_child_env(&mut command, &unit.derivation.env);
     if let Some(policy) = compiler_policy {
         for (key, value) in &policy.environment {
@@ -16376,9 +16236,6 @@ fn execute_rust_compiler_command(
     }
     if let Some(source_root) = rustc_source_root_from_remaps(&unit.derivation.args) {
         command.current_dir(source_root);
-    }
-    if let Some(port) = action_port {
-        return port.run_output(&mut command);
     }
     command.output().map_err(|err| {
         let executable = compiler_policy
@@ -16569,7 +16426,6 @@ fn failed_rust_compiler_execution(
     options: &RustUnitExecutionOptions,
     inputs: &mut RustUnitExecutionInputs,
     output: &std::process::Output,
-    action_port: Option<&dyn RustChildActionExecutionPort>,
 ) -> Result<Option<RustUnitExecutionReceipt>, RunError> {
     debug_assert!(!output.status.success());
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
@@ -16602,7 +16458,7 @@ fn failed_rust_compiler_execution(
         .map(Some);
     }
     prepare_unit_output_dir(&inputs.output_dir)?;
-    let fallback_output = execute_rust_compiler_command(unit, options, &inputs.output_dir, None, action_port)?;
+    let fallback_output = execute_rust_compiler_command(unit, options, &inputs.output_dir, None)?;
     if !fallback_output.status.success() {
         let diagnostic = redacted_diagnostic(&fallback_output.stderr);
         let policy = inputs
@@ -17273,29 +17129,6 @@ fn execute_rust_unit(
     unit: &RustUnitDerivationSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
-    execute_rust_unit_with_action_port(unit, options, None)
-}
-
-fn execute_rust_unit_with_action_port(
-    unit: &RustUnitDerivationSummary,
-    options: &RustUnitExecutionOptions,
-    action_port: Option<&dyn RustChildActionExecutionPort>,
-) -> Result<RustUnitExecutionReceipt, RunError> {
-    let scope = action_port
-        .map(|port| port.begin_action(&unit.unit_id, RustChildActionExecutionPhase::CompileUnit))
-        .transpose()?;
-    let result = execute_rust_unit_inner(unit, options, action_port);
-    if let (Some(port), Some(scope)) = (action_port, scope) {
-        port.end_action(scope)?;
-    }
-    result
-}
-
-fn execute_rust_unit_inner(
-    unit: &RustUnitDerivationSummary,
-    options: &RustUnitExecutionOptions,
-    action_port: Option<&dyn RustChildActionExecutionPort>,
-) -> Result<RustUnitExecutionReceipt, RunError> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
     debug_assert!(!RUST_UNIT_EXECUTION_RECEIPT_FILE.is_empty());
     let mut inputs = match prepare_rust_unit_execution_inputs(unit, options)? {
@@ -17324,15 +17157,10 @@ fn execute_rust_unit_inner(
         return Ok(receipt);
     }
     prepare_unit_output_dir(&inputs.output_dir)?;
-    let output = execute_rust_compiler_command(
-        unit,
-        options,
-        &inputs.output_dir,
-        inputs.compiler_policy_invocation.as_ref(),
-        action_port,
-    )?;
+    let output =
+        execute_rust_compiler_command(unit, options, &inputs.output_dir, inputs.compiler_policy_invocation.as_ref())?;
     if !output.status.success() {
-        if let Some(receipt) = failed_rust_compiler_execution(unit, options, &mut inputs, &output, action_port)? {
+        if let Some(receipt) = failed_rust_compiler_execution(unit, options, &mut inputs, &output)? {
             return Ok(receipt);
         }
     } else if let Some(receipt) = validate_successful_compiler_policy_report(unit, options, &mut inputs)? {
@@ -18743,8 +18571,6 @@ fn normalize_path_string(path: &Path) -> String {
 #[cfg(test)]
 #[allow(clippy::cloned_ref_to_slice_refs)]
 mod tests {
-    mod lock_sources;
-
     use std::ffi::OsStr;
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
@@ -18771,8 +18597,6 @@ mod tests {
     const PROCESS_GLOBAL_ENV_REMOVE_FN: &str = "remove_var";
     const PROCESS_GLOBAL_ENV_SAMPLE_KEY: &str = "MANTLE_TEST_RACY_ENV";
     const PROCESS_GLOBAL_ENV_SAMPLE_VALUE: &str = "bad";
-    const MANIFEST_CWD_CHILD_ENV: &str = "MANTLE_MANIFEST_CWD_CHILD";
-    const MANIFEST_CWD_CHILD_VALUE: &str = "read-manifest";
 
     struct FixedOracle {
         cargo_version: CargoOutput,
@@ -18782,16 +18606,14 @@ mod tests {
     }
 
     impl CargoOracle for FixedOracle {
-        fn run_cargo(&self, _root: &Path, _cargo: &Path, args: &[String]) -> Result<CargoOutput, RustPlanAdapterError> {
+        fn run_cargo(&self, _root: &Path, _cargo: &Path, args: &[String]) -> Result<CargoOutput, RunError> {
             if args.first().map(String::as_str) == Some("metadata") {
                 return Ok(self.metadata.clone());
             }
             Ok(self.unit_graph.clone())
         }
-    }
 
-    impl CompilerProcessAdapter for FixedOracle {
-        fn run_tool_version(&self, tool: &Path, _args: &[&str]) -> Result<CargoOutput, RustPlanAdapterError> {
+        fn run_tool_version(&self, tool: &Path, _args: &[&str]) -> Result<CargoOutput, RunError> {
             if tool.file_name() == Some(OsStr::new("rustc")) {
                 return Ok(self.rustc_version.clone());
             }
@@ -19288,39 +19110,6 @@ mod tests {
         rustc
     }
 
-    #[derive(Debug, Default)]
-    struct RecordingRustActionPort {
-        events: std::sync::Mutex<Vec<String>>,
-        deny_begin: bool,
-    }
-
-    impl RustChildActionExecutionPort for RecordingRustActionPort {
-        fn begin_action(
-            &self,
-            unit_id: &str,
-            phase: RustChildActionExecutionPhase,
-        ) -> Result<RustChildActionExecutionScope, RunError> {
-            if self.deny_begin {
-                return Err(RunError::Build("test Rust action denied before execution".to_string()));
-            }
-            self.events.lock().unwrap().push(format!("begin:{unit_id}:{phase:?}"));
-            Ok(RustChildActionExecutionScope {
-                action_id: unit_id.to_string(),
-                audit_event_start: 0,
-            })
-        }
-
-        fn end_action(&self, scope: RustChildActionExecutionScope) -> Result<(), RunError> {
-            self.events.lock().unwrap().push(format!("end:{}", scope.action_id));
-            Ok(())
-        }
-
-        fn promote_build_script(&self, unit_id: &str, _executable: &Path) -> Result<(), RunError> {
-            self.events.lock().unwrap().push(format!("promote:{unit_id}"));
-            Ok(())
-        }
-    }
-
     fn write_counting_fake_rustc(dir: &Path, counter: &Path) -> PathBuf {
         let rustc = dir.join("counting-rustc");
         let counter = counter.display().to_string();
@@ -19658,59 +19447,6 @@ mod tests {
             weak: true,
         }));
         assert!(resolution.blockers.iter().any(|blocker| blocker.class == "unknown-feature-entry"));
-    }
-
-    #[test]
-    fn native_feature_resolver_exposes_nonweak_optional_dependency_feature_edge() {
-        let optional_dependencies = BTreeSet::from(["rand".to_string()]);
-        let mut feature_defs = BTreeMap::new();
-        feature_defs.insert("prime".to_string(), vec!["rand/std_rng".to_string()]);
-        let activated = resolve_native_features(NativeFeatureResolutionRequest {
-            feature_defs,
-            optional_dependencies: optional_dependencies.clone(),
-            explicit_features: vec!["prime".to_string()],
-            all_features: false,
-            no_default_features: true,
-        });
-        let mut weak_defs = BTreeMap::new();
-        weak_defs.insert("prime".to_string(), vec!["rand?/std_rng".to_string()]);
-        let weak = resolve_native_features(NativeFeatureResolutionRequest {
-            feature_defs: weak_defs,
-            optional_dependencies: optional_dependencies.clone(),
-            explicit_features: vec!["prime".to_string()],
-            all_features: false,
-            no_default_features: true,
-        });
-        let mut suppressed_defs = BTreeMap::new();
-        suppressed_defs.insert("prime".to_string(), vec!["rand/std_rng".to_string()]);
-        suppressed_defs.insert("internal-rand".to_string(), vec!["dep:rand".to_string()]);
-        let suppressed = resolve_native_features(NativeFeatureResolutionRequest {
-            feature_defs: suppressed_defs,
-            optional_dependencies,
-            explicit_features: vec!["prime".to_string()],
-            all_features: false,
-            no_default_features: true,
-        });
-
-        assert!(activated.blockers.is_empty(), "{:#?}", activated.blockers);
-        assert_eq!(activated.selected_features, vec!["prime".to_string(), "rand".to_string()]);
-        assert_eq!(activated.activated_optional_dependencies, vec!["rand".to_string()]);
-        assert!(activated.dependency_feature_edges.contains(&NativeDependencyFeatureEdge {
-            dependency: "rand".to_string(),
-            feature: "std_rng".to_string(),
-            weak: false,
-        }));
-        assert!(weak.blockers.is_empty(), "{:#?}", weak.blockers);
-        assert_eq!(weak.selected_features, vec!["prime".to_string()]);
-        assert!(weak.activated_optional_dependencies.is_empty());
-        assert!(weak.dependency_feature_edges.contains(&NativeDependencyFeatureEdge {
-            dependency: "rand".to_string(),
-            feature: "std_rng".to_string(),
-            weak: true,
-        }));
-        assert!(suppressed.blockers.is_empty(), "{:#?}", suppressed.blockers);
-        assert_eq!(suppressed.selected_features, vec!["prime".to_string()]);
-        assert_eq!(suppressed.activated_optional_dependencies, vec!["rand".to_string()]);
     }
 
     #[test]
@@ -20245,7 +19981,7 @@ mod tests {
         ));
         assert_eq!(
             derivation.derivation.env.get(BUILD_SCRIPT_CARGO_MANIFEST_DIR_ENV).unwrap(),
-            DETERMINISTIC_COMPILE_CWD_PREFIX
+            DETERMINISTIC_RELEASE_SOURCE_PREFIX
         );
         assert_eq!(
             derivation.derivation.env.get(SNIX_BUILD_SANDBOX_SHELL_ENV).unwrap(),
@@ -20255,71 +19991,6 @@ mod tests {
             derivation.derivation.env.get("SOURCE_CLOSURE_DIGEST").unwrap(),
             &execution_source_closure_digest(&source_closure, &plan_options)
         );
-    }
-
-    #[test]
-    fn deterministic_manifest_dir_uses_process_cwd_package_alias() {
-        let dir = TempDir::new().unwrap();
-        let root = dir.path().join("source");
-        let package_root = root.join("vendor-deps/crossterm");
-        let mut plan_options = options(&root);
-        plan_options.deterministic_release_paths = true;
-        plan_options.path_remaps = deterministic_release_path_remaps(&root, None);
-
-        let manifest_dir = compile_time_manifest_dir(CompileTimeManifestDirInputs {
-            package_root: &normalize_path_string(&package_root),
-            target_kind: "lib",
-            options: &plan_options,
-        });
-
-        assert_eq!(manifest_dir, "/proc/self/cwd/vendor-deps/crossterm");
-        assert_ne!(manifest_dir, normalize_path_string(&package_root));
-        assert!(Path::new(&manifest_dir).is_absolute());
-    }
-
-    #[test]
-    fn deterministic_manifest_dir_is_readable_from_compiler_working_directory() {
-        let temp = TempDir::new().unwrap();
-        let package_root = temp.path().join("vendor-deps/crossterm");
-        std::fs::create_dir_all(&package_root).unwrap();
-        std::fs::write(package_root.join("Cargo.toml"), "[package]\nname = \"crossterm\"\n").unwrap();
-        let output = Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "rust_plan::tests::deterministic_manifest_dir_child_reads_package_manifest",
-                "--nocapture",
-            ])
-            .current_dir(temp.path())
-            .env(MANIFEST_CWD_CHILD_ENV, MANIFEST_CWD_CHILD_VALUE)
-            .output()
-            .unwrap();
-
-        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-        assert!(String::from_utf8_lossy(&output.stdout).contains("manifest-cwd-child-ok"));
-    }
-
-    #[test]
-    fn deterministic_manifest_dir_child_reads_package_manifest() {
-        if std::env::var(MANIFEST_CWD_CHILD_ENV).as_deref() != Ok(MANIFEST_CWD_CHILD_VALUE) {
-            return;
-        }
-        let root = std::env::current_dir().unwrap();
-        let package_root = root.join("vendor-deps/crossterm");
-        let mut plan_options = options(&root);
-        plan_options.deterministic_release_paths = true;
-        plan_options.path_remaps = deterministic_release_path_remaps(&root, None);
-        let manifest_dir = compile_time_manifest_dir(CompileTimeManifestDirInputs {
-            package_root: &normalize_path_string(&package_root),
-            target_kind: "lib",
-            options: &plan_options,
-        });
-        let manifest = std::fs::read_to_string(Path::new(&manifest_dir).join("Cargo.toml")).unwrap();
-        let inaccessible_logical =
-            Path::new(DETERMINISTIC_RELEASE_SOURCE_PREFIX).join("vendor-deps/crossterm/Cargo.toml");
-
-        assert!(manifest.contains("name = \"crossterm\""));
-        assert!(std::fs::read_to_string(inaccessible_logical).is_err());
-        println!("manifest-cwd-child-ok");
     }
 
     #[test]
@@ -21936,62 +21607,6 @@ rust-version = "1.80"
     }
 
     #[test]
-    fn receipt_bound_gcc_subprogram_prefix_is_derived_from_the_validated_compiler_route() {
-        let route = test_c_compiler_route();
-        let mut non_gcc = route.clone();
-        non_gcc.compiler_family = "clang".to_string();
-        let mut relative = route.clone();
-        relative.execution_path = "provider/bin/x86_64-linux-musl-gcc".to_string();
-
-        let prefix = receipt_bound_gcc_subprogram_prefix_flag(Some(&route)).unwrap();
-        let absent = receipt_bound_gcc_subprogram_prefix_flag(Some(&non_gcc)).unwrap();
-        let rejected = receipt_bound_gcc_subprogram_prefix_flag(Some(&relative)).unwrap_err();
-
-        assert_eq!(prefix, Some("-B/provider/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/".to_string()));
-        assert!(absent.is_none());
-        assert!(rejected.to_string().contains("not absolute and normalized"));
-    }
-
-    #[test]
-    fn receipt_bound_gcc_subprogram_prefix_is_added_to_c_and_linker_flags() {
-        let route = test_c_compiler_route();
-        let mut env = BTreeMap::from([(CFLAGS_ENV.to_string(), "-O2".to_string())]);
-        let mut non_gcc = route.clone();
-        non_gcc.compiler_family = "clang".to_string();
-        let mut non_gcc_env = BTreeMap::new();
-
-        append_receipt_bound_gcc_subprogram_env(&mut env, Some(&route)).unwrap();
-        append_receipt_bound_gcc_subprogram_env(&mut non_gcc_env, Some(&non_gcc)).unwrap();
-
-        let flag = "-B/provider/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/";
-        assert_eq!(env.get(CFLAGS_ENV).unwrap(), &format!("-O2 {flag}"));
-        for key in [CXXFLAGS_ENV, LDFLAGS_ENV, TARGET_CFLAGS_ENV, TARGET_CXXFLAGS_ENV] {
-            assert_eq!(env.get(key).map(String::as_str), Some(flag));
-        }
-        assert!(non_gcc_env.is_empty());
-    }
-
-    #[test]
-    fn receipt_bound_gcc_subprogram_prefix_is_added_to_rustc_linker_arguments_only_for_gcc() {
-        let route = test_c_compiler_route();
-        let mut non_gcc = route.clone();
-        non_gcc.compiler_family = "clang".to_string();
-        let mut gcc_command = Command::new("/receipt-bound/rustc");
-        let mut non_gcc_command = Command::new("/receipt-bound/rustc");
-
-        append_receipt_bound_gcc_subprogram_rustc_arg(&mut gcc_command, Some(&route)).unwrap();
-        append_receipt_bound_gcc_subprogram_rustc_arg(&mut non_gcc_command, Some(&non_gcc)).unwrap();
-
-        let gcc_args =
-            gcc_command.get_args().map(|argument| argument.to_string_lossy().into_owned()).collect::<Vec<_>>();
-        assert_eq!(gcc_args, vec![
-            RUSTC_CODEGEN_OPTION_FLAG.to_string(),
-            "link-arg=-B/provider/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/".to_string()
-        ]);
-        assert_eq!(non_gcc_command.get_args().count(), 0usize);
-    }
-
-    #[test]
     fn source_built_c_compiler_route_json_validates_receipt_bound_identity() {
         let route = test_c_compiler_route();
         let text = serde_json::to_string(&route).unwrap();
@@ -22248,8 +21863,6 @@ rust-version = "1.80"
         let candidates = BTreeMap::from([
             (SNIX_BUILD_SANDBOX_SHELL_ENV.to_string(), OsString::from("/busybox")),
             (RUSTC_BOOTSTRAP_ENV.to_string(), OsString::from("1")),
-            (GCC_EXEC_PREFIX_ENV.to_string(), OsString::from("/ambient/libexec/gcc/")),
-            ("COMPILER_PATH".to_string(), OsString::from("/ambient/libexec/gcc")),
             ("LD_PRELOAD".to_string(), OsString::from("/tmp/inject.so")),
             ("SECRET_TOKEN".to_string(), OsString::from("do-not-forward")),
         ]);
@@ -22258,8 +21871,6 @@ rust-version = "1.80"
 
         assert_eq!(env.get(SNIX_BUILD_SANDBOX_SHELL_ENV), Some(&OsString::from("/busybox")));
         assert_eq!(env.get(RUSTC_BOOTSTRAP_ENV), Some(&OsString::from("1")));
-        assert!(!env.contains_key(GCC_EXEC_PREFIX_ENV));
-        assert!(!env.contains_key("COMPILER_PATH"));
         assert!(!env.contains_key("LD_PRELOAD"));
         assert!(!env.contains_key("SECRET_TOKEN"));
         assert_eq!(env.len(), 2usize);
@@ -23983,24 +23594,6 @@ rust-version = "1.80"
     }
 
     #[test]
-    fn combined_unit_topology_action_scope_excludes_unsupported_derivations() {
-        let supported = test_rust_derivation(0, "package:supported", "lib", "target", Vec::new());
-        let unsupported = test_rust_derivation(1, "package:unsupported", "example", "target", Vec::new());
-        let supported_id = supported.unit_id.clone();
-        let unsupported_id = unsupported.unit_id.clone();
-        let graph = test_unit_derivation_graph(vec![supported, unsupported.clone()]);
-        let unsupported_graph = test_unit_derivation_graph(vec![unsupported]);
-
-        let selected = combined_topology_execution_unit_ids(&graph).unwrap();
-        let error = combined_topology_execution_unit_ids(&unsupported_graph).unwrap_err();
-
-        assert!(selected.contains(&supported_id));
-        assert!(!selected.contains(&unsupported_id));
-        assert_eq!(selected.len(), 1);
-        assert_eq!(error.class, "missing-supported-unit");
-    }
-
-    #[test]
     fn combined_unit_topology_keeps_standalone_host_units() {
         let target_index = 0usize;
         let standalone_host_index = 1usize;
@@ -24977,40 +24570,6 @@ unix_dep = { path = "../unix-dep" }
         assert_eq!(package_planning.packages.len(), 2);
         let app = package_planning.packages.iter().find(|package| package.name == "app").unwrap();
         assert_eq!(app.path_dependencies[0].manifest_path, normalize_path_string(&dep_dir.join("Cargo.toml")));
-    }
-
-    #[test]
-    fn declared_vendor_roots_reads_dedicated_vendor_config() {
-        let dir = TempDir::new().unwrap();
-        let main = dir.path().join("vendor-deps");
-        let alternate = main.join(".alternate-source");
-        std::fs::create_dir_all(dir.path().join(".cargo")).unwrap();
-        std::fs::create_dir_all(&alternate).unwrap();
-        std::fs::write(
-            dir.path().join(".cargo/vendor-config.toml"),
-            "[source.crates-io]\nreplace-with = \"main\"\n\n[source.\"git+https://example.invalid/repo.git?rev=abc\"]\nreplace-with = \"alternate\"\n\n[source.main]\ndirectory = \"vendor-deps\"\n\n[source.alternate]\ndirectory = \"vendor-deps/.alternate-source\"\n",
-        )
-        .unwrap();
-        let mut blockers = Vec::new();
-
-        let roots = declared_vendor_roots(dir.path(), &mut blockers);
-
-        assert!(blockers.is_empty(), "{blockers:#?}");
-        assert_eq!(roots, vec![main.canonicalize().unwrap(), alternate.canonicalize().unwrap()]);
-    }
-
-    #[test]
-    fn declared_vendor_roots_reports_malformed_dedicated_vendor_config() {
-        let dir = TempDir::new().unwrap();
-        std::fs::create_dir_all(dir.path().join(".cargo")).unwrap();
-        std::fs::write(dir.path().join(".cargo/vendor-config.toml"), "[source.invalid\n").unwrap();
-        let mut blockers = Vec::new();
-
-        let roots = declared_vendor_roots(dir.path(), &mut blockers);
-
-        assert!(roots.is_empty());
-        assert_eq!(blockers.len(), 1);
-        assert_eq!(blockers[0].class, "invalid-cargo-source-config");
     }
 
     #[test]
@@ -27191,60 +26750,6 @@ checksum = "0123456789abcdef"
                 report.disposition == crunch_rust_cache::CACHE_DISPOSITION_HIT && !report.compiler_executed
             })
         }));
-    }
-
-    #[test]
-    fn rust_action_port_wraps_compiler_execution_and_denies_before_launch() {
-        let dir = TempDir::new().unwrap();
-        let rustc = write_fake_rustc(dir.path());
-        let graph = policy_test_graph(dir.path());
-        let options = RustUnitExecutionOptions {
-            rustc,
-            output_root: dir.path().join("action-port-out"),
-            compiler_policy: RustCompilerPolicySelection::default(),
-            local_cache: None,
-        };
-        let recording = RecordingRustActionPort::default();
-        let receipt = execute_rust_unit_with_action_port(&graph.derivations[0], &options, Some(&recording)).unwrap();
-        let events = recording.events.lock().unwrap().clone();
-        let denying = RecordingRustActionPort {
-            events: std::sync::Mutex::new(Vec::new()),
-            deny_begin: true,
-        };
-        let error = execute_rust_unit_with_action_port(&graph.derivations[0], &options, Some(&denying)).unwrap_err();
-
-        assert_eq!(receipt.execution_status, "success");
-        assert_eq!(events.len(), 2);
-        assert!(events[0].starts_with("begin:"));
-        assert!(events[1].starts_with("end:"));
-        assert!(error.to_string().contains("denied before execution"));
-        assert!(denying.events.lock().unwrap().is_empty());
-    }
-
-    #[test]
-    fn rust_action_port_promotes_build_script_before_execution() {
-        let dir = TempDir::new().unwrap();
-        let executable = dir.path().join("build-script");
-        write_executable(&executable, "#!/bin/sh\nprintf 'cargo:rustc-cfg=action_port_test\\n'\n");
-        let unit = test_rust_derivation(0, "action-port-build", "custom-build", HOST_EXECUTION_KIND, Vec::new());
-        let options = RustUnitExecutionOptions {
-            rustc: dir.path().join("unused-rustc"),
-            output_root: dir.path().join("build-script-out"),
-            compiler_policy: RustCompilerPolicySelection::default(),
-            local_cache: None,
-        };
-        let recording = RecordingRustActionPort::default();
-
-        let receipt = run_build_script_metadata_with_action_port(&unit, &options, &executable, Some(&recording))
-            .unwrap()
-            .unwrap();
-        let events = recording.events.lock().unwrap().clone();
-
-        assert_eq!(events.len(), 3);
-        assert!(events[0].starts_with("promote:"));
-        assert!(events[1].starts_with("begin:"));
-        assert!(events[2].starts_with("end:"));
-        assert_eq!(receipt.stdout_digest_blake3.len(), BLAKE3_HEX_CHARS);
     }
 
     #[test]

@@ -278,7 +278,6 @@ pub struct Builder<BServ> {
     build_environment_reports: Vec<crate::BuildEnvironmentReport>,
     network_policy_reports: Vec<BuildNetworkPolicyReport>,
     action_result_reports: Vec<ActionResultRuntimeReport>,
-    publication_observations: Vec<crunch_store::PublicationObservation>,
     source_closure_cache: HashMap<StorePath<String>, Vec<StorePath<String>>>,
     observed_source_paths: BTreeSet<StorePath<String>>,
     root_retention_source: Option<GcRootSource>,
@@ -394,7 +393,6 @@ where BServ: BuildService + 'static
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
             action_result_reports: Vec::new(),
-            publication_observations: Vec::new(),
             source_closure_cache: HashMap::new(),
             observed_source_paths: BTreeSet::new(),
             root_retention_source: None,
@@ -448,10 +446,6 @@ where BServ: BuildService + 'static
 
     pub fn take_network_policy_reports(&mut self) -> Vec<BuildNetworkPolicyReport> {
         std::mem::take(&mut self.network_policy_reports)
-    }
-
-    pub fn take_publication_observations(&mut self) -> Vec<crunch_store::PublicationObservation> {
-        std::mem::take(&mut self.publication_observations)
     }
 
     pub fn take_action_result_reports(&mut self) -> Vec<ActionResultRuntimeReport> {
@@ -750,7 +744,7 @@ where BServ: BuildService + 'static
             &prepared.drv_name,
             &prepared.derivation.outputs,
             &prepared.derivation.environment,
-        )?;
+        );
         assert_eq!(ca_plans.len(), prepared.derivation.outputs.len(), "CA plan count must match output count",);
 
         // Pass 1: marker replacement + CA path computation.
@@ -1266,10 +1260,7 @@ where BServ: BuildService + 'static
             .map_err(|error| Error::NarCalculation(error.to_string()))?;
 
         // 4. Compute CA store path from marker-replaced hash.
-        let path_name = crate::ca_plan::ca_output_path_name(crate::ca_plan::CaOutputPathInput {
-            derivation_name: drv_name,
-            output_name,
-        })?;
+        let path_name = crate::ca_plan::ca_output_path_name(drv_name, output_name);
         let ca_path = crate::ca_plan::compute_ca_store_path(&path_name, marker_nar_sha256, self.store.store_dir())?;
 
         // 5. Replace zero markers with the final CA path (in sandbox/logical space).
@@ -1348,8 +1339,7 @@ where BServ: BuildService + 'static
 
         signing::sign_pathinfo_with_store_dir(&mut path_info, &self.keypair.signing_key, self.store.store_dir());
 
-        let admitted = self
-            .store
+        self.store
             .persist_and_export_signed_output(crunch_store::PersistOutputRequest {
                 output_name,
                 output_path,
@@ -1360,32 +1350,7 @@ where BServ: BuildService + 'static
                 root_source: self.root_retention_source,
             })
             .await
-            .map_err(|e| Error::Store(format!("{e}")))?;
-        self.execute_admitted_publication(admitted).await
-    }
-
-    async fn execute_admitted_publication(
-        &mut self,
-        admitted: crunch_store::AdmittedOutput,
-    ) -> Result<PathInfo, Error> {
-        let observations = self
-            .store
-            .publication_execution()
-            .execute(&admitted.publication_plan, &admitted.path_info)
-            .await
-            .map_err(|e| Error::Store(format!("{e}")))?;
-        for observation in &observations {
-            if observation.disposition == crunch_store::PublicationDisposition::Failed {
-                tracing::warn!(
-                    path = %observation.logical_path,
-                    publisher_index = observation.publisher_index,
-                    error = observation.error.as_deref().unwrap_or("publisher failure"),
-                    "output publication failed after local admission"
-                );
-            }
-        }
-        self.publication_observations.extend(observations);
-        Ok(admitted.path_info)
+            .map_err(|e| Error::Store(format!("{e}")))
     }
 
     async fn check_shared_action_result(
@@ -1433,14 +1398,10 @@ where BServ: BuildService + 'static
             .map(|probe| probe.outputs)
             .ok_or_else(|| Error::Store("selected action result has no admitted outputs".to_string()))?;
         let remote_result_source = self.root_retention_source.map(GcRootSource::for_remote_result);
-        let admitted_outputs = self
-            .store
+        self.store
             .admit_action_result_outputs(&infos, is_root, remote_result_source)
             .await
             .map_err(|error| Error::Store(format!("admitting shared action result: {error}")))?;
-        for admitted in admitted_outputs {
-            self.execute_admitted_publication(admitted).await?;
-        }
         self.persist_shared_ca_mapping(drv_path, derivation, &infos);
         self.record_cached_output_paths(drv_path, derivation, &infos, known_paths)?;
         Ok(Some(CacheCheckHit {

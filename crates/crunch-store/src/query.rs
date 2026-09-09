@@ -168,9 +168,7 @@ pub async fn store_verify(
             });
         }
     }
-    let result_count =
-        u64::try_from(results.len()).map_err(|_| Error::Store("store verify result count exceeds u64".to_string()))?;
-    assert!(result_count <= u64::from(scanned_count));
+    assert!(results.len() <= usize::try_from(scanned_count).unwrap_or(usize::MAX));
     assert!(scanned_count <= MAX_VERIFY_ENTRIES);
     Ok(results)
 }

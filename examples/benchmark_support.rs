@@ -14,6 +14,7 @@ use nix_compat::store_path::StorePath;
 use serde::Deserialize;
 use serde::Serialize;
 use snix_castore::Node;
+use tokio::io::AsyncWriteExt;
 
 pub const BENCHMARK_BUNDLE_SCHEMA_V1: &str = "crunch-benchmark-bundle-v1";
 pub const EVAL_SMOKE_ENTRY_POINT: &str = "cargo run --example benchmark_eval_smoke --";
@@ -1052,7 +1053,7 @@ fn suite_workloads(repo_root: &Path) -> Result<Vec<SuiteWorkload>, Error> {
                 workload_kind: "store".to_string(),
                 workload_path: "examples/benchmark_support.rs::benchmark_store_aware_workload".to_string(),
                 rationale: "A fresh temp store per sample persists one signed blob output, reopens the store, and times the follow-up cached-node lookup without inventing store phases for unrelated workloads.".to_string(),
-                operation: "crunch_store::BuildStore admission plus explicit publication plan and cached-node lookup over deterministic local bytes".to_string(),
+                operation: "crunch_store::StoreHandle::persist_and_export_signed_output + StoreHandle::cached_node_for_path over deterministic local bytes".to_string(),
                 entry_point: SUITE_ENTRY_POINT.to_string(),
                 cache_mode: "fresh temp store per sample".to_string(),
                 logical_store_prefix: DEFAULT_LOGICAL_STORE_PREFIX.to_string(),
@@ -1735,7 +1736,7 @@ fn run_store_aware_sample(runtime: &tokio::runtime::Runtime, store_prefix: &str)
         let path_info = benchmark_signed_pathinfo(output_path.clone(), node.clone())?;
 
         let persistence_started_at = Instant::now();
-        let admitted = store
+        let persisted_path_info = store
             .persist_and_export_signed_output(crunch_store::PersistOutputRequest {
                 output_name: "out",
                 output_path: &output_path,
@@ -1746,10 +1747,7 @@ fn run_store_aware_sample(runtime: &tokio::runtime::Runtime, store_prefix: &str)
                 root_source: None,
             })
             .await?;
-        let observations =
-            store.publication_execution().execute(&admitted.publication_plan, &admitted.path_info).await?;
-        assert!(observations.is_empty(), "benchmark config has no publishers");
-        assert_eq!(admitted.path_info.store_path, output_path, "persisted path must stay stable");
+        assert_eq!(persisted_path_info.store_path, output_path, "persisted path must stay stable");
         let store_persistence_wall_ns = duration_to_ns_u64(persistence_started_at.elapsed())?;
         drop(store);
 
@@ -1775,8 +1773,8 @@ async fn open_benchmark_store(
     state_dir: &Path,
     output_dir: &Path,
     store_prefix: &str,
-) -> Result<crunch_store::BuildStore, Error> {
-    crunch_store::BuildStore::open(crunch_store::StoreConfig {
+) -> Result<crunch_store::StoreHandle, Error> {
+    crunch_store::StoreHandle::open(crunch_store::StoreConfig {
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),
@@ -1788,8 +1786,10 @@ async fn open_benchmark_store(
     .map_err(Error::from)
 }
 
-async fn store_local_blob(store: &crunch_store::BuildStore, contents: &[u8]) -> Result<Node, Error> {
-    let digest = store.transfer_store().put_blob_bytes(contents).await?;
+async fn store_local_blob(store: &crunch_store::StoreHandle, contents: &[u8]) -> Result<Node, Error> {
+    let mut writer = store.blob_service().open_write().await;
+    writer.write_all(contents).await?;
+    let digest = writer.close().await.map_err(Error::Io)?;
     Ok(Node::File {
         digest,
         size: u64::try_from(contents.len())
@@ -2317,7 +2317,7 @@ mod tests {
             host_class: "linux-x86_64".to_string(),
             target: "linux-x86_64".to_string(),
             evaluator_id: "nickel-lang".to_string(),
-            evaluator_version: "2.2.0".to_string(),
+            evaluator_version: "2.0.0".to_string(),
             toolchain_id: "fixture-toolchain".to_string(),
             policy_ref: "fixture-policy".to_string(),
             fixture_set_id: "fixture-set".to_string(),

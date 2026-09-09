@@ -108,12 +108,6 @@ use crunch_build::distributed::plan_remote_resource_reservation;
 use crunch_build::distributed::rank_remote_worker_placement_candidates;
 use crunch_build::distributed::remote_resource_remaining_capacity;
 use crunch_build::distributed::validate_remote_resource_lease_snapshot;
-pub use crunch_remote_core::MAX_REMOTE_BUILD_PAYLOAD_BYTES;
-pub use crunch_remote_core::MAX_REMOTE_CAPABILITIES;
-pub use crunch_remote_core::MAX_REMOTE_EXPECTED_OUTPUTS;
-pub use crunch_remote_core::MAX_REMOTE_INPUT_REFS;
-pub use crunch_remote_core::REMOTE_PROTOCOL_ALPN;
-pub use crunch_remote_core::REMOTE_PROTOCOL_VERSION;
 use fs2::FileExt;
 use nix_compat::store_path::StorePath;
 use rand::RngCore;
@@ -145,7 +139,14 @@ use crate::remote_trace_context::REMOTE_TRACE_CONTEXT_CAPABILITY;
 use crate::remote_trace_context::RemoteTraceContext;
 use crate::remote_trace_context::RemoteTraceContextHealth;
 use crate::remote_trace_context::accept_remote_trace_context;
+
+pub const REMOTE_PROTOCOL_ALPN: &str = "mantle-remote-build/1";
 pub const REMOTE_OBSERVABILITY_NON_CLAIM: &str = "remote observability is diagnostic only and does not prove build success, output validity, reproducibility, release eligibility, or physical-target determinism";
+pub const REMOTE_PROTOCOL_VERSION: u32 = 1;
+pub const MAX_REMOTE_CAPABILITIES: usize = 32;
+pub const MAX_REMOTE_INPUT_REFS: usize = 1_000_000;
+pub const MAX_REMOTE_EXPECTED_OUTPUTS: usize = 128;
+pub const MAX_REMOTE_BUILD_PAYLOAD_BYTES: usize = 1_048_576;
 pub const MAX_REMOTE_FRAME_BYTES: usize = 1_048_576;
 const MAX_REMOTE_PATHINFO_READ_BYTES: u64 = 1_048_577;
 const REMOTE_JSON_BYTE_ARRAY_MAX_CHARS_PER_BYTE: usize = 4;
@@ -214,6 +215,7 @@ const LEGACY_LOG_MIGRATION_COUNT_MAX_U32: u32 = 4_294_967_295;
 const LEGACY_LOG_MIGRATION_PAYLOAD_BYTES_MAX: u64 = 18_446_744_073_709_551_615;
 const LEGACY_LOG_MIGRATION_NON_CLAIM: &str =
     "legacy mutable log vectors are not immutable attempt-log history and were not rehashed or promoted";
+const REMOTE_COORDINATOR_BUILD_KEY_LABEL: &str = "remote-coordinator-build-key";
 const REMOTE_COORDINATOR_JOB_ID_LABEL: &str = "remote-coordinator-job";
 const REMOTE_ASSIGNMENT_NONCE_LABEL: &str = "remote-assignment-nonce";
 const EXTERNAL_BATCH_PLAN_REPORT_SCHEMA: &str = "mantle-external-batch-plan-v1";
@@ -1553,8 +1555,6 @@ pub struct RemoteCoordinatorBuildRequest {
     pub resource_requirements: Option<RemoteResourceRequirements>,
     #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub locality_scope: Option<RemoteLocalityScope>,
-    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
-    pub resource_policy_selection: Option<crunch_resource_policy::ResourceSelectionRequest>,
     pub trusted_output_keys: Vec<String>,
     pub live_output_claims: Vec<String>,
     pub wait_for_worker: bool,
@@ -1604,8 +1604,6 @@ pub struct RemoteCoordinatorJobSummary {
     pub last_attempt_reason_code: Option<RemoteAttemptReasonCode>,
     #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub resource_requirements: Option<RemoteResourceRequirements>,
-    #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
-    pub resource_policy_decision: Option<crunch_resource_policy::ResourceSelectionDecision>,
     #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
     pub resource_lease_id_blake3: Option<String>,
     #[serde(default = "absent_remote_value", skip_serializing_if = "Option::is_none")]
@@ -1831,7 +1829,6 @@ pub struct RemoteCoordinatorJobStatus {
     pub attempt_phase: Option<RemoteAttemptPhase>,
     pub attempt_reason_code: Option<RemoteAttemptReasonCode>,
     pub resource_requirements: Option<RemoteResourceRequirements>,
-    pub resource_policy_decision: Option<crunch_resource_policy::ResourceSelectionDecision>,
     pub resource_lease_id_blake3: Option<String>,
     pub resource_fit: Option<crunch_build::ResourceFitClass>,
     pub locality: Option<RemoteVerifiedLocalitySummary>,
@@ -1976,26 +1973,34 @@ pub fn validate_hello(
         Ok(value) => value,
         Err(error) => return ProtocolDecision::Reject(format!("expected endpoint invalid: {}", error.as_str())),
     };
-    let accepted = match crunch_remote_core::admit_hello(crunch_remote_core::HelloAdmissionInput {
-        alpn: hello.alpn.clone(),
-        version: hello.version,
-        endpoint_id: actual_endpoint.as_str().to_string(),
-        expected_endpoint_id: expected_endpoint.as_str().to_string(),
-        capabilities: hello.capabilities.clone(),
-        supported_capabilities: supported_capabilities.to_vec(),
-        workspace_policy_valid: true,
-    }) {
-        crunch_remote_core::HelloAdmissionDecision::Proceed(accepted) => accepted,
-        crunch_remote_core::HelloAdmissionDecision::Reject(reason) => return ProtocolDecision::Reject(reason),
-    };
+    if hello.alpn != REMOTE_PROTOCOL_ALPN {
+        return ProtocolDecision::Reject(format!("unsupported ALPN {}", hello.alpn));
+    }
+    if hello.version != REMOTE_PROTOCOL_VERSION {
+        return ProtocolDecision::Reject(format!("unsupported protocol version {}", hello.version));
+    }
+    if actual_endpoint != expected_endpoint {
+        return ProtocolDecision::Reject("endpoint identity mismatch".to_string());
+    }
+    if hello.capabilities.len() > MAX_REMOTE_CAPABILITIES {
+        return ProtocolDecision::Reject(format!("capability count exceeds {MAX_REMOTE_CAPABILITIES}"));
+    }
     if let Some(policy) = hello.workspace_policy.as_ref()
         && let Err(reason) = crate::remote_farm_config::validate_remote_workspace_policy(policy)
     {
         return ProtocolDecision::Reject(format!("invalid workspace registration: {reason}"));
     }
+    let accepted_capabilities = hello
+        .capabilities
+        .iter()
+        .filter(|capability| supported_capabilities.contains(capability))
+        .cloned()
+        .collect::<Vec<_>>();
+    debug_assert!(accepted_capabilities.len() <= hello.capabilities.len());
+    debug_assert!(accepted_capabilities.iter().all(|capability| supported_capabilities.contains(capability)));
     ProtocolDecision::Proceed(AcceptedHello {
-        endpoint_id: accepted.endpoint_id,
-        accepted_capabilities: accepted.accepted_capabilities,
+        endpoint_id: hello.endpoint_id.clone(),
+        accepted_capabilities,
     })
 }
 
@@ -2534,10 +2539,10 @@ async fn execute_remote_local_build_linux(
         .map_err(|err| format!("remote-local-executor-mutation-lock: {err}"))?;
     let (drv_path, mut known_paths) = local_derivation_registry(request, plan)?;
     let workspace_lease = acquire_remote_execution_workspace(executor, request, &drv_path, &mut known_paths)?;
-    let store = crunch_store::BuildStore::open(remote_local_store_config(executor))
+    let store = crunch_store::StoreHandle::open(remote_local_store_config(executor))
         .await
         .map_err(|err| format!("remote-local-executor-open-store: {err}"))?;
-    materialize_remote_input_upload(store.transfer_store(), request, input_upload).await?;
+    materialize_remote_input_upload(&store, request, input_upload).await?;
     let workdir = std::env::temp_dir().join(REMOTE_LOCAL_BUILD_WORKDIR_NAME);
     std::fs::create_dir_all(&workdir).map_err(|err| format!("remote-local-executor-workdir: {err}"))?;
     let failure_workspace_root = remote_failure_workspace_root(executor, request)?;
@@ -3122,7 +3127,7 @@ pub fn set_remote_diagnostic_trace_context(
 }
 
 pub async fn prepare_remote_production_input_transfer(
-    store: crunch_store::TransferStore<'_>,
+    store: &crunch_store::StoreHandle,
     command: &mut RemoteStdioCommand,
     request: &ConcreteBuildRequest,
     source_state_dir: &Path,
@@ -3180,7 +3185,7 @@ pub async fn prepare_remote_production_input_transfer(
 }
 
 struct RemoteInputNarPrepareContext<'a> {
-    store: crunch_store::TransferStore<'a>,
+    store: &'a crunch_store::StoreHandle,
     request: &'a ConcreteBuildRequest,
     source_state_dir: &'a Path,
     spool_dir: &'a Path,
@@ -3213,11 +3218,14 @@ async fn prepare_remote_input_nar_artifact(
         }
         Err(reason) => return Err(reason),
     };
-    let node = context
-        .store
-        .ingest_host_path(&host_path)
-        .await
-        .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
+    let node = snix_castore::import::fs::ingest_path::<_, _, _, &[u8]>(
+        context.store.blob_service(),
+        context.store.directory_service(),
+        &host_path,
+        None,
+    )
+    .await
+    .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
     let artifact = crate::remote_transfer::prepare_nar_node_transfer_artifact(
         context.store,
         &node,
@@ -3277,7 +3285,7 @@ fn remote_input_requested_content_digest(request: &ConcreteBuildRequest) -> Resu
 }
 
 pub async fn populate_remote_input_upload_artifacts_from_store(
-    store: crunch_store::TransferStore<'_>,
+    store: &crunch_store::StoreHandle,
     command: &mut RemoteStdioCommand,
     request: &ConcreteBuildRequest,
 ) -> Result<(), String> {
@@ -3286,7 +3294,7 @@ pub async fn populate_remote_input_upload_artifacts_from_store(
 }
 
 pub async fn populate_remote_input_upload_artifacts_from_store_or_source_state(
-    store: crunch_store::TransferStore<'_>,
+    store: &crunch_store::StoreHandle,
     command: &mut RemoteStdioCommand,
     request: &ConcreteBuildRequest,
     source_state_dir: &Path,
@@ -3327,14 +3335,14 @@ fn attach_remote_input_upload_artifacts(
 }
 
 pub async fn plan_remote_input_upload_artifacts_from_store(
-    store: crunch_store::TransferStore<'_>,
+    store: &crunch_store::StoreHandle,
     request: &ConcreteBuildRequest,
 ) -> Result<Vec<RemoteInputUploadArtifact>, String> {
     plan_remote_input_upload_artifacts(store, request, None).await
 }
 
 pub async fn plan_remote_input_upload_artifacts_from_store_or_source_state(
-    store: crunch_store::TransferStore<'_>,
+    store: &crunch_store::StoreHandle,
     request: &ConcreteBuildRequest,
     source_state_dir: &Path,
 ) -> Result<Vec<RemoteInputUploadArtifact>, String> {
@@ -3342,7 +3350,7 @@ pub async fn plan_remote_input_upload_artifacts_from_store_or_source_state(
 }
 
 async fn plan_remote_input_upload_artifacts(
-    store: crunch_store::TransferStore<'_>,
+    store: &crunch_store::StoreHandle,
     request: &ConcreteBuildRequest,
     source_state_dir: Option<&Path>,
 ) -> Result<Vec<RemoteInputUploadArtifact>, String> {
@@ -3735,7 +3743,7 @@ pub fn validate_remote_source_upload_record(
 }
 
 fn remote_input_ref_host_path(
-    store: crunch_store::TransferStore<'_>,
+    store: &crunch_store::StoreHandle,
     store_prefix: &str,
     input_ref: impl AsRef<str>,
 ) -> Result<PathBuf, String> {
@@ -3753,7 +3761,7 @@ fn remote_input_ref_host_path(
 }
 
 async fn render_remote_input_nar_payload_for_ref(
-    store: crunch_store::TransferStore<'_>,
+    store: &crunch_store::StoreHandle,
     request: &ConcreteBuildRequest,
     input_ref: &str,
     source_state_dir: Option<&Path>,
@@ -3768,7 +3776,7 @@ async fn render_remote_input_nar_payload_for_ref(
 }
 
 async fn render_remote_input_nar_payload_from_source_state(
-    store: crunch_store::TransferStore<'_>,
+    store: &crunch_store::StoreHandle,
     request: &ConcreteBuildRequest,
     input_ref: &str,
     source_state_dir: Option<&Path>,
@@ -3792,13 +3800,17 @@ async fn render_remote_input_nar_payload_from_source_state(
 }
 
 async fn render_remote_input_nar_payload(
-    store: crunch_store::TransferStore<'_>,
+    store: &crunch_store::StoreHandle,
     host_path: &Path,
 ) -> Result<Vec<u8>, String> {
-    let node = store
-        .ingest_host_path(host_path)
-        .await
-        .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
+    let node = snix_castore::import::fs::ingest_path::<_, _, _, &[u8]>(
+        store.blob_service(),
+        store.directory_service(),
+        host_path,
+        None,
+    )
+    .await
+    .map_err(|err| format!("remote-input-source-ingest-failed: {err}"))?;
     let mut writer = BoundedAsyncVecWriter::new(MAX_REMOTE_INLINE_NAR_PAYLOAD_BYTES);
     store
         .render_nar(&node, &mut writer)
@@ -3808,7 +3820,7 @@ async fn render_remote_input_nar_payload(
 }
 
 async fn materialize_remote_input_upload(
-    store: crunch_store::TransferStore<'_>,
+    store: &crunch_store::StoreHandle,
     request: &ConcreteBuildRequest,
     upload: &RemoteInputUpload,
 ) -> Result<(), String> {
@@ -3837,24 +3849,24 @@ async fn materialize_remote_input_upload(
 }
 
 async fn materialize_remote_input_artifact(
-    store: crunch_store::TransferStore<'_>,
+    store: &crunch_store::StoreHandle,
     store_prefix: &str,
     artifact: &RemoteInputUploadArtifact,
 ) -> Result<(), String> {
     let store_path = parse_remote_output_store_path(&artifact.input_ref, store_prefix)?;
     let mut reader = std::io::Cursor::new(artifact.payload.as_slice());
-    let observation = store
-        .ingest_nar_and_hash(&mut reader)
-        .await
-        .map_err(|err| format!("remote-input-nar-ingest-failed: {err}"))?;
-    if observation.nar_size_bytes != artifact.size_bytes {
+    let (node, _nar_sha256, nar_size) =
+        snix_store::nar::ingest_nar_and_hash(store.blob_service(), store.directory_service(), &mut reader, &None)
+            .await
+            .map_err(|err| format!("remote-input-nar-ingest-failed: {err}"))?;
+    if nar_size != artifact.size_bytes {
         return Err("remote-input-nar-size-mismatch".to_string());
     }
-    export_remote_input_node(store, &store_path, &observation.node).await
+    export_remote_input_node(store, &store_path, &node).await
 }
 
 async fn materialize_streamed_remote_inputs(
-    store: crunch_store::TransferStore<'_>,
+    store: &crunch_store::StoreHandle,
     request: &ConcreteBuildRequest,
     manifest: &crunch_build::distributed::CanonicalRemoteTransferManifest,
     receiver_root: &Path,
@@ -3887,22 +3899,22 @@ async fn materialize_streamed_remote_inputs(
         let reader = crate::remote_transfer::open_remote_transfer_received_artifact(receiver_root, &artifact_id)
             .map_err(|err| format!("remote-streamed-input-open-failed: {err}"))?;
         let mut reader = tokio::fs::File::from_std(reader);
-        let observation = store
-            .ingest_nar_and_hash(&mut reader)
-            .await
-            .map_err(|err| format!("remote-streamed-input-nar-ingest-failed: {err}"))?;
-        if observation.nar_size_bytes != descriptor.size_bytes {
+        let (node, nar_sha256, nar_size) =
+            snix_store::nar::ingest_nar_and_hash(store.blob_service(), store.directory_service(), &mut reader, &None)
+                .await
+                .map_err(|err| format!("remote-streamed-input-nar-ingest-failed: {err}"))?;
+        if nar_size != descriptor.size_bytes {
             return Err("remote-streamed-input-nar-size-mismatch".to_string());
         }
         if descriptor
             .nar_sha256_hex
             .as_deref()
-            .is_some_and(|expected| expected != data_encoding::HEXLOWER.encode(&observation.nar_sha256))
+            .is_some_and(|expected| expected != data_encoding::HEXLOWER.encode(&nar_sha256))
         {
             return Err("remote-streamed-input-nar-sha256-mismatch".to_string());
         }
         let store_path = parse_remote_output_store_path(input_ref, &request.store_prefix)?;
-        export_remote_input_node(store, &store_path, &observation.node).await?;
+        export_remote_input_node(store, &store_path, &node).await?;
     }
     assert_eq!(expected_ids.len(), request.input_refs.len());
     assert!(manifest.total_bytes <= request.transfer_policy.unwrap_or_default().total_bytes_max);
@@ -3910,14 +3922,17 @@ async fn materialize_streamed_remote_inputs(
 }
 
 async fn export_remote_input_node(
-    store: crunch_store::TransferStore<'_>,
+    store: &crunch_store::StoreHandle,
     store_path: &StorePath<String>,
     node: &snix_castore::Node,
 ) -> Result<(), String> {
-    store
-        .export_node(store_path, node)
-        .await
-        .map_err(|err| format!("remote-input-export-failed: {err}"))
+    let host_path = store_path.to_absolute_path_with_prefix(store.output_dir_str());
+    if !Path::new(&host_path).exists() {
+        crunch_store::export_castore_to_disk(node, &host_path, &store.blob_service(), &store.directory_service())
+            .await
+            .map_err(|err| format!("remote-input-export-failed: {err}"))?;
+    }
+    Ok(())
 }
 
 struct PreparedRemoteProductionOutput {
@@ -3947,7 +3962,7 @@ async fn prepare_remote_production_output(
             policy,
         )?;
         let nar = crate::remote_transfer::prepare_nar_transfer_artifact(
-            store.transfer_store(),
+            &store,
             path_info,
             remote_output_nar_artifact_id(&output.name, &output.logical_path)?,
             &spool_dir,
@@ -3989,8 +4004,8 @@ async fn prepare_remote_production_output(
 
 async fn open_remote_local_executor_store(
     executor: &RemoteLocalBuildExecutor,
-) -> Result<crunch_store::BuildStore, String> {
-    crunch_store::BuildStore::open(crunch_store::StoreConfig {
+) -> Result<crunch_store::StoreHandle, String> {
+    crunch_store::StoreHandle::open(crunch_store::StoreConfig {
         state_dir: executor.state_dir.clone(),
         output_dir: executor.output_dir.clone(),
         remote_cache_urls: Vec::new(),
@@ -4644,11 +4659,11 @@ pub fn redeem_after_queue(ticket: &mut RemoteTicket, request_validated: bool) ->
 }
 
 pub fn derive_missing_inputs(declared_refs: &[String], present_refs: &[String]) -> Result<Vec<String>, String> {
-    crunch_remote_core::derive_missing_inputs(crunch_remote_core::MissingInputFacts {
-        declared_refs: declared_refs.to_vec(),
-        present_refs: present_refs.to_vec(),
-    })
-    .map_err(|error| error.code().to_string())
+    if declared_refs.len() > MAX_REMOTE_INPUT_REFS || present_refs.len() > MAX_REMOTE_INPUT_REFS {
+        return Err(format!("input-ref-count-exceeds-{MAX_REMOTE_INPUT_REFS}"));
+    }
+    let present = present_refs.iter().collect::<std::collections::BTreeSet<_>>();
+    Ok(declared_refs.iter().filter(|reference| !present.contains(reference)).cloned().collect::<Vec<_>>())
 }
 
 pub fn decide_output_trust(
@@ -4656,23 +4671,73 @@ pub fn decide_output_trust(
     trusted_key_ids: &[String],
     store_prefix_matches: bool,
 ) -> OutputTrustDecision {
-    let decision = crunch_remote_core::decide_output_trust(crunch_remote_core::OutputTrustInput {
-        signing_key_id: signing_key_id.to_string(),
-        trusted_key_ids: trusted_key_ids.to_vec(),
-        store_prefix_matches,
-    });
-    match decision {
-        crunch_remote_core::RemoteOutputTrustDecision::Accept {
-            key_id,
-            key_material_digest_blake3,
-        } => OutputTrustDecision::Accept {
-            key_id: key_id.clone(),
-            trust_basis: RemoteOutputTrustBasis {
-                key_id,
-                key_material_digest_blake3,
-            },
-        },
-        crunch_remote_core::RemoteOutputTrustDecision::Reject(reason) => OutputTrustDecision::Reject(reason),
+    if !store_prefix_matches {
+        return OutputTrustDecision::Reject("store-prefix-mismatch".to_string());
+    }
+    let signer = parse_output_key_ref(signing_key_id);
+    debug_assert_eq!(signer.name.is_empty(), signing_key_id.is_empty());
+    debug_assert!(signer.key_material_digest_blake3.as_ref().is_none_or(|digest| is_blake3_hex_digest(digest)));
+    let mut is_same_name_material_required = false;
+    let mut is_same_name_different_material = false;
+    for trusted_key_id in trusted_key_ids {
+        let trusted = parse_output_key_ref(trusted_key_id);
+        if trusted.name != signer.name {
+            continue;
+        }
+        match (&signer.key_material_digest_blake3, &trusted.key_material_digest_blake3) {
+            (Some(signer_digest), Some(trusted_digest)) if signer_digest == trusted_digest => {
+                return OutputTrustDecision::Accept {
+                    key_id: signing_key_id.to_string(),
+                    trust_basis: signer.trust_basis(signing_key_id),
+                };
+            }
+            (Some(_), Some(_)) => is_same_name_different_material = true,
+            (None, Some(_)) => is_same_name_material_required = true,
+            (_, None) => {
+                return OutputTrustDecision::Accept {
+                    key_id: signing_key_id.to_string(),
+                    trust_basis: signer.trust_basis(signing_key_id),
+                };
+            }
+        }
+    }
+    if is_same_name_material_required {
+        return OutputTrustDecision::Reject("output-key-material-missing".to_string());
+    }
+    if is_same_name_different_material {
+        return OutputTrustDecision::Reject("same-name-different-output-key".to_string());
+    }
+    OutputTrustDecision::Reject("untrusted-output-key".to_string())
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct OutputKeyRef {
+    name: String,
+    key_material_digest_blake3: Option<String>,
+}
+
+impl OutputKeyRef {
+    fn trust_basis(&self, key_id: &str) -> RemoteOutputTrustBasis {
+        RemoteOutputTrustBasis {
+            key_id: key_id.to_string(),
+            key_material_digest_blake3: self.key_material_digest_blake3.clone(),
+        }
+    }
+}
+
+fn parse_output_key_ref(value: &str) -> OutputKeyRef {
+    if let Some((name, material)) = value.split_once(':')
+        && !name.is_empty()
+        && !material.is_empty()
+    {
+        return OutputKeyRef {
+            name: name.to_string(),
+            key_material_digest_blake3: Some(blake3::hash(material.as_bytes()).to_hex().to_string()),
+        };
+    }
+    OutputKeyRef {
+        name: value.to_string(),
+        key_material_digest_blake3: None,
     }
 }
 
@@ -4804,9 +4869,6 @@ pub fn validate_coordinator_build_request(
     {
         return Err("remote-coordinator-locality-scope-invalid".to_string());
     }
-    if request.resource_policy_selection.is_some() {
-        effective_coordinator_resource_requirements(request)?;
-    }
     if request.request.upload_bytes > MAX_REMOTE_UPLOAD_BYTES {
         return Err("remote-coordinator-upload-byte-limit-exceeded".to_string());
     }
@@ -4820,164 +4882,57 @@ pub fn validate_coordinator_build_request(
     Ok(plan)
 }
 
-fn coordinator_resource_policy_decision(
-    request: &RemoteCoordinatorBuildRequest,
-) -> Result<Option<crunch_resource_policy::ResourceSelectionDecision>, String> {
-    let Some(selection) = &request.resource_policy_selection else {
-        return Ok(None);
-    };
-    let declared = request
-        .resource_requirements
-        .as_ref()
-        .ok_or_else(|| "resource-policy-declared-requirements-missing".to_string())?;
-    validate_resource_policy_request_binding(request, selection, declared)?;
-    let decision =
-        crunch_resource_policy::select_resource_class(selection.clone()).map_err(|error| error.code().to_string())?;
-    debug_assert_eq!(decision.action_family_blake3, selection.action_family.identity_blake3);
-    debug_assert_eq!(decision.policy_id, selection.policy.policy_id);
-    Ok(Some(decision))
-}
-
-fn effective_coordinator_resource_requirements(
-    request: &RemoteCoordinatorBuildRequest,
-) -> Result<Option<RemoteResourceRequirements>, String> {
-    if request.resource_policy_selection.is_none() {
-        return Ok(request.resource_requirements.clone());
-    }
-    let Some(mut effective) = request.resource_requirements.clone() else {
-        return Err("resource-policy-declared-requirements-missing".to_string());
-    };
-    let decision =
-        coordinator_resource_policy_decision(request)?.ok_or_else(|| "resource-policy-decision-missing".to_string())?;
-    effective.quantities.cpu_units = decision.effective_minima.cpu_units;
-    effective.quantities.memory_bytes = decision.effective_minima.memory_bytes;
-    effective.quantities.scratch_bytes = decision.effective_minima.scratch_bytes;
-    canonical_remote_resource_requirements(&effective).map_err(|reason| reason.as_str().to_string())?;
-    debug_assert!(effective.quantities.cpu_units >= decision.declared_minima.cpu_units);
-    debug_assert!(effective.quantities.memory_bytes >= decision.declared_minima.memory_bytes);
-    Ok(Some(effective))
-}
-
-fn validate_resource_policy_request_binding(
-    request: &RemoteCoordinatorBuildRequest,
-    selection: &crunch_resource_policy::ResourceSelectionRequest,
-    declared: &RemoteResourceRequirements,
-) -> Result<(), String> {
-    let policy_minima = selection.declared.minima;
-    if policy_minima.cpu_units != declared.quantities.cpu_units
-        || policy_minima.memory_bytes != declared.quantities.memory_bytes
-        || policy_minima.scratch_bytes != declared.quantities.scratch_bytes
-    {
-        return Err("resource-policy-request-binding-mismatch".to_string());
-    }
-    if selection.declared.platform.platform != request.required_system
-        || selection.declared.platform.isolation != request.required_sandbox_mode
-    {
-        return Err("resource-policy-request-binding-mismatch".to_string());
-    }
-    if selection.action_family.system != request.required_system
-        || selection.action_family.sandbox_mode != request.required_sandbox_mode
-        || selection.action_family.network_mode != request.required_network_mode
-    {
-        return Err("resource-policy-request-binding-mismatch".to_string());
-    }
-    let policy_features =
-        selection.declared.platform.required_features.iter().map(String::as_str).collect::<BTreeSet<_>>();
-    if request.required_features.iter().any(|feature| !policy_features.contains(feature.as_str()))
-        || (request.required_features.iter().any(|feature| feature == "kvm")
-            && !selection.declared.platform.kvm_required)
-    {
-        return Err("resource-policy-hard-feature-binding-mismatch".to_string());
-    }
-    debug_assert_eq!(selection.action_family.system, request.required_system);
-    debug_assert!(request.required_features.iter().all(|feature| policy_features.contains(feature.as_str())));
-    Ok(())
-}
-
 pub fn normalized_remote_build_key(request: &RemoteCoordinatorBuildRequest) -> Result<String, String> {
     let plan = validate_coordinator_build_request(request)?;
-    let input = remote_build_identity_input(request, &plan)?;
-    crunch_remote_core::normalized_remote_build_key(input).map_err(|error| error.code().to_string())
-}
-
-fn remote_build_identity_input(
-    request: &RemoteCoordinatorBuildRequest,
-    plan: &RemoteExecutablePlan,
-) -> Result<crunch_remote_core::RemoteBuildIdentityInput, String> {
-    let (replay_source, replay_execution) = request
-        .request
-        .failure_replay
-        .as_ref()
-        .map(|replay| {
-            (
-                Some(replay.source_bundle_blake3.as_str().to_string()),
-                Some(replay.execution_blake3.as_str().to_string()),
-            )
-        })
-        .unwrap_or((None, None));
-    Ok(crunch_remote_core::RemoteBuildIdentityInput {
-        store_prefix: request.request.store_prefix.clone(),
-        source: remote_build_identity_source(&plan.source),
-        system: plan.system.clone(),
-        command_args: plan.command_args.clone(),
-        command_env: plan.command_env.clone(),
-        input_refs: request.request.input_refs.clone(),
-        source_input_refs: request.request.source_input_refs.clone(),
-        expected_outputs: request.request.expected_outputs.iter().map(remote_output_expectation_fact).collect(),
-        failure_replay_source_bundle_blake3: replay_source,
-        failure_replay_execution_blake3: replay_execution,
-        required_system: request.required_system.clone(),
-        required_features: request.required_features.clone(),
-        required_sandbox_mode: request.required_sandbox_mode.clone(),
-        required_network_mode: request.required_network_mode.clone(),
-        semantic_accelerator_classes: remote_semantic_accelerator_classes(request)?,
-    })
-}
-
-fn remote_build_identity_source(source: &RemoteExecutablePlanSource) -> crunch_remote_core::RemoteBuildIdentitySource {
-    match source {
-        RemoteExecutablePlanSource::Action {
-            action_id,
-            schema,
-            spec_digest_blake3,
-        } => crunch_remote_core::RemoteBuildIdentitySource::Action {
-            action_id: action_id.clone(),
-            schema: schema.clone(),
-            spec_digest_blake3: spec_digest_blake3.clone(),
-        },
-        RemoteExecutablePlanSource::Derivation {
-            declared_drv_path,
-            computed_drv_path,
-            drv_name,
-            drv_digest_blake3,
-        } => crunch_remote_core::RemoteBuildIdentitySource::Derivation {
-            declared_drv_path: declared_drv_path.clone(),
-            computed_drv_path: computed_drv_path.clone(),
-            drv_name: drv_name.clone(),
-            drv_digest_blake3: drv_digest_blake3.clone(),
-        },
+    let mut hasher = blake3::Hasher::new();
+    hash_labeled_str(&mut hasher, "kind", REMOTE_COORDINATOR_BUILD_KEY_LABEL);
+    hash_labeled_str(&mut hasher, "store-prefix", &request.request.store_prefix);
+    hash_executable_plan_source(&mut hasher, &plan.source);
+    hash_labeled_str(&mut hasher, "system", &plan.system);
+    hash_ordered_values(&mut hasher, "command-arg", &plan.command_args);
+    hash_ordered_map(&mut hasher, "env", &plan.command_env);
+    hash_ordered_values(&mut hasher, "input-ref", &request.request.input_refs);
+    hash_ordered_values(&mut hasher, "source-input-ref", &request.request.source_input_refs);
+    hash_expected_outputs_for_key(&mut hasher, &request.request.expected_outputs);
+    if let Some(replay) = &request.request.failure_replay {
+        hash_labeled_str(&mut hasher, "failure-replay-source-bundle", replay.source_bundle_blake3.as_str());
+        hash_labeled_str(&mut hasher, "failure-replay-execution", replay.execution_blake3.as_str());
     }
-}
-
-fn remote_output_expectation_fact(output: &RemoteExpectedOutput) -> crunch_remote_core::RemoteOutputExpectation {
-    crunch_remote_core::RemoteOutputExpectation {
-        name: output.name.clone(),
-        logical_path: output.logical_path.clone(),
+    hash_labeled_str(&mut hasher, "required-system", &request.required_system);
+    hash_ordered_values(&mut hasher, "required-feature", &request.required_features);
+    hash_labeled_str(&mut hasher, "required-sandbox", &request.required_sandbox_mode);
+    hash_labeled_str(&mut hasher, "required-network", &request.required_network_mode);
+    if let Some(requirements) = &request.resource_requirements {
+        let canonical =
+            canonical_remote_resource_requirements(requirements).map_err(|reason| reason.as_str().to_string())?;
+        hash_ordered_values(&mut hasher, "semantic-accelerator-class", &canonical.semantic_accelerator_classes);
     }
-}
-
-fn remote_semantic_accelerator_classes(request: &RemoteCoordinatorBuildRequest) -> Result<Vec<String>, String> {
-    let Some(requirements) = &request.resource_requirements else {
-        return Ok(Vec::new());
-    };
-    let canonical =
-        canonical_remote_resource_requirements(requirements).map_err(|reason| reason.as_str().to_string())?;
-    Ok(canonical.semantic_accelerator_classes)
+    let normalized_key_blake3 = hasher.finalize().to_hex().to_string();
+    debug_assert!(is_blake3_hex_digest(&normalized_key_blake3));
+    debug_assert_eq!(normalized_key_blake3.len(), BLAKE3_HEX_LENGTH_CHARS);
+    Ok(normalized_key_blake3)
 }
 
 fn hash_ordered_values(hasher: &mut blake3::Hasher, label: &str, values: &[String]) {
     for value in values {
         hash_labeled_str(hasher, label, value);
+    }
+}
+
+fn hash_ordered_map(hasher: &mut blake3::Hasher, label: &str, values: &BTreeMap<String, String>) {
+    for (name, value) in values {
+        hash_labeled_str(hasher, &format!("{label}-name"), name);
+        hash_labeled_str(hasher, &format!("{label}-value"), value);
+    }
+}
+
+fn hash_expected_outputs_for_key(hasher: &mut blake3::Hasher, outputs: &[RemoteExpectedOutput]) {
+    for output in outputs {
+        hash_labeled_str(hasher, "expected-output-name", &output.name);
+        match &output.logical_path {
+            Some(logical_path) => hash_labeled_str(hasher, "expected-output-path", logical_path),
+            None => hash_labeled_str(hasher, "expected-output-path", "<content-addressed>"),
+        }
     }
 }
 
@@ -5792,7 +5747,6 @@ fn production_coordinator_request(
         required_network_mode: "none".to_string(),
         resource_requirements: input.request.resource_requirements.clone(),
         locality_scope: input.request.locality_scope.clone(),
-        resource_policy_selection: None,
         trusted_output_keys: input.trusted_output_keys.to_vec(),
         live_output_claims,
         wait_for_worker: false,
@@ -6613,8 +6567,7 @@ fn queued_job_summary(input: QueuedJobSummaryInput<'_>) -> Result<RemoteCoordina
         transferred_bytes: 0,
         output_admission_completed: false,
         last_attempt_reason_code: None,
-        resource_requirements: effective_coordinator_resource_requirements(request)?,
-        resource_policy_decision: coordinator_resource_policy_decision(request)?,
+        resource_requirements: request.resource_requirements.clone(),
         resource_lease_id_blake3: None,
         resource_fit: None,
         locality: None,
@@ -6627,12 +6580,12 @@ fn queued_job_summary(input: QueuedJobSummaryInput<'_>) -> Result<RemoteCoordina
 fn install_job_resource_reservation(
     state: &mut RemoteCoordinatorState,
     summary: &mut RemoteCoordinatorJobSummary,
-    _request: &RemoteCoordinatorBuildRequest,
+    request: &RemoteCoordinatorBuildRequest,
     placement: &CoordinatorWorkerPlacement,
 ) -> Result<(), String> {
     summary.resource_fit = Some(placement.resource_fit);
     summary.locality = placement.locality.clone();
-    let Some(requirements) = &summary.resource_requirements else {
+    let Some(requirements) = &request.resource_requirements else {
         debug_assert_eq!(placement.resource_fit, crunch_build::ResourceFitClass::Unknown);
         debug_assert!(summary.resource_lease_id_blake3.is_none());
         return Ok(());
@@ -7546,23 +7499,6 @@ fn select_coordinator_worker(
     if placements.is_empty() {
         return Ok(None);
     }
-    if let Some(selection) = &request.resource_policy_selection {
-        let decision = crunch_resource_policy::select_resource_class(selection.clone())
-            .map_err(|error| error.code().to_string())?;
-        let static_endpoint_ids =
-            placements.iter().map(|placement| placement.worker_endpoint_id.clone()).collect::<Vec<_>>();
-        let policy_plan = crate::resource_policy::plan_coordinator_resource_policy(
-            decision,
-            selection.machine_classes.clone(),
-            static_endpoint_ids,
-        )?;
-        let selected = placements
-            .into_iter()
-            .find(|placement| placement.worker_endpoint_id == policy_plan.selected_worker_endpoint_id)
-            .ok_or_else(|| "resource-policy-selected-worker-placement-missing".to_string())?;
-        debug_assert_eq!(selected.worker_endpoint_id, policy_plan.selected_worker_endpoint_id);
-        return Ok(Some(selected));
-    }
     let facts = placements
         .iter()
         .map(|placement| RemoteWorkerPlacementFacts {
@@ -7606,7 +7542,6 @@ fn coordinator_worker_placement_candidates(
     request: &RemoteCoordinatorBuildRequest,
 ) -> Result<Vec<CoordinatorWorkerPlacement>, String> {
     let active_leases = state.resource_leases.values().cloned().collect::<Vec<_>>();
-    let effective_requirements = effective_coordinator_resource_requirements(request)?;
     let mut placements = Vec::with_capacity(state.workers.len());
     for worker in state.workers.values() {
         if worker_satisfies_request(worker, request).is_err()
@@ -7614,7 +7549,7 @@ fn coordinator_worker_placement_candidates(
         {
             continue;
         }
-        let resource_fit = match (&effective_requirements, &worker.resource_inventory) {
+        let resource_fit = match (&request.resource_requirements, &worker.resource_inventory) {
             (Some(requirements), Some(inventory)) => {
                 match plan_remote_resource_availability(&worker.endpoint_id, inventory, requirements, &active_leases) {
                     Ok(plan) => plan.resource_fit,
@@ -7948,7 +7883,7 @@ fn coordinator_log_cursor_status(
     })
 }
 
-pub(crate) fn bounded_untrusted_text(value: &str) -> String {
+fn bounded_untrusted_text(value: &str) -> String {
     if text_looks_secret_bearing(value) {
         return SECRET_REDACTION.to_string();
     }
@@ -8009,7 +7944,6 @@ fn coordinator_job_status(
         attempt_phase: job.current_attempt.as_ref().map(|attempt| attempt.phase),
         attempt_reason_code: job.last_attempt_reason_code,
         resource_requirements: job.resource_requirements.clone(),
-        resource_policy_decision: job.resource_policy_decision.clone(),
         resource_lease_id_blake3: job.resource_lease_id_blake3.clone(),
         resource_fit: job.resource_fit,
         locality: job.locality.clone(),
@@ -10766,7 +10700,7 @@ pub fn plan_remote_output_import_actions(
 }
 
 pub async fn import_admitted_remote_outputs(
-    store: &mut crunch_store::BuildStore,
+    store: &mut crunch_store::StoreHandle,
     request: &ConcreteBuildRequest,
     admission: &RemoteOutputAdmissionReport,
     is_root: bool,
@@ -10780,7 +10714,7 @@ pub async fn import_admitted_remote_outputs(
 }
 
 struct AdmittedRemoteStdioOutputImportInput<'a> {
-    store: &'a mut crunch_store::BuildStore,
+    store: &'a mut crunch_store::StoreHandle,
     request: &'a ConcreteBuildRequest,
     admission: &'a RemoteOutputAdmissionReport,
     transcript: &'a RemoteStdioTranscript,
@@ -10792,7 +10726,7 @@ type RemoteOutputImportFuture<'a> =
     Pin<Box<dyn std::future::Future<Output = Result<RemoteOutputImportReport, String>> + 'a>>;
 
 pub const IMPORT_ADMITTED_REMOTE_STDIO_OUTPUTS: for<'a> fn(
-    &'a mut crunch_store::BuildStore,
+    &'a mut crunch_store::StoreHandle,
     &'a ConcreteBuildRequest,
     &'a RemoteOutputAdmissionReport,
     &'a RemoteStdioTranscript,
@@ -10855,7 +10789,7 @@ async fn import_admitted_remote_stdio_outputs_core(
 }
 
 async fn persist_remote_output_actions(
-    store: &mut crunch_store::BuildStore,
+    store: &mut crunch_store::StoreHandle,
     admission: &RemoteOutputAdmissionReport,
     actions: Vec<RemoteOutputImportAction>,
     is_root: bool,
@@ -11106,47 +11040,58 @@ fn remote_transfer_mode_to_store_mode(mode: RemoteTransferMode) -> crunch_store:
 }
 
 async fn ingest_remote_output_nar_payload(
-    store: &crunch_store::BuildStore,
+    store: &crunch_store::StoreHandle,
     action: &RemoteOutputImportAction,
 ) -> Result<(), String> {
     if action.nar_payload.is_some() && action.nar_path.is_some() {
         return Err("remote-output-nar-source-ambiguous".to_string());
     }
-    let transfer_store = store.transfer_store();
     let result = if let Some(payload) = &action.nar_payload {
         let mut reader = std::io::Cursor::new(payload.as_slice());
-        transfer_store.ingest_nar_and_hash_with_ca(&mut reader, &action.path_info.ca).await
+        snix_store::nar::ingest_nar_and_hash(
+            store.blob_service(),
+            store.directory_service(),
+            &mut reader,
+            &action.path_info.ca,
+        )
+        .await
     } else if let Some(path) = &action.nar_path {
         let reader = crate::remote_transfer::open_remote_transfer_authority_file(path)
             .map_err(|err| format!("remote-output-streamed-nar-open-failed: {err}"))?;
         let mut reader = tokio::fs::File::from_std(reader);
-        transfer_store.ingest_nar_and_hash_with_ca(&mut reader, &action.path_info.ca).await
+        snix_store::nar::ingest_nar_and_hash(
+            store.blob_service(),
+            store.directory_service(),
+            &mut reader,
+            &action.path_info.ca,
+        )
+        .await
     } else {
         return Ok(());
     };
-    let observation = result.map_err(|err| format!("remote-output-nar-ingest-failed: {err}"))?;
-    if observation.node != action.final_node {
+    let (node, nar_sha256, nar_size) = result.map_err(|err| format!("remote-output-nar-ingest-failed: {err}"))?;
+    if node != action.final_node {
         return Err("remote-output-nar-node-mismatch".to_string());
     }
-    if observation.nar_sha256 != action.path_info.nar_sha256 {
+    if nar_sha256 != action.path_info.nar_sha256 {
         return Err("remote-output-nar-sha256-mismatch".to_string());
     }
-    if observation.nar_size_bytes != action.path_info.nar_size {
+    if nar_size != action.path_info.nar_size {
         return Err("remote-output-nar-size-mismatch".to_string());
     }
-    debug_assert_eq!(observation.node, action.final_node);
-    debug_assert_eq!(observation.nar_size_bytes, action.path_info.nar_size);
+    debug_assert_eq!(node, action.final_node);
+    debug_assert_eq!(nar_size, action.path_info.nar_size);
     Ok(())
 }
 
 async fn persist_remote_output_action(
-    store: &mut crunch_store::BuildStore,
+    store: &mut crunch_store::StoreHandle,
     action: &RemoteOutputImportAction,
     is_root: bool,
     root_source: Option<crunch_store::GcRootSource>,
 ) -> Result<PathInfo, String> {
     ingest_remote_output_nar_payload(store, action).await?;
-    let admitted = store
+    store
         .persist_and_export_signed_output(crunch_store::PersistOutputRequest {
             output_name: &action.output_name,
             output_path: &action.store_path,
@@ -11157,27 +11102,11 @@ async fn persist_remote_output_action(
             root_source,
         })
         .await
-        .map_err(|err| format!("remote-output-persist-failed: {err}"))?;
-    let observations = store
-        .publication_execution()
-        .execute(&admitted.publication_plan, &admitted.path_info)
-        .await
-        .map_err(|err| format!("remote-output-publication-plan-failed: {err}"))?;
-    for observation in observations {
-        if observation.disposition == crunch_store::PublicationDisposition::Failed {
-            tracing::warn!(
-                path = %observation.logical_path,
-                publisher_index = observation.publisher_index,
-                error = observation.error.as_deref().unwrap_or("publisher failure"),
-                "remote output publication failed after local admission"
-            );
-        }
-    }
-    Ok(admitted.path_info)
+        .map_err(|err| format!("remote-output-persist-failed: {err}"))
 }
 
 fn imported_remote_output_report(
-    store: &crunch_store::BuildStore,
+    store: &crunch_store::StoreHandle,
     action: &RemoteOutputImportAction,
     stored: &PathInfo,
 ) -> RemoteImportedOutput {
@@ -12251,9 +12180,6 @@ pub fn cmd_remote(
     json_output: bool,
 ) -> Result<(), RunError> {
     match action {
-        crate::RemoteAction::Gateway { action } => {
-            crate::remote_gateway::cmd_remote_gateway(action, output_dir, state_dir, store_prefix, json_output)
-        }
         crate::RemoteAction::Ticket { action } => cmd_remote_ticket(action, state_dir, json_output),
         crate::RemoteAction::Status {
             endpoint_id,
@@ -12763,12 +12689,9 @@ fn receive_remote_production_input_transfer(
         report: runtime_transfer_receipt.clone(),
     })?;
     let store = input.runtime.block_on(open_remote_local_executor_store(context.executor))?;
-    input.runtime.block_on(materialize_streamed_remote_inputs(
-        store.transfer_store(),
-        &opening.request,
-        &canonical,
-        &receiver_root,
-    ))?;
+    input
+        .runtime
+        .block_on(materialize_streamed_remote_inputs(&store, &opening.request, &canonical, &receiver_root))?;
     debug_assert!(runtime_transfer_receipt.transferred_bytes <= input.max_upload_bytes);
     debug_assert!(canonical.total_bytes <= input.max_upload_bytes);
     Ok(runtime_transfer_receipt.transferred_bytes)
@@ -13327,18 +13250,6 @@ mod tests {
     const TEST_RESOURCE_SCRATCH_BYTES: u64 = 32_768;
     const TEST_RESOURCE_ACCELERATOR_COUNT: u32 = 1;
     const TEST_RESOURCE_TOKEN_COUNT: u32 = 2;
-    const TEST_RESOURCE_POLICY_MEMORY_INCREMENT_BYTES: u64 = 4_096;
-    const TEST_RESOURCE_POLICY_LARGE_MEMORY_BYTES: u64 = 20_480;
-    const TEST_RESOURCE_POLICY_SMALL_CLASS_ORDINAL: u32 = 1;
-    const TEST_RESOURCE_POLICY_LARGE_CLASS_ORDINAL: u32 = 2;
-    const TEST_RESOURCE_POLICY_SAMPLE_COUNT_MIN: u32 = 1;
-    const TEST_RESOURCE_POLICY_EXECUTION_MS: u64 = 100;
-    const TEST_RESOURCE_POLICY_IO_BYTES: u64 = 64;
-    const TEST_RESOURCE_POLICY_SMALL_CHARGE_UNITS: u64 = 100;
-    const TEST_RESOURCE_POLICY_LARGE_CHARGE_UNITS: u64 = 200;
-    const TEST_RESOURCE_POLICY_QUOTA_UNITS: u64 = 1_000;
-    const TEST_RESOURCE_POLICY_NOW_UNIX_S: u64 = 10_000;
-    const TEST_RESOURCE_POLICY_OBSERVED_UNIX_S: u64 = 9_999;
     const TEST_WORKER_CONCURRENCY: u32 = 4;
     const TEST_EXTERNAL_BATCH_TIMEOUT_SECS: u64 = 10;
     const TEST_EXTERNAL_BATCH_MAX_ATTEMPTS: u32 = 3;
@@ -15180,7 +15091,7 @@ mod tests {
             production_transfer: None,
         };
 
-        populate_remote_input_upload_artifacts_from_store(client_store.transfer_store(), &mut command, &client.request)
+        populate_remote_input_upload_artifacts_from_store(&client_store, &mut command, &client.request)
             .await
             .expect("source input artifact is attached");
         let upload = command
@@ -15191,7 +15102,7 @@ mod tests {
                 _ => None,
             })
             .expect("input upload frame present");
-        materialize_remote_input_upload(remote_store.transfer_store(), &client.request, &upload)
+        materialize_remote_input_upload(&remote_store, &client.request, &upload)
             .await
             .expect("source input artifact materializes");
         let remote_source_path = source_store_path.to_absolute_path_with_prefix(remote_store.output_dir_str());
@@ -15235,7 +15146,7 @@ mod tests {
         };
 
         populate_remote_input_upload_artifacts_from_store_or_source_state(
-            client_store.transfer_store(),
+            &client_store,
             &mut command,
             &client.request,
             state_temp.path(),
@@ -15250,7 +15161,7 @@ mod tests {
                 _ => None,
             })
             .expect("input upload frame present");
-        materialize_remote_input_upload(remote_store.transfer_store(), &client.request, &upload)
+        materialize_remote_input_upload(&remote_store, &client.request, &upload)
             .await
             .expect("source-state source input artifact materializes");
         let remote_source_path = source_store_path.to_absolute_path_with_prefix(remote_store.output_dir_str());
@@ -15395,7 +15306,7 @@ mod tests {
         let mut client = fixture_loopback_client(vec![source_ref.clone()], vec!["builder-key".to_string()]);
         client.request.input_refs = vec![source_ref.clone()];
         client.request.source_input_refs = vec![source_ref];
-        let err = plan_remote_input_upload_artifacts_from_store(client_store.transfer_store(), &client.request)
+        let err = plan_remote_input_upload_artifacts_from_store(&client_store, &client.request)
             .await
             .expect_err("missing source state fails closed");
 
@@ -15424,7 +15335,7 @@ mod tests {
             timeout_secs: DEFAULT_REMOTE_STDIO_TIMEOUT_SECS,
             production_transfer: None,
         };
-        populate_remote_input_upload_artifacts_from_store(client_store.transfer_store(), &mut command, &client.request)
+        populate_remote_input_upload_artifacts_from_store(&client_store, &mut command, &client.request)
             .await
             .expect("source input artifact is attached");
         let mut upload = command
@@ -15437,7 +15348,7 @@ mod tests {
             .expect("input upload frame present");
         upload.artifacts[0].payload[0] = CORRUPTED_TRANSFER_PAYLOAD_BYTE;
 
-        let err = materialize_remote_input_upload(remote_store.transfer_store(), &client.request, &upload)
+        let err = materialize_remote_input_upload(&remote_store, &client.request, &upload)
             .await
             .expect_err("tampered source input artifact fails");
         assert_eq!(err, "input-upload-artifact-digest-mismatch");
@@ -15613,7 +15524,7 @@ mod tests {
         )
         .await
         .expect("remote output imports durably");
-        let stored_pathinfo = store.path_info(&store_path).await.unwrap().unwrap();
+        let stored_pathinfo = store.pathinfo_service().get(*store_path.digest()).await.unwrap().unwrap();
         let stored_attestation = store.get_artifact_attestation(&store_path).await.unwrap().unwrap();
         let substitution = store.take_output_substitution_report(&store_path).expect("substitution report");
         let exported_path = store_path.to_absolute_path_with_prefix(store.output_dir_str());
@@ -15899,43 +15810,6 @@ mod tests {
     }
 
     #[test]
-    fn evidence_policy_selects_and_reserves_the_larger_statically_eligible_worker() {
-        let mut state = RemoteCoordinatorState::default();
-        let mut small = fixture_worker_registration();
-        small.resource_inventory = Some(fixture_resource_inventory());
-        apply_worker_registration(&mut state, small).expect("small worker registers");
-        let mut large = fixture_worker_registration();
-        large.endpoint_id = "builder-2".to_string();
-        let mut large_inventory = fixture_resource_inventory();
-        large_inventory.total.memory_bytes = TEST_RESOURCE_MEMORY_BYTES
-            .checked_add(TEST_RESOURCE_POLICY_MEMORY_INCREMENT_BYTES)
-            .expect("large fixture memory fits");
-        large.resource_inventory = Some(large_inventory);
-        apply_worker_registration(&mut state, large).expect("large worker registers");
-        let mut request = fixture_quantified_coordinator_request("resource-policy-action", "resource-policy-claim");
-        request.resource_policy_selection = Some(fixture_resource_policy_selection());
-        let decision = admit_fixture_dispatch(&mut state, &request).expect("policy request dispatches");
-        let RemoteCoordinatorDispatchDecision::Dispatch {
-            worker_endpoint_id,
-            job_id,
-            ..
-        } = decision
-        else {
-            panic!("resource policy request must dispatch");
-        };
-        let summary = &state.jobs[&job_id];
-        let lease = &state.resource_leases[summary.resource_lease_id_blake3.as_ref().expect("lease id")];
-
-        assert_eq!(worker_endpoint_id, "builder-2");
-        assert_eq!(summary.resource_policy_decision.as_ref().expect("policy decision").scheduled_class_id, "large");
-        assert_eq!(
-            summary.resource_requirements.as_ref().expect("effective requirements").quantities.memory_bytes,
-            TEST_RESOURCE_POLICY_LARGE_MEMORY_BYTES
-        );
-        assert_eq!(lease.reserved.memory_bytes, TEST_RESOURCE_POLICY_LARGE_MEMORY_BYTES);
-    }
-
-    #[test]
     fn concurrent_resource_dispatches_commit_once_and_never_overcommit() {
         let temp = tempfile::tempdir().expect("temporary concurrent coordinator state");
         let mut initial = RemoteCoordinatorState {
@@ -16091,49 +15965,6 @@ mod tests {
         }
     }
 
-    fn legacy_normalized_remote_build_key(request: &RemoteCoordinatorBuildRequest) -> Result<String, String> {
-        let plan = validate_coordinator_build_request(request)?;
-        let mut hasher = blake3::Hasher::new();
-        hash_labeled_str(&mut hasher, "kind", "remote-coordinator-build-key");
-        hash_labeled_str(&mut hasher, "store-prefix", &request.request.store_prefix);
-        hash_executable_plan_source(&mut hasher, &plan.source);
-        hash_labeled_str(&mut hasher, "system", &plan.system);
-        hash_ordered_values(&mut hasher, "command-arg", &plan.command_args);
-        legacy_hash_ordered_map(&mut hasher, "env", &plan.command_env);
-        hash_ordered_values(&mut hasher, "input-ref", &request.request.input_refs);
-        hash_ordered_values(&mut hasher, "source-input-ref", &request.request.source_input_refs);
-        legacy_hash_expected_outputs(&mut hasher, &request.request.expected_outputs);
-        if let Some(replay) = &request.request.failure_replay {
-            hash_labeled_str(&mut hasher, "failure-replay-source-bundle", replay.source_bundle_blake3.as_str());
-            hash_labeled_str(&mut hasher, "failure-replay-execution", replay.execution_blake3.as_str());
-        }
-        hash_labeled_str(&mut hasher, "required-system", &request.required_system);
-        hash_ordered_values(&mut hasher, "required-feature", &request.required_features);
-        hash_labeled_str(&mut hasher, "required-sandbox", &request.required_sandbox_mode);
-        hash_labeled_str(&mut hasher, "required-network", &request.required_network_mode);
-        if let Some(requirements) = &request.resource_requirements {
-            let canonical =
-                canonical_remote_resource_requirements(requirements).map_err(|reason| reason.as_str().to_string())?;
-            hash_ordered_values(&mut hasher, "semantic-accelerator-class", &canonical.semantic_accelerator_classes);
-        }
-        Ok(hasher.finalize().to_hex().to_string())
-    }
-
-    fn legacy_hash_ordered_map(hasher: &mut blake3::Hasher, label: &str, values: &BTreeMap<String, String>) {
-        for (name, value) in values {
-            hash_labeled_str(hasher, &format!("{label}-name"), name);
-            hash_labeled_str(hasher, &format!("{label}-value"), value);
-        }
-    }
-
-    fn legacy_hash_expected_outputs(hasher: &mut blake3::Hasher, outputs: &[RemoteExpectedOutput]) {
-        for output in outputs {
-            hash_labeled_str(hasher, "expected-output-name", &output.name);
-            let path = output.logical_path.as_deref().unwrap_or("<content-addressed>");
-            hash_labeled_str(hasher, "expected-output-path", path);
-        }
-    }
-
     #[test]
     fn scheduling_quantities_do_not_change_action_key_but_semantic_classes_do() {
         let baseline = fixture_quantified_coordinator_request("resource-identity", "resource-identity-claim");
@@ -16148,11 +15979,9 @@ mod tests {
         semantic_requirements.semantic_accelerator_classes = vec!["amd-gfx942".to_string()];
         semantic_change.request.resource_requirements = semantic_change.resource_requirements.clone();
         let baseline_key = normalized_remote_build_key(&baseline).expect("baseline key derives");
-        let legacy_baseline_key = legacy_normalized_remote_build_key(&baseline).expect("legacy baseline key derives");
         let quantity_key = normalized_remote_build_key(&quantity_only).expect("quantity key derives");
         let semantic_key = normalized_remote_build_key(&semantic_change).expect("semantic key derives");
 
-        assert_eq!(baseline_key, legacy_baseline_key);
         assert_eq!(baseline_key, quantity_key);
         assert_ne!(baseline_key, semantic_key);
         assert_ne!(baseline.resource_requirements, quantity_only.resource_requirements);
@@ -17183,7 +17012,6 @@ mod tests {
             output_admission_completed: false,
             last_attempt_reason_code: Some(RemoteAttemptReasonCode::LegacyStateRejected),
             resource_requirements: None,
-            resource_policy_decision: None,
             resource_lease_id_blake3: None,
             resource_fit: None,
             locality: None,
@@ -17455,7 +17283,6 @@ mod tests {
             output_admission_completed: false,
             last_attempt_reason_code: None,
             resource_requirements: None,
-            resource_policy_decision: None,
             resource_lease_id_blake3: None,
             resource_fit: None,
             locality: None,
@@ -17666,8 +17493,8 @@ mod tests {
         }
     }
 
-    async fn remote_import_store(root: &std::path::Path) -> crunch_store::BuildStore {
-        crunch_store::BuildStore::open(crunch_store::StoreConfig {
+    async fn remote_import_store(root: &std::path::Path) -> crunch_store::StoreHandle {
+        crunch_store::StoreHandle::open(crunch_store::StoreConfig {
             state_dir: root.join("state"),
             output_dir: root.join("store"),
             remote_cache_urls: Vec::new(),
@@ -18201,161 +18028,6 @@ mod tests {
         }
     }
 
-    fn fixture_resource_policy_class(
-        class_id: &str,
-        endpoint_id: &str,
-        ordinal: u32,
-        memory_bytes: u64,
-        charge_units: u64,
-    ) -> crunch_resource_policy::MachineClass {
-        crunch_resource_policy::MachineClass {
-            class_id: class_id.to_string(),
-            endpoint_ids: vec![endpoint_id.to_string()],
-            ordinal,
-            architecture: "x86_64".to_string(),
-            platform: DEFAULT_REMOTE_ACTION_SYSTEM.to_string(),
-            kvm_available: true,
-            trust_tier: "trusted-builder".to_string(),
-            isolation: "bwrap".to_string(),
-            features: vec!["kvm".to_string()],
-            capacity: crunch_resource_policy::ResourceQuantities {
-                cpu_units: TEST_RESOURCE_CPU_UNITS,
-                memory_bytes,
-                scratch_bytes: TEST_RESOURCE_SCRATCH_BYTES,
-            },
-            reservation_charge_units: charge_units,
-            available: true,
-            onixos_source_blake3: blake3::hash(b"onixos-resource-class-fixture").to_hex().to_string(),
-        }
-    }
-
-    fn fixture_resource_policy_selection() -> crunch_resource_policy::ResourceSelectionRequest {
-        let family = crunch_resource_policy::derive_action_family_identity(crunch_resource_policy::ActionFamilyInput {
-            request_kind: "action".to_string(),
-            system: DEFAULT_REMOTE_ACTION_SYSTEM.to_string(),
-            builder_class: "remote".to_string(),
-            sandbox_mode: "bwrap".to_string(),
-            network_mode: "off".to_string(),
-            required_features: vec!["kvm".to_string()],
-            semantic_accelerator_classes: vec!["nvidia-sm90".to_string()],
-        })
-        .expect("fixture action family");
-        let policy = fixture_resource_selection_policy();
-        let observation = fixture_resource_policy_observation(&family, &policy);
-        crunch_resource_policy::ResourceSelectionRequest {
-            now_unix_s: TEST_RESOURCE_POLICY_NOW_UNIX_S,
-            action_family: family,
-            declared: crunch_resource_policy::DeclaredResourceRequirements {
-                minima: crunch_resource_policy::ResourceQuantities {
-                    cpu_units: TEST_RESOURCE_CPU_UNITS,
-                    memory_bytes: TEST_RESOURCE_MEMORY_BYTES,
-                    scratch_bytes: TEST_RESOURCE_SCRATCH_BYTES,
-                },
-                platform: crunch_resource_policy::PlatformRequirements {
-                    architecture: "x86_64".to_string(),
-                    platform: DEFAULT_REMOTE_ACTION_SYSTEM.to_string(),
-                    kvm_required: true,
-                    trust_tier: "trusted-builder".to_string(),
-                    isolation: "bwrap".to_string(),
-                    required_features: vec!["kvm".to_string()],
-                },
-            },
-            machine_classes: vec![
-                fixture_resource_policy_class(
-                    "small",
-                    "builder-1",
-                    TEST_RESOURCE_POLICY_SMALL_CLASS_ORDINAL,
-                    TEST_RESOURCE_MEMORY_BYTES,
-                    TEST_RESOURCE_POLICY_SMALL_CHARGE_UNITS,
-                ),
-                fixture_resource_policy_class(
-                    "large",
-                    "builder-2",
-                    TEST_RESOURCE_POLICY_LARGE_CLASS_ORDINAL,
-                    TEST_RESOURCE_POLICY_LARGE_MEMORY_BYTES,
-                    TEST_RESOURCE_POLICY_LARGE_CHARGE_UNITS,
-                ),
-            ],
-            quota: crunch_resource_policy::QuotaFacts {
-                project_remaining_units: TEST_RESOURCE_POLICY_QUOTA_UNITS,
-                account_remaining_units: TEST_RESOURCE_POLICY_QUOTA_UNITS,
-            },
-            observations: vec![observation],
-            policy,
-            controls: crunch_resource_policy::ResourceFeatureControls {
-                mode: crunch_resource_policy::ResourcePolicyMode::Enforce,
-                project_opted_in: true,
-                historical_selection_enabled: true,
-                oom_retry_enabled: false,
-                quota_enforcement_enabled: true,
-                result_sharing_enabled: false,
-            },
-        }
-    }
-
-    fn fixture_resource_selection_policy() -> crunch_resource_policy::ResourceSelectionPolicy {
-        crunch_resource_policy::ResourceSelectionPolicy {
-            schema: crunch_resource_policy::RESOURCE_SELECTION_POLICY_SCHEMA.to_string(),
-            policy_id: "resource-selection-test-v1".to_string(),
-            policy_version: "v1".to_string(),
-            sample_count_min: TEST_RESOURCE_POLICY_SAMPLE_COUNT_MIN,
-            observation_age_secs_max: crunch_resource_policy::DEFAULT_OBSERVATION_AGE_SECS_MAX,
-            memory_margin_basis_points: crunch_resource_policy::BASIS_POINTS_DENOMINATOR_U32,
-            scratch_margin_basis_points: crunch_resource_policy::BASIS_POINTS_DENOMINATOR_U32,
-            measurement_bytes_max: crunch_resource_policy::MAX_MEASUREMENT_BYTES,
-            fallback: crunch_resource_policy::SelectionFallbackRule::StaticOnInsufficientHistory,
-        }
-    }
-
-    fn fixture_resource_policy_observation(
-        family: &crunch_resource_policy::ActionFamilyIdentity,
-        policy: &crunch_resource_policy::ResourceSelectionPolicy,
-    ) -> crunch_resource_policy::ResourceObservation {
-        crunch_resource_policy::build_resource_observation(crunch_resource_policy::ResourceObservationInput {
-            attempt_id: "historical-attempt".to_string(),
-            action_family_blake3: family.identity_blake3.clone(),
-            platform_identity: DEFAULT_REMOTE_ACTION_SYSTEM.to_string(),
-            machine_class_id: "small".to_string(),
-            declared: crunch_resource_policy::ResourceQuantities {
-                cpu_units: TEST_RESOURCE_CPU_UNITS,
-                memory_bytes: TEST_RESOURCE_MEMORY_BYTES,
-                scratch_bytes: TEST_RESOURCE_SCRATCH_BYTES,
-            },
-            selected: crunch_resource_policy::ResourceQuantities {
-                cpu_units: TEST_RESOURCE_CPU_UNITS,
-                memory_bytes: TEST_RESOURCE_MEMORY_BYTES,
-                scratch_bytes: TEST_RESOURCE_SCRATCH_BYTES,
-            },
-            timing: crunch_resource_policy::ResourceTiming {
-                queue_ms: 0,
-                execution_ms: TEST_RESOURCE_POLICY_EXECUTION_MS,
-                terminal_ms: 1,
-            },
-            measurements: crunch_resource_policy::ResourceMeasurements {
-                cpu_time_ms: TEST_RESOURCE_POLICY_EXECUTION_MS,
-                peak_memory_bytes: TEST_RESOURCE_POLICY_LARGE_MEMORY_BYTES,
-                scratch_peak_bytes: TEST_RESOURCE_SCRATCH_BYTES,
-                io_bytes: TEST_RESOURCE_POLICY_IO_BYTES,
-                transfer_bytes: TEST_RESOURCE_POLICY_IO_BYTES,
-                wall_time_ms: TEST_RESOURCE_POLICY_EXECUTION_MS,
-            },
-            oom_evidence: crunch_resource_policy::OomEvidence {
-                category: crunch_resource_policy::OomEvidenceCategory::None,
-                platform: DEFAULT_REMOTE_ACTION_SYSTEM.to_string(),
-                evidence_ref: None,
-                trusted: false,
-            },
-            terminal_outcome: crunch_resource_policy::TerminalOutcome::Succeeded,
-            retry_predecessor_attempt_id: None,
-            collector_id: "mantle-worker".to_string(),
-            collector_version: "v1".to_string(),
-            compatibility_policy_id: policy.policy_id.clone(),
-            observed_at_unix_s: TEST_RESOURCE_POLICY_OBSERVED_UNIX_S,
-            trusted: true,
-        })
-        .expect("fixture resource observation")
-    }
-
     fn fixture_worker_registration() -> RemoteWorkerRegistration {
         RemoteWorkerRegistration {
             endpoint_id: "builder-1".to_string(),
@@ -18395,7 +18067,6 @@ mod tests {
             required_network_mode: "off".to_string(),
             resource_requirements: None,
             locality_scope: None,
-            resource_policy_selection: None,
             trusted_output_keys: vec!["builder-key".to_string()],
             live_output_claims: vec!["claim-out".to_string()],
             wait_for_worker: false,
@@ -19200,7 +18871,6 @@ mod tests {
             required_network_mode: "off".to_string(),
             resource_requirements: None,
             locality_scope: None,
-            resource_policy_selection: None,
             trusted_output_keys: vec!["builder-key".to_string()],
             live_output_claims: vec!["claim-out".to_string()],
             wait_for_worker: false,

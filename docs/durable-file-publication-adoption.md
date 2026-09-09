@@ -4,15 +4,7 @@ Mantle consumes `durable-file-publication` from Radicle RID `rad:z3tAR4For7qw8Zi
 
 ## Selected boundary
 
-The shared shell publishes these immutable files:
-
-- remote-attempt segments;
-- remote-attempt anchors;
-- source records;
-- source-observation sidecars;
-- source pins.
-
-Mantle maps these facts into the shared request:
+The shared shell publishes immutable remote-attempt segment and anchor files only. Mantle maps these facts into the shared request:
 
 - One admitted destination leaf.
 - The exact canonical JSON byte count.
@@ -34,7 +26,7 @@ Uncommitted results retain the primary failure and cleanup result. Cleanup failu
 
 ## Mantle-owned policy
 
-Mantle retains canonical JSON, object identity, limits, content equivalence, source-ingest policy, source readiness, manifest replacement, chain validation, retention, deletion, receipts, retry policy, and diagnostics. Replaceable manifests and release-bundle directories do not use this dependency.
+Mantle retains canonical JSON, object identity, limits, content equivalence, manifest replacement, chain validation, retention, deletion, receipts, retry policy, and diagnostics. Replaceable manifests and release-bundle directories do not use this dependency.
 
 The previous local immutable publisher remains as an explicit rollback backend. Production selects the shared backend. No automatic fallback runs after a shared-path failure.
 

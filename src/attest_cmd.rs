@@ -16,8 +16,8 @@ use crunch_project::Lockfile;
 use crunch_project::ProjectAttestationInput;
 use crunch_project::ProjectManifest;
 use crunch_project::synthesize_project_attestation;
-use crunch_store::AttestationStore;
 use crunch_store::StoreConfig;
+use crunch_store::StoreHandle;
 use crunch_store::artifact_attestation_file_path;
 use crunch_store::closure_attestation_file_path;
 use nix_compat::store_path::StorePath;
@@ -39,8 +39,8 @@ use crate::release_attestation::create_witness_attestation;
 use crate::release_attestation::load_release_attestation_document;
 use crate::release_attestation::load_witness_documents;
 
-const MIN_ATTESTATION_BASE_LAYER_INDEX: u32 = 1;
-const MAX_ATTESTATION_BASE_LAYERS: u32 = 8;
+const MIN_ATTESTATION_BASE_LAYER_INDEX: usize = 1;
+const MAX_ATTESTATION_BASE_LAYERS: usize = 8;
 const MAX_ATTESTATION_SELECTED_LAYERS: usize = 65_536;
 use crate::release_attestation::verify_release_attestation_directory;
 use crate::witness_handoff::import_witness_material;
@@ -671,7 +671,7 @@ async fn open_store(
     state_dir: &Path,
     store_dir: &str,
     base_state_dirs: &[PathBuf],
-) -> Result<AttestationStore, RunError> {
+) -> Result<StoreHandle, RunError> {
     let config = StoreConfig {
         state_dir: state_dir.to_path_buf(),
         output_dir: output_dir.to_path_buf(),
@@ -680,11 +680,11 @@ async fn open_store(
         store_dir: store_dir.to_string(),
         base_state_dirs: base_state_dirs.to_vec(),
     };
-    AttestationStore::open(config).await.map_err(|e| RunError::Internal(format!("opening store: {e}")))
+    StoreHandle::open(config).await.map_err(|e| RunError::Internal(format!("opening store: {e}")))
 }
 
 async fn load_artifact_document(
-    store: &AttestationStore,
+    store: &StoreHandle,
     selector: &str,
 ) -> Result<(AttestationDocument, PathBuf, crunch_store::layer::StoreLayer), RunError> {
     let store_path = resolve_store_path(StorePathInput {
@@ -703,7 +703,7 @@ async fn load_artifact_document(
 
 async fn load_project_document(
     current_dir: &Path,
-    store: &AttestationStore,
+    store: &StoreHandle,
     roots: &[String],
 ) -> Result<AttestationDocument, RunError> {
     let (manifest_text, manifest) = load_manifest(current_dir)?;
@@ -720,7 +720,7 @@ async fn load_project_document(
     Ok(AttestationDocument::Project(attestation))
 }
 
-async fn load_selected_roots(store: &AttestationStore, roots: &[String]) -> Result<Vec<ArtifactReference>, RunError> {
+async fn load_selected_roots(store: &StoreHandle, roots: &[String]) -> Result<Vec<ArtifactReference>, RunError> {
     if roots.is_empty() {
         return Err(RunError::Internal("provide at least one root path".to_string()));
     }
@@ -897,7 +897,7 @@ fn verify_project_document(
     ))
 }
 
-async fn load_document_input(store: Option<&AttestationStore>, input: &str) -> Result<AttestationDocument, RunError> {
+async fn load_document_input(store: Option<&StoreHandle>, input: &str) -> Result<AttestationDocument, RunError> {
     if let Some(store) = store
         && let Ok((document, _stored_path, _selected_layer)) = load_artifact_document(store, input).await
     {

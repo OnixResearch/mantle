@@ -21,9 +21,8 @@ nix build .#spacewasm-reference-bundle
 nix run .#spacewasm-reference-bundler -- verify ./result
 ```
 
-The build uses the pinned Nix source fetch and Crane vendoring from the pinned
-Cargo lock, then sets Cargo to offline mode for all source builds. It retains
-the exact source archive,
+The build uses the pinned Nix source fetch and Cargo lock import, then sets Cargo
+to offline mode for all source builds. It retains the exact source archive,
 locked vendor closure, minimal Rust `1.91.1` host/`wasm32-unknown-unknown`
 toolchain, host and wasm libraries, bounded host runner, generated fixtures,
 canonical corpus archives, descriptors, licenses/notices, result report,

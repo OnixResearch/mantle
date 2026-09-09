@@ -1,11 +1,9 @@
 // machine-artifact-public: self-build.cargo-free-reports
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::env;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fs;
-use std::fs::OpenOptions;
 use std::io::Read;
 use std::io::Write;
 use std::path::Component;
@@ -21,24 +19,15 @@ use crate::errors::RunError;
 
 const SCHEMA: &str = "mantle-cargo-free-self-build-v1";
 const FIXED_POINT_SCHEMA: &str = "mantle-cargo-free-fixed-point-proof-v1";
-pub(crate) const RECEIPT_FILE: &str = "receipt.json";
+const RECEIPT_FILE: &str = "receipt.json";
 const STDERR_FILE: &str = "stderr.txt";
 const STATUS_FILE: &str = "status.txt";
-pub(crate) const META_FILE: &str = "meta.json";
+const META_FILE: &str = "meta.json";
 const PRE_FLIGHT_FILE: &str = "preflight.json";
 const NON_CLAIMS_FILE: &str = "non-claims.txt";
 const SMOKE_STDOUT_FILE: &str = "smoke-stdout.txt";
 const SMOKE_STDERR_FILE: &str = "smoke-stderr.txt";
 const EXECUTION_DIR: &str = "execution";
-const RUST_CHILD_ACTION_EVIDENCE_DIR: &str = "rust-child-actions";
-const RUST_CHILD_ACTION_AUTHORITY_FILE: &str = "authority.json";
-const RUST_CHILD_ACTION_PLAN_FILE: &str = "plan.json";
-const RUST_CHILD_ACTION_AUDIT_FILE: &str = "audit.json";
-const RUST_CHILD_ACTION_RECONCILIATION_FILE: &str = "reconciliation.json";
-const RUST_CHILD_ACTION_AUTHORITY_FLAG: &str = "--rust-child-action-authority";
-const RUST_CHILD_ACTION_EVIDENCE_DIR_FLAG: &str = "--rust-child-action-evidence-dir";
-const RUST_CHILD_ACTION_ALIAS_PRODUCER_CONTEXT: &[u8] = b"mantle-rust-child-action-alias-producer-v1\0";
-const RUST_CHILD_ACTION_FIXED_AUTHORITY_CONTEXT: &[u8] = b"mantle-rust-child-action-fixed-authority-v1\0";
 const BUNDLE_ROOT_RELATIVE_PATH: &str = ".";
 const CARGO_SHIM_FILE: &str = "cargo-forbidden";
 const CARGO_SHIM_DIR: &str = "cargo-guard-bin";
@@ -49,14 +38,14 @@ const LINKER_ALIAS: &str = "ld";
 const ARCHIVER_ALIAS: &str = "ar";
 const RANLIB_ALIAS: &str = "ranlib";
 const PKG_CONFIG_ALIAS: &str = "pkg-config";
-pub(crate) const PRODUCED_MANTLE_FILE: &str = "mantle";
+const PRODUCED_MANTLE_FILE: &str = "mantle";
 const MANTLE_TARGET_NAME: &str = "mantle";
 const MANTLE_TARGET_KIND: &str = "bin";
 const SUCCESS_STATUS: &str = "success";
 const BLOCKED_STATUS: &str = "blocked";
 const MISMATCH_STATUS: &str = "mismatch";
-pub(crate) const STAGE1_DIR: &str = "stage1";
-pub(crate) const STAGE2_DIR: &str = "stage2";
+const STAGE1_DIR: &str = "stage1";
+const STAGE2_DIR: &str = "stage2";
 const JSON_FLAG: &str = "--json";
 const RUST_PLAN_COMMAND: &str = "rust-plan";
 const ROOT_FLAG: &str = "--root";
@@ -69,17 +58,6 @@ const EXECUTION_OUTPUT_ROOT_FLAG: &str = "--execution-output-root";
 const HELP_FLAG: &str = "--help";
 const TOOLCHAIN_DIR: &str = "toolchain";
 const RUSTC_WRAPPER_FILE: &str = "rustc-normalized";
-const RUSTC_RUNTIME_WRAPPER_FILE: &str = "rustc-receipt-bound-runtime";
-const RUSTC_LIBSTDCXX_RUNTIME_FILE: &str = "libstdc++.so.6.0.28";
-const RUSTC_LIBSTDCXX_SONAME: &str = "libstdc++.so.6";
-const RUSTC_DYNAMIC_LOADER_FILE: &str = "ld-musl-x86_64.so.1";
-const RUSTC_DYNAMIC_BINARY_FILE: &str = "rustc.dynamic";
-const RUSTC_RUNTIME_HOST_TRIPLE: &str = "x86_64-unknown-linux-musl";
-const RUSTC_BOUND_LINKER_ALIAS: &str = "cc";
-const RUST_UNAVAILABLE_TOOL_ALIASES: &[&str] = &["emcc", "pkg-config", "pkgconf", "git"];
-const RUST_UNAVAILABLE_TOOL_EXIT_CODE: i32 = 127;
-const REQUIRED_GCC_COMPILER_SUBPROGRAMS: &[&str] = &["cc1", "cc1plus", "collect2", "lto-wrapper"];
-const DYNAMIC_LIBRARY_PATH_ENV: &str = "LD_LIBRARY_PATH";
 const COMPATIBILITY_FILE: &str = "compatibility.json";
 const TOOLCHAIN_COMPATIBILITY_PATH_DIR: &str = "receipt-bound-path";
 const TOOLCHAIN_ALIAS_RUNTIME_DIR: &str = ".toolchain-runtime";
@@ -101,7 +79,6 @@ const WRAPPER_PROBE_BYTES_MAX: usize = 4096;
 const SHEBANG_BYTES: &[u8] = b"#!";
 const WRAPPER_RUSTC_MARKER: &[u8] = b"rustc";
 const NORMALIZATION_NONE: &str = "none";
-const NORMALIZATION_RECEIPT_BOUND_RUNTIME: &str = "receipt-bound-dynamic-runtime";
 const NORMALIZATION_STRIP_LINK_SELF_CONTAINED: &str = "strip-link-self-contained-no";
 const SIGNAL_STATUS_TEXT: &str = "signal";
 const BLOCKED_SMOKE_STDOUT: &str = "not run: blocked before binary\n";
@@ -138,12 +115,6 @@ const CARGO_SHIM_PERMISSIONS: u32 = 0o755;
 #[cfg(unix)]
 const UNIX_EXECUTE_BITS: u32 = 0o111;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CargoFreeFixedPointResume {
-    None,
-    Stage1,
-}
-
 pub(crate) struct CargoFreeSelfBuildOptions<'a> {
     pub(crate) root: &'a Path,
     pub(crate) out_dir: &'a Path,
@@ -151,9 +122,7 @@ pub(crate) struct CargoFreeSelfBuildOptions<'a> {
     pub(crate) targets: &'a [String],
     pub(crate) toolchain_closure: Option<&'a Path>,
     pub(crate) rust_source_provider: Option<&'a Path>,
-    pub(crate) rust_action_resources: Option<crate::source_built_rust_action_plan::RustActionResourceLimits>,
     pub(crate) hermeticity_mode: crunch_pipeline::HermeticityMode,
-    pub(crate) resume: CargoFreeFixedPointResume,
     pub(crate) json: bool,
 }
 
@@ -168,26 +137,7 @@ struct LoadedToolchainClosure {
 struct LoadedRustSourceProvider {
     status: RustSourceProviderBindingStatus,
     rustc: Option<PathBuf>,
-    source_built_shell: Option<BoundRustExecutionShell>,
-    source_built_host_tools: Vec<crate::full_source_rust_binding::FullSourceRustHostToolBinding>,
-    source_built_native_artifacts: Vec<crate::full_source_rust_binding::FullSourceNativeArtifactBinding>,
-    source_built_action_trust: Option<crate::source_built_rust_provider_action::RustProviderActionEvidence>,
     toolchain_closure_status: Option<crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus>,
-}
-
-#[derive(Clone, Debug)]
-struct BoundRustExecutionShell {
-    execution_path: PathBuf,
-    content_digest_blake3: String,
-    source_id: String,
-    construction_receipt_digest_blake3: String,
-}
-
-#[derive(Clone, Debug)]
-struct BoundRustExecutionAuthority {
-    shell: Option<BoundRustExecutionShell>,
-    host_tools: Vec<crate::full_source_rust_binding::FullSourceRustHostToolBinding>,
-    native_artifacts: Vec<crate::full_source_rust_binding::FullSourceNativeArtifactBinding>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -206,12 +156,6 @@ struct RustSourceProviderBindingStatus {
     rustc_path: Option<PathBuf>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct BoundRustcRuntime {
-    library_dir: PathBuf,
-    loader: PathBuf,
-}
-
 #[derive(Clone, Debug)]
 struct ExecutionToolchain {
     rustc: PathBuf,
@@ -224,7 +168,6 @@ struct ExecutionToolchain {
 struct CcCompilerAliasRuntimeInputs {
     unwind_archive: Option<PathBuf>,
     crt1_object: PathBuf,
-    compiler_subprogram_dir: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -274,8 +217,6 @@ struct RustPlanChildRequest<'a> {
     path_env: &'a OsStr,
     c_compiler_route: Option<&'a crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
     policy_digest_blake3: Option<&'a str>,
-    rust_action_authority_path: Option<&'a Path>,
-    rust_action_evidence_dir: Option<&'a Path>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -354,8 +295,6 @@ struct BuildPaths {
     guard_path_dir: PathBuf,
     binary_path: PathBuf,
     meta_path: PathBuf,
-    rust_action_evidence_dir: PathBuf,
-    rust_action_authority_path: PathBuf,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -519,10 +458,6 @@ struct FixedPointStageSummary {
     smoke_status_code: Option<i32>,
     source_built_toolchain_closure_policy_digest_blake3: Option<String>,
     selected_c_compiler: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
-    rust_child_action_authority: Option<PathBuf>,
-    rust_child_action_plan: Option<PathBuf>,
-    rust_child_action_audit: Option<PathBuf>,
-    rust_child_action_reconciliation: Option<PathBuf>,
     blocker: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     blocker_diagnostic: Option<BlockedTopologyDiagnostic>,
@@ -1379,9 +1314,8 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
     prepare_output_dir(&paths)?;
     write_cargo_shim(&paths.explicit_cargo_shim, &paths.marker_path)?;
     write_cargo_shim(&paths.path_cargo_shim, &paths.marker_path)?;
+    let loaded_rust_provider = load_rust_source_provider(options.rust_source_provider)?;
     let loaded_toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
-    let loaded_rust_provider =
-        load_rust_source_provider(options.rust_source_provider, loaded_toolchain_closure.manifest.as_ref())?;
     let initial_toolchain_status =
         effective_source_built_toolchain_closure(&loaded_toolchain_closure, &loaded_rust_provider);
     write_non_claims(&paths.out_dir, &initial_toolchain_status)?;
@@ -1392,18 +1326,6 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
         &loaded_toolchain_closure,
         &loaded_rust_provider,
     )?;
-    let rust_action_enabled = prepare_rust_child_action_authority(
-        "mantle-self-build",
-        options.rust_action_resources.as_ref(),
-        &execution_toolchain.rustc,
-        &loaded_toolchain_closure,
-        loaded_rust_provider.source_built_shell.as_ref(),
-        &loaded_rust_provider.source_built_host_tools,
-        &loaded_rust_provider.source_built_native_artifacts,
-        loaded_rust_provider.source_built_action_trust.as_ref(),
-        &paths.guard_path_dir,
-        &paths.rust_action_authority_path,
-    )?;
 
     let mut child = run_rust_plan_child(RustPlanChildRequest {
         paths: &paths,
@@ -1412,8 +1334,6 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
         path_env: &execution_toolchain.path_env,
         c_compiler_route: execution_toolchain.c_compiler_route.as_ref(),
         policy_digest_blake3: initial_toolchain_status.policy_digest_blake3.as_deref(),
-        rust_action_authority_path: rust_action_enabled.then_some(paths.rust_action_authority_path.as_path()),
-        rust_action_evidence_dir: rust_action_enabled.then_some(paths.rust_action_evidence_dir.as_path()),
     })?;
     let produced = if child.blocker.is_none() {
         materialize_or_block(&paths, &mut child)?
@@ -1440,55 +1360,20 @@ pub(crate) fn cmd_cargo_free_self_build(options: CargoFreeSelfBuildOptions<'_>) 
     Ok(())
 }
 
-#[cfg(test)]
-mod prefix_publication_tests;
-
-pub(crate) trait FixedPointStage1Publisher {
-    fn publish_stage1(&self) -> Result<(), RunError>;
-}
-
-fn publish_stage1_before_continuation<T>(
-    publisher: Option<&dyn FixedPointStage1Publisher>,
-    continuation: impl FnOnce() -> Result<T, RunError>,
-) -> Result<T, RunError> {
-    if let Some(publisher) = publisher {
-        publisher.publish_stage1()?;
-    }
-    continuation()
-}
-
 pub(crate) fn cmd_cargo_free_fixed_point_self_build(options: CargoFreeSelfBuildOptions<'_>) -> Result<(), RunError> {
-    cmd_cargo_free_fixed_point_self_build_with_publisher(options, None)
-}
-
-pub(crate) fn cmd_cargo_free_fixed_point_self_build_with_publisher(
-    options: CargoFreeSelfBuildOptions<'_>,
-    publisher: Option<&dyn FixedPointStage1Publisher>,
-) -> Result<(), RunError> {
     let root = canonicalize_root(options.root)?;
     let bundle_dir = absolutize(&root, options.out_dir);
     ensure_outside_root(&bundle_dir, &root)?;
     debug_assert!(root.is_absolute());
     debug_assert!(!bundle_dir.starts_with(&root));
-    prepare_fixed_point_output_dir(&bundle_dir, options.resume)?;
+    prepare_fixed_point_output_dir(&bundle_dir)?;
+    let loaded_rust_provider = load_rust_source_provider(options.rust_source_provider)?;
     let loaded_toolchain_closure = load_source_built_toolchain_closure(options.toolchain_closure)?;
-    let loaded_rust_provider =
-        load_rust_source_provider(options.rust_source_provider, loaded_toolchain_closure.manifest.as_ref())?;
     let requested_rustc = selected_cargo_free_rustc(&loaded_rust_provider, options.rustc);
     let compatibility_rustc = prepare_rustc_for_compatibility(requested_rustc, &loaded_toolchain_closure)?;
-    let execution_shell = selected_execution_shell(&loaded_rust_provider);
-    let runtime = bound_rustc_runtime(&loaded_rust_provider.source_built_native_artifacts)?;
-    let compatibility = prepare_rustc_compatibility_with_shell(
-        &bundle_dir,
-        &compatibility_rustc,
-        &loaded_toolchain_closure,
-        execution_shell,
-        &loaded_rust_provider.source_built_native_artifacts,
-        runtime.as_ref(),
-    )?;
+    let compatibility = prepare_rustc_compatibility(&bundle_dir, &compatibility_rustc, &loaded_toolchain_closure)?;
     let plan = plan_fixed_point_paths(&root, &bundle_dir, &compatibility.summary.stage_rustc, options.targets)?;
     let toolchain_status = enforce_fixed_point_toolchain(
-        &compatibility.summary.requested_rustc,
         &compatibility.summary.stage_rustc,
         &loaded_toolchain_closure,
         &loaded_rust_provider,
@@ -1507,25 +1392,12 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build_with_publisher(
     };
     let host_mantle = env::current_exe().map_err(|err| internal(format!("resolve current executable: {err}")))?;
     let stage_policy_digest = toolchain_status.policy_digest_blake3.as_deref();
-    let stage1 = match options.resume {
-        CargoFreeFixedPointResume::None => execute_fixed_point_stage(
-            &plan.stages[FIXED_POINT_STAGE1_INDEX],
-            &host_mantle,
-            &compatibility.summary.stage_rustc,
-            &loaded_toolchain_closure,
-            loaded_rust_provider.source_built_shell.as_ref(),
-            &loaded_rust_provider.source_built_host_tools,
-            &loaded_rust_provider.source_built_native_artifacts,
-            loaded_rust_provider.source_built_action_trust.as_ref(),
-            options.rust_action_resources.as_ref(),
-            stage_policy_digest,
-        )?,
-        CargoFreeFixedPointResume::Stage1 => load_restored_fixed_point_stage(
-            &plan.stages[FIXED_POINT_STAGE1_INDEX],
-            stage_policy_digest,
-            fixed_point_c_compiler_route(&loaded_toolchain_closure)?,
-        )?,
-    };
+    let stage1 = execute_fixed_point_stage(
+        &plan.stages[FIXED_POINT_STAGE1_INDEX],
+        &host_mantle,
+        &loaded_toolchain_closure,
+        stage_policy_digest,
+    )?;
     if !stage1.success {
         return finish_fixed_point(&finish_context, stage1, None, BLOCKED_STATUS);
     }
@@ -1533,25 +1405,12 @@ pub(crate) fn cmd_cargo_free_fixed_point_self_build_with_publisher(
         let stage1 = blocked_fixed_point_stage(stage1, "stage1 succeeded without produced binary path".to_string());
         return finish_fixed_point(&finish_context, stage1, None, BLOCKED_STATUS);
     };
-    let publisher = if options.resume == CargoFreeFixedPointResume::None {
-        publisher
-    } else {
-        None
-    };
-    let stage2 = publish_stage1_before_continuation(publisher, || {
-        execute_fixed_point_stage(
-            &plan.stages[FIXED_POINT_STAGE2_INDEX],
-            stage1_binary,
-            &compatibility.summary.stage_rustc,
-            &loaded_toolchain_closure,
-            loaded_rust_provider.source_built_shell.as_ref(),
-            &loaded_rust_provider.source_built_host_tools,
-            &loaded_rust_provider.source_built_native_artifacts,
-            loaded_rust_provider.source_built_action_trust.as_ref(),
-            options.rust_action_resources.as_ref(),
-            stage_policy_digest,
-        )
-    })?;
+    let stage2 = execute_fixed_point_stage(
+        &plan.stages[FIXED_POINT_STAGE2_INDEX],
+        stage1_binary,
+        &loaded_toolchain_closure,
+        stage_policy_digest,
+    )?;
     if !stage2.success {
         return finish_fixed_point(&finish_context, stage1, Some(stage2), BLOCKED_STATUS);
     }
@@ -1564,8 +1423,6 @@ fn prepare_paths(root: &Path, out_dir: &Path) -> Result<BuildPaths, RunError> {
     let out_dir = absolutize(&root, out_dir);
     ensure_outside_root(&out_dir, &root)?;
     let execution_dir = out_dir.join(EXECUTION_DIR);
-    let rust_action_evidence_dir = out_dir.join(RUST_CHILD_ACTION_EVIDENCE_DIR);
-    let rust_action_authority_path = rust_action_evidence_dir.join(RUST_CHILD_ACTION_AUTHORITY_FILE);
     debug_assert!(root.is_absolute());
     debug_assert_eq!(execution_dir.parent(), Some(out_dir.as_path()));
     Ok(BuildPaths {
@@ -1581,8 +1438,6 @@ fn prepare_paths(root: &Path, out_dir: &Path) -> Result<BuildPaths, RunError> {
         meta_path: out_dir.join(META_FILE),
         out_dir,
         execution_dir,
-        rust_action_evidence_dir,
-        rust_action_authority_path,
     })
 }
 
@@ -1713,11 +1568,10 @@ fn rust_plan_args(
     args
 }
 
-fn prepare_fixed_point_output_dir(bundle_dir: &Path, resume: CargoFreeFixedPointResume) -> Result<(), RunError> {
+fn prepare_fixed_point_output_dir(bundle_dir: &Path) -> Result<(), RunError> {
     fs::create_dir_all(bundle_dir).map_err(|err| internal(format!("create {}: {err}", bundle_dir.display())))?;
-    let stage1 = bundle_dir.join(STAGE1_DIR);
     let owned_paths = [
-        stage1.clone(),
+        bundle_dir.join(STAGE1_DIR),
         bundle_dir.join(STAGE2_DIR),
         bundle_dir.join(EXECUTION_DIR),
         bundle_dir.join(TOOLCHAIN_DIR),
@@ -1726,34 +1580,15 @@ fn prepare_fixed_point_output_dir(bundle_dir: &Path, resume: CargoFreeFixedPoint
         bundle_dir.join(NON_CLAIMS_FILE),
     ];
     for path in &owned_paths {
-        if resume == CargoFreeFixedPointResume::Stage1 && path == &stage1 {
-            continue;
-        }
         remove_owned_path(path)?;
     }
-    if resume == CargoFreeFixedPointResume::Stage1 && !stage1.is_dir() {
-        return Err(internal("restored fixed-point stage1 directory is missing".to_string()));
-    }
-    debug_assert_eq!(resume == CargoFreeFixedPointResume::Stage1, stage1.is_dir());
     fs::create_dir_all(bundle_dir).map_err(|err| internal(format!("create {}: {err}", bundle_dir.display())))
 }
 
-#[cfg(test)]
 fn prepare_rustc_compatibility(
     bundle_dir: &Path,
     requested: &Path,
     toolchain_closure: &LoadedToolchainClosure,
-) -> Result<RustcCompatibility, RunError> {
-    prepare_rustc_compatibility_with_shell(bundle_dir, requested, toolchain_closure, Path::new("/bin/sh"), &[], None)
-}
-
-fn prepare_rustc_compatibility_with_shell(
-    bundle_dir: &Path,
-    requested: &Path,
-    toolchain_closure: &LoadedToolchainClosure,
-    execution_shell: &Path,
-    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
-    runtime: Option<&BoundRustcRuntime>,
 ) -> Result<RustcCompatibility, RunError> {
     let requested_rustc = resolve_executable(requested, "rustc")?;
     let toolchain_dir = bundle_dir.join(TOOLCHAIN_DIR);
@@ -1761,41 +1596,14 @@ fn prepare_rustc_compatibility_with_shell(
     debug_assert_ne!(toolchain_dir, requested_rustc);
     fs::create_dir_all(&toolchain_dir)
         .map_err(|err| internal(format!("create toolchain dir {}: {err}", toolchain_dir.display())))?;
-    let probe_path_env = prepare_rustc_compatibility_path_env_with_shell(
-        &toolchain_dir,
-        toolchain_closure,
-        execution_shell,
-        source_built_native_artifacts,
-    )?;
-    let receipt_bound_linker = toolchain_dir.join(TOOLCHAIN_COMPATIBILITY_PATH_DIR).join(RUSTC_BOUND_LINKER_ALIAS);
-    let runtime_wrapper = runtime
-        .map(|runtime| {
-            let wrapper = toolchain_dir.join(RUSTC_RUNTIME_WRAPPER_FILE);
-            write_bound_rustc_runtime_wrapper(
-                &wrapper,
-                &requested_rustc,
-                runtime,
-                execution_shell,
-                &receipt_bound_linker,
-            )?;
-            Ok::<PathBuf, RunError>(wrapper)
-        })
-        .transpose()?;
-    let probe_rustc = runtime_wrapper.as_deref().unwrap_or(&requested_rustc);
-    if rustc_accepts_link_self_contained_no(probe_rustc, &toolchain_dir, probe_path_env.as_deref())? {
-        let wrapper_blake3 = runtime_wrapper.as_deref().map(blake3_file).transpose()?;
-        let stage_rustc = probe_rustc.to_path_buf();
-        let normalization = if runtime_wrapper.is_some() {
-            NORMALIZATION_RECEIPT_BOUND_RUNTIME
-        } else {
-            NORMALIZATION_NONE
-        };
+    let probe_path_env = prepare_rustc_compatibility_path_env(&toolchain_dir, toolchain_closure)?;
+    if rustc_accepts_link_self_contained_no(&requested_rustc, &toolchain_dir, probe_path_env.as_deref())? {
         let summary = RustcCompatibilitySummary {
-            requested_rustc,
-            stage_rustc,
-            normalization,
-            wrapper: runtime_wrapper,
-            wrapper_blake3,
+            requested_rustc: requested_rustc.clone(),
+            stage_rustc: requested_rustc,
+            normalization: NORMALIZATION_NONE,
+            wrapper: None,
+            wrapper_blake3: None,
         };
         write_rustc_compatibility(&toolchain_dir.join(COMPATIBILITY_FILE), &summary)?;
         return Ok(RustcCompatibility { summary });
@@ -1820,11 +1628,9 @@ fn prepare_rustc_compatibility_with_shell(
     Ok(RustcCompatibility { summary })
 }
 
-fn prepare_rustc_compatibility_path_env_with_shell(
+fn prepare_rustc_compatibility_path_env(
     toolchain_dir: &Path,
     toolchain_closure: &LoadedToolchainClosure,
-    execution_shell: &Path,
-    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
 ) -> Result<Option<OsString>, RunError> {
     let Some(manifest) = &toolchain_closure.manifest else {
         return Ok(None);
@@ -1833,12 +1639,7 @@ fn prepare_rustc_compatibility_path_env_with_shell(
     remove_owned_path(&path_dir)?;
     fs::create_dir_all(&path_dir)
         .map_err(|err| internal(format!("create receipt-bound rustc probe PATH dir {}: {err}", path_dir.display())))?;
-    write_toolchain_path_aliases_with_shell_and_native_artifacts(
-        &path_dir,
-        manifest,
-        execution_shell,
-        source_built_native_artifacts,
-    )?;
+    write_toolchain_path_aliases(&path_dir, manifest)?;
     let path_env = env::join_paths([path_dir])
         .map_err(|err| internal(format!("construct receipt-bound rustc probe PATH: {err}")))?;
     Ok(Some(path_env))
@@ -1900,58 +1701,6 @@ fn rustc_accepts_link_self_contained_no(
     Ok(is_accepted)
 }
 
-fn write_bound_rustc_runtime_wrapper(
-    wrapper: &Path,
-    real_rustc: &Path,
-    runtime: &BoundRustcRuntime,
-    execution_shell: &Path,
-    receipt_bound_linker: &Path,
-) -> Result<(), RunError> {
-    require_executable(real_rustc)?;
-    require_executable(&runtime.loader)?;
-    require_executable(execution_shell)?;
-    require_executable(receipt_bound_linker)?;
-    let rust_root = real_rustc
-        .parent()
-        .and_then(Path::parent)
-        .ok_or_else(|| RunError::Build("receipt-bound rustc has no provider root".to_string()))?;
-    if !real_rustc.ends_with("bin/rustc") {
-        return Err(RunError::Build(format!(
-            "receipt-bound rustc path has unexpected shape: {}",
-            real_rustc.display()
-        )));
-    }
-    let dynamic_rustc = rust_root.join("bin").join(RUSTC_DYNAMIC_BINARY_FILE);
-    require_executable(&dynamic_rustc)?;
-    let rust_lib = rust_root.join("lib");
-    let runtime_lib = rust_lib.join("mantle-runtime");
-    let rust_stdlib = rust_lib.join("rustlib").join(RUSTC_RUNTIME_HOST_TRIPLE).join("lib");
-    for directory in [&runtime_lib, &runtime.library_dir, &rust_lib, &rust_stdlib] {
-        if !directory.is_dir() {
-            return Err(RunError::Build(format!(
-                "receipt-bound rustc runtime directory is unavailable: {}",
-                directory.display()
-            )));
-        }
-    }
-    let library_path = env::join_paths([&runtime_lib, &runtime.library_dir, &rust_lib, &rust_stdlib])
-        .map_err(|error| internal(format!("construct receipt-bound rustc library path: {error}")))?;
-    let execution_shell = path_to_string(execution_shell)?;
-    let linker_arg = format!("linker={}", receipt_bound_linker.display());
-    let script = format!(
-        "#!{execution_shell}\nset -eu\nhas_sysroot=false\nfor arg in \"$@\"; do\n  if [ \"$arg\" = \"--sysroot\" ]; then has_sysroot=true; break; fi\n  case \"$arg\" in --sysroot=*) has_sysroot=true; break ;; esac\ndone\nif [ \"$has_sysroot\" = false ]; then set -- --sysroot {} \"$@\"; fi\nset -- \"$@\" -C {}\n{DYNAMIC_LIBRARY_PATH_ENV}={}\nexport {DYNAMIC_LIBRARY_PATH_ENV}\nexec {} {} \"$@\"\n",
-        shell_quote(rust_root),
-        shell_quote(Path::new(&linker_arg)),
-        shell_quote(Path::new(&library_path)),
-        shell_quote(&runtime.loader),
-        shell_quote(&dynamic_rustc)
-    );
-    write_text(wrapper, &script)?;
-    set_executable(wrapper)?;
-    assert!(wrapper.is_file());
-    Ok(())
-}
-
 fn write_rustc_wrapper(wrapper: &Path, real_rustc: &Path) -> Result<(), RunError> {
     let script = rustc_wrapper_script(real_rustc);
     write_text(wrapper, &script)?;
@@ -1978,7 +1727,6 @@ fn prepare_output_dir(paths: &BuildPaths) -> Result<(), RunError> {
         .map_err(|err| internal(format!("create output dir {}: {err}", paths.out_dir.display())))?;
     remove_owned_path(&paths.execution_dir)?;
     remove_owned_path(&paths.guard_path_dir)?;
-    remove_owned_path(&paths.rust_action_evidence_dir)?;
     let owned_files = vec![
         paths.receipt_path.clone(),
         paths.stderr_path.clone(),
@@ -2057,21 +1805,6 @@ fn run_rust_plan_child(request: RustPlanChildRequest<'_>) -> Result<ChildRun, Ru
             .arg("--source-built-c-compiler-route-json")
             .arg(&route_json)
             .env(crate::source_toolchain_closure::SOURCE_BUILT_C_COMPILER_ROUTE_ENV, route_json);
-    }
-    match (request.rust_action_authority_path, request.rust_action_evidence_dir) {
-        (Some(authority_path), Some(evidence_dir)) => {
-            command
-                .arg(RUST_CHILD_ACTION_AUTHORITY_FLAG)
-                .arg(authority_path)
-                .arg(RUST_CHILD_ACTION_EVIDENCE_DIR_FLAG)
-                .arg(evidence_dir);
-        }
-        (None, None) => {}
-        _ => {
-            return Err(internal(
-                "Rust child-action authority path and evidence directory must be supplied together".to_string(),
-            ));
-        }
     }
     if let Some(policy_digest_blake3) = request.policy_digest_blake3 {
         command.env(crate::rust_plan::RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV, policy_digest_blake3);
@@ -2335,41 +2068,13 @@ fn push_optional_summary_part(parts: &mut Vec<String>, label: &str, value: Optio
 fn execute_fixed_point_stage(
     stage: &FixedPointStagePlan,
     mantle_bin: &Path,
-    rustc: &Path,
     toolchain_closure: &LoadedToolchainClosure,
-    bound_shell: Option<&BoundRustExecutionShell>,
-    source_built_host_tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
-    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
-    source_built_action_trust: Option<&crate::source_built_rust_provider_action::RustProviderActionEvidence>,
-    rust_action_resources: Option<&crate::source_built_rust_action_plan::RustActionResourceLimits>,
     policy_digest_blake3: Option<&str>,
 ) -> Result<FixedPointStageRun, RunError> {
     debug_assert!(matches!(stage.name, STAGE1_DIR | STAGE2_DIR));
     debug_assert_eq!(stage.command.path_guard_dir, stage.guard_path_dir);
-    let execution_shell = bound_shell.map_or_else(|| Path::new("/bin/sh"), |shell| shell.execution_path.as_path());
-    debug_assert!(execution_shell.is_absolute());
     prepare_fixed_point_stage(stage)?;
-    let path_env = prepare_receipt_bound_guard_path(
-        &stage.guard_path_dir,
-        toolchain_closure,
-        source_built_host_tools,
-        source_built_native_artifacts,
-        execution_shell,
-    )?;
-    let rust_action_evidence_dir = stage.stage_dir.join(RUST_CHILD_ACTION_EVIDENCE_DIR);
-    let rust_action_authority_path = rust_action_evidence_dir.join(RUST_CHILD_ACTION_AUTHORITY_FILE);
-    let rust_action_enabled = prepare_rust_child_action_authority(
-        fixed_point_rust_action_stage_id(stage.name)?,
-        rust_action_resources,
-        rustc,
-        toolchain_closure,
-        bound_shell,
-        source_built_host_tools,
-        source_built_native_artifacts,
-        source_built_action_trust,
-        &stage.guard_path_dir,
-        &rust_action_authority_path,
-    )?;
+    let path_env = execution_path_env(&stage.guard_path_dir, toolchain_closure)?;
     let c_compiler_route = fixed_point_c_compiler_route(toolchain_closure)?;
     let route_json = c_compiler_route
         .as_ref()
@@ -2389,13 +2094,6 @@ fn execute_fixed_point_stage(
             .arg(route_json)
             .env(crate::source_toolchain_closure::SOURCE_BUILT_C_COMPILER_ROUTE_ENV, route_json);
     }
-    if rust_action_enabled {
-        command
-            .arg(RUST_CHILD_ACTION_AUTHORITY_FLAG)
-            .arg(&rust_action_authority_path)
-            .arg(RUST_CHILD_ACTION_EVIDENCE_DIR_FLAG)
-            .arg(&rust_action_evidence_dir);
-    }
     if let Some(policy_digest_blake3) = policy_digest_blake3 {
         command.env(crate::rust_plan::RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV, policy_digest_blake3);
     }
@@ -2411,57 +2109,6 @@ fn execute_fixed_point_stage(
     record_file_write(&stage.stderr_path, &output.stderr, &mut blocker);
     record_file_write(&stage.status_path, status_text(output.status.code()).as_bytes(), &mut blocker);
     fixed_point_stage_from_output(stage, output.status.code(), blocker, policy_digest_blake3, c_compiler_route)
-}
-
-fn load_restored_fixed_point_stage(
-    stage: &FixedPointStagePlan,
-    policy_digest_blake3: Option<&str>,
-    c_compiler_route: Option<crate::source_toolchain_closure::ReceiptBoundCCompilerRoute>,
-) -> Result<FixedPointStageRun, RunError> {
-    if stage.name != STAGE1_DIR || !stage.stage_dir.is_dir() {
-        return Err(internal("restored fixed-point stage1 shape is invalid".to_string()));
-    }
-    let receipt = parse_receipt(&stage.receipt_path, true)?
-        .ok_or_else(|| internal("restored fixed-point stage1 receipt is missing".to_string()))?;
-    let execution_status = receipt_execution_status(Some(&receipt));
-    if execution_status != SUCCESS_STATUS {
-        return Err(internal("restored fixed-point stage1 receipt is not successful".to_string()));
-    }
-    if policy_digest_blake3.is_some_and(|expected| {
-        receipt.pointer(&format!("/{TOOLCHAIN_CLOSURE_POLICY_DIGEST_FIELD}")).and_then(Value::as_str) != Some(expected)
-    }) {
-        return Err(internal("restored fixed-point stage1 policy identity mismatch".to_string()));
-    }
-    require_executable(&stage.binary_path)?;
-    let digest = blake3_file(&stage.binary_path)?;
-    let smoke_status_code = run_smoke_to_paths(&stage.binary_path, &stage.smoke_stdout_path, &stage.smoke_stderr_path)?;
-    if smoke_status_code != SUCCESS_EXIT_CODE || failed_unit_count(&receipt) != 0 {
-        return Err(internal("restored fixed-point stage1 validation failed".to_string()));
-    }
-    let run = FixedPointStageRun {
-        name: stage.name,
-        dir: stage.stage_dir.clone(),
-        execution_dir: stage.execution_dir.clone(),
-        receipt_path: stage.receipt_path.clone(),
-        stderr_path: stage.stderr_path.clone(),
-        status_path: stage.status_path.clone(),
-        status_code: Some(SUCCESS_EXIT_CODE),
-        execution_status,
-        cargo_marker_absent: !stage.cargo_marker_path.exists(),
-        success: true,
-        unit_count: unit_count(&receipt),
-        failed_unit_count: failed_unit_count(&receipt),
-        binary: Some(stage.binary_path.clone()),
-        binary_blake3: Some(digest),
-        smoke_status_code: Some(smoke_status_code),
-        source_built_toolchain_closure_policy_digest_blake3: policy_digest_blake3.map(ToOwned::to_owned),
-        selected_c_compiler: c_compiler_route,
-        blocker: None,
-        blocker_diagnostic: None,
-    };
-    debug_assert!(run.success);
-    debug_assert!(run.binary.is_some());
-    Ok(run)
 }
 
 fn fixed_point_c_compiler_route(
@@ -2870,26 +2517,9 @@ fn stage_summary(stage: &FixedPointStageRun, bundle_dir: &Path) -> FixedPointSta
             .source_built_toolchain_closure_policy_digest_blake3
             .clone(),
         selected_c_compiler: stage.selected_c_compiler.clone(),
-        rust_child_action_authority: existing_stage_action_artifact(
-            stage,
-            bundle_dir,
-            RUST_CHILD_ACTION_AUTHORITY_FILE,
-        ),
-        rust_child_action_plan: existing_stage_action_artifact(stage, bundle_dir, RUST_CHILD_ACTION_PLAN_FILE),
-        rust_child_action_audit: existing_stage_action_artifact(stage, bundle_dir, RUST_CHILD_ACTION_AUDIT_FILE),
-        rust_child_action_reconciliation: existing_stage_action_artifact(
-            stage,
-            bundle_dir,
-            RUST_CHILD_ACTION_RECONCILIATION_FILE,
-        ),
         blocker: stage.blocker.clone(),
         blocker_diagnostic: stage.blocker_diagnostic.clone(),
     }
-}
-
-fn existing_stage_action_artifact(stage: &FixedPointStageRun, bundle_dir: &Path, file_name: &str) -> Option<PathBuf> {
-    let path = stage.dir.join(RUST_CHILD_ACTION_EVIDENCE_DIR).join(file_name);
-    path.is_file().then(|| bundle_local_path(bundle_dir, &path))
 }
 
 fn bundle_local_path(bundle_dir: &Path, path: &Path) -> PathBuf {
@@ -3176,43 +2806,13 @@ fn prepare_execution_toolchain(
     rust_source_provider: &LoadedRustSourceProvider,
 ) -> Result<ExecutionToolchain, RunError> {
     let execution_toolchain = if let Some(manifest) = &toolchain_closure.manifest {
-        let original_rustc = resolve_executable(requested_rustc, "rustc")?;
-        reject_undeclared_external_rustc_wrapper(&original_rustc, manifest)?;
+        let rustc = resolve_executable(requested_rustc, "rustc")?;
+        reject_undeclared_external_rustc_wrapper(&rustc, manifest)?;
+        let status = enforce_receipt_bound_toolchain(&rustc, toolchain_closure, manifest)?;
         let c_compiler_route = Some(receipt_bound_c_compiler_route(manifest)?);
-        let execution_shell = selected_execution_shell(rust_source_provider);
-        if let Some(bound_shell) = &rust_source_provider.source_built_shell {
-            debug_assert_eq!(execution_shell, bound_shell.execution_path);
-            debug_assert_eq!(bound_shell.content_digest_blake3.len(), blake3::OUT_LEN * 2);
-            debug_assert!(!bound_shell.source_id.is_empty());
-            debug_assert_eq!(bound_shell.construction_receipt_digest_blake3.len(), blake3::OUT_LEN * 2);
-        }
-        let path_env = prepare_receipt_bound_guard_path(
-            guard_path_dir,
-            toolchain_closure,
-            &rust_source_provider.source_built_host_tools,
-            &rust_source_provider.source_built_native_artifacts,
-            execution_shell,
-        )?;
-        let runtime = bound_rustc_runtime(&rust_source_provider.source_built_native_artifacts)?;
-        let rustc = if let Some(runtime) = runtime {
-            let wrapper = guard_path_dir.join(RUSTC_RUNTIME_WRAPPER_FILE);
-            let receipt_bound_linker = guard_path_dir.join(RUSTC_BOUND_LINKER_ALIAS);
-            write_bound_rustc_runtime_wrapper(
-                &wrapper,
-                &original_rustc,
-                &runtime,
-                execution_shell,
-                &receipt_bound_linker,
-            )?;
-            wrapper
-        } else {
-            original_rustc.clone()
-        };
-        let status =
-            enforce_receipt_bound_toolchain_with_runtime(&original_rustc, &rustc, toolchain_closure, manifest)?;
         ExecutionToolchain {
             rustc,
-            path_env,
+            path_env: execution_path_env(guard_path_dir, toolchain_closure)?,
             status,
             c_compiler_route,
         }
@@ -3227,320 +2827,6 @@ fn prepare_execution_toolchain(
     debug_assert!(!execution_toolchain.rustc.as_os_str().is_empty());
     debug_assert!(!execution_toolchain.path_env.is_empty());
     Ok(execution_toolchain)
-}
-
-fn fixed_point_rust_action_stage_id(stage_name: &str) -> Result<&'static str, RunError> {
-    match stage_name {
-        STAGE1_DIR => Ok(crate::source_built_fixed_point::MANTLE_STAGE1_STAGE_ID),
-        STAGE2_DIR => Ok(crate::source_built_fixed_point::MANTLE_STAGE2_STAGE_ID),
-        other => Err(internal(format!("unknown fixed-point Rust action stage: {other}"))),
-    }
-}
-
-fn prepare_rust_child_action_authority(
-    stage_id: &str,
-    resources: Option<&crate::source_built_rust_action_plan::RustActionResourceLimits>,
-    selected_rustc: &Path,
-    toolchain_closure: &LoadedToolchainClosure,
-    bound_shell: Option<&BoundRustExecutionShell>,
-    source_built_host_tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
-    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
-    source_built_action_trust: Option<&crate::source_built_rust_provider_action::RustProviderActionEvidence>,
-    guard_path_dir: &Path,
-    authority_path: &Path,
-) -> Result<bool, RunError> {
-    let Some(resources) = resources else {
-        return Ok(false);
-    };
-    let manifest = toolchain_closure.manifest.as_ref().ok_or_else(|| {
-        RunError::Build("Rust child-action authority requires an explicit toolchain closure manifest".to_string())
-    })?;
-    let bound_shell = bound_shell.ok_or_else(|| {
-        RunError::Build("Rust child-action authority requires a source-built BusyBox shell binding".to_string())
-    })?;
-    let source_built_action_trust = source_built_action_trust.ok_or_else(|| {
-        RunError::Build("Rust child-action authority requires Rust-provider action reconciliation".to_string())
-    })?;
-    let fixed_executables = rust_child_action_fixed_executables(
-        selected_rustc,
-        manifest,
-        bound_shell,
-        source_built_host_tools,
-        source_built_native_artifacts,
-        source_built_action_trust,
-        guard_path_dir,
-        toolchain_closure.status.policy_digest_blake3.as_deref(),
-    )?;
-    let authority = crate::source_built_rust_action_plan::rust_child_action_authority(
-        stage_id.to_string(),
-        resources.clone(),
-        fixed_executables,
-    )
-    .map_err(rust_action_error)?;
-    write_new_rust_action_authority(authority_path, &authority)?;
-    assert!(authority_path.is_file());
-    assert!(!authority.fixed_executables.is_empty());
-    Ok(true)
-}
-
-fn rust_child_action_fixed_executables(
-    selected_rustc: &Path,
-    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
-    bound_shell: &BoundRustExecutionShell,
-    source_built_host_tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
-    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
-    source_built_action_trust: &crate::source_built_rust_provider_action::RustProviderActionEvidence,
-    guard_path_dir: &Path,
-    policy_digest_blake3: Option<&str>,
-) -> Result<Vec<crate::source_built_rust_action_plan::RustFixedExecutableAuthority>, RunError> {
-    use crate::source_built_rust_action_plan::RustFixedExecutableKind;
-    let selected_rustc = canonical_action_executable(selected_rustc)?;
-    let policy_digest_blake3 = policy_digest_blake3.ok_or_else(|| {
-        RunError::Build("Rust child-action authority requires a toolchain closure policy digest".to_string())
-    })?;
-    let alias_producer = rust_action_alias_producer(policy_digest_blake3, bound_shell, source_built_action_trust);
-    let closure_authorities =
-        crate::source_built_rust_action_plan::fixed_executable_authorities_from_toolchain_closure(manifest)
-            .map_err(rust_action_error)?;
-    let mut by_path = BTreeMap::new();
-    for authority in closure_authorities {
-        let path = canonical_action_executable(Path::new(&authority.path))?;
-        let is_rustc_authority = authority.kind == RustFixedExecutableKind::Rustc;
-        let kind = if path == selected_rustc {
-            RustFixedExecutableKind::Rustc
-        } else if is_rustc_authority {
-            RustFixedExecutableKind::NativeHelper
-        } else {
-            authority.kind.clone()
-        };
-        let producer_action_id = if is_rustc_authority {
-            format!(
-                "rust-provider-action:{}:{}",
-                source_built_action_trust.plan_digest_blake3, source_built_action_trust.reconciliation_digest_blake3
-            )
-        } else {
-            authority.producer_action_id
-        };
-        let measured = measured_rust_fixed_authority(&path, kind, &producer_action_id)?;
-        insert_rust_fixed_authority(&mut by_path, measured)?;
-    }
-    for artifact in source_built_native_artifacts {
-        let Some(kind) = rust_fixed_kind_for_native_artifact(artifact.role) else {
-            continue;
-        };
-        let path = canonical_action_executable(Path::new(&artifact.path))?;
-        let producer = format!("full-source-native-provider:{policy_digest_blake3}:{:?}", artifact.role);
-        let authority = measured_rust_fixed_authority(&path, kind, &producer)?;
-        insert_rust_fixed_authority(&mut by_path, authority)?;
-    }
-    for tool in source_built_host_tools {
-        let path = canonical_action_executable(Path::new(&tool.path))?;
-        let kind = if tool.role == crate::full_source_rust_binding::FullSourceRustHostToolRole::Busybox {
-            RustFixedExecutableKind::Shell
-        } else {
-            RustFixedExecutableKind::NativeHelper
-        };
-        let producer = format!("rust-host-tool:{}:{}", tool.source_id, tool.construction_receipt_digest_blake3);
-        let authority = measured_rust_fixed_authority(&path, kind, &producer)?;
-        insert_rust_fixed_authority(&mut by_path, authority)?;
-    }
-    let reserved_aliases = rust_reserved_tool_aliases(manifest, source_built_host_tools)?;
-    for alias in &reserved_aliases {
-        let path = canonical_action_executable(&guard_path_dir.join(alias))?;
-        let authority = measured_rust_fixed_authority(&path, RustFixedExecutableKind::NativeHelper, &alias_producer)?;
-        insert_rust_fixed_authority(&mut by_path, authority)?;
-    }
-    for alias in RUST_UNAVAILABLE_TOOL_ALIASES {
-        if reserved_aliases.contains(*alias) {
-            continue;
-        }
-        let path = verify_unavailable_rust_tool_alias(&guard_path_dir.join(alias), &bound_shell.execution_path)?;
-        let producer = format!("{alias_producer}:unavailable-tool:{alias}");
-        let authority =
-            measured_rust_fixed_authority(&path, RustFixedExecutableKind::CompilerPolicyAdapter, &producer)?;
-        insert_rust_fixed_authority(&mut by_path, authority)?;
-    }
-    let shell_path = canonical_action_executable(&bound_shell.execution_path)?;
-    let shell = measured_rust_fixed_authority(&shell_path, RustFixedExecutableKind::Shell, &alias_producer)?;
-    insert_rust_fixed_authority(&mut by_path, shell)?;
-    if let Some(linker) = rustc_runtime_wrapper_linker(&selected_rustc)? {
-        let producer = format!("{alias_producer}:rustc-linker");
-        let linker = measured_rust_fixed_authority(&linker, RustFixedExecutableKind::CCompiler, &producer)?;
-        insert_rust_fixed_authority(&mut by_path, linker)?;
-    }
-    if !by_path.contains_key(&selected_rustc) {
-        let rustc_producer = format!("{alias_producer}:selected-rustc");
-        let rustc = measured_rust_fixed_authority(&selected_rustc, RustFixedExecutableKind::Rustc, &rustc_producer)?;
-        insert_rust_fixed_authority(&mut by_path, rustc)?;
-    }
-    let authorities = by_path.into_values().collect::<Vec<_>>();
-    let rustc_count = authorities.iter().filter(|authority| authority.kind == RustFixedExecutableKind::Rustc).count();
-    if rustc_count != 1 {
-        return Err(RunError::Build(format!(
-            "Rust child-action authority requires one selected rustc, found {rustc_count}"
-        )));
-    }
-    assert!(!authorities.is_empty());
-    assert!(authorities.iter().all(|authority| Path::new(&authority.path).is_absolute()));
-    Ok(authorities)
-}
-
-fn rustc_runtime_wrapper_linker(selected_rustc: &Path) -> Result<Option<PathBuf>, RunError> {
-    if selected_rustc.file_name() != Some(OsStr::new(RUSTC_RUNTIME_WRAPPER_FILE)) {
-        return Ok(None);
-    }
-    let parent = selected_rustc
-        .parent()
-        .ok_or_else(|| RunError::Build("receipt-bound rustc wrapper has no parent".to_string()))?;
-    let candidates = [
-        parent.join(RUSTC_BOUND_LINKER_ALIAS),
-        parent.join(TOOLCHAIN_COMPATIBILITY_PATH_DIR).join(RUSTC_BOUND_LINKER_ALIAS),
-    ]
-    .into_iter()
-    .filter(|candidate| candidate.is_file())
-    .collect::<Vec<_>>();
-    let [linker] = candidates.as_slice() else {
-        return Err(RunError::Build(format!(
-            "receipt-bound rustc wrapper requires one linker alias, found {}",
-            candidates.len()
-        )));
-    };
-    canonical_action_executable(linker).map(Some)
-}
-
-fn rust_action_alias_producer(
-    policy_digest_blake3: &str,
-    shell: &BoundRustExecutionShell,
-    action_trust: &crate::source_built_rust_provider_action::RustProviderActionEvidence,
-) -> String {
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(RUST_CHILD_ACTION_ALIAS_PRODUCER_CONTEXT);
-    hasher.update(policy_digest_blake3.as_bytes());
-    hasher.update(shell.content_digest_blake3.as_bytes());
-    hasher.update(shell.source_id.as_bytes());
-    hasher.update(shell.construction_receipt_digest_blake3.as_bytes());
-    hasher.update(action_trust.plan_digest_blake3.as_bytes());
-    hasher.update(action_trust.reconciliation_digest_blake3.as_bytes());
-    let digest = hasher.finalize().to_hex();
-    assert_eq!(digest.len(), blake3::OUT_LEN * 2);
-    assert!(!shell.source_id.is_empty());
-    format!("receipt-bound-aliases:{digest}")
-}
-
-fn rust_fixed_kind_for_native_artifact(
-    role: crate::full_source_rust_binding::FullSourceNativeArtifactRole,
-) -> Option<crate::source_built_rust_action_plan::RustFixedExecutableKind> {
-    use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
-    use crate::source_built_rust_action_plan::RustFixedExecutableKind;
-    match role {
-        FullSourceNativeArtifactRole::CCompiler | FullSourceNativeArtifactRole::Preprocessor => {
-            Some(RustFixedExecutableKind::CCompiler)
-        }
-        FullSourceNativeArtifactRole::CxxCompiler => Some(RustFixedExecutableKind::CxxCompiler),
-        FullSourceNativeArtifactRole::Linker => Some(RustFixedExecutableKind::Linker),
-        FullSourceNativeArtifactRole::CompilerInternal
-        | FullSourceNativeArtifactRole::Assembler
-        | FullSourceNativeArtifactRole::ArchiveTool
-        | FullSourceNativeArtifactRole::Ranlib
-        | FullSourceNativeArtifactRole::SymbolTool
-        | FullSourceNativeArtifactRole::ObjectCopy
-        | FullSourceNativeArtifactRole::ObjectDump
-        | FullSourceNativeArtifactRole::ObjectFormat => Some(RustFixedExecutableKind::NativeHelper),
-        FullSourceNativeArtifactRole::DynamicLinker => Some(RustFixedExecutableKind::NativeHelper),
-        FullSourceNativeArtifactRole::CrtObject
-        | FullSourceNativeArtifactRole::Libc
-        | FullSourceNativeArtifactRole::Libgcc
-        | FullSourceNativeArtifactRole::Libstdcxx => None,
-    }
-}
-
-fn measured_rust_fixed_authority(
-    path: &Path,
-    kind: crate::source_built_rust_action_plan::RustFixedExecutableKind,
-    producer_action_id: &str,
-) -> Result<crate::source_built_rust_action_plan::RustFixedExecutableAuthority, RunError> {
-    let digest_blake3 = crate::protected_exec::blake3_file_hex(path)
-        .map_err(|error| RunError::Build(format!("hash Rust child-action executable {}: {error}", path.display())))?;
-    let path = path_to_string(path)?;
-    let material = serde_json::to_vec(&(&path, &digest_blake3, &kind, producer_action_id))
-        .map_err(|error| internal(format!("encode Rust fixed executable authority: {error}")))?;
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(RUST_CHILD_ACTION_FIXED_AUTHORITY_CONTEXT);
-    hasher.update(&material);
-    let authority_id = format!("fixed:{}", hasher.finalize().to_hex());
-    assert_eq!(digest_blake3.len(), blake3::OUT_LEN * 2);
-    assert!(!producer_action_id.is_empty());
-    Ok(crate::source_built_rust_action_plan::RustFixedExecutableAuthority {
-        authority_id,
-        producer_action_id: producer_action_id.to_string(),
-        output_identity_blake3: digest_blake3.clone(),
-        path,
-        digest_blake3,
-        kind,
-    })
-}
-
-fn insert_rust_fixed_authority(
-    by_path: &mut BTreeMap<PathBuf, crate::source_built_rust_action_plan::RustFixedExecutableAuthority>,
-    authority: crate::source_built_rust_action_plan::RustFixedExecutableAuthority,
-) -> Result<(), RunError> {
-    use crate::source_built_rust_action_plan::RustFixedExecutableKind;
-    let path = PathBuf::from(&authority.path);
-    if let Some(existing) = by_path.get(&path) {
-        if existing.digest_blake3 != authority.digest_blake3 {
-            return Err(RunError::Build(format!(
-                "Rust child-action executable path has conflicting bytes: {}",
-                path.display()
-            )));
-        }
-        if existing.kind == RustFixedExecutableKind::Rustc || authority.kind != RustFixedExecutableKind::Rustc {
-            return Ok(());
-        }
-    }
-    by_path.insert(path, authority);
-    assert!(!by_path.is_empty());
-    assert!(by_path.keys().all(|path| path.is_absolute()));
-    Ok(())
-}
-
-fn canonical_action_executable(path: &Path) -> Result<PathBuf, RunError> {
-    let path = fs::canonicalize(path).map_err(|error| {
-        RunError::Build(format!("resolve Rust child-action executable {}: {error}", path.display()))
-    })?;
-    require_executable(&path)?;
-    assert!(path.is_absolute());
-    assert!(path.is_file());
-    Ok(path)
-}
-
-fn write_new_rust_action_authority(
-    path: &Path,
-    authority: &crate::source_built_rust_action_plan::RustChildActionAuthority,
-) -> Result<(), RunError> {
-    let bytes = serde_json::to_vec_pretty(authority)
-        .map_err(|error| internal(format!("encode Rust child-action authority: {error}")))?;
-    let parent = path
-        .parent()
-        .ok_or_else(|| internal(format!("Rust child-action authority path has no parent: {}", path.display())))?;
-    fs::create_dir_all(parent).map_err(|error| {
-        internal(format!("create Rust child-action authority directory {}: {error}", parent.display()))
-    })?;
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .map_err(|error| internal(format!("create Rust child-action authority {}: {error}", path.display())))?;
-    file.write_all(&bytes)
-        .map_err(|error| internal(format!("write Rust child-action authority {}: {error}", path.display())))?;
-    file.sync_all()
-        .map_err(|error| internal(format!("sync Rust child-action authority {}: {error}", path.display())))?;
-    assert!(!bytes.is_empty());
-    assert!(path.is_file());
-    Ok(())
-}
-
-fn rust_action_error(error: crate::source_built_rust_action_plan::RustChildActionPlanError) -> RunError {
-    RunError::Build(format!("Rust child-action authority blocked: {error}"))
 }
 
 fn prepare_rustc_for_compatibility(
@@ -3601,7 +2887,6 @@ fn is_probable_external_wrapper(path: &Path) -> Result<bool, RunError> {
 }
 
 fn enforce_fixed_point_toolchain(
-    requested_rustc: &Path,
     stage_rustc: &Path,
     toolchain_closure: &LoadedToolchainClosure,
     rust_source_provider: &LoadedRustSourceProvider,
@@ -3609,7 +2894,7 @@ fn enforce_fixed_point_toolchain(
     let Some(manifest) = &toolchain_closure.manifest else {
         return Ok(effective_source_built_toolchain_closure(toolchain_closure, rust_source_provider));
     };
-    enforce_receipt_bound_toolchain_with_runtime(requested_rustc, stage_rustc, toolchain_closure, manifest)
+    enforce_receipt_bound_toolchain(stage_rustc, toolchain_closure, manifest)
 }
 
 fn effective_source_built_toolchain_closure(
@@ -3625,13 +2910,18 @@ fn effective_source_built_toolchain_closure(
         .unwrap_or_else(|| toolchain_closure.status.clone())
 }
 
-#[cfg(test)]
 fn enforce_receipt_bound_toolchain(
     rustc: &Path,
     toolchain_closure: &LoadedToolchainClosure,
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
 ) -> Result<crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus, RunError> {
-    enforce_receipt_bound_toolchain_with_runtime(rustc, rustc, toolchain_closure, manifest)
+    let manifest_path = toolchain_closure
+        .manifest_path
+        .clone()
+        .ok_or_else(|| internal("toolchain closure manifest path missing during enforcement".to_string()))?;
+    let observed = observed_toolchain_inputs(rustc, manifest)?;
+    let validation = enforce_observed_toolchain_subset(manifest, &observed)?;
+    Ok(crate::source_toolchain_closure::enforced_source_built_toolchain_closure(manifest_path, &validation))
 }
 
 fn enforce_observed_toolchain_subset(
@@ -3642,24 +2932,8 @@ fn enforce_observed_toolchain_subset(
         .map_err(|err| RunError::Build(format!("source-built toolchain closure blocked: {}", err.message())))
 }
 
-fn enforce_receipt_bound_toolchain_with_runtime(
-    rustc: &Path,
-    runtime_rustc: &Path,
-    toolchain_closure: &LoadedToolchainClosure,
-    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
-) -> Result<crate::source_toolchain_closure::SourceBuiltToolchainClosureStatus, RunError> {
-    let manifest_path = toolchain_closure
-        .manifest_path
-        .clone()
-        .ok_or_else(|| internal("toolchain closure manifest path missing during enforcement".to_string()))?;
-    let observed = observed_toolchain_inputs(rustc, runtime_rustc, manifest)?;
-    let validation = enforce_observed_toolchain_subset(manifest, &observed)?;
-    Ok(crate::source_toolchain_closure::enforced_source_built_toolchain_closure(manifest_path, &validation))
-}
-
 fn observed_toolchain_inputs(
     rustc: &Path,
-    runtime_rustc: &Path,
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
 ) -> Result<Vec<crate::source_toolchain_closure::ToolchainObservedInput>, RunError> {
     use crate::source_toolchain_closure::ToolchainRole;
@@ -3672,7 +2946,7 @@ fn observed_toolchain_inputs(
     );
     debug_assert!(observed.capacity() >= BASE_OBSERVED_TOOLCHAIN_INPUT_COUNT);
     observed.push(observed_file_tool(ToolchainRole::Rustc, rustc)?);
-    observed.push(observed_sysroot_tool(runtime_rustc)?);
+    observed.push(observed_sysroot_tool(rustc)?);
     for role in [ToolchainRole::Linker, ToolchainRole::CCompiler] {
         let member = single_member_for_role(manifest, role)?;
         observed.push(observed_member_tool(member)?);
@@ -3784,190 +3058,32 @@ fn declared_file_members(
         .collect()
 }
 
-#[cfg(test)]
 fn execution_path_env(cargo_path_dir: &Path, toolchain_closure: &LoadedToolchainClosure) -> Result<OsString, RunError> {
-    execution_path_env_with_shell(cargo_path_dir, toolchain_closure, Path::new("/bin/sh"))
-}
-
-#[cfg(test)]
-fn execution_path_env_with_shell(
-    cargo_path_dir: &Path,
-    toolchain_closure: &LoadedToolchainClosure,
-    execution_shell: &Path,
-) -> Result<OsString, RunError> {
-    execution_path_env_with_shell_and_native_artifacts(cargo_path_dir, toolchain_closure, execution_shell, &[])
-}
-
-fn execution_path_env_with_shell_and_native_artifacts(
-    cargo_path_dir: &Path,
-    toolchain_closure: &LoadedToolchainClosure,
-    execution_shell: &Path,
-    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
-) -> Result<OsString, RunError> {
     let Some(manifest) = &toolchain_closure.manifest else {
         return guarded_path(cargo_path_dir);
     };
-    write_toolchain_path_aliases_with_shell_and_native_artifacts(
-        cargo_path_dir,
-        manifest,
-        execution_shell,
-        source_built_native_artifacts,
-    )?;
+    write_toolchain_path_aliases(cargo_path_dir, manifest)?;
     env::join_paths([cargo_path_dir]).map_err(|err| internal(format!("construct receipt-bound PATH: {err}")))
 }
 
-fn prepare_receipt_bound_guard_path(
-    guard_path_dir: &Path,
-    toolchain_closure: &LoadedToolchainClosure,
-    source_built_host_tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
-    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
-    execution_shell: &Path,
-) -> Result<OsString, RunError> {
-    let path_env = execution_path_env_with_shell_and_native_artifacts(
-        guard_path_dir,
-        toolchain_closure,
-        execution_shell,
-        source_built_native_artifacts,
-    )?;
-    write_bound_rust_host_tool_aliases(guard_path_dir, source_built_host_tools, execution_shell)?;
-    if let Some(manifest) = &toolchain_closure.manifest {
-        write_unavailable_rust_tool_aliases(guard_path_dir, manifest, source_built_host_tools, execution_shell)?;
-    }
-    debug_assert!(!path_env.is_empty());
-    debug_assert!(guard_path_dir.is_absolute() || !guard_path_dir.as_os_str().is_empty());
-    Ok(path_env)
-}
-
-fn write_bound_rust_host_tool_aliases(
-    guard_path_dir: &Path,
-    tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
-    execution_shell: &Path,
-) -> Result<(), RunError> {
-    for (alias, target) in bound_rust_host_tool_aliases(tools)? {
-        let path = guard_path_dir.join(alias);
-        remove_owned_path(&path)?;
-        write_toolchain_alias(&target, &path, execution_shell)?;
-    }
-    Ok(())
-}
-
-fn write_unavailable_rust_tool_aliases(
-    guard_path_dir: &Path,
-    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
-    tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
-    execution_shell: &Path,
-) -> Result<(), RunError> {
-    let reserved_aliases = rust_reserved_tool_aliases(manifest, tools)?;
-    let script = unavailable_rust_tool_script(execution_shell)?;
-    for alias in RUST_UNAVAILABLE_TOOL_ALIASES {
-        if reserved_aliases.contains(*alias) {
-            continue;
-        }
-        let alias = safe_toolchain_alias(alias)?;
-        let path = guard_path_dir.join(alias);
-        remove_owned_path(&path)?;
-        write_text(&path, &script)?;
-        set_executable(&path)?;
-    }
-    Ok(())
-}
-
-fn rust_reserved_tool_aliases(
-    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
-    tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
-) -> Result<BTreeSet<String>, RunError> {
-    let toolchain_aliases = toolchain_path_aliases(manifest)?;
-    let host_tool_aliases = bound_rust_host_tool_aliases(tools)?;
-    let aliases = toolchain_aliases.keys().chain(host_tool_aliases.keys()).cloned().collect::<BTreeSet<_>>();
-    assert!(toolchain_aliases.is_empty() || !aliases.is_empty());
-    assert!(host_tool_aliases.is_empty() || !aliases.is_empty());
-    Ok(aliases)
-}
-
-fn unavailable_rust_tool_script(execution_shell: &Path) -> Result<String, RunError> {
-    require_executable(execution_shell)?;
-    let execution_shell = path_to_string(execution_shell)?;
-    Ok(format!("#!{execution_shell}\nexit {RUST_UNAVAILABLE_TOOL_EXIT_CODE}\n"))
-}
-
-fn verify_unavailable_rust_tool_alias(path: &Path, execution_shell: &Path) -> Result<PathBuf, RunError> {
-    let expected = unavailable_rust_tool_script(execution_shell)?;
-    let observed = fs::read_to_string(path)
-        .map_err(|error| RunError::Build(format!("read unavailable Rust tool alias {}: {error}", path.display())))?;
-    if observed != expected {
-        return Err(RunError::Build(format!("unavailable Rust tool alias has unexpected bytes: {}", path.display())));
-    }
-    canonical_action_executable(path)
-}
-
-fn bound_rust_host_tool_aliases(
-    tools: &[crate::full_source_rust_binding::FullSourceRustHostToolBinding],
-) -> Result<BTreeMap<String, PathBuf>, RunError> {
-    use crate::full_source_rust_binding::FullSourceRustHostToolRole;
-    let mut aliases = BTreeMap::new();
-    for tool in tools {
-        let target = canonical_action_executable(Path::new(&tool.path))?;
-        add_toolchain_alias(&mut aliases, path_file_name(&target)?, &target)?;
-        let role_aliases = match tool.role {
-            FullSourceRustHostToolRole::Make => vec!["make"],
-            FullSourceRustHostToolRole::Cmake => vec!["cmake"],
-            FullSourceRustHostToolRole::Python => vec!["python", "python3"],
-            FullSourceRustHostToolRole::Perl => vec!["perl"],
-            FullSourceRustHostToolRole::Busybox => vec!["busybox"],
-        };
-        for alias in role_aliases {
-            add_toolchain_alias(&mut aliases, alias.to_string(), &target)?;
-        }
-    }
-    assert!(tools.is_empty() || !aliases.is_empty());
-    assert!(aliases.keys().all(|alias| !alias.is_empty()));
-    Ok(aliases)
-}
-
-#[cfg(test)]
 fn write_toolchain_path_aliases(
     guard_path_dir: &Path,
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
 ) -> Result<(), RunError> {
-    write_toolchain_path_aliases_with_shell(guard_path_dir, manifest, Path::new("/bin/sh"))
-}
-
-#[cfg(test)]
-fn write_toolchain_path_aliases_with_shell(
-    guard_path_dir: &Path,
-    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
-    execution_shell: &Path,
-) -> Result<(), RunError> {
-    write_toolchain_path_aliases_with_shell_and_native_artifacts(guard_path_dir, manifest, execution_shell, &[])
-}
-
-fn write_toolchain_path_aliases_with_shell_and_native_artifacts(
-    guard_path_dir: &Path,
-    manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
-    execution_shell: &Path,
-    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
-) -> Result<(), RunError> {
-    if !execution_shell.is_absolute() {
-        return Err(RunError::Build(format!(
-            "receipt-bound toolchain shell is not absolute: {}",
-            execution_shell.display()
-        )));
-    }
     let aliases = toolchain_path_aliases(manifest)?;
     let c_compiler = c_compiler_alias_target(manifest)?;
-    let compiler_drivers = bound_compiler_driver_paths(source_built_native_artifacts)?;
-    let c_compiler_runtime = c_compiler_alias_runtime_inputs(manifest, source_built_native_artifacts)?;
+    let c_compiler_runtime = c_compiler_alias_runtime_inputs(manifest)?;
     for (alias, target) in aliases {
         let link = guard_path_dir.join(alias);
         if link.file_name() == Some(OsStr::new(CARGO_SHIM_NAME)) {
             return Err(RunError::Build("source-built toolchain closure blocked: Cargo must stay guarded".to_string()));
         }
         remove_owned_path(&link)?;
-        if c_compiler.as_ref().is_some_and(|compiler| compiler == &target) || compiler_drivers.contains(&target) {
-            write_c_compiler_toolchain_alias(&target, &c_compiler_runtime, &link, execution_shell)?;
+        if c_compiler.as_ref().is_some_and(|compiler| compiler == &target) {
+            write_c_compiler_toolchain_alias(&target, &c_compiler_runtime, &link)?;
             continue;
         }
-        write_toolchain_alias(&target, &link, execution_shell)?;
+        write_toolchain_alias(&target, &link)?;
     }
     Ok(())
 }
@@ -4008,84 +3124,11 @@ fn c_compiler_alias_target(
 
 fn c_compiler_alias_runtime_inputs(
     manifest: &crate::source_toolchain_closure::ToolchainClosureManifest,
-    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
 ) -> Result<CcCompilerAliasRuntimeInputs, RunError> {
     Ok(CcCompilerAliasRuntimeInputs {
         unwind_archive: declared_unwind_archive(manifest)?,
         crt1_object: declared_target_crt1_object(manifest)?,
-        compiler_subprogram_dir: bound_compiler_subprogram_dir(source_built_native_artifacts)?,
     })
-}
-
-fn bound_compiler_driver_paths(
-    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
-) -> Result<BTreeSet<PathBuf>, RunError> {
-    use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
-    let mut paths = BTreeSet::new();
-    for artifact in source_built_native_artifacts {
-        if !matches!(
-            artifact.role,
-            FullSourceNativeArtifactRole::CCompiler
-                | FullSourceNativeArtifactRole::CxxCompiler
-                | FullSourceNativeArtifactRole::Preprocessor
-        ) {
-            continue;
-        }
-        let path = canonical_action_executable(Path::new(&artifact.path))?;
-        let observed_digest = blake3_file(&path)?;
-        if observed_digest != artifact.content_digest_blake3 {
-            return Err(RunError::Build(format!("bound compiler driver digest mismatch: {}", path.display())));
-        }
-        paths.insert(path);
-    }
-    assert!(source_built_native_artifacts.is_empty() || paths.len() <= source_built_native_artifacts.len());
-    Ok(paths)
-}
-
-fn bound_compiler_subprogram_dir(
-    source_built_native_artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
-) -> Result<Option<PathBuf>, RunError> {
-    use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
-    let internals = source_built_native_artifacts
-        .iter()
-        .filter(|artifact| artifact.role == FullSourceNativeArtifactRole::CompilerInternal)
-        .collect::<Vec<_>>();
-    if internals.is_empty() {
-        return Ok(None);
-    }
-    let mut by_name = BTreeMap::new();
-    for artifact in internals {
-        let path = canonical_action_executable(Path::new(&artifact.path))?;
-        let name = path_file_name(&path)?;
-        if !REQUIRED_GCC_COMPILER_SUBPROGRAMS.contains(&name.as_str()) {
-            return Err(RunError::Build(format!("unexpected bound GCC compiler subprogram: {name}")));
-        }
-        let observed_digest = blake3_file(&path)?;
-        if observed_digest != artifact.content_digest_blake3 {
-            return Err(RunError::Build(format!("bound GCC compiler subprogram digest mismatch: {}", path.display())));
-        }
-        if by_name.insert(name.clone(), path).is_some() {
-            return Err(RunError::Build(format!("duplicate bound GCC compiler subprogram: {name}")));
-        }
-    }
-    for required in REQUIRED_GCC_COMPILER_SUBPROGRAMS {
-        if !by_name.contains_key(*required) {
-            return Err(RunError::Build(format!("missing bound GCC compiler subprogram: {required}")));
-        }
-    }
-    let parents = by_name
-        .values()
-        .map(|path| path.parent().map(Path::to_path_buf))
-        .collect::<Option<BTreeSet<_>>>()
-        .ok_or_else(|| RunError::Build("bound GCC compiler subprogram has no parent".to_string()))?;
-    let mut parents = parents.into_iter();
-    let directory = parents
-        .next()
-        .ok_or_else(|| RunError::Build("bound GCC compiler subprogram directory is missing".to_string()))?;
-    if parents.next().is_some() {
-        return Err(RunError::Build("bound GCC compiler subprograms do not share one directory".to_string()));
-    }
-    Ok(Some(directory))
 }
 
 fn declared_unwind_archive(
@@ -4219,8 +3262,8 @@ fn path_to_string(path: &Path) -> Result<String, RunError> {
 }
 
 #[cfg(unix)]
-fn write_toolchain_alias(target: &Path, link: &Path, execution_shell: &Path) -> Result<(), RunError> {
-    write_text(link, &format!("#!{}\nexec {} \"$@\"\n", execution_shell.display(), shell_quote(target)))?;
+fn write_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
+    write_text(link, &format!("#!/bin/sh\nexec {} \"$@\"\n", shell_quote(target)))?;
     set_executable(link)
 }
 
@@ -4229,7 +3272,6 @@ fn write_c_compiler_toolchain_alias(
     target: &Path,
     runtime_inputs: &CcCompilerAliasRuntimeInputs,
     link: &Path,
-    execution_shell: &Path,
 ) -> Result<(), RunError> {
     debug_assert_ne!(target, link);
     debug_assert!(link.parent().is_some());
@@ -4247,22 +3289,10 @@ fn write_c_compiler_toolchain_alias(
         &runtime_dir.join(TOOLCHAIN_ALIAS_CRT1_OBJECT),
         "target crt1.o",
     )?;
-    let compiler_subprogram_prefix = runtime_inputs
-        .compiler_subprogram_dir
-        .as_ref()
-        .map(|directory| {
-            let directory = path_to_string(directory)?;
-            let argument = format!("-B{directory}/");
-            Ok::<String, RunError>(format!(" {}", shell_quote(Path::new(&argument))))
-        })
-        .transpose()?
-        .unwrap_or_default();
     let script = format!(
-        "#!{}\nruntime_dir={}\nmapped_args_set=false\nstatic_pie_normalized=false\nresponse_index=0\nrewrite_response_file() {{\n  response_source=$1\n  response_index=$((response_index + 1))\n  response_target=\"$runtime_dir/response-$response_index.rsp\"\n  : > \"$response_target\" || exit 1\n  while IFS= read -r response_arg || [ -n \"$response_arg\" ]; do\n    case \"$response_arg\" in\n      {crt1}|*/{crt1}|{rcrt1}|*/{rcrt1}) response_arg=\"$runtime_dir/{crt1}\" ;;\n      {static_pie}) response_arg=\"{static}\"; static_pie_normalized=true ;;\n    esac\n    printf '%s\\n' \"$response_arg\" >> \"$response_target\" || exit 1\n  done < \"$response_source\" || exit 1\n  mapped_arg=\"@$response_target\"\n}}\nfor arg in \"$@\"; do\n  case \"$arg\" in\n    @*) response_source=${{arg#@}}; if [ -r \"$response_source\" ]; then rewrite_response_file \"$response_source\"; else mapped_arg=\"$arg\"; fi ;;\n    {crt1}|*/{crt1}|{rcrt1}|*/{rcrt1}) mapped_arg=\"$runtime_dir/{crt1}\" ;;\n    {static_pie}) mapped_arg=\"{static}\"; static_pie_normalized=true ;;\n    *) mapped_arg=\"$arg\" ;;\n  esac\n  if [ \"$mapped_args_set\" = false ]; then\n    set -- \"$mapped_arg\"\n    mapped_args_set=true\n  else\n    set -- \"$@\" \"$mapped_arg\"\n  fi\ndone\nif [ \"$static_pie_normalized\" = true ]; then\n  set -- \"$@\" {non_pie}\nfi\nexec {} -L\"$runtime_dir\" \"$@\"{}\n",
-        execution_shell.display(),
+        "#!/bin/sh\nruntime_dir={}\nmapped_args_set=false\nstatic_pie_normalized=false\nresponse_index=0\nrewrite_response_file() {{\n  response_source=$1\n  response_index=$((response_index + 1))\n  response_target=\"$runtime_dir/response-$response_index.rsp\"\n  : > \"$response_target\" || exit 1\n  while IFS= read -r response_arg || [ -n \"$response_arg\" ]; do\n    case \"$response_arg\" in\n      {crt1}|*/{crt1}|{rcrt1}|*/{rcrt1}) response_arg=\"$runtime_dir/{crt1}\" ;;\n      {static_pie}) response_arg=\"{static}\"; static_pie_normalized=true ;;\n    esac\n    printf '%s\\n' \"$response_arg\" >> \"$response_target\" || exit 1\n  done < \"$response_source\" || exit 1\n  mapped_arg=\"@$response_target\"\n}}\nfor arg in \"$@\"; do\n  case \"$arg\" in\n    @*) response_source=${{arg#@}}; if [ -r \"$response_source\" ]; then rewrite_response_file \"$response_source\"; else mapped_arg=\"$arg\"; fi ;;\n    {crt1}|*/{crt1}|{rcrt1}|*/{rcrt1}) mapped_arg=\"$runtime_dir/{crt1}\" ;;\n    {static_pie}) mapped_arg=\"{static}\"; static_pie_normalized=true ;;\n    *) mapped_arg=\"$arg\" ;;\n  esac\n  if [ \"$mapped_args_set\" = false ]; then\n    set -- \"$mapped_arg\"\n    mapped_args_set=true\n  else\n    set -- \"$@\" \"$mapped_arg\"\n  fi\ndone\nif [ \"$static_pie_normalized\" = true ]; then\n  set -- \"$@\" {non_pie}\nfi\nexec {} -L\"$runtime_dir\" \"$@\"\n",
         shell_quote(&runtime_dir),
         shell_quote(target),
-        compiler_subprogram_prefix,
         crt1 = TOOLCHAIN_ALIAS_CRT1_OBJECT,
         rcrt1 = TOOLCHAIN_ALIAS_STATIC_PIE_CRT_OBJECT,
         static_pie = TOOLCHAIN_ALIAS_STATIC_PIE_FLAG,
@@ -4284,7 +3314,7 @@ fn copy_alias_runtime_file(source: &Path, destination: &Path, label: &str) -> Re
 }
 
 #[cfg(not(unix))]
-fn write_toolchain_alias(target: &Path, link: &Path, _execution_shell: &Path) -> Result<(), RunError> {
+fn write_toolchain_alias(target: &Path, link: &Path) -> Result<(), RunError> {
     fs::copy(target, link)
         .map_err(|err| internal(format!("copy {} -> {}: {err}", target.display(), link.display())))?;
     set_executable(link)
@@ -4295,9 +3325,8 @@ fn write_c_compiler_toolchain_alias(
     target: &Path,
     _runtime_inputs: &CcCompilerAliasRuntimeInputs,
     link: &Path,
-    execution_shell: &Path,
 ) -> Result<(), RunError> {
-    write_toolchain_alias(target, link, execution_shell)
+    write_toolchain_alias(target, link)
 }
 
 fn guarded_path(cargo_path_dir: &Path) -> Result<OsString, RunError> {
@@ -4448,27 +3477,13 @@ fn selected_cargo_free_rustc<'a>(loaded_provider: &'a LoadedRustSourceProvider, 
     loaded_provider.rustc.as_deref().unwrap_or(fallback_rustc)
 }
 
-fn selected_execution_shell(provider: &LoadedRustSourceProvider) -> &Path {
-    provider
-        .source_built_shell
-        .as_ref()
-        .map_or_else(|| Path::new("/bin/sh"), |shell| shell.execution_path.as_path())
-}
-
-fn load_rust_source_provider(
-    provider_dir: Option<&Path>,
-    closure_manifest: Option<&crate::source_toolchain_closure::ToolchainClosureManifest>,
-) -> Result<LoadedRustSourceProvider, RunError> {
+fn load_rust_source_provider(provider_dir: Option<&Path>) -> Result<LoadedRustSourceProvider, RunError> {
     debug_assert_eq!(RUST_SOURCE_PROVIDER_REQUIRED_ROLE_COUNT, 1);
     debug_assert_ne!(RUST_SOURCE_PROVIDER_STATUS_ABSENT, RUST_SOURCE_PROVIDER_STATUS_VALIDATED);
     let Some(provider_dir) = provider_dir else {
         return Ok(LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: None,
-            source_built_shell: None,
-            source_built_host_tools: Vec::new(),
-            source_built_native_artifacts: Vec::new(),
-            source_built_action_trust: None,
             toolchain_closure_status: None,
         });
     };
@@ -4491,357 +3506,11 @@ fn load_rust_source_provider(
         validation.metadata_path.clone(),
         &validation.validation,
     );
-    let execution_authority = load_bound_rust_execution_authority(&provider_dir, closure_manifest)?;
-    let action_trust_dir = provider_dir.join(crate::rust_source_provider::RUST_PROVIDER_ACTION_EVIDENCE_RELATIVE_PATH);
-    let source_built_action_trust = action_trust_dir
-        .is_dir()
-        .then(|| crate::source_built_rust_provider_action::validate_rust_provider_action_evidence(&action_trust_dir))
-        .transpose()
-        .map_err(|error| RunError::Build(format!("source-built Rust provider action evidence blocked: {error}")))?;
     Ok(LoadedRustSourceProvider {
         status: validated_rust_source_provider_binding(&provider_dir, &validation, &rustc_path),
         rustc: Some(rustc_path),
-        source_built_shell: execution_authority.shell,
-        source_built_host_tools: execution_authority.host_tools,
-        source_built_native_artifacts: execution_authority.native_artifacts,
-        source_built_action_trust,
         toolchain_closure_status: Some(toolchain_closure_status),
     })
-}
-
-fn load_bound_rust_execution_authority(
-    provider_dir: &Path,
-    closure_manifest: Option<&crate::source_toolchain_closure::ToolchainClosureManifest>,
-) -> Result<BoundRustExecutionAuthority, RunError> {
-    let binding_path = provider_dir.join(crate::full_source_rust_binding_shell::FULL_SOURCE_RUST_BINDING_RELATIVE_PATH);
-    if !binding_path.is_file() {
-        return Ok(BoundRustExecutionAuthority {
-            shell: None,
-            host_tools: Vec::new(),
-            native_artifacts: Vec::new(),
-        });
-    }
-    let bytes = fs::read(&binding_path)
-        .map_err(|err| RunError::Build(format!("read full-source Rust binding {}: {err}", binding_path.display())))?;
-    let binding =
-        serde_json::from_slice::<crate::full_source_rust_binding::FullSourceRustProviderBindingReceipt>(&bytes)
-            .map_err(|err| {
-                RunError::Build(format!("parse full-source Rust binding {}: {err}", binding_path.display()))
-            })?;
-    validate_bound_rust_execution_shell_policy(&binding)?;
-    for tool in &binding.host_tools {
-        validate_bound_rust_host_tool(tool)?;
-    }
-    let closure_manifest = closure_manifest.ok_or_else(|| {
-        RunError::Build(
-            "full-source Rust binding requires an explicit validated toolchain closure to resolve native artifacts"
-                .to_string(),
-        )
-    })?;
-    let native_provider_root = crate::source_toolchain_closure::source_built_native_provider_root(closure_manifest)
-        .map_err(|error| {
-            RunError::Build(format!(
-                "resolving full-source Rust native-provider root from the validated closure failed: {error}"
-            ))
-        })?;
-    let native_artifacts = rebase_bound_native_artifacts(&native_provider_root, &binding.native_artifacts)?;
-    let candidates = binding
-        .host_tools
-        .iter()
-        .filter(|tool| tool.role == crate::full_source_rust_binding::FullSourceRustHostToolRole::Busybox)
-        .collect::<Vec<_>>();
-    let [busybox] = candidates.as_slice() else {
-        return Err(RunError::Build(format!(
-            "full-source Rust binding must contain one BusyBox host tool, found {}",
-            candidates.len()
-        )));
-    };
-    let shell = bound_rust_execution_shell(busybox)?;
-    let host_tools = binding.host_tools;
-    assert!(!host_tools.is_empty());
-    assert!(!native_artifacts.is_empty());
-    assert!(host_tools.iter().all(|tool| Path::new(&tool.path).is_absolute()));
-    Ok(BoundRustExecutionAuthority {
-        shell: Some(shell),
-        host_tools,
-        native_artifacts,
-    })
-}
-
-fn validate_bound_rust_execution_shell_policy(
-    binding: &crate::full_source_rust_binding::FullSourceRustProviderBindingReceipt,
-) -> Result<(), RunError> {
-    if binding.ambient_tool_discovery || !binding.fallback_events.is_empty() || !binding.seed_exceptions.is_empty() {
-        return Err(RunError::Build(
-            "full-source Rust binding cannot authorize a shell with ambient discovery, fallback, or seed exceptions"
-                .to_string(),
-        ));
-    }
-    Ok(())
-}
-
-fn bound_rust_execution_shell(
-    busybox: &crate::full_source_rust_binding::FullSourceRustHostToolBinding,
-) -> Result<BoundRustExecutionShell, RunError> {
-    let busybox_path = Path::new(&busybox.path);
-    if !busybox_path.is_absolute() {
-        return Err(RunError::Build(format!("full-source BusyBox path is not absolute: {}", busybox_path.display())));
-    }
-    validate_bound_rust_host_tool(busybox)?;
-    let shell_path = busybox_path
-        .parent()
-        .ok_or_else(|| RunError::Build("full-source BusyBox path has no parent".to_string()))?
-        .join("sh");
-    require_executable(&shell_path)?;
-    let resolved_shell = fs::canonicalize(&shell_path)
-        .map_err(|err| RunError::Build(format!("resolve full-source shell {}: {err}", shell_path.display())))?;
-    if resolved_shell
-        != fs::canonicalize(busybox_path)
-            .map_err(|err| RunError::Build(format!("resolve full-source BusyBox {}: {err}", busybox_path.display())))?
-    {
-        return Err(RunError::Build(format!(
-            "full-source shell {} does not resolve to bound BusyBox {}",
-            shell_path.display(),
-            busybox_path.display()
-        )));
-    }
-    Ok(BoundRustExecutionShell {
-        execution_path: shell_path,
-        content_digest_blake3: busybox.content_digest_blake3.clone(),
-        source_id: busybox.source_id.clone(),
-        construction_receipt_digest_blake3: busybox.construction_receipt_digest_blake3.clone(),
-    })
-}
-
-fn bound_rustc_runtime(
-    artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
-) -> Result<Option<BoundRustcRuntime>, RunError> {
-    use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
-
-    if artifacts.is_empty() {
-        return Ok(None);
-    }
-    let cxx_runtime = unique_bound_runtime_artifact(
-        artifacts,
-        FullSourceNativeArtifactRole::Libstdcxx,
-        RUSTC_LIBSTDCXX_RUNTIME_FILE,
-    )?;
-    let loader = unique_bound_runtime_artifact(
-        artifacts,
-        FullSourceNativeArtifactRole::DynamicLinker,
-        RUSTC_DYNAMIC_LOADER_FILE,
-    )?;
-    let cxx_runtime_path = validated_bound_runtime_file(cxx_runtime, "Rust C++ runtime")?;
-    let loader_path = validated_bound_runtime_file(loader, "Rust dynamic loader")?;
-    require_executable(&loader_path)?;
-    let library_dir = cxx_runtime_path
-        .parent()
-        .ok_or_else(|| RunError::Build("full-source Rust C++ runtime has no parent directory".to_string()))?;
-    if loader_path.parent() != Some(library_dir) {
-        return Err(RunError::Build("Rust C++ runtime and dynamic loader use different bound directories".to_string()));
-    }
-    let soname_path = library_dir.join(RUSTC_LIBSTDCXX_SONAME);
-    let resolved_soname = fs::canonicalize(&soname_path).map_err(|error| {
-        RunError::Build(format!("resolve Rust C++ runtime soname {}: {error}", soname_path.display()))
-    })?;
-    if resolved_soname != cxx_runtime_path {
-        return Err(RunError::Build(format!(
-            "Rust C++ runtime soname {} does not resolve to bound artifact {}",
-            soname_path.display(),
-            cxx_runtime_path.display()
-        )));
-    }
-    assert!(library_dir.is_absolute());
-    assert!(library_dir.is_dir());
-    Ok(Some(BoundRustcRuntime {
-        library_dir: library_dir.to_path_buf(),
-        loader: loader_path,
-    }))
-}
-
-fn unique_bound_runtime_artifact<'a>(
-    artifacts: &'a [crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
-    role: crate::full_source_rust_binding::FullSourceNativeArtifactRole,
-    file_name: &str,
-) -> Result<&'a crate::full_source_rust_binding::FullSourceNativeArtifactBinding, RunError> {
-    let candidates = artifacts
-        .iter()
-        .filter(|artifact| artifact.role == role)
-        .filter(|artifact| Path::new(&artifact.path).file_name() == Some(OsStr::new(file_name)))
-        .collect::<Vec<_>>();
-    let [artifact] = candidates.as_slice() else {
-        return Err(RunError::Build(format!(
-            "full-source Rust runtime requires one {file_name} artifact, found {}",
-            candidates.len()
-        )));
-    };
-    Ok(*artifact)
-}
-
-fn validated_bound_runtime_file(
-    artifact: &crate::full_source_rust_binding::FullSourceNativeArtifactBinding,
-    label: &str,
-) -> Result<PathBuf, RunError> {
-    let path = Path::new(&artifact.path);
-    if !path.is_absolute() {
-        return Err(RunError::Build(format!("full-source {label} is not absolute: {}", path.display())));
-    }
-    if !path.is_file() {
-        return Err(RunError::Build(format!("full-source {label} is unavailable: {}", path.display())));
-    }
-    let observed = crate::protected_exec::blake3_file_hex(path)
-        .map_err(|error| RunError::Build(format!("hash full-source {label}: {error}")))?;
-    if observed != artifact.content_digest_blake3 {
-        return Err(RunError::Build(format!(
-            "full-source {label} digest mismatch: expected {}, got {observed}",
-            artifact.content_digest_blake3
-        )));
-    }
-    fs::canonicalize(path).map_err(|error| RunError::Build(format!("resolve full-source {label}: {error}")))
-}
-
-fn rebase_bound_native_artifacts(
-    native_provider_root: &Path,
-    artifacts: &[crate::full_source_rust_binding::FullSourceNativeArtifactBinding],
-) -> Result<Vec<crate::full_source_rust_binding::FullSourceNativeArtifactBinding>, RunError> {
-    if !native_provider_root.is_absolute() {
-        return Err(RunError::Build(format!(
-            "full-source native-provider root is not absolute: {}",
-            native_provider_root.display()
-        )));
-    }
-    if !native_provider_root.is_dir() {
-        return Err(RunError::Build(format!(
-            "full-source native-provider root is unavailable: {}",
-            native_provider_root.display()
-        )));
-    }
-    let mut rebound = Vec::with_capacity(artifacts.len());
-    for artifact in artifacts {
-        let relative_path = require_provider_relative_native_artifact_path(artifact)?;
-        let mut runtime_artifact = artifact.clone();
-        runtime_artifact.path = native_provider_root.join(relative_path).display().to_string();
-        validate_bound_native_artifact(&runtime_artifact)?;
-        assert!(Path::new(&runtime_artifact.path).is_absolute());
-        rebound.push(runtime_artifact);
-    }
-    assert_eq!(rebound.len(), artifacts.len());
-    Ok(rebound)
-}
-
-fn require_provider_relative_native_artifact_path(
-    artifact: &crate::full_source_rust_binding::FullSourceNativeArtifactBinding,
-) -> Result<&Path, RunError> {
-    let path = Path::new(&artifact.path);
-    if artifact.path.is_empty() {
-        return Err(invalid_provider_relative_native_artifact_path(artifact));
-    }
-    if path.is_absolute() {
-        return Err(invalid_provider_relative_native_artifact_path(artifact));
-    }
-    for component in path.components() {
-        if !matches!(component, Component::Normal(_)) {
-            return Err(invalid_provider_relative_native_artifact_path(artifact));
-        }
-    }
-    assert!(!artifact.path.is_empty());
-    assert!(!path.is_absolute());
-    Ok(path)
-}
-
-fn invalid_provider_relative_native_artifact_path(
-    artifact: &crate::full_source_rust_binding::FullSourceNativeArtifactBinding,
-) -> RunError {
-    RunError::Build(format!(
-        "full-source native artifact path must stay provider-relative: role={:?} path={}",
-        artifact.role, artifact.path
-    ))
-}
-
-fn validate_bound_native_artifact(
-    artifact: &crate::full_source_rust_binding::FullSourceNativeArtifactBinding,
-) -> Result<(), RunError> {
-    let path = Path::new(&artifact.path);
-    if !path.is_absolute() || !path.is_file() {
-        return Err(RunError::Build(format!("full-source native artifact is unavailable: {}", path.display())));
-    }
-    if full_source_native_artifact_is_executable(artifact.role) {
-        require_executable(path)?;
-    }
-    let observed = crate::protected_exec::blake3_file_hex(path)
-        .map_err(|error| RunError::Build(format!("hash full-source native artifact {}: {error}", path.display())))?;
-    if observed != artifact.content_digest_blake3 {
-        return Err(RunError::Build(format!(
-            "full-source native artifact digest mismatch: expected {}, got {observed}",
-            artifact.content_digest_blake3
-        )));
-    }
-    assert_eq!(observed.len(), blake3::OUT_LEN * 2);
-    assert!(path.is_file());
-    Ok(())
-}
-
-fn full_source_native_artifact_is_executable(
-    role: crate::full_source_rust_binding::FullSourceNativeArtifactRole,
-) -> bool {
-    use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
-    matches!(
-        role,
-        FullSourceNativeArtifactRole::CCompiler
-            | FullSourceNativeArtifactRole::CxxCompiler
-            | FullSourceNativeArtifactRole::Preprocessor
-            | FullSourceNativeArtifactRole::CompilerInternal
-            | FullSourceNativeArtifactRole::Assembler
-            | FullSourceNativeArtifactRole::Linker
-            | FullSourceNativeArtifactRole::ArchiveTool
-            | FullSourceNativeArtifactRole::Ranlib
-            | FullSourceNativeArtifactRole::SymbolTool
-            | FullSourceNativeArtifactRole::ObjectCopy
-            | FullSourceNativeArtifactRole::ObjectDump
-            | FullSourceNativeArtifactRole::ObjectFormat
-            | FullSourceNativeArtifactRole::DynamicLinker
-    )
-}
-
-fn validate_bound_rust_host_tool(
-    tool: &crate::full_source_rust_binding::FullSourceRustHostToolBinding,
-) -> Result<(), RunError> {
-    let tool_path = Path::new(&tool.path);
-    if !tool_path.is_absolute() {
-        return Err(RunError::Build(format!("full-source host-tool path is not absolute: {}", tool_path.display())));
-    }
-    require_executable(tool_path)?;
-    let observed = crate::protected_exec::blake3_file_hex(tool_path)
-        .map_err(|err| RunError::Build(format!("hash full-source host tool {}: {err}", tool_path.display())))?;
-    if observed != tool.content_digest_blake3 {
-        return Err(RunError::Build(format!(
-            "full-source host-tool digest mismatch: expected {}, got {observed}",
-            tool.content_digest_blake3
-        )));
-    }
-    validate_bound_host_tool_receipt(tool)
-}
-
-fn validate_bound_host_tool_receipt(
-    tool: &crate::full_source_rust_binding::FullSourceRustHostToolBinding,
-) -> Result<(), RunError> {
-    let receipt_path = Path::new(&tool.construction_receipt_path);
-    if !receipt_path.is_absolute() || !receipt_path.is_file() {
-        return Err(RunError::Build(format!(
-            "full-source host-tool construction receipt is unavailable: {}",
-            receipt_path.display()
-        )));
-    }
-    let observed = crate::protected_exec::blake3_file_hex(receipt_path).map_err(|err| {
-        RunError::Build(format!("hash host-tool construction receipt {}: {err}", receipt_path.display()))
-    })?;
-    if observed != tool.construction_receipt_digest_blake3 {
-        return Err(RunError::Build(format!(
-            "full-source host-tool construction receipt digest mismatch: expected {}, got {observed}",
-            tool.construction_receipt_digest_blake3
-        )));
-    }
-    Ok(())
 }
 
 fn absent_rust_source_provider_binding() -> RustSourceProviderBindingStatus {
@@ -4988,27 +3657,7 @@ fn internal(message: String) -> RunError {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
-
     use super::*;
-
-    #[test]
-    fn fixed_point_output_preparation_preserves_only_an_explicit_restored_stage1() {
-        let temp = tempfile::tempdir().unwrap();
-        let bundle = temp.path().join("bundle");
-        fs::create_dir_all(bundle.join(STAGE1_DIR)).unwrap();
-        fs::create_dir_all(bundle.join(STAGE2_DIR)).unwrap();
-        fs::write(bundle.join(STAGE1_DIR).join("kept"), b"stage1").unwrap();
-        fs::write(bundle.join(STAGE2_DIR).join("removed"), b"stage2").unwrap();
-
-        prepare_fixed_point_output_dir(&bundle, CargoFreeFixedPointResume::Stage1).unwrap();
-        assert!(bundle.join(STAGE1_DIR).join("kept").is_file());
-        assert!(!bundle.join(STAGE2_DIR).exists());
-
-        prepare_fixed_point_output_dir(&bundle, CargoFreeFixedPointResume::None).unwrap();
-        assert!(!bundle.join(STAGE1_DIR).exists());
-        assert!(!bundle.join(STAGE2_DIR).exists());
-    }
 
     const FIXED_POINT_TEST_DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const FIXED_POINT_TEST_DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -5739,7 +4388,7 @@ mod tests {
         fs::create_dir(&provider_dir).unwrap();
         write_fake_rust_source_provider(&provider_dir, false);
 
-        let loaded = load_rust_source_provider(Some(&provider_dir), None).unwrap();
+        let loaded = load_rust_source_provider(Some(&provider_dir)).unwrap();
         let expected_provider_dir = fs::canonicalize(&provider_dir).unwrap();
         let expected_rustc = expected_provider_dir.join("bin/rustc");
 
@@ -5757,285 +4406,6 @@ mod tests {
         assert_eq!(status.policy_digest_blake3, loaded.status.policy_digest_blake3);
     }
 
-    #[cfg(unix)]
-    #[test]
-    fn receipt_bound_rustc_runtime_wrapper_uses_only_the_validated_cxx_runtime() {
-        use crate::full_source_rust_binding::FullSourceNativeArtifactBinding;
-        use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
-
-        let dir = tempfile::tempdir().unwrap();
-        let runtime_dir = dir.path().join("native-provider/x86_64-linux-musl/lib");
-        let cxx_runtime = runtime_dir.join(RUSTC_LIBSTDCXX_RUNTIME_FILE);
-        let soname = runtime_dir.join(RUSTC_LIBSTDCXX_SONAME);
-        let loader = runtime_dir.join(RUSTC_DYNAMIC_LOADER_FILE);
-        fs::create_dir_all(&runtime_dir).unwrap();
-        fs::write(&cxx_runtime, b"bound cxx runtime\n").unwrap();
-        std::os::unix::fs::symlink(RUSTC_LIBSTDCXX_RUNTIME_FILE, &soname).unwrap();
-        write_fake_executable(
-            &loader,
-            "#!/bin/sh\nprintf '%s\\n' \"${LD_LIBRARY_PATH-unset}\"\nprintf '%s\\n' \"$@\"\n",
-        );
-        let cxx_artifact = FullSourceNativeArtifactBinding {
-            role: FullSourceNativeArtifactRole::Libstdcxx,
-            path: cxx_runtime.display().to_string(),
-            content_digest_blake3: crate::protected_exec::blake3_file_hex(&cxx_runtime).unwrap(),
-        };
-        let loader_artifact = FullSourceNativeArtifactBinding {
-            role: FullSourceNativeArtifactRole::DynamicLinker,
-            path: loader.display().to_string(),
-            content_digest_blake3: crate::protected_exec::blake3_file_hex(&loader).unwrap(),
-        };
-        let rust_root = dir.path().join("rust-provider");
-        let real_rustc = rust_root.join("bin/rustc");
-        let dynamic_rustc = rust_root.join("bin").join(RUSTC_DYNAMIC_BINARY_FILE);
-        let runtime_lib = rust_root.join("lib/mantle-runtime");
-        let rust_lib = rust_root.join("lib");
-        let rust_stdlib = rust_lib.join("rustlib").join(RUSTC_RUNTIME_HOST_TRIPLE).join("lib");
-        fs::create_dir_all(&runtime_lib).unwrap();
-        fs::create_dir_all(&rust_stdlib).unwrap();
-        fs::create_dir_all(real_rustc.parent().unwrap()).unwrap();
-        write_fake_executable(&real_rustc, "#!/bin/sh\nexit 0\n");
-        write_fake_executable(&dynamic_rustc, "#!/bin/sh\nexit 0\n");
-        let wrapper = dir.path().join(RUSTC_RUNTIME_WRAPPER_FILE);
-        let receipt_bound_linker = dir.path().join(TOOLCHAIN_COMPATIBILITY_PATH_DIR).join(RUSTC_BOUND_LINKER_ALIAS);
-        fs::create_dir_all(receipt_bound_linker.parent().unwrap()).unwrap();
-        write_fake_executable(&receipt_bound_linker, "#!/bin/sh\nexit 0\n");
-        let artifacts = [cxx_artifact.clone(), loader_artifact];
-
-        let selected = bound_rustc_runtime(&artifacts).unwrap().expect("bound Rust runtime");
-        write_bound_rustc_runtime_wrapper(
-            &wrapper,
-            &real_rustc,
-            &selected,
-            Path::new("/bin/sh"),
-            &receipt_bound_linker,
-        )
-        .unwrap();
-        let output = Command::new(&wrapper).env(DYNAMIC_LIBRARY_PATH_ENV, "/ambient/not-authorized").output().unwrap();
-        fs::remove_file(&soname).unwrap();
-        let wrong_runtime = runtime_dir.join("wrong-runtime");
-        fs::write(&wrong_runtime, b"wrong runtime\n").unwrap();
-        std::os::unix::fs::symlink("wrong-runtime", &soname).unwrap();
-        let error = bound_rustc_runtime(&artifacts).unwrap_err();
-        let action_linker = rustc_runtime_wrapper_linker(&wrapper).unwrap().expect("runtime wrapper linker");
-        let ambiguous_linker = wrapper.parent().unwrap().join(RUSTC_BOUND_LINKER_ALIAS);
-        write_fake_executable(&ambiguous_linker, "#!/bin/sh\nexit 0\n");
-        let ambiguous_linker_error = rustc_runtime_wrapper_linker(&wrapper).unwrap_err();
-        let expected_library_path = env::join_paths([runtime_lib, runtime_dir, rust_lib, rust_stdlib]).unwrap();
-        let stdout = String::from_utf8(output.stdout).unwrap();
-
-        assert!(output.status.success());
-        assert!(stdout.contains(expected_library_path.to_string_lossy().as_ref()));
-        assert!(stdout.contains(dynamic_rustc.to_string_lossy().as_ref()));
-        assert!(stdout.contains(&format!("linker={}", receipt_bound_linker.display())));
-        assert_eq!(action_linker, fs::canonicalize(&receipt_bound_linker).unwrap());
-        assert!(ambiguous_linker_error.message().contains("found 2"));
-        assert!(!stdout.contains("ambient/not-authorized"));
-        assert!(!String::from_utf8(output.stderr).unwrap().contains("ambient"));
-        assert!(error.message().contains("does not resolve to bound artifact"));
-        assert!(full_source_native_artifact_is_executable(FullSourceNativeArtifactRole::DynamicLinker));
-        assert_eq!(
-            rust_fixed_kind_for_native_artifact(FullSourceNativeArtifactRole::DynamicLinker),
-            Some(crate::source_built_rust_action_plan::RustFixedExecutableKind::NativeHelper)
-        );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn relative_native_binding_rebases_under_the_closure_root_and_rejects_escape() {
-        use crate::full_source_rust_binding::FullSourceNativeArtifactBinding;
-        use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
-
-        let dir = tempfile::tempdir().unwrap();
-        let native_root = dir.path().join("native-provider");
-        let archiver = native_root.join("bin/ar");
-        fs::create_dir_all(archiver.parent().unwrap()).unwrap();
-        write_fake_executable(&archiver, "#!/bin/sh\nexit 0\n");
-        let artifact = FullSourceNativeArtifactBinding {
-            role: FullSourceNativeArtifactRole::ArchiveTool,
-            path: "bin/ar".to_string(),
-            content_digest_blake3: crate::protected_exec::blake3_file_hex(&archiver).unwrap(),
-        };
-
-        let rebound = rebase_bound_native_artifacts(&native_root, std::slice::from_ref(&artifact)).unwrap();
-        let mut escaping = artifact;
-        escaping.path = "../bin/ar".to_string();
-        let error = rebase_bound_native_artifacts(&native_root, &[escaping]).unwrap_err();
-
-        assert_eq!(rebound.len(), 1);
-        assert_eq!(rebound[0].path, archiver.display().to_string());
-        assert!(Path::new(&rebound[0].path).is_absolute());
-        assert!(error.message().contains("must stay provider-relative"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn bound_rust_execution_shell_requires_exact_busybox_and_receipt_bytes() {
-        let dir = tempfile::tempdir().unwrap();
-        let bin = dir.path().join("bin");
-        let busybox = bin.join("busybox");
-        let shell = bin.join("sh");
-        let receipt = dir.path().join("busybox-receipt.json");
-        fs::create_dir_all(&bin).unwrap();
-        write_fake_executable(&busybox, "#!/bin/sh\nexit 0\n");
-        std::os::unix::fs::symlink(&busybox, &shell).unwrap();
-        fs::write(&receipt, b"{\"status\":\"built\"}\n").unwrap();
-        let busybox_digest = crate::protected_exec::blake3_file_hex(&busybox).unwrap();
-        let receipt_digest = crate::protected_exec::blake3_file_hex(&receipt).unwrap();
-        let binding = crate::full_source_rust_binding::FullSourceRustHostToolBinding {
-            role: crate::full_source_rust_binding::FullSourceRustHostToolRole::Busybox,
-            path: busybox.display().to_string(),
-            content_digest_blake3: busybox_digest.clone(),
-            source_id: "busybox-source".to_string(),
-            construction_receipt_path: receipt.display().to_string(),
-            construction_receipt_digest_blake3: receipt_digest.clone(),
-        };
-
-        let bound = bound_rust_execution_shell(&binding).unwrap();
-        let mut wrong_tool = binding.clone();
-        wrong_tool.content_digest_blake3 = FIXED_POINT_TEST_DIGEST_A.to_string();
-        let tool_error = bound_rust_execution_shell(&wrong_tool).unwrap_err();
-        let mut wrong_receipt = binding;
-        wrong_receipt.construction_receipt_digest_blake3 = FIXED_POINT_TEST_DIGEST_B.to_string();
-        let receipt_error = bound_rust_execution_shell(&wrong_receipt).unwrap_err();
-
-        assert_eq!(bound.execution_path, shell);
-        assert_eq!(bound.content_digest_blake3, busybox_digest);
-        assert_eq!(bound.construction_receipt_digest_blake3, receipt_digest);
-        assert!(tool_error.message().contains("host-tool digest mismatch"));
-        assert!(receipt_error.message().contains("construction receipt digest mismatch"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn rust_action_fixed_authority_includes_receipt_bound_aliases_and_host_tools() {
-        use crate::source_built_rust_action_plan::RustFixedExecutableKind;
-        let dir = tempfile::tempdir().unwrap();
-        let tools = fake_toolchain(&dir, false);
-        let manifest = fake_toolchain_manifest(&tools, None);
-        let guard = dir.path().join("guard");
-        let host_bin = dir.path().join("host-tools");
-        let busybox = host_bin.join("busybox");
-        let shell = host_bin.join("sh");
-        let receipt = dir.path().join("busybox-receipt.json");
-        fs::create_dir_all(&guard).unwrap();
-        fs::create_dir_all(&host_bin).unwrap();
-        write_fake_executable(&busybox, "#!/bin/sh\nexit 0\n");
-        std::os::unix::fs::symlink(&busybox, &shell).unwrap();
-        fs::write(&receipt, b"{\"status\":\"built\"}\n").unwrap();
-        let binding = crate::full_source_rust_binding::FullSourceRustHostToolBinding {
-            role: crate::full_source_rust_binding::FullSourceRustHostToolRole::Busybox,
-            path: busybox.display().to_string(),
-            content_digest_blake3: crate::protected_exec::blake3_file_hex(&busybox).unwrap(),
-            source_id: "busybox-source".to_string(),
-            construction_receipt_path: receipt.display().to_string(),
-            construction_receipt_digest_blake3: crate::protected_exec::blake3_file_hex(&receipt).unwrap(),
-        };
-        let bound_shell = bound_rust_execution_shell(&binding).unwrap();
-        let closure = loaded_toolchain_closure(dir.path().join("closure.json"), manifest.clone());
-        let path_env = prepare_receipt_bound_guard_path(
-            &guard,
-            &closure,
-            std::slice::from_ref(&binding),
-            &[],
-            &bound_shell.execution_path,
-        )
-        .unwrap();
-        let action_trust = crate::source_built_rust_provider_action::RustProviderActionEvidence {
-            plan_path: dir.path().join("rust-provider-action-plan.json"),
-            plan_digest_blake3: FIXED_POINT_TEST_DIGEST_A.to_string(),
-            audit_path: dir.path().join("rust-provider-action-audit.json"),
-            audit_digest_blake3: FIXED_POINT_TEST_DIGEST_A.to_string(),
-            reconciliation_path: dir.path().join("rust-provider-action-reconciliation.json"),
-            reconciliation_digest_blake3: FIXED_POINT_TEST_DIGEST_B.to_string(),
-            planned_action_count: 1,
-            matched_action_count: 1,
-            observed_event_count: 1,
-            matched_event_count: 1,
-        };
-
-        let authorities = rust_child_action_fixed_executables(
-            &tools.rustc,
-            &manifest,
-            &bound_shell,
-            std::slice::from_ref(&binding),
-            &[],
-            &action_trust,
-            &guard,
-            Some(FIXED_POINT_TEST_DIGEST_A),
-        )
-        .unwrap();
-        let paths = authorities.iter().map(|authority| authority.path.as_str()).collect::<BTreeSet<_>>();
-        let unavailable_count = authorities
-            .iter()
-            .filter(|authority| authority.kind == RustFixedExecutableKind::CompilerPolicyAdapter)
-            .count();
-        let unavailable_scripts = RUST_UNAVAILABLE_TOOL_ALIASES
-            .iter()
-            .map(|alias| fs::read_to_string(guard.join(alias)).unwrap())
-            .collect::<Vec<_>>();
-        fs::write(guard.join("emcc"), "#!/bin/sh\nexit 0\n").unwrap();
-        let corrupted_alias_error = rust_child_action_fixed_executables(
-            &tools.rustc,
-            &manifest,
-            &bound_shell,
-            std::slice::from_ref(&binding),
-            &[],
-            &action_trust,
-            &guard,
-            Some(FIXED_POINT_TEST_DIGEST_A),
-        )
-        .unwrap_err();
-
-        assert_eq!(authorities.iter().filter(|authority| authority.kind == RustFixedExecutableKind::Rustc).count(), 1);
-        assert_eq!(env::split_paths(&path_env).collect::<Vec<_>>(), vec![guard.clone()]);
-        assert_eq!(unavailable_count, RUST_UNAVAILABLE_TOOL_ALIASES.len());
-        assert_eq!(paths.len(), authorities.len());
-        assert!(paths.contains(path_to_string(&fs::canonicalize(&busybox).unwrap()).unwrap().as_str()));
-        assert!(paths.contains(path_to_string(&fs::canonicalize(guard.join("busybox")).unwrap()).unwrap().as_str()));
-        assert!(RUST_UNAVAILABLE_TOOL_ALIASES.iter().all(|alias| {
-            paths.contains(path_to_string(&fs::canonicalize(guard.join(alias)).unwrap()).unwrap().as_str())
-        }));
-        assert!(unavailable_scripts.iter().all(|script| script.contains("exit 127")));
-        assert!(corrupted_alias_error.message().contains("unexpected bytes"));
-        assert!(authorities.iter().all(|authority| authority.output_identity_blake3 == authority.digest_blake3));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn unavailable_rust_tool_aliases_exit_127_without_replacing_declared_tools() {
-        let dir = tempfile::tempdir().unwrap();
-        let tools = fake_toolchain(&dir, false);
-        let manifest = fake_toolchain_manifest(&tools, None);
-        let guard = dir.path().join("guard");
-        let declared_git = dir.path().join("declared-tools/git");
-        let declared_receipt = dir.path().join("declared-tools/receipt.json");
-        fs::create_dir_all(&guard).unwrap();
-        fs::create_dir_all(declared_git.parent().unwrap()).unwrap();
-        write_fake_executable(&declared_git, "#!/bin/sh\nexit 42\n");
-        fs::write(&declared_receipt, b"{\"status\":\"built\"}\n").unwrap();
-        let binding = crate::full_source_rust_binding::FullSourceRustHostToolBinding {
-            role: crate::full_source_rust_binding::FullSourceRustHostToolRole::Make,
-            path: declared_git.display().to_string(),
-            content_digest_blake3: crate::protected_exec::blake3_file_hex(&declared_git).unwrap(),
-            source_id: "declared-git-source".to_string(),
-            construction_receipt_path: declared_receipt.display().to_string(),
-            construction_receipt_digest_blake3: crate::protected_exec::blake3_file_hex(&declared_receipt).unwrap(),
-        };
-        let preserved_git_bytes = b"declared git alias\n";
-        fs::write(guard.join("git"), preserved_git_bytes).unwrap();
-        set_executable(&guard.join("git")).unwrap();
-
-        write_unavailable_rust_tool_aliases(&guard, &manifest, &[binding], Path::new("/bin/sh")).unwrap();
-        let emcc_status = Command::new(guard.join("emcc")).status().unwrap();
-
-        assert_eq!(emcc_status.code(), Some(RUST_UNAVAILABLE_TOOL_EXIT_CODE));
-        assert_eq!(fs::read(guard.join("git")).unwrap(), preserved_git_bytes);
-        assert!(guard.join("pkg-config").is_file());
-        assert!(guard.join("pkgconf").is_file());
-        assert!(!fs::read_to_string(guard.join("emcc")).unwrap().contains("/usr/bin"));
-    }
-
     #[test]
     fn rust_source_provider_selection_prefers_validated_provider_and_keeps_fallback() {
         let fallback = PathBuf::from("/fallback/rustc");
@@ -6043,19 +4413,11 @@ mod tests {
         let absent = LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: None,
-            source_built_shell: None,
-            source_built_host_tools: Vec::new(),
-            source_built_native_artifacts: Vec::new(),
-            source_built_action_trust: None,
             toolchain_closure_status: None,
         };
         let validated = LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: Some(provider_rustc.clone()),
-            source_built_shell: None,
-            source_built_host_tools: Vec::new(),
-            source_built_native_artifacts: Vec::new(),
-            source_built_action_trust: None,
             toolchain_closure_status: None,
         };
 
@@ -6072,10 +4434,6 @@ mod tests {
         let provider = LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: Some(PathBuf::from("/provider/bin/rustc")),
-            source_built_shell: None,
-            source_built_host_tools: Vec::new(),
-            source_built_native_artifacts: Vec::new(),
-            source_built_action_trust: None,
             toolchain_closure_status: Some(provider_status.clone()),
         };
 
@@ -6092,10 +4450,6 @@ mod tests {
         let provider = LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: None,
-            source_built_shell: None,
-            source_built_host_tools: Vec::new(),
-            source_built_native_artifacts: Vec::new(),
-            source_built_action_trust: None,
             toolchain_closure_status: None,
         };
 
@@ -6114,7 +4468,7 @@ mod tests {
         fs::create_dir(&provider_dir).unwrap();
         write_fake_rust_source_provider(&provider_dir, true);
 
-        let err = load_rust_source_provider(Some(&provider_dir), None).unwrap_err();
+        let err = load_rust_source_provider(Some(&provider_dir)).unwrap_err();
         let message = err.message();
 
         assert!(message.contains("source-built Rust provider blocked"));
@@ -6383,10 +4737,6 @@ mod tests {
         let provider = LoadedRustSourceProvider {
             status: absent_rust_source_provider_binding(),
             rustc: Some(PathBuf::from("/provider/bin/rustc")),
-            source_built_shell: None,
-            source_built_host_tools: Vec::new(),
-            source_built_native_artifacts: Vec::new(),
-            source_built_action_trust: None,
             toolchain_closure_status: Some(provider_status),
         };
 
@@ -6415,74 +4765,6 @@ mod tests {
         assert!(guard_dir.join(C_COMPILER_ALIAS).exists());
         assert!(!path_env.to_string_lossy().contains("/nix/var/nix/profiles"));
         assert!(!path_env.to_string_lossy().contains("/run/current-system/sw"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn receipt_bound_c_compiler_alias_uses_one_bound_normalized_subprogram_directory() {
-        use crate::full_source_rust_binding::FullSourceNativeArtifactBinding;
-        use crate::full_source_rust_binding::FullSourceNativeArtifactRole;
-        let dir = tempfile::TempDir::new().unwrap();
-        let tools = fake_toolchain(&dir, false);
-        let observed_args = dir.path().join("observed-compiler-args.txt");
-        write_fake_executable(
-            &tools.c_compiler,
-            &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nexit 0\n", shell_quote(&observed_args)),
-        );
-        let manifest = fake_toolchain_manifest(&tools, None);
-        let subprogram_dir = dir.path().join("native/libexec/gcc/target/version");
-        fs::create_dir_all(&subprogram_dir).unwrap();
-        let mut artifacts = Vec::new();
-        for name in REQUIRED_GCC_COMPILER_SUBPROGRAMS {
-            let path = subprogram_dir.join(name);
-            write_fake_executable(&path, "#!/bin/sh\nexit 0\n");
-            artifacts.push(FullSourceNativeArtifactBinding {
-                role: FullSourceNativeArtifactRole::CompilerInternal,
-                path: path.display().to_string(),
-                content_digest_blake3: crate::protected_exec::blake3_file_hex(&path).unwrap(),
-            });
-        }
-        artifacts.push(FullSourceNativeArtifactBinding {
-            role: FullSourceNativeArtifactRole::CCompiler,
-            path: tools.c_compiler.display().to_string(),
-            content_digest_blake3: crate::protected_exec::blake3_file_hex(&tools.c_compiler).unwrap(),
-        });
-        let cxx_compiler = dir.path().join("native/bin/x86_64-linux-musl-g++");
-        fs::create_dir_all(cxx_compiler.parent().unwrap()).unwrap();
-        write_fake_executable(&cxx_compiler, "#!/bin/sh\nexit 0\n");
-        artifacts.push(FullSourceNativeArtifactBinding {
-            role: FullSourceNativeArtifactRole::CxxCompiler,
-            path: cxx_compiler.display().to_string(),
-            content_digest_blake3: crate::protected_exec::blake3_file_hex(&cxx_compiler).unwrap(),
-        });
-        let guard = dir.path().join("guard-bin");
-        fs::create_dir_all(&guard).unwrap();
-
-        write_toolchain_path_aliases_with_shell_and_native_artifacts(
-            &guard,
-            &manifest,
-            Path::new("/bin/sh"),
-            &artifacts,
-        )
-        .unwrap();
-        let status = Command::new(guard.join(C_COMPILER_ALIAS)).arg("input.c").status().unwrap();
-        let observed = fs::read_to_string(&observed_args).unwrap();
-        let compiler_drivers = bound_compiler_driver_paths(&artifacts).unwrap();
-        let missing_subprogram = REQUIRED_GCC_COMPILER_SUBPROGRAMS.last().unwrap();
-        let mut missing = artifacts.clone();
-        missing.retain(|artifact| Path::new(&artifact.path).file_name() != Some(OsStr::new(missing_subprogram)));
-        let missing_error = bound_compiler_subprogram_dir(&missing).unwrap_err();
-        let mut wrong_digest = artifacts;
-        wrong_digest[0].content_digest_blake3 = FIXED_POINT_TEST_DIGEST_A.to_string();
-        let digest_error = bound_compiler_subprogram_dir(&wrong_digest).unwrap_err();
-
-        assert!(status.success());
-        assert!(observed.contains(&format!("-B{}/", subprogram_dir.display())));
-        assert!(!observed.contains("/../"));
-        assert!(compiler_drivers.contains(&fs::canonicalize(&tools.c_compiler).unwrap()));
-        assert!(compiler_drivers.contains(&fs::canonicalize(&cxx_compiler).unwrap()));
-        assert!(missing_error.message().contains("missing bound GCC compiler subprogram"));
-        assert!(digest_error.message().contains("digest mismatch"));
     }
 
     #[cfg(unix)]
@@ -6671,30 +4953,6 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn receipt_bound_enforcement_uses_original_rustc_identity_and_runtime_sysroot() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let tools = fake_toolchain(&dir, false);
-        let manifest = fake_toolchain_manifest(&tools, None);
-        let closure = loaded_toolchain_closure(dir.path().join("closure.json"), manifest.clone());
-        let runtime_wrapper = dir.path().join("runtime-rustc");
-        write_fake_executable(&runtime_wrapper, &format!("#!/bin/sh\nexec {} \"$@\"\n", shell_quote(&tools.rustc)));
-
-        let status =
-            enforce_receipt_bound_toolchain_with_runtime(&tools.rustc, &runtime_wrapper, &closure, &manifest).unwrap();
-        let leaked_sysroot = dir.path().join("leaked-sysroot");
-        fs::create_dir(&leaked_sysroot).unwrap();
-        write_fake_executable(&runtime_wrapper, &rustc_sysroot_script(&leaked_sysroot));
-        let error = enforce_receipt_bound_toolchain_with_runtime(&tools.rustc, &runtime_wrapper, &closure, &manifest)
-            .unwrap_err();
-
-        assert_eq!(status.status, ENFORCED_SOURCE_BUILT_STATUS);
-        assert!(status.claim);
-        assert!(error.message().contains("host-tool-leakage"));
-        assert!(error.message().contains("Sysroot"));
-    }
-
-    #[cfg(unix)]
-    #[test]
     fn receipt_bound_enforcement_rejects_sysroot_leakage() {
         let dir = tempfile::TempDir::new().unwrap();
         let tools = fake_toolchain(&dir, false);
@@ -6707,8 +4965,8 @@ mod tests {
 
         let err = enforce_receipt_bound_toolchain(&tools.rustc, &closure, &manifest).unwrap_err();
 
-        assert!(err.message().contains("host-tool-leakage"), "unexpected error: {}", err.message());
-        assert!(err.message().contains("Sysroot"), "unexpected error: {}", err.message());
+        assert!(err.message().contains("host-tool-leakage"));
+        assert!(err.message().contains("Sysroot"));
         assert!(err.message().contains(path_to_string(&leaked_sysroot).unwrap().as_str()));
     }
 
@@ -6752,8 +5010,8 @@ mod tests {
 
         let err = enforce_receipt_bound_toolchain(&tools.rustc, &closure, &manifest).unwrap_err();
 
-        assert!(err.message().contains("host-tool-leakage"), "unexpected error: {}", err.message());
-        assert!(err.message().contains("PkgConfig"), "unexpected error: {}", err.message());
+        assert!(err.message().contains("host-tool-leakage"));
+        assert!(err.message().contains("PkgConfig"));
         assert!(err.message().contains("digest mismatch"));
     }
 
@@ -6795,28 +5053,6 @@ mod tests {
         assert_eq!(aliases.get(ARCHIVER_ALIAS), Some(&tools.archiver));
         assert_eq!(aliases.get(RANLIB_ALIAS), Some(&tools.ranlib));
         assert!(!aliases.contains_key("cargo"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn receipt_bound_path_aliases_bind_the_selected_source_built_shell() {
-        let dir = tempfile::tempdir().unwrap();
-        let tools = fake_toolchain(&dir, false);
-        let manifest = fake_toolchain_manifest(&tools, None);
-        let guard_dir = dir.path().join("guard-bin");
-        let shell = dir.path().join("host-tools/bin/sh");
-        fs::create_dir_all(&guard_dir).unwrap();
-        fs::create_dir_all(shell.parent().unwrap()).unwrap();
-        write_fake_executable(&shell, "#!/bin/sh\nexit 0\n");
-
-        write_toolchain_path_aliases_with_shell(&guard_dir, &manifest, &shell).unwrap();
-        let linker_alias = fs::read_to_string(guard_dir.join(LINKER_ALIAS)).unwrap();
-        let c_alias = fs::read_to_string(guard_dir.join(C_COMPILER_ALIAS)).unwrap();
-
-        assert!(linker_alias.starts_with(&format!("#!{}\n", shell.display())));
-        assert!(c_alias.starts_with(&format!("#!{}\n", shell.display())));
-        assert!(!linker_alias.starts_with("#!/bin/sh\n"));
-        assert!(!c_alias.starts_with("#!/bin/sh\n"));
     }
 
     #[cfg(unix)]

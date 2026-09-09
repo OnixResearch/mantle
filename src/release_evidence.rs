@@ -153,7 +153,6 @@ pub(crate) struct ReleaseBundleCreateRequest {
     pub stack_provenance: Option<StackProvenanceCreateRequest>,
     pub content_bound_requirement: Option<ContentBoundRequirementCreateRequest>,
     pub cairn_handoff_descriptor_path: Option<PathBuf>,
-    pub source_review_attachment_path: Option<PathBuf>,
 }
 
 impl ReleaseBundleCreateRequest {
@@ -182,7 +181,6 @@ impl ReleaseBundleCreateRequest {
             stack_provenance: None,
             content_bound_requirement: None,
             cairn_handoff_descriptor_path: None,
-            source_review_attachment_path: None,
         }
     }
 }
@@ -327,7 +325,6 @@ fn expected_publication_artifacts(
     append_expected_external_artifacts(request, &mut artifacts)?;
     append_expected_content_bound_requirement_artifacts(request, &mut artifacts)?;
     append_expected_cairn_handoff_artifacts(request, &mut artifacts)?;
-    append_expected_source_review_attachment_artifacts(request, &mut artifacts)?;
     debug_assert!(!artifacts.is_empty());
     debug_assert!(artifacts.capacity() >= artifacts.len());
     Ok(artifacts)
@@ -413,20 +410,6 @@ fn append_expected_content_bound_requirement_artifacts(
                 .map_err(core_error_to_run_error)?,
         );
     }
-    Ok(())
-}
-
-fn append_expected_source_review_attachment_artifacts(
-    request: &ReleaseBundleCreateRequest,
-    artifacts: &mut Vec<BundledArtifact>,
-) -> Result<(), RunError> {
-    let Some(path) = request.source_review_attachment_path.as_deref() else {
-        return Ok(());
-    };
-    let relative = crate::source_review_release::source_review_bundle_relative_path();
-    let artifact = build_artifact_record(path, &relative, BundledArtifactKind::File)?;
-    debug_assert_eq!(artifact.relative_path, crunch_release_core::RELEASED_SOURCE_REVIEW_ATTACHMENT_RELATIVE_PATH);
-    artifacts.push(artifact);
     Ok(())
 }
 
@@ -771,7 +754,6 @@ struct ReleaseManifestEvidence {
     stack_provenance: Option<StackProvenanceReleaseEvidence>,
     content_bound_requirement: Option<ContentBoundReleaseEvidenceV1>,
     cairn_handoff: Option<CairnReleaseEvidenceHandoff>,
-    source_review_attachment: Option<crunch_release_core::SourceReviewReleaseEvidence>,
 }
 
 fn build_release_manifest(
@@ -781,7 +763,7 @@ fn build_release_manifest(
 ) -> Result<ReleaseEvidenceManifest, RunError> {
     let mut evidence = collect_release_manifest_evidence(request, stage_root, &mut inputs)?;
     let source_archive_digest_blake3 = inputs.source_archive.digest_blake3.clone();
-    let source_acquisition = build_source_acquisition(request, &source_archive_digest_blake3)?;
+    let source_acquisition = build_source_acquisition(request, &source_archive_digest_blake3);
     let cairn_handoff = evidence.cairn_handoff.take();
     let mut manifest = compose_release_manifest(request, inputs, evidence, source_acquisition);
     if let Some(handoff) = cairn_handoff {
@@ -821,7 +803,6 @@ fn collect_release_manifest_evidence(
             crate::cairn_release_handoff::prepare_cairn_handoff_for_bundle(descriptor, &request.bundle_dir)
         })
         .transpose()?;
-    let source_review_attachment = copy_optional_source_review_attachment(request, stage_root)?;
     let stack_provenance_artifact_count =
         stack_provenance.as_ref().map_or(0, |_| STACK_PROVENANCE_EXTERNAL_ARTIFACT_COUNT);
     let content_bound_artifact_count =
@@ -841,23 +822,7 @@ fn collect_release_manifest_evidence(
         stack_provenance,
         content_bound_requirement,
         cairn_handoff,
-        source_review_attachment,
     })
-}
-
-fn copy_optional_source_review_attachment(
-    request: &ReleaseBundleCreateRequest,
-    stage_root: &ReleaseCapabilityRoot,
-) -> Result<Option<crunch_release_core::SourceReviewReleaseEvidence>, RunError> {
-    let Some(path) = request.source_review_attachment_path.as_deref() else {
-        return Ok(None);
-    };
-    let attachment = crate::source_review_release::read_source_review_attachment(path)?;
-    debug_assert!(!attachment.attachment_blake3.is_empty());
-    let relative = crate::source_review_release::source_review_bundle_relative_path();
-    let artifact = copy_file_into_bundle(path, stage_root, &request.bundle_dir, &relative)?;
-    debug_assert_eq!(artifact.relative_path, crunch_release_core::RELEASED_SOURCE_REVIEW_ATTACHMENT_RELATIVE_PATH);
-    Ok(Some(crunch_release_core::SourceReviewReleaseEvidence { attachment: artifact }))
 }
 
 fn compose_release_manifest(
@@ -889,7 +854,6 @@ fn compose_release_manifest(
         stack_provenance: evidence.stack_provenance,
         opaque_evidence_sidecar_bindings: vec![],
         cairn_handoff_validation: None,
-        source_review_attachment: evidence.source_review_attachment,
         function_address_evidence: None,
         proof_linkage: ReleaseProofLinkage {
             release_id: request.release_id.clone(),
@@ -925,9 +889,6 @@ fn manifest_publication_artifacts(
     }
     if let Some(report) = &manifest.reproducibility_report {
         artifacts.push(publication_artifact_input(report));
-    }
-    if let Some(review) = &manifest.source_review_attachment {
-        artifacts.push(publication_artifact_input(&review.attachment));
     }
     if let Some(receipt) = &manifest.cairn_handoff_validation {
         artifacts.push(publication_input_from_cairn_artifact(&receipt.handoff.authentication.archive_receipt));
@@ -1100,15 +1061,7 @@ pub(crate) fn verify_release_evidence_bundle(bundle_dir: &Path) -> Result<Releas
     verify_manifest_artifacts(&manifest, bundle_dir)?;
     verify_manifest_proof_linkage(&manifest, bundle_dir)?;
     verify_cairn_handoff_bundle_bytes(&manifest, bundle_dir)?;
-    verify_source_review_bundle_bytes(&manifest, bundle_dir)?;
     Ok(manifest)
-}
-
-fn verify_source_review_bundle_bytes(manifest: &ReleaseEvidenceManifest, bundle_dir: &Path) -> Result<(), RunError> {
-    let Some(record) = &manifest.source_review_attachment else {
-        return Ok(());
-    };
-    crate::source_review_release::remeasure_bundled_source_review_attachment(bundle_dir, &record.attachment).map(|_| ())
 }
 
 fn verify_cairn_handoff_bundle_bytes(manifest: &ReleaseEvidenceManifest, bundle_dir: &Path) -> Result<(), RunError> {
@@ -1151,25 +1104,20 @@ pub(crate) fn load_full_self_hosting_proof_identity(
 fn build_source_acquisition(
     request: &ReleaseBundleCreateRequest,
     source_archive_digest_blake3: &str,
-) -> Result<Option<SourceAcquisition>, RunError> {
-    let acquisition = if let Some(git_source) = &request.git_source {
-        Some(SourceAcquisition::git(
+) -> Option<SourceAcquisition> {
+    if let Some(git_source) = &request.git_source {
+        return Some(SourceAcquisition::git(
             git_source.remote_url.clone(),
             git_source.commit.clone(),
             git_source.reference.clone(),
             git_source.tag.clone(),
             source_archive_digest_blake3.to_string(),
-        ))
-    } else {
-        request
-            .source_acquisition_url
-            .as_ref()
-            .map(|url| SourceAcquisition::external_archive(url.clone(), source_archive_digest_blake3.to_string()))
-    };
-    acquisition
-        .map(SourceAcquisition::with_derived_source_observation)
-        .transpose()
-        .map_err(core_error_to_run_error)
+        ));
+    }
+    request
+        .source_acquisition_url
+        .as_ref()
+        .map(|url| SourceAcquisition::external_archive(url.clone(), source_archive_digest_blake3.to_string()))
 }
 
 fn validate_create_request(request: &ReleaseBundleCreateRequest) -> Result<(), RunError> {
@@ -2040,7 +1988,6 @@ pub(crate) mod tests {
             stack_provenance: None,
             opaque_evidence_sidecar_bindings: vec![],
             cairn_handoff_validation: None,
-            source_review_attachment: None,
             function_address_evidence: None,
             proof_linkage: ReleaseProofLinkage {
                 release_id: "mantle-0.1.0-rc1".to_string(),

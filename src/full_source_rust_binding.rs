@@ -91,31 +91,9 @@ const REQUIRED_NATIVE_ARTIFACTS: &[(&str, FullSourceNativeArtifactRole)] = &[
     ("bin/x86_64-linux-musl-size", FullSourceNativeArtifactRole::ObjectFormat),
     ("bin/x86_64-linux-musl-strings", FullSourceNativeArtifactRole::ObjectFormat),
     ("bin/x86_64-linux-musl-strip", FullSourceNativeArtifactRole::ObjectCopy),
-    ("bin/gcc.real", FullSourceNativeArtifactRole::CCompiler),
-    ("bin/g++.real", FullSourceNativeArtifactRole::CxxCompiler),
-    ("bin/cpp.real", FullSourceNativeArtifactRole::Preprocessor),
-    ("bin/ar", FullSourceNativeArtifactRole::ArchiveTool),
-    ("bin/as", FullSourceNativeArtifactRole::Assembler),
-    ("bin/ld", FullSourceNativeArtifactRole::Linker),
-    ("bin/nm", FullSourceNativeArtifactRole::SymbolTool),
-    ("bin/objcopy", FullSourceNativeArtifactRole::ObjectCopy),
-    ("bin/objdump", FullSourceNativeArtifactRole::ObjectDump),
-    ("bin/ranlib", FullSourceNativeArtifactRole::Ranlib),
-    ("bin/readelf", FullSourceNativeArtifactRole::ObjectFormat),
-    ("bin/size", FullSourceNativeArtifactRole::ObjectFormat),
-    ("bin/strings", FullSourceNativeArtifactRole::ObjectFormat),
-    ("bin/strip", FullSourceNativeArtifactRole::ObjectCopy),
     ("libexec/gcc/x86_64-unknown-linux-musl/10.5.0/cc1", FullSourceNativeArtifactRole::CompilerInternal),
     (
         "libexec/gcc/x86_64-unknown-linux-musl/10.5.0/cc1plus",
-        FullSourceNativeArtifactRole::CompilerInternal,
-    ),
-    (
-        "libexec/gcc/x86_64-unknown-linux-musl/10.5.0/collect2",
-        FullSourceNativeArtifactRole::CompilerInternal,
-    ),
-    (
-        "libexec/gcc/x86_64-unknown-linux-musl/10.5.0/lto-wrapper",
         FullSourceNativeArtifactRole::CompilerInternal,
     ),
     ("x86_64-linux-musl/lib/crt1.o", FullSourceNativeArtifactRole::CrtObject),
@@ -1240,9 +1218,6 @@ fn binding_error(kind: FullSourceRustBindingErrorKind, message: impl Into<String
 }
 
 #[cfg(test)]
-pub(crate) use tests::valid_host_tool_manifest as host_tool_test_manifest;
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use crate::source_toolchain_closure::RUST_SOURCE_PROVIDER_ID;
@@ -1811,7 +1786,7 @@ mod tests {
         }
     }
 
-    pub(crate) fn valid_host_tool_manifest() -> FullSourceRustHostToolManifest {
+    fn valid_host_tool_manifest() -> FullSourceRustHostToolManifest {
         FullSourceRustHostToolManifest {
             schema: FULL_SOURCE_RUST_HOST_TOOL_SCHEMA.to_string(),
             source_policy: FULL_SOURCE_POLICY.to_string(),

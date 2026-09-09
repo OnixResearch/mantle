@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted on 2026-09-03
+Proposed
 
 ## Context
 
@@ -26,13 +26,11 @@ Mantle will define a versioned source observation with checked source kind, loca
 
 A locator records where bytes were observed. It is not canonical content identity or ownership authority. Git identity uses the declared object format and immutable revision. A mutable ref can remain a non-authoritative hint. Mantle will not infer repository authority from one genesis commit.
 
-A pure ingest planner returns add, identical reuse, identity conflict, or invalid rejection. Add uses the pinned `durable-file-publication` component with create-new and required durability. Reuse does not write. Every rejection preserves existing records, payloads, pins, roots, and readiness state.
+A pure ingest planner returns add, identical reuse, identity conflict, or invalid rejection. Add uses atomic create-new publication. Reuse does not write. Every rejection preserves existing records, payloads, pins, roots, and readiness state.
 
 Source-bundle v1 remains readable. A compatibility adapter creates a stronger source observation only when all required facts are present and unambiguous. Other valid v1 records keep a provenance-unavailable disposition.
 
-Release evidence binds the accepted source-observation subject without locator or mutable-reference hints. The subject includes its observation digest and exact source-content digest. Reviewed-source checks bind the same content and immutable revision facts.
-
-The existing release signature covers the enclosing manifest identity. Mantle will not add a source-observation signature role.
+Release evidence binds the accepted source-observation digest. The existing release signature covers that manifest linkage. Mantle will not add a source-observation signature role.
 
 ## Alternatives Considered
 

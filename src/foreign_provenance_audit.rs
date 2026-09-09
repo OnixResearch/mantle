@@ -15,9 +15,9 @@ use crunch_store::CastoreProvenanceScan;
 use crunch_store::ForeignProvenancePolicy;
 use crunch_store::ProvenanceExpectedPathInfo;
 use crunch_store::ProvenanceFinding;
-use crunch_store::ProvenanceStore;
 use crunch_store::StoreConfig;
 use crunch_store::StoreFallbackMode;
+use crunch_store::StoreHandle;
 use nix_compat::narinfo::VerifyingKey;
 use serde::Deserialize;
 use serde::Serialize;
@@ -115,7 +115,7 @@ pub(crate) async fn audit_foreign_realization(
 ) -> Result<ForeignProvenanceAuditReceipt, RunError> {
     let admitted =
         admit_foreign_audit(request.plan, request.realization_receipt, request.policy, request.selected_root_node_ids)?;
-    let store = ProvenanceStore::open(StoreConfig {
+    let store = StoreHandle::open(StoreConfig {
         state_dir: request.state_dir.to_path_buf(),
         output_dir: request.output_dir.to_path_buf(),
         remote_cache_urls: Vec::new(),
@@ -125,18 +125,17 @@ pub(crate) async fn audit_foreign_realization(
     })
     .await
     .map_err(|error| RunError::Internal(format!("opening foreign provenance audit store: {error}")))?;
-    let scan = store
-        .scan(CastoreProvenanceRequest {
-            selected_root_paths: &admitted.closure_paths,
-            admitted_closure_paths: &admitted.admitted_closure_paths,
-            expected_path_infos: &admitted.expected_path_infos,
-            declared_references_by_output: &admitted.declared_references_by_output,
-            foreign_to_target_paths: &admitted.foreign_to_target_paths,
-            trusted_keys: request.trusted_keys,
-            policy: request.policy,
-        })
-        .await
-        .map_err(|error| RunError::Internal(format!("scanning foreign castore provenance: {error}")))?;
+    let scan = crunch_store::scan_castore_provenance(&store, CastoreProvenanceRequest {
+        selected_root_paths: &admitted.closure_paths,
+        admitted_closure_paths: &admitted.admitted_closure_paths,
+        expected_path_infos: &admitted.expected_path_infos,
+        declared_references_by_output: &admitted.declared_references_by_output,
+        foreign_to_target_paths: &admitted.foreign_to_target_paths,
+        trusted_keys: request.trusted_keys,
+        policy: request.policy,
+    })
+    .await
+    .map_err(|error| RunError::Internal(format!("scanning foreign castore provenance: {error}")))?;
     build_foreign_provenance_receipt(request.plan, request.realization_receipt, request.policy, admitted, scan)
 }
 

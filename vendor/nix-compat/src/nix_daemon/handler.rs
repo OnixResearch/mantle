@@ -49,8 +49,6 @@ pub struct NixDaemon<IO, R, W> {
     io: Arc<IO>,
     protocol_version: ProtocolVersion,
     client_settings: ClientSettings,
-    frame_bytes_max: u64,
-    compatibility_stubs_enabled: bool,
     reader: NixReader<R>,
     writer: Arc<Mutex<NixWriter<W>>>,
 }
@@ -69,21 +67,9 @@ where IO: NixDaemonIO + Sync + Send
             io,
             protocol_version,
             client_settings,
-            frame_bytes_max: u64::MAX,
-            compatibility_stubs_enabled: true,
             reader,
             writer: Arc::new(Mutex::new(writer)),
         }
-    }
-
-    /// Negotiated protocol version for shell-level minimum-version policy.
-    pub fn protocol_version(&self) -> ProtocolVersion {
-        self.protocol_version
-    }
-
-    /// Disable operations that return compatibility-only synthetic results.
-    pub fn disable_compatibility_stubs(&mut self) {
-        self.compatibility_stubs_enabled = false;
     }
 }
 
@@ -98,60 +84,16 @@ where
     /// settings.
     ///
     /// The resulting daemon can handle the client session by calling [NixDaemon::handle_client].
-    pub async fn initialize(io: Arc<IO>, connection: RW) -> Result<Self, std::io::Error>
+    pub async fn initialize(io: Arc<IO>, mut connection: RW) -> Result<Self, std::io::Error>
     where RW: AsyncReadExt + AsyncWriteExt + Send + Unpin {
-        Self::initialize_with_version(io, connection, "2.18.2").await
-    }
-
-    /// Async constructor with an explicit server version for protocol adapters.
-    pub async fn initialize_with_version(
-        io: Arc<IO>,
-        connection: RW,
-        server_version: &str,
-    ) -> Result<Self, std::io::Error>
-    where
-        RW: AsyncReadExt + AsyncWriteExt + Send + Unpin,
-    {
-        Self::initialize_with_version_and_limits(
-            io,
-            connection,
-            server_version,
-            8_192,
-            usize::MAX,
-            usize::MAX,
-            u64::MAX,
-        )
-        .await
-    }
-
-    /// Async constructor with explicit parser and framed-payload limits.
-    pub async fn initialize_with_version_and_limits(
-        io: Arc<IO>,
-        mut connection: RW,
-        server_version: &str,
-        value_bytes_max: usize,
-        collection_items_max: usize,
-        message_bytes_max: usize,
-        frame_bytes_max: u64,
-    ) -> Result<Self, std::io::Error> {
-        if value_bytes_max == 0 || collection_items_max == 0 || message_bytes_max == 0 || frame_bytes_max == 0 {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "nix-daemon-reader-limit-invalid"));
-        }
-        let protocol_version = server_handshake_client(&mut connection, server_version, Trust::Trusted).await?;
+        let protocol_version = server_handshake_client(&mut connection, "2.18.2", Trust::Trusted).await?;
 
         connection.write_u64_le(STDERR_LAST).await?;
         let (reader, writer) = split(connection);
-        let mut reader = NixReader::builder()
-            .set_version(protocol_version)
-            .set_reserved_buf_size(value_bytes_max.min(8_192))
-            .set_max_buf_size(value_bytes_max)
-            .set_max_collection_len(collection_items_max)
-            .set_max_message_bytes(message_bytes_max)
-            .build(reader);
+        let mut reader = NixReader::builder().set_version(protocol_version).build(reader);
         let mut writer = NixWriterBuilder::default().set_version(protocol_version).build(writer);
 
-        // The first op is always SetOptions.
-        reader.reset_message_budget();
+        // The first op is always SetOptions
         let operation: Operation = reader.read_value().await?;
         if operation != Operation::SetOptions {
             return Err(std::io::Error::other("Expected SetOptions operation, but got {operation}"));
@@ -160,16 +102,13 @@ where
         writer.write_number(STDERR_LAST).await?;
         writer.flush().await?;
 
-        let mut daemon = Self::new(io, protocol_version, client_settings, reader, writer);
-        daemon.frame_bytes_max = frame_bytes_max;
-        Ok(daemon)
+        Ok(Self::new(io, protocol_version, client_settings, reader, writer))
     }
 
     /// Main client connection loop, reads client's requests and responds to them accordingly.
     pub async fn handle_client(&mut self) -> Result<(), std::io::Error> {
         let io = self.io.clone();
         loop {
-            self.reader.reset_message_budget();
             let op_code = self.reader.read_number().await?;
             let op = TryInto::<Operation>::try_into(op_code);
             debug!(?op, "Received operation");
@@ -211,9 +150,6 @@ where
                     // same time, returning an empty list here shouldn't break any of local-overlay store's
                     // invariants.
                     Operation::QueryReferrers | Operation::QueryRealisation => {
-                        if !self.compatibility_stubs_enabled {
-                            return Err(std::io::Error::other(format!("Operation {operation:?} is not implemented")));
-                        }
                         let _: String = self.reader.read_value().await?;
                         Self::handle(&self.writer, async move {
                             warn!(?operation, "This operation is not implemented. Returning empty result...");
@@ -243,8 +179,7 @@ where
                             23.. => {
                                 // Starting at protocol version 1.23, the framed protocol is used, see
                                 // serialization.md#framed
-                                let mut framed =
-                                    NixFramedReader::new_with_max_frame_bytes(&mut self.reader, self.frame_bytes_max);
+                                let mut framed = NixFramedReader::new(&mut self.reader);
 
                                 Self::handle(&self.writer, async {
                                     self.io.add_to_store_nar(request, &mut framed).await
@@ -422,27 +357,6 @@ mod tests {
             NixWriter::new(writer),
         );
         assert_eq!(ErrorKind::UnexpectedEof, daemon.handle_client().await.expect_err("Expecting eof").kind());
-    }
-
-    #[tokio::test]
-    async fn strict_mode_rejects_compatibility_stub_operations() {
-        let version = ProtocolVersion::from_parts(1, 37);
-        let (io, mut handle) = tokio_test::io::Builder::new().build_with_handle();
-        let (reader, writer) = split(io);
-        handle.read(&Into::<u64>::into(Operation::QueryReferrers).to_le_bytes());
-        drop(handle);
-
-        let mut daemon = NixDaemon::new(
-            Arc::new(MockNixDaemonIO::new()),
-            version,
-            ClientSettings::default(),
-            NixReader::new(reader),
-            NixWriter::new(writer),
-        );
-        daemon.disable_compatibility_stubs();
-        let error = daemon.handle_client().await.unwrap_err();
-        assert_eq!(error.kind(), ErrorKind::Other);
-        assert_eq!(error.to_string(), "Operation QueryReferrers is not implemented");
     }
 
     #[tokio::test]

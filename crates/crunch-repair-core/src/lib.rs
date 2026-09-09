@@ -9,8 +9,6 @@
 
 extern crate alloc;
 
-pub mod legacy_archive;
-
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;

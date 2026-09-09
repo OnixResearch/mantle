@@ -89,7 +89,7 @@ mantle build --plan examples/hello.ncl
 mantle build examples/hello.ncl --no-substitute
 ```
 
-Use `mantle --json build ...` for the stable aggregate build report. Its compatibility identifier is `crunch-build-report-v1`. See the [build-planning core guide](docs/build-planning-core.md) for explicit route, concurrency, and effect boundaries. The [CLI application architecture guide](docs/cli-application-architecture.md) describes the mechanical command root and typed dispatch boundary.
+Use `mantle --json build ...` for the stable aggregate build report. Its compatibility identifier is `crunch-build-report-v1`.
 
 External CI consumers can bind normalized requests and observations through the host-independent [`mantle-build-contract`](docs/build-interchange-contract.md) component. This contract does not import build or store authority.
 
@@ -178,12 +178,6 @@ castore content, preserves CA/path/node/reference identity, discards signatures
 bound to stale facts, and emits a replacement local signature. This does not
 recover historical signer authority or prove output correctness.
 
-For archives whose signed final-NAR facts are already correct, the separate
-[checked legacy archive migration](docs/legacy-archive-migration.md) preserves
-those signatures and payloads. It proves marker-CA and doubled-directory-count
-identities before producing a new archive. It does not rebuild Mantle, alter the
-original store, or weaken ordinary import checks.
-
 GC and final-NAR repair use separate pure decision cores. The cores receive
 bounded, normalized facts and return ordered plans with BLAKE3 identities.
 `crunch-store` still owns service reads, NAR rendering, signing, filesystem
@@ -255,8 +249,7 @@ mantle --state-dir ./offline-state build \
 
 Source readiness proves declared input availability and identity only. Build
 success, output trust, compiler correctness, and release eligibility require
-separate evidence. See [source observations and monotonic ingest](docs/source-observations.md)
-for the identity, compatibility, mutation, and release-linkage rules.
+separate evidence.
 
 ## Mantlepkgs catalogs
 
@@ -391,7 +384,6 @@ signed directory or HTTP exchange. Mantle keeps existing output and local
 castore reuse ahead of shared transfer. It admits a shared result only after
 full-key authority, policy, object, complete-tree, artifact, and materialization
 checks. See [`docs/native-rust-plan-validation.md`](docs/native-rust-plan-validation.md),
-[`docs/rust-plan-hexagon.md`](docs/rust-plan-hexagon.md),
 [`docs/shared-rust-unit-cache.md`](docs/shared-rust-unit-cache.md), and the
 [Rust compiler cache daemon guide](rust-cache/daemon/README.md).
 
@@ -414,10 +406,6 @@ nix develop -c cargo -Zscript scripts/check-foreign-import-trust-model.rs --self
 
 Use [`docs/operator-proof-guide.md`](docs/operator-proof-guide.md) before making
 or reviewing self-build, Cargo-free, Nix-free, or release claims.
-
-Development-only fixed-point resume is documented in
-[`docs/dev-cache-cross-run-resume.md`](docs/dev-cache-cross-run-resume.md).
-It does not satisfy a promoted proof.
 
 ### Bootstrap proof methodology
 
@@ -489,27 +477,8 @@ ambient compiler discovery.
 | Can the claim be published? | Bootstrap parity and Cairn gates |
 
 This methodology proves bounded bootstrap facts for the recorded seed, source,
-tools, platform, and policy. The promoted V98 parity path additionally requires
-a matching two-stage Mantle binary plus complete local reconciliation of 1,914
-actions and 478,870 events. The checked-in compressed bundle contains the five
-native receipts and all five action domains. Its independent checker does not
-import the parity collector implementation. Validate both paths with:
-
-```bash
-mantle --json bootstrap parity-report \
-  --require live-bootstrap --require guix --require stagex
-cargo -Zscript scripts/check-source-built-parity-promotion.rs --self-test
-cargo -Zscript scripts/check-source-built-parity-promotion.rs \
-  --root . \
-  --bundle bootstrap/evidence/full-bootstrap-parity-v98
-```
-
-The independent receipt is suitable for release external evidence. It does not
-select or satisfy a build-witness policy.
-
-These results do not prove compiler correctness, semantic correctness, seed or
-kernel correctness, independent rebuild agreement, or universal
-reproducibility.
+tools, platform, and policy. It does not prove compiler correctness, semantic
+correctness, kernel correctness, or universal reproducibility.
 
 Self-hosting preflight and proof modes:
 
@@ -576,19 +545,12 @@ Useful documentation:
 - [Operator proof guide](docs/operator-proof-guide.md)
 - [Machine artifact contracts](docs/machine-artifact-contracts.md)
 - [Build correctness primitives](docs/build-correctness-primitives.md)
-- [Nickel evaluator cohort](docs/nickel-evaluator-cohort.md)
 - [Remote credential operations](docs/remote-credentials.md)
-- [Remote-build hexagon](docs/remote-build-hexagon.md)
-- [Remote service gateway](docs/remote-service-gateway.md)
-- [Evidence-driven remote resource policy](docs/resource-policy.md)
-- [Trellis remote-admission evidence](docs/trellis-remote-admission.md)
-- [CLI application architecture](docs/cli-application-architecture.md)
 - [Portable remote client](docs/portable-remote-client.md)
 - [Mantle naming rules](docs/mantle-naming.md)
 - [Durable file publication adoption](docs/durable-file-publication-adoption.md)
 - [Immutable release objects and the current pointer](docs/immutable-release-current-pointer.md)
 - [Filesystem and castore NAR boundary](docs/nix-archive-nar-boundary.md)
-- [Radiance bootstrap reference](docs/radiance-bootstrap-reference.md)
 
 ## Requirements
 
@@ -628,8 +590,6 @@ notices.
 - [fzakaria/nixpkgs-multiverse](https://github.com/fzakaria/nixpkgs-multiverse) provides the compact historical Nixpkgs revision-index reference. Mantle retains producer, source-admission, package-identity, and evidence authority.
 - [cachix/nix-derivation](https://github.com/cachix/nix-derivation) provides the reviewed Nix 2.34 derivation parsing, validation, serialization, and store-path compatibility candidate. Mantle retains native BLAKE3, configurable-prefix, build, store, evidence, and release authority.
 - `bounded-tree` at `rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX`, revision `b0fd0103bc9eed2c1b6d852045959462d105d8f1`, provides product-neutral bounded tree planning, capability-relative observation, revalidation, and copy mechanics. Mantle retains product identity, evidence, publication, and release authority.
+- [nix-community/robotnix](https://github.com/nix-community/robotnix) provides the Nix-family architectural reference for Android builds: pinned prebuilt SDK admission, explicit signing keys, and `repo2nix` source materialization. Mantle stays at app-level APK scope and retains admission, identity, and evidence authority.
+- [nix-community/nix-on-droid](https://github.com/nix-community/nix-on-droid) provides the host-platform boundary reference: Nix on Android hosts runs through proot without user namespaces. Mantle's bwrap sandbox requires a Linux host, so on-device operation stays out of scope.
 - `transactional-reconciliation-core` at `rad:z4Tky6zvC8w4Y6c4YBzNxVbq5n752`, revision `606489b5f40298181214bb76bc3457b607f225d9`, provides immutable planning, exact reservation admission, and unknown-outcome classification. Mantle retains GC semantics, store mutation, effect authority, and evidence.
-- [Radiance](https://code.radiant.computer/radiance), Git SHA-256 commit `0d8a2d4fe8d0ba488e22c8ed83df1e53a5d23d69489c5d9e7fa0646b1c29c444`, supplies the optional self-hosting compiler source and RV64 seed reference.
-- [radiance.s0](https://code.radiant.computer/radiance.s0), Git SHA-256 commit `7834d3a9d44fb48ae3d3c06da992922f3e46b580b3d92df36372081b2fe475c3`, supplies the optional C99 bootstrap route.
-- [Radiance emulator](https://code.radiant.computer/emulator), Git SHA-256 commit `92cdb0c5293447964be053214fac403b49193ac3ec07c902576346ebaa205535`, supplies the optional RV64 execution adapter. Mantle retains source admission, execution, evidence, and release authority.
-- [nixbuild/nixbench](https://github.com/nixbuild/nixbench), revision `b256cd275d8c79ba485be8d317005f973879825a`, provides an Apache-2.0 fixed-output workload-shape reference. Mantle copies no source or hosted-service policy and retains selection, execution, accounting, evidence, and release authority.

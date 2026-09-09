@@ -22,15 +22,13 @@ The [Atom Reforged architecture](https://nrd.sh/blog/atom-reforged.html) describ
 
 Mantle will split store access into concrete capability values with private fields.
 
-The capability roles are `BuildStore`, `BuildServiceStore`, `OutputLookup`, `RootRegistry`, `SourceStore`, `SourceAdmission`, `TransferStore`, `AttestationStore`, `ProvenanceStore`, `RustCacheStore`, `ActionResultPort`, `PathInfoAdministration`, `StoreAdministration`, and `StoreAdmin`. `Builder` owns `BuildStore` and a fixed `ActionResultPort`. It cannot own store administration, source admission, or a broad compatibility handle.
+The initial roles are `BuildStore`, `OutputLookup`, `RootRegistry`, `SourceAdmission`, `ActionResultPort`, and `StoreAdmin`. `Builder` can own `BuildStore` and a fixed `ActionResultPort`. It cannot own `StoreAdmin`, `SourceAdmission`, or a broad compatibility handle.
 
-Capability methods expose named high-level operations. They do not return writable blob, directory, PathInfo-service, publisher, or action-result backend objects. Raw Snix services remain inside `crunch-store`.
+Capability methods expose named high-level operations. They do not return writable blob, directory, PathInfo, publisher, or action-result backend objects.
 
-Build-session output nodes, built-output facts, substitution reports, and CA resolution remain in `BuildStore`. Pipeline orchestration receives already-split parts for output lookup, root registration, build services, action results, and build admission.
+Build-session output nodes, built-output facts, substitution reports, and CA resolution move into builder-owned session state or `BuildStore`. Pipeline orchestration retains output lookup and root registration separately.
 
-Local output admission returns an ordered BLAKE3-bound publication effect plan. `PublicationExecution` validates and executes that plan afterward, returning typed success or failure observations without changing local admission truth.
-
-`StoreHandle` remains an internal implementation facade and a fixture-only compatibility surface. The deterministic architecture rail rejects production access outside `crunch-store`.
+A shell-owned compatibility facade can exist during migration. `Builder::store_handle()` will not remain part of the accepted design.
 
 ## Alternatives Considered
 
@@ -53,8 +51,7 @@ Rejected because concrete local roles are easier to review and do not add a repo
 ## Consequences
 
 - Store operations move behind role-specific methods.
-- Tests use capability fixtures or explicit fixture-only compatibility constructors.
+- Some tests need restricted test constructors instead of raw services.
 - Pipeline and builder construction change, while wire formats stay stable.
-- Output publishers run only after a checked effect plan exists.
-- Compile-fail, deterministic AST, dependency, and source-policy tests form the authority boundary.
+- Compile-fail and source-policy tests become part of the authority boundary.
 - The type split proves API reachability only. It does not prove filesystem or sandbox confinement.

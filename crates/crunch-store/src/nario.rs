@@ -145,11 +145,6 @@ pub struct NarioV2ImportOptions {
     pub materialize: bool,
 }
 
-struct NarByteAddition {
-    current_bytes: u64,
-    next_bytes: u64,
-}
-
 #[derive(Debug)]
 struct StagedRecord {
     listed: NarioV2ListedPath,
@@ -281,19 +276,17 @@ fn rollback_materializations(materializations: &[StagedMaterialization]) -> Resu
 
 pub fn validate_nario_record_state(
     marker: u64,
-    record_index: u32,
+    record_index: usize,
     seen_paths: &BTreeSet<String>,
     path: Option<&str>,
     limits: &NarioV2Limits,
 ) -> Result<bool, String> {
     assert!(limits.records_max > 0, "Nario record limit must be positive");
     assert!(limits.metadata_string_bytes_max > 0, "Nario metadata limit must be positive");
-    let maximum_record_count = u32::try_from(limits.records_max)
-        .map_err(|_| "nario-v2-record-limit: configured record count exceeds u32".to_string())?;
     match marker {
         END_MARKER => Ok(false),
         RECORD_MARKER => {
-            if record_index >= maximum_record_count {
+            if record_index >= limits.records_max {
                 return Err(format!("nario-v2-record-limit: record count exceeds {}", limits.records_max));
             }
             let path = path.ok_or_else(|| "nario-v2-missing-path: record marker has no path metadata".to_string())?;
@@ -338,11 +331,8 @@ fn validate_metadata(metadata: &NarioMetadata, limits: &NarioV2Limits) -> Result
     Ok(())
 }
 
-fn checked_total(addition: NarByteAddition, limits: &NarioV2Limits) -> Result<u64, Error> {
-    let total = addition
-        .current_bytes
-        .checked_add(addition.next_bytes)
-        .ok_or_else(|| nario_error("nario-v2-total-size-overflow"))?;
+fn checked_total(current: u64, next: u64, limits: &NarioV2Limits) -> Result<u64, Error> {
+    let total = current.checked_add(next).ok_or_else(|| nario_error("nario-v2-total-size-overflow"))?;
     if total > limits.total_nar_bytes_max {
         return Err(nario_error(format!("nario-v2-total-limit: {total} exceeds {}", limits.total_nar_bytes_max)));
     }
@@ -350,19 +340,17 @@ fn checked_total(addition: NarByteAddition, limits: &NarioV2Limits) -> Result<u6
 }
 
 pub async fn list_nario_v2<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Result<NarioV2ListReport, Error> {
-    let bounds = NarioV2Limits::default();
-    assert!(bounds.records_max > 0);
-    assert!(bounds.total_nar_bytes_max >= bounds.nar_bytes_max);
+    let limits = NarioV2Limits::default();
     let mut hashing_reader = ArchiveHashReader::new(reader);
     let mut wire = nix_compat::wire::de::NixReader::builder()
-        .set_max_buf_size(bounds.metadata_string_bytes_max)
+        .set_max_buf_size(limits.metadata_string_bytes_max)
         .set_reserved_buf_size(IO_BUFFER_BYTES)
         .build(&mut hashing_reader);
     require_magic(&mut wire).await?;
     let mut seen_paths = BTreeSet::new();
-    let mut paths = Vec::with_capacity(bounds.records_max);
+    let mut paths = Vec::new();
     let mut total_nar_bytes = 0u64;
-    for record_index in 0..=bounds.records_max {
+    for record_index in 0..=limits.records_max {
         let marker = wire.read_number().await.map_err(read_error("nario-v2-record-marker"))?;
         if marker == END_MARKER {
             require_eof(&mut wire).await?;
@@ -383,21 +371,14 @@ pub async fn list_nario_v2<R: AsyncRead + Unpin + Send>(reader: &mut R) -> Resul
                 paths,
             });
         }
-        let metadata = read_metadata(&mut wire, &bounds).await?;
-        let record_index = checked_u32(record_index, "nario-v2 list record index")?;
-        validate_nario_record_state(marker, record_index, &seen_paths, Some(&metadata.store_path.to_string()), &bounds)
+        let metadata = read_metadata(&mut wire, &limits).await?;
+        validate_nario_record_state(marker, record_index, &seen_paths, Some(&metadata.store_path.to_string()), &limits)
             .map_err(nario_error)?;
-        validate_metadata(&metadata, &bounds).map_err(nario_error)?;
+        validate_metadata(&metadata, &limits).map_err(nario_error)?;
         require_metadata_ca_identity(&metadata)?;
         let path = metadata.store_path.to_string();
         seen_paths.insert(path);
-        total_nar_bytes = checked_total(
-            NarByteAddition {
-                current_bytes: total_nar_bytes,
-                next_bytes: metadata.nar_size,
-            },
-            &bounds,
-        )?;
+        total_nar_bytes = checked_total(total_nar_bytes, metadata.nar_size, &limits)?;
         drain_and_verify_nar(&mut wire, &metadata).await?;
         paths.push(listed_from_metadata(&metadata));
     }
@@ -429,6 +410,7 @@ async fn finalize_nario_import(
     }
     drop(materialization_dir);
     let paths = staged.iter().map(|record| record.listed.clone()).collect::<Vec<_>>();
+    let imported_count = checked_u32(path_infos.len(), "nario-v2 imported count")?;
     let skipped = staged.iter().filter(|record| record.present).count();
     Ok(NarioV2ImportReport {
         format: NARIO_V2_FORMAT_NAME,
@@ -438,54 +420,12 @@ async fn finalize_nario_import(
         supported_direction: NARIO_V2_DIRECTION,
         store_prefix: NARIO_V2_STORE_PREFIX,
         archive_blake3,
-        imported_count: checked_u32(path_infos.len(), "nario-v2 imported count")?,
+        imported_count,
         skipped_already_present_count: checked_u32(skipped, "nario-v2 skipped count")?,
         total_nar_bytes,
         unsupported_metadata_classes: NARIO_V2_UNSUPPORTED_METADATA,
         non_claim: NARIO_V2_NON_CLAIM,
         paths,
-    })
-}
-
-async fn stage_missing_record<R: AsyncRead + Unpin + Send>(
-    handle: &StoreHandle,
-    reader: &mut R,
-    metadata: NarioMetadata,
-    listed: NarioV2ListedPath,
-) -> Result<StagedRecord, Error> {
-    let expected_ca_content_hash = None;
-    let mut nar_reader = reader.take(metadata.nar_size);
-    let (node, actual_hash, actual_size_bytes) = ingest_nar_and_hash(
-        handle.blob_service(),
-        handle.directory_service(),
-        &mut nar_reader,
-        &expected_ca_content_hash,
-    )
-    .await
-    .map_err(|error| nario_error(format!("nario-v2-nar-ingest for {}: {error}", metadata.store_path)))?;
-    if actual_size_bytes != metadata.nar_size || nar_reader.limit() != 0 {
-        return Err(nario_error(format!("nario-v2-nar-size-mismatch for {}", metadata.store_path)));
-    }
-    if actual_hash != metadata.nar_sha256 {
-        return Err(nario_error(format!("nario-v2-nar-hash-mismatch for {}", metadata.store_path)));
-    }
-    assert_eq!(actual_size_bytes, metadata.nar_size);
-    assert_eq!(actual_hash, metadata.nar_sha256);
-    let path_info = PathInfo {
-        store_path: metadata.store_path,
-        node,
-        references: metadata.references,
-        nar_size: metadata.nar_size,
-        nar_sha256: metadata.nar_sha256,
-        signatures: metadata.signatures,
-        deriver: metadata.deriver,
-        ca: metadata.ca,
-    };
-    require_standard_nix_ca_identity(&path_info)?;
-    Ok(StagedRecord {
-        listed,
-        path_info: Some(path_info),
-        present: false,
     })
 }
 
@@ -500,19 +440,17 @@ pub async fn import_nario_v2<R: AsyncRead + Unpin + Send>(
             handle.store_dir()
         )));
     }
-    let bounds = NarioV2Limits::default();
-    assert!(bounds.records_max > 0);
-    assert!(bounds.total_nar_bytes_max >= bounds.nar_bytes_max);
+    let limits = NarioV2Limits::default();
     let mut hashing_reader = ArchiveHashReader::new(reader);
     let mut wire = NixReader::builder()
-        .set_max_buf_size(bounds.metadata_string_bytes_max)
+        .set_max_buf_size(limits.metadata_string_bytes_max)
         .set_reserved_buf_size(IO_BUFFER_BYTES)
         .build(&mut hashing_reader);
     require_magic(&mut wire).await?;
-    let mut staged = Vec::with_capacity(bounds.records_max);
+    let mut staged = Vec::new();
     let mut seen_paths = BTreeSet::new();
     let mut total_nar_bytes = 0u64;
-    for record_index in 0..=bounds.records_max {
+    for record_index in 0..=limits.records_max {
         let marker = wire.read_number().await.map_err(read_error("nario-v2-record-marker"))?;
         if marker == END_MARKER {
             require_eof(&mut wire).await?;
@@ -520,21 +458,15 @@ pub async fn import_nario_v2<R: AsyncRead + Unpin + Send>(
             let archive_blake3 = hashing_reader.finish();
             return finalize_nario_import(handle, options, staged, total_nar_bytes, archive_blake3).await;
         }
-        let metadata = read_metadata(&mut wire, &bounds).await?;
-        let record_index = checked_u32(record_index, "nario-v2 import record index")?;
-        validate_nario_record_state(marker, record_index, &seen_paths, Some(&metadata.store_path.to_string()), &bounds)
+        let metadata = read_metadata(&mut wire, &limits).await?;
+        validate_nario_record_state(marker, record_index, &seen_paths, Some(&metadata.store_path.to_string()), &limits)
             .map_err(nario_error)?;
-        validate_metadata(&metadata, &bounds).map_err(nario_error)?;
+        validate_metadata(&metadata, &limits).map_err(nario_error)?;
         require_metadata_ca_identity(&metadata)?;
         require_trusted(&metadata, options)?;
-        seen_paths.insert(metadata.store_path.to_string());
-        total_nar_bytes = checked_total(
-            NarByteAddition {
-                current_bytes: total_nar_bytes,
-                next_bytes: metadata.nar_size,
-            },
-            &bounds,
-        )?;
+        let path = metadata.store_path.to_string();
+        seen_paths.insert(path);
+        total_nar_bytes = checked_total(total_nar_bytes, metadata.nar_size, &limits)?;
         let local = handle
             .pathinfo_service()
             .get(*metadata.store_path.digest())
@@ -551,7 +483,38 @@ pub async fn import_nario_v2<R: AsyncRead + Unpin + Send>(
             });
             continue;
         }
-        staged.push(stage_missing_record(handle, &mut wire, metadata, listed).await?);
+        let expected_ca_content_hash = None;
+        let mut limited = (&mut wire).take(metadata.nar_size);
+        let (node, actual_hash, actual_size) = ingest_nar_and_hash(
+            handle.blob_service(),
+            handle.directory_service(),
+            &mut limited,
+            &expected_ca_content_hash,
+        )
+        .await
+        .map_err(|error| nario_error(format!("nario-v2-nar-ingest for {}: {error}", metadata.store_path)))?;
+        if actual_size != metadata.nar_size || limited.limit() != 0 {
+            return Err(nario_error(format!("nario-v2-nar-size-mismatch for {}", metadata.store_path)));
+        }
+        if actual_hash != metadata.nar_sha256 {
+            return Err(nario_error(format!("nario-v2-nar-hash-mismatch for {}", metadata.store_path)));
+        }
+        let path_info = PathInfo {
+            store_path: metadata.store_path.clone(),
+            node,
+            references: metadata.references.clone(),
+            nar_size: metadata.nar_size,
+            nar_sha256: metadata.nar_sha256,
+            signatures: metadata.signatures.clone(),
+            deriver: metadata.deriver.clone(),
+            ca: metadata.ca.clone(),
+        };
+        require_standard_nix_ca_identity(&path_info)?;
+        staged.push(StagedRecord {
+            listed,
+            path_info: Some(path_info),
+            present: false,
+        });
     }
     Err(nario_error("nario-v2-record-limit"))
 }
@@ -568,8 +531,6 @@ async fn read_metadata<R: AsyncRead + Unpin + Send>(
     reader: &mut NixReader<R>,
     limits: &NarioV2Limits,
 ) -> Result<NarioMetadata, Error> {
-    assert!(limits.records_max > 0);
-    assert!(limits.metadata_string_bytes_max > 0);
     let store_path = parse_store_path(read_string(reader, "path").await?, "path")?;
     let deriver_text = read_string(reader, "deriver").await?;
     let deriver = if deriver_text.is_empty() {
@@ -585,9 +546,9 @@ async fn read_metadata<R: AsyncRead + Unpin + Send>(
         references.push(parse_store_path(read_string(reader, "reference").await?, "reference")?);
     }
     let registration_time = reader.read_number().await.map_err(read_error("nario-v2-registration-time"))?;
-    let nar_size_bytes = reader.read_number().await.map_err(read_error("nario-v2-nar-size"))?;
+    let nar_size = reader.read_number().await.map_err(read_error("nario-v2-nar-size"))?;
     let ultimate_raw = reader.read_number().await.map_err(read_error("nario-v2-ultimate"))?;
-    let is_ultimate = match ultimate_raw {
+    let ultimate = match ultimate_raw {
         0 => false,
         1 => true,
         other => return Err(nario_error(format!("nario-v2-invalid-boolean: ultimate={other}"))),
@@ -613,8 +574,8 @@ async fn read_metadata<R: AsyncRead + Unpin + Send>(
         nar_sha256,
         references,
         registration_time,
-        nar_size: nar_size_bytes,
-        ultimate: is_ultimate,
+        nar_size,
+        ultimate,
         signatures,
         ca,
     };
@@ -658,8 +619,6 @@ fn parse_sha256(text: &str) -> Result<[u8; 32], Error> {
 }
 
 fn require_trusted(metadata: &NarioMetadata, options: &NarioV2ImportOptions) -> Result<(), Error> {
-    assert!(!metadata.store_path.name().is_empty());
-    assert!(metadata.signatures.len() <= MAX_SIGNATURES);
     if options.trust_unsigned {
         return Ok(());
     }
@@ -674,13 +633,13 @@ fn require_trusted(metadata: &NarioMetadata, options: &NarioV2ImportOptions) -> 
         refs.iter(),
         NARIO_V2_STORE_PREFIX,
     );
-    let is_trusted = metadata.signatures.iter().any(|signature| {
+    let trusted = metadata.signatures.iter().any(|signature| {
         options
             .trusted_public_keys
             .iter()
             .any(|key| key.name() == signature.name() && key.verify(&fingerprint, &signature.as_ref()))
     });
-    if !is_trusted {
+    if !trusted {
         return Err(nario_error(format!("nario-v2-untrusted-signature: {}", metadata.store_path)));
     }
     Ok(())
@@ -714,7 +673,6 @@ fn require_standard_nix_ca_identity(path_info: &PathInfo) -> Result<(), Error> {
 }
 
 fn standard_nix_ca_path(name: &str, ca: &CAHash, references: &[String]) -> Result<StorePath<String>, Error> {
-    assert!(references.len() <= MAX_REFERENCES);
     let (ty, inner_digest) = match ca {
         CAHash::Text(digest) => (reference_type("text", references), *digest),
         CAHash::Nar(NixHash::Sha256(digest)) => (reference_type("source", references), *digest),
@@ -733,7 +691,6 @@ fn standard_nix_ca_path(name: &str, ca: &CAHash, references: &[String]) -> Resul
     };
     let fingerprint =
         format!("{ty}:sha256:{}:{NARIO_V2_STORE_PREFIX}:{name}", data_encoding::HEXLOWER.encode(&inner_digest));
-    assert!(!fingerprint.is_empty());
     let digest: [u8; 32] = sha2::Sha256::digest(fingerprint.as_bytes()).into();
     StorePath::from_name_and_digest_fixed(name, compress_hash(&digest))
         .map_err(|error| nario_error(format!("nario-v2-content-address-path: {error}")))
@@ -754,57 +711,35 @@ fn reference_type(prefix: &str, references: &[String]) -> String {
 }
 
 fn validate_existing_metadata(metadata: &NarioMetadata, local: &PathInfo) -> Result<(), Error> {
-    let conflict = || nario_error(format!("nario-v2-existing-path-conflict: {}", metadata.store_path));
-    if local.store_path != metadata.store_path {
-        return Err(conflict());
+    if local.store_path != metadata.store_path
+        || local.references != metadata.references
+        || local.nar_size != metadata.nar_size
+        || local.nar_sha256 != metadata.nar_sha256
+        || local.signatures != metadata.signatures
+        || local.deriver != metadata.deriver
+        || local.ca != metadata.ca
+    {
+        return Err(nario_error(format!("nario-v2-existing-path-conflict: {}", metadata.store_path)));
     }
-    if local.references != metadata.references {
-        return Err(conflict());
-    }
-    if local.nar_size != metadata.nar_size {
-        return Err(conflict());
-    }
-    if local.nar_sha256 != metadata.nar_sha256 {
-        return Err(conflict());
-    }
-    if local.signatures != metadata.signatures {
-        return Err(conflict());
-    }
-    if local.deriver != metadata.deriver {
-        return Err(conflict());
-    }
-    if local.ca != metadata.ca {
-        return Err(conflict());
-    }
-    assert_eq!(local.store_path, metadata.store_path);
-    assert_eq!(local.nar_sha256, metadata.nar_sha256);
     Ok(())
 }
 
 async fn drain_and_verify_nar<R: AsyncRead + Unpin>(reader: &mut R, metadata: &NarioMetadata) -> Result<(), Error> {
-    let mut nar_reader = reader.take(metadata.nar_size);
+    let mut limited = reader.take(metadata.nar_size);
     let mut hasher = sha2::Sha256::new();
     let mut buffer = vec![0u8; IO_BUFFER_BYTES];
-    let mut bytes_read = 0u64;
-    let buffer_size_bytes = u64::try_from(IO_BUFFER_BYTES).map_err(|_| nario_error("nario-v2-buffer-size"))?;
-    let maximum_read_count = metadata
-        .nar_size
-        .div_ceil(buffer_size_bytes)
-        .checked_add(1)
-        .ok_or_else(|| nario_error("nario-v2-read-count-overflow"))?;
-    for _read_index in 0..maximum_read_count {
-        let count = nar_reader.read(&mut buffer).await.map_err(read_error("nario-v2-nar-read"))?;
+    let mut read_total = 0u64;
+    loop {
+        let count = limited.read(&mut buffer).await.map_err(read_error("nario-v2-nar-read"))?;
         if count == 0 {
             break;
         }
         hasher.update(&buffer[..count]);
-        bytes_read = bytes_read.saturating_add(count as u64);
+        read_total = read_total.saturating_add(count as u64);
     }
-    if bytes_read != metadata.nar_size || nar_reader.limit() != 0 {
+    if read_total != metadata.nar_size || limited.limit() != 0 {
         return Err(nario_error(format!("nario-v2-truncated-nar: {}", metadata.store_path)));
     }
-    assert_eq!(bytes_read, metadata.nar_size);
-    assert_eq!(nar_reader.limit(), 0);
     let actual: [u8; 32] = hasher.finalize().into();
     if actual != metadata.nar_sha256 {
         return Err(nario_error(format!("nario-v2-nar-hash-mismatch: {}", metadata.store_path)));
@@ -899,10 +834,8 @@ mod tests {
 
     #[test]
     fn state_core_rejects_marker_duplicate_and_limit() {
-        let limits = NarioV2Limits {
-            records_max: 1,
-            ..NarioV2Limits::default()
-        };
+        let mut limits = NarioV2Limits::default();
+        limits.records_max = 1;
         let seen = BTreeSet::from(["abc-path".to_string()]);
         assert!(
             validate_nario_record_state(2, 0, &seen, None, &limits)

@@ -151,8 +151,7 @@ fn write_matching_seed_exception_toolchain_closure_manifest(dir: &TempDir) -> st
 
 fn write_mismatched_rustc_toolchain_closure_manifest(dir: &TempDir) -> std::path::PathBuf {
     let path = dir.path().join("mismatched-rustc-toolchain-closure.json");
-    let rustc = dir.path().join("not-the-host-rustc");
-    std::fs::copy(resolve_on_path("rustc"), &rustc).unwrap();
+    let rustc = std::path::PathBuf::from("/toolchain/not-the-host-rustc");
     let members = matching_toolchain_members(&rustc);
     write_toolchain_manifest_value(&path, members);
     path

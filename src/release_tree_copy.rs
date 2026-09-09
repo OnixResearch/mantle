@@ -53,11 +53,6 @@ impl PreparedTreeCopy {
         hash_prepared_tree(self)
     }
 
-    pub(crate) fn entry_count(&self) -> Result<u32, RunError> {
-        u32::try_from(self.plan.entries.len())
-            .map_err(|_| RunError::Internal("prepared tree entry count does not fit u32".to_string()))
-    }
-
     pub(crate) fn chapter_transport_entries(&self) -> Result<Vec<ChapterTransportEntryInput>, RunError> {
         let mut entries = Vec::with_capacity(self.plan.entries.len());
         for observation in &self.plan.entries {

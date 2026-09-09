@@ -79,7 +79,12 @@ pub fn observation_identity(observation: &BuildObservation) -> Identity {
     frame.text("schema", &observation.schema);
     frame.text("request", observation.request_identity.as_str());
     frame.text("outcome", observation.outcome.as_str());
-    hash_observation_products(&mut frame, observation);
+    frame.count("product_count", observation.products.len());
+    for product in &observation.products {
+        frame.text("product_name", product.name.as_str());
+        frame.text("product_artifact", product.artifact_identity.as_str());
+        frame.text("product_store", product.store_identity.as_str());
+    }
     frame.text("builder", observation.builder_identity.as_str());
     frame.text("worker", observation.worker_identity.as_str());
     frame.text("store", observation.store_identity.as_str());
@@ -87,20 +92,6 @@ pub fn observation_identity(observation: &BuildObservation) -> Identity {
     if let Some(source) = &observation.cache.source_identity {
         frame.text("cache_source", source.as_str());
     }
-    hash_observation_details(&mut frame, observation);
-    frame.finish()
-}
-
-fn hash_observation_products(frame: &mut Frame, observation: &BuildObservation) {
-    frame.count("product_count", observation.products.len());
-    for product in &observation.products {
-        frame.text("product_name", product.name.as_str());
-        frame.text("product_artifact", product.artifact_identity.as_str());
-        frame.text("product_store", product.store_identity.as_str());
-    }
-}
-
-fn hash_observation_details(frame: &mut Frame, observation: &BuildObservation) {
     frame.count("log_count", observation.logs.len());
     for log in &observation.logs {
         frame.text("log", log.as_str());
@@ -117,4 +108,5 @@ fn hash_observation_details(frame: &mut Frame, observation: &BuildObservation) {
     for non_claim in &observation.non_claims {
         frame.text("non_claim", non_claim);
     }
+    frame.finish()
 }

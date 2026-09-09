@@ -22,7 +22,6 @@ mod types;
 pub use conversion_cache::ConversionCache;
 pub use conversion_cache::ConversionEntry;
 pub use conversion_cache::InsertCaEntry;
-pub use conversion_cache::PendingEntry;
 pub use convert::ResolvedDerivationRequest;
 pub use convert::convert;
 pub use convert::resolve_derivation_registration;

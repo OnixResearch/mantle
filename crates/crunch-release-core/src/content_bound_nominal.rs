@@ -39,7 +39,7 @@ impl ContentBoundRepositoryId {
     pub fn new(value: impl Into<String>) -> Result<Self, ContentBoundNominalError> {
         let value = value.into();
         let components = value.split('/');
-        let is_valid = !value.is_empty()
+        let valid = !value.is_empty()
             && value.len() <= MAX_REPOSITORY_ID_BYTES
             && value.trim() == value
             && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-' | b'/'))
@@ -47,7 +47,7 @@ impl ContentBoundRepositoryId {
             && components
                 .into_iter()
                 .all(|component| !component.is_empty() && component != "." && component != "..");
-        if !is_valid {
+        if !valid {
             return Err(ContentBoundNominalError::RepositoryIdInvalid);
         }
         Ok(Self(value))
@@ -64,13 +64,13 @@ pub struct ContentBoundRequirementId(String);
 impl ContentBoundRequirementId {
     pub fn new(value: impl Into<String>) -> Result<Self, ContentBoundNominalError> {
         let value = value.into();
-        let is_valid = !value.is_empty()
+        let valid = !value.is_empty()
             && value.len() <= MAX_REQUIREMENT_ID_BYTES
             && value.contains('.')
             && value
                 .bytes()
                 .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b'-'));
-        if !is_valid {
+        if !valid {
             return Err(ContentBoundNominalError::RequirementIdInvalid);
         }
         Ok(Self(value))
@@ -87,11 +87,11 @@ pub struct ContentBoundReleaseId(String);
 impl ContentBoundReleaseId {
     pub fn new(value: impl Into<String>) -> Result<Self, ContentBoundNominalError> {
         let value = value.into();
-        let is_valid = !value.is_empty()
+        let valid = !value.is_empty()
             && value.len() <= MAX_RELEASE_ID_BYTES
             && value.trim() == value
             && !value.chars().any(char::is_control);
-        if !is_valid {
+        if !valid {
             return Err(ContentBoundNominalError::ReleaseIdInvalid);
         }
         Ok(Self(value))
@@ -108,11 +108,11 @@ pub struct ContentBoundSpecificationPath(String);
 impl ContentBoundSpecificationPath {
     pub fn new(value: impl Into<String>) -> Result<Self, ContentBoundNominalError> {
         let value = value.into();
-        let is_valid = safe_relative_path(&value)
+        let valid = safe_relative_path(&value)
             && value.len() <= MAX_RELATIVE_PATH_BYTES
             && value.starts_with("cairn/specs/")
             && value.ends_with("/spec.md");
-        if !is_valid {
+        if !valid {
             return Err(ContentBoundNominalError::SpecificationPathInvalid);
         }
         Ok(Self(value))

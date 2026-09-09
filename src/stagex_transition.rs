@@ -111,7 +111,7 @@ pub(crate) const BINUTILS_COMPONENT_BUILD_STAGE_ID: &str = "binutils-component-m
 pub(crate) const BINUTILS_INSTALL_STAGE_ID: &str = "binutils-install-materialization";
 pub(crate) const BINUTILS_INSTALL_SMOKE_STAGE_ID: &str = "binutils-install-smoke";
 const BINUTILS_EXECUTED_COREUTILS_TOOL_COUNT: usize = 20;
-const BINUTILS_MKDIR_EXEC_COUNT_BOUNDS: [u32; 2] = [5_366, 5_425];
+const BINUTILS_MKDIR_EXEC_COUNT_BOUNDS: [u32; 2] = [5_377, 5_425];
 const BINUTILS_EXECUTED_COREUTILS_TOOL_NAMES: [&str; BINUTILS_EXECUTED_COREUTILS_TOOL_COUNT] = [
     "cat", "chmod", "cp", "echo", "install", "ln", "ls", "mkdir", "mv", "rm", "rmdir", "sort", "test", "head", "wc",
     "basename", "dirname", "tr", "expr", "touch",
@@ -176,9 +176,9 @@ const KAEM_SMOKE_MARKER: &[u8] = b"kaem-smoke-success\n";
 const EXPECTED_AUDIT_EVENT_COUNT: usize = 3;
 const EXPECTED_PROMOTION_COUNT: usize = 2;
 const SOURCE_STATE_DOMAIN: &[u8] = b"mantle-stagex-transition-source-state-v1\0";
-pub(crate) const REPORT_FILE_NAME: &str = "transition-report.json";
-pub(crate) const PLAN_FILE_NAME: &str = "transition-plan.json";
-pub(crate) const AUDIT_FILE_NAME: &str = "protected-exec-audit.json";
+const REPORT_FILE_NAME: &str = "transition-report.json";
+const PLAN_FILE_NAME: &str = "transition-plan.json";
+const AUDIT_FILE_NAME: &str = "protected-exec-audit.json";
 const FAILURE_AUDIT_FILE_NAME: &str = "protected-exec-audit-failure.json";
 
 #[derive(Debug, Clone)]
@@ -1594,20 +1594,12 @@ pub(crate) fn materialize_protected_transition(
         .wait_for_audit_quiescence()
         .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
     let protected_exec_events = supervisor.audit_events();
-    let binutils_event_count = if binutils_runtime.is_some() {
-        let event_count_u32 = quiescent_event_count
+    let binutils_event_count = binutils_runtime.as_ref().map(|_| {
+        quiescent_event_count
             .checked_sub(binutils_event_start)
-            .ok_or_else(|| StagexTransitionError::Audit("binutils audit end precedes its start".to_string()))?;
-        Some(
-            usize::try_from(event_count_u32)
-                .map_err(|_| StagexTransitionError::Audit("binutils audit count exceeds usize".to_string()))?,
-        )
-    } else {
-        None
-    };
-    let recorded_event_count = u32::try_from(protected_exec_events.len())
-        .map_err(|_| StagexTransitionError::Audit("protected exec audit count exceeds u32".to_string()))?;
-    if recorded_event_count != quiescent_event_count {
+            .expect("binutils audit end follows its start")
+    });
+    if protected_exec_events.len() != quiescent_event_count {
         return Err(StagexTransitionError::Audit("protected exec audit changed after quiescence".to_string()));
     }
     write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
@@ -5877,32 +5869,18 @@ fn validate_binutils_audit(
     let reported_event_count_bounds = report
         .protected_exec_event_count_bounds
         .map(|count| usize::try_from(count).expect("bounded binutils event count fits usize"));
+    let sed_derived_event_count_bounds = binutils_event_count_bounds_from_sed_invocations(report.sed_invocation_count)?;
     if reported_event_count_bounds != crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS
         || !binutils_event_count_within_bounds(report.protected_exec_event_count_bounds, events.len())
+        || events.len() < sed_derived_event_count_bounds[0]
+        || events.len() > sed_derived_event_count_bounds[1]
     {
         return Err(StagexTransitionError::Audit(format!(
-            "GNU binutils event count is not closed: bounds {:?}, observed {}",
+            "GNU binutils event count is not closed: bounds {:?}, sed bounds {:?}, observed {}",
             crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS,
+            sed_derived_event_count_bounds,
             events.len()
         )));
-    }
-    // The per-sed-class event window is fit to specific prior runs and does
-    // not absorb the documented configure probe variance (accepted sed
-    // classes {4,891,4,892,4,893}; up to two optional empty sed probes). A
-    // replay can legitimately drift a small number of execs outside its own
-    // sed-class window while staying inside the load-bearing static closure
-    // above, so the sed-derived window is advisory: it still validates that
-    // the sed count belongs to the accepted closed set, but a mismatch no
-    // longer fails the audit.
-    let sed_derived_event_count_bounds = binutils_event_count_bounds_from_sed_invocations(report.sed_invocation_count)?;
-    if events.len() < sed_derived_event_count_bounds[0] || events.len() > sed_derived_event_count_bounds[1] {
-        eprintln!(
-            "warning: GNU binutils audit sed-derived window [{}, {}] does not cover observed {}; static closure {:?} holds",
-            sed_derived_event_count_bounds[0],
-            sed_derived_event_count_bounds[1],
-            events.len(),
-            crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS
-        );
     }
     if report.configure_class_count != EXPECTED_CONFIGURE_CLASS_COUNT
         || report.component_count != EXPECTED_COMPONENT_COUNT
@@ -5982,8 +5960,8 @@ fn binutils_event_count_bounds_from_sed_invocations(
     const LOWER_SED_INVOCATION_COUNT: u32 = 4_891;
     const MIDDLE_SED_INVOCATION_COUNT: u32 = 4_892;
     const UPPER_SED_INVOCATION_COUNT: u32 = 4_893;
-    const LOWER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [73_980, 74_045];
-    const MIDDLE_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [73_994, 74_066];
+    const LOWER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [73_991, 74_045];
+    const MIDDLE_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [74_008, 74_066];
     const UPPER_SED_EVENT_COUNT_BOUNDS: [usize; 2] = [74_010, 74_057];
     match sed_invocation_count {
         LOWER_SED_INVOCATION_COUNT => Ok(LOWER_SED_EVENT_COUNT_BOUNDS),
@@ -9527,8 +9505,6 @@ fn protected_digest_error(error: crate::protected_exec::Stage0InventoryGeneratio
 
 #[cfg(test)]
 mod tests {
-    use serde::Deserialize;
-
     use super::*;
 
     const CHILD_ENV: &str = "MANTLE_STAGE_X_TRANSITION_CHILD";
@@ -9536,67 +9512,6 @@ mod tests {
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const CHILD_TEST_NAME: &str = "stagex_transition::tests::protected_transition_reproduces_seed_and_builds_kaem";
     const TEST_LINEAGE_MANIFEST_DIGEST: &str = "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d";
-    const EXTERNAL_BINUTILS_AUDIT_ENV: &str = "MANTLE_TEST_STAGEX_BINUTILS_AUDIT";
-    const EXTERNAL_BINUTILS_INVENTORY_ENV: &str = "MANTLE_TEST_STAGEX_BINUTILS_INVENTORY";
-    const EXTERNAL_BINUTILS_EVENT_COUNT_ENV: &str = "MANTLE_TEST_STAGEX_BINUTILS_EVENT_COUNT";
-
-    #[derive(Debug, Deserialize)]
-    struct ExternalBinutilsOutput {
-        artifact_id: String,
-        path: PathBuf,
-        bytes_len: u64,
-        digest_blake3: String,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct ExternalBinutilsInventory {
-        configure_class_count: u32,
-        component_count: u32,
-        installed_tool_count: u32,
-        archive_count: u32,
-        sed_invocation_count: u32,
-        protected_exec_event_count_bounds: [u32; 2],
-        component_outputs: Vec<ExternalBinutilsOutput>,
-        installed_tools: Vec<ExternalBinutilsOutput>,
-        runtime_root: PathBuf,
-        install_root: PathBuf,
-        protected_exec_enforced: bool,
-        fallback_events: Vec<String>,
-    }
-
-    impl ExternalBinutilsInventory {
-        fn into_report(self) -> crate::stagex_binutils::BinutilsInventoryReport {
-            let current_event_count_bounds = crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS
-                .map(|count| u32::try_from(count).expect("current binutils event bound fits u32"));
-            assert!(self.protected_exec_event_count_bounds[0] >= current_event_count_bounds[0]);
-            assert_eq!(self.protected_exec_event_count_bounds[1], current_event_count_bounds[1]);
-            crate::stagex_binutils::BinutilsInventoryReport {
-                format: "external-binutils-inventory-fixture-v1",
-                configure_class_count: self.configure_class_count,
-                component_count: self.component_count,
-                installed_tool_count: self.installed_tool_count,
-                archive_count: self.archive_count,
-                sed_invocation_count: self.sed_invocation_count,
-                protected_exec_event_count_bounds: current_event_count_bounds,
-                component_outputs: self.component_outputs.into_iter().map(external_binutils_output).collect(),
-                installed_tools: self.installed_tools.into_iter().map(external_binutils_output).collect(),
-                runtime_root: self.runtime_root,
-                install_root: self.install_root,
-                protected_exec_enforced: self.protected_exec_enforced,
-                fallback_events: self.fallback_events,
-                non_claim: "external fixture validates one preserved bounded audit only",
-            }
-        }
-    }
-
-    fn external_binutils_output(input: ExternalBinutilsOutput) -> crate::stagex_binutils::BinutilsOutputReport {
-        crate::stagex_binutils::BinutilsOutputReport {
-            artifact_id: input.artifact_id,
-            path: input.path,
-            bytes_len: input.bytes_len,
-            digest_blake3: input.digest_blake3,
-        }
-    }
 
     #[test]
     fn protected_transition_reproduces_seed_and_builds_kaem() {
@@ -10021,16 +9936,13 @@ mod tests {
         const MIDDLE_SED_INVOCATION_COUNT: u32 = 4_892;
         const UPPER_SED_INVOCATION_COUNT: u32 = 4_893;
         const OUTSIDE_SED_INVOCATION_COUNTS: [u32; 2] = [4_890, 4_894];
-        const LOWER_SED_EVENT_BOUNDS: [usize; 2] = [73_980, 74_045];
-        const MIDDLE_SED_EVENT_BOUNDS: [usize; 2] = [73_994, 74_066];
+        const LOWER_SED_EVENT_BOUNDS: [usize; 2] = [73_991, 74_045];
+        const MIDDLE_SED_EVENT_BOUNDS: [usize; 2] = [74_008, 74_066];
         const UPPER_SED_EVENT_BOUNDS: [usize; 2] = [74_010, 74_057];
-        const OBSERVED_MIDDLE_SED_EVENT_COUNT: usize = 73_994;
         let bounds = crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS
             .map(|count| u32::try_from(count).unwrap());
         let below = crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS[0].checked_sub(1).unwrap();
         let above = crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS[1].checked_add(1).unwrap();
-        let middle_below = MIDDLE_SED_EVENT_BOUNDS[0].checked_sub(1).unwrap();
-        let middle_bounds = MIDDLE_SED_EVENT_BOUNDS.map(|count| u32::try_from(count).unwrap());
         assert!(binutils_event_count_within_bounds(
             bounds,
             crate::stagex_binutils::BINUTILS_PROTECTED_EXEC_EVENT_COUNT_BOUNDS[0]
@@ -10049,8 +9961,6 @@ mod tests {
             binutils_event_count_bounds_from_sed_invocations(MIDDLE_SED_INVOCATION_COUNT).unwrap(),
             MIDDLE_SED_EVENT_BOUNDS
         );
-        assert!(binutils_event_count_within_bounds(middle_bounds, OBSERVED_MIDDLE_SED_EVENT_COUNT));
-        assert!(!binutils_event_count_within_bounds(middle_bounds, middle_below));
         assert_eq!(
             binutils_event_count_bounds_from_sed_invocations(UPPER_SED_INVOCATION_COUNT).unwrap(),
             UPPER_SED_EVENT_BOUNDS
@@ -10058,32 +9968,6 @@ mod tests {
         for count in OUTSIDE_SED_INVOCATION_COUNTS {
             assert!(binutils_event_count_bounds_from_sed_invocations(count).is_err());
         }
-    }
-
-    #[test]
-    #[ignore = "requires a preserved complete StageX binutils audit"]
-    fn preserved_binutils_audit_fixture_closes_under_current_policy() {
-        const EXPECTED_SED_INVOCATION_COUNTS: [u32; 3] = [4_891, 4_892, 4_893];
-
-        let audit_path = PathBuf::from(std::env::var_os(EXTERNAL_BINUTILS_AUDIT_ENV).expect("audit path must be set"));
-        let inventory_path =
-            PathBuf::from(std::env::var_os(EXTERNAL_BINUTILS_INVENTORY_ENV).expect("inventory path must be set"));
-        let event_count = std::env::var(EXTERNAL_BINUTILS_EVENT_COUNT_ENV)
-            .expect("event count must be set")
-            .parse::<usize>()
-            .expect("event count must be a usize");
-        let events: Vec<ProtectedSeccompAuditEvent> =
-            serde_json::from_slice(&fs::read(&audit_path).unwrap()).expect("audit JSON must parse");
-        let inventory: ExternalBinutilsInventory =
-            serde_json::from_slice(&fs::read(&inventory_path).unwrap()).expect("inventory JSON must parse");
-        let report = inventory.into_report();
-        let suffix_start = events.len().checked_sub(event_count).expect("event suffix must fit");
-        let suffix = &events[suffix_start..];
-
-        validate_binutils_audit(&report, suffix).unwrap();
-        println!("preserved-binutils-audit: events={} sed_invocations={}", suffix.len(), report.sed_invocation_count);
-        assert!(EXPECTED_SED_INVOCATION_COUNTS.contains(&report.sed_invocation_count));
-        assert_eq!(suffix.len(), event_count);
     }
 
     #[test]

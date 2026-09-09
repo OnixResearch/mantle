@@ -589,427 +589,6 @@
   "schema": "mantle-operator-surface-inventory-v1",
   "surfaces": [
     {
-      "canonical": "bootstrap radiance-reference",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--base-store",
-        "--help",
-        "--json",
-        "--log-level",
-        "--nix-compat",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
-      "canonical": "bootstrap radiance-reference prepare",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--base-store",
-        "--bootstrap-compiler-checkout",
-        "--cohort-out",
-        "--emulator-checkout",
-        "--git",
-        "--help",
-        "--json",
-        "--log-level",
-        "--nix-compat",
-        "--radiance-checkout",
-        "--source-bundle-out",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "project-files",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
-      "canonical": "bootstrap radiance-reference prove",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--base-store",
-        "--cc",
-        "--cc-driver",
-        "--cohort",
-        "--crt-dir",
-        "--expected-cohort-blake3",
-        "--expected-source-bundle-blake3",
-        "--help",
-        "--json",
-        "--libgcc-dir",
-        "--linker",
-        "--log-level",
-        "--nix-compat",
-        "--output",
-        "--source-bundle",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "project-files",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
-      "canonical": "bootstrap radiance-reference verify",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--base-store",
-        "--help",
-        "--json",
-        "--log-level",
-        "--nix-compat",
-        "--output",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
-      "canonical": "remote gateway",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--base-store",
-        "--help",
-        "--json",
-        "--log-level",
-        "--nix-compat",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
-      "canonical": "remote gateway api-dispatch-stdio-once",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--authority",
-        "--base-store",
-        "--cursor-key-fd",
-        "--help",
-        "--json",
-        "--log-level",
-        "--nix-compat",
-        "--secret-manifest",
-        "--secret-profile",
-        "--secret-provider",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "store-state",
-      "network": "optional",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
-      "canonical": "remote gateway api-stdio-once",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--base-store",
-        "--help",
-        "--json",
-        "--log-level",
-        "--nix-compat",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
-      "canonical": "remote gateway metadata",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--base-store",
-        "--help",
-        "--json",
-        "--log-level",
-        "--nix-compat",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
-      "canonical": "remote gateway nix-stdio-once",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--authority",
-        "--base-store",
-        "--help",
-        "--json",
-        "--log-level",
-        "--nix-compat",
-        "--policy",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--trusted-store-key",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "store-state",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
-      "canonical": "remote gateway plan",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--base-store",
-        "--help",
-        "--json",
-        "--log-level",
-        "--nix-compat",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
-      "canonical": "remote gateway status",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--base-store",
-        "--help",
-        "--json",
-        "--log-level",
-        "--nix-compat",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
       "canonical": "artifact",
       "compatibility_spellings": [],
       "compatibility_state": "canonical",
@@ -2187,43 +1766,6 @@
       ]
     },
     {
-      "canonical": "bootstrap trust-report",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--base-store",
-        "--help",
-        "--json",
-        "--log-level",
-        "--nix-compat",
-        "--proof-root",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "none",
-      "network": "optional",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
       "canonical": "bootstrap validate",
       "compatibility_spellings": [],
       "compatibility_state": "canonical",
@@ -2282,7 +1824,6 @@
         "--builder",
         "--builder-arg",
         "--builder-program",
-        "--evaluation-stream",
         "--fix",
         "--help",
         "--import-path",
@@ -4166,161 +3707,6 @@
       ]
     },
     {
-      "canonical": "mantlepkgs version",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--base-store",
-        "--help",
-        "--json",
-        "--log-level",
-        "--nix-compat",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
-      "canonical": "mantlepkgs version index",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--base-store",
-        "--cohort",
-        "--help",
-        "--json",
-        "--log-level",
-        "--nix-compat",
-        "--nix-program",
-        "--output-root",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
-      "canonical": "mantlepkgs version recheck",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--base-store",
-        "--help",
-        "--json",
-        "--log-level",
-        "--nix-compat",
-        "--nix-program",
-        "--output-root",
-        "--plan",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--template-manifest",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
-      "canonical": "mantlepkgs version resolve",
-      "compatibility_spellings": [],
-      "compatibility_state": "canonical",
-      "exit_classes": [
-        "policy-rejection",
-        "success",
-        "usage"
-      ],
-      "flags": [
-        "--base-store",
-        "--help",
-        "--index",
-        "--json",
-        "--log-level",
-        "--nix-compat",
-        "--output-root",
-        "--policy",
-        "--requests",
-        "--state-dir",
-        "--store",
-        "--store-prefix",
-        "--verbose",
-        "-h",
-        "-v"
-      ],
-      "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
-      "migration_reference": null,
-      "mutation": "none",
-      "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": null,
-      "role": "public-command",
-      "support_tier": "advanced",
-      "supported_operations": [
-        "invoke",
-        "read-help"
-      ]
-    },
-    {
       "canonical": "nix-free-demo",
       "compatibility_spellings": [],
       "compatibility_state": "canonical",
@@ -5048,7 +4434,6 @@
         "--requirement-evidence-input",
         "--requirement-evidence-root",
         "--source-acquisition-url",
-        "--source-review-attachment",
         "--stack-provenance-binary",
         "--stack-provenance-sidecar",
         "--stack-provenance-valence-receipt",
@@ -5615,19 +5000,10 @@
         "--require-reproducible",
         "--require-stagex-no-quorum",
         "--requirement-coverage",
-        "--review-author-key",
-        "--review-claim-root",
-        "--review-preset",
-        "--review-producer-id",
-        "--review-threshold",
-        "--reviewed-source",
-        "--revoked-reviewer",
-        "--source-review",
         "--stack-provenance",
         "--state-dir",
         "--store",
         "--store-prefix",
-        "--trusted-reviewer",
         "--verbose",
         "-h",
         "-v"
@@ -6521,12 +5897,9 @@
         "--offline-source-state-dir",
         "--out",
         "--proof-bwrap",
-        "--proof-checkpoint-import-attempt",
-        "--proof-checkpoint-store",
         "--proof-disk-bytes-max",
         "--proof-elapsed-seconds-max",
         "--proof-exec-events-max",
-        "--proof-native-checkpoint-attempt",
         "--proof-sandbox-shell",
         "--proof-source-records-max",
         "--rust-source-provider",
@@ -7337,7 +6710,7 @@
       "network": "none",
       "owner": "mantle-cli",
       "removal_gate": null,
-      "role": "public-command",
+      "role": "experimental-command",
       "support_tier": "advanced",
       "supported_operations": [
         "invoke",
@@ -7368,13 +6741,13 @@
         "-v"
       ],
       "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
+      "machine_schema": "mantle-composition-plan-v1",
       "migration_reference": null,
       "mutation": "none",
       "network": "none",
       "owner": "mantle-cli",
       "removal_gate": null,
-      "role": "public-command",
+      "role": "experimental-command",
       "support_tier": "advanced",
       "supported_operations": [
         "invoke",
@@ -7406,13 +6779,13 @@
         "-v"
       ],
       "kind": "command",
-      "machine_schema": "mantle-command-json-v1",
+      "machine_schema": "mantle-composition-receipt-v1",
       "migration_reference": null,
-      "mutation": "none",
+      "mutation": "store-state",
       "network": "none",
       "owner": "mantle-cli",
       "removal_gate": null,
-      "role": "public-command",
+      "role": "experimental-command",
       "support_tier": "advanced",
       "supported_operations": [
         "invoke",
@@ -8095,7 +7468,7 @@
       ]
     },
     {
-      "canonical": "crunch.ncl",
+      "canonical": ".crunch/",
       "compatibility_spellings": [],
       "compatibility_state": "compatibility-read-write",
       "exit_classes": [],
@@ -8106,8 +7479,8 @@
       "mutation": "project-files",
       "network": "none",
       "owner": "mantle-project",
-      "removal_gate": "accepted project-file migration with consumer evidence",
-      "role": "legacy-project-input",
+      "removal_gate": "accepted project-state migration with consumer and rollback evidence",
+      "role": "legacy-project-state-directory",
       "support_tier": "compatibility",
       "supported_operations": [
         "read",
@@ -8115,7 +7488,7 @@
       ]
     },
     {
-      "canonical": "crunch-project.ncl",
+      "canonical": ".crunch/inputs.ncl",
       "compatibility_spellings": [],
       "compatibility_state": "compatibility-read-write",
       "exit_classes": [],
@@ -8126,8 +7499,8 @@
       "mutation": "project-files",
       "network": "none",
       "owner": "mantle-project",
-      "removal_gate": "accepted project-file migration with consumer evidence",
-      "role": "legacy-project-input",
+      "removal_gate": "accepted generated-input migration with consumer evidence",
+      "role": "legacy-generated-project-input",
       "support_tier": "compatibility",
       "supported_operations": [
         "read",
@@ -8155,22 +7528,43 @@
       ]
     },
     {
-      "canonical": "CRUNCH_STATE_DIR",
+      "canonical": "crunch-project.ncl",
       "compatibility_spellings": [],
       "compatibility_state": "compatibility-read-write",
       "exit_classes": [],
       "flags": [],
-      "kind": "environment",
+      "kind": "project-file",
       "machine_schema": null,
       "migration_reference": "docs/mantle-naming.md",
-      "mutation": "none",
+      "mutation": "project-files",
       "network": "none",
-      "owner": "mantle-cli",
-      "removal_gate": "accepted environment migration with consumer evidence",
-      "role": "legacy-environment-input",
+      "owner": "mantle-project",
+      "removal_gate": "accepted project-file migration with consumer evidence",
+      "role": "legacy-project-input",
       "support_tier": "compatibility",
       "supported_operations": [
-        "read"
+        "read",
+        "write"
+      ]
+    },
+    {
+      "canonical": "crunch.ncl",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-write",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "project-file",
+      "machine_schema": null,
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "project-files",
+      "network": "none",
+      "owner": "mantle-project",
+      "removal_gate": "accepted build-file migration with consumer evidence",
+      "role": "legacy-build-input",
+      "support_tier": "compatibility",
+      "supported_operations": [
+        "read",
+        "write"
       ]
     },
     {
@@ -8193,13 +7587,186 @@
       ]
     },
     {
-      "canonical": "crunch-doctor-report-v1",
+      "canonical": "CRUNCH_LOG_DIR",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-write",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "environment",
+      "machine_schema": null,
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-cli",
+      "removal_gate": "accepted log-directory migration with consumer evidence",
+      "role": "legacy-environment-input",
+      "support_tier": "compatibility",
+      "supported_operations": [
+        "read"
+      ]
+    },
+    {
+      "canonical": "CRUNCH_NO_FUSE",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-write",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "environment",
+      "machine_schema": null,
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-build",
+      "removal_gate": "accepted sandbox-mode migration with host evidence",
+      "role": "legacy-sandbox-mode-input",
+      "support_tier": "compatibility",
+      "supported_operations": [
+        "read"
+      ]
+    },
+    {
+      "canonical": "CRUNCH_STATE_DIR",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-write",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "environment",
+      "machine_schema": null,
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-cli",
+      "removal_gate": "accepted state-directory migration with consumer evidence",
+      "role": "legacy-environment-input",
+      "support_tier": "compatibility",
+      "supported_operations": [
+        "read"
+      ]
+    },
+    {
+      "canonical": "CRUNCH_STAGE0_SEED_BUILD_TOOLS",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-write",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "environment",
+      "machine_schema": null,
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-bootstrap",
+      "removal_gate": "accepted stage0 inventory migration with proof evidence",
+      "role": "legacy-stage0-seed-input",
+      "support_tier": "internal",
+      "supported_operations": [
+        "read"
+      ]
+    },
+    {
+      "canonical": "CRUNCH_STAGE0_SEED_SANDBOX_ENTRY",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-write",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "environment",
+      "machine_schema": null,
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-bootstrap",
+      "removal_gate": "accepted stage0 inventory migration with proof evidence",
+      "role": "legacy-stage0-seed-input",
+      "support_tier": "internal",
+      "supported_operations": [
+        "read"
+      ]
+    },
+    {
+      "canonical": "CRUNCH_STAGE0_SEED_SANDBOX_SHELL",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-write",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "environment",
+      "machine_schema": null,
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-bootstrap",
+      "removal_gate": "accepted stage0 inventory migration with proof evidence",
+      "role": "legacy-stage0-seed-input",
+      "support_tier": "internal",
+      "supported_operations": [
+        "read"
+      ]
+    },
+    {
+      "canonical": "CRUNCH_STAGE0_SEED_TOOLCHAIN_ROOT",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-write",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "environment",
+      "machine_schema": null,
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-bootstrap",
+      "removal_gate": "accepted stage0 inventory migration with proof evidence",
+      "role": "legacy-stage0-seed-input",
+      "support_tier": "internal",
+      "supported_operations": [
+        "read"
+      ]
+    },
+    {
+      "canonical": "crunch-bootstrap-parity-gap-report-v1",
       "compatibility_spellings": [],
       "compatibility_state": "compatibility-read-only",
       "exit_classes": [],
       "flags": [],
       "kind": "machine-schema",
-      "machine_schema": "crunch-doctor-report-v1",
+      "machine_schema": "crunch-bootstrap-parity-gap-report-v1",
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-bootstrap",
+      "removal_gate": "schema migration and reader evidence",
+      "role": "legacy-machine-output",
+      "support_tier": "compatibility",
+      "supported_operations": [
+        "produce",
+        "read"
+      ]
+    },
+    {
+      "canonical": "crunch-bootstrap-validation-v1",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-only",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "machine-schema",
+      "machine_schema": "crunch-bootstrap-validation-v1",
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-bootstrap",
+      "removal_gate": "schema migration and reader evidence",
+      "role": "legacy-machine-output",
+      "support_tier": "compatibility",
+      "supported_operations": [
+        "produce",
+        "read"
+      ]
+    },
+    {
+      "canonical": "crunch-build-plan-v1",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-only",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "machine-schema",
+      "machine_schema": "crunch-build-plan-v1",
       "migration_reference": "docs/mantle-naming.md",
       "mutation": "none",
       "network": "none",
@@ -8233,6 +7800,66 @@
       ]
     },
     {
+      "canonical": "crunch-doctor-report-v1",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-only",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "machine-schema",
+      "machine_schema": "crunch-doctor-report-v1",
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-cli",
+      "removal_gate": "schema migration and reader evidence",
+      "role": "legacy-machine-output",
+      "support_tier": "compatibility",
+      "supported_operations": [
+        "produce",
+        "read"
+      ]
+    },
+    {
+      "canonical": "crunch-self-hosting-proof-v2",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-only",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "machine-schema",
+      "machine_schema": "crunch-self-hosting-proof-v2",
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-release",
+      "removal_gate": "workflow migration and witness replay evidence",
+      "role": "legacy-proof-workflow-identity",
+      "support_tier": "compatibility",
+      "supported_operations": [
+        "produce",
+        "read"
+      ]
+    },
+    {
+      "canonical": "crunch-stage0-inventory-preflight-v1",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-only",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "machine-schema",
+      "machine_schema": "crunch-stage0-inventory-preflight-v1",
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-bootstrap",
+      "removal_gate": "schema migration and reader evidence",
+      "role": "legacy-machine-output",
+      "support_tier": "compatibility",
+      "supported_operations": [
+        "produce",
+        "read"
+      ]
+    },
+    {
       "canonical": "mantle-runtime-fingerprint-v1",
       "compatibility_spellings": [],
       "compatibility_state": "canonical",
@@ -8247,6 +7874,86 @@
       "removal_gate": null,
       "role": "canonical-machine-output",
       "support_tier": "advanced",
+      "supported_operations": [
+        "produce",
+        "read"
+      ]
+    },
+    {
+      "canonical": "/crunch/store",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-write",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "identifier",
+      "machine_schema": null,
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "store-state",
+      "network": "none",
+      "owner": "mantle-store",
+      "removal_gate": "store-prefix migration and rollback evidence",
+      "role": "legacy-logical-store-prefix",
+      "support_tier": "compatibility",
+      "supported_operations": [
+        "read",
+        "write"
+      ]
+    },
+    {
+      "canonical": "crunch.fetchurl",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-write",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "identifier",
+      "machine_schema": null,
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "store-state",
+      "network": "optional",
+      "owner": "mantle-eval",
+      "removal_gate": "Nickel API migration and consumer evidence",
+      "role": "legacy-nickel-function",
+      "support_tier": "compatibility",
+      "supported_operations": [
+        "invoke",
+        "read"
+      ]
+    },
+    {
+      "canonical": "crunch.self-build",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-only",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "identifier",
+      "machine_schema": null,
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-release",
+      "removal_gate": "workflow identity migration and replay evidence",
+      "role": "legacy-workflow-identity",
+      "support_tier": "compatibility",
+      "supported_operations": [
+        "produce",
+        "read"
+      ]
+    },
+    {
+      "canonical": "not-crunch-bootstrap",
+      "compatibility_spellings": [],
+      "compatibility_state": "compatibility-read-only",
+      "exit_classes": [],
+      "flags": [],
+      "kind": "identifier",
+      "machine_schema": null,
+      "migration_reference": "docs/mantle-naming.md",
+      "mutation": "none",
+      "network": "none",
+      "owner": "mantle-release",
+      "removal_gate": "non-claim schema migration and reader evidence",
+      "role": "legacy-non-claim-token",
+      "support_tier": "compatibility",
       "supported_operations": [
         "produce",
         "read"

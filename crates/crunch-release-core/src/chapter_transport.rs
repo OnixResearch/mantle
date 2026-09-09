@@ -24,13 +24,12 @@ pub const CHAPTER_TRANSPORT_CLAIM_SCOPE: &str = "compressed-transport-identity-a
 pub const CHAPTER_TRANSPORT_MAX_CHAPTERS_COUNT: u32 = 256;
 pub const CHAPTER_TRANSPORT_MAX_MEMBERS_COUNT: u32 = 4_096;
 pub const CHAPTER_TRANSPORT_MAX_PATH_BYTES: u32 = 4_096;
-pub const CHAPTER_TRANSPORT_MAX_INDEX_BYTES: u64 = 33_554_432;
+pub const CHAPTER_TRANSPORT_MAX_INDEX_BYTES: u64 = 32 * 1_024 * 1_024;
 pub const CHAPTER_TRANSPORT_MAX_ARCHIVE_BYTES: u64 = 1_u64 << 40;
 pub const CHAPTER_TRANSPORT_MAX_MEMBER_BYTES: u64 = 1_u64 << 40;
 pub const CHAPTER_TRANSPORT_MAX_UNCOMPRESSED_BYTES: u64 = 1_u64 << 40;
 pub const CHAPTER_TRANSPORT_PERMISSION_MODE_MASK: u32 = 0o777;
 const BLAKE3_HEX_CHARS: usize = 64;
-const ENTRY_SHAPE_BLOCKER_COUNT_MAX: usize = 3;
 const CONTROL_GROUP: &str = "control";
 const SOURCE_GROUP: &str = "source";
 const BINARIES_GROUP: &str = "binaries";
@@ -85,7 +84,7 @@ pub struct ChapterTransportMember {
     pub kind: ChapterTransportEntryKind,
     pub mode: u32,
     pub size_bytes: u64,
-    #[serde(default = "no_symlink_target", skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symlink_target: Option<String>,
 }
 
@@ -179,10 +178,6 @@ impl fmt::Display for ChapterTransportError {
     }
 }
 
-fn no_symlink_target() -> Option<String> {
-    None
-}
-
 // r[impl mantle.release_provenance.chapter_transport.plan]
 pub fn plan_chapter_transport(
     mut entries: Vec<ChapterTransportEntryInput>,
@@ -210,7 +205,7 @@ pub fn plan_chapter_transport(
         total_uncompressed_file_bytes: totals.file_bytes,
         chapters,
     };
-    debug_assert!(u32::try_from(index.chapters.len()).is_ok_and(|count| count == index.chapter_count));
+    debug_assert_eq!(index.chapter_count, u32::try_from(index.chapters.len()).unwrap_or(u32::MAX));
     debug_assert!(index.chapters.first().is_some_and(|chapter| chapter.ordinal == 0));
     Ok(index)
 }
@@ -242,13 +237,11 @@ fn validate_plan_header(entries: &[ChapterTransportEntryInput], digest: &str) ->
             format!("chapter transport member count {entry_count} exceeds {CHAPTER_TRANSPORT_MAX_MEMBERS_COUNT}"),
         ));
     }
-    debug_assert!(blockers.len() <= entries.len().saturating_add(1));
-    debug_assert!(entry_count <= u32::try_from(entries.len()).unwrap_or_default());
     blockers
 }
 
 fn validate_input_shapes(entries: &[ChapterTransportEntryInput]) -> Vec<ChapterTransportBlocker> {
-    let mut blockers = Vec::with_capacity(entries.len().saturating_add(1));
+    let mut blockers = Vec::new();
     let mut manifest_count = 0_u32;
     for entry in entries {
         if entry.relative_path == CHAPTER_TRANSPORT_RESERVED_INDEX_PATH {
@@ -277,13 +270,10 @@ fn validate_input_shapes(entries: &[ChapterTransportEntryInput]) -> Vec<ChapterT
             "chapter transport input is missing manifest.json",
         ));
     }
-    debug_assert!(u32::try_from(entries.len()).is_ok_and(|entry_count| manifest_count <= entry_count));
-    debug_assert!(blockers.capacity() >= entries.len());
     blockers
 }
 
 fn validate_entry_shape(entry: &ChapterTransportEntryInput, blockers: &mut Vec<ChapterTransportBlocker>) {
-    let blocker_count_before = blockers.len();
     if entry.mode & !CHAPTER_TRANSPORT_PERMISSION_MODE_MASK != 0 {
         blockers.push(blocker(
             ChapterTransportBlockerKind::InvalidEntryMode,
@@ -304,21 +294,19 @@ fn validate_entry_shape(entry: &ChapterTransportEntryInput, blockers: &mut Vec<C
             ),
         ));
     }
-    let is_shape_valid = match entry.kind {
+    let shape_is_valid = match entry.kind {
         ChapterTransportEntryKind::File => entry.symlink_target.is_none(),
         ChapterTransportEntryKind::Directory => entry.size_bytes == 0 && entry.symlink_target.is_none(),
         ChapterTransportEntryKind::Symlink => entry.size_bytes == 0 && entry.symlink_target.is_some(),
         ChapterTransportEntryKind::Unsupported => false,
     };
-    if !is_shape_valid {
+    if !shape_is_valid {
         blockers.push(blocker(
             ChapterTransportBlockerKind::InvalidEntryShape,
             Some(entry.relative_path.clone()),
             format!("chapter transport member {} has inconsistent kind, size, or link target", entry.relative_path),
         ));
     }
-    debug_assert!(blockers.len() >= blocker_count_before);
-    debug_assert!(blockers.len() <= blocker_count_before.saturating_add(ENTRY_SHAPE_BLOCKER_COUNT_MAX));
 }
 
 fn plan_transport_tree(entries: &[ChapterTransportEntryInput]) -> Result<(), Vec<ChapterTransportBlocker>> {
@@ -405,34 +393,32 @@ struct GroupKey {
 }
 
 fn group_for_path(path: &str) -> GroupKey {
-    debug_assert!(!path.is_empty());
-    let mut components = path.split('/');
-    let first = components.next().unwrap_or_default();
-    let group_key = if path == CHAPTER_TRANSPORT_MANIFEST_PATH {
-        GroupKey {
+    if path == CHAPTER_TRANSPORT_MANIFEST_PATH {
+        return GroupKey {
             role: ChapterTransportRole::Control,
             group: CONTROL_GROUP.to_string(),
-        }
-    } else if first == SOURCE_GROUP {
-        GroupKey {
+        };
+    }
+    let mut components = path.split('/');
+    let first = components.next().unwrap_or_default();
+    if first == SOURCE_GROUP {
+        return GroupKey {
             role: ChapterTransportRole::Source,
             group: SOURCE_GROUP.to_string(),
-        }
-    } else if first == BINARIES_GROUP {
+        };
+    }
+    if first == BINARIES_GROUP {
         let second = components.next();
         let group = second.map_or_else(|| BINARIES_GROUP.to_string(), |name| format!("{BINARIES_GROUP}/{name}"));
-        GroupKey {
+        return GroupKey {
             role: ChapterTransportRole::Binary,
             group,
-        }
-    } else {
-        GroupKey {
-            role: ChapterTransportRole::ArtifactGroup,
-            group: first.to_string(),
-        }
-    };
-    debug_assert!(!group_key.group.is_empty());
-    group_key
+        };
+    }
+    GroupKey {
+        role: ChapterTransportRole::ArtifactGroup,
+        group: first.to_string(),
+    }
 }
 
 fn member_from_input(entry: ChapterTransportEntryInput) -> ChapterTransportMember {
@@ -528,14 +514,11 @@ fn chapter_totals(chapters: &[ChapterTransportChapter]) -> Result<ChapterTotals,
             ),
         )]);
     }
-    let totals = ChapterTotals {
+    Ok(ChapterTotals {
         chapter_count,
         member_count,
         file_bytes,
-    };
-    debug_assert!(u32::try_from(chapters.len()).is_ok_and(|count| count == totals.chapter_count));
-    debug_assert!(totals.file_bytes <= CHAPTER_TRANSPORT_MAX_UNCOMPRESSED_BYTES);
-    Ok(totals)
+    })
 }
 
 pub fn canonical_chapter_transport_index(index: &ChapterTransportIndex) -> Result<Vec<u8>, ChapterTransportError> {
@@ -578,9 +561,9 @@ pub fn validate_chapter_transport_index(index: &ChapterTransportIndex) -> Result
 fn flatten_index_members(
     index: &ChapterTransportIndex,
 ) -> Result<Vec<ChapterTransportEntryInput>, ChapterTransportError> {
-    let expected_member_count = usize::try_from(index.member_count)
+    let member_capacity = usize::try_from(index.member_count)
         .map_err(|_| transport_error("chapter transport index member count overflowed usize"))?;
-    let mut inputs = Vec::with_capacity(expected_member_count);
+    let mut inputs = Vec::with_capacity(member_capacity);
     for chapter in &index.chapters {
         for member in &chapter.members {
             inputs.push(ChapterTransportEntryInput {
@@ -592,15 +575,13 @@ fn flatten_index_members(
             });
         }
     }
-    if inputs.len() != expected_member_count {
+    if inputs.len() != member_capacity {
         return Err(transport_error(format!(
             "chapter transport index member count {} does not match {}",
             index.member_count,
             inputs.len()
         )));
     }
-    debug_assert_eq!(inputs.len(), expected_member_count);
-    debug_assert!(inputs.capacity() >= expected_member_count);
     Ok(inputs)
 }
 
@@ -684,8 +665,6 @@ pub fn validate_chapter_transport_receipt(receipt: &ChapterTransportReceipt) -> 
     if receipt.non_claims != chapter_transport_non_claims() {
         return Err(transport_error("chapter transport receipt non-claims are incomplete or out of order"));
     }
-    debug_assert!(receipt.chapter_count <= CHAPTER_TRANSPORT_MAX_CHAPTERS_COUNT);
-    debug_assert!(receipt.member_count <= CHAPTER_TRANSPORT_MAX_MEMBERS_COUNT);
     Ok(())
 }
 

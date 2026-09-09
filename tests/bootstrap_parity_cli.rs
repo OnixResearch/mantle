@@ -56,8 +56,6 @@ const FINAL_ROW_FIXTURE_PATHS: &[&str] = &[
 const FINAL_SOURCE_PATH: &str = "bootstrap/binutils-full.ncl";
 const FINAL_RECEIPT_PATH: &str = "bootstrap/evidence/final-native-musl-binutils-row-v1.json";
 const FINAL_ACCEPTANCE_PATH: &str = "bootstrap/evidence/final-native-musl-binutils-acceptance-v1.json";
-const V98_PLANNED_ACTION_COUNT: u64 = 1_914;
-const V98_OBSERVED_EVENT_COUNT: u64 = 478_870;
 
 fn copy_binutils_row_fixture() -> TempDir {
     let fixture = TempDir::new().unwrap();
@@ -396,23 +394,38 @@ fn bootstrap_parity_report_requires_binutils_row_receipt_for_live_bootstrap_and_
 }
 
 #[test]
-fn bootstrap_parity_report_accepts_bound_v98_self_build_evidence() {
-    let report = parity_report(Path::new(env!("CARGO_MANIFEST_DIR")));
+fn bootstrap_parity_report_rejects_legacy_self_build_proof_without_unblocking_axes() {
+    let repo = env!("CARGO_MANIFEST_DIR");
+
+    let output = crunch()
+        .arg("--json")
+        .arg("bootstrap")
+        .arg("parity-report")
+        .current_dir(repo)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let report: Value = serde_json::from_slice(&output).unwrap();
     let row = row_by_id(&report, "crunch.self-build");
-    assert_eq!(row["status"], "complete");
-    assert_eq!(row["provider_kind"], "full-source");
-    assert_eq!(row["proof_details"]["planned_actions"], V98_PLANNED_ACTION_COUNT);
-    assert_eq!(row["proof_details"]["matched_actions"], V98_PLANNED_ACTION_COUNT);
-    assert_eq!(row["proof_details"]["observed_events"], V98_OBSERVED_EVENT_COUNT);
-    assert_eq!(row["proof_details"]["matched_events"], V98_OBSERVED_EVENT_COUNT);
-    assert_eq!(row["proof_details"]["local_only"], true);
+    assert_eq!(row["status"], "blocked");
+    assert_eq!(row["provider_kind"], "unknown");
+    assert!(row["proof_details"].is_null());
+    assert!(row["notes"].as_str().unwrap().contains("mantle-deterministic-proof-receipt-v2"));
 
     let guix = report["axes"].as_array().unwrap().iter().find(|axis| axis["axis"] == "guix").unwrap();
     let stagex = report["axes"].as_array().unwrap().iter().find(|axis| axis["axis"] == "stagex").unwrap();
-    assert_eq!(guix["complete"], true);
-    assert_eq!(stagex["complete"], true);
-    assert!(guix["blocking_rows"].as_array().unwrap().is_empty());
-    assert!(stagex["blocking_rows"].as_array().unwrap().is_empty());
+    assert_eq!(guix["complete"], false);
+    assert_eq!(stagex["complete"], false);
+    assert!(guix["blocking_rows"].as_array().unwrap().contains(&Value::String("crunch.self-build".to_string())));
+    assert!(
+        stagex["blocking_rows"]
+            .as_array()
+            .unwrap()
+            .contains(&Value::String("crunch.self-build".to_string()))
+    );
 }
 
 #[test]
@@ -429,8 +442,7 @@ fn bootstrap_parity_report_accepts_independently_receipted_final_native_rows() {
     let guix = report["axes"].as_array().unwrap().iter().find(|axis| axis["axis"] == "guix").unwrap();
     assert_eq!(live["complete"], true);
     assert!(live["blocking_rows"].as_array().unwrap().is_empty());
-    assert_eq!(guix["complete"], true);
-    assert!(guix["blocking_rows"].as_array().unwrap().is_empty());
+    assert_eq!(guix["complete"], false);
     assert!(!live["blocking_rows"].as_array().unwrap().contains(&Value::String("full-musl-binutils".to_string())));
     assert!(!guix["blocking_rows"].as_array().unwrap().contains(&Value::String("full-musl-binutils".to_string())));
 }

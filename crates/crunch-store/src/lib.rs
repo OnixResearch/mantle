@@ -4,8 +4,8 @@
 //!
 //! Owns service construction, cache checking, realization (castore -> disk
 //! export), CA mapping persistence, and store queries. Build and pipeline
-//! consumers receive narrow capability values. `StoreHandle` remains an
-//! internal implementation and fixture surface, not runtime application authority.
+//! consumers receive narrow capability values. Shell code can retain the
+//! compatibility `StoreHandle` for explicit orchestration.
 
 mod action_result;
 mod archive;
@@ -19,7 +19,6 @@ mod completeness;
 mod composition;
 mod error;
 mod export;
-mod gateway;
 mod gc;
 mod handle;
 mod http_closure;
@@ -79,29 +78,14 @@ pub use build_io::hash_host_path;
 pub use ca_mapping::CaMappings;
 pub use ca_mapping::OutputMap;
 pub use capability::ActionResultPort;
-pub use capability::AttestationStore;
 pub use capability::BuildServiceStore;
 pub use capability::BuildStore;
 pub use capability::BuilderStoreParts;
-pub use capability::ForeignRealizationStore;
 pub use capability::OutputLookup;
-pub use capability::PathInfoAdministration;
 pub use capability::PipelineStoreParts;
-pub use capability::PlanningStoreParts;
-pub use capability::ProvenanceStore;
-pub use capability::PublicationExecution;
 pub use capability::RootRegistry;
-pub use capability::RustCacheStore;
 pub use capability::SourceAdmission;
-pub use capability::SourceStore;
 pub use capability::StoreAdmin;
-pub use capability::StoreAdministration;
-pub use capability::TransferNarObservation;
-pub use capability::TransferStore;
-pub use capability::open_overlay_pipeline_store_parts;
-pub use capability::open_pipeline_store_parts;
-pub use capability::open_planning_store_parts;
-pub use capability::open_raw_seed_store_parts;
 pub use closure::ClosureResolution;
 pub use closure::MAX_CLOSURE_DEPTH;
 pub use closure::resolve_closure;
@@ -112,9 +96,6 @@ pub use composition::realize_composition;
 pub use error::Error;
 pub use export::MAX_EXPORT_DEPTH;
 pub use export::export_castore_to_disk;
-pub use gateway::GatewayImportRequest;
-pub use gateway::GatewayNar;
-pub use gateway::GatewayStore;
 pub use gc::GcBaseReachability;
 pub use gc::GcContext;
 pub use gc::GcOperationKind;
@@ -202,16 +183,10 @@ pub use provenance::PurePayloadInput;
 pub use provenance::classify_payload;
 pub use provenance::scan_castore_provenance;
 pub use provenance::validate_foreign_provenance_policy;
-pub use publisher::AdmittedOutput;
 pub use publisher::NoopPublisher;
-pub use publisher::PublicationDisposition;
-pub use publisher::PublicationEffect;
-pub use publisher::PublicationEffectPlan;
-pub use publisher::PublicationObservation;
 pub use publisher::Publisher;
 #[cfg(test)]
 pub use publisher::RecordingPublisher;
-pub use pull::HttpClosureImportValidation;
 pub use pull::HttpClosurePullReport;
 pub use pull::PullOptions;
 pub use pull::PullReport;

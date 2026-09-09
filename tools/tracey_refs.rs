@@ -1,17 +1,5 @@
 // Mantle Tracey coverage bridge.
 //
-// Build interchange dependency compatibility lives in the contract Cargo
-// manifest and flake.nix. The independently locked fixtures under
-// fixtures/mantle-build-contract/hash-compat verify original identities.
-// Published Neural Stream linkage is recorded in
-// evidence/build-contract-hash-compatibility-2026-09-06.md.
-// r[impl mantle.build_interchange.hash_dependency]
-// r[impl mantle.build_interchange.hash_matrix]
-// r[impl mantle.build_interchange.linked_consumer]
-// r[verify mantle.build_interchange.hash_dependency]
-// r[verify mantle.build_interchange.hash_matrix]
-// r[verify mantle.build_interchange.linked_consumer]
-//
 // Native dynamic derivation admission bridge.
 //
 // r[impl dynamic_derivation_admission.staged_core]
@@ -513,62 +501,6 @@
 // The evidence remains bounded by its explicit compiler/seed correctness,
 // independent rebuild, release reproducibility, deployment, and Cargo non-claims.
 
-// Promoted source-built provider checkpoint bridge.
-//
-// r[impl bootstrap_inventory.source_built_mantle_checkpoint_reuse]
-// Implemented by the pure stage-authority core in
-// `src/source_built_fixed_point_checkpoint.rs`, the bounded publication/restore
-// shell in `src/source_built_fixed_point_checkpoint_shell.rs`, and proof/receipt
-// integration in `src/{source_built_fixed_point_shell,source_built_fixed_point_receipt}.rs`.
-//
-// r[verify bootstrap_inventory.source_built_mantle_checkpoint_reuse]
-// Positive and adversarial tests cover stage-specific lookup, dev rejection,
-// payload mutation, partial candidates, atomic idempotent publication,
-// fresh-root restore, legacy-attempt recipe projection, and receipt origins.
-
-// Full-bootstrap parity promotion bridge.
-//
-// r[impl bootstrap_inventory.full_bootstrap_parity_promotion]
-// Implemented by the independent evidence collector in `src/bootstrap_parity.rs`,
-// the pure V98 linkage core in `src/source_built_parity_promotion.rs`, the
-// bounded shell in `src/source_built_parity_promotion_shell.rs`, and the
-// separately implemented exporter and verifier under `scripts/`.
-//
-// r[verify bootstrap_inventory.full_bootstrap_parity_promotion]
-// Verified by five native row domains, five action adapters, 1,914 matched
-// actions, 478,870 matched events, 31 negative standalone cases, release
-// external-evidence handoff without witness quorum, and all-axis CLI tests.
-// Runtime adoption evidence remains owned by the active checkpoint change.
-
-// Radiance external-reference bridge.
-//
-// r[impl bootstrap_inventory.radiance_reference]
-// Implemented by the no-std cohort, plan, convergence, and receipt core in
-// `crates/crunch-radiance-reference-core`, connected preparation in
-// `src/radiance/source.rs`, protected native builds under
-// `src/radiance/runtime/native/`, stage execution in
-// `src/radiance/runtime/execution.rs`, the fd-close plus nonlocal-socket
-// filter in `src/radiance/runtime/network.rs`, and immutable publication in
-// `src/radiance/publication.rs`.
-//
-// r[verify bootstrap_inventory.radiance_reference]
-// Verified by core cohort, plan, lineage, convergence, zero-event,
-// publication, tamper, and claim-boundary tests; shell profile, checkout,
-// digest, CLI, and filter tests; the architecture checker with positive and
-// negative fixtures; and the live offline proof receipt.
-
-// Full-check blocker closure bridge.
-//
-// r[impl bootstrap_inventory.full_check_blocker_closure]
-// Implemented by exact V98 file identities and structural near-miss rules in
-// `scripts/check-bootstrap-blocker-inventory.rs`, explicit BLAKE3 tool binding
-// in its shell, and Crane-backed SpaceWasm vendoring in the Nix composition.
-//
-// r[verify bootstrap_inventory.full_check_blocker_closure]
-// Verified by clean enforcement, changed-file and missing-tool failures,
-// positive-bridge and observed-timeout near misses, repeated SpaceWasm builds,
-// the Octet-bearing component toolchain rebuild, and full Nix checks.
-
 // r[impl gcc40_bridge.configure_preprocess_confinement]
 // Implemented by the runtime authority, canonical-source, output, byte, class,
 // count, and audit guards in `bootstrap/gcc-4.0-native.ncl`.
@@ -774,18 +706,6 @@
 // `EvalBackend`, `EvalRequest`, and Cranelift request handling stay private to
 // `crunch-eval`; existing public helper signatures remain interpreter-shaped.
 
-// Store capability migration bridge.
-//
-// r[impl store_authority.complete_capability_migration]
-// `crates/crunch-store/src/capability.rs` owns role-specific store capabilities,
-// `crates/crunch-store/src/publisher.rs` owns publication plans and observations,
-// and runtime callers receive those bounded values instead of raw services.
-//
-// r[verify store_authority.complete_capability_migration]
-// The deterministic architecture script, compile-fail examples, focused store,
-// pipeline, cache, delta, remote-transfer, Clippy, Tiger Style, and Nix checks
-// provide positive and negative acceptance evidence.
-//
 // Tracey coverage readiness bridge.
 //
 // r[impl verification_evidence.tracey_coverage_readiness]
@@ -1186,107 +1106,3 @@
 // rail scans `tools/` and not the package root. Evidence: positive and
 // negative probe transcripts, the deterministic report, inventory, oracle
 // checkpoint, and ADR 0078 under the active change `explore-distributed-evaluation`.
-
-// Nickel 1.17 evaluator cohort bridge.
-//
-// r[impl mantle.nickel_toolchain.cohort]
-// r[impl mantle.nickel_toolchain.vendor]
-// r[impl mantle.nickel_toolchain.compatibility]
-// r[impl mantle.nickel_toolchain.boundary]
-// r[impl mantle.nickel_toolchain.evidence]
-// r[impl mantle.nickel_toolchain.validation]
-// Exact Cargo and Nix pins, the typed cohort contract, the importer, the
-// BLAKE3 vendor manifest, and the boundary checker live in `flake.nix`,
-// `config/nickel-cohort.ncl`, `scripts/`, and `bootstrap/evidence/`.
-//
-// r[verify mantle.nickel_toolchain.cohort]
-// r[verify mantle.nickel_toolchain.vendor]
-// r[verify mantle.nickel_toolchain.compatibility]
-// r[verify mantle.nickel_toolchain.boundary]
-// r[verify mantle.nickel_toolchain.evidence]
-// r[verify mantle.nickel_toolchain.validation]
-// Positive and negative evaluator, budget, import, contract, deserialization,
-// vendor, stale-evidence, boundary, formatting, Clippy, Nix, and lifecycle
-// checks are preserved in the active change evidence.
-
-// CLI application architecture bridge.
-//
-// r[impl application_architecture.thin_composition_root]
-// r[impl application_architecture.application_owned_ports]
-// r[impl application_architecture.typed_error_ownership]
-// r[impl application_architecture.effect_observation_boundary]
-// r[impl application_architecture.dependency_guard]
-// The no-std core and application port contracts live under `crates/`.
-// CLI DTOs, compatibility operations, concrete adapters, presentation, and
-// the deterministic architecture checker live under root-owned paths.
-//
-// r[verify application_architecture.thin_composition_root]
-// r[verify application_architecture.application_owned_ports]
-// r[verify application_architecture.typed_error_ownership]
-// r[verify application_architecture.effect_observation_boundary]
-// r[verify application_architecture.dependency_guard]
-// Positive and negative tests cover DTO mapping, family dispatch, typed
-// failures, effect identity, observation mismatch, presentation failure, CLI
-// byte parity, forbidden inward authority, host builds, and WASM builds.
-
-// Evidence-driven remote resource-policy bridge.
-//
-// r[impl remote_builds.resource_observations]
-// r[impl remote_builds.replayable_resource_selection]
-// r[impl remote_builds.positive_oom_retry]
-// r[impl remote_builds.usage_reservation_and_reconciliation]
-// r[impl remote_builds.authorized_result_sharing]
-// r[impl remote_builds.resource_benchmark_evidence]
-// r[impl remote_builds.resource_policy_rollout]
-// Deterministic policy, identity, accounting, retry, sharing, benchmark, and
-// fault models live in `crates/crunch-resource-policy-core`. Application-owned
-// evidence and ledger ports live in `crates/crunch-resource-policy`. Existing
-// remote coordinator and result-admission shells retain all execution and trust
-// authority. Typed Nickel defaults keep every authority-changing feature off.
-//
-// r[verify remote_builds.resource_observations]
-// r[verify remote_builds.replayable_resource_selection]
-// r[verify remote_builds.positive_oom_retry]
-// r[verify remote_builds.usage_reservation_and_reconciliation]
-// r[verify remote_builds.authorized_result_sharing]
-// r[verify remote_builds.resource_benchmark_evidence]
-// r[verify remote_builds.resource_policy_rollout]
-// Positive, negative, replay, property, integration, machine-contract,
-// benchmark, ChaosControl, OnixOS, Valence, architecture, WASM, Nix, and
-// lifecycle checks bind the implementation without claiming future sufficiency,
-// fair billing, host isolation, opaque heuristic authority, or result trust.
-
-// Trellis remote-admission evidence bridge.
-//
-// r[impl remote_builds.trellis_admission_model]
-// r[impl remote_builds.trellis_admission_safety]
-// r[impl remote_builds.trellis_admission_projection]
-// r[impl remote_builds.trellis_admission_evidence_boundary]
-// r[impl remote_builds.trellis_admission_claim_boundary]
-// The pure projection and outcome normalization live under
-// `crates/crunch-build/src/distributed/remote_attempt_trellis/`. The compact
-// oracle records all 6,720 cases from Trellis revision `8de4b24`. Unsupported
-// semantic differences reject before proof coverage. Runtime admission still
-// calls `plan_remote_attempt_report` without reading formal evidence.
-//
-// r[verify remote_builds.trellis_admission_model]
-// r[verify remote_builds.trellis_admission_safety]
-// r[verify remote_builds.trellis_admission_projection]
-// r[verify remote_builds.trellis_admission_evidence_boundary]
-// r[verify remote_builds.trellis_admission_claim_boundary]
-// Matrix, drift, mutation, source, claim, machine-contract, Kamacite, Valence,
-// Trellis, Nix, and lifecycle checks retain the bounded claim.
-
-// Dev cross-run resume bridge.
-//
-// r[impl source_built_fixed_point_improved_iteration.dev_cross_run_resume]
-// r[impl source_built_fixed_point_improved_iteration.dev_resume_runtime_confirmation]
-// The no-std core validates content-bound stage candidates. The shell owns
-// remeasurement, no-replace publication, restoration, execution, and reports.
-// Promoted mode rejects the dev namespace before cache access.
-//
-// r[verify source_built_fixed_point_improved_iteration.dev_cross_run_resume]
-// r[verify source_built_fixed_point_improved_iteration.dev_resume_runtime_confirmation]
-// Positive, mutation, architecture, WASM, machine-contract, runtime-cycle,
-// promoted-cold, Nix, and lifecycle evidence keep restored work distinct from
-// execution in the current attempt.

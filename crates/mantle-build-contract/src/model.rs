@@ -34,9 +34,7 @@ pub struct Identity(String);
 impl Identity {
     pub fn new(value: String) -> Result<Self, ValueError> {
         let digest = value.strip_prefix(BLAKE3_PREFIX);
-        let expected_identity_bytes =
-            BLAKE3_PREFIX.len().checked_add(BLAKE3_HEX_LENGTH).ok_or(ValueError::InvalidIdentity)?;
-        if value.len() == expected_identity_bytes
+        if value.len() == BLAKE3_PREFIX.len() + BLAKE3_HEX_LENGTH
             && digest
                 .is_some_and(|digest| digest.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
         {
@@ -78,19 +76,17 @@ pub struct Label(String);
 
 impl Label {
     pub fn new(value: String) -> Result<Self, ValueError> {
-        if value.is_empty() || value.len() > MAXIMUM_LABEL_BYTES {
-            return Err(ValueError::InvalidLabel);
+        if !value.is_empty()
+            && value.len() <= MAXIMUM_LABEL_BYTES
+            && value.bytes().all(|byte| {
+                byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b':' | b'-')
+            })
+            && value.as_bytes().first().is_some_and(u8::is_ascii_lowercase)
+        {
+            Ok(Self(value))
+        } else {
+            Err(ValueError::InvalidLabel)
         }
-        let has_valid_characters = value.bytes().all(|byte| {
-            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b':' | b'-')
-        });
-        if !has_valid_characters {
-            return Err(ValueError::InvalidLabel);
-        }
-        if !value.as_bytes().first().is_some_and(u8::is_ascii_lowercase) {
-            return Err(ValueError::InvalidLabel);
-        }
-        Ok(Self(value))
     }
 
     #[must_use]

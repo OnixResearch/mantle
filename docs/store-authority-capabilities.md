@@ -11,14 +11,8 @@ Mantle splits store authority into concrete Rust values. Each value has private 
 | `BuildServiceStore` | Pipeline build-service wiring | Construct approved sandbox services and ingest fetched host paths. | Raw service access and store administration. |
 | `OutputLookup` | `crunch-pipeline` | Find one exact `PathInfo` value and reject conflicting identities. | Output mutation and raw `PathInfoService` access. |
 | `RootRegistry` | `crunch-pipeline` | Register a selected root only when its output exists. List retained roots. | Build execution, arbitrary store mutation, and raw service access. |
-| `SourceStore` / `SourceAdmission` | CLI or source shell | Preflight and ingest verified sources. Adopt an approved local output. | Build execution and store administration. |
-| `TransferStore` | Remote-transfer adapter | Ingest and render NARs, stream bounded blobs, and serialize admitted directory objects. | PathInfo administration, roots, GC, and publisher execution. |
-| `AttestationStore` | Attestation command shell | Load artifact and runtime-closure attestations with layer checks. | Store mutation and raw services. |
-| `ProvenanceStore` | Foreign-provenance shell | Run bounded castore provenance scans. | Build execution, administration, and publication. |
-| `RustCacheStore` | Rust cache adapter | Ingest, verify, render, and export Rust-unit castore objects. | PathInfo, roots, substitution, and administration. |
-| `PathInfoAdministration` | Verification and signing commands | Verify hashes and signatures or apply an explicit signing operation. | Blob and directory service access. |
-| `StoreAdministration` / `StoreAdmin` | Operator shell | List, inspect, repair, transfer, archive, compose, retain, and garbage-collect through named operations. | Build realization and raw service escape. |
-| `PublicationExecution` | Build application shell | Validate and execute a returned publication plan, then return typed observations. | Local output admission and plan construction. |
+| `SourceAdmission` | CLI or source shell | Preflight and ingest verified sources. Adopt an approved local output. | Build execution and store administration. |
+| `StoreAdmin` | Operator shell | Run garbage collection with explicit retained castore roots. | Build realization. |
 
 ## Builder boundary
 
@@ -28,26 +22,15 @@ The pipeline keeps `OutputLookup` and `RootRegistry`. It uses these values after
 
 The pipeline creates sandbox services through `BuildServiceStore`. It does not receive blob, directory, or `PathInfo` services.
 
-```text
-application command
-  -> role capability
-  -> crunch-store shell
-  -> private Snix services
-  -> typed result or effect plan
-  -> application shell
-  -> checked effect execution
-  -> typed observation
-```
+## Compatibility facade
 
-## Completed boundary
+`StoreHandle` remains a shell-owned compatibility facade. CLI and operator shells can split it into narrow capabilities.
 
-Production code outside `crunch-store` does not consume `StoreHandle`, `StoreHandleServices`, or raw Snix store-service traits. It receives concrete capability values or already-split capability sets.
+Archive, repair, pin, migration, and transfer shells can use this facade during migration.
 
-Focused unit tests can use explicit fixture-only constructors. The architecture checker classifies these as fixtures and rejects the same access from runtime items.
+Focused unit tests can use test-only service constructors. These constructors use `#[cfg(test)]` and do not change the production API.
 
-`workspace_shell` now ingests snapshots through `BuildServiceStore`. Rust cache and delta-manifest adapters use Mantle-owned capability or in-memory fact boundaries instead of raw store services.
-
-Local output admission returns a publication plan before any configured publisher executes. The shell records each publisher attempt as a typed observation.
+`workspace_shell` remains an explicit shell compatibility boundary. It can adapt services required by the existing workspace protocol.
 
 ## Migration rules
 
@@ -58,9 +41,9 @@ Local output admission returns a publication plan before any configured publishe
 5. Keep `ActionResultPort` backends fixed after construction.
 6. Keep output lookup and selected root registration outside `Builder`.
 
-Source-policy and deterministic AST tests reject raw service escape, broad-handle runtime ownership, administrative build methods, and action-result backend replacement.
+Source-policy tests reject raw service escape, broad builder ownership, administrative build methods, and action-result backend replacement.
 
-Compile-fail examples also reject garbage collection, repair, source import, root mutation, and raw blob access from `BuildStore`. Positive and negative publication tests prove plan-before-effect ordering and fail-closed effect identity.
+Compile-fail examples also reject garbage collection, repair, source import, root mutation, and raw blob access from `BuildStore`.
 
 ## Compatibility and claim boundary
 

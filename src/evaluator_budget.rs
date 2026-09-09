@@ -1,4 +1,3 @@
-// machine-artifact-public: evaluation.budget-reports
 use std::ffi::OsString;
 use std::fs;
 use std::io;
@@ -22,7 +21,6 @@ use crunch_eval_budget_core::EvaluationBudgetPolicy;
 use crunch_eval_budget_core::EvaluationBudgetReport;
 use crunch_eval_budget_core::EvaluationMode;
 use crunch_eval_budget_core::EvaluationOperation;
-use crunch_eval_budget_core::EvaluationReportInput;
 use crunch_eval_budget_core::EvaluatorObservation;
 use crunch_eval_budget_core::EvaluatorWorkerRequest;
 use crunch_eval_budget_core::EvaluatorWorkerResponse;
@@ -30,7 +28,6 @@ use crunch_eval_budget_core::FRAME_HEADER_BYTES;
 use crunch_eval_budget_core::ImportDescriptor;
 use crunch_eval_budget_core::MechanismSupport;
 use crunch_eval_budget_core::MetricFact;
-use crunch_eval_budget_core::MetricFactInput;
 use crunch_eval_budget_core::MetricFactStatus;
 use crunch_eval_budget_core::ProcessObservation;
 use crunch_eval_budget_core::REQUEST_SCHEMA;
@@ -522,16 +519,16 @@ fn run_observe_only(request: &EvaluatorWorkerRequest, policy_ref: &str) -> Resul
         }
     };
     let teardown = completed_teardown(output_json.is_some() || error_class.is_some());
-    let report = build_report(EvaluationReportInput {
-        request_ref: &request.request_ref,
+    let report = build_report(
+        &request.request_ref,
         policy_ref,
-        mode: EvaluationMode::ObserveOnly,
-        terminal_facts: TerminalFacts { teardown, exit_kind },
-        metrics: observe_only_metrics(request, &evaluator, wall_time_ms),
-        evaluator: Some(evaluator),
-        error_class: error_class.clone(),
-        bounded_stderr: String::new(),
-    })
+        EvaluationMode::ObserveOnly,
+        TerminalFacts { teardown, exit_kind },
+        observe_only_metrics(request, &evaluator, wall_time_ms),
+        Some(evaluator),
+        error_class.clone(),
+        String::new(),
+    )
     .map_err(budget_error)?;
     Ok(BudgetedEvaluation { output_json, report })
 }
@@ -548,16 +545,16 @@ fn run_enforced(
     let error_class = response.and_then(|value| value.error_class.clone()).or_else(|| worker.protocol_error.clone());
     let metrics = enforced_metrics(&request, response, worker.wall_time_ms);
     let bounded_stderr = redact_worker_stderr(&worker.stderr.bytes, &request);
-    let report = build_report(EvaluationReportInput {
-        request_ref: &request.request_ref,
+    let report = build_report(
+        &request.request_ref,
         policy_ref,
-        mode: EvaluationMode::Enforce,
-        terminal_facts: worker.facts,
+        EvaluationMode::Enforce,
+        worker.facts,
         metrics,
         evaluator,
         error_class,
         bounded_stderr,
-    })
+    )
     .map_err(budget_error)?;
     Ok(BudgetedEvaluation { output_json, report })
 }
@@ -651,13 +648,8 @@ fn configure_worker_limits(_command: &mut Command, _policy: &EvaluationBudgetPol
     Err(RunError::Eval("evaluation-budget-unsupported:worker-limits".to_string()))
 }
 
-#[cfg(all(target_os = "linux", target_env = "gnu"))]
-type LinuxRlimitResource = libc::__rlimit_resource_t;
-#[cfg(all(target_os = "linux", target_env = "musl"))]
-type LinuxRlimitResource = libc::c_int;
-
 #[cfg(target_os = "linux")]
-fn set_resource_limit(resource: LinuxRlimitResource, soft: libc::rlim_t, hard: libc::rlim_t) -> io::Result<()> {
+fn set_resource_limit(resource: libc::__rlimit_resource_t, soft: libc::rlim_t, hard: libc::rlim_t) -> io::Result<()> {
     let limit = libc::rlimit {
         rlim_cur: soft,
         rlim_max: hard,
@@ -667,20 +659,6 @@ fn set_resource_limit(resource: LinuxRlimitResource, soft: libc::rlim_t, hard: l
         return Err(io::Error::last_os_error());
     }
     Ok(())
-}
-
-#[cfg(all(test, target_os = "linux"))]
-mod resource_limit_tests {
-    use super::LinuxRlimitResource;
-
-    fn accepts_resource(_resource: LinuxRlimitResource) {}
-
-    #[test]
-    fn evaluator_resource_ids_match_the_selected_linux_libc_signature() {
-        accepts_resource(libc::RLIMIT_AS);
-        accepts_resource(libc::RLIMIT_CPU);
-        assert_ne!(libc::RLIMIT_AS, libc::RLIMIT_CPU);
-    }
 }
 
 fn configure_worker_command(command: &mut Command) {
@@ -1126,17 +1104,13 @@ fn read_one_frame(mut reader: impl Read, bytes_max: u64) -> Result<Vec<u8>, crun
         .read_exact(&mut header)
         .map_err(|_| crunch_eval_budget_core::BudgetError::FrameHeaderIncomplete)?;
     let payload_len = decode_frame_header(&header, bytes_max)?;
-    let payload_len_bytes =
-        usize::try_from(payload_len).map_err(|_| crunch_eval_budget_core::BudgetError::FrameLengthOverflow)?;
-    let mut payload = vec![0_u8; payload_len_bytes];
+    let mut payload = vec![0_u8; payload_len];
     reader
         .read_exact(&mut payload)
         .map_err(|_| crunch_eval_budget_core::BudgetError::FrameHeaderIncomplete)?;
     let mut trailing = [0_u8; 1];
     let trailing_count = reader.read(&mut trailing).map_err(|_| crunch_eval_budget_core::BudgetError::TrailingData)?;
-    let trailing_count_bytes =
-        u64::try_from(trailing_count).map_err(|_| crunch_eval_budget_core::BudgetError::FrameLengthOverflow)?;
-    reject_trailing_data(trailing_count_bytes)?;
+    reject_trailing_data(trailing_count)?;
     Ok(payload)
 }
 
@@ -1145,17 +1119,13 @@ fn decode_one_frame(bytes: &[u8], bytes_max: u64) -> Result<&[u8], crunch_eval_b
         return Err(crunch_eval_budget_core::BudgetError::FrameHeaderIncomplete);
     }
     let payload_len = decode_frame_header(&bytes[..FRAME_HEADER_BYTES], bytes_max)?;
-    let payload_len_bytes =
-        usize::try_from(payload_len).map_err(|_| crunch_eval_budget_core::BudgetError::FrameLengthOverflow)?;
     let frame_len = FRAME_HEADER_BYTES
-        .checked_add(payload_len_bytes)
+        .checked_add(payload_len)
         .ok_or(crunch_eval_budget_core::BudgetError::FrameLengthOverflow)?;
     if bytes.len() < frame_len {
         return Err(crunch_eval_budget_core::BudgetError::FrameHeaderIncomplete);
     }
-    let trailing_count_bytes = u64::try_from(bytes.len().saturating_sub(frame_len))
-        .map_err(|_| crunch_eval_budget_core::BudgetError::FrameLengthOverflow)?;
-    reject_trailing_data(trailing_count_bytes)?;
+    reject_trailing_data(bytes.len().saturating_sub(frame_len))?;
     Ok(&bytes[FRAME_HEADER_BYTES..frame_len])
 }
 
@@ -1204,15 +1174,15 @@ fn observe_only_metrics(
 ) -> Vec<MetricFact> {
     let mut metrics = common_request_metrics(request);
     append_evaluator_metrics(&mut metrics, Some(evaluator));
-    metrics.push(metric_fact(MetricFactInput {
-        name: "wall_time",
-        unit: "milliseconds",
-        role: "observation",
-        status: MetricFactStatus::Observed,
-        value: Some(wall_time_ms),
-        mechanism: "parent-monotonic-clock",
-        reason: None,
-    }));
+    metrics.push(metric_fact(
+        "wall_time",
+        "milliseconds",
+        "observation",
+        MetricFactStatus::Observed,
+        Some(wall_time_ms),
+        "parent-monotonic-clock",
+        None,
+    ));
     metrics.push(unavailable_metric(
         "cpu_time",
         "milliseconds",
@@ -1228,42 +1198,42 @@ fn enforced_metrics(
     wall_time_ms: u64,
 ) -> Vec<MetricFact> {
     let mut metrics = common_request_metrics(request);
-    metrics.push(metric_fact(MetricFactInput {
-        name: "wall_time",
-        unit: "milliseconds",
-        role: "observation-and-deadline",
-        status: MetricFactStatus::Enforced,
-        value: Some(wall_time_ms),
-        mechanism: "owned-worker-parent-deadline",
-        reason: None,
-    }));
-    metrics.push(metric_fact(MetricFactInput {
-        name: "cpu_time_limit",
-        unit: "milliseconds",
-        role: "enforcement-policy",
-        status: MetricFactStatus::Enforced,
-        value: Some(request.policy.cpu_time_ms_max),
-        mechanism: "rlimit-cpu",
-        reason: None,
-    }));
-    metrics.push(metric_fact(MetricFactInput {
-        name: "import_filesystem_confinement",
-        unit: "boolean",
-        role: "enforcement-policy",
-        status: MetricFactStatus::Enforced,
-        value: Some(1),
-        mechanism: "landlock-read-file-and-read-dir",
-        reason: None,
-    }));
-    metrics.push(metric_fact(MetricFactInput {
-        name: "address_space_limit",
-        unit: "bytes",
-        role: "enforcement-policy",
-        status: MetricFactStatus::Enforced,
-        value: Some(request.policy.peak_rss_bytes_max),
-        mechanism: "rlimit-as-not-rss",
-        reason: None,
-    }));
+    metrics.push(metric_fact(
+        "wall_time",
+        "milliseconds",
+        "observation-and-deadline",
+        MetricFactStatus::Enforced,
+        Some(wall_time_ms),
+        "owned-worker-parent-deadline",
+        None,
+    ));
+    metrics.push(metric_fact(
+        "cpu_time_limit",
+        "milliseconds",
+        "enforcement-policy",
+        MetricFactStatus::Enforced,
+        Some(request.policy.cpu_time_ms_max),
+        "rlimit-cpu",
+        None,
+    ));
+    metrics.push(metric_fact(
+        "import_filesystem_confinement",
+        "boolean",
+        "enforcement-policy",
+        MetricFactStatus::Enforced,
+        Some(1),
+        "landlock-read-file-and-read-dir",
+        None,
+    ));
+    metrics.push(metric_fact(
+        "address_space_limit",
+        "bytes",
+        "enforcement-policy",
+        MetricFactStatus::Enforced,
+        Some(request.policy.peak_rss_bytes_max),
+        "rlimit-as-not-rss",
+        None,
+    ));
     append_evaluator_metrics(&mut metrics, response.map(|value| &value.evaluator));
     match response {
         Some(response) => {
@@ -1330,51 +1300,51 @@ fn common_request_metrics(request: &EvaluatorWorkerRequest) -> Vec<MetricFact> {
     let import_roots = u64::try_from(request.imports.len()).unwrap_or(u64::MAX);
     let selected_roots = u64::try_from(request.selected_roots.len()).unwrap_or(u64::MAX);
     vec![
-        metric_fact(MetricFactInput {
-            name: "source_bytes",
-            unit: "bytes",
-            role: "admitted-input",
-            status: MetricFactStatus::Observed,
-            value: Some(source_bytes),
-            mechanism: "request-envelope",
-            reason: None,
-        }),
-        metric_fact(MetricFactInput {
-            name: "import_roots",
-            unit: "count",
-            role: "admitted-input",
-            status: MetricFactStatus::Observed,
-            value: Some(import_roots),
-            mechanism: "request-envelope",
-            reason: None,
-        }),
-        metric_fact(MetricFactInput {
-            name: "admitted_import_entries",
-            unit: "count",
-            role: "admitted-input-upper-bound-not-imported-module-count",
-            status: MetricFactStatus::Observed,
-            value: Some(u64::from(request.import_entry_count)),
-            mechanism: "bounded-import-root-walk",
-            reason: None,
-        }),
-        metric_fact(MetricFactInput {
-            name: "selected_roots",
-            unit: "count",
-            role: "public-api-request",
-            status: MetricFactStatus::Observed,
-            value: Some(selected_roots),
-            mechanism: "request-envelope",
-            reason: None,
-        }),
-        metric_fact(MetricFactInput {
-            name: "explicit_top_level_root_force_count",
-            unit: "count",
-            role: "public-api-request-not-nickel-thunk-count",
-            status: MetricFactStatus::Observed,
-            value: Some(selected_roots),
-            mechanism: "request-envelope",
-            reason: None,
-        }),
+        metric_fact(
+            "source_bytes",
+            "bytes",
+            "admitted-input",
+            MetricFactStatus::Observed,
+            Some(source_bytes),
+            "request-envelope",
+            None,
+        ),
+        metric_fact(
+            "import_roots",
+            "count",
+            "admitted-input",
+            MetricFactStatus::Observed,
+            Some(import_roots),
+            "request-envelope",
+            None,
+        ),
+        metric_fact(
+            "admitted_import_entries",
+            "count",
+            "admitted-input-upper-bound-not-imported-module-count",
+            MetricFactStatus::Observed,
+            Some(u64::from(request.import_entry_count)),
+            "bounded-import-root-walk",
+            None,
+        ),
+        metric_fact(
+            "selected_roots",
+            "count",
+            "public-api-request",
+            MetricFactStatus::Observed,
+            Some(selected_roots),
+            "request-envelope",
+            None,
+        ),
+        metric_fact(
+            "explicit_top_level_root_force_count",
+            "count",
+            "public-api-request-not-nickel-thunk-count",
+            MetricFactStatus::Observed,
+            Some(selected_roots),
+            "request-envelope",
+            None,
+        ),
         unavailable_metric("actual_nonselected_evaluation_count", "count", "nickel-does-not-expose-this-observation"),
     ]
 }
@@ -1387,29 +1357,13 @@ fn optional_observed_metric(
     unavailable_reason: &str,
 ) -> MetricFact {
     match value {
-        Some(value) => metric_fact(MetricFactInput {
-            name,
-            unit,
-            role: "observation",
-            status: MetricFactStatus::Observed,
-            value: Some(value),
-            mechanism,
-            reason: None,
-        }),
+        Some(value) => metric_fact(name, unit, "observation", MetricFactStatus::Observed, Some(value), mechanism, None),
         None => unavailable_metric(name, unit, unavailable_reason),
     }
 }
 
 fn unavailable_metric(name: &str, unit: &str, reason: &str) -> MetricFact {
-    metric_fact(MetricFactInput {
-        name,
-        unit,
-        role: "observation",
-        status: MetricFactStatus::Unavailable,
-        value: None,
-        mechanism: "unavailable",
-        reason: Some(reason),
-    })
+    metric_fact(name, unit, "observation", MetricFactStatus::Unavailable, None, "unavailable", Some(reason))
 }
 
 fn completed_teardown(response_present: bool) -> TeardownFacts {

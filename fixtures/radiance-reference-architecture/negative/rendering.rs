@@ -1,3 +1,0 @@
-fn escaped() {
-    println!("proof");
-}

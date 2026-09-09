@@ -204,15 +204,6 @@ const FULL_SOURCE_RUST_HOST_TOOL_SPECS: &[FullSourceRustHostToolSpec] = &[
     },
 ];
 
-pub(crate) fn full_source_rust_host_tool_executable_relative_path(
-    role: crate::full_source_rust_binding::FullSourceRustHostToolRole,
-) -> Option<&'static str> {
-    FULL_SOURCE_RUST_HOST_TOOL_SPECS
-        .iter()
-        .find(|spec| spec.role == role)
-        .map(|spec| spec.executable_relative_path)
-}
-
 pub(crate) fn prepare_full_source_rust_execution_context(
     admission_report_path: &Path,
     host_tool_manifest_path: &Path,
@@ -795,20 +786,6 @@ fn write_full_source_rust_host_tool_receipt(
 ) -> Result<crate::full_source_rust_binding::FullSourceRustHostToolBinding, RustSourceProviderError> {
     let role_label = format!("{:?}", tool.spec.role).to_ascii_lowercase();
     let receipt_path = output_dir.join(format!("{role_label}-construction.json"));
-    let attestation_path = output_dir.join(format!("{role_label}-attestation.json"));
-    let attestation_bytes = fs::read(&tool.attestation_path).map_err(|error| {
-        RustSourceProviderError::Read(format!(
-            "reading full-source host-tool attestation {}: {error}",
-            tool.attestation_path.display()
-        ))
-    })?;
-    if blake3::hash(&attestation_bytes).to_hex().to_string() != tool.attestation_file_digest_blake3 {
-        return Err(RustSourceProviderError::Digest(format!(
-            "full-source host-tool attestation file digest drifted for {:?}",
-            tool.spec.role
-        )));
-    }
-    write_create_new(&attestation_path, &attestation_bytes)?;
     let native_provider_output_digest_blake3 =
         dependency_digests_blake3.get("native-provider").cloned().ok_or_else(|| {
             RustSourceProviderError::Validate("host-tool native-provider dependency is missing".to_string())
@@ -824,7 +801,7 @@ fn write_full_source_rust_host_tool_receipt(
         native_provider_output_digest_blake3,
         executable_path: tool.executable_path.display().to_string(),
         executable_digest_blake3: tool.executable_digest_blake3.clone(),
-        artifact_attestation_path: attestation_path.display().to_string(),
+        artifact_attestation_path: tool.attestation_path.display().to_string(),
         artifact_attestation_digest_blake3: tool.attestation_digest_blake3,
         artifact_attestation_file_digest_blake3: tool.attestation_file_digest_blake3,
         positive_checks: tool.spec.positive_checks.iter().map(|check| (*check).to_string()).collect(),
@@ -913,7 +890,7 @@ fn parse_admission_report(
     })
 }
 
-pub(crate) fn observe_full_source_rust_host_tools(
+fn observe_full_source_rust_host_tools(
     manifest_path: &Path,
     native_provider_output_digest_blake3: &str,
 ) -> Result<FullSourceRustHostToolObservation, RustSourceProviderError> {

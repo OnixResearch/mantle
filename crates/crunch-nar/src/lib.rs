@@ -414,18 +414,11 @@ pub fn compare_nar_facts(expected: &ExpectedNarFacts, observed: &FilesystemNarOb
     if expected.digest != observed.digest {
         mismatches.push(NarFactMismatch::Digest);
     }
-    let comparison = if mismatches.is_empty() {
+    if mismatches.is_empty() {
         NarComparison::Match
     } else {
         NarComparison::Mismatch(mismatches)
-    };
-    let mismatch_count = match &comparison {
-        NarComparison::Match => 0,
-        NarComparison::Mismatch(items) => items.len(),
-    };
-    debug_assert!(matches!(comparison, NarComparison::Match) || mismatch_count > 0);
-    debug_assert!(mismatch_count <= EXPECTED_COMPARISON_FIELD_COUNT);
-    comparison
+    }
 }
 
 pub fn evaluate_cutover(evidence: &CutoverEvidence) -> CutoverDecision {
@@ -485,8 +478,6 @@ fn observe_path_with_hook(
 }
 
 fn observe_path_inner(path: &Path, request: FilesystemNarRequest) -> Result<(u64, NixHash), FilesystemNarError> {
-    debug_assert!(!path.as_os_str().is_empty());
-    debug_assert!(request.nar_bytes_max > 0);
     if request.algorithm == HashAlgo::Sha256 {
         let (nar_size, digest) = nar::hash_path_with_case_hack(path, request.case_hack.upstream())?;
         if nar_size > request.nar_bytes_max {
@@ -551,8 +542,6 @@ fn validate_upstream_identity(evidence: &CutoverEvidence, rejections: &mut Vec<S
 }
 
 fn validate_parity_cases(evidence: &CutoverEvidence, rejections: &mut Vec<String>) {
-    let rejection_count_before = rejections.len();
-    debug_assert!(rejection_count_before <= PARITY_CASE_COUNT_MAX);
     if evidence.required_cases.len() > PARITY_CASE_COUNT_MAX || evidence.comparisons.len() > PARITY_CASE_COUNT_MAX {
         rejections.push("parity-case-limit-exceeded".to_string());
         return;
@@ -576,7 +565,6 @@ fn validate_parity_cases(evidence: &CutoverEvidence, rejections: &mut Vec<String
     for case_id in required.difference(&observed) {
         rejections.push(format!("missing-parity-case:{case_id}"));
     }
-    debug_assert!(rejections.len() >= rejection_count_before);
 }
 
 #[cfg(test)]

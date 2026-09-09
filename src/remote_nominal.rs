@@ -51,6 +51,10 @@ macro_rules! remote_id {
             pub fn new(value: impl Into<String>) -> Result<Self, RemoteNominalError> {
                 admit_remote_id(value.into()).map(Self)
             }
+
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
         }
     };
 }
@@ -59,18 +63,6 @@ remote_id!(RemoteRequestId);
 remote_id!(RemoteProtocolSessionId);
 remote_id!(RemoteEndpointId);
 remote_id!(RemoteOutputId);
-
-impl RemoteEndpointId {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl RemoteOutputId {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -85,8 +77,8 @@ mod tests {
         let endpoint = RemoteEndpointId::new(VALID_ID).unwrap();
         let oversized = "a".repeat(MAX_REMOTE_PROTOCOL_ID_BYTES.saturating_add(1));
 
-        assert_eq!(request, RemoteRequestId::new(VALID_ID).unwrap());
-        assert_eq!(session, RemoteProtocolSessionId::new(VALID_ID).unwrap());
+        assert_eq!(request.as_str(), VALID_ID);
+        assert_eq!(session.as_str(), VALID_ID);
         assert_eq!(endpoint.as_str(), VALID_ID);
         assert_eq!(RemoteRequestId::new(""), Err(RemoteNominalError::Empty));
         assert_eq!(RemoteEndpointId::new("bad\nendpoint"), Err(RemoteNominalError::ControlCharacter));

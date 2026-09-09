@@ -5,15 +5,9 @@
 #
 # Current legacy policy: every Tiger Style lint is enabled and treated as an error.
 # Current Octet policy denies only the reviewed nominal-domain family.
-# The remote core scope enables targeted deterministic-profile diagnostics.
 
 [octet]
 nominal_domain_mode = "deny"
-core_source_scopes = [
-  "crates/crunch-remote-core/src/",
-  "crates/crunch-resource-policy-core/src/",
-  "crates/crunch-dev-resume-core/src/",
-]
 
 [tigerstyle]
 

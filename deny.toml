@@ -8,7 +8,7 @@ feature-depth = 1
 
 [advisories]
 ignore = [
-  { id = "RUSTSEC-2024-0436", reason = "paste comes through crunch-eval -> nickel-lang-core 0.18.0; remove when Nickel releases a paste-free core or Mantle carries that upstream migration" },
+  { id = "RUSTSEC-2024-0436", reason = "paste comes through crunch-eval -> nickel-lang-core 0.16.1; remove when Nickel releases a paste-free core or Mantle carries that upstream migration" },
   { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 comes through vendor/snix-build -> oci-spec 0.7.1 -> getset 0.1.6; latest checked oci-spec 0.10.0 still uses getset, so remove when oci-spec/getset no longer pulls proc-macro-error2" },
   { id = "RUSTSEC-2026-0194", reason = "quick-xml comes through vendor/snix-castore -> object_store 0.14.0 -> quick-xml 0.40.1; remove when object_store permits quick-xml >=0.41" },
   { id = "RUSTSEC-2026-0195", reason = "quick-xml comes through vendor/snix-castore -> object_store 0.14.0 -> quick-xml 0.40.1; remove when object_store permits quick-xml >=0.41" },

@@ -70,14 +70,6 @@ pub trait NixRead: Send {
     /// of the protocol and so this can be used for implementing that.
     fn version(&self) -> ProtocolVersion;
 
-    /// Maximum collection item count admitted before allocation or iteration.
-    fn collection_len_limit(&self) -> usize {
-        usize::MAX
-    }
-
-    /// Start a new request-metadata message budget.
-    fn reset_message_budget(&mut self) {}
-
     /// Read a single u64 from the protocol.
     /// This returns an Option to support graceful shutdown.
     fn try_read_number(&mut self) -> impl Future<Output = Result<Option<u64>, Self::Error>> + Send + '_;
@@ -155,14 +147,6 @@ impl<T: ?Sized + NixRead> NixRead for &mut T {
 
     fn version(&self) -> ProtocolVersion {
         (**self).version()
-    }
-
-    fn collection_len_limit(&self) -> usize {
-        (**self).collection_len_limit()
-    }
-
-    fn reset_message_budget(&mut self) {
-        (**self).reset_message_budget();
     }
 
     fn try_read_number(&mut self) -> impl Future<Output = Result<Option<u64>, Self::Error>> + Send + '_ {

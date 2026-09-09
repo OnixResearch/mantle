@@ -142,8 +142,6 @@ pub fn store_overlay_policy_blake3() -> String {
 }
 
 pub(crate) fn ensure_store_identity(state_dir: &Path, logical_prefix: &str) -> Result<(), Error> {
-    assert!(!state_dir.as_os_str().is_empty());
-    assert!(!logical_prefix.is_empty());
     let policy = store_overlay_runtime_policy()?;
     let expected = StoreIdentityRecord {
         schema: STORE_STATE_SCHEMA.to_string(),
@@ -209,8 +207,6 @@ pub(crate) fn overlay_report(state: &StoreOverlayState) -> Result<StoreOverlayRe
     if state.plan.descriptors.len() != state.base_state_dirs.len() {
         return Err(Error::Store("overlay report descriptor and base counts differ".to_string()));
     }
-    assert_eq!(state.plan.descriptors.len(), state.base_state_dirs.len());
-    assert!(!state.plan.logical_prefix.is_empty());
     let bases = state
         .plan
         .descriptors
@@ -281,7 +277,6 @@ pub(crate) fn verify_pathinfo_trust(path_info: &PathInfo, trusted_keys: &[Verify
 }
 
 pub(crate) fn load_layer_trust_keys(state_dir: &Path) -> Result<Vec<VerifyingKey>, Error> {
-    assert!(!state_dir.as_os_str().is_empty());
     let policy = store_overlay_runtime_policy()?;
     let public_keys_path = state_dir.join(OVERLAY_TRUSTED_PUBLIC_KEYS_FILE_NAME);
     let mut keys = if public_keys_path.exists() {
@@ -304,18 +299,14 @@ pub(crate) fn load_layer_trust_keys(state_dir: &Path) -> Result<Vec<VerifyingKey
             keys.len()
         )));
     }
-    assert!(!keys.is_empty());
-    assert!(keys.len() <= MAX_LAYER_TRUST_KEYS);
     Ok(keys)
 }
 
 fn parse_public_keys(path: &Path, maximum_bytes: u64) -> Result<Vec<VerifyingKey>, Error> {
-    assert!(!path.as_os_str().is_empty());
-    assert!(maximum_bytes > 0);
     let bytes = read_file_bounded(path, maximum_bytes)?;
     let text = std::str::from_utf8(&bytes)
         .map_err(|error| Error::Store(format!("parsing {} as UTF-8: {error}", path.display())))?;
-    let mut keys = Vec::with_capacity(MAX_LAYER_TRUST_KEYS);
+    let mut keys = Vec::new();
     for line in text.lines() {
         let value = line.split_once('#').map_or(line, |(prefix, _)| prefix);
         for encoded_key in value.split(|character: char| character.is_whitespace() || character == ',') {
@@ -386,7 +377,7 @@ impl PathInfoService for TrustedBasePathInfoService {
 }
 
 fn validate_runtime_policy(policy: &StoreOverlayRuntimePolicy) -> Result<(), Error> {
-    let is_valid = policy.schema == STORE_OVERLAY_POLICY_SCHEMA
+    let valid = policy.schema == STORE_OVERLAY_POLICY_SCHEMA
         && policy.hash_algorithm == "BLAKE3"
         && !policy.policy_name.is_empty()
         && !policy.trust.policy_id.is_empty()
@@ -406,11 +397,9 @@ fn validate_runtime_policy(policy: &StoreOverlayRuntimePolicy) -> Result<(), Err
         && policy.generation.bind_blobs
         && policy.generation.revalidate_before_execution
         && policy.generation.revalidate_before_output_admission;
-    if !is_valid {
+    if !valid {
         return Err(Error::Store("embedded store overlay policy violates required fail-closed invariants".to_string()));
     }
-    assert!(is_valid);
-    assert_eq!(policy.schema, STORE_OVERLAY_POLICY_SCHEMA);
     Ok(())
 }
 
@@ -420,8 +409,6 @@ fn core_policy(policy: &StoreOverlayRuntimePolicy) -> Result<OverlayPolicy, Erro
     if max_descriptor_bytes == 0 {
         return Err(Error::Store("overlay descriptor byte limit must be positive".to_string()));
     }
-    assert!(max_descriptor_bytes > 0);
-    assert!(!policy.trust.policy_id.is_empty());
     Ok(OverlayPolicy {
         policy_id: store_overlay_policy_blake3(),
         trust_policy_id: policy.trust.policy_id.clone(),
@@ -468,8 +455,6 @@ fn observe_base(
             "overlay-base-not-directory: declaration {declaration_index} is not a direct directory"
         )));
     }
-    assert!(!metadata.file_type().is_symlink());
-    assert!(metadata.is_dir());
     ensure_read_only_member(declaration_index, base_state_dir, &metadata)?;
     let canonical = fs::canonicalize(base_state_dir)
         .map_err(|error| Error::Store(format!("resolving overlay base {}: {error}", base_state_dir.display())))?;
@@ -495,39 +480,11 @@ fn read_store_identity(path: &Path, maximum_bytes: u64) -> Result<StoreIdentityR
         .map_err(|error| Error::Store(format!("parsing store identity {}: {error}", path.display())))
 }
 
-fn observe_file_member(
-    path: &Path,
-    relative_path: String,
-    metadata: &fs::Metadata,
-    observed_bytes: &mut u64,
-    policy: &StoreOverlayRuntimePolicy,
-) -> Result<GenerationMember, Error> {
-    assert!(metadata.is_file());
-    *observed_bytes = observed_bytes
-        .checked_add(metadata.len())
-        .ok_or_else(|| Error::Store("overlay generation observed-byte count overflow".to_string()))?;
-    if *observed_bytes > policy.limits.max_generation_bytes {
-        return Err(Error::Store(format!(
-            "overlay-generation-byte-limit: declaration exceeds {} bytes",
-            policy.limits.max_generation_bytes
-        )));
-    }
-    assert!(*observed_bytes <= policy.limits.max_generation_bytes);
-    Ok(GenerationMember {
-        relative_path,
-        kind: GenerationMemberKind::File,
-        bytes: metadata.len(),
-        content_blake3: hash_file(path, metadata.len())?,
-    })
-}
-
 fn observe_generation_members(
     declaration_index: usize,
     root: &Path,
     policy: &StoreOverlayRuntimePolicy,
 ) -> Result<Vec<GenerationMember>, Error> {
-    assert!(root.is_absolute());
-    assert!(policy.limits.max_generation_members > 0);
     let mut members = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     let mut observed_bytes = 0_u64;
@@ -578,7 +535,22 @@ fn observe_generation_members(
                     "overlay-generation-special-file: declaration contains unsupported member {relative_path}"
                 )));
             }
-            members.push(observe_file_member(&path, relative_path, &metadata, &mut observed_bytes, policy)?);
+            observed_bytes = observed_bytes
+                .checked_add(metadata.len())
+                .ok_or_else(|| Error::Store("overlay generation observed-byte count overflow".to_string()))?;
+            if observed_bytes > policy.limits.max_generation_bytes {
+                return Err(Error::Store(format!(
+                    "overlay-generation-byte-limit: declaration exceeds {} bytes",
+                    policy.limits.max_generation_bytes
+                )));
+            }
+            let digest = hash_file(&path, metadata.len())?;
+            members.push(GenerationMember {
+                relative_path,
+                kind: GenerationMemberKind::File,
+                bytes: metadata.len(),
+                content_blake3: digest,
+            });
         }
     }
     members.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
@@ -597,7 +569,6 @@ fn ensure_read_only_member(declaration_index: usize, path: &Path, metadata: &fs:
                 path.display()
             )));
         }
-        assert_eq!(metadata.permissions().mode() & WRITE_PERMISSION_BITS, 0);
     }
     #[cfg(not(unix))]
     if !metadata.permissions().readonly() {
@@ -606,26 +577,16 @@ fn ensure_read_only_member(declaration_index: usize, path: &Path, metadata: &fs:
             path.display()
         )));
     }
-    assert!(!path.as_os_str().is_empty());
-    #[cfg(not(unix))]
-    assert!(metadata.permissions().readonly());
     Ok(())
 }
 
 fn hash_file(path: &Path, expected_bytes: u64) -> Result<[u8; blake3::OUT_LEN], Error> {
-    assert!(!path.as_os_str().is_empty());
     let mut file = File::open(path)
         .map_err(|error| Error::Store(format!("opening overlay generation member {}: {error}", path.display())))?;
     let mut hasher = blake3::Hasher::new();
     let mut buffer = [0_u8; FILE_HASH_BUFFER_BYTES];
     let mut observed_bytes = 0_u64;
-    let buffer_size_bytes = u64::try_from(FILE_HASH_BUFFER_BYTES)
-        .map_err(|_| Error::Store("overlay hash buffer size does not fit u64".to_string()))?;
-    let maximum_read_count = expected_bytes
-        .div_ceil(buffer_size_bytes)
-        .checked_add(1)
-        .ok_or_else(|| Error::Store("overlay generation read count overflow".to_string()))?;
-    for _read_index in 0..maximum_read_count {
+    loop {
         let read_count = file
             .read(&mut buffer)
             .map_err(|error| Error::Store(format!("reading overlay generation member {}: {error}", path.display())))?;
@@ -643,7 +604,6 @@ fn hash_file(path: &Path, expected_bytes: u64) -> Result<[u8; blake3::OUT_LEN], 
     if observed_bytes != expected_bytes {
         return Err(Error::Store(format!("overlay-generation-race: {} changed size while observed", path.display())));
     }
-    assert_eq!(observed_bytes, expected_bytes);
     Ok(*hasher.finalize().as_bytes())
 }
 
@@ -653,16 +613,12 @@ fn read_file_bounded(path: &Path, maximum_bytes: u64) -> Result<Vec<u8>, Error> 
     if metadata.file_type().is_symlink() || !metadata.is_file() {
         return Err(Error::Store(format!("overlay descriptor {} must be a direct regular file", path.display())));
     }
-    assert!(!metadata.file_type().is_symlink());
-    assert!(metadata.is_file());
-    let maximum_read_bytes = maximum_bytes
+    let read_limit = maximum_bytes
         .checked_add(1)
         .ok_or_else(|| Error::Store("bounded file read limit overflow".to_string()))?;
-    let buffer_capacity_bytes = usize::try_from(maximum_read_bytes)
-        .map_err(|_| Error::Store("bounded file read capacity does not fit usize".to_string()))?;
     let file = File::open(path).map_err(|error| Error::Store(format!("opening {}: {error}", path.display())))?;
-    let mut bytes = Vec::with_capacity(buffer_capacity_bytes);
-    file.take(maximum_read_bytes)
+    let mut bytes = Vec::new();
+    file.take(read_limit)
         .read_to_end(&mut bytes)
         .map_err(|error| Error::Store(format!("reading {}: {error}", path.display())))?;
     let observed = u64::try_from(bytes.len())

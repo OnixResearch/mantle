@@ -5407,6 +5407,152 @@
         "skipped"
       ],
       "task_link_class": "acceptance"
+    },
+    {
+      "artifacts": [
+        {
+          "apply_prerequisites": [],
+          "constraints": [
+            "Use substantive text without placeholders.",
+            "Keep lifecycle authority and non-claims explicit."
+          ],
+          "generates": "proposal.md",
+          "id": "proposal",
+          "instruction_template": "Write proposal.md for {{change}} with Why, What Changes, Impact, and Out of Scope sections.",
+          "output_path": "proposal.md",
+          "path_kind": "file",
+          "requires": [],
+          "skip_satisfies_dependencies": false,
+          "skipped": false,
+          "stage": "proposal",
+          "structural_admission": "proposal"
+        },
+        {
+          "apply_prerequisites": [
+            "gate:proposal"
+          ],
+          "constraints": [
+            "Use cairn.outcome-machine-review.v1.",
+            "Replace every placeholder before the design gate.",
+            "Record observed evidence before sync or archive."
+          ],
+          "generates": "outcome-machine.json",
+          "id": "outcome-machine",
+          "instruction_template": "Complete outcome-machine.json for {{change}} with one admitted route, tracked inputs, checks, authority facts, and completion state.",
+          "output_path": "outcome-machine.json",
+          "path_kind": "file",
+          "requires": [
+            "proposal"
+          ],
+          "skip_satisfies_dependencies": false,
+          "skipped": false,
+          "stage": "design",
+          "structural_admission": "outcome_machine"
+        },
+        {
+          "apply_prerequisites": [
+            "gate:proposal"
+          ],
+          "constraints": [
+            "Use stable r[...] requirement IDs.",
+            "Give every scenario GIVEN, WHEN, and THEN clauses."
+          ],
+          "generates": "specs/**/*.md",
+          "id": "specs",
+          "instruction_template": "Write one or more specs/<spec-id>/spec.md delta files for {{change}} with explicit requirement operations.",
+          "output_path": "specs",
+          "path_kind": "spec_directory",
+          "requires": [
+            "proposal"
+          ],
+          "skip_satisfies_dependencies": false,
+          "skipped": false,
+          "stage": "design",
+          "structural_admission": "delta_specs"
+        },
+        {
+          "apply_prerequisites": [
+            "gate:proposal",
+            "artifact:outcome-machine"
+          ],
+          "constraints": [
+            "Keep pure decisions separate from shell effects.",
+            "Name deterministic ordering and failure behavior."
+          ],
+          "generates": "design.md",
+          "id": "design",
+          "instruction_template": "Write design.md for {{change}} with decisions, rejected alternatives, tests, risks, and claim boundaries.",
+          "output_path": "design.md",
+          "path_kind": "file",
+          "requires": [
+            "proposal",
+            "outcome-machine"
+          ],
+          "skip_satisfies_dependencies": false,
+          "skipped": false,
+          "stage": "design",
+          "structural_admission": "design"
+        },
+        {
+          "apply_prerequisites": [
+            "gate:design"
+          ],
+          "constraints": [
+            "Link each task to a delta requirement or valid dependency marker.",
+            "Include completion-evidence and fresh-state tasks."
+          ],
+          "generates": "tasks.md",
+          "id": "tasks",
+          "instruction_template": "Write tasks.md for {{change}} with substantive linked tasks and positive and negative verification coverage.",
+          "output_path": "tasks.md",
+          "path_kind": "file",
+          "requires": [
+            "specs",
+            "design",
+            "outcome-machine"
+          ],
+          "skip_satisfies_dependencies": false,
+          "skipped": false,
+          "stage": "tasks",
+          "structural_admission": "tasks"
+        }
+      ],
+      "bounds": {
+        "max_artifact_bytes": 1048576,
+        "max_artifacts": 16,
+        "max_constraints": 16,
+        "max_dependencies": 8,
+        "max_directory_depth": 8,
+        "max_directory_entries": 128,
+        "max_files_per_artifact": 64,
+        "max_issues": 64,
+        "max_non_claims": 16,
+        "max_path_bytes": 4096,
+        "max_template_bytes": 4096
+      },
+      "description": "Spec-driven lifecycle with repeatable-capability and completion-evidence obligations",
+      "id": "outcome-machine",
+      "profile_version": 1,
+      "receipt_fields": [
+        "workflow_profile",
+        "workflow_profile_version",
+        "spec_effect",
+        "non_claims"
+      ],
+      "required_non_claims": [
+        "outcome-machine profile conformance does not prove product value, evidence truth, semantic correctness, reuse quality, maintenance quality, or release eligibility",
+        "recorded completion and fresh-state references prove only admitted structure and identity, not that the referenced claim is true"
+      ],
+      "review_obligations": [],
+      "schema_version": "cairn.workflow-schema.v1",
+      "spec_effect": "delta",
+      "states": [
+        "done",
+        "ready",
+        "blocked",
+        "skipped"
+      ],
+      "task_link_class": "requirement"
     }
   ],
   "stack_provenance_gate": {
@@ -5507,7 +5653,7 @@
             "extensions": [
               "md"
             ],
-            "root": "cairn/specs/release-provenance/spec.md",
+            "root": ".cairn/specs/release-provenance/spec.md",
             "source_kind": "accepted_specs"
           }
         ]
@@ -5536,64 +5682,7 @@
             "extensions": [
               "md"
             ],
-            "root": "cairn/specs/release-provenance/spec.md",
-            "source_kind": "accepted_specs"
-          }
-        ]
-      },
-      {
-        "anchor_kind": "exact_marker_bytes",
-        "assurance_level": "declared",
-        "evidence_sources": [
-          {
-            "extensions": [
-              "rs"
-            ],
-            "root": "tools/source_transports_tracey_refs.rs",
-            "source_kind": "rust_source"
-          },
-          {
-            "extensions": [
-              "rs"
-            ],
-            "root": "tools/release_provenance_tracey_refs.rs",
-            "source_kind": "rust_source"
-          },
-          {
-            "extensions": [
-              "rs"
-            ],
-            "root": "tools/durable_file_publication_tracey_refs.rs",
-            "source_kind": "rust_source"
-          }
-        ],
-        "id": "source-observations",
-        "marker_verbs": [
-          "impl",
-          "verify",
-          "depends",
-          "related"
-        ],
-        "requirement_sources": [
-          {
-            "extensions": [
-              "md"
-            ],
-            "root": "cairn/specs/source-transports/spec.md",
-            "source_kind": "accepted_specs"
-          },
-          {
-            "extensions": [
-              "md"
-            ],
-            "root": "cairn/specs/release-provenance/spec.md",
-            "source_kind": "accepted_specs"
-          },
-          {
-            "extensions": [
-              "md"
-            ],
-            "root": "cairn/specs/durable-file-publication-adoption/spec.md",
+            "root": ".cairn/specs/release-provenance/spec.md",
             "source_kind": "accepted_specs"
           }
         ]
@@ -5622,7 +5711,7 @@
             "extensions": [
               "md"
             ],
-            "root": "cairn/specs/immutable-release-pointer/spec.md",
+            "root": ".cairn/specs/immutable-release-pointer/spec.md",
             "source_kind": "accepted_specs"
           }
         ]
@@ -5739,7 +5828,10 @@
   "version": 1,
   "workflow_profile_policy": {
     "allowed_profiles": [
-      "spec-driven"
+      "spec-driven",
+      "assurance",
+      "no-spec-delta",
+      "outcome-machine"
     ],
     "default_profile": "spec-driven",
     "forbidden_selection_sources": [

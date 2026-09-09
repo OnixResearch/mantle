@@ -93,8 +93,6 @@ pub fn validate_observation(
     if observation.identity != observation_identity(observation) {
         return Err(ContractError::ObservationIdentityMismatch);
     }
-    debug_assert!(observation.products.len() <= MAXIMUM_PRODUCTS);
-    debug_assert_eq!(observation.non_claims, expected_non_claims);
     Ok(())
 }
 

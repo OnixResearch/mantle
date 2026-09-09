@@ -21,6 +21,9 @@ use snix_build::buildservice::BuildService;
 use snix_build::buildservice::StatefulWorkspaceMode;
 use snix_build::buildservice::StatefulWorkspaceRequest;
 use snix_castore::Node;
+use snix_castore::blobservice::BlobService;
+use snix_castore::directoryservice::DirectoryService;
+use snix_castore::import::fs::ingest_path;
 
 use crate::workspace::*;
 
@@ -520,11 +523,16 @@ pub struct IngestedWorkspaceSnapshot {
     pub manifest: WorkspaceSnapshotManifest,
 }
 
-pub async fn ingest_immutable_workspace_snapshot(
+pub async fn ingest_immutable_workspace_snapshot<BS, DS>(
     root: &Path,
     request: &StatefulWorkspaceRequest,
-    store: &crunch_store::BuildServiceStore,
-) -> Result<IngestedWorkspaceSnapshot, WorkspaceShellError> {
+    blob_service: &BS,
+    directory_service: &DS,
+) -> Result<IngestedWorkspaceSnapshot, WorkspaceShellError>
+where
+    BS: BlobService + Clone,
+    DS: DirectoryService,
+{
     let observations = scan_workspace(root, request)?;
     let plan = content_plan(&observations, request);
     if !plan.snapshot_allowed || plan.quarantine_required {
@@ -537,10 +545,10 @@ pub async fn ingest_immutable_workspace_snapshot(
         &plan,
     )
     .map_err(|reason| WorkspaceShellError::Quarantine(reason.as_str()))?;
-    let node = store
-        .ingest_host_path(root)
-        .await
-        .map_err(|error| WorkspaceShellError::Record(format!("snapshot CAS ingest failed: {error}")))?;
+    let node =
+        ingest_path(blob_service, directory_service, root, None::<&snix_castore::refscan::ReferenceScanner<Vec<u8>>>)
+            .await
+            .map_err(|error| WorkspaceShellError::Record(format!("snapshot CAS ingest failed: {error}")))?;
     Ok(IngestedWorkspaceSnapshot { node, manifest })
 }
 
@@ -1076,6 +1084,9 @@ mod tests {
     use snix_build::buildservice::BuildOutput;
     use snix_build::buildservice::StatefulWorkspaceLeaseBinding;
     use snix_castore::SymlinkTarget;
+    use snix_castore::blobservice::MemoryBlobService;
+    use snix_castore::directoryservice::RedbDirectoryService;
+    use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 
     use super::*;
 
@@ -1198,15 +1209,20 @@ mod tests {
         snapshot.mode = StatefulWorkspaceMode::ImmutableSnapshot;
         snapshot.snapshot_enabled = true;
         snapshot.lease = None;
-        let store = crunch_store::BuildServiceStore::memory().await.unwrap();
-        let first = ingest_immutable_workspace_snapshot(temp.path(), &snapshot, &store).await.unwrap();
-        let second = ingest_immutable_workspace_snapshot(temp.path(), &snapshot, &store).await.unwrap();
+        let blobs = MemoryBlobService::default();
+        let directories = RedbDirectoryService::new_temporary(
+            "workspace-snapshot-tests".to_string(),
+            RedbDirectoryServiceConfig::default(),
+        )
+        .unwrap();
+        let first = ingest_immutable_workspace_snapshot(temp.path(), &snapshot, &blobs, &directories).await.unwrap();
+        let second = ingest_immutable_workspace_snapshot(temp.path(), &snapshot, &blobs, &directories).await.unwrap();
         assert_eq!(first.manifest, second.manifest);
         assert_eq!(first.node, second.node);
         assert!(first.manifest.object_ref.starts_with(WORKSPACE_SNAPSHOT_REF_PREFIX));
 
         std::fs::write(temp.path().join("token.txt"), b"token=reject").unwrap();
-        let rejected = ingest_immutable_workspace_snapshot(temp.path(), &snapshot, &store).await;
+        let rejected = ingest_immutable_workspace_snapshot(temp.path(), &snapshot, &blobs, &directories).await;
         assert!(matches!(rejected, Err(WorkspaceShellError::Quarantine("secret-detected"))));
     }
 

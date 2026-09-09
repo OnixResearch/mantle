@@ -1,6 +1,5 @@
 {
   pkgs,
-  craneLib,
   packageRoot,
   coreCrate,
   shellCrate,
@@ -61,12 +60,20 @@ let
       test -f "$out/source/NOTICE"
     '';
 
-  vendor = craneLib.vendorCargoDeps {
-    src = "${source}/source";
-    cargoLock = "${packageRoot}/upstream-Cargo.lock";
+  vendor = pkgs.rustPlatform.importCargoLock {
+    lockFile = "${packageRoot}/upstream-Cargo.lock";
   };
 
-  cargoConfig = "${vendor}/config.toml";
+  cargoConfig = pkgs.writeText "spacewasm-offline-cargo-config.toml" ''
+    [source.crates-io]
+    replace-with = "vendored-sources"
+
+    [source.vendored-sources]
+    directory = "${vendor}"
+
+    [net]
+    offline = true
+  '';
 
   mkCargoBuild =
     {

@@ -6,7 +6,6 @@
 // r[impl foreign_derivation_import.executable_payload_classification]
 // r[impl foreign_derivation_import.provenance_audit_receipt]
 // r[impl foreign_derivation_import.live_guixpkgs_export_realization]
-// r[impl store_lifecycle.tiger_conformance]
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -39,7 +38,7 @@ const CPIO_NEWC_MAGIC: &[u8] = b"070701";
 const CPIO_CRC_MAGIC: &[u8] = b"070702";
 const TAR_USTAR_MAGIC: &[u8] = b"ustar";
 const TAR_USTAR_OFFSET: usize = 257;
-const TAR_USTAR_END: usize = TAR_USTAR_OFFSET.saturating_add(TAR_USTAR_MAGIC.len());
+const TAR_USTAR_END: usize = TAR_USTAR_OFFSET + TAR_USTAR_MAGIC.len();
 const ELF_IDENT_BYTES: usize = 16;
 const ELF32_HEADER_BYTES: usize = 52;
 const ELF64_HEADER_BYTES: usize = 64;
@@ -75,6 +74,7 @@ const HEX_RADIX: u32 = 16;
 #[cfg(test)]
 const DIGEST_HEX_CHARS: usize = 64;
 const INITIAL_WORKLIST_CAPACITY: usize = 128;
+const INITIAL_READ_CAPACITY: usize = 4096;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -203,68 +203,6 @@ pub struct PurePayloadInput<'a> {
     pub bytes: &'a [u8],
 }
 
-struct ObservedReferenceInput<'a> {
-    owner_store_path: &'a str,
-    view: &'a str,
-    reference: &'a str,
-    suffix: &'a str,
-    kind: ProvenanceReferenceKind,
-}
-
-struct SymlinkInput<'a> {
-    owner_store_path: &'a str,
-    path: &'a str,
-    target: &'a str,
-    link_root: &'a str,
-}
-
-struct RelativePathInput<'a> {
-    path: &'a str,
-    target: &'a str,
-    root: &'a str,
-}
-
-struct CompressedStreamInput<'a, R> {
-    payload: &'a PurePayloadInput<'a>,
-    decoder: R,
-    extension: &'a str,
-    format_name: &'a str,
-    container_depth: u32,
-}
-
-struct CpioInput<'a> {
-    payload: &'a PurePayloadInput<'a>,
-    bytes: &'a [u8],
-    container_depth: u32,
-}
-
-struct ContainerInspection<'a> {
-    payload: &'a PurePayloadInput<'a>,
-    entries: Vec<ContainerEntry>,
-    container_depth: u32,
-}
-
-struct ContainerSymlinkInput<'a> {
-    payload: &'a PurePayloadInput<'a>,
-    path: &'a str,
-    target: &'a str,
-}
-
-struct ScanCompletion {
-    is_preflight_complete: bool,
-    is_traversal_complete: bool,
-}
-
-struct StoreReferenceInput<'a> {
-    raw: &'a str,
-    prefix: &'a str,
-}
-
-struct AlignmentInput {
-    value_bytes: usize,
-    alignment_bytes: usize,
-}
-
 struct ResolutionContext<'a> {
     target_store_prefix: &'a str,
     admitted_closure_paths: &'a BTreeSet<String>,
@@ -311,13 +249,10 @@ impl ScanAccumulator {
         if self.halted {
             return;
         }
-        let Ok(finding_index) = u32::try_from(self.findings.len()) else {
+        let max_findings = usize::try_from(policy.max_findings).unwrap_or(usize::MAX);
+        if self.findings.len() >= max_findings {
             self.halted = true;
-            return;
-        };
-        if finding_index >= policy.max_findings {
-            self.halted = true;
-            if policy.max_findings > 0 {
+            if max_findings > 0 {
                 self.findings.pop();
                 self.findings.push(ProvenanceFinding {
                     code: "limit-exhausted".to_string(),
@@ -345,55 +280,11 @@ struct LoadedPathInfo {
     path_info: snix_store::path_info::PathInfo,
 }
 
-struct VerifiedPreflightPathInfo {
-    logical_path: String,
-    path_info: snix_store::path_info::PathInfo,
-    observed_nar_sha256: String,
-}
-
 struct WorkItem {
     owner_store_path: String,
     logical_path: String,
     node: Node,
     depth: u32,
-}
-
-struct DirectoryWorkInput {
-    owner_store_path: String,
-    logical_path: String,
-    digest: snix_castore::B3Digest,
-    size_bytes: u64,
-    depth: u32,
-}
-
-struct FileWorkInput {
-    owner_store_path: String,
-    logical_path: String,
-    node_identity: String,
-    digest: snix_castore::B3Digest,
-    size_bytes: u64,
-    is_executable: bool,
-}
-
-struct SymlinkWorkInput<'a> {
-    owner_store_path: String,
-    logical_path: String,
-    node_identity: String,
-    target: &'a str,
-}
-
-struct EncodedSymlinkWorkInput {
-    owner_store_path: String,
-    logical_path: String,
-    node_identity: String,
-    target: snix_castore::SymlinkTarget,
-}
-
-struct PayloadWalkContext<'services, 'policy, 'context, 'facts> {
-    directory_service: &'services dyn snix_castore::directoryservice::DirectoryService,
-    blob_service: &'services dyn snix_castore::blobservice::BlobService,
-    policy: &'policy ForeignProvenancePolicy,
-    resolution: &'context ResolutionContext<'facts>,
 }
 
 #[derive(Clone, Debug)]
@@ -408,7 +299,7 @@ pub fn validate_foreign_provenance_policy(policy: &ForeignProvenancePolicy) -> R
     if policy.schema != FOREIGN_PROVENANCE_POLICY_SCHEMA {
         return Err(format!("foreign provenance policy schema must be {FOREIGN_PROVENANCE_POLICY_SCHEMA}"));
     }
-    let bounded_fields = [
+    let limits = [
         ("max_path_infos", u64::from(policy.max_path_infos)),
         ("max_nodes", u64::from(policy.max_nodes)),
         ("max_blobs", u64::from(policy.max_blobs)),
@@ -423,7 +314,7 @@ pub fn validate_foreign_provenance_policy(policy: &ForeignProvenancePolicy) -> R
         ("max_path_bytes", u64::from(policy.max_path_bytes)),
         ("max_shebang_bytes", u64::from(policy.max_shebang_bytes)),
     ];
-    for (name, value) in bounded_fields {
+    for (name, value) in limits {
         if value == 0 {
             return Err(format!("foreign provenance policy limit must be nonzero: {name}"));
         }
@@ -444,8 +335,6 @@ pub fn validate_foreign_provenance_policy(policy: &ForeignProvenancePolicy) -> R
         }
         previous = Some(path);
     }
-    assert_eq!(policy.schema, FOREIGN_PROVENANCE_POLICY_SCHEMA);
-    assert!(policy.max_blob_bytes <= policy.max_total_bytes);
     Ok(())
 }
 
@@ -460,8 +349,6 @@ pub async fn scan_castore_provenance(
     if request.trusted_keys.is_empty() {
         return Err(Error::Store("foreign provenance audit requires at least one trusted key".to_string()));
     }
-    assert!(!request.selected_root_paths.is_empty());
-    assert!(!request.trusted_keys.is_empty());
     let target_store_prefix = store.store_dir();
     let context = ResolutionContext {
         target_store_prefix,
@@ -473,209 +360,13 @@ pub async fn scan_castore_provenance(
     };
     let (loaded_path_infos, path_infos, mut preflight) = preflight_path_infos(store, &request, &context).await?;
     if !preflight.findings.is_empty() || preflight.halted {
-        return Ok(finalize_scan(
-            ScanCompletion {
-                is_preflight_complete: false,
-                is_traversal_complete: false,
-            },
-            path_infos,
-            preflight,
-        ));
+        return Ok(finalize_scan(false, false, path_infos, preflight));
     }
     walk_castore_payloads(store, &loaded_path_infos, request.policy, &context, &mut preflight).await?;
     finalize_symlink_graph(request.policy, &mut preflight);
-    let is_traversal_complete =
+    let traversal_complete =
         !preflight.halted && !preflight.findings.iter().any(|finding| finding.code == "incomplete-closure");
-    Ok(finalize_scan(
-        ScanCompletion {
-            is_preflight_complete: true,
-            is_traversal_complete,
-        },
-        path_infos,
-        preflight,
-    ))
-}
-
-struct PreflightTraversal {
-    pending: BTreeSet<String>,
-    seen: BTreeSet<String>,
-    loaded_path_infos: Vec<LoadedPathInfo>,
-    observations: Vec<ProvenancePathInfoObservation>,
-    state: ScanAccumulator,
-}
-
-impl PreflightTraversal {
-    fn new(request: &CastoreProvenanceRequest<'_>) -> Result<Self, Error> {
-        Ok(Self {
-            pending: request.selected_root_paths.iter().cloned().collect(),
-            seen: BTreeSet::new(),
-            loaded_path_infos: Vec::with_capacity(
-                usize::try_from(request.policy.max_path_infos)
-                    .map_err(|_| Error::Store("foreign provenance path-info limit exceeds usize".to_string()))?,
-            ),
-            observations: Vec::with_capacity(
-                usize::try_from(request.policy.max_path_infos)
-                    .map_err(|_| Error::Store("foreign provenance path-info limit exceeds usize".to_string()))?,
-            ),
-            state: ScanAccumulator::new(),
-        })
-    }
-
-    fn admit_logical_path(&mut self, logical_path: &str, request: &CastoreProvenanceRequest<'_>) -> bool {
-        if !self.seen.insert(logical_path.to_string()) {
-            return false;
-        }
-        let should_stop = match u32::try_from(self.seen.len()) {
-            Ok(value) => value > request.policy.max_path_infos,
-            Err(_) => true,
-        };
-        if should_stop {
-            self.state.limit(request.policy, logical_path, "path-infos");
-            return false;
-        }
-        if !request.admitted_closure_paths.contains(logical_path) {
-            self.state.finding(
-                request.policy,
-                "unadmitted-closure-path",
-                logical_path,
-                "path is outside the admitted plan closure",
-            );
-            return false;
-        }
-        assert!(self.seen.contains(logical_path));
-        assert!(request.admitted_closure_paths.contains(logical_path));
-        true
-    }
-
-    fn finish(mut self) -> (Vec<LoadedPathInfo>, Vec<ProvenancePathInfoObservation>, ScanAccumulator) {
-        self.loaded_path_infos.sort_by(|left, right| left.logical_path.cmp(&right.logical_path));
-        self.observations.sort();
-        (self.loaded_path_infos, self.observations, self.state)
-    }
-}
-
-async fn load_preflight_path_info(
-    service: &dyn snix_store::pathinfoservice::PathInfoService,
-    logical_path: &str,
-    context: &ResolutionContext<'_>,
-    policy: &ForeignProvenancePolicy,
-    state: &mut ScanAccumulator,
-) -> Result<Option<snix_store::path_info::PathInfo>, Error> {
-    let parsed: StorePath<String> =
-        match StorePath::from_absolute_path_with_prefix(logical_path.as_bytes(), context.target_store_prefix) {
-            Ok(path) => path,
-            Err(error) => {
-                state.finding(policy, "invalid-store-path", logical_path, error.to_string());
-                return Ok(None);
-            }
-        };
-    assert!(!logical_path.is_empty());
-    assert!(!context.target_store_prefix.is_empty());
-    let path_info = service
-        .get(*parsed.digest())
-        .await
-        .map_err(|error| Error::PathInfoService(format!("foreign provenance preflight for {logical_path}: {error}")))?;
-    let Some(path_info) = path_info else {
-        state.finding(policy, "incomplete-closure", logical_path, "PathInfo is missing");
-        return Ok(None);
-    };
-    Ok(Some(path_info))
-}
-
-fn verify_preflight_path_info(
-    path_info: &snix_store::path_info::PathInfo,
-    logical_path: &str,
-    request: &CastoreProvenanceRequest<'_>,
-    context: &ResolutionContext<'_>,
-    state: &mut ScanAccumulator,
-) -> Option<String> {
-    let observed_path = path_info.store_path.to_absolute_path_with_prefix(context.target_store_prefix);
-    if observed_path != logical_path {
-        state.finding(
-            request.policy,
-            "inconsistent-pathinfo",
-            logical_path,
-            format!("stored path was {observed_path}"),
-        );
-        return None;
-    }
-    if !path_info_has_trusted_signature(path_info, request.trusted_keys, context.target_store_prefix) {
-        state.finding(
-            request.policy,
-            "unsigned-or-untrusted-pathinfo",
-            logical_path,
-            "no trusted PathInfo signature verified",
-        );
-        return None;
-    }
-    let observed_nar_sha256 = data_encoding::HEXLOWER.encode(&path_info.nar_sha256);
-    let Some(expected) = request.expected_path_infos.get(logical_path) else {
-        state.finding(
-            request.policy,
-            "unbound-pathinfo",
-            logical_path,
-            "realization receipt has no NAR fact for this path",
-        );
-        return None;
-    };
-    if expected.nar_sha256 != observed_nar_sha256 || expected.nar_size != path_info.nar_size {
-        state.finding(
-            request.policy,
-            "inconsistent-pathinfo",
-            logical_path,
-            format!(
-                "receipt NAR was {}:{} but store NAR was {}:{}",
-                expected.nar_sha256, expected.nar_size, observed_nar_sha256, path_info.nar_size
-            ),
-        );
-        return None;
-    }
-    assert_eq!(observed_path, logical_path);
-    assert_eq!(expected.nar_size, path_info.nar_size);
-    Some(observed_nar_sha256)
-}
-
-fn record_preflight_path_info(
-    verified: VerifiedPreflightPathInfo,
-    request: &CastoreProvenanceRequest<'_>,
-    context: &ResolutionContext<'_>,
-    traversal: &mut PreflightTraversal,
-) {
-    let VerifiedPreflightPathInfo {
-        logical_path,
-        path_info,
-        observed_nar_sha256,
-    } = verified;
-    let mut references = Vec::with_capacity(path_info.references.len());
-    for reference in &path_info.references {
-        let target = reference.to_absolute_path_with_prefix(context.target_store_prefix);
-        references.push(target.clone());
-        if request.admitted_closure_paths.contains(&target) {
-            traversal.pending.insert(target);
-        } else {
-            traversal.state.finding(
-                request.policy,
-                "unadmitted-closure-reference",
-                &logical_path,
-                format!("PathInfo references {target}"),
-            );
-        }
-    }
-    references.sort();
-    references.dedup();
-    traversal.observations.push(ProvenancePathInfoObservation {
-        logical_path: logical_path.clone(),
-        nar_sha256: observed_nar_sha256,
-        nar_size: path_info.nar_size,
-        node_identity: node_identity(&path_info.node),
-        references,
-    });
-    traversal.loaded_path_infos.push(LoadedPathInfo {
-        logical_path,
-        path_info,
-    });
-    assert_eq!(traversal.loaded_path_infos.len(), traversal.observations.len());
-    assert!(u32::try_from(traversal.loaded_path_infos.len()).is_ok_and(|value| value <= request.policy.max_path_infos));
+    Ok(finalize_scan(true, traversal_complete, path_infos, preflight))
 }
 
 async fn preflight_path_infos(
@@ -683,281 +374,121 @@ async fn preflight_path_infos(
     request: &CastoreProvenanceRequest<'_>,
     context: &ResolutionContext<'_>,
 ) -> Result<(Vec<LoadedPathInfo>, Vec<ProvenancePathInfoObservation>, ScanAccumulator), Error> {
-    assert!(!request.selected_root_paths.is_empty());
-    assert!(!context.target_store_prefix.is_empty());
     let service = store.pathinfo_service();
-    let mut traversal = PreflightTraversal::new(request)?;
-    while let Some(logical_path) = traversal.pending.pop_first() {
-        if traversal.state.halted {
-            break;
-        }
-        if !traversal.admit_logical_path(&logical_path, request) {
-            continue;
-        }
-        let Some(path_info) =
-            load_preflight_path_info(service.as_ref(), &logical_path, context, request.policy, &mut traversal.state)
-                .await?
-        else {
-            continue;
-        };
-        let Some(observed_nar_sha256) =
-            verify_preflight_path_info(&path_info, &logical_path, request, context, &mut traversal.state)
-        else {
-            continue;
-        };
-        record_preflight_path_info(
-            VerifiedPreflightPathInfo {
-                logical_path,
-                path_info,
-                observed_nar_sha256,
-            },
-            request,
-            context,
-            &mut traversal,
-        );
-    }
-    Ok(traversal.finish())
-}
+    let mut pending = request.selected_root_paths.iter().cloned().collect::<BTreeSet<_>>();
+    let mut seen = BTreeSet::new();
+    let mut loaded_path_infos = Vec::new();
+    let mut observations = Vec::new();
+    let mut state = ScanAccumulator::new();
 
-async fn process_directory_node(
-    directory_service: &dyn snix_castore::directoryservice::DirectoryService,
-    input: DirectoryWorkInput,
-    policy: &ForeignProvenancePolicy,
-    worklist: &mut Vec<WorkItem>,
-    state: &mut ScanAccumulator,
-) -> Result<(), Error> {
-    assert!(!input.logical_path.is_empty());
-    assert!(input.depth <= policy.max_depth);
-    let directory = directory_service
-        .get(&input.digest)
-        .await
-        .map_err(|error| Error::DirectoryService(format!("foreign provenance directory {}: {error}", input.digest)))?;
-    let Some(directory) = directory else {
-        state.finding(
-            policy,
-            "incomplete-closure",
-            &input.logical_path,
-            format!("directory {} is missing", input.digest),
-        );
-        return Ok(());
-    };
-    if directory.digest() != input.digest || directory.size() != input.size_bytes {
-        state.finding(
-            policy,
-            "incomplete-closure",
-            &input.logical_path,
-            format!("directory {} content or size is inconsistent", input.digest),
-        );
-        return Ok(());
-    }
-    let mut children = Vec::with_capacity(directory.nodes().count());
-    for (name, child) in directory.nodes() {
-        let name = match std::str::from_utf8(name.as_ref()) {
-            Ok(name) => name,
-            Err(error) => {
-                state.finding(
-                    policy,
-                    "malformed-path",
-                    &input.logical_path,
-                    format!("non-UTF-8 directory name: {error}"),
-                );
-                continue;
-            }
-        };
-        let child_path = format!("{}/{name}", input.logical_path);
-        let is_path_too_long = u32::try_from(child_path.len()).map_or(true, |value| value > policy.max_path_bytes);
-        if is_path_too_long {
-            state.limit(policy, &child_path, "path-bytes");
+    while let Some(logical_path) = pending.pop_first() {
+        if state.halted {
             break;
         }
-        children.push(WorkItem {
-            owner_store_path: input.owner_store_path.clone(),
-            logical_path: child_path,
-            node: child.clone(),
-            depth: input.depth.saturating_add(1),
+        if !seen.insert(logical_path.clone()) {
+            continue;
+        }
+        if seen.len() > usize::try_from(request.policy.max_path_infos).unwrap_or(usize::MAX) {
+            state.limit(request.policy, &logical_path, "path-infos");
+            break;
+        }
+        if !request.admitted_closure_paths.contains(&logical_path) {
+            state.finding(
+                request.policy,
+                "unadmitted-closure-path",
+                &logical_path,
+                "path is outside the admitted plan closure",
+            );
+            continue;
+        }
+        let parsed: StorePath<String> =
+            match StorePath::from_absolute_path_with_prefix(logical_path.as_bytes(), context.target_store_prefix) {
+                Ok(path) => path,
+                Err(error) => {
+                    state.finding(request.policy, "invalid-store-path", &logical_path, error.to_string());
+                    continue;
+                }
+            };
+        let path_info = service.get(*parsed.digest()).await.map_err(|error| {
+            Error::PathInfoService(format!("foreign provenance preflight for {logical_path}: {error}"))
+        })?;
+        let Some(path_info) = path_info else {
+            state.finding(request.policy, "incomplete-closure", &logical_path, "PathInfo is missing");
+            continue;
+        };
+        let observed_path = path_info.store_path.to_absolute_path_with_prefix(context.target_store_prefix);
+        if observed_path != logical_path {
+            state.finding(
+                request.policy,
+                "inconsistent-pathinfo",
+                &logical_path,
+                format!("stored path was {observed_path}"),
+            );
+            continue;
+        }
+        if !path_info_has_trusted_signature(&path_info, request.trusted_keys, context.target_store_prefix) {
+            state.finding(
+                request.policy,
+                "unsigned-or-untrusted-pathinfo",
+                &logical_path,
+                "no trusted PathInfo signature verified",
+            );
+            continue;
+        }
+        let observed_nar_sha256 = data_encoding::HEXLOWER.encode(&path_info.nar_sha256);
+        let Some(expected) = request.expected_path_infos.get(&logical_path) else {
+            state.finding(
+                request.policy,
+                "unbound-pathinfo",
+                &logical_path,
+                "realization receipt has no NAR fact for this path",
+            );
+            continue;
+        };
+        if expected.nar_sha256 != observed_nar_sha256 || expected.nar_size != path_info.nar_size {
+            state.finding(
+                request.policy,
+                "inconsistent-pathinfo",
+                &logical_path,
+                format!(
+                    "receipt NAR was {}:{} but store NAR was {}:{}",
+                    expected.nar_sha256, expected.nar_size, observed_nar_sha256, path_info.nar_size
+                ),
+            );
+            continue;
+        }
+        let mut references = Vec::with_capacity(path_info.references.len());
+        for reference in &path_info.references {
+            let target = reference.to_absolute_path_with_prefix(context.target_store_prefix);
+            references.push(target.clone());
+            if request.admitted_closure_paths.contains(&target) {
+                pending.insert(target);
+            } else {
+                state.finding(
+                    request.policy,
+                    "unadmitted-closure-reference",
+                    &logical_path,
+                    format!("PathInfo references {target}"),
+                );
+            }
+        }
+        references.sort();
+        references.dedup();
+        observations.push(ProvenancePathInfoObservation {
+            logical_path: logical_path.clone(),
+            nar_sha256: observed_nar_sha256,
+            nar_size: path_info.nar_size,
+            node_identity: node_identity(&path_info.node),
+            references,
+        });
+        loaded_path_infos.push(LoadedPathInfo {
+            logical_path,
+            path_info,
         });
     }
-    children.sort_by(|left, right| right.logical_path.cmp(&left.logical_path));
-    worklist
-        .try_reserve(children.len())
-        .map_err(|error| Error::Store(format!("reserving provenance worklist: {error}")))?;
-    worklist.extend(children);
-    Ok(())
-}
-
-async fn process_file_node(
-    blob_service: &dyn snix_castore::blobservice::BlobService,
-    input: FileWorkInput,
-    policy: &ForeignProvenancePolicy,
-    context: &ResolutionContext<'_>,
-    state: &mut ScanAccumulator,
-) -> Result<(), Error> {
-    if state.visited_blob_count >= policy.max_blobs {
-        state.limit(policy, &input.logical_path, "blobs");
-        return Ok(());
-    }
-    if input.size_bytes > policy.max_blob_bytes {
-        state.limit(policy, &input.logical_path, "blob-bytes");
-        return Ok(());
-    }
-    let Some(next_total_bytes) = state.read_byte_count.checked_add(input.size_bytes) else {
-        state.limit(policy, &input.logical_path, "total-bytes");
-        return Ok(());
-    };
-    if next_total_bytes > policy.max_total_bytes {
-        state.limit(policy, &input.logical_path, "total-bytes");
-        return Ok(());
-    }
-    assert!(input.size_bytes <= policy.max_blob_bytes);
-    assert!(next_total_bytes <= policy.max_total_bytes);
-    state.visited_blob_count = state.visited_blob_count.saturating_add(1);
-    let bytes = match read_blob_exact(blob_service, &input.digest, input.size_bytes).await {
-        Ok(bytes) => bytes,
-        Err(detail) => {
-            state.finding(policy, "incomplete-closure", &input.logical_path, detail);
-            return Ok(());
-        }
-    };
-    state.read_byte_count = next_total_bytes;
-    inspect_payload(
-        PurePayloadInput {
-            owner_store_path: &input.owner_store_path,
-            path: &input.logical_path,
-            node_identity: &input.node_identity,
-            executable: input.is_executable,
-            bytes: &bytes,
-        },
-        0,
-        policy,
-        context,
-        state,
-    );
-    Ok(())
-}
-
-fn process_symlink_node(
-    input: SymlinkWorkInput<'_>,
-    policy: &ForeignProvenancePolicy,
-    context: &ResolutionContext<'_>,
-    state: &mut ScanAccumulator,
-) {
-    assert!(!input.owner_store_path.is_empty());
-    assert!(!input.logical_path.is_empty());
-    let target_size_bytes = match u64::try_from(input.target.len()) {
-        Ok(value) => value,
-        Err(_) => {
-            state.limit(policy, &input.logical_path, "symlink-bytes");
-            return;
-        }
-    };
-    state.payloads.push(ProvenancePayloadObservation {
-        owner_store_path: input.owner_store_path.clone(),
-        path: input.logical_path.clone(),
-        node_identity: input.node_identity,
-        class: ProvenancePayloadClass::Symlink,
-        executable: false,
-        byte_count: target_size_bytes,
-        content_blake3: blake3::hash(input.target.as_bytes()).to_hex().to_string(),
-    });
-    inspect_symlink(
-        SymlinkInput {
-            owner_store_path: &input.owner_store_path,
-            path: &input.logical_path,
-            target: input.target,
-            link_root: &input.owner_store_path,
-        },
-        policy,
-        context,
-        state,
-    );
-}
-
-fn process_encoded_symlink(
-    input: EncodedSymlinkWorkInput,
-    walk: &PayloadWalkContext<'_, '_, '_, '_>,
-    state: &mut ScanAccumulator,
-) {
-    assert!(!input.owner_store_path.is_empty());
-    assert!(!input.logical_path.is_empty());
-    let target = match std::str::from_utf8(input.target.as_ref()) {
-        Ok(target) => target,
-        Err(error) => {
-            state.finding(walk.policy, "malformed-symlink", &input.logical_path, format!("non-UTF-8 target: {error}"));
-            return;
-        }
-    };
-    process_symlink_node(
-        SymlinkWorkInput {
-            owner_store_path: input.owner_store_path,
-            logical_path: input.logical_path,
-            node_identity: input.node_identity,
-            target,
-        },
-        walk.policy,
-        walk.resolution,
-        state,
-    );
-}
-
-async fn process_work_item(
-    walk: &PayloadWalkContext<'_, '_, '_, '_>,
-    item: WorkItem,
-    worklist: &mut Vec<WorkItem>,
-    state: &mut ScanAccumulator,
-) -> Result<(), Error> {
-    assert!(item.depth <= walk.policy.max_depth);
-    assert!(!state.halted);
-    let identity = node_identity(&item.node);
-    match item.node {
-        Node::Directory { digest, size } => {
-            process_directory_node(
-                walk.directory_service,
-                DirectoryWorkInput {
-                    owner_store_path: item.owner_store_path,
-                    logical_path: item.logical_path,
-                    digest,
-                    size_bytes: size,
-                    depth: item.depth,
-                },
-                walk.policy,
-                worklist,
-                state,
-            )
-            .await?;
-        }
-        Node::File {
-            digest,
-            size,
-            executable,
-        } => {
-            process_file_node(
-                walk.blob_service,
-                FileWorkInput {
-                    owner_store_path: item.owner_store_path,
-                    logical_path: item.logical_path,
-                    node_identity: identity,
-                    digest,
-                    size_bytes: size,
-                    is_executable: executable,
-                },
-                walk.policy,
-                walk.resolution,
-                state,
-            )
-            .await?;
-        }
-        Node::Symlink { target } => process_encoded_symlink(
-            EncodedSymlinkWorkInput {
-                owner_store_path: item.owner_store_path,
-                logical_path: item.logical_path,
-                node_identity: identity,
-                target,
-            },
-            walk,
-            state,
-        ),
-    }
-    Ok(())
+    loaded_path_infos.sort_by(|left, right| left.logical_path.cmp(&right.logical_path));
+    observations.sort();
+    Ok((loaded_path_infos, observations, state))
 }
 
 async fn walk_castore_payloads(
@@ -967,17 +498,9 @@ async fn walk_castore_payloads(
     context: &ResolutionContext<'_>,
     state: &mut ScanAccumulator,
 ) -> Result<(), Error> {
-    assert!(u32::try_from(path_infos.len()).is_ok_and(|value| value <= policy.max_path_infos));
-    assert!(!context.target_store_prefix.is_empty());
     let directory_service = store.directory_service();
     let blob_service = store.blob_service();
-    let walk = PayloadWalkContext {
-        directory_service: directory_service.as_ref(),
-        blob_service: blob_service.as_ref(),
-        policy,
-        resolution: context,
-    };
-    let mut worklist = Vec::with_capacity(INITIAL_WORKLIST_CAPACITY.max(path_infos.len()));
+    let mut worklist = Vec::with_capacity(INITIAL_WORKLIST_CAPACITY);
     for loaded in path_infos.iter().rev() {
         worklist.push(WorkItem {
             owner_store_path: loaded.logical_path.clone(),
@@ -1003,14 +526,140 @@ async fn walk_castore_payloads(
         state.visited_node_count = state.visited_node_count.saturating_add(1);
         state.observed_paths.insert(item.logical_path.clone());
         let identity = node_identity(&item.node);
-        if !node_identities.insert(identity) {
+        if !node_identities.insert(identity.clone()) {
             state.duplicate_node_count = state.duplicate_node_count.saturating_add(1);
             if state.duplicate_node_count > policy.max_duplicates {
                 state.limit(policy, &item.logical_path, "duplicates");
                 break;
             }
         }
-        process_work_item(&walk, item, &mut worklist, state).await?;
+
+        match item.node {
+            Node::Directory { digest, size } => {
+                let directory = directory_service.get(&digest).await.map_err(|error| {
+                    Error::DirectoryService(format!("foreign provenance directory {digest}: {error}"))
+                })?;
+                let Some(directory) = directory else {
+                    state.finding(
+                        policy,
+                        "incomplete-closure",
+                        &item.logical_path,
+                        format!("directory {digest} is missing"),
+                    );
+                    continue;
+                };
+                if directory.digest() != digest || directory.size() != size {
+                    state.finding(
+                        policy,
+                        "incomplete-closure",
+                        &item.logical_path,
+                        format!("directory {digest} content or size is inconsistent"),
+                    );
+                    continue;
+                }
+                let mut children = Vec::new();
+                for (name, child) in directory.nodes() {
+                    let name = match std::str::from_utf8(name.as_ref()) {
+                        Ok(name) => name,
+                        Err(error) => {
+                            state.finding(
+                                policy,
+                                "malformed-path",
+                                &item.logical_path,
+                                format!("non-UTF-8 directory name: {error}"),
+                            );
+                            continue;
+                        }
+                    };
+                    let child_path = format!("{}/{name}", item.logical_path);
+                    if child_path.len() > usize::try_from(policy.max_path_bytes).unwrap_or(usize::MAX) {
+                        state.limit(policy, &child_path, "path-bytes");
+                        break;
+                    }
+                    children.push(WorkItem {
+                        owner_store_path: item.owner_store_path.clone(),
+                        logical_path: child_path,
+                        node: child.clone(),
+                        depth: item.depth.saturating_add(1),
+                    });
+                }
+                children.sort_by(|left, right| right.logical_path.cmp(&left.logical_path));
+                worklist.extend(children);
+            }
+            Node::File {
+                digest,
+                size,
+                executable,
+            } => {
+                if state.visited_blob_count >= policy.max_blobs {
+                    state.limit(policy, &item.logical_path, "blobs");
+                    break;
+                }
+                if size > policy.max_blob_bytes {
+                    state.limit(policy, &item.logical_path, "blob-bytes");
+                    break;
+                }
+                let next_total = state.read_byte_count.checked_add(size);
+                if next_total.is_none_or(|value| value > policy.max_total_bytes) {
+                    state.limit(policy, &item.logical_path, "total-bytes");
+                    break;
+                }
+                state.visited_blob_count = state.visited_blob_count.saturating_add(1);
+                let bytes = match read_blob_exact(blob_service.as_ref(), &digest, size).await {
+                    Ok(bytes) => bytes,
+                    Err(detail) => {
+                        state.finding(policy, "incomplete-closure", &item.logical_path, detail);
+                        continue;
+                    }
+                };
+                state.read_byte_count = next_total.expect("checked total byte count must exist");
+                inspect_payload(
+                    PurePayloadInput {
+                        owner_store_path: &item.owner_store_path,
+                        path: &item.logical_path,
+                        node_identity: &identity,
+                        executable,
+                        bytes: &bytes,
+                    },
+                    0,
+                    policy,
+                    context,
+                    state,
+                );
+            }
+            Node::Symlink { target } => {
+                let target = match std::str::from_utf8(target.as_ref()) {
+                    Ok(target) => target,
+                    Err(error) => {
+                        state.finding(
+                            policy,
+                            "malformed-symlink",
+                            &item.logical_path,
+                            format!("non-UTF-8 target: {error}"),
+                        );
+                        continue;
+                    }
+                };
+                state.payloads.push(ProvenancePayloadObservation {
+                    owner_store_path: item.owner_store_path.clone(),
+                    path: item.logical_path.clone(),
+                    node_identity: identity,
+                    class: ProvenancePayloadClass::Symlink,
+                    executable: false,
+                    byte_count: u64::try_from(target.len()).unwrap_or(u64::MAX),
+                    content_blake3: blake3::hash(target.as_bytes()).to_hex().to_string(),
+                });
+                inspect_symlink(
+                    &item.owner_store_path,
+                    &item.logical_path,
+                    target,
+                    &item.owner_store_path,
+                    policy,
+                    context,
+                    state,
+                );
+            }
+        }
     }
     Ok(())
 }
@@ -1018,7 +667,7 @@ async fn walk_castore_payloads(
 async fn read_blob_exact(
     blob_service: &dyn snix_castore::blobservice::BlobService,
     digest: &snix_castore::B3Digest,
-    expected_size_bytes: u64,
+    expected_size: u64,
 ) -> Result<Vec<u8>, String> {
     let Some(reader) = blob_service
         .open_read(digest)
@@ -1027,27 +676,20 @@ async fn read_blob_exact(
     else {
         return Err(format!("foreign provenance blob is missing: {digest}"));
     };
-    let mut bytes = Vec::with_capacity(
-        usize::try_from(expected_size_bytes).map_err(|_| "foreign provenance blob size exceeds usize".to_string())?,
-    );
+    let capacity = usize::try_from(expected_size).unwrap_or(INITIAL_READ_CAPACITY);
+    let mut bytes = Vec::with_capacity(capacity);
     reader
-        .take(expected_size_bytes.saturating_add(1))
+        .take(expected_size.saturating_add(1))
         .read_to_end(&mut bytes)
         .await
         .map_err(|error| format!("reading foreign provenance blob {digest}: {error}"))?;
-    if u64::try_from(bytes.len()).ok() != Some(expected_size_bytes)
-        || blake3::hash(&bytes).as_bytes() != digest.as_slice()
-    {
+    if u64::try_from(bytes.len()).ok() != Some(expected_size) || blake3::hash(&bytes).as_bytes() != digest.as_slice() {
         return Err(format!("foreign provenance blob is corrupt: {digest}"));
     }
-    assert_eq!(u64::try_from(bytes.len()).ok(), Some(expected_size_bytes));
-    assert_eq!(blake3::hash(&bytes).as_bytes(), digest.as_slice());
     Ok(bytes)
 }
 
 pub fn classify_payload(executable: bool, path: &str, bytes: &[u8]) -> ProvenancePayloadClass {
-    assert!(!ELF_MAGIC.is_empty());
-    assert!(!SCRIPT_MAGIC.is_empty());
     if bytes.starts_with(GZIP_MAGIC) {
         return ProvenancePayloadClass::GzipStream;
     }
@@ -1092,16 +734,7 @@ fn inspect_payload(
     if state.halted {
         return;
     }
-    assert!(!state.halted);
-    assert!(policy.max_findings > 0);
     let class = classify_payload(input.executable, input.path, input.bytes);
-    let payload_size_bytes = match u64::try_from(input.bytes.len()) {
-        Ok(value) => value,
-        Err(_) => {
-            state.limit(policy, input.path, "payload-bytes");
-            return;
-        }
-    };
     state.observed_paths.insert(input.path.to_string());
     state.payloads.push(ProvenancePayloadObservation {
         owner_store_path: input.owner_store_path.to_string(),
@@ -1109,7 +742,7 @@ fn inspect_payload(
         node_identity: input.node_identity.to_string(),
         class,
         executable: input.executable,
-        byte_count: payload_size_bytes,
+        byte_count: u64::try_from(input.bytes.len()).unwrap_or(u64::MAX),
         content_blake3: blake3::hash(input.bytes).to_hex().to_string(),
     });
     scan_byte_references(&input, policy, context, state);
@@ -1117,16 +750,9 @@ fn inspect_payload(
         ProvenancePayloadClass::Elf | ProvenancePayloadClass::LibtoolArchive => {}
         ProvenancePayloadClass::Script => inspect_shebang(&input, policy, context, state),
         ProvenancePayloadClass::TarArchive => inspect_tar(&input, container_depth, policy, context, state),
-        ProvenancePayloadClass::CpioInitrd => inspect_cpio(
-            CpioInput {
-                payload: &input,
-                bytes: input.bytes,
-                container_depth,
-            },
-            policy,
-            context,
-            state,
-        ),
+        ProvenancePayloadClass::CpioInitrd => {
+            inspect_cpio(&input, input.bytes, container_depth, policy, context, state)
+        }
         ProvenancePayloadClass::GzipCpioInitrd | ProvenancePayloadClass::GzipStream => {
             inspect_gzip_stream(&input, container_depth, policy, context, state)
         }
@@ -1165,13 +791,11 @@ fn is_libtool_archive(path: &str, bytes: &[u8]) -> bool {
     if !first_line.starts_with("# ") || !first_line.ends_with(expected_suffix) {
         return false;
     }
-    let is_generated_by_libtool = text.lines().any(|line| line.starts_with("# Generated by libtool "));
+    let generated_by_libtool = text.lines().any(|line| line.starts_with("# Generated by libtool "));
     let has_dynamic_name = text.lines().any(|line| line.starts_with("dlname='"));
     let has_library_names = text.lines().any(|line| line.starts_with("library_names='"));
     let has_installation_state = text.lines().any(|line| line.starts_with("installed="));
-    assert!(path.ends_with(".la"));
-    assert!(first_line.ends_with(expected_suffix));
-    is_generated_by_libtool && has_dynamic_name && has_library_names && has_installation_state
+    generated_by_libtool && has_dynamic_name && has_library_names && has_installation_state
 }
 
 fn valid_elf_header(bytes: &[u8]) -> bool {
@@ -1184,7 +808,7 @@ fn valid_elf_header(bytes: &[u8]) -> bool {
     match bytes.get(ELF_CLASS_OFFSET).copied() {
         Some(ELF_CLASS_32) => bytes.len() >= ELF32_HEADER_BYTES,
         Some(ELF_CLASS_64) => bytes.len() >= ELF64_HEADER_BYTES,
-        Some(_) | None => false,
+        _ => false,
     }
 }
 
@@ -1194,20 +818,12 @@ fn inspect_shebang(
     context: &ResolutionContext<'_>,
     state: &mut ScanAccumulator,
 ) {
-    let maximum_shebang_bytes = match usize::try_from(policy.max_shebang_bytes) {
-        Ok(value) => value,
-        Err(_) => {
-            state.limit(policy, input.path, "shebang-bytes");
-            return;
-        }
-    };
+    let max = usize::try_from(policy.max_shebang_bytes).unwrap_or(usize::MAX);
     let line_end = input.bytes.iter().position(|byte| *byte == b'\n').unwrap_or(input.bytes.len());
-    if line_end > maximum_shebang_bytes {
+    if line_end > max {
         state.limit(policy, input.path, "shebang-bytes");
         return;
     }
-    assert!(line_end <= maximum_shebang_bytes);
-    assert!(input.bytes.starts_with(SCRIPT_MAGIC));
     let line = match std::str::from_utf8(&input.bytes[SCRIPT_MAGIC.len()..line_end]) {
         Ok(line) => line.trim(),
         Err(error) => {
@@ -1236,20 +852,14 @@ fn inspect_shebang(
     let prefix = std::iter::once(context.target_store_prefix)
         .chain(context.foreign_store_prefixes.iter().map(String::as_str))
         .find(|prefix| interpreter.starts_with(&format!("{prefix}/")));
-    let (reference, suffix) = prefix.map_or((interpreter, EMPTY_PATH), |prefix| {
-        split_store_reference(StoreReferenceInput {
-            raw: interpreter,
-            prefix,
-        })
-    });
+    let (reference, suffix) =
+        prefix.map_or((interpreter, EMPTY_PATH), |prefix| split_store_reference(interpreter, prefix));
     resolve_observed_reference(
-        ObservedReferenceInput {
-            owner_store_path: input.owner_store_path,
-            view: input.path,
-            reference,
-            suffix,
-            kind: ProvenanceReferenceKind::ShebangInterpreter,
-        },
+        input.owner_store_path,
+        input.path,
+        reference,
+        suffix,
+        ProvenanceReferenceKind::ShebangInterpreter,
         policy,
         context,
         state,
@@ -1262,8 +872,6 @@ fn scan_byte_references(
     context: &ResolutionContext<'_>,
     state: &mut ScanAccumulator,
 ) {
-    assert!(!context.target_store_prefix.is_empty());
-    assert!(policy.max_path_bytes > 0);
     let mut prefixes = context.foreign_store_prefixes.clone();
     prefixes.push(context.target_store_prefix.to_string());
     prefixes.sort();
@@ -1279,22 +887,17 @@ fn scan_byte_references(
             let end = reference_end(input.bytes, start);
             let raw = &input.bytes[start..end];
             if let Ok(raw) = std::str::from_utf8(raw) {
-                let (reference, suffix) = split_store_reference(StoreReferenceInput { raw, prefix: &prefix });
-                if !is_well_formed_store_reference(StoreReferenceInput {
-                    raw: reference,
-                    prefix: &prefix,
-                }) {
+                let (reference, suffix) = split_store_reference(raw, &prefix);
+                if !is_well_formed_store_reference(reference, &prefix) {
                     cursor = end.max(start.saturating_add(1));
                     continue;
                 }
                 resolve_observed_reference(
-                    ObservedReferenceInput {
-                        owner_store_path: input.owner_store_path,
-                        view: &format!("{}#byte-{start}", input.path),
-                        reference,
-                        suffix,
-                        kind: ProvenanceReferenceKind::ByteReference,
-                    },
+                    input.owner_store_path,
+                    &format!("{}#byte-{start}", input.path),
+                    reference,
+                    suffix,
+                    ProvenanceReferenceKind::ByteReference,
                     policy,
                     context,
                     state,
@@ -1306,148 +909,120 @@ fn scan_byte_references(
 }
 
 fn resolve_observed_reference(
-    input: ObservedReferenceInput<'_>,
+    owner_store_path: &str,
+    view: &str,
+    reference: &str,
+    suffix: &str,
+    kind: ProvenanceReferenceKind,
     policy: &ForeignProvenancePolicy,
     context: &ResolutionContext<'_>,
     state: &mut ScanAccumulator,
 ) {
-    assert!(!input.owner_store_path.is_empty());
-    assert!(!input.view.is_empty());
-    let normalized_suffix = match normalize_store_suffix(input.suffix) {
+    let normalized_suffix = match normalize_store_suffix(suffix) {
         Ok(normalized) => normalized,
         Err(()) => {
-            state.finding(policy, "reference-path-escape", input.view, format!("{}{}", input.reference, input.suffix));
+            state.finding(policy, "reference-path-escape", view, format!("{reference}{suffix}"));
             return;
         }
     };
-    if is_untranslated_foreign_reference(
-        input.reference,
-        context.foreign_to_target_paths,
-        &context.foreign_store_prefixes,
-    ) {
-        state.finding(
-            policy,
-            "untranslated-foreign-path",
-            input.view,
-            format!("{}{normalized_suffix}", input.reference),
-        );
+    if is_untranslated_foreign_reference(reference, context.foreign_to_target_paths, &context.foreign_store_prefixes) {
+        state.finding(policy, "untranslated-foreign-path", view, format!("{reference}{normalized_suffix}"));
         return;
     }
-    if !input.reference.starts_with(&format!("{}/", context.target_store_prefix)) {
-        state.finding(
-            policy,
-            "missing-executable-target",
-            input.view,
-            format!("{}{normalized_suffix}", input.reference),
-        );
+    if !reference.starts_with(&format!("{}/", context.target_store_prefix)) {
+        state.finding(policy, "missing-executable-target", view, format!("{reference}{normalized_suffix}"));
         return;
     }
-    if !context.admitted_closure_paths.contains(input.reference) {
-        state.finding(policy, "missing-target", input.view, format!("{}{normalized_suffix}", input.reference));
+    if !context.admitted_closure_paths.contains(reference) {
+        state.finding(policy, "missing-target", view, format!("{reference}{normalized_suffix}"));
         return;
     }
-    let declared = context.declared_references_by_output.get(input.owner_store_path);
-    let is_self = input.reference == input.owner_store_path;
-    if !is_self && !declared.is_some_and(|values| values.contains(input.reference)) {
-        state.finding(
-            policy,
-            "undeclared-target-reference",
-            input.view,
-            format!("{}{normalized_suffix}", input.reference),
-        );
+    let declared = context.declared_references_by_output.get(owner_store_path);
+    let is_self = reference == owner_store_path;
+    if !is_self && !declared.is_some_and(|values| values.contains(reference)) {
+        state.finding(policy, "undeclared-target-reference", view, format!("{reference}{normalized_suffix}"));
         return;
     }
     state.references.push(ProvenanceReferenceObservation {
-        owner_store_path: input.owner_store_path.to_string(),
-        view: input.view.to_string(),
-        reference: input.reference.to_string(),
+        owner_store_path: owner_store_path.to_string(),
+        view: view.to_string(),
+        reference: reference.to_string(),
         suffix: normalized_suffix,
-        kind: input.kind,
+        kind,
     });
 }
 
 fn inspect_symlink(
-    input: SymlinkInput<'_>,
+    owner_store_path: &str,
+    path: &str,
+    target: &str,
+    link_root: &str,
     policy: &ForeignProvenancePolicy,
     context: &ResolutionContext<'_>,
     state: &mut ScanAccumulator,
 ) {
-    assert!(!input.owner_store_path.is_empty());
-    assert!(!input.path.is_empty());
-    if input.target.starts_with(PATH_COMPONENT_SEPARATOR) {
-        let prefix = if input.target.starts_with(&format!("{}/", context.target_store_prefix)) {
-            Some(context.target_store_prefix)
+    if target.starts_with(PATH_COMPONENT_SEPARATOR) {
+        let prefix = if target.starts_with(&format!("{}/", context.target_store_prefix)) {
+            context.target_store_prefix
         } else {
             context
                 .foreign_store_prefixes
                 .iter()
-                .find(|prefix| input.target.starts_with(&format!("{prefix}/")))
+                .find(|prefix| target.starts_with(&format!("{prefix}/")))
                 .map(String::as_str)
+                .unwrap_or(EMPTY_PATH)
         };
-        let Some(prefix) = prefix else {
-            state.finding(policy, "symlink-outside-closure", input.path, input.target);
+        if prefix.is_empty() {
+            state.finding(policy, "symlink-outside-closure", path, target);
             return;
-        };
-        let (reference, suffix) = split_store_reference(StoreReferenceInput {
-            raw: input.target,
-            prefix,
-        });
+        }
+        let (reference, suffix) = split_store_reference(target, prefix);
         resolve_observed_reference(
-            ObservedReferenceInput {
-                owner_store_path: input.owner_store_path,
-                view: input.path,
-                reference,
-                suffix,
-                kind: ProvenanceReferenceKind::SymlinkTarget,
-            },
+            owner_store_path,
+            path,
+            reference,
+            suffix,
+            ProvenanceReferenceKind::SymlinkTarget,
             policy,
             context,
             state,
         );
         if reference.starts_with(&format!("{}/", context.target_store_prefix)) {
-            state.symlink_edges.insert(input.path.to_string(), format!("{reference}{suffix}"));
+            state.symlink_edges.insert(path.to_string(), format!("{reference}{suffix}"));
         }
         return;
     }
-    match resolve_relative_path(RelativePathInput {
-        path: input.path,
-        target: input.target,
-        root: input.link_root,
-    }) {
+    match resolve_relative_path(path, target, link_root) {
         Ok(resolved) => {
-            state.symlink_edges.insert(input.path.to_string(), resolved);
+            state.symlink_edges.insert(path.to_string(), resolved);
         }
-        Err(detail) => state.finding(policy, "symlink-path-escape", input.path, detail),
+        Err(detail) => state.finding(policy, "symlink-path-escape", path, detail),
     }
 }
 
-fn resolve_relative_path(input: RelativePathInput<'_>) -> Result<String, String> {
-    let mut components = input
-        .path
+fn resolve_relative_path(path: &str, target: &str, root: &str) -> Result<String, String> {
+    let mut components = path
         .rsplit_once(PATH_COMPONENT_SEPARATOR)
         .map(|(parent, _)| parent)
-        .unwrap_or(input.path)
+        .unwrap_or(path)
         .split(PATH_COMPONENT_SEPARATOR)
         .filter(|component| !component.is_empty())
         .map(str::to_string)
         .collect::<Vec<_>>();
-    let root_count = input.root.split(PATH_COMPONENT_SEPARATOR).filter(|component| !component.is_empty()).count();
-    for component in input.target.split(PATH_COMPONENT_SEPARATOR) {
+    let root_count = root.split(PATH_COMPONENT_SEPARATOR).filter(|component| !component.is_empty()).count();
+    for component in target.split(PATH_COMPONENT_SEPARATOR) {
         match component {
             EMPTY_PATH | CURRENT_PATH_COMPONENT => {}
             PARENT_PATH_COMPONENT => {
                 if components.len() <= root_count {
-                    return Err(input.target.to_string());
+                    return Err(target.to_string());
                 }
                 components.pop();
             }
             value => components.push(value.to_string()),
         }
     }
-    let resolved = format!("/{}", components.join("/"));
-    assert!(resolved.starts_with(PATH_COMPONENT_SEPARATOR));
-    assert!(components.len() >= root_count);
-    Ok(resolved)
+    Ok(format!("/{}", components.join("/")))
 }
 
 fn finalize_symlink_graph(policy: &ForeignProvenancePolicy, state: &mut ScanAccumulator) {
@@ -1470,98 +1045,6 @@ fn finalize_symlink_graph(policy: &ForeignProvenancePolicy, state: &mut ScanAccu
     }
 }
 
-enum TarEntryOutcome {
-    Parsed(ContainerEntry),
-    Skip,
-    Stop,
-}
-
-fn parse_tar_symlink<R: Read>(
-    entry: &mut tar::Entry<'_, R>,
-    virtual_path: String,
-    policy: &ForeignProvenancePolicy,
-    state: &mut ScanAccumulator,
-) -> TarEntryOutcome {
-    assert!(!virtual_path.is_empty());
-    assert!(policy.max_container_entries > 0);
-    let target = match entry.link_name() {
-        Ok(Some(target)) => match target.to_str() {
-            Some(target) => Some(target.to_string()),
-            None => {
-                state.finding(policy, "malformed-container", &virtual_path, "tar link target is non-UTF-8");
-                return TarEntryOutcome::Skip;
-            }
-        },
-        Ok(None) => {
-            state.finding(policy, "malformed-container", &virtual_path, "tar link target is missing");
-            return TarEntryOutcome::Skip;
-        }
-        Err(error) => {
-            state.finding(policy, "malformed-container", &virtual_path, format!("tar link target: {error}"));
-            return TarEntryOutcome::Skip;
-        }
-    };
-    TarEntryOutcome::Parsed(ContainerEntry {
-        path: virtual_path,
-        executable: false,
-        bytes: Vec::new(),
-        symlink_target: target,
-    })
-}
-
-fn parse_tar_entry<R: Read>(
-    entry: &mut tar::Entry<'_, R>,
-    input: &PurePayloadInput<'_>,
-    policy: &ForeignProvenancePolicy,
-    state: &mut ScanAccumulator,
-) -> TarEntryOutcome {
-    assert!(!input.path.is_empty());
-    assert!(policy.max_container_entries > 0);
-    let path = match entry.path() {
-        Ok(path) => match path.to_str() {
-            Some(path) => path.to_string(),
-            None => {
-                state.finding(policy, "malformed-container", input.path, "tar path is non-UTF-8");
-                return TarEntryOutcome::Stop;
-            }
-        },
-        Err(error) => {
-            state.finding(policy, "malformed-container", input.path, format!("tar path: {error}"));
-            return TarEntryOutcome::Stop;
-        }
-    };
-    if container_path_escapes(&path) {
-        state.finding(policy, "container-path-escape", input.path, path);
-        return TarEntryOutcome::Skip;
-    }
-    let virtual_path = format!("{}!/{path}", input.path);
-    let entry_type = entry.header().entry_type();
-    let is_executable = entry.header().mode().is_ok_and(|mode| mode & UNIX_EXECUTABLE_BITS != 0);
-    if entry_type.is_symlink() {
-        return parse_tar_symlink(entry, virtual_path, policy, state);
-    }
-    if entry_type.is_file() {
-        let Some(bytes) = read_container_entry(entry, policy, state, &virtual_path) else {
-            return TarEntryOutcome::Stop;
-        };
-        return TarEntryOutcome::Parsed(ContainerEntry {
-            path: virtual_path,
-            executable: is_executable,
-            bytes,
-            symlink_target: None,
-        });
-    }
-    if !entry_type.is_dir() {
-        state.finding(
-            policy,
-            "unsupported-container-entry",
-            &virtual_path,
-            format!("tar entry type {}", entry_type.as_byte()),
-        );
-    }
-    TarEntryOutcome::Skip
-}
-
 fn inspect_tar(
     input: &PurePayloadInput<'_>,
     container_depth: u32,
@@ -1573,8 +1056,6 @@ fn inspect_tar(
         state.limit(policy, input.path, "container-depth");
         return;
     }
-    assert!(container_depth < policy.max_container_depth);
-    assert!(policy.max_container_entries > 0);
     let mut archive = tar::Archive::new(Cursor::new(input.bytes));
     let entries = match archive.entries() {
         Ok(entries) => entries,
@@ -1583,13 +1064,7 @@ fn inspect_tar(
             return;
         }
     };
-    let mut parsed = Vec::with_capacity(match usize::try_from(policy.max_container_entries) {
-        Ok(value) => value,
-        Err(_) => {
-            state.limit(policy, input.path, "container-entries");
-            return;
-        }
-    });
+    let mut parsed = Vec::new();
     for entry in entries {
         if state.halted {
             return;
@@ -1606,28 +1081,71 @@ fn inspect_tar(
                 return;
             }
         };
-        match parse_tar_entry(&mut entry, input, policy, state) {
-            TarEntryOutcome::Parsed(entry) => {
-                if parsed.try_reserve(1).is_err() {
-                    state.limit(policy, input.path, "container-entries");
+        let path = match entry.path() {
+            Ok(path) => match path.to_str() {
+                Some(path) => path.to_string(),
+                None => {
+                    state.finding(policy, "malformed-container", input.path, "tar path is non-UTF-8");
                     return;
                 }
-                parsed.push(entry);
+            },
+            Err(error) => {
+                state.finding(policy, "malformed-container", input.path, format!("tar path: {error}"));
+                return;
             }
-            TarEntryOutcome::Skip => {}
-            TarEntryOutcome::Stop => return,
+        };
+        if container_path_escapes(&path) {
+            state.finding(policy, "container-path-escape", input.path, path);
+            continue;
+        }
+        let virtual_path = format!("{}!/{path}", input.path);
+        let entry_type = entry.header().entry_type();
+        let executable = entry.header().mode().is_ok_and(|mode| mode & UNIX_EXECUTABLE_BITS != 0);
+        if entry_type.is_symlink() {
+            let target = match entry.link_name() {
+                Ok(Some(target)) => match target.to_str() {
+                    Some(target) => Some(target.to_string()),
+                    None => {
+                        state.finding(policy, "malformed-container", &virtual_path, "tar link target is non-UTF-8");
+                        continue;
+                    }
+                },
+                Ok(None) => {
+                    state.finding(policy, "malformed-container", &virtual_path, "tar link target is missing");
+                    continue;
+                }
+                Err(error) => {
+                    state.finding(policy, "malformed-container", &virtual_path, format!("tar link target: {error}"));
+                    continue;
+                }
+            };
+            parsed.push(ContainerEntry {
+                path: virtual_path,
+                executable: false,
+                bytes: Vec::new(),
+                symlink_target: target,
+            });
+        } else if entry_type.is_file() {
+            let bytes = match read_container_entry(&mut entry, policy, state, &virtual_path) {
+                Some(bytes) => bytes,
+                None => return,
+            };
+            parsed.push(ContainerEntry {
+                path: virtual_path,
+                executable,
+                bytes,
+                symlink_target: None,
+            });
+        } else if !entry_type.is_dir() {
+            state.finding(
+                policy,
+                "unsupported-container-entry",
+                &virtual_path,
+                format!("tar entry type {}", entry_type.as_byte()),
+            );
         }
     }
-    inspect_container_entries(
-        ContainerInspection {
-            payload: input,
-            entries: parsed,
-            container_depth,
-        },
-        policy,
-        context,
-        state,
-    );
+    inspect_container_entries(input, parsed, container_depth, policy, context, state);
 }
 
 fn inspect_gzip_stream(
@@ -1638,18 +1156,7 @@ fn inspect_gzip_stream(
     state: &mut ScanAccumulator,
 ) {
     let decoder = GzDecoder::new(Cursor::new(input.bytes));
-    inspect_compressed_stream(
-        CompressedStreamInput {
-            payload: input,
-            decoder,
-            extension: ".gz",
-            format_name: "gzip",
-            container_depth,
-        },
-        policy,
-        context,
-        state,
-    );
+    inspect_compressed_stream(input, decoder, ".gz", "gzip", container_depth, policy, context, state);
 }
 
 fn inspect_zstd_stream(
@@ -1659,8 +1166,6 @@ fn inspect_zstd_stream(
     context: &ResolutionContext<'_>,
     state: &mut ScanAccumulator,
 ) {
-    assert!(input.bytes.starts_with(ZSTD_MAGIC));
-    assert!(policy.max_container_expanded_bytes > 0);
     let decoder = match ZstdDecoder::new(Cursor::new(input.bytes)) {
         Ok(decoder) => decoder,
         Err(error) => {
@@ -1668,75 +1173,45 @@ fn inspect_zstd_stream(
             return;
         }
     };
-    inspect_compressed_stream(
-        CompressedStreamInput {
-            payload: input,
-            decoder,
-            extension: ".zst",
-            format_name: "zstd",
-            container_depth,
-        },
-        policy,
-        context,
-        state,
-    );
+    inspect_compressed_stream(input, decoder, ".zst", "zstd", container_depth, policy, context, state);
 }
 
 fn inspect_compressed_stream<R: Read>(
-    input: CompressedStreamInput<'_, R>,
+    input: &PurePayloadInput<'_>,
+    decoder: R,
+    extension: &str,
+    format_name: &str,
+    container_depth: u32,
     policy: &ForeignProvenancePolicy,
     context: &ResolutionContext<'_>,
     state: &mut ScanAccumulator,
 ) {
-    assert!(!input.extension.is_empty());
-    assert!(!input.format_name.is_empty());
+    assert!(!extension.is_empty());
+    assert!(!format_name.is_empty());
     let mut expanded = Vec::new();
-    let mut bounded = input.decoder.take(policy.max_container_expanded_bytes.saturating_add(1));
+    let mut bounded = decoder.take(policy.max_container_expanded_bytes.saturating_add(1));
     if let Err(error) = bounded.read_to_end(&mut expanded) {
-        state.finding(
-            policy,
-            "malformed-container",
-            input.payload.path,
-            format!("{} stream: {error}", input.format_name),
-        );
+        state.finding(policy, "malformed-container", input.path, format!("{format_name} stream: {error}"));
         return;
     }
-    let expanded_size_bytes = match u64::try_from(expanded.len()) {
-        Ok(value) => value,
-        Err(_) => {
-            state.limit(policy, input.payload.path, "container-expanded-bytes");
-            return;
-        }
-    };
-    if expanded_size_bytes > policy.max_container_expanded_bytes {
-        state.limit(policy, input.payload.path, "container-expanded-bytes");
+    if u64::try_from(expanded.len()).unwrap_or(u64::MAX) > policy.max_container_expanded_bytes {
+        state.limit(policy, input.path, "container-expanded-bytes");
         return;
     }
     if expanded.starts_with(CPIO_NEWC_MAGIC) || expanded.starts_with(CPIO_CRC_MAGIC) {
-        inspect_cpio(
-            CpioInput {
-                payload: input.payload,
-                bytes: &expanded,
-                container_depth: input.container_depth,
-            },
-            policy,
-            context,
-            state,
-        );
+        inspect_cpio(input, &expanded, container_depth, policy, context, state);
         return;
     }
-    let inner_path = input.payload.path.strip_suffix(input.extension).unwrap_or(input.payload.path).to_string();
+    let inner_path = input.path.strip_suffix(extension).unwrap_or(input.path).to_string();
     inspect_container_entries(
-        ContainerInspection {
-            payload: input.payload,
-            entries: vec![ContainerEntry {
-                path: inner_path,
-                executable: false,
-                bytes: expanded,
-                symlink_target: None,
-            }],
-            container_depth: input.container_depth,
-        },
+        input,
+        vec![ContainerEntry {
+            path: inner_path,
+            executable: false,
+            bytes: expanded,
+            symlink_target: None,
+        }],
+        container_depth,
         policy,
         context,
         state,
@@ -1744,194 +1219,22 @@ fn inspect_compressed_stream<R: Read>(
 }
 
 fn inspect_cpio(
-    input: CpioInput<'_>,
+    input: &PurePayloadInput<'_>,
+    bytes: &[u8],
+    container_depth: u32,
     policy: &ForeignProvenancePolicy,
     context: &ResolutionContext<'_>,
     state: &mut ScanAccumulator,
 ) {
-    if input.container_depth >= policy.max_container_depth {
-        state.limit(policy, input.payload.path, "container-depth");
+    if container_depth >= policy.max_container_depth {
+        state.limit(policy, input.path, "container-depth");
         return;
     }
-    assert!(input.container_depth < policy.max_container_depth);
-    assert!(policy.max_container_entries > 0);
-    let entries = match parse_newc_entries(input.bytes, policy, state, input.payload.path) {
+    let entries = match parse_newc_entries(bytes, policy, state, input.path) {
         Some(entries) => entries,
         None => return,
     };
-    inspect_container_entries(
-        ContainerInspection {
-            payload: input.payload,
-            entries,
-            container_depth: input.container_depth,
-        },
-        policy,
-        context,
-        state,
-    );
-}
-
-struct NewcNameInput<'a> {
-    bytes: &'a [u8],
-    header_end: usize,
-    header: &'a [u8],
-    outer_path: &'a str,
-}
-
-struct NewcHeader {
-    mode: u32,
-    file_size_bytes: usize,
-    name: String,
-    data_start_bytes: usize,
-}
-
-struct NewcEntryInput {
-    mode: u32,
-    virtual_path: String,
-    data: Vec<u8>,
-    outer_path: String,
-}
-
-fn parse_newc_name(
-    input: NewcNameInput<'_>,
-    policy: &ForeignProvenancePolicy,
-    state: &mut ScanAccumulator,
-) -> Option<(String, usize)> {
-    assert!(input.header_end <= input.bytes.len());
-    assert!(!input.outer_path.is_empty());
-    let name_size_bytes = parse_hex_u32(&input.header[CPIO_NAME_SIZE_START..CPIO_NAME_SIZE_END])
-        .and_then(|value| usize::try_from(value).ok())
-        .or_else(|| {
-            state.finding(policy, "malformed-container", input.outer_path, "cpio name size is invalid");
-            None
-        })?;
-    if name_size_bytes == 0 {
-        state.finding(policy, "malformed-container", input.outer_path, "cpio entry name is empty");
-        return None;
-    }
-    let name_end = input.header_end.checked_add(name_size_bytes).or_else(|| {
-        state.finding(policy, "malformed-container", input.outer_path, "cpio name offset overflowed");
-        None
-    })?;
-    let name_bytes = input.bytes.get(input.header_end..name_end).or_else(|| {
-        state.finding(policy, "malformed-container", input.outer_path, "cpio entry name is truncated");
-        None
-    })?;
-    let name_bytes = name_bytes.strip_suffix(&[0]).unwrap_or(name_bytes);
-    let name = std::str::from_utf8(name_bytes)
-        .map(str::to_string)
-        .map_err(|error| {
-            state.finding(policy, "malformed-container", input.outer_path, format!("cpio name is non-UTF-8: {error}"));
-        })
-        .ok()?;
-    let data_start_bytes = align_up(AlignmentInput {
-        value_bytes: name_end,
-        alignment_bytes: CPIO_ALIGNMENT_BYTES,
-    })
-    .or_else(|| {
-        state.finding(policy, "malformed-container", input.outer_path, "cpio data offset overflowed");
-        None
-    })?;
-    Some((name, data_start_bytes))
-}
-
-fn parse_newc_header(
-    bytes: &[u8],
-    offset_bytes: usize,
-    policy: &ForeignProvenancePolicy,
-    state: &mut ScanAccumulator,
-    outer_path: &str,
-) -> Option<NewcHeader> {
-    assert!(policy.max_container_entries > 0);
-    assert!(!outer_path.is_empty());
-    let header_end = offset_bytes.checked_add(CPIO_HEADER_BYTES).or_else(|| {
-        state.finding(policy, "malformed-container", outer_path, "cpio header offset overflowed");
-        None
-    })?;
-    let header = bytes.get(offset_bytes..header_end).or_else(|| {
-        state.finding(policy, "malformed-container", outer_path, "cpio header is truncated");
-        None
-    })?;
-    if header.starts_with(CPIO_CRC_MAGIC) {
-        state.finding(policy, "unsupported-container", outer_path, "cpio CRC archives are not accepted");
-        return None;
-    }
-    if !header.starts_with(CPIO_NEWC_MAGIC) {
-        state.finding(policy, "malformed-container", outer_path, "cpio newc header magic is invalid");
-        return None;
-    }
-    let mode = parse_hex_u32(&header[CPIO_MODE_START..CPIO_MODE_END]).or_else(|| {
-        state.finding(policy, "malformed-container", outer_path, "cpio mode is invalid");
-        None
-    })?;
-    let file_size_bytes = parse_hex_u32(&header[CPIO_FILE_SIZE_START..CPIO_FILE_SIZE_END])
-        .and_then(|value| usize::try_from(value).ok())
-        .or_else(|| {
-            state.finding(policy, "malformed-container", outer_path, "cpio file size is invalid");
-            None
-        })?;
-    let (name, data_start_bytes) = parse_newc_name(
-        NewcNameInput {
-            bytes,
-            header_end,
-            header,
-            outer_path,
-        },
-        policy,
-        state,
-    )?;
-    Some(NewcHeader {
-        mode,
-        file_size_bytes,
-        name,
-        data_start_bytes,
-    })
-}
-
-fn newc_container_entry(
-    input: NewcEntryInput,
-    policy: &ForeignProvenancePolicy,
-    state: &mut ScanAccumulator,
-) -> Option<Option<ContainerEntry>> {
-    assert!(!input.virtual_path.is_empty());
-    assert!(!input.outer_path.is_empty());
-    let file_type = input.mode & UNIX_FILE_TYPE_MASK;
-    if file_type == UNIX_REGULAR_FILE_TYPE {
-        return Some(Some(ContainerEntry {
-            path: input.virtual_path,
-            executable: input.mode & UNIX_EXECUTABLE_BITS != 0,
-            bytes: input.data,
-            symlink_target: None,
-        }));
-    }
-    if file_type == UNIX_SYMLINK_FILE_TYPE {
-        let target = String::from_utf8(input.data).map_err(|error| {
-            state.finding(
-                policy,
-                "malformed-container",
-                &input.outer_path,
-                format!("cpio symlink is non-UTF-8: {error}"),
-            );
-        });
-        return match target {
-            Ok(target) => Some(Some(ContainerEntry {
-                path: input.virtual_path,
-                executable: false,
-                bytes: Vec::new(),
-                symlink_target: Some(target),
-            })),
-            Err(()) => None,
-        };
-    }
-    if file_type != UNIX_DIRECTORY_FILE_TYPE {
-        state.finding(
-            policy,
-            "unsupported-container-entry",
-            &input.virtual_path,
-            format!("cpio mode {:o}", input.mode),
-        );
-    }
-    Some(None)
+    inspect_container_entries(input, entries, container_depth, policy, context, state);
 }
 
 fn parse_newc_entries(
@@ -1940,139 +1243,156 @@ fn parse_newc_entries(
     state: &mut ScanAccumulator,
     outer_path: &str,
 ) -> Option<Vec<ContainerEntry>> {
-    assert!(!outer_path.is_empty());
-    assert!(policy.max_container_entries > 0);
-    let mut offset_bytes = 0usize;
-    let mut entries = Vec::with_capacity(match usize::try_from(policy.max_container_entries) {
-        Ok(value) => value,
-        Err(_) => {
-            state.limit(policy, outer_path, "container-entries");
-            return None;
-        }
-    });
-    while offset_bytes < bytes.len() {
+    let mut offset = 0usize;
+    let mut entries = Vec::new();
+    while offset < bytes.len() {
         if state.container_entry_count >= policy.max_container_entries {
             state.limit(policy, outer_path, "container-entries");
             return None;
         }
-        let header = parse_newc_header(bytes, offset_bytes, policy, state, outer_path)?;
-        if header.name == CPIO_TRAILER_NAME {
-            return Some(entries);
-        }
-        if container_path_escapes(&header.name) {
-            state.finding(policy, "container-path-escape", outer_path, &header.name);
+        let Some(header_end) = offset.checked_add(CPIO_HEADER_BYTES) else {
+            state.finding(policy, "malformed-container", outer_path, "cpio header offset overflowed");
+            return None;
+        };
+        let Some(header) = bytes.get(offset..header_end) else {
+            state.finding(policy, "malformed-container", outer_path, "cpio header is truncated");
+            return None;
+        };
+        if header.starts_with(CPIO_CRC_MAGIC) {
+            state.finding(policy, "unsupported-container", outer_path, "cpio CRC archives are not accepted");
             return None;
         }
-        let data_end_bytes = header.data_start_bytes.checked_add(header.file_size_bytes).or_else(|| {
-            state.finding(policy, "malformed-container", outer_path, "cpio payload offset overflowed");
-            None
-        })?;
-        let data = bytes.get(header.data_start_bytes..data_end_bytes).map(<[u8]>::to_vec).or_else(|| {
-            state.finding(policy, "malformed-container", outer_path, "cpio payload is truncated");
-            None
-        })?;
-        state.container_entry_count = state.container_entry_count.saturating_add(1);
-        if let Some(entry) = newc_container_entry(
-            NewcEntryInput {
-                mode: header.mode,
-                virtual_path: format!("{outer_path}!/{}", header.name),
-                data,
-                outer_path: outer_path.to_string(),
-            },
-            policy,
-            state,
-        )? {
-            if entries.try_reserve(1).is_err() {
-                state.limit(policy, outer_path, "container-entries");
+        if !header.starts_with(CPIO_NEWC_MAGIC) {
+            state.finding(policy, "malformed-container", outer_path, "cpio newc header magic is invalid");
+            return None;
+        }
+        let Some(mode) = parse_hex_u32(&header[CPIO_MODE_START..CPIO_MODE_END]) else {
+            state.finding(policy, "malformed-container", outer_path, "cpio mode is invalid");
+            return None;
+        };
+        let Some(file_size) = parse_hex_u32(&header[CPIO_FILE_SIZE_START..CPIO_FILE_SIZE_END])
+            .and_then(|value| usize::try_from(value).ok())
+        else {
+            state.finding(policy, "malformed-container", outer_path, "cpio file size is invalid");
+            return None;
+        };
+        let Some(name_size) = parse_hex_u32(&header[CPIO_NAME_SIZE_START..CPIO_NAME_SIZE_END])
+            .and_then(|value| usize::try_from(value).ok())
+        else {
+            state.finding(policy, "malformed-container", outer_path, "cpio name size is invalid");
+            return None;
+        };
+        if name_size == 0 {
+            state.finding(policy, "malformed-container", outer_path, "cpio entry name is empty");
+            return None;
+        }
+        let name_start = header_end;
+        let Some(name_end) = name_start.checked_add(name_size) else {
+            state.finding(policy, "malformed-container", outer_path, "cpio name offset overflowed");
+            return None;
+        };
+        let Some(name_bytes) = bytes.get(name_start..name_end) else {
+            state.finding(policy, "malformed-container", outer_path, "cpio entry name is truncated");
+            return None;
+        };
+        let name_bytes = name_bytes.strip_suffix(&[0]).unwrap_or(name_bytes);
+        let name = match std::str::from_utf8(name_bytes) {
+            Ok(name) => name,
+            Err(error) => {
+                state.finding(policy, "malformed-container", outer_path, format!("cpio name is non-UTF-8: {error}"));
                 return None;
             }
-            entries.push(entry);
+        };
+        let Some(data_start) = align_up(name_end, CPIO_ALIGNMENT_BYTES) else {
+            state.finding(policy, "malformed-container", outer_path, "cpio data offset overflowed");
+            return None;
+        };
+        if name == CPIO_TRAILER_NAME {
+            return Some(entries);
         }
-        offset_bytes = align_up(AlignmentInput {
-            value_bytes: data_end_bytes,
-            alignment_bytes: CPIO_ALIGNMENT_BYTES,
-        })
-        .or_else(|| {
+        if container_path_escapes(name) {
+            state.finding(policy, "container-path-escape", outer_path, name);
+            return None;
+        }
+        let Some(data_end) = data_start.checked_add(file_size) else {
+            state.finding(policy, "malformed-container", outer_path, "cpio payload offset overflowed");
+            return None;
+        };
+        let Some(data) = bytes.get(data_start..data_end).map(<[u8]>::to_vec) else {
+            state.finding(policy, "malformed-container", outer_path, "cpio payload is truncated");
+            return None;
+        };
+        state.container_entry_count = state.container_entry_count.saturating_add(1);
+        let virtual_path = format!("{outer_path}!/{name}");
+        let file_type = mode & UNIX_FILE_TYPE_MASK;
+        if file_type == UNIX_REGULAR_FILE_TYPE {
+            entries.push(ContainerEntry {
+                path: virtual_path,
+                executable: mode & UNIX_EXECUTABLE_BITS != 0,
+                bytes: data,
+                symlink_target: None,
+            });
+        } else if file_type == UNIX_SYMLINK_FILE_TYPE {
+            let target = match String::from_utf8(data) {
+                Ok(target) => target,
+                Err(error) => {
+                    state.finding(
+                        policy,
+                        "malformed-container",
+                        outer_path,
+                        format!("cpio symlink is non-UTF-8: {error}"),
+                    );
+                    return None;
+                }
+            };
+            entries.push(ContainerEntry {
+                path: virtual_path,
+                executable: false,
+                bytes: Vec::new(),
+                symlink_target: Some(target),
+            });
+        } else if file_type != UNIX_DIRECTORY_FILE_TYPE {
+            state.finding(policy, "unsupported-container-entry", &virtual_path, format!("cpio mode {mode:o}"));
+        }
+        let Some(next_offset) = align_up(data_end, CPIO_ALIGNMENT_BYTES) else {
             state.finding(policy, "malformed-container", outer_path, "cpio next-entry offset overflowed");
-            None
-        })?;
+            return None;
+        };
+        offset = next_offset;
     }
     state.finding(policy, "malformed-container", outer_path, "cpio trailer is missing");
     None
 }
 
-fn inspect_container_symlink(
-    input: ContainerSymlinkInput<'_>,
-    policy: &ForeignProvenancePolicy,
-    context: &ResolutionContext<'_>,
-    state: &mut ScanAccumulator,
-) {
-    assert!(!input.path.is_empty());
-    assert!(!input.payload.owner_store_path.is_empty());
-    let target_size_bytes = match u64::try_from(input.target.len()) {
-        Ok(value) => value,
-        Err(_) => {
-            state.limit(policy, input.path, "symlink-bytes");
-            return;
-        }
-    };
-    state.payloads.push(ProvenancePayloadObservation {
-        owner_store_path: input.payload.owner_store_path.to_string(),
-        path: input.path.to_string(),
-        node_identity: format!("container-symlink:{}", blake3::hash(input.target.as_bytes()).to_hex()),
-        class: ProvenancePayloadClass::Symlink,
-        executable: false,
-        byte_count: target_size_bytes,
-        content_blake3: blake3::hash(input.target.as_bytes()).to_hex().to_string(),
-    });
-    inspect_symlink(
-        SymlinkInput {
-            owner_store_path: input.payload.owner_store_path,
-            path: input.path,
-            target: input.target,
-            link_root: input.payload.path,
-        },
-        policy,
-        context,
-        state,
-    );
-}
-
 fn inspect_container_entries(
-    input: ContainerInspection<'_>,
+    input: &PurePayloadInput<'_>,
+    entries: Vec<ContainerEntry>,
+    container_depth: u32,
     policy: &ForeignProvenancePolicy,
     context: &ResolutionContext<'_>,
     state: &mut ScanAccumulator,
 ) {
-    assert!(!input.payload.path.is_empty());
-    assert!(u32::try_from(input.entries.len()).is_ok_and(|value| value <= policy.max_container_entries));
-    let entry_paths = input.entries.iter().map(|entry| entry.path.clone()).collect::<BTreeSet<_>>();
+    let entry_paths = entries.iter().map(|entry| entry.path.clone()).collect::<BTreeSet<_>>();
     state.observed_paths.extend(entry_paths);
-    for entry in input.entries {
+    for entry in entries {
         if state.halted {
             return;
         }
         if let Some(target) = entry.symlink_target {
-            inspect_container_symlink(
-                ContainerSymlinkInput {
-                    payload: input.payload,
-                    path: &entry.path,
-                    target: &target,
-                },
-                policy,
-                context,
-                state,
-            );
+            state.payloads.push(ProvenancePayloadObservation {
+                owner_store_path: input.owner_store_path.to_string(),
+                path: entry.path.clone(),
+                node_identity: format!("container-symlink:{}", blake3::hash(target.as_bytes()).to_hex()),
+                class: ProvenancePayloadClass::Symlink,
+                executable: false,
+                byte_count: u64::try_from(target.len()).unwrap_or(u64::MAX),
+                content_blake3: blake3::hash(target.as_bytes()).to_hex().to_string(),
+            });
+            inspect_symlink(input.owner_store_path, &entry.path, &target, input.path, policy, context, state);
             continue;
         }
-        let expanded_size_bytes = match u64::try_from(entry.bytes.len()) {
-            Ok(value) => value,
-            Err(_) => {
-                state.limit(policy, &entry.path, "container-expanded-bytes");
-                return;
-            }
-        };
-        state.container_expanded_bytes = state.container_expanded_bytes.saturating_add(expanded_size_bytes);
+        let expanded = u64::try_from(entry.bytes.len()).unwrap_or(u64::MAX);
+        state.container_expanded_bytes = state.container_expanded_bytes.saturating_add(expanded);
         if state.container_expanded_bytes > policy.max_container_expanded_bytes {
             state.limit(policy, &entry.path, "container-expanded-bytes");
             return;
@@ -2080,13 +1400,13 @@ fn inspect_container_entries(
         let identity = format!("container-entry:{}", blake3::hash(&entry.bytes).to_hex());
         inspect_payload(
             PurePayloadInput {
-                owner_store_path: input.payload.owner_store_path,
+                owner_store_path: input.owner_store_path,
                 path: &entry.path,
                 node_identity: &identity,
                 executable: entry.executable,
                 bytes: &entry.bytes,
             },
-            input.container_depth.saturating_add(1),
+            container_depth.saturating_add(1),
             policy,
             context,
             state,
@@ -2100,22 +1420,13 @@ fn read_container_entry(
     state: &mut ScanAccumulator,
     path: &str,
 ) -> Option<Vec<u8>> {
-    assert!(!path.is_empty());
-    assert!(policy.max_container_expanded_bytes > 0);
     let mut bytes = Vec::new();
     let mut bounded = entry.take(policy.max_container_expanded_bytes.saturating_add(1));
     if let Err(error) = bounded.read_to_end(&mut bytes) {
         state.finding(policy, "malformed-container", path, error.to_string());
         return None;
     }
-    let expanded_size_bytes = match u64::try_from(bytes.len()) {
-        Ok(value) => value,
-        Err(_) => {
-            state.limit(policy, path, "container-expanded-bytes");
-            return None;
-        }
-    };
-    if expanded_size_bytes > policy.max_container_expanded_bytes {
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > policy.max_container_expanded_bytes {
         state.limit(policy, path, "container-expanded-bytes");
         return None;
     }
@@ -2123,7 +1434,8 @@ fn read_container_entry(
 }
 
 fn finalize_scan(
-    completion: ScanCompletion,
+    preflight_complete: bool,
+    traversal_complete: bool,
     mut path_infos: Vec<ProvenancePathInfoObservation>,
     mut state: ScanAccumulator,
 ) -> CastoreProvenanceScan {
@@ -2133,8 +1445,8 @@ fn finalize_scan(
     state.findings.sort();
     state.findings.dedup();
     CastoreProvenanceScan {
-        preflight_complete: completion.is_preflight_complete,
-        traversal_complete: completion.is_traversal_complete,
+        preflight_complete,
+        traversal_complete,
         path_infos,
         payloads: state.payloads,
         references: state.references,
@@ -2222,20 +1534,19 @@ fn reference_end(bytes: &[u8], start: usize) -> usize {
     end
 }
 
-fn split_store_reference<'a>(input: StoreReferenceInput<'a>) -> (&'a str, &'a str) {
-    let root_end = input
-        .raw
-        .get(input.prefix.len().saturating_add(1)..)
+fn split_store_reference<'a>(raw: &'a str, prefix: &str) -> (&'a str, &'a str) {
+    let root_end = raw
+        .get(prefix.len().saturating_add(1)..)
         .and_then(|rest| {
             rest.find(PATH_COMPONENT_SEPARATOR)
-                .map(|index| input.prefix.len().saturating_add(1).saturating_add(index))
+                .map(|index| prefix.len().saturating_add(1).saturating_add(index))
         })
-        .unwrap_or(input.raw.len());
-    input.raw.split_at(root_end)
+        .unwrap_or(raw.len());
+    raw.split_at(root_end)
 }
 
-fn is_well_formed_store_reference(input: StoreReferenceInput<'_>) -> bool {
-    StorePath::<String>::from_absolute_path_with_prefix(input.raw.as_bytes(), input.prefix).is_ok()
+fn is_well_formed_store_reference(reference: &str, prefix: &str) -> bool {
+    StorePath::<String>::from_absolute_path_with_prefix(reference.as_bytes(), prefix).is_ok()
 }
 
 fn contains_parent_component(path: &str) -> bool {
@@ -2243,15 +1554,13 @@ fn contains_parent_component(path: &str) -> bool {
 }
 
 fn normalize_store_suffix(suffix: &str) -> Result<String, ()> {
-    assert!(!PARENT_PATH_COMPONENT.is_empty());
-    assert_eq!(PATH_COMPONENT_SEPARATOR, '/');
     if suffix.is_empty() {
         return Ok(String::new());
     }
     if !suffix.starts_with(PATH_COMPONENT_SEPARATOR) {
         return Err(());
     }
-    let mut components = Vec::with_capacity(suffix.split(PATH_COMPONENT_SEPARATOR).count());
+    let mut components = Vec::new();
     for component in suffix.split(PATH_COMPONENT_SEPARATOR) {
         match component {
             EMPTY_PATH | CURRENT_PATH_COMPONENT => {}
@@ -2276,23 +1585,16 @@ fn parse_hex_u32(bytes: &[u8]) -> Option<u32> {
     std::str::from_utf8(bytes).ok().and_then(|value| u32::from_str_radix(value, HEX_RADIX).ok())
 }
 
-fn align_up(input: AlignmentInput) -> Option<usize> {
-    let alignment_bytes = input.alignment_bytes;
-    if alignment_bytes == 0 {
-        return None;
-    }
-    assert!(alignment_bytes > 0);
-    let remainder = input.value_bytes % alignment_bytes;
-    assert!(remainder < alignment_bytes);
+fn align_up(value: usize, alignment: usize) -> Option<usize> {
+    let remainder = value % alignment;
     if remainder == 0 {
-        Some(input.value_bytes)
+        Some(value)
     } else {
-        input.value_bytes.checked_add(alignment_bytes.saturating_sub(remainder))
+        value.checked_add(alignment.saturating_sub(remainder))
     }
 }
 
 #[cfg(test)]
-// r[verify store_lifecycle.tiger_conformance]
 mod tests {
     use std::collections::HashMap;
     use std::io::Write;
@@ -2576,11 +1878,11 @@ mod tests {
             components in proptest::collection::vec(PROPERTY_COMPONENT_REGEX, 0..PROPERTY_MAX_COMPONENTS),
         ) {
             let target = components.join("/");
-            let resolved = resolve_relative_path(RelativePathInput {
-                path: "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-owner/link",
-                target: &target,
-                root: "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-owner",
-            }).expect("generated components remain within the root");
+            let resolved = resolve_relative_path(
+                "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-owner/link",
+                &target,
+                "/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-owner",
+            ).expect("generated components remain within the root");
             prop_assert!(resolved.starts_with("/mantle/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-owner"));
         }
     }
@@ -2693,43 +1995,13 @@ mod tests {
         let context = context();
         state.observed_paths.insert(format!("{TEST_OWNER}/a"));
         state.observed_paths.insert(format!("{TEST_OWNER}/b"));
-        inspect_symlink(
-            SymlinkInput {
-                owner_store_path: TEST_OWNER,
-                path: &format!("{TEST_OWNER}/a"),
-                target: "b",
-                link_root: TEST_OWNER,
-            },
-            &policy,
-            &context,
-            &mut state,
-        );
-        inspect_symlink(
-            SymlinkInput {
-                owner_store_path: TEST_OWNER,
-                path: &format!("{TEST_OWNER}/b"),
-                target: "a",
-                link_root: TEST_OWNER,
-            },
-            &policy,
-            &context,
-            &mut state,
-        );
+        inspect_symlink(TEST_OWNER, &format!("{TEST_OWNER}/a"), "b", TEST_OWNER, &policy, &context, &mut state);
+        inspect_symlink(TEST_OWNER, &format!("{TEST_OWNER}/b"), "a", TEST_OWNER, &policy, &context, &mut state);
         finalize_symlink_graph(&policy, &mut state);
         assert!(state.findings.iter().any(|finding| finding.code == "symlink-loop"));
 
         let mut escape = ScanAccumulator::new();
-        inspect_symlink(
-            SymlinkInput {
-                owner_store_path: TEST_OWNER,
-                path: &format!("{TEST_OWNER}/a"),
-                target: "../..",
-                link_root: TEST_OWNER,
-            },
-            &policy,
-            &context,
-            &mut escape,
-        );
+        inspect_symlink(TEST_OWNER, &format!("{TEST_OWNER}/a"), "../..", TEST_OWNER, &policy, &context, &mut escape);
         assert_eq!(escape.findings[0].code, "symlink-path-escape");
     }
 
@@ -2832,21 +2104,7 @@ mod tests {
         });
         let mut right = ScanAccumulator::new();
         right.findings = left.findings.iter().cloned().rev().collect();
-        let completion = ScanCompletion {
-            is_preflight_complete: true,
-            is_traversal_complete: true,
-        };
-        assert_eq!(
-            finalize_scan(completion, Vec::new(), left),
-            finalize_scan(
-                ScanCompletion {
-                    is_preflight_complete: true,
-                    is_traversal_complete: true,
-                },
-                Vec::new(),
-                right,
-            ),
-        );
+        assert_eq!(finalize_scan(true, true, Vec::new(), left), finalize_scan(true, true, Vec::new(), right));
     }
 
     #[test]
@@ -3107,28 +2365,18 @@ mod tests {
 
     #[test]
     fn byte_reference_admission_requires_a_valid_store_path_digest() {
-        assert!(is_well_formed_store_reference(StoreReferenceInput {
-            raw: "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-valid",
-            prefix: "/nix/store",
-        }));
-        assert!(!is_well_formed_store_reference(StoreReferenceInput {
-            raw: "/nix/store/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee-placeholder",
-            prefix: "/nix/store",
-        }));
+        assert!(is_well_formed_store_reference("/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-valid", "/nix/store"));
+        assert!(!is_well_formed_store_reference(
+            "/nix/store/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee-placeholder",
+            "/nix/store"
+        ));
     }
 
     #[test]
     fn identity_shape_is_bounded_and_stable() {
         let identity = format!("container-entry:{}", blake3::hash(b"payload").to_hex());
         assert_eq!(identity.len(), "container-entry:".len() + DIGEST_HEX_CHARS);
-        const EXPECTED_ALIGNED_CPIO_HEADER_BYTES: usize = 112;
-        assert_eq!(
-            align_up(AlignmentInput {
-                value_bytes: CPIO_HEADER_BYTES,
-                alignment_bytes: CPIO_ALIGNMENT_BYTES,
-            }),
-            Some(EXPECTED_ALIGNED_CPIO_HEADER_BYTES),
-        );
+        assert_eq!(align_up(CPIO_HEADER_BYTES, CPIO_ALIGNMENT_BYTES), Some(112));
         assert_eq!(STORE_PATH_SEPARATOR, b'/');
     }
 }

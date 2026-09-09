@@ -2,7 +2,6 @@
 let _digest_hex_chars = 64 in
 let _git_oid_hex_chars = 40 in
 let _corpus_case_count = 17 in
-let _source_ingest_test_count = 16 in
 let _collision_attempt_limit = 8 in
 let _private_file_mode = 384 in
 let _blake3_regex = "^[0-9a-f]{%{std.to_string _digest_hex_chars}}$" in
@@ -17,10 +16,10 @@ let _expected = {
   producer_archive_receipt = "3a11ed34c922a32678f4e5e72bd9ea48b3e3d0eba35edf0c821c27f5a7920fe4",
   package = "durable-file-publication",
   package_version = "0.1.0",
-  cargo_manifest_blake3 = "440b9d457cd07cb1f31d65a860e449d3578078ef3bd426c9f1b0242069907de0",
-  cargo_lock_blake3 = "1075382c6a2dfd36012e83d3055d79c29cf14e0c38a2007564d7773bc5af74a0",
-  flake_blake3 = "1c096dc203adbd8147d8a102da8f692cb1aeaac32200f5720ce2c0878b9f6a9e",
-  flake_lock_blake3 = "9ce3960a702c3aaacf8010cb24a23d5c7646536445144e3cc64137d6cfb76bd3",
+  cargo_manifest_blake3 = "dad0080d2387b21be3f4d630804b2eb182f6c041c2c2fc9db80ac25a688331a0",
+  cargo_lock_blake3 = "176b8277620f6ee9f53145dffee31e0d7171c169ddb0fff4dd890fbb66af8be7",
+  flake_blake3 = "022b8e2a24a9c1cd8b2e9e9f2a6926c7c34ee5b98aa3f697176e2970ed847ce0",
+  flake_lock_blake3 = "f0499958c3d22062fff3ae74311d706b7820ad8b89f3e5809f25d6386f72e4cc",
   nar_hash = "sha256-fKxZ+3rzWzVuawILnmpiYCCe8PT/z6usopFMbr2KFbI=",
 }
 in
@@ -46,7 +45,6 @@ let _required_non_claims = [
   "durable-file-publication-source-correctness",
   "whole-mantle-behavior-correctness",
   "remote-attempt-log-semantic-correctness",
-  "source-state-semantic-correctness",
   "manifest-publication-adoption",
   "release-bundle-publication-adoption",
   "android-execution",
@@ -84,7 +82,7 @@ let _validate = fun receipt =>
       if receipt.schema_version == 1
       && receipt.receipt_type == "mantle.durable-file-publication-adoption.v1"
       && receipt.status == "accepted"
-      && receipt.observed_date == "2026-09-03" then null
+      && receipt.observed_date == "2026-07-27" then null
       else _error "adoption-header" "adoption identity or status drifted",
       if _is_rid receipt.source.rid
       && receipt.source.rid == _expected.rid
@@ -117,23 +115,8 @@ let _validate = fun receipt =>
       && receipt.nix.nar_hash == _expected.nar_hash then null
       else _error "adoption-nix" "Nix input, lock, revision, or narHash drifted",
       if receipt.mapping.production_backend == "shared"
-      && receipt.mapping.shared_surfaces == [
-        "remote-attempt-segment",
-        "remote-attempt-anchor",
-        "source-record",
-        "source-observation",
-        "source-pin",
-      ]
-      && receipt.mapping.consumer_surfaces == [
-        "manifest",
-        "content-equivalence",
-        "source-ingest",
-        "source-readiness",
-        "retention",
-        "deletion",
-        "receipts",
-        "diagnostics",
-      ]
+      && receipt.mapping.shared_surfaces == ["remote-attempt-segment", "remote-attempt-anchor"]
+      && receipt.mapping.consumer_surfaces == ["manifest", "content-equivalence", "retention", "deletion", "receipts", "diagnostics"]
       && receipt.mapping.replacement == "no-replace"
       && receipt.mapping.durability == "required"
       && receipt.mapping.final_mode == _private_file_mode
@@ -150,8 +133,6 @@ let _validate = fun receipt =>
       && receipt.validation.formatting == "passed"
       && receipt.validation.focused_clippy == "passed"
       && receipt.validation.tigerstyle == "passed"
-      && receipt.validation.source_ingest_tests == "passed"
-      && receipt.validation.source_ingest_test_count == _source_ingest_test_count
       && receipt.validation.source_agreement_positive == "passed"
       && receipt.validation.source_agreement_negative == "passed" then null
       else _error "adoption-validation" "behavioral or source-agreement evidence is incomplete",
@@ -161,8 +142,6 @@ let _validate = fun receipt =>
       && receipt.rollback.explicit_code_change_required then null
       else _error "adoption-rollback" "rollback is missing or automatic fallback is enabled",
       if receipt.authority_boundary.product_policy_retained
-      && receipt.authority_boundary.source_ingest_policy_retained
-      && receipt.authority_boundary.source_readiness_retained
       && receipt.authority_boundary.manifest_retained
       && receipt.authority_boundary.retention_retained
       && receipt.authority_boundary.deletion_retained

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "mantle://schemas/realization/route-plan-report-v1",
   "title": "Mantle realization route plan",
-  "x-mantle-rust-owner": "crates/crunch-build-planning-core/src/lib.rs::RoutePlanReport",
+  "x-mantle-rust-owner": "src/realization_routing.rs::RoutePlanReport",
   "$defs": {
     "route": {
       "type": "string",

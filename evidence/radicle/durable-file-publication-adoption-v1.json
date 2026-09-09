@@ -5,19 +5,16 @@
     "product_policy_retained": true,
     "retention_retained": true,
     "shared_deletion_authority": false,
-    "shared_release_authority": false,
-    "source_ingest_policy_retained": true,
-    "source_readiness_retained": true
+    "shared_release_authority": false
   },
   "cargo": {
-    "lock_blake3": "1075382c6a2dfd36012e83d3055d79c29cf14e0c38a2007564d7773bc5af74a0",
+    "lock_blake3": "176b8277620f6ee9f53145dffee31e0d7171c169ddb0fff4dd890fbb66af8be7",
     "lock_source": "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f59003cea9bfdb40ed4d89653d50fada1f",
-    "manifest_blake3": "440b9d457cd07cb1f31d65a860e449d3578078ef3bd426c9f1b0242069907de0",
+    "manifest_blake3": "dad0080d2387b21be3f4d630804b2eb182f6c041c2c2fc9db80ac25a688331a0",
     "package": "durable-file-publication"
   },
   "evidence": [
     "cairn/archive/1970-01-01-adopt-durable-file-publication/evidence/validation.md",
-    ".cairn/archive/2026-09-03-bind-source-observations-and-monotonic-ingest/evidence/implementation-2026-09-03/summary.md",
     "evidence/radicle/durable-file-publication-adoption-v1.json",
     "durable-file-publication:cairn/archive/2026-07-27-establish-durable-file-publication/evidence/validation.md",
     "onix-core:cairn/archive/1970-01-01-admit-durable-file-publication-radicle-source/evidence/declarative-deployment-2026-07-27.md"
@@ -32,8 +29,6 @@
     "consumer_surfaces": [
       "manifest",
       "content-equivalence",
-      "source-ingest",
-      "source-readiness",
       "retention",
       "deletion",
       "receipts",
@@ -53,15 +48,12 @@
     "replacement": "no-replace",
     "shared_surfaces": [
       "remote-attempt-segment",
-      "remote-attempt-anchor",
-      "source-record",
-      "source-observation",
-      "source-pin"
+      "remote-attempt-anchor"
     ]
   },
   "nix": {
-    "flake_blake3": "1c096dc203adbd8147d8a102da8f692cb1aeaac32200f5720ce2c0878b9f6a9e",
-    "lock_blake3": "9ce3960a702c3aaacf8010cb24a23d5c7646536445144e3cc64137d6cfb76bd3",
+    "flake_blake3": "022b8e2a24a9c1cd8b2e9e9f2a6926c7c34ee5b98aa3f697176e2970ed847ce0",
+    "lock_blake3": "f0499958c3d22062fff3ae74311d706b7820ad8b89f3e5809f25d6386f72e4cc",
     "locked_rev": "951c27f59003cea9bfdb40ed4d89653d50fada1f",
     "locked_url": "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git",
     "nar_hash": "sha256-fKxZ+3rzWzVuawILnmpiYCCe8PT/z6usopFMbr2KFbI=",
@@ -72,7 +64,6 @@
     "durable-file-publication-source-correctness",
     "whole-mantle-behavior-correctness",
     "remote-attempt-log-semantic-correctness",
-    "source-state-semantic-correctness",
     "manifest-publication-adoption",
     "release-bundle-publication-adoption",
     "android-execution",
@@ -80,7 +71,7 @@
     "release-readiness",
     "retention-or-deletion-authority"
   ],
-  "observed_date": "2026-09-03",
+  "observed_date": "2026-07-27",
   "platforms": {
     "executed": [
       "x86_64-linux"
@@ -121,8 +112,6 @@
     "shared_corpus_cases": 17,
     "source_agreement_negative": "passed",
     "source_agreement_positive": "passed",
-    "source_ingest_test_count": 16,
-    "source_ingest_tests": "passed",
     "tigerstyle": "passed"
   }
 }

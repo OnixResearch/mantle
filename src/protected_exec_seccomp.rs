@@ -1,6 +1,5 @@
 #[cfg(target_os = "linux")]
 mod linux {
-    #[cfg(test)]
     use std::collections::BTreeSet;
     use std::ffi::OsString;
     use std::fs::File;
@@ -19,8 +18,6 @@ mod linux {
     use crate::protected_exec::ExecRequest;
     use crate::protected_exec::OutputPromotionRecord;
     use crate::protected_exec::PHASE_PROTECTED;
-    #[cfg(test)]
-    use crate::protected_exec::PlannedProducedExecutableRoot;
     use crate::protected_exec::PromotedExecutable;
     use crate::protected_exec::ProtectedExecError;
     use crate::protected_exec::ProtectedExecPolicy;
@@ -40,12 +37,9 @@ mod linux {
     const EXECVEAT_DIRFD_ARG_INDEX: usize = 0;
     const EXECVEAT_PATH_ARG_INDEX: usize = 1;
     const PROC_FD_PATH_PREFIX: &str = "/proc/self/fd";
-    #[cfg(test)]
     const DIAGNOSTIC_EXEC_PATH_COUNT_MAX: usize = 256;
-    #[cfg(test)]
     const DIAGNOSTIC_EXEC_EVENT_COUNT_MAX: usize = 131_072;
-    const PROTECTED_EXEC_EVENT_COUNT_MAX: usize = 262_144;
-    const SEND_RESPONSE_EINTR_RETRY_COUNT_MAX: u32 = 16;
+    const PROTECTED_EXEC_EVENT_COUNT_MAX: usize = 131_072;
     const ADOPTED_DESCENDANT_REAP_POLL_COUNT_MAX: u32 = 3_000;
     const ADOPTED_DESCENDANT_REAP_POLL_INTERVAL_MS: u64 = 10;
     const AUDIT_QUIESCENCE_POLL_COUNT_MAX: u32 = 3_000;
@@ -53,8 +47,6 @@ mod linux {
     const AUDIT_QUIESCENCE_POLL_INTERVAL_MS: u64 = 10;
     const _: () = assert!(ADOPTED_DESCENDANT_REAP_POLL_COUNT_MAX > 0);
     const _: () = assert!(AUDIT_QUIESCENCE_STABLE_POLL_COUNT > 0);
-    const _: () = assert!(SEND_RESPONSE_EINTR_RETRY_COUNT_MAX > 1);
-    #[cfg(test)]
     const PHASE_DIAGNOSTIC: &str = "diagnostic";
 
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -76,13 +68,12 @@ mod linux {
 
     impl std::error::Error for ProtectedSeccompError {}
 
-    #[cfg(test)]
     #[derive(Debug)]
     pub struct DiagnosticExecObserver {
         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
+        listener_fd: RawFd,
     }
 
-    #[cfg(test)]
     impl DiagnosticExecObserver {
         pub fn audit_events(&self) -> Vec<ProtectedSeccompAuditEvent> {
             match self.audit_events.lock() {
@@ -91,19 +82,20 @@ mod linux {
             }
         }
 
-        pub fn wait_for_audit_quiescence(&self) -> Result<u32, ProtectedSeccompError> {
+        pub fn listener_fd(&self) -> RawFd {
+            self.listener_fd
+        }
+
+        pub fn wait_for_audit_quiescence(&self) -> Result<usize, ProtectedSeccompError> {
             wait_for_audit_quiescence(&self.audit_events)
         }
     }
 
     #[derive(Debug)]
     pub struct ProtectedSeccompSupervisor {
-        // Lock order: shared_policy -> audit_events -> auto_promotions. Never acquire these locks in reverse order.
+        // Lock order: shared_policy -> audit_events. Never acquire these locks in reverse order.
         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
-        #[cfg(test)]
-        auto_promotions: Arc<Mutex<Vec<OutputPromotionRecord>>>,
         shared_policy: Arc<RwLock<ProtectedExecPolicy>>,
-        #[cfg(test)]
         listener_fd: RawFd,
     }
 
@@ -115,41 +107,11 @@ mod linux {
             }
         }
 
-        #[cfg(test)]
         pub fn listener_fd(&self) -> RawFd {
             self.listener_fd
         }
 
-        #[cfg(test)]
-        pub fn automatic_promotions(&self) -> Vec<OutputPromotionRecord> {
-            match self.auto_promotions.lock() {
-                Ok(promotions) => promotions.clone(),
-                Err(poisoned) => poisoned.into_inner().clone(),
-            }
-        }
-
-        #[cfg(test)]
-        pub fn register_planned_produced_roots(
-            &self,
-            roots: &[PlannedProducedExecutableRoot],
-        ) -> Result<(), ProtectedExecError> {
-            let mut policy = self.shared_policy.write().map_err(|_| ProtectedExecError::PolicyLockPoisoned)?;
-            policy.register_planned_produced_roots(roots)
-        }
-
-        #[cfg(test)]
-        pub fn begin_producer_action(&self, producer_action_id: &str) -> Result<(), ProtectedExecError> {
-            let mut policy = self.shared_policy.write().map_err(|_| ProtectedExecError::PolicyLockPoisoned)?;
-            policy.begin_producer_action(producer_action_id)
-        }
-
-        #[cfg(test)]
-        pub fn end_producer_action(&self, producer_action_id: &str) -> Result<(), ProtectedExecError> {
-            let mut policy = self.shared_policy.write().map_err(|_| ProtectedExecError::PolicyLockPoisoned)?;
-            policy.end_producer_action(producer_action_id)
-        }
-
-        pub fn wait_for_audit_quiescence(&self) -> Result<u32, ProtectedSeccompError> {
+        pub fn wait_for_audit_quiescence(&self) -> Result<usize, ProtectedSeccompError> {
             wait_for_audit_quiescence(&self.audit_events)
         }
 
@@ -190,7 +152,6 @@ mod linux {
             }
             if error.raw_os_error() == Some(libc::ECHILD) {
                 assert!(reaped_count < u32::MAX);
-                assert!(reaped_count <= ADOPTED_DESCENDANT_REAP_POLL_COUNT_MAX);
                 return Ok(reaped_count);
             }
             return Err(ProtectedSeccompError::Supervisor(format!("reaping adopted StageX descendant: {error}")));
@@ -203,7 +164,7 @@ mod linux {
 
     fn wait_for_audit_quiescence(
         audit_events: &Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
-    ) -> Result<u32, ProtectedSeccompError> {
+    ) -> Result<usize, ProtectedSeccompError> {
         let mut previous_count = usize::MAX;
         let mut stable_poll_count = 0_u32;
         for _ in 0..AUDIT_QUIESCENCE_POLL_COUNT_MAX {
@@ -218,17 +179,8 @@ mod linux {
                 stable_poll_count = 0;
             }
             if stable_poll_count >= AUDIT_QUIESCENCE_STABLE_POLL_COUNT {
-                if count > PROTECTED_EXEC_EVENT_COUNT_MAX {
-                    return Err(ProtectedSeccompError::Supervisor(format!(
-                        "StageX exec audit count {count} exceeds {PROTECTED_EXEC_EVENT_COUNT_MAX}"
-                    )));
-                }
-                let event_count_u32 = u32::try_from(count).map_err(|_| {
-                    ProtectedSeccompError::Supervisor(format!("StageX exec audit count exceeds u32: {count}"))
-                })?;
-                debug_assert!(stable_poll_count >= AUDIT_QUIESCENCE_STABLE_POLL_COUNT);
-                debug_assert_eq!(usize::try_from(event_count_u32).ok(), Some(count));
-                return Ok(event_count_u32);
+                assert!(count <= PROTECTED_EXEC_EVENT_COUNT_MAX);
+                return Ok(count);
             }
             thread::sleep(std::time::Duration::from_millis(AUDIT_QUIESCENCE_POLL_INTERVAL_MS));
         }
@@ -238,7 +190,6 @@ mod linux {
         )))
     }
 
-    #[cfg(test)]
     pub fn install_current_thread_diagnostic_exec_observer(
         allowed_paths: BTreeSet<PathBuf>,
     ) -> Result<DiagnosticExecObserver, ProtectedSeccompError> {
@@ -249,10 +200,12 @@ mod linux {
         let listener_fd = install_exec_filter()?;
         let audit_events = Arc::new(Mutex::new(Vec::new()));
         spawn_diagnostic_observer_thread(listener_fd, allowed_paths, audit_events.clone())?;
-        Ok(DiagnosticExecObserver { audit_events })
+        Ok(DiagnosticExecObserver {
+            audit_events,
+            listener_fd,
+        })
     }
 
-    #[cfg(test)]
     fn validate_diagnostic_paths(allowed_paths: &BTreeSet<PathBuf>) -> Result<(), ProtectedSeccompError> {
         if allowed_paths.is_empty() || allowed_paths.len() > DIAGNOSTIC_EXEC_PATH_COUNT_MAX {
             return Err(ProtectedSeccompError::Install(format!(
@@ -278,15 +231,11 @@ mod linux {
         set_no_new_privileges()?;
         let listener_fd = install_exec_filter()?;
         let audit_events = Arc::new(Mutex::new(Vec::new()));
-        let auto_promotions = Arc::new(Mutex::new(Vec::new()));
         let shared_policy = Arc::new(RwLock::new(policy));
-        spawn_supervisor_thread(listener_fd, shared_policy.clone(), audit_events.clone(), auto_promotions.clone())?;
+        spawn_supervisor_thread(listener_fd, shared_policy.clone(), audit_events.clone())?;
         Ok(ProtectedSeccompSupervisor {
             audit_events,
-            #[cfg(test)]
-            auto_promotions,
             shared_policy,
-            #[cfg(test)]
             listener_fd,
         })
     }
@@ -445,7 +394,6 @@ mod linux {
         None
     }
 
-    #[cfg(test)]
     fn spawn_diagnostic_observer_thread(
         listener_fd: RawFd,
         allowed_paths: BTreeSet<PathBuf>,
@@ -458,7 +406,6 @@ mod linux {
             .map_err(|err| ProtectedSeccompError::Supervisor(format!("spawning diagnostic observer thread: {err}")))
     }
 
-    #[cfg(test)]
     fn diagnostic_observer_loop(
         listener_fd: RawFd,
         allowed_paths: BTreeSet<PathBuf>,
@@ -504,11 +451,10 @@ mod linux {
         listener_fd: RawFd,
         shared_policy: Arc<RwLock<ProtectedExecPolicy>>,
         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
-        auto_promotions: Arc<Mutex<Vec<OutputPromotionRecord>>>,
     ) -> Result<(), ProtectedSeccompError> {
         thread::Builder::new()
             .name("crunch-protected-exec-supervisor".to_string())
-            .spawn(move || supervisor_loop(listener_fd, shared_policy, audit_events, auto_promotions))
+            .spawn(move || supervisor_loop(listener_fd, shared_policy, audit_events))
             .map(|_| ())
             .map_err(|err| ProtectedSeccompError::Supervisor(format!("spawning supervisor thread: {err}")))
     }
@@ -517,7 +463,6 @@ mod linux {
         listener_fd: RawFd,
         shared_policy: Arc<RwLock<ProtectedExecPolicy>>,
         audit_events: Arc<Mutex<Vec<ProtectedSeccompAuditEvent>>>,
-        auto_promotions: Arc<Mutex<Vec<OutputPromotionRecord>>>,
     ) {
         while listener_is_open(listener_fd) {
             let mut notif: libc::seccomp_notif = unsafe { std::mem::zeroed() };
@@ -534,13 +479,11 @@ mod linux {
                 return;
             }
             if event_limit_reached(&audit_events, PROTECTED_EXEC_EVENT_COUNT_MAX) {
-                if send_response(listener_fd, notif.id, false).is_err() {
-                    return;
-                }
+                let _ = send_response(listener_fd, notif.id, false);
                 continue;
             }
-            let decision = match shared_policy.write() {
-                Ok(mut policy) => classify_notification(listener_fd, &mut policy, &notif),
+            let decision = match shared_policy.read() {
+                Ok(policy) => classify_notification(listener_fd, &policy, &notif),
                 Err(_) => denied_event(DeniedEventInput {
                     pid: notif.pid,
                     syscall_name: syscall_name(notif.data.nr),
@@ -551,24 +494,13 @@ mod linux {
                     inventory_entry_id: None,
                 }),
             };
-            let SupervisorDecision {
-                allowed,
-                audit_event,
-                promotion,
-            } = decision;
-            let mut events = match audit_events.lock() {
-                Ok(events) => events,
-                Err(poisoned) => poisoned.into_inner(),
-            };
-            let response = send_response(listener_fd, notif.id, allowed);
-            let (audit_event, promotion) = bind_response_result(audit_event, promotion, response);
-            if let Some(promotion) = promotion {
-                match auto_promotions.lock() {
-                    Ok(mut promotions) => promotions.push(promotion),
-                    Err(poisoned) => poisoned.into_inner().push(promotion),
-                }
+            match audit_events.lock() {
+                Ok(mut events) => events.push(decision.audit_event),
+                Err(poisoned) => poisoned.into_inner().push(decision.audit_event),
             }
-            events.push(audit_event);
+            if send_response(listener_fd, notif.id, decision.allowed).is_err() {
+                continue;
+            }
         }
     }
 
@@ -583,7 +515,6 @@ mod linux {
     struct SupervisorDecision {
         allowed: bool,
         audit_event: ProtectedSeccompAuditEvent,
-        promotion: Option<OutputPromotionRecord>,
     }
 
     struct ExecTarget {
@@ -591,7 +522,6 @@ mod linux {
         resolved_host_path: PathBuf,
     }
 
-    #[cfg(test)]
     fn classify_diagnostic_notification(
         listener_fd: RawFd,
         allowed_paths: &BTreeSet<PathBuf>,
@@ -612,7 +542,6 @@ mod linux {
         }
     }
 
-    #[cfg(test)]
     fn diagnostic_tracee_context(pid: u32) -> String {
         match std::fs::read_link(format!("/proc/{pid}/exe")) {
             Ok(path) => format!("tracee-image={}", path.display()),
@@ -620,7 +549,6 @@ mod linux {
         }
     }
 
-    #[cfg(test)]
     fn classify_diagnostic_path(
         allowed_paths: &BTreeSet<PathBuf>,
         pid: u32,
@@ -666,11 +594,9 @@ mod linux {
                 inventory_entry_id: None,
                 policy_decision: "diagnostic-observed".to_string(),
             },
-            promotion: None,
         }
     }
 
-    #[cfg(test)]
     fn diagnostic_path_allowed(allowed_paths: &BTreeSet<PathBuf>, target: &ExecTarget) -> bool {
         let tracee_allowed = allowed_paths.contains(&target.tracee_path);
         let resolved_allowed = allowed_paths.contains(&target.resolved_host_path);
@@ -681,7 +607,7 @@ mod linux {
 
     fn classify_notification(
         listener_fd: RawFd,
-        policy: &mut ProtectedExecPolicy,
+        policy: &ProtectedExecPolicy,
         notif: &libc::seccomp_notif,
     ) -> SupervisorDecision {
         let syscall_name = syscall_name(notif.data.nr);
@@ -700,7 +626,7 @@ mod linux {
     }
 
     fn classify_path(
-        policy: &mut ProtectedExecPolicy,
+        policy: &ProtectedExecPolicy,
         pid: u32,
         syscall_name: &'static str,
         target: ExecTarget,
@@ -724,13 +650,12 @@ mod linux {
                 });
             }
         };
-        match policy.decide_exec_or_promote(&ExecRequest {
+        match policy.decide_exec(&ExecRequest {
             path: target.resolved_host_path.clone(),
             digest_hex: digest_hex.clone(),
         }) {
-            Ok(classification) => SupervisorDecision {
+            Ok(decision) => SupervisorDecision {
                 allowed: true,
-                promotion: classification.promotion,
                 audit_event: ProtectedSeccompAuditEvent {
                     pid,
                     syscall: syscall_name.to_string(),
@@ -738,9 +663,9 @@ mod linux {
                     tracee_path: target.tracee_path,
                     resolved_host_path: target.resolved_host_path,
                     digest_hex,
-                    reason: classification.decision.reason,
+                    reason: decision.reason,
                     phase: PHASE_PROTECTED.to_string(),
-                    inventory_entry_id: classification.decision.entry_id,
+                    inventory_entry_id: decision.entry_id,
                     policy_decision: "allowed".to_string(),
                 },
             },
@@ -781,7 +706,6 @@ mod linux {
                 inventory_entry_id: input.inventory_entry_id,
                 policy_decision: "denied".to_string(),
             },
-            promotion: None,
         }
     }
 
@@ -930,14 +854,6 @@ mod linux {
     }
 
     fn read_tracee_memory(pid: u32, address: u64, buffer: &mut [u8]) -> Result<usize, String> {
-        if pid == 0 {
-            return Err("target pid must be positive".to_string());
-        }
-        if buffer.is_empty() {
-            return Err("target memory buffer must not be empty".to_string());
-        }
-        debug_assert!(pid > 0);
-        debug_assert!(!buffer.is_empty());
         let process_id = libc::pid_t::try_from(pid).map_err(|_| format!("target pid exceeds pid_t: {pid}"))?;
         let local = libc::iovec {
             iov_base: buffer.as_mut_ptr().cast::<libc::c_void>(),
@@ -970,50 +886,20 @@ mod linux {
     }
 
     fn send_response(listener_fd: RawFd, id: u64, allowed: bool) -> Result<(), String> {
-        let mut response: libc::seccomp_notif_resp = unsafe { std::mem::zeroed() };
-        response.id = id;
+        let mut resp: libc::seccomp_notif_resp = unsafe { std::mem::zeroed() };
+        resp.id = id;
         if allowed {
-            response.flags = u32::try_from(libc::SECCOMP_USER_NOTIF_FLAG_CONTINUE)
+            resp.flags = u32::try_from(libc::SECCOMP_USER_NOTIF_FLAG_CONTINUE)
                 .map_err(|_| "seccomp continue flag exceeds u32".to_string())?;
-            debug_assert_eq!(response.error, 0);
-            debug_assert_ne!(response.flags, 0);
         } else {
-            response.error = -libc::EACCES;
-            debug_assert_eq!(response.flags, 0);
-            debug_assert!(response.error < 0);
+            resp.error = -libc::EACCES;
         }
-        for attempt in 0..SEND_RESPONSE_EINTR_RETRY_COUNT_MAX {
-            #[allow(clippy::unnecessary_cast)]
-            let result = unsafe { libc::ioctl(listener_fd, SECCOMP_IOCTL_NOTIF_SEND as libc::Ioctl, &mut response) };
-            if result == 0 {
-                return Ok(());
-            }
-            let error = io::Error::last_os_error();
-            let is_retryable = error.raw_os_error() == Some(libc::EINTR);
-            let has_retries_remaining = attempt.saturating_add(1) < SEND_RESPONSE_EINTR_RETRY_COUNT_MAX;
-            if is_retryable && has_retries_remaining {
-                continue;
-            }
-            return Err(format!("SECCOMP_IOCTL_NOTIF_SEND: {error}"));
+        #[allow(clippy::unnecessary_cast)]
+        let rc = unsafe { libc::ioctl(listener_fd, SECCOMP_IOCTL_NOTIF_SEND as libc::Ioctl, &mut resp) };
+        if rc == 0 {
+            return Ok(());
         }
-        Err("SECCOMP_IOCTL_NOTIF_SEND exhausted its bounded retry loop".to_string())
-    }
-
-    fn bind_response_result(
-        mut audit_event: ProtectedSeccompAuditEvent,
-        promotion: Option<OutputPromotionRecord>,
-        response: Result<(), String>,
-    ) -> (ProtectedSeccompAuditEvent, Option<OutputPromotionRecord>) {
-        if let Err(error) = response {
-            audit_event.policy_decision = "denied".to_string();
-            audit_event.reason = format!("seccomp notification response failed: {error}");
-            assert_eq!(audit_event.policy_decision, "denied");
-            assert!(audit_event.reason.contains("SECCOMP_IOCTL_NOTIF_SEND"));
-            return (audit_event, None);
-        }
-        debug_assert!(!audit_event.policy_decision.is_empty());
-        debug_assert!(!audit_event.reason.is_empty());
-        (audit_event, promotion)
+        Err(last_os_error("SECCOMP_IOCTL_NOTIF_SEND"))
     }
 
     fn syscall_name(syscall_nr: libc::c_int) -> &'static str {
@@ -1039,24 +925,14 @@ mod linux {
         use super::*;
         use crate::protected_exec::DigestSpec;
         use crate::protected_exec::ExecutableSeedEntry;
-        use crate::protected_exec::PlannedExecutable;
         use crate::protected_exec::Stage0Inventory;
 
         const CHILD_MODE_VAR: &str = "CRUNCH_TEST_SECCOMP_CHILD_MODE";
         const LISTENER_ISOLATION_CHILD_MODE: &str = "listener-isolation";
-        const RUST_ACTION_ALLOW_CHILD_MODE: &str = "rust-action-allow";
-        const RUST_ACTION_DENY_CHILD_MODE: &str = "rust-action-deny";
-        const AUTO_PROMOTION_CHILD_MODE: &str = "auto-promotion";
-        const CONCURRENT_ALLOW_CHILD_MODE: &str = "concurrent-allow";
-        const CONCURRENT_ALLOW_WORKER_COUNT: usize = 4;
-        const CONCURRENT_ALLOW_EXECUTIONS_PER_WORKER: usize = 128;
         const FRESH_LISTENER_WORKER_COUNT: usize = 2;
         const _: () = assert!(FRESH_LISTENER_WORKER_COUNT > 1);
-        const _: () = assert!(CONCURRENT_ALLOW_WORKER_COUNT > 1);
-        const _: () = assert!(CONCURRENT_ALLOW_EXECUTIONS_PER_WORKER > 1);
         const AUDIT_FLUSH_WAIT_MS: u64 = 50;
         const DIAGNOSTIC_TEST_EVENT_COUNT: usize = 2;
-        const TEST_BLAKE3_HEX_LENGTH: usize = 64;
         const ORPHAN_EXEC_DELAY_US: libc::useconds_t = 100_000;
 
         fn current_exe_policy(digest_hex: String) -> ProtectedExecPolicy {
@@ -1070,17 +946,6 @@ mod linux {
                 source_entries: Vec::new(),
             };
             ProtectedExecPolicy::from_inventory(inventory).unwrap()
-        }
-
-        fn current_exe_action_policy(digest_hex: String) -> ProtectedExecPolicy {
-            let current_exe = std::env::current_exe().unwrap();
-            ProtectedExecPolicy::from_action_plan(&["rust-provider-final".to_string()], &[PlannedExecutable {
-                authorization_id: "rustc".to_string(),
-                source_stage_id: "rust-provider-final".to_string(),
-                path: current_exe,
-                digest_hex,
-            }])
-            .unwrap()
         }
 
         fn seed_entry(id: &str, role: &str, path: &Path, digest_hex: String, required: bool) -> ExecutableSeedEntry {
@@ -1143,56 +1008,6 @@ mod linux {
         }
 
         #[test]
-        fn successful_seccomp_response_preserves_allowed_audit_and_promotion() {
-            let event = sample_allowed_audit_event();
-            let promotion = sample_promotion();
-
-            let (bound_event, bound_promotion) = bind_response_result(event.clone(), Some(promotion.clone()), Ok(()));
-
-            assert_eq!(bound_event, event);
-            assert_eq!(bound_promotion, Some(promotion));
-        }
-
-        #[test]
-        fn failed_seccomp_response_becomes_denied_and_discards_promotion() {
-            let event = sample_allowed_audit_event();
-
-            let (bound_event, bound_promotion) = bind_response_result(
-                event,
-                Some(sample_promotion()),
-                Err("SECCOMP_IOCTL_NOTIF_SEND: Interrupted system call".to_string()),
-            );
-
-            assert_eq!(bound_event.policy_decision, "denied");
-            assert!(bound_event.reason.contains("Interrupted system call"));
-            assert!(bound_promotion.is_none());
-        }
-
-        fn sample_allowed_audit_event() -> ProtectedSeccompAuditEvent {
-            ProtectedSeccompAuditEvent {
-                pid: 1,
-                syscall: "execve".to_string(),
-                executable_path: PathBuf::from("/test/tool"),
-                tracee_path: PathBuf::from("/test/tool"),
-                resolved_host_path: PathBuf::from("/test/tool"),
-                digest_hex: "a".repeat(TEST_BLAKE3_HEX_LENGTH),
-                reason: "bound test executable".to_string(),
-                phase: PHASE_PROTECTED.to_string(),
-                inventory_entry_id: Some("test-tool".to_string()),
-                policy_decision: "allowed".to_string(),
-            }
-        }
-
-        fn sample_promotion() -> OutputPromotionRecord {
-            OutputPromotionRecord {
-                source_entry_id: "test-source".to_string(),
-                extraction_rules: vec!["test-rule".to_string()],
-                promoted_executables: Vec::new(),
-                promoted_at_policy_size: 1,
-            }
-        }
-
-        #[test]
         fn diagnostic_exec_path_validation_is_bounded_and_absolute() {
             let empty = BTreeSet::new();
             let relative = BTreeSet::from([PathBuf::from("relative-tool")]);
@@ -1250,29 +1065,6 @@ mod linux {
         }
 
         #[test]
-        fn seccomp_supervisor_allows_concurrent_declared_execve() {
-            if std::env::var(CHILD_MODE_VAR).ok().as_deref() == Some(CONCURRENT_ALLOW_CHILD_MODE) {
-                run_concurrent_allow_child();
-                return;
-            }
-            let output = Command::new(std::env::current_exe().unwrap())
-                .arg("--exact")
-                .arg("protected_exec_seccomp::linux::tests::seccomp_supervisor_allows_concurrent_declared_execve")
-                .arg("--nocapture")
-                .env(CHILD_MODE_VAR, CONCURRENT_ALLOW_CHILD_MODE)
-                .output()
-                .unwrap();
-
-            assert!(
-                output.status.success(),
-                "stdout={}\nstderr={}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
-            assert!(output.stderr.is_empty(), "stderr={}", String::from_utf8_lossy(&output.stderr));
-        }
-
-        #[test]
         fn seccomp_listeners_require_distinct_fresh_worker_threads() {
             if std::env::var(CHILD_MODE_VAR).ok().as_deref() == Some(LISTENER_ISOLATION_CHILD_MODE) {
                 run_listener_isolation_child();
@@ -1306,63 +1098,6 @@ mod linux {
                 .arg("protected_exec_seccomp::linux::tests::seccomp_supervisor_denies_digest_mismatch_before_execve")
                 .arg("--nocapture")
                 .env(CHILD_MODE_VAR, "deny")
-                .output()
-                .unwrap();
-            assert!(
-                output.status.success(),
-                "stdout={}\nstderr={}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-
-        #[test]
-        fn rust_action_policy_supervises_allowed_and_denied_child_exec() {
-            match std::env::var(CHILD_MODE_VAR).ok().as_deref() {
-                Some(RUST_ACTION_ALLOW_CHILD_MODE) => {
-                    run_rust_action_child(true);
-                    return;
-                }
-                Some(RUST_ACTION_DENY_CHILD_MODE) => {
-                    run_rust_action_child(false);
-                    return;
-                }
-                _ => {}
-            }
-            for mode in [RUST_ACTION_ALLOW_CHILD_MODE, RUST_ACTION_DENY_CHILD_MODE] {
-                let output = Command::new(std::env::current_exe().unwrap())
-                    .arg("--exact")
-                    .arg(
-                        "protected_exec_seccomp::linux::tests::rust_action_policy_supervises_allowed_and_denied_child_exec",
-                    )
-                    .arg("--nocapture")
-                    .env(CHILD_MODE_VAR, mode)
-                    .output()
-                    .unwrap();
-                assert!(
-                    output.status.success(),
-                    "mode={mode}\nstdout={}\nstderr={}",
-                    String::from_utf8_lossy(&output.stdout),
-                    String::from_utf8_lossy(&output.stderr)
-                );
-            }
-        }
-
-        #[test]
-        fn seccomp_supervisor_pins_producer_scoped_output_before_first_exec() {
-            if std::env::var(CHILD_MODE_VAR).ok().as_deref() == Some(AUTO_PROMOTION_CHILD_MODE) {
-                run_auto_promotion_child();
-                return;
-            }
-            let temp = tempfile::tempdir().unwrap();
-            let output = Command::new(std::env::current_exe().unwrap())
-                .arg("--exact")
-                .arg(
-                    "protected_exec_seccomp::linux::tests::seccomp_supervisor_pins_producer_scoped_output_before_first_exec",
-                )
-                .arg("--nocapture")
-                .env(CHILD_MODE_VAR, AUTO_PROMOTION_CHILD_MODE)
-                .env("MANTLE_TEST_PRODUCED_ROOT", temp.path())
                 .output()
                 .unwrap();
             assert!(
@@ -1651,39 +1386,6 @@ mod linux {
             assert_eq!(events[0].inventory_entry_id.as_deref(), Some("sandbox-entry"));
         }
 
-        fn run_concurrent_allow_child() {
-            let executable = std::fs::canonicalize("/bin/sh").unwrap();
-            let digest_hex = blake3_file_hex(&executable).unwrap();
-            let shell_placeholder = executable.with_extension("sandbox-shell-placeholder");
-            let inventory = Stage0Inventory {
-                executable_entries: vec![
-                    seed_entry("sandbox-entry", "sandbox-entry", &executable, digest_hex.clone(), true),
-                    seed_entry("sandbox-shell", "sandbox-shell", &shell_placeholder, digest_hex, true),
-                ],
-                source_entries: Vec::new(),
-            };
-            let policy = ProtectedExecPolicy::from_inventory(inventory).unwrap();
-            let supervisor = install_current_thread_exec_supervisor(policy).unwrap();
-            std::thread::scope(|scope| {
-                for _ in 0..CONCURRENT_ALLOW_WORKER_COUNT {
-                    let executable = executable.clone();
-                    scope.spawn(move || {
-                        for _ in 0..CONCURRENT_ALLOW_EXECUTIONS_PER_WORKER {
-                            let status = Command::new(&executable).arg("-c").arg(":").status().unwrap();
-                            assert!(status.success());
-                        }
-                    });
-                }
-            });
-            supervisor.wait_for_audit_quiescence().unwrap();
-            let events = supervisor.audit_events();
-            let expected_event_count =
-                CONCURRENT_ALLOW_WORKER_COUNT.checked_mul(CONCURRENT_ALLOW_EXECUTIONS_PER_WORKER).unwrap();
-
-            assert_eq!(events.len(), expected_event_count);
-            assert!(events.iter().all(|event| event.policy_decision == "allowed"));
-        }
-
         fn run_deny_child() {
             let current_exe = std::env::current_exe().unwrap();
             let supervisor = install_current_thread_exec_supervisor(current_exe_policy("0".repeat(64))).unwrap();
@@ -1694,73 +1396,6 @@ mod linux {
             assert_eq!(events.len(), 1);
             assert_eq!(events[0].policy_decision, "denied");
             assert!(events[0].reason.contains("digest mismatch"));
-        }
-
-        fn run_rust_action_child(allow: bool) {
-            let current_exe = std::env::current_exe().unwrap();
-            let actual_digest = blake3_file_hex(&current_exe).unwrap();
-            let planned_digest = if allow { actual_digest.clone() } else { "0".repeat(64) };
-            let supervisor = install_current_thread_exec_supervisor(current_exe_action_policy(planned_digest)).unwrap();
-            let result = Command::new(&current_exe).arg("--help").status();
-            std::thread::sleep(std::time::Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-            let events = supervisor.audit_events();
-
-            assert_eq!(events.len(), 1);
-            assert_eq!(events[0].digest_hex, actual_digest);
-            if allow {
-                assert!(result.unwrap().success());
-                assert_eq!(events[0].policy_decision, "allowed");
-                assert_eq!(events[0].inventory_entry_id.as_deref(), Some("planned:rust-provider-final:rustc"));
-            } else {
-                assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::PermissionDenied);
-                assert_eq!(events[0].policy_decision, "denied");
-                assert!(events[0].inventory_entry_id.is_none());
-                assert!(events[0].reason.contains("digest mismatch"));
-            }
-        }
-
-        fn run_auto_promotion_child() {
-            const PROMOTION_COUNT_MAX: u32 = 4;
-            let producer = "rust-provider-stage";
-            let root = PathBuf::from(std::env::var_os("MANTLE_TEST_PRODUCED_ROOT").unwrap());
-            let root = std::fs::canonicalize(root).unwrap();
-            let shell = std::fs::canonicalize("/bin/sh").unwrap();
-            let shell_digest = blake3_file_hex(&shell).unwrap();
-            let policy = ProtectedExecPolicy::from_action_plan(&[producer.to_string()], &[PlannedExecutable {
-                authorization_id: "shell".to_string(),
-                source_stage_id: producer.to_string(),
-                path: shell,
-                digest_hex: shell_digest,
-            }])
-            .unwrap();
-            let supervisor = install_current_thread_exec_supervisor(policy).unwrap();
-            supervisor
-                .register_planned_produced_roots(&[PlannedProducedExecutableRoot {
-                    producer_action_id: producer.to_string(),
-                    output_identity_blake3: "c".repeat(64),
-                    root: root.clone(),
-                    promotion_count_max: PROMOTION_COUNT_MAX,
-                }])
-                .unwrap();
-            supervisor.begin_producer_action(producer).unwrap();
-            let generated = root.join("generated-tool");
-            std::fs::write(&generated, b"#!/bin/sh\nexit 0\n").unwrap();
-            make_executable(&generated);
-            let first = Command::new(&generated).status().unwrap();
-            std::fs::write(&generated, b"#!/bin/sh\nexit 1\n").unwrap();
-            let changed = Command::new(&generated).status().unwrap_err();
-            supervisor.end_producer_action(producer).unwrap();
-            std::thread::sleep(std::time::Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-            let events = supervisor.audit_events();
-            let promotions = supervisor.automatic_promotions();
-
-            assert!(first.success());
-            assert_eq!(changed.kind(), std::io::ErrorKind::PermissionDenied);
-            assert_eq!(promotions.len(), 1);
-            assert!(
-                events.iter().any(|event| event.executable_path == generated && event.policy_decision == "allowed")
-            );
-            assert!(events.iter().any(|event| event.executable_path == generated && event.policy_decision == "denied"));
         }
 
         fn run_denied_host_bwrap_child() {
@@ -1823,8 +1458,7 @@ mod linux {
             let listener_fd = install_exec_filter().unwrap();
             let audit_events = Arc::new(Mutex::new(Vec::new()));
             let shared_policy = Arc::new(RwLock::new(policy));
-            let auto_promotions = Arc::new(Mutex::new(Vec::new()));
-            spawn_supervisor_thread(listener_fd, shared_policy, audit_events.clone(), auto_promotions).unwrap();
+            spawn_supervisor_thread(listener_fd, shared_policy, audit_events.clone()).unwrap();
             let status = Command::new(&current_exe)
                 .arg("--exact")
                 .arg(

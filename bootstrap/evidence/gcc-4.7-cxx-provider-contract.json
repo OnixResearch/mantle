@@ -3,7 +3,7 @@
   "derivation": "bootstrap/gcc-4.7.ncl",
   "status": "contract-only",
   "required_markers": [
-    "GCC4=$(find_input gcc-4.0.4-musl-cxx-v8)",
+    "GCC4=$(find_input gcc-4.0.4-musl-cxx-v7)",
     "test -x \"$GCC4/libexec/gcc/$TARGET/$SEED_GCC_VERSION/cc1plus\"",
     "--enable-languages=c,c++",
     "make -j\"$JOB_COUNT\" all-gcc",

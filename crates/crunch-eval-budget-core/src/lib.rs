@@ -181,17 +181,6 @@ pub struct MetricFact {
     pub reason: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MetricFactInput<'a> {
-    pub name: &'a str,
-    pub unit: &'a str,
-    pub role: &'a str,
-    pub status: MetricFactStatus,
-    pub value: Option<u64>,
-    pub mechanism: &'a str,
-    pub reason: Option<&'a str>,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum TerminalDisposition {
@@ -258,18 +247,6 @@ pub struct EvaluationBudgetReport {
     pub error_class: Option<String>,
     pub bounded_stderr: String,
     pub non_claim: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvaluationReportInput<'a> {
-    pub request_ref: &'a str,
-    pub policy_ref: &'a str,
-    pub mode: EvaluationMode,
-    pub terminal_facts: TerminalFacts,
-    pub metrics: Vec<MetricFact>,
-    pub evaluator: Option<EvaluatorObservation>,
-    pub error_class: Option<String>,
-    pub bounded_stderr: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -346,12 +323,7 @@ pub fn prepare_request(
     if request.schema != REQUEST_SCHEMA {
         return Err(BudgetError::InvalidRequestSchema);
     }
-    if request.policy_ref != policy_ref
-        || !is_reference(ReferenceCheck {
-            value: policy_ref,
-            prefix: POLICY_REF_PREFIX,
-        })
-    {
+    if request.policy_ref != policy_ref || !is_ref(policy_ref, POLICY_REF_PREFIX) {
         return Err(BudgetError::InvalidReference("policy-ref"));
     }
     if request.policy != *policy {
@@ -368,8 +340,6 @@ pub fn prepare_request(
     normalize_selected_roots(&mut request.selected_roots)?;
     validate_operation_roots(&request)?;
     request.request_ref = hash_request(&request)?;
-    debug_assert!(u64::try_from(request.source_bytes.len()).is_ok_and(|count| count <= policy.source_bytes_max));
-    debug_assert!(u32::try_from(request.imports.len()).is_ok_and(|count| count <= policy.import_roots_max));
     Ok(request)
 }
 
@@ -427,19 +397,17 @@ pub fn validate_worker_response(
     if diagnostic_bytes > request.policy.diagnostic_bytes_max {
         return Err(BudgetError::LimitExceeded("response-diagnostic-bytes"));
     }
-    debug_assert_eq!(diagnostic_count, response.evaluator.diagnostic_count);
-    debug_assert_eq!(diagnostic_bytes, response.evaluator.diagnostic_bytes);
     Ok(())
 }
 
 fn validate_response_shape(response: &EvaluatorWorkerResponse) -> Result<(), BudgetError> {
-    let is_shape_valid = match response.status {
+    let shape_is_valid = match response.status {
         WorkerResponseStatus::Success => response.output_json.is_some() && response.error_class.is_none(),
         WorkerResponseStatus::EvaluationError | WorkerResponseStatus::ResponseOverflow => {
             response.output_json.is_none() && response.error_class.is_some()
         }
     };
-    if !is_shape_valid {
+    if !shape_is_valid {
         return Err(BudgetError::InvalidReference("response-shape"));
     }
     Ok(())
@@ -448,14 +416,14 @@ fn validate_response_shape(response: &EvaluatorWorkerResponse) -> Result<(), Bud
 pub fn frame_payload(payload: &[u8], bytes_max: u64) -> Result<Vec<u8>, BudgetError> {
     check_count(payload.len(), bytes_max, "protocol-bytes")?;
     let payload_len = u64::try_from(payload.len()).map_err(|_| BudgetError::FrameLengthOverflow)?;
-    let frame_capacity_bytes = FRAME_HEADER_BYTES.checked_add(payload.len()).ok_or(BudgetError::FrameLengthOverflow)?;
-    let mut framed = Vec::with_capacity(frame_capacity_bytes);
+    let capacity = FRAME_HEADER_BYTES.checked_add(payload.len()).ok_or(BudgetError::FrameLengthOverflow)?;
+    let mut framed = Vec::with_capacity(capacity);
     framed.extend_from_slice(&payload_len.to_le_bytes());
     framed.extend_from_slice(payload);
     Ok(framed)
 }
 
-pub fn decode_frame_header(header: &[u8], bytes_max: u64) -> Result<u64, BudgetError> {
+pub fn decode_frame_header(header: &[u8], bytes_max: u64) -> Result<usize, BudgetError> {
     if header.len() != FRAME_HEADER_BYTES {
         return Err(BudgetError::FrameHeaderIncomplete);
     }
@@ -465,10 +433,10 @@ pub fn decode_frame_header(header: &[u8], bytes_max: u64) -> Result<u64, BudgetE
     if declared > bytes_max {
         return Err(BudgetError::FrameTooLarge);
     }
-    Ok(declared)
+    usize::try_from(declared).map_err(|_| BudgetError::FrameLengthOverflow)
 }
 
-pub fn reject_trailing_data(trailing_byte_count: u64) -> Result<(), BudgetError> {
+pub fn reject_trailing_data(trailing_byte_count: usize) -> Result<(), BudgetError> {
     if trailing_byte_count > 0 {
         return Err(BudgetError::TrailingData);
     }
@@ -480,19 +448,18 @@ pub fn truncate_diagnostics(
     diagnostics_max: u32,
     diagnostic_bytes_max: u64,
 ) -> Result<(Vec<String>, bool), BudgetError> {
-    let diagnostics_take_bound =
-        usize::try_from(diagnostics_max).map_err(|_| BudgetError::IntegerOverflow("diagnostics"))?;
-    let byte_limit_bytes =
+    let item_limit = usize::try_from(diagnostics_max).map_err(|_| BudgetError::IntegerOverflow("diagnostics"))?;
+    let byte_limit =
         usize::try_from(diagnostic_bytes_max).map_err(|_| BudgetError::IntegerOverflow("diagnostic-bytes"))?;
-    let mut result = Vec::with_capacity(diagnostics.len().min(diagnostics_take_bound));
+    let mut result = Vec::with_capacity(diagnostics.len().min(item_limit));
     let mut retained_bytes = 0_usize;
-    let mut is_truncated = diagnostics.len() > diagnostics_take_bound;
-    for diagnostic in diagnostics.iter().take(diagnostics_take_bound) {
-        if retained_bytes >= byte_limit_bytes {
+    let mut is_truncated = diagnostics.len() > item_limit;
+    for diagnostic in diagnostics.iter().take(item_limit) {
+        if retained_bytes >= byte_limit {
             is_truncated = true;
             break;
         }
-        let remaining = byte_limit_bytes.saturating_sub(retained_bytes);
+        let remaining = byte_limit.saturating_sub(retained_bytes);
         let retained = truncate_utf8(diagnostic, remaining);
         retained_bytes =
             retained_bytes.checked_add(retained.len()).ok_or(BudgetError::IntegerOverflow("diagnostic-bytes"))?;
@@ -501,39 +468,28 @@ pub fn truncate_diagnostics(
         }
         result.push(retained.to_string());
     }
-    debug_assert!(result.len() <= diagnostics_take_bound);
-    debug_assert!(retained_bytes <= byte_limit_bytes);
     Ok((result, is_truncated))
 }
 
 pub fn classify_terminal(facts: &TerminalFacts) -> TerminalDisposition {
-    let disposition = if facts.teardown.cancellation_requested {
-        reaped_disposition(facts.teardown.reaped, TerminalDisposition::Cancelled)
-    } else if facts.teardown.deadline_exceeded {
-        reaped_disposition(facts.teardown.reaped, TerminalDisposition::Timeout)
-    } else if !facts.teardown.reaped {
-        TerminalDisposition::IncompleteTeardown
-    } else {
-        exit_disposition(facts.exit_kind.clone())
-    };
-    debug_assert!(facts.teardown.reaped || disposition == TerminalDisposition::IncompleteTeardown);
-    debug_assert!(
-        !facts.teardown.cancellation_requested
-            || matches!(disposition, TerminalDisposition::Cancelled | TerminalDisposition::IncompleteTeardown)
-    );
-    disposition
-}
-
-fn reaped_disposition(is_reaped: bool, completed: TerminalDisposition) -> TerminalDisposition {
-    if is_reaped {
-        completed
-    } else {
-        TerminalDisposition::IncompleteTeardown
+    if facts.teardown.cancellation_requested {
+        return if facts.teardown.reaped {
+            TerminalDisposition::Cancelled
+        } else {
+            TerminalDisposition::IncompleteTeardown
+        };
     }
-}
-
-fn exit_disposition(exit_kind: WorkerExitKind) -> TerminalDisposition {
-    match exit_kind {
+    if facts.teardown.deadline_exceeded {
+        return if facts.teardown.reaped {
+            TerminalDisposition::Timeout
+        } else {
+            TerminalDisposition::IncompleteTeardown
+        };
+    }
+    if !facts.teardown.reaped {
+        return TerminalDisposition::IncompleteTeardown;
+    }
+    match facts.exit_kind {
         WorkerExitKind::SuccessResponse => TerminalDisposition::Success,
         WorkerExitKind::EvaluationErrorResponse => TerminalDisposition::EvaluationError,
         WorkerExitKind::ResponseOverflow => TerminalDisposition::ResponseOverflow,
@@ -545,52 +501,60 @@ fn exit_disposition(exit_kind: WorkerExitKind) -> TerminalDisposition {
     }
 }
 
-pub fn metric_fact(input: MetricFactInput<'_>) -> MetricFact {
+pub fn metric_fact(
+    name: &str,
+    unit: &str,
+    role: &str,
+    status: MetricFactStatus,
+    value: Option<u64>,
+    mechanism: &str,
+    reason: Option<&str>,
+) -> MetricFact {
     MetricFact {
-        name: input.name.to_string(),
-        unit: input.unit.to_string(),
-        role: input.role.to_string(),
-        status: input.status,
-        value: input.value,
-        mechanism: input.mechanism.to_string(),
-        reason: input.reason.map(ToString::to_string),
+        name: name.to_string(),
+        unit: unit.to_string(),
+        role: role.to_string(),
+        status,
+        value,
+        mechanism: mechanism.to_string(),
+        reason: reason.map(ToString::to_string),
     }
 }
 
-pub fn build_report(input: EvaluationReportInput<'_>) -> Result<EvaluationBudgetReport, BudgetError> {
-    if !is_reference(ReferenceCheck {
-        value: input.request_ref,
-        prefix: REQUEST_REF_PREFIX,
-    }) {
+pub fn build_report(
+    request_ref: &str,
+    policy_ref: &str,
+    mode: EvaluationMode,
+    facts: TerminalFacts,
+    metrics: Vec<MetricFact>,
+    evaluator: Option<EvaluatorObservation>,
+    error_class: Option<String>,
+    bounded_stderr: String,
+) -> Result<EvaluationBudgetReport, BudgetError> {
+    if !is_ref(request_ref, REQUEST_REF_PREFIX) {
         return Err(BudgetError::InvalidReference("request-ref"));
     }
-    if !is_reference(ReferenceCheck {
-        value: input.policy_ref,
-        prefix: POLICY_REF_PREFIX,
-    }) {
+    if !is_ref(policy_ref, POLICY_REF_PREFIX) {
         return Err(BudgetError::InvalidReference("policy-ref"));
     }
-    let terminal_disposition = classify_terminal(&input.terminal_facts);
-    let output = EvaluationBudgetReport {
+    let terminal_disposition = classify_terminal(&facts);
+    Ok(EvaluationBudgetReport {
         schema: REPORT_SCHEMA.to_string(),
-        request_ref: input.request_ref.to_string(),
-        policy_ref: input.policy_ref.to_string(),
-        mode: input.mode,
+        request_ref: request_ref.to_string(),
+        policy_ref: policy_ref.to_string(),
+        mode,
         terminal_disposition,
-        metrics: input.metrics,
-        evaluator: input.evaluator,
-        teardown: input.terminal_facts.teardown,
-        error_class: input.error_class,
-        bounded_stderr: input.bounded_stderr,
+        metrics,
+        evaluator,
+        teardown: facts.teardown,
+        error_class,
+        bounded_stderr,
         non_claim: NON_CLAIM.to_string(),
-    };
-    debug_assert_eq!(output.schema, REPORT_SCHEMA);
-    debug_assert_eq!(output.terminal_disposition, terminal_disposition);
-    Ok(output)
+    })
 }
 
 fn validate_policy_limits(policy: &EvaluationBudgetPolicy) -> Result<(), BudgetError> {
-    let u64_bound_checks = [
+    let u64_limits = [
         (policy.source_bytes_max, ABSOLUTE_SOURCE_BYTES_MAX, "source-bytes"),
         (policy.diagnostic_bytes_max, ABSOLUTE_DIAGNOSTIC_BYTES_MAX, "diagnostic-bytes"),
         (policy.request_bytes_max, ABSOLUTE_PROTOCOL_BYTES_MAX, "request-bytes"),
@@ -601,14 +565,10 @@ fn validate_policy_limits(policy: &EvaluationBudgetPolicy) -> Result<(), BudgetE
         (policy.shutdown_grace_ms, ABSOLUTE_SHUTDOWN_GRACE_MS_MAX, "shutdown-grace-ms"),
         (policy.stderr_bytes_max, ABSOLUTE_STDERR_BYTES_MAX, "stderr-bytes"),
     ];
-    for (value, absolute_max, name) in u64_bound_checks {
-        validate_limit(LimitCheck {
-            value,
-            absolute_max,
-            name,
-        })?;
+    for (value, absolute_max, name) in u64_limits {
+        validate_limit(value, absolute_max, name)?;
     }
-    let u32_bound_checks = [
+    let u32_limits = [
         (policy.import_roots_max, ABSOLUTE_IMPORT_ROOTS_MAX, "import-roots"),
         (policy.imported_modules_max, ABSOLUTE_IMPORTED_MODULES_MAX, "imported-modules"),
         (policy.discovered_roots_max, ABSOLUTE_ROOTS_MAX, "discovered-roots"),
@@ -616,33 +576,21 @@ fn validate_policy_limits(policy: &EvaluationBudgetPolicy) -> Result<(), BudgetE
         (policy.diagnostics_max, ABSOLUTE_DIAGNOSTICS_MAX, "diagnostics"),
         (policy.workers_max, ABSOLUTE_WORKERS_MAX, "workers"),
     ];
-    for (value, absolute_max, name) in u32_bound_checks {
-        validate_limit(LimitCheck {
-            value: u64::from(value),
-            absolute_max: u64::from(absolute_max),
-            name,
-        })?;
+    for (value, absolute_max, name) in u32_limits {
+        validate_limit(u64::from(value), u64::from(absolute_max), name)?;
     }
     if policy.selected_roots_max > policy.discovered_roots_max {
         return Err(BudgetError::ContradictoryLimit("selected-roots-vs-discovered-roots"));
     }
-    debug_assert!(policy.source_bytes_max <= ABSOLUTE_SOURCE_BYTES_MAX);
-    debug_assert!(policy.selected_roots_max <= policy.discovered_roots_max);
     Ok(())
 }
 
-struct LimitCheck {
-    value: u64,
-    absolute_max: u64,
-    name: &'static str,
-}
-
-fn validate_limit(check: LimitCheck) -> Result<(), BudgetError> {
-    if check.value == 0 {
-        return Err(BudgetError::InvalidLimit(check.name));
+fn validate_limit(value: u64, absolute_max: u64, name: &'static str) -> Result<(), BudgetError> {
+    if value == 0 {
+        return Err(BudgetError::InvalidLimit(name));
     }
-    if check.value > check.absolute_max {
-        return Err(BudgetError::LimitTooLarge(check.name));
+    if value > absolute_max {
+        return Err(BudgetError::LimitTooLarge(name));
     }
     Ok(())
 }
@@ -681,10 +629,7 @@ fn normalize_imports(imports: &mut [ImportDescriptor]) -> Result<(), BudgetError
     let mut previous: Option<&str> = None;
     for import in imports {
         let path = import.canonical_path.as_str();
-        if !path.starts_with('/') || path.contains('\0') {
-            return Err(BudgetError::InvalidImportPath(path.to_string()));
-        }
-        if path.contains("/../") || path.ends_with("/..") {
+        if !path.starts_with('/') || path.contains("/../") || path.ends_with("/..") || path.contains('\0') {
             return Err(BudgetError::InvalidImportPath(path.to_string()));
         }
         if previous == Some(path) {
@@ -723,8 +668,6 @@ fn normalize_selected_roots(roots: &mut [String]) -> Result<(), BudgetError> {
 }
 
 fn hash_policy(policy: &EvaluationBudgetPolicy) -> Result<String, BudgetError> {
-    debug_assert_eq!(policy.schema, POLICY_SCHEMA);
-    debug_assert!(!policy.policy_id.is_empty());
     let mut hasher = blake3::Hasher::new();
     hash_bytes(&mut hasher, POLICY_DOMAIN)?;
     hash_string(&mut hasher, &policy.policy_id)?;
@@ -755,8 +698,6 @@ fn hash_policy(policy: &EvaluationBudgetPolicy) -> Result<String, BudgetError> {
 }
 
 fn hash_request(request: &EvaluatorWorkerRequest) -> Result<String, BudgetError> {
-    debug_assert_eq!(request.schema, REQUEST_SCHEMA);
-    debug_assert!(!request.policy_ref.is_empty());
     let mut hasher = blake3::Hasher::new();
     hash_bytes(&mut hasher, REQUEST_DOMAIN)?;
     hash_string(&mut hasher, &request.policy_ref)?;
@@ -817,13 +758,8 @@ fn truncate_utf8(value: &str, bytes_max: usize) -> &str {
     &value[..end]
 }
 
-struct ReferenceCheck<'a> {
-    value: &'a str,
-    prefix: &'a str,
-}
-
-fn is_reference(check: ReferenceCheck<'_>) -> bool {
-    check.value.strip_prefix(check.prefix).is_some_and(|digest| {
+fn is_ref(value: &str, prefix: &str) -> bool {
+    value.strip_prefix(prefix).is_some_and(|digest| {
         digest.len() == BLAKE3_HEX_CHARS
             && digest.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
     })
@@ -976,7 +912,7 @@ mod tests {
             let payload = vec![b'x'; payload_size];
             let frame = frame_payload(&payload, TEST_BYTES_MAX).unwrap();
             let decoded = decode_frame_header(&frame[..FRAME_HEADER_BYTES], TEST_BYTES_MAX).unwrap();
-            assert_eq!(decoded, u64::try_from(payload_size).unwrap());
+            assert_eq!(decoded, payload_size);
             assert_eq!(&frame[FRAME_HEADER_BYTES..], payload);
         }
 
@@ -1043,7 +979,7 @@ mod tests {
         let payload = b"bounded";
         let framed = frame_payload(payload, TEST_BYTES_MAX).unwrap();
         let length = decode_frame_header(&framed[..FRAME_HEADER_BYTES], TEST_BYTES_MAX).unwrap();
-        assert_eq!(length, u64::try_from(payload.len()).unwrap());
+        assert_eq!(length, payload.len());
         assert_eq!(&framed[FRAME_HEADER_BYTES..], payload);
         assert_eq!(
             decode_frame_header(&u64::MAX.to_le_bytes(), TEST_BYTES_MAX).unwrap_err(),
@@ -1116,27 +1052,27 @@ mod tests {
             stderr_bytes: 0,
             stderr_truncated: false,
         };
-        let report = build_report(EvaluationReportInput {
-            request_ref: &request.request_ref,
-            policy_ref: &policy_ref,
-            mode: policy.mode,
-            terminal_facts: TerminalFacts {
+        let report = build_report(
+            &request.request_ref,
+            &policy_ref,
+            policy.mode,
+            TerminalFacts {
                 teardown,
                 exit_kind: WorkerExitKind::SuccessResponse,
             },
-            metrics: vec![metric_fact(MetricFactInput {
-                name: "explicit_top_level_root_force_count",
-                unit: "count",
-                role: "public-api-request",
-                status: MetricFactStatus::Observed,
-                value: Some(1),
-                mechanism: "mantle-request",
-                reason: None,
-            })],
-            evaluator: None,
-            error_class: None,
-            bounded_stderr: String::new(),
-        })
+            vec![metric_fact(
+                "explicit_top_level_root_force_count",
+                "count",
+                "public-api-request",
+                MetricFactStatus::Observed,
+                Some(1),
+                "mantle-request",
+                None,
+            )],
+            None,
+            None,
+            String::new(),
+        )
         .unwrap();
         assert_eq!(report.terminal_disposition, TerminalDisposition::Success);
         assert_eq!(report.metrics[0].role, "public-api-request");

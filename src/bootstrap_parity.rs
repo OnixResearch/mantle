@@ -139,47 +139,22 @@ pub struct ParityProofDetails {
     pub verdict: String,
     pub verify_status: String,
     pub sandbox_profile_identity: String,
-    pub action_trust_plan_digest_blake3: String,
-    pub action_trust_reconciliation_digest_blake3: String,
-    pub planned_actions: u64,
-    pub matched_actions: u64,
-    pub observed_events: u64,
-    pub matched_events: u64,
-    pub local_only: bool,
-    pub independent_bundle_manifest_file_blake3: String,
-    pub independent_bundle_manifest_identity_blake3: String,
-    pub independent_verification_file_blake3: String,
-    pub independent_verification_identity_blake3: String,
-    pub independent_verifier_source_blake3: String,
-    pub independent_exporter_source_blake3: String,
     pub bounded_claim: String,
 }
 
 #[derive(Debug, Clone)]
 struct EvidenceValidation {
     proof_details: Option<ParityProofDetails>,
-    promotes_completion: bool,
 }
 
 impl EvidenceValidation {
     fn empty() -> Self {
-        Self {
-            proof_details: None,
-            promotes_completion: false,
-        }
+        Self { proof_details: None }
     }
 
     fn with_proof(details: ParityProofDetails) -> Self {
         Self {
             proof_details: Some(details),
-            promotes_completion: false,
-        }
-    }
-
-    fn with_promoted_proof(details: ParityProofDetails) -> Self {
-        Self {
-            proof_details: Some(details),
-            promotes_completion: true,
         }
     }
 }
@@ -597,15 +572,8 @@ fn evaluate_stage(project_root: &Path, spec: &StageSpec) -> ParityRow {
     let evidence_result = validate_stage_evidence(project_root, path.as_deref(), spec.evidence_check);
     let evidence_failure = evidence_result.as_ref().err().map(String::as_str);
     let proof_details = evidence_result.as_ref().ok().and_then(|validation| validation.proof_details.clone());
-    let evidence_promotes_completion = evidence_result.as_ref().is_ok_and(|validation| validation.promotes_completion);
-    let status = if spec.evidence_check == EvidenceCheck::RealSelfBuildProof {
-        if evidence_failure.is_some() {
-            StageStatus::Blocked
-        } else if evidence_promotes_completion {
-            StageStatus::Complete
-        } else {
-            StageStatus::Partial
-        }
+    let status = if spec.evidence_check == EvidenceCheck::RealSelfBuildProof && evidence_failure.is_some() {
+        StageStatus::Blocked
     } else {
         match (spec.expected_complete, file_state) {
             (true, None) if spec.evidence_check != EvidenceCheck::None && evidence_failure.is_none() => {
@@ -694,24 +662,14 @@ fn row_notes(
         _ => {}
     }
     if let Some(details) = proof_details {
-        let evidence_scope = if status == StageStatus::Complete {
-            "complete"
-        } else {
-            "partial"
-        };
         notes.push(format!(
-            "genuine release rebuild evidence accepted as {evidence_scope} bootstrap-parity evidence for provider_kind={} release_id={} proof_digest={} rebuild_descriptor={} rebuild_authority_plan={} verify_status={} actions={}/{} events={}/{} local_only={}; bounded claim: {}",
+            "genuine release rebuild evidence accepted as partial bootstrap-parity evidence for provider_kind={} release_id={} proof_digest={} rebuild_descriptor={} rebuild_authority_plan={} verify_status={}; bounded claim: {}",
             details.selected_provider_kind,
             details.release_id,
             details.deterministic_proof_digest_blake3,
             details.rebuild_descriptor_blake3,
             details.rebuild_authority_plan_blake3,
             details.verify_status,
-            details.matched_actions,
-            details.planned_actions,
-            details.matched_events,
-            details.observed_events,
-            details.local_only,
             details.bounded_claim
         ));
     }
@@ -2438,10 +2396,6 @@ fn validate_real_self_build_proof_parity_evidence(project_root: &Path) -> Result
     let evidence_digest_blake3 = blake3::hash(content.as_bytes()).to_hex().to_string();
     let value: serde_json::Value = serde_json::from_str(&content)
         .map_err(|err| format!("real self-build proof parity receipt is not valid JSON: {err}"))?;
-    let promotion = value
-        .get("bound_evidence")
-        .map(|_| crate::source_built_parity_promotion_shell::validate_bound_promotion(project_root, &value))
-        .transpose()?;
     let (release_id, selected_provider_kind) = validate_real_proof_identity(&value)?;
     let provider_kind_linkage = require_real_proof_object(&value, "provider_kind_linkage")?;
     require_real_proof_object_string(provider_kind_linkage, StringFieldExpectation {
@@ -2469,12 +2423,9 @@ fn validate_real_self_build_proof_parity_evidence(project_root: &Path) -> Result
         field: "vendor_blake3",
         expected: &deterministic.vendor_blake3,
     })?;
-    if let Some(promoted) = &promotion {
-        validate_promoted_parity_links(&value, selected_provider_kind, &deterministic, &summary, promoted)?;
-    }
     assert_eq!(evidence_digest_blake3.len(), BLAKE3_HEX_LENGTH);
     assert!(path.starts_with(project_root));
-    let details = ParityProofDetails {
+    Ok(EvidenceValidation::with_proof(ParityProofDetails {
         schema: "mantle-real-self-build-proof-parity-evidence-v1".to_string(),
         release_id,
         selected_provider_kind,
@@ -2489,97 +2440,8 @@ fn validate_real_self_build_proof_parity_evidence(project_root: &Path) -> Result
         verdict: "self-rebuild-match".to_string(),
         verify_status: "eligible".to_string(),
         sandbox_profile_identity: sandbox.profile_identity,
-        action_trust_plan_digest_blake3: promotion
-            .as_ref()
-            .map_or_else(String::new, |p| p.action_plan_file_blake3.clone()),
-        action_trust_reconciliation_digest_blake3: promotion
-            .as_ref()
-            .map_or_else(String::new, |p| p.action_reconciliation_file_blake3.clone()),
-        planned_actions: promotion.as_ref().map_or(0, |p| p.planned_actions),
-        matched_actions: promotion.as_ref().map_or(0, |p| p.matched_actions),
-        observed_events: promotion.as_ref().map_or(0, |p| p.observed_events),
-        matched_events: promotion.as_ref().map_or(0, |p| p.matched_events),
-        local_only: promotion.as_ref().is_some_and(|p| p.local_only),
-        independent_bundle_manifest_file_blake3: promotion
-            .as_ref()
-            .map_or_else(String::new, |p| p.independent_bundle_manifest_file_blake3.clone()),
-        independent_bundle_manifest_identity_blake3: promotion
-            .as_ref()
-            .map_or_else(String::new, |p| p.independent_bundle_manifest_identity_blake3.clone()),
-        independent_verification_file_blake3: promotion
-            .as_ref()
-            .map_or_else(String::new, |p| p.independent_verification_file_blake3.clone()),
-        independent_verification_identity_blake3: promotion
-            .as_ref()
-            .map_or_else(String::new, |p| p.independent_verification_identity_blake3.clone()),
-        independent_verifier_source_blake3: promotion
-            .as_ref()
-            .map_or_else(String::new, |p| p.independent_verifier_source_blake3.clone()),
-        independent_exporter_source_blake3: promotion
-            .as_ref()
-            .map_or_else(String::new, |p| p.independent_exporter_source_blake3.clone()),
         bounded_claim: summary.bounded_claim,
-    };
-    if promotion.is_some() {
-        Ok(EvidenceValidation::with_promoted_proof(details))
-    } else {
-        Ok(EvidenceValidation::with_proof(details))
-    }
-}
-
-fn validate_promoted_parity_links(
-    value: &serde_json::Value,
-    selected_provider_kind: ProviderKind,
-    deterministic: &DeterministicProofValidation,
-    summary: &SummaryProofValidation,
-    promoted: &crate::source_built_parity_promotion::PromotionSummary,
-) -> Result<(), String> {
-    let promoted_provider = parse_provider_kind(ProviderKindFieldCheck {
-        kind: &promoted.selected_provider_kind,
-        field: "bound_evidence.selected_provider_kind",
-    })?;
-    if promoted_provider != selected_provider_kind {
-        return Err("bound promotion provider kind does not match parity descriptor".to_string());
-    }
-    for (field, actual, expected) in [
-        ("receipt digest", promoted.receipt_digest_blake3.as_str(), deterministic.digest_blake3.as_str()),
-        ("source digest", promoted.source_blake3.as_str(), deterministic.source_blake3.as_str()),
-        ("vendor digest", promoted.vendor_blake3.as_str(), deterministic.vendor_blake3.as_str()),
-        (
-            "rebuild descriptor",
-            promoted.rebuild_descriptor_blake3.as_str(),
-            deterministic.rebuild_descriptor_blake3.as_str(),
-        ),
-        (
-            "rebuild authority plan",
-            promoted.rebuild_authority_plan_blake3.as_str(),
-            deterministic.rebuild_authority_plan_blake3.as_str(),
-        ),
-        (
-            "trust report JSON digest",
-            promoted.trust_report_file_blake3.as_str(),
-            summary.json_digest_blake3.as_str(),
-        ),
-    ] {
-        if actual != expected {
-            return Err(format!("bound promotion {field} mismatch: {actual} != {expected}"));
-        }
-    }
-    let proof = require_real_proof_object(value, "deterministic_proof")?;
-    let artifacts = proof
-        .get("artifact_digests_blake3")
-        .and_then(serde_json::Value::as_array)
-        .ok_or_else(|| "real self-build proof artifact digest set is missing".to_string())?;
-    if !artifacts.iter().any(|digest| digest.as_str() == Some(promoted.output_digest_blake3.as_str())) {
-        return Err("bound promotion output digest is absent from parity descriptor".to_string());
-    }
-    if !promoted.local_only || promoted.planned_actions != promoted.matched_actions {
-        return Err("bound promotion action evidence is incomplete or nonlocal".to_string());
-    }
-    if promoted.observed_events != promoted.matched_events {
-        return Err("bound promotion event evidence is incomplete".to_string());
-    }
-    Ok(())
+    }))
 }
 
 fn validate_real_proof_identity(value: &serde_json::Value) -> Result<(String, ProviderKind), String> {
@@ -3618,15 +3480,15 @@ const BOOTSTRAP_PROOF_STAGE_SPECS: &[StageSpec] = &[
     },
     StageSpec {
         id: "crunch.self-build",
-        title: "Mantle source-built fixed-point proof",
+        title: "Crunch self-build proof",
         axes: GUIX_STAGEX,
-        lineage: "mantle",
-        derivation: None,
+        lineage: "crunch",
+        derivation: Some("crunch.ncl"),
         expected_complete: false,
-        graph_evidence: "content-bound v2 proof and complete root action trust required",
-        semantic_evidence: "stage1/stage2 binary equality and strict local reconciliation required",
-        proof_evidence: "V98 deterministic receipt, action plan, reconciliation, and trust report required",
-        notes: "compatibility row id retained; promotion requires exact V98 file bindings and complete local root action trust",
+        graph_evidence: "crunch derivation present",
+        semantic_evidence: "stage1/stage2 binary comparison required",
+        proof_evidence: "full proof bundle required",
+        notes: "release evidence must bind selected provider kind; checked receipt at bootstrap/evidence/crunch-self-build-provider-kind-linkage.json validates proof_identity/proof_linkage/prerequisites provider-kind equality but does not prove full self-build",
         evidence_check: EvidenceCheck::RealSelfBuildProof,
     },
 ];
@@ -3644,9 +3506,6 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-
-    const V98_PLANNED_ACTION_COUNT: u64 = 1_914;
-    const V98_OBSERVED_EVENT_COUNT: u64 = 478_870;
 
     fn write_stage(root: &Path, name: &str, content: &str) {
         let bootstrap = root.join(BOOTSTRAP_DIR);
@@ -6010,23 +5869,19 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
     }
 
     #[test]
-    fn self_build_v98_evidence_completes_full_source_parity_row() {
+    fn self_build_checked_legacy_release_evidence_is_blocked_until_genuine_v2_refresh() {
         let project_root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let report = collect_bootstrap_parity_report(project_root);
         let row = report.rows.iter().find(|row| row.id == "crunch.self-build").unwrap();
 
-        assert_eq!(row.status, StageStatus::Complete);
-        assert_eq!(row.provider_kind, ProviderKind::FullSource);
-        assert!(!row.status.blocks_parity());
-        let proof = row.proof_details.as_ref().unwrap();
-        assert_eq!(proof.planned_actions, V98_PLANNED_ACTION_COUNT);
-        assert_eq!(proof.matched_actions, proof.planned_actions);
-        assert_eq!(proof.observed_events, V98_OBSERVED_EVENT_COUNT);
-        assert_eq!(proof.matched_events, proof.observed_events);
-        assert!(proof.local_only);
-        assert!(row.notes.contains("complete bootstrap-parity evidence"));
-        assert!(report.axes.iter().any(|axis| axis.axis == ParityAxis::Guix && axis.complete));
-        assert!(report.axes.iter().any(|axis| axis.axis == ParityAxis::Stagex && axis.complete));
+        assert_eq!(row.status, StageStatus::Blocked);
+        assert_eq!(row.provider_kind, ProviderKind::Unknown);
+        assert!(row.status.blocks_parity());
+        assert!(row.proof_details.is_none());
+        assert!(!row.notes.contains("provider-kind linkage receipt missing"));
+        assert!(row.notes.contains("mantle-deterministic-proof-receipt-v2"));
+        assert!(report.axes.iter().any(|axis| axis.axis == ParityAxis::Guix && !axis.complete));
+        assert!(report.axes.iter().any(|axis| axis.axis == ParityAxis::Stagex && !axis.complete));
     }
 
     #[test]
@@ -6216,8 +6071,7 @@ non_claim: full native cp-demangle and GCC 4.0 correctness pending
         assert!(!row.notes.contains("evidence check failed"));
         let stagex = report.axes.iter().find(|axis| axis.axis == ParityAxis::Stagex).unwrap();
         assert!(!stagex.blocking_rows.contains(&"seed-full.stagex-lineage".to_string()));
-        assert!(stagex.blocking_rows.is_empty());
-        assert!(stagex.complete);
+        assert!(!stagex.blocking_rows.is_empty());
     }
 
     #[test]

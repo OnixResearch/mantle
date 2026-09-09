@@ -119,7 +119,7 @@ fn validate_authority_sources(build: &str, pipeline: &str, capability: &str) -> 
         }
     }
     for required in [
-        "store: crunch_store::PipelineStoreParts",
+        "into_pipeline_store_parts()",
         ".find(&expected.store_path)",
         ".register_if_present(",
     ] {
@@ -181,16 +181,15 @@ fn validate_authority_sources(build: &str, pipeline: &str, capability: &str) -> 
 fn production_sources_keep_store_authority_narrow() {
     let findings = validate_authority_sources(BUILD_SOURCE, PIPELINE_SOURCE, CAPABILITY_SOURCE);
     assert!(findings.is_empty(), "unexpected authority findings: {findings:?}");
-    assert!(FOREIGN_REALIZATION_SHELL_SOURCE.contains("ForeignRealizationStore::open"));
     assert!(FOREIGN_REALIZATION_SHELL_SOURCE.contains("store.source_admission()"));
     assert!(FOREIGN_REALIZATION_SHELL_SOURCE.contains(".preflight(VerifiedSourceIngestRequest"));
     assert!(FOREIGN_REALIZATION_SHELL_SOURCE.contains(".ingest(VerifiedSourceIngestRequest"));
     assert!(!FOREIGN_REALIZATION_SHELL_SOURCE.contains(".preflight_verified_source("));
     assert!(!FOREIGN_REALIZATION_SHELL_SOURCE.contains(".ingest_verified_source("));
-    assert!(STORE_COMMAND_SOURCE.contains("StoreAdministration::open"));
-    assert!(STORE_COMMAND_SOURCE.contains("let mut store_admin = store.admin();"));
+    assert!(STORE_COMMAND_SOURCE.contains("let mut store_admin = store.store_admin();"));
     assert!(STORE_COMMAND_SOURCE.contains(".garbage_collect_with_castore_roots("));
     for shell_source in [BOOTSTRAP_SOURCE, REMOTE_BUILD_SOURCE] {
+        assert!(shell_source.contains("into_pipeline_store_parts()"));
         assert!(shell_source.contains("Builder::from_store_parts("));
         assert!(!shell_source.contains("Builder::with_state_dir("));
         assert!(!shell_source.contains("FetchBuildService::new(blob_service"));

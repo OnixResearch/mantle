@@ -35,6 +35,8 @@ use crunch_rust_cache_core::shared::sign_rust_result_envelope;
 use crunch_rust_cache_core::shared::validate_signed_rust_result_envelope;
 use serde::Deserialize;
 use serde::Serialize;
+use snix_store::nar::ingest_nar_and_hash;
+use snix_store::nar::write_nar;
 use tempfile::Builder;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
@@ -1103,11 +1105,10 @@ impl RustCache {
         shared_policy: &SharedRustCachePolicy,
     ) -> Result<u64, Error> {
         let node = node_from_identity(&signed.envelope.result.input.root_node)?;
-        let is_complete = self
-            .store
-            .has_complete_content(&node)
-            .await
-            .map_err(|error| Error::Castore(format!("shared-completeness:{error}")))?;
+        let is_complete =
+            crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
+                .await
+                .map_err(|error| Error::Castore(format!("shared-completeness:{error}")))?;
         let transferred = if is_complete {
             0
         } else {
@@ -1141,20 +1142,23 @@ impl RustCache {
             context: "open-shared-object-staging".to_string(),
             source,
         })?;
-        let observation = self
-            .store
-            .ingest_nar_and_hash(&mut reader)
-            .await
-            .map_err(|error| Error::Castore(format!("shared-object-ingest:{error}")))?;
-        let identity = node_identity(&observation.node)?;
+        let expected_ca_content_hash = None;
+        let (node, _, _) = ingest_nar_and_hash(
+            self.blob_service.clone(),
+            self.directory_service.clone(),
+            &mut reader,
+            &expected_ca_content_hash,
+        )
+        .await
+        .map_err(|error| Error::Castore(format!("shared-object-ingest:{error}")))?;
+        let identity = node_identity(&node)?;
         if identity != signed.envelope.result.input.root_node {
             return Err(Error::State("shared-object-root-mismatch".to_string()));
         }
-        let is_complete = self
-            .store
-            .has_complete_content(&observation.node)
-            .await
-            .map_err(|error| Error::Castore(format!("shared-completeness:{error}")))?;
+        let is_complete =
+            crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
+                .await
+                .map_err(|error| Error::Castore(format!("shared-completeness:{error}")))?;
         if !is_complete {
             return Err(Error::State("shared-object-tree-incomplete".to_string()));
         }
@@ -1174,8 +1178,9 @@ impl RustCache {
                 source,
             })?;
         let node = node_from_identity(&result.input.root_node)?;
-        self.store
-            .export_node(&node, temp.path())
+        let destination =
+            temp.path().to_str().ok_or_else(|| Error::State("shared-verify-path-non-utf8".to_string()))?;
+        crunch_store::export_castore_to_disk(&node, destination, &self.blob_service, &self.directory_service)
             .await
             .map_err(|error| Error::Castore(format!("shared-verify-export:{error}")))?;
         let observed = scan_output_artifacts(temp.path(), local_policy)?;
@@ -1271,11 +1276,10 @@ impl RustCache {
 
     async fn render_shared_object(&self, result: &RustUnitResult) -> Result<StagedSharedObject, Error> {
         let node = node_from_identity(&result.input.root_node)?;
-        let is_complete = self
-            .store
-            .has_complete_content(&node)
-            .await
-            .map_err(|error| Error::Castore(format!("shared-publish-completeness:{error}")))?;
+        let is_complete =
+            crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
+                .await
+                .map_err(|error| Error::Castore(format!("shared-publish-completeness:{error}")))?;
         if !is_complete {
             return Err(Error::State("shared-publish-tree-incomplete".to_string()));
         }
@@ -1293,8 +1297,10 @@ impl RustCache {
         })?;
         let (mut reader, writer) = tokio::io::duplex(NAR_DUPLEX_BUFFER_BYTES);
         let render_node = node.clone();
-        let store = self.store.clone();
-        let render_task = tokio::spawn(async move { store.render_nar(&render_node, writer).await });
+        let blob_service = self.blob_service.clone();
+        let directory_service = self.directory_service.clone();
+        let render_task =
+            tokio::spawn(async move { write_nar(writer, &render_node, blob_service, directory_service).await });
         tokio::io::copy(&mut reader, &mut file).await.map_err(|source| Error::Io {
             context: "copy-shared-publish-staging".to_string(),
             source,
@@ -1988,6 +1994,11 @@ mod tests {
     use crunch_rust_cache_core::canonical_rust_action;
     use crunch_rust_cache_core::shared::SHARED_RUST_TRUST_POLICY_SCHEMA;
     use crunch_rust_cache_core::shared::TrustedRustResultKey;
+    use snix_castore::blobservice::BlobService;
+    use snix_castore::blobservice::MemoryBlobService;
+    use snix_castore::directoryservice::DirectoryService;
+    use snix_castore::directoryservice::RedbDirectoryService;
+    use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 
     use super::*;
     use crate::PublishRequest;
@@ -2431,8 +2442,15 @@ mod tests {
     }
 
     async fn test_cache(state_dir: &Path) -> RustCache {
-        let store = crunch_store::RustCacheStore::memory(state_dir.to_path_buf()).await.unwrap();
-        RustCache::new(store).unwrap()
+        let blob_service = Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>;
+        let directory_service = Arc::new(
+            RedbDirectoryService::new_temporary(
+                format!("shared-test-{}", blake3::hash(state_dir.as_os_str().as_encoded_bytes()).to_hex()),
+                RedbDirectoryServiceConfig::default(),
+            )
+            .unwrap(),
+        ) as Arc<dyn DirectoryService>;
+        RustCache::new(state_dir.to_path_buf(), blob_service, directory_service).unwrap()
     }
 
     fn shared_publish_request<'a>(

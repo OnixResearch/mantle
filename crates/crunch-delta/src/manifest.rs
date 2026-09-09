@@ -4,12 +4,20 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+use async_trait::async_trait;
 use bytes::Bytes;
+use futures::stream::BoxStream;
+use futures::stream::{self};
 use snix_castore::B3Digest;
 use snix_castore::Directory;
 use snix_castore::Node;
 use snix_castore::PathComponent;
 use snix_castore::SymlinkTarget;
+use snix_castore::blobservice::BlobReader;
+use snix_castore::blobservice::BlobService;
+use snix_castore::blobservice::BlobWriter;
+use snix_castore::directoryservice::DirectoryPutter;
+use snix_castore::directoryservice::DirectoryService;
 use snix_castore::proto::stat_blob_response::ChunkMeta;
 
 use crate::fixtures::BenchCase;
@@ -493,14 +501,14 @@ async fn load_seeded_directory_if_present(
     services: &FixtureManifestStore,
     digest: B3Digest,
 ) -> Result<Option<Directory>, ManifestError> {
-    Ok(services.directory(&digest))
+    services.directory_service.get(&digest).await.map_err(|_| ManifestError::MissingDirectory(digest))
 }
 
 async fn load_seeded_chunk_metadata_if_present(
     services: &FixtureManifestStore,
     digest: B3Digest,
 ) -> Result<Option<Vec<ChunkMeta>>, ManifestError> {
-    Ok(services.chunk_metadata(&digest))
+    services.blob_service.chunks(&digest).await.map_err(|_| ManifestError::MissingBlob(digest))
 }
 
 #[allow(tigerstyle::too_many_parameters)] // manifest walk threads shared state through recursive traversal
@@ -827,9 +835,8 @@ async fn record_local_blob_probabilistic(
 }
 
 struct FixtureManifestStore {
-    counters: Arc<ProbeCounters>,
-    directories: HashMap<B3Digest, Directory>,
-    blobs: HashMap<B3Digest, Vec<ChunkMeta>>,
+    directory_service: Arc<FixtureDirectoryService>,
+    blob_service: Arc<FixtureBlobService>,
 }
 
 impl FixtureManifestStore {
@@ -843,33 +850,25 @@ impl FixtureManifestStore {
         }
 
         Self {
-            counters,
-            directories,
-            blobs,
+            directory_service: Arc::new(FixtureDirectoryService {
+                counters: Arc::clone(&counters),
+                directories,
+            }),
+            blob_service: Arc::new(FixtureBlobService { counters, blobs }),
         }
-    }
-
-    fn directory(&self, digest: &B3Digest) -> Option<Directory> {
-        self.counters.directory_gets.fetch_add(1, Ordering::Relaxed);
-        self.directories.get(digest).cloned()
-    }
-
-    fn chunk_metadata(&self, digest: &B3Digest) -> Option<Vec<ChunkMeta>> {
-        self.counters.chunk_queries.fetch_add(1, Ordering::Relaxed);
-        self.blobs.get(digest).cloned()
     }
 
     fn finish_counts(&self, output_checks: u64) -> ManifestProbeCounts {
         ManifestProbeCounts {
             output_checks,
-            directory_gets: self.counters.directory_gets.load(Ordering::Relaxed),
-            chunk_queries: self.counters.chunk_queries.load(Ordering::Relaxed),
+            directory_gets: self.directory_service.counters.directory_gets.load(Ordering::Relaxed),
+            chunk_queries: self.blob_service.counters.chunk_queries.load(Ordering::Relaxed),
         }
     }
 
     #[cfg(test)]
     fn blob_read_opens(&self) -> u64 {
-        self.counters.blob_read_opens.load(Ordering::Relaxed)
+        self.blob_service.counters.blob_read_opens.load(Ordering::Relaxed)
     }
 }
 
@@ -877,8 +876,130 @@ impl FixtureManifestStore {
 struct ProbeCounters {
     directory_gets: AtomicU64,
     chunk_queries: AtomicU64,
-    #[cfg(test)]
     blob_read_opens: AtomicU64,
+}
+
+struct FixtureDirectoryService {
+    counters: Arc<ProbeCounters>,
+    directories: HashMap<B3Digest, Directory>,
+}
+
+#[async_trait]
+impl DirectoryService for FixtureDirectoryService {
+    async fn get(&self, digest: &B3Digest) -> Result<Option<Directory>, snix_castore::directoryservice::Error> {
+        self.counters.directory_gets.fetch_add(1, Ordering::Relaxed);
+        Ok(self.directories.get(digest).cloned())
+    }
+
+    async fn put(&self, _directory: Directory) -> Result<B3Digest, snix_castore::directoryservice::Error> {
+        Err(Box::new(std::io::Error::other("put unsupported in fixture directory service")))
+    }
+
+    fn get_recursive(
+        &self,
+        root_directory_digest: &B3Digest,
+    ) -> BoxStream<'_, Result<Directory, snix_castore::directoryservice::Error>> {
+        let mut items = Vec::new();
+        collect_recursive_directories(root_directory_digest, &self.directories, &mut items);
+        Box::pin(stream::iter(items.into_iter().map(Ok)))
+    }
+
+    fn put_multiple_start(&self) -> Box<dyn DirectoryPutter + '_> {
+        Box::new(FixtureDirectoryPutter)
+    }
+}
+
+struct FixtureDirectoryPutter;
+
+#[async_trait]
+impl DirectoryPutter for FixtureDirectoryPutter {
+    async fn put(&mut self, _directory: Directory) -> Result<(), snix_castore::directoryservice::Error> {
+        Err(Box::new(std::io::Error::other("put unsupported in fixture directory putter")))
+    }
+
+    async fn close(&mut self) -> Result<B3Digest, snix_castore::directoryservice::Error> {
+        Err(Box::new(std::io::Error::other("close unsupported in fixture directory putter")))
+    }
+}
+
+struct FixtureBlobService {
+    counters: Arc<ProbeCounters>,
+    blobs: HashMap<B3Digest, Vec<ChunkMeta>>,
+}
+
+#[async_trait]
+impl BlobService for FixtureBlobService {
+    async fn has(&self, digest: &B3Digest) -> std::io::Result<bool> {
+        Ok(self.blobs.contains_key(digest))
+    }
+
+    async fn open_read(&self, _digest: &B3Digest) -> std::io::Result<Option<Box<dyn BlobReader>>> {
+        self.counters.blob_read_opens.fetch_add(1, Ordering::Relaxed);
+        Ok(None)
+    }
+
+    async fn open_write(&self) -> Box<dyn BlobWriter> {
+        Box::new(FixtureBlobWriter::default())
+    }
+
+    async fn chunks(&self, digest: &B3Digest) -> std::io::Result<Option<Vec<ChunkMeta>>> {
+        self.counters.chunk_queries.fetch_add(1, Ordering::Relaxed);
+        Ok(self.blobs.get(digest).cloned())
+    }
+}
+
+#[derive(Default)]
+struct FixtureBlobWriter {
+    data: Vec<u8>,
+}
+
+impl tokio::io::AsyncWrite for FixtureBlobWriter {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        self.data.extend_from_slice(buf);
+        std::task::Poll::Ready(Ok(buf.len()))
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+}
+
+#[async_trait]
+impl BlobWriter for FixtureBlobWriter {
+    async fn close(&mut self) -> std::io::Result<B3Digest> {
+        Ok(blake3::hash(&self.data).as_bytes().into())
+    }
+}
+
+#[allow(tigerstyle::no_recursion)] // tree walk bounded by fixture tree depth
+fn collect_recursive_directories(
+    digest: &B3Digest,
+    directories: &HashMap<B3Digest, Directory>,
+    items: &mut Vec<Directory>,
+) {
+    let Some(directory) = directories.get(digest).cloned() else {
+        return;
+    };
+    for (_name, child) in directory.nodes() {
+        if let Node::Directory { digest, .. } = child {
+            collect_recursive_directories(digest, directories, items);
+        }
+    }
+    items.push(directory);
 }
 
 #[allow(tigerstyle::no_recursion)] // tree walk bounded by fixture tree depth
@@ -1024,9 +1145,11 @@ mod tests {
             blobs.remove(digest);
         }
         FixtureManifestStore {
-            counters,
-            directories,
-            blobs,
+            directory_service: Arc::new(FixtureDirectoryService {
+                counters: Arc::clone(&counters),
+                directories,
+            }),
+            blob_service: Arc::new(FixtureBlobService { counters, blobs }),
         }
     }
 

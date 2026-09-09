@@ -406,7 +406,7 @@ fn remeasure_artifact(bundle_dir: &Path, artifact: &CairnMeasuredArtifact) -> Re
     })
 }
 
-pub(crate) fn read_bounded_file(
+fn read_bounded_file(
     path: &Path,
     maximum_bytes: u64,
     label: &str,

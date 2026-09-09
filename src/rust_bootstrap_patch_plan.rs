@@ -20,8 +20,8 @@ const DIGEST_HEX_CHAR_COUNT: usize = 64;
 const PATCH_PLAN_MAX_SOURCE_IDENTITIES: usize = 16;
 const PATCH_PLAN_MAX_OPERATIONS: usize = 64;
 const PATCH_PLAN_BASE_RECEIPT_ARGUMENTS: usize = 10;
-const FIRST_STAGE_MUSL_REPAIR_OPERATION_COUNT: usize = 8;
-const RUST_BOOTSTRAP_REPAIR_OPERATION_COUNT: usize = 7;
+const FIRST_STAGE_MUSL_REPAIR_OPERATION_COUNT: usize = 6;
+const RUST_BOOTSTRAP_REPAIR_OPERATION_COUNT: usize = 5;
 const OPERATION_LABEL_SEPARATOR: &str = ":";
 
 const _: () = {
@@ -87,16 +87,13 @@ pub(crate) enum RustBootstrapPatchPhase {
 pub(crate) enum RustBootstrapPatchOperationKind {
     MinicargoBuildOutDir,
     MinicargoRustcThreads,
-    MinicargoProtectedExecutionPaths,
     MinicargoLlvmStaticArchiveTargets,
     SourceRootMuslLlvmRuntime,
-    OpenSslNoAsm,
     RustExplicitSysroot,
     RustcDriverRlib,
     RunRustcHostRuntime,
     RunRustcTargetRustlib,
     RustBootstrapTargetToolConfig,
-    RustBootstrapLlvmAbsoluteTablegen,
     RustBootstrapWorkspaceIsolation,
     RustBootstrapRustcDriverRlib,
     RustBootstrapSysrootFallback,
@@ -362,14 +359,6 @@ fn derive_first_stage_musl_repair_operations(operations: &mut Vec<RustBootstrapP
         Some("tools/minicargo/build.cpp rustc argument construction"),
     ));
     operations.push(patch_operation!(
-        "first-stage-minicargo-protected-execution-paths",
-        RustBootstrapPatchOperationKind::MinicargoProtectedExecutionPaths,
-        RustBootstrapPatchPhase::BeforeFirstStageMainMake,
-        "route minicargo and Make recipe execution through absolute receipt-bound paths",
-        Some(&format!("mrustc-{SUPPORTED_MRUSTC_VERSION}")),
-        Some("minicargo.mk MINICARGO variable and generated Make runner"),
-    ));
-    operations.push(patch_operation!(
         "first-stage-llvm-static-archives",
         RustBootstrapPatchOperationKind::MinicargoLlvmStaticArchiveTargets,
         RustBootstrapPatchPhase::BeforeFirstStageMainMake,
@@ -384,14 +373,6 @@ fn derive_first_stage_musl_repair_operations(operations: &mut Vec<RustBootstrapP
         "prepare source-root musl compiler runtime for LLVM and helper links",
         Some(&format!("mrustc-{SUPPORTED_MRUSTC_VERSION}")),
         Some("source-root musl target toolchain"),
-    ));
-    operations.push(patch_operation!(
-        "first-stage-openssl-no-asm",
-        RustBootstrapPatchOperationKind::OpenSslNoAsm,
-        RustBootstrapPatchPhase::AfterFirstStageRustSourceExtract,
-        "disable OpenSSL assembly generators that require an ambient shell",
-        Some(&format!("rust-{SUPPORTED_FIRST_STAGE_RUST_VERSION}")),
-        Some("vendored openssl-src configure arguments"),
     ));
     operations.push(patch_operation!(
         "first-stage-rust-explicit-sysroot",
@@ -448,22 +429,6 @@ fn derive_rust_bootstrap_operations(
         "bind source-root target tools and runtime paths in Rust bootstrap config",
         Some(&format!("rust-{}", input.rust_version)),
         Some("Rust bootstrap target tool configuration"),
-    ));
-    operations.push(patch_operation!(
-        "rust-bootstrap-openssl-no-asm",
-        RustBootstrapPatchOperationKind::OpenSslNoAsm,
-        RustBootstrapPatchPhase::RustBootstrapBeforeXpy,
-        "disable OpenSSL assembly generators that require an ambient shell",
-        Some(&format!("rust-{}", input.rust_version)),
-        Some("vendored openssl-src configure arguments"),
-    ));
-    operations.push(patch_operation!(
-        "rust-bootstrap-llvm-absolute-tablegen",
-        RustBootstrapPatchOperationKind::RustBootstrapLlvmAbsoluteTablegen,
-        RustBootstrapPatchPhase::RustBootstrapBeforeXpy,
-        "emit generated LLVM tablegen commands with runtime-output absolute paths",
-        Some(&format!("rust-{}", input.rust_version)),
-        Some("src/llvm-project/llvm/cmake/modules/TableGen.cmake tablegen executable selection"),
     ));
     operations.push(patch_operation!(
         "rust-bootstrap-workspace-isolation",
@@ -610,8 +575,7 @@ mod tests {
     const DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     const DIGEST_C: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
     const DIGEST_D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
-    const EXPECTED_FIRST_STAGE_MUSL_OPERATION_COUNT: u32 = 11;
-    const EXPECTED_RUST_BOOTSTRAP_MUSL_OPERATION_COUNT: u32 = 8;
+    const EXPECTED_FIRST_STAGE_MUSL_OPERATION_COUNT: u32 = 9;
     const EXPECTED_GNU_OPERATION_COUNT: u32 = 3;
 
     #[test]
@@ -626,8 +590,6 @@ mod tests {
         assert_eq!(plan.output_digest_blake3, plan_again.output_digest_blake3);
         assert_eq!(plan.operations[0].kind, RustBootstrapPatchOperationKind::MinicargoBuildOutDir);
         assert_eq!(plan.operations[0].phase, RustBootstrapPatchPhase::BeforeFirstStageMainMake);
-        assert!(plan.contains_operation(RustBootstrapPatchOperationKind::MinicargoProtectedExecutionPaths));
-        assert!(plan.contains_operation(RustBootstrapPatchOperationKind::OpenSslNoAsm));
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::RunRustcHostRuntime));
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::ProviderContractAssertion));
         assert!(!plan.contains_operation(RustBootstrapPatchOperationKind::RustBootstrapRustcPrivateToolRlibLookup));
@@ -653,10 +615,7 @@ mod tests {
 
         let plan = derive_rust_bootstrap_patch_plan(input).unwrap();
 
-        assert_eq!(plan.operation_count, EXPECTED_RUST_BOOTSTRAP_MUSL_OPERATION_COUNT);
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::RustBootstrapTargetToolConfig));
-        assert!(plan.contains_operation(RustBootstrapPatchOperationKind::OpenSslNoAsm));
-        assert!(plan.contains_operation(RustBootstrapPatchOperationKind::RustBootstrapLlvmAbsoluteTablegen));
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::RustBootstrapRustcPrivateToolRlibLookup));
         assert!(plan.contains_operation(RustBootstrapPatchOperationKind::ProviderContractAssertion));
         assert!(plan.receipt_arguments().iter().any(|argument| argument.contains("output-digest=")));

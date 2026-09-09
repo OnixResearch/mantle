@@ -426,16 +426,14 @@ mantle source bundle refresh-mantle-source \
   --to /media/handoff/refreshed-source-built-fixed-point-sources.json
 ```
 
-The output path must not exist. The command checks `Cargo.lock`, the Cargo
-vendor config, each vendored package, and each vendor file checksum. It then
-replaces the Mantle source and vendor records as one coherent pair. It preserves
-every other source record and can add materialized fetch records from repeated
-`--include-bundle` arguments. It recomputes the profile BLAKE3. It rejects
-missing, duplicate, mixed-mode, conflicting, classified, stale-vendor, or
+The output path must not exist. The command replaces exactly one Mantle source
+record. It preserves every other source record and can add materialized fetch
+records from repeated `--include-bundle` arguments. It recomputes the profile
+BLAKE3. It rejects missing, duplicate, mixed-mode, conflicting, classified, or
 changed authority metadata. Supplemental records must be materialized fetch
-inputs. The proof repeats the vendor check before StageX. It also requires every
-native and StageX record to match its bound manifest. The expected profile and
-combined source-manifest BLAKE3 values bind each added record.
+inputs. The proof still requires every native and StageX record to match its
+bound manifest. The expected profile and combined source-manifest BLAKE3 values
+bind each added record.
 
 Run the proof with independent digests and explicit executable paths:
 
@@ -454,58 +452,6 @@ CRUNCH_NO_FUSE=1 mantle self-build \
 The output path and its two success aliases must be absent. A failed run keeps
 its private staging directory and `attempt-status.json`. A successful run
 publishes with a no-replace rename and updates both aliases atomically.
-
-Use a promoted checkpoint store to retain completed provider stages:
-
-```bash
-CRUNCH_NO_FUSE=1 mantle self-build \
-  --source-built-fixed-point \
-  --source-profile /media/handoff/source-built-fixed-point-sources.json \
-  --expected-source-profile-blake3 "$SOURCE_PROFILE_BLAKE3" \
-  --expected-stagex-lineage-blake3 "$STAGEX_LINEAGE_BLAKE3" \
-  --expected-native-provider-blake3 "$NATIVE_PROVIDER_BLAKE3" \
-  --proof-bwrap /absolute/path/to/bwrap \
-  --proof-sandbox-shell /absolute/path/to/static-busybox \
-  --proof-checkpoint-store /absolute/path/to/proof-checkpoints \
-  --out /absolute/fresh/path/source-built-proof
-```
-
-A cold run publishes the provider checkpoint before stage1. A later run restores
-only a promoted checkpoint whose stage sources, recipes, policies, resources,
-predecessor outputs, semantic outputs, execution evidence, and payloads match.
-The final receipt labels restored stages. It does not claim current execution.
-
-Inspect the verified receipt and its root action-trust status:
-
-```bash
-mantle --json bootstrap trust-report \
-  --proof-root /absolute/path/to/source-built-proof
-```
-
-The command revalidates the v2 receipt, proof-bundle digest, plan, and stage
-evidence before it prints a report. A receipt without bound root action-plan and
-reconciliation digests reports `fixed-point-only`. It lists explicit blockers
-and does not emit the broader root action-trust claim.
-
-Import completed provider stages from a preserved, stopped attempt:
-
-```bash
-mantle self-build \
-  --source-built-fixed-point \
-  --source-profile /media/handoff/source-built-fixed-point-sources.json \
-  --expected-source-profile-blake3 "$SOURCE_PROFILE_BLAKE3" \
-  --expected-stagex-lineage-blake3 "$STAGEX_LINEAGE_BLAKE3" \
-  --expected-native-provider-blake3 "$NATIVE_PROVIDER_BLAKE3" \
-  --proof-bwrap /absolute/path/to/bwrap \
-  --proof-sandbox-shell /absolute/path/to/static-busybox \
-  --proof-checkpoint-store /absolute/path/to/proof-checkpoints \
-  --proof-checkpoint-import-attempt /absolute/path/to/preserved-attempt \
-  --out /absolute/fresh/path/checkpoint-import-evidence
-```
-
-The importer rejects a running attempt. It revalidates provider-stage source and
-recipe projections before publication. It does not publish a fixed-point receipt
-or update a success alias.
 
 For a prepared checkout that already has its explicit vendor directory, import,
 pin, and preflight the bundle directly:
@@ -998,10 +944,6 @@ cargo -Zscript scripts/summarize-real-release-determinism.rs \
 # Inspect bootstrap parity's checked self-build proof descriptor consumption
 mantle --json bootstrap parity-report
 
-# Revalidate a source-built proof and inspect its bounded trust result
-mantle --json bootstrap trust-report \
-  --proof-root /absolute/path/to/source-built-proof
-
 # Save and validate a bounded bootstrap parity snapshot receipt under target/
 ./scripts/check-bootstrap-parity-snapshot.sh
 
@@ -1150,49 +1092,12 @@ for an explicit universe. Provider fixed-point release artifacts are admitted
 only when the bundled provider proof verifier is valid and its stage digest
 matches the release artifact; invalid or incomplete provider proof material
 stays blocker-producing evidence. The helper output alone is not an eligible
-report; the evaluator remains the gate.
-
-`bootstrap parity-report` consumes the checked-in compatibility descriptor at
+report; the evaluator remains the gate. `bootstrap parity-report` also consumes the checked-in compact
+descriptor at
 `bootstrap/evidence/real-self-build-proof-parity.json` for the
-`crunch.self-build` row. The descriptor binds the archived V98 deterministic
-receipt, root action plan, reconciliation, complete trust report, compressed
-full-parity bundle, independent verification receipt, and both verifier source
-files by BLAKE3. The in-process validator checks source and provider linkage,
-stage equality, adapter sums, and 1,914-action/478,870-event local coverage.
-
-The standalone checker is a separate implementation. It decompresses and
-hashes each bundle member, validates all five native rows against current source
-records, checks StageX and Rust executable authority, and reads every exported
-audit event. Run both its negative matrix and the checked-in bundle:
-
-```bash
-cargo -Zscript scripts/check-source-built-parity-promotion.rs --self-test
-cargo -Zscript scripts/check-source-built-parity-promotion.rs \
-  --root . \
-  --bundle bootstrap/evidence/full-bootstrap-parity-v98 \
-  --out /tmp/mantle-full-bootstrap-parity-verification.json
-```
-
-To export the accepted verification into release evidence without selecting a
-witness policy, add these options to `mantle release create`:
-
-```bash
---external-evidence bootstrap/evidence/full-bootstrap-parity-v98/verification.json \
---external-evidence-role full-bootstrap-parity \
---external-evidence-schema mantle-full-bootstrap-parity-verification-v1 \
---external-evidence-claim-scope recorded-stagex-to-mantle-fixed-point \
---external-evidence-non-claim 'does not establish build-witness quorum'
-```
-
-A later `optional-witness` or explicit quorum result remains separate. It cannot
-change bootstrap-axis status.
-
-When every native row and the V98 binding validate, `--require live-bootstrap
---require guix --require stagex` passes. This is a bounded promotion over the
-recorded source, lineage, providers, V98 platform, and action evidence. It does
-not prove compiler or verifier soundness, seed correctness, kernel isolation,
-independent rebuild agreement, universal release reproducibility, deployment
-success, or full Cargo compatibility.
+`crunch.self-build` row; that descriptor surfaces the bounded proof digest and
+provider kind, but the row remains partial and still blocks Guix/StageX parity
+until the separate source-root/lineage blockers are closed.
 
 ## Sign and verify decentralized release material
 

@@ -177,18 +177,11 @@ parseable for diagnosis but is always `missing-genuine-rebuild-evidence` and
 cannot satisfy release verification, the standalone checker, Nix witness
 admission, summaries, or bootstrap-parity evidence.
 
-For bootstrap parity, a v2 receipt alone remains partial evidence. A missing,
-legacy, or incomplete genuine-rebuild fact leaves `crunch.self-build` blocked.
-Promotion also requires exact BLAKE3 bindings to the V98 root action plan,
-reconciliation, and complete trust report. Planned and matched actions, observed
-and matched events, locality, fallback, remote, cache-only, and violation counts
-must reconcile before Guix or StageX parity completes.
-
-Report the exact descriptor, authority-plan, proof-bundle, action-plan,
-reconciliation, and trust-report digests. The promoted claim remains bounded to
-the recorded source-built workflow. It does not establish compiler or verifier
-soundness, seed correctness, kernel isolation, independent rebuild agreement,
-or universal full-bootstrap reproducibility.
+For bootstrap parity, genuine v2 release evidence is partial evidence only. A
+missing, legacy, or incomplete genuine-rebuild fact leaves `crunch.self-build`
+blocked; even accepted release evidence does not complete Guix or StageX parity.
+Report the exact descriptor/plan digests and fresh roots. The claim does not
+establish compiler/verifier soundness or full-bootstrap reproducibility.
 
 ## Cargo-free fixed-point proof
 
@@ -247,32 +240,6 @@ This evidence predates strict proof-mode admission metadata and is a bounded Car
 This lane does not prove compiler correctness, does not prove full Cargo
 compatibility, does not prove release reproducibility, does not prove deploy
 success, and does not prove general Nix replacement completeness.
-
-## Promoted full-bootstrap parity bundle
-
-The V98 promotion bundle is at
-`bootstrap/evidence/full-bootstrap-parity-v98/`. It contains compressed native,
-StageX, Rust-provider, and stage1/stage2 action evidence. The manifest binds both
-the compressed files and their exact decoded JSON bytes with BLAKE3.
-
-Run the independent verifier and its negative matrix:
-
-```bash
-cargo -Zscript scripts/check-source-built-parity-promotion.rs --self-test
-cargo -Zscript scripts/check-source-built-parity-promotion.rs \
-  --root . \
-  --bundle bootstrap/evidence/full-bootstrap-parity-v98 \
-  --out /tmp/mantle-full-bootstrap-parity-verification.json
-```
-
-The checker is separate from the in-process parity collector. It validates five
-native rows, five action adapters, 1,914 planned and matched actions, and 478,870
-observed and matched events. It also requires local execution, zero fallback,
-zero cache-only completion, and no selected witness policy.
-
-The resulting verification receipt can be release external evidence. It does
-not establish witness quorum, independent rebuild agreement, release
-reproducibility, compiler correctness, seed correctness, or kernel isolation.
 
 ## Nix-free demo bundle validation
 

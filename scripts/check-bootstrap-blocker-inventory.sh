@@ -122,11 +122,4 @@ if [[ "$self_test" == 1 ]]; then
   args+=(--self-test)
 fi
 
-b3sum_bin="$(command -v b3sum || true)"
-if [[ -z "$b3sum_bin" || "$b3sum_bin" != /* || ! -x "$b3sum_bin" ]]; then
-  echo "error: absolute executable b3sum is required for proof-bound blocker classification" >&2
-  exit 2
-fi
-export MANTLE_BOOTSTRAP_BLOCKER_B3SUM="$b3sum_bin"
-
 "$runner_bin" "${args[@]}"

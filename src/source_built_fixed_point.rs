@@ -10,20 +10,14 @@ use std::fmt;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub(crate) const SOURCE_BUILT_FIXED_POINT_PLAN_SCHEMA: &str = "mantle-source-built-fixed-point-plan-v3";
+pub(crate) const SOURCE_BUILT_FIXED_POINT_PLAN_SCHEMA: &str = "mantle-source-built-fixed-point-plan-v2";
 pub(crate) const SOURCE_BUILT_FIXED_POINT_PROOF_WORKFLOW: &str = "mantle-deterministic-proof-receipt-v2";
 pub(crate) const SOURCE_BUILT_FIXED_POINT_PROVIDER_KIND: &str = "full-source";
 pub(crate) const SOURCE_BUILT_FIXED_POINT_OPEN_FILE_DESCRIPTORS_MAX: u64 = 4_096;
-pub(crate) const STAGEX_TRANSITION_STAGE_ID: &str = "stagex-transition";
-pub(crate) const STAGEX_PROVIDER_STAGE_ID: &str = "stagex-provider-publication";
-pub(crate) const FULL_SOURCE_NATIVE_STAGE_ID: &str = "full-source-native-provider";
-pub(crate) const FULL_SOURCE_RUST_STAGE_ID: &str = "full-source-rust-provider";
-pub(crate) const MANTLE_STAGE1_STAGE_ID: &str = "mantle-stage1";
-pub(crate) const MANTLE_STAGE2_STAGE_ID: &str = "mantle-stage2";
 const SOURCE_AUTHORITY_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-source-authority-v1";
-const PLAN_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-plan-v3";
+const PLAN_DIGEST_CONTEXT: &str = "mantle-source-built-fixed-point-plan-v2";
 const BUILD_EFFECT_POLICY_VERSION: &str = "mantle-build-effects-v1";
-pub(crate) const SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT: u32 = 8;
+const REQUIRED_SOURCE_ROLE_COUNT: u32 = 7;
 const EXPECTED_STAGE_COUNT: u32 = 6;
 const EXPECTED_RUN_COUNT: u32 = 2;
 const BLAKE3_HEX_LENGTH: usize = 64;
@@ -34,13 +28,12 @@ const EXEC_EVENT_COUNT_MAX: u32 = 262_144;
 const SOURCE_RECORD_COUNT_MAX: u32 = 65_536;
 const MANTLE_STAGE2_INDEX: usize = 5;
 
-const REQUIRED_SOURCE_ROLES: [SourceAuthorityRole; SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT as usize] = [
+const REQUIRED_SOURCE_ROLES: [SourceAuthorityRole; REQUIRED_SOURCE_ROLE_COUNT as usize] = [
     SourceAuthorityRole::StagexSeed,
     SourceAuthorityRole::StagexLineage,
     SourceAuthorityRole::StagexSourceBundle,
     SourceAuthorityRole::NativeSourceBundle,
     SourceAuthorityRole::RustSourceArchiveSet,
-    SourceAuthorityRole::ProviderRecipeProjection,
     SourceAuthorityRole::MantleSource,
     SourceAuthorityRole::VendorInputs,
 ];
@@ -53,7 +46,6 @@ pub(crate) enum SourceAuthorityRole {
     StagexSourceBundle,
     NativeSourceBundle,
     RustSourceArchiveSet,
-    ProviderRecipeProjection,
     MantleSource,
     VendorInputs,
     ImportedNativeProvider,
@@ -344,12 +336,10 @@ fn validate_source_inputs(inputs: &[SourceAuthorityInput]) -> Result<(), SourceB
             "source authority input count exceeds u32".to_string(),
         )
     })?;
-    if input_count != SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT {
+    if input_count != REQUIRED_SOURCE_ROLE_COUNT {
         return Err(plan_error(
             SourceBuiltFixedPointPlanErrorKind::InvalidSourceAuthority,
-            format!(
-                "source authority must contain exactly {SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT} inputs, got {input_count}"
-            ),
+            format!("source authority must contain exactly {REQUIRED_SOURCE_ROLE_COUNT} inputs, got {input_count}"),
         ));
     }
     let mut roles = BTreeMap::new();
@@ -383,8 +373,8 @@ fn validate_source_inputs(inputs: &[SourceAuthorityInput]) -> Result<(), SourceB
             ));
         }
     }
-    debug_assert_eq!(roles.len(), SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT as usize);
-    debug_assert_eq!(ids.len(), SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT as usize);
+    debug_assert_eq!(roles.len(), REQUIRED_SOURCE_ROLE_COUNT as usize);
+    debug_assert_eq!(ids.len(), REQUIRED_SOURCE_ROLE_COUNT as usize);
     Ok(())
 }
 
@@ -416,7 +406,6 @@ fn expected_content_kind(role: SourceAuthorityRole) -> SourceContentKind {
         | SourceAuthorityRole::StagexSourceBundle
         | SourceAuthorityRole::NativeSourceBundle => SourceContentKind::RegularFile,
         SourceAuthorityRole::RustSourceArchiveSet
-        | SourceAuthorityRole::ProviderRecipeProjection
         | SourceAuthorityRole::MantleSource
         | SourceAuthorityRole::VendorInputs
         | SourceAuthorityRole::ImportedNativeProvider
@@ -561,7 +550,7 @@ fn source_input_for_role(
     Ok(input)
 }
 
-pub(crate) fn expected_stage_plans() -> Vec<SourceBuiltFixedPointStagePlan> {
+fn expected_stage_plans() -> Vec<SourceBuiltFixedPointStagePlan> {
     let stages = vec![
         stagex_transition_stage(),
         stagex_provider_stage(),
@@ -577,7 +566,7 @@ pub(crate) fn expected_stage_plans() -> Vec<SourceBuiltFixedPointStagePlan> {
 
 fn stagex_transition_stage() -> SourceBuiltFixedPointStagePlan {
     stage_plan(
-        STAGEX_TRANSITION_STAGE_ID,
+        "stagex-transition",
         ProofStageKind::StagexTransition,
         ProofOrchestrator::HostMantle,
         vec![
@@ -585,7 +574,6 @@ fn stagex_transition_stage() -> SourceBuiltFixedPointStagePlan {
             source_authority(SourceAuthorityRole::StagexLineage),
             source_authority(SourceAuthorityRole::StagexSourceBundle),
             source_authority(SourceAuthorityRole::NativeSourceBundle),
-            source_authority(SourceAuthorityRole::ProviderRecipeProjection),
             policy_authority(ProofPolicyRole::ProtectedExecution),
         ],
         ProofOutputRole::StagexTransition,
@@ -594,7 +582,7 @@ fn stagex_transition_stage() -> SourceBuiltFixedPointStagePlan {
 
 fn stagex_provider_stage() -> SourceBuiltFixedPointStagePlan {
     stage_plan(
-        STAGEX_PROVIDER_STAGE_ID,
+        "stagex-provider-publication",
         ProofStageKind::StagexProviderPublication,
         ProofOrchestrator::HostMantle,
         vec![
@@ -609,13 +597,12 @@ fn stagex_provider_stage() -> SourceBuiltFixedPointStagePlan {
 
 fn full_source_native_stage() -> SourceBuiltFixedPointStagePlan {
     stage_plan(
-        FULL_SOURCE_NATIVE_STAGE_ID,
+        "full-source-native-provider",
         ProofStageKind::FullSourceNativeProvider,
         ProofOrchestrator::HostMantle,
         vec![
             output_authority(ProofOutputRole::StagexProvider),
             source_authority(SourceAuthorityRole::NativeSourceBundle),
-            source_authority(SourceAuthorityRole::ProviderRecipeProjection),
             policy_authority(ProofPolicyRole::Closure),
             policy_authority(ProofPolicyRole::Hermeticity),
             policy_authority(ProofPolicyRole::ProtectedExecution),
@@ -627,13 +614,12 @@ fn full_source_native_stage() -> SourceBuiltFixedPointStagePlan {
 
 fn full_source_rust_stage() -> SourceBuiltFixedPointStagePlan {
     stage_plan(
-        FULL_SOURCE_RUST_STAGE_ID,
+        "full-source-rust-provider",
         ProofStageKind::FullSourceRustProvider,
         ProofOrchestrator::HostMantle,
         vec![
             output_authority(ProofOutputRole::FullSourceNativeProvider),
             source_authority(SourceAuthorityRole::RustSourceArchiveSet),
-            source_authority(SourceAuthorityRole::ProviderRecipeProjection),
             policy_authority(ProofPolicyRole::Closure),
             policy_authority(ProofPolicyRole::Hermeticity),
             policy_authority(ProofPolicyRole::ProtectedExecution),
@@ -645,7 +631,7 @@ fn full_source_rust_stage() -> SourceBuiltFixedPointStagePlan {
 
 fn mantle_stage1_plan() -> SourceBuiltFixedPointStagePlan {
     stage_plan(
-        MANTLE_STAGE1_STAGE_ID,
+        "mantle-stage1",
         ProofStageKind::MantleStage1,
         ProofOrchestrator::HostMantle,
         mantle_build_inputs(false),
@@ -655,7 +641,7 @@ fn mantle_stage1_plan() -> SourceBuiltFixedPointStagePlan {
 
 fn mantle_stage2_plan() -> SourceBuiltFixedPointStagePlan {
     stage_plan(
-        MANTLE_STAGE2_STAGE_ID,
+        "mantle-stage2",
         ProofStageKind::MantleStage2,
         ProofOrchestrator::Stage1Mantle,
         mantle_build_inputs(true),
@@ -1005,12 +991,6 @@ mod tests {
                     SourceAuthorityRole::RustSourceArchiveSet,
                     SourceContentKind::Directory,
                     'e',
-                ),
-                source_input(
-                    "provider-recipe-projection",
-                    SourceAuthorityRole::ProviderRecipeProjection,
-                    SourceContentKind::Directory,
-                    '8',
                 ),
                 source_input("mantle-source", SourceAuthorityRole::MantleSource, SourceContentKind::Directory, 'f'),
                 source_input("vendor-inputs", SourceAuthorityRole::VendorInputs, SourceContentKind::Directory, '7'),

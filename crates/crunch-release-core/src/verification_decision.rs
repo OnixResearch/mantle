@@ -80,7 +80,6 @@ define_release_verification_contributors!(
     (StagexNoQuorum, stagex_no_quorum, "stagex-no-quorum"),
     (FunctionAddress, function_address, "function-address"),
     (CairnHandoff, cairn_handoff, "cairn-handoff"),
-    (SourceReview, source_review, "source-review"),
 );
 
 pub const RELEASE_VERIFICATION_CONTRIBUTOR_COUNT: usize = ReleaseVerificationContributor::ALL.len();
@@ -331,7 +330,6 @@ mod tests {
             stagex_no_quorum: ReleaseVerificationFact::satisfied(),
             function_address: ReleaseVerificationFact::satisfied(),
             cairn_handoff: ReleaseVerificationFact::satisfied(),
-            source_review: ReleaseVerificationFact::satisfied(),
         }
     }
 
@@ -347,7 +345,6 @@ mod tests {
             stagex_no_quorum: ReleaseVerificationRequirement::Required,
             function_address: ReleaseVerificationRequirement::Required,
             cairn_handoff: ReleaseVerificationRequirement::Required,
-            source_review: ReleaseVerificationRequirement::Required,
         }
     }
 
@@ -433,7 +430,6 @@ mod tests {
             stagex_no_quorum: rejected_fact(ReleaseVerificationContributor::StagexNoQuorum),
             function_address: rejected_fact(ReleaseVerificationContributor::FunctionAddress),
             cairn_handoff: rejected_fact(ReleaseVerificationContributor::CairnHandoff),
-            source_review: rejected_fact(ReleaseVerificationContributor::SourceReview),
         };
 
         let decision = aggregate_release_verification(facts, required_requirements());

@@ -21,13 +21,6 @@
       url = "github:bytecodealliance/wasi-virt/19b174a3244f81ed9b91e067b6901f71665316a8";
       flake = false;
     };
-    nickelCohort = {
-      url = "github:nickel-lang/nickel/1320a983e6c3d1e2fb53dd2464b084b4903b1426";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.crane.follows = "crane";
-      inputs.rust-overlay.follows = "rust-overlay";
-      inputs.flake-utils.follows = "flake-utils";
-    };
     nickelExportCore = {
       url = "github:OnixResearch/nickel-export/257fafc1c746f1faf156207043a4c826bfb16d49";
       flake = false;
@@ -66,7 +59,6 @@
       flake-utils,
       tigerstyle,
       wasi-virt,
-      nickelCohort,
       nickelExportCore,
       artifactAuthSource,
       durablePublicationSource,
@@ -97,7 +89,6 @@
           if system == "x86_64-linux" then
             import ./nix/spacewasm-reference.nix {
               inherit pkgs;
-              craneLib = componentCraneLib;
               packageRoot = ./packages/spacewasm-reference;
               coreCrate = ./crates/crunch-spacewasm-core;
               shellCrate = ./crates/crunch-spacewasm;
@@ -110,18 +101,8 @@
         componentRustToolchain = pkgs.rust-bin.stable.${componentRustVersion}.default.override {
           targets = [ "wasm32-wasip2" ];
         };
-        nickelCohortRevision = "1320a983e6c3d1e2fb53dd2464b084b4903b1426";
-        nickelCohortManifest = builtins.fromTOML (builtins.readFile (nickelCohort + "/Cargo.toml"));
-        nickelCli =
-          assert pkgs.lib.assertMsg (
-            nickelCohort.rev == nickelCohortRevision
-            && nickelCohortManifest.workspace.package.version == "1.17.0"
-            && nickelCohortManifest.workspace.package.rust-version == "1.89"
-          ) "Mantle Nickel CLI cohort revision, version, or Rust requirement drifted";
-          nickelCohort.packages.${system}.default;
 
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
-        componentCraneLib = (crane.mkLib pkgs).overrideToolchain componentRustToolchain;
         cargoManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         artifactAuthRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1";
         artifactAuthRepository = "ssh://git@github.com/OnixResearch/onix-artifact.git";
@@ -144,12 +125,10 @@
           artifactAuthShellManifest.dependencies.artifact-auth-core
           artifactAuthShellManifest.dependencies.artifact-auth-ed25519
         ];
-        artifactAuthExpectedLockSource = "git+${artifactAuthRepository}?rev=${artifactAuthRevision}#${artifactAuthRevision}";
         artifactAuthLockPackages = builtins.filter (
-          package:
-          builtins.elem package.name artifactAuthExpectedPackages
-          && (package.source or null) == artifactAuthExpectedLockSource
+          package: builtins.elem package.name artifactAuthExpectedPackages
         ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        artifactAuthExpectedLockSource = "git+${artifactAuthRepository}?rev=${artifactAuthRevision}#${artifactAuthRevision}";
         artifactAuthWorkspace = builtins.fromTOML (builtins.readFile (artifactAuthSource + "/Cargo.toml"));
         artifactAuthSourceAdmitted =
           assert pkgs.lib.assertMsg (
@@ -248,20 +227,16 @@
             transactionalReconciliationDependency.git == transactionalReconciliationRepository
             && transactionalReconciliationDependency.rev == transactionalReconciliationRevision
             && transactionalReconciliationSource.rev == transactionalReconciliationRevision
-            &&
-              map (package: package.name) transactionalReconciliationLockPackages == [
-                "transactional-reconciliation-core"
-              ]
+            && map (package: package.name) transactionalReconciliationLockPackages == [
+              "transactional-reconciliation-core"
+            ]
             && builtins.all (
               package: package.source == transactionalReconciliationExpectedLockSource
             ) transactionalReconciliationLockPackages
-            &&
-              transactionalReconciliationWorkspace.workspace.members == [
-                "crates/transactional-reconciliation-core"
-              ]
-            &&
-              transactionalReconciliationWorkspace.workspace.package.repository
-              == transactionalReconciliationRepository
+            && transactionalReconciliationWorkspace.workspace.members == [
+              "crates/transactional-reconciliation-core"
+            ]
+            && transactionalReconciliationWorkspace.workspace.package.repository == transactionalReconciliationRepository
             && transactionalReconciliationWorkspace.workspace.package.license == "MIT"
           ) "Mantle transactional reconciliation Cargo/Nix source identity, package, RID, or license drifted";
           true;
@@ -316,7 +291,6 @@
             (craneLib.filterCargoSources path type)
             || pathString == toString ./README.md
             || pathString == toString ./flake.nix
-            || pathString == toString ./flake.lock
             || pkgs.lib.hasPrefix "${toString ./.github/workflows}/" pathString
             || pkgs.lib.hasPrefix "${toString ./lib}/" pathString
             || pkgs.lib.hasPrefix "${toString ./bootstrap}/" pathString
@@ -324,11 +298,9 @@
             || pkgs.lib.hasPrefix "${toString ./mantlepkgs}/" pathString
             || pkgs.lib.hasPrefix "${toString ./cairn-policy/evidence}/" pathString
             || pkgs.lib.hasPrefix "${toString ./cairn/archive}/" pathString
-            || pkgs.lib.hasPrefix "${toString ./.cairn/archive}/" pathString
             || pathString == toString ./config
             || pkgs.lib.hasPrefix "${toString ./config}/" pathString
             || pkgs.lib.hasPrefix "${toString ./contracts}/" pathString
-            || pkgs.lib.hasPrefix "${toString ./fixtures}/" pathString
             || pkgs.lib.hasPrefix "${toString ./fixtures/mantle-build-contract}/" pathString
             || builtins.elem pathString catalogExamplePaths
             || pathString == toString ./examples/catalog.ncl
@@ -337,17 +309,12 @@
             || pkgs.lib.hasPrefix "${toString ./examples/projects}/" pathString
             || pkgs.lib.hasPrefix "${toString ./examples/transcripts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./schemas/machine-contracts}/" pathString
-            || pkgs.lib.hasPrefix "${toString ./crates/crunch-source-core/fixtures}/" pathString
-            || pkgs.lib.hasPrefix "${toString ./crates/crunch-build/testdata}/" pathString
-            || pkgs.lib.hasPrefix "${toString ./crates/crunch-release-core/fixtures}/" pathString
             || pkgs.lib.hasPrefix "${toString ./tests/fixtures}/" pathString
             || pkgs.lib.hasPrefix "${toString ./fixtures/nario-v2}/" pathString
             || isContentBoundRequirementFixture pathString
             || pkgs.lib.hasPrefix "${toString ./packages/kernelscript-experiment}/" pathString
             || pathString == toString ./nix/kernelscript-experiment.nix
             || pkgs.lib.hasPrefix "${toString ./docs}/" pathString
-            || pkgs.lib.hasPrefix "${toString ./evidence/source}/" pathString
-            || pkgs.lib.hasPrefix "${toString ./evidence/trellis}/" pathString
             || pkgs.lib.hasPrefix "${toString ./scripts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./openspec}/" pathString
           );
@@ -425,21 +392,6 @@
             pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
           ];
 
-        # Test scripts require an explicit Python interpreter in every check entrypoint.
-        nativeCheckInputs = [
-          pkgs.git
-          pkgs.python3
-        ];
-
-        # Keep fault injection in a separate debug executable, never the installed CLI.
-        prepareEvaluatorTestBinary = ''
-          fixture_target_dir="$TMPDIR/mantle-evaluator-fixture-target"
-          CARGO_TARGET_DIR="$fixture_target_dir" cargo build --locked --profile dev \
-            --bin mantle --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget}
-          export MANTLE_TEST_EVALUATOR_BINARY="$fixture_target_dir/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/debug/mantle"
-          test -x "$MANTLE_TEST_EVALUATOR_BINARY"
-        '';
-
         astGrepVersion = "0.42.1";
         astGrepUpstream = pkgs.ast-grep;
         astGrepToolchain =
@@ -491,24 +443,16 @@
         octetProfileId = "portable-component-baseline";
         octetPackage = octet.packages.${system}.cargo-octet;
         octetProfileConfig = "${octet}/standards/wasm-artifact/generated/profiles.json";
-        wasiVirtVendor = componentCraneLib.vendorCargoDeps {
-          src = wasi-virt;
-          cargoLock = "${wasi-virt}/Cargo.lock";
-        };
-        wasiVirtArtifacts = componentCraneLib.buildDepsOnly {
-          pname = "wasi-virt-dependencies";
-          version = wasiVirtVersion;
-          src = wasi-virt;
-          cargoVendorDir = wasiVirtVendor;
-          cargoExtraArgs = "--package wasi-virt --no-default-features";
-        };
-        wasiVirt = componentCraneLib.buildPackage {
+        wasiVirt = pkgs.rustPlatform.buildRustPackage {
           pname = "wasi-virt";
           version = wasiVirtVersion;
           src = wasi-virt;
-          cargoVendorDir = wasiVirtVendor;
-          cargoArtifacts = wasiVirtArtifacts;
-          cargoExtraArgs = "--package wasi-virt --no-default-features";
+          cargoLock.lockFile = "${wasi-virt}/Cargo.lock";
+          cargoBuildFlags = [
+            "--package"
+            "wasi-virt"
+            "--no-default-features"
+          ];
           doCheck = false;
           meta.mainProgram = "wasi-virt";
         };
@@ -844,27 +788,6 @@
           printf '%s\n' "$actualDigest" > "$out/binary.blake3"
         '';
 
-        # Independent consumers retain their own exact hash selections. Do not
-        # reuse the native workspace's dependency artifacts or digest traits.
-        buildContractHashCheck =
-          lane:
-          let
-            manifest = "fixtures/mantle-build-contract/hash-compat/${lane}/Cargo.toml";
-            lock = ./. + "/fixtures/mantle-build-contract/hash-compat/${lane}/Cargo.lock";
-          in
-          craneLib.cargoTest {
-            pname = "mantle-build-contract-hash-${lane}";
-            version = "1";
-            inherit src nativeBuildInputs;
-            cargoArtifacts = null;
-            cargoVendorDir = craneLib.vendorCargoDeps { cargoLock = lock; };
-            cargoExtraArgs = "--manifest-path ${manifest}";
-            cargoTestExtraArgs = "--all-targets";
-            postCheck = ''
-              cargo check --locked --manifest-path ${manifest} --lib --target wasm32-unknown-unknown
-            '';
-          };
-
         # Build just the cargo dependencies for caching
         cargoArtifacts = craneLib.buildDepsOnly {
           inherit src nativeBuildInputs buildInputs;
@@ -889,10 +812,7 @@
           MANTLE_WASM_COMPONENT_TOOLCHAIN = "${wasmComponentToolchain}";
           CRUNCH_NO_FUSE = "1";
           MANTLE_TEST_OFFLINE = "1";
-          inherit nativeCheckInputs;
-          preCheck = prepareEvaluatorTestBinary;
-          # Report every failing target without weakening Cargo's failing exit status.
-          cargoTestExtraArgs = "--no-fail-fast";
+          nativeCheckInputs = [ pkgs.git ];
         };
 
         rustcWrapper = craneLib.buildPackage {
@@ -926,7 +846,7 @@
             pkgs.coreutils
             pkgs.diffutils
             pkgs.gnugrep
-            nickelCli
+            pkgs.nickel
           ];
           text = ''
             set -eu
@@ -969,7 +889,7 @@
             pkgs.coreutils
             pkgs.diffutils
             pkgs.gnugrep
-            nickelCli
+            pkgs.nickel
           ];
           text = ''
             set -eu
@@ -1012,7 +932,7 @@
           runtimeInputs = [
             pkgs.coreutils
             pkgs.diffutils
-            nickelCli
+            pkgs.nickel
           ];
           text = ''
             set -eu
@@ -1070,227 +990,6 @@
               echo "setid execution profile fixture unexpectedly passed" >&2
               exit 1
             fi
-          '';
-        };
-
-        nickelCohortCheck = craneLib.mkCargoDerivation {
-          pname = "mantle-nickel-cohort-check";
-          inherit src cargoVendorDir;
-          cargoArtifacts = null;
-          nativeBuildInputs = nativeBuildInputs ++ [
-            rustToolchain
-            nickelCli
-            pkgs.diffutils
-            pkgs.jq
-          ];
-          buildPhaseCargoCommand = ''
-            cargo -Zscript --offline scripts/refresh-nickel-cohort.rs --self-test
-            cargo -Zscript --offline scripts/check-nickel-cohort.rs --self-test
-            cargo -Zscript --offline scripts/check-nickel-cohort.rs --root .
-            nickel typecheck config/nickel-cohort.ncl
-            nickel export --format json config/nickel-cohort.ncl > "$TMPDIR/nickel-cohort.json"
-            jq --sort-keys . "$TMPDIR/nickel-cohort.json" > "$TMPDIR/actual.sorted.json"
-            jq --sort-keys . config/generated/nickel-cohort.json > "$TMPDIR/expected.sorted.json"
-            diff -u "$TMPDIR/expected.sorted.json" "$TMPDIR/actual.sorted.json"
-          '';
-          doInstallCargoArtifacts = false;
-          installPhaseCommand = ''
-            mkdir -p "$out"
-            cp config/generated/nickel-cohort.json "$out/cohort.json"
-            cp bootstrap/evidence/nickel-1.17-vendor-manifest.json "$out/vendor-manifest.json"
-          '';
-        };
-
-        storeCapabilityArchitectureCheck = craneLib.mkCargoDerivation {
-          pname = "mantle-store-capability-architecture-check";
-          inherit src cargoVendorDir;
-          cargoArtifacts = null;
-          nativeBuildInputs = nativeBuildInputs ++ [ rustToolchain ];
-          buildPhaseCargoCommand = ''
-            cargo -Zscript --offline scripts/check-store-capability-architecture.rs --self-test
-            cargo -Zscript --offline scripts/check-store-capability-architecture.rs --root .
-          '';
-          doInstallCargoArtifacts = false;
-          installPhaseCommand = ''
-            mkdir -p "$out"
-            printf '%s\n' 'external_runtime_findings=0' > "$out/report.txt"
-          '';
-        };
-
-        remoteHexagonArchitectureCheck = craneLib.mkCargoDerivation {
-          pname = "mantle-remote-hexagon-architecture-check";
-          inherit src cargoVendorDir;
-          cargoArtifacts = null;
-          nativeBuildInputs = nativeBuildInputs ++ [ rustToolchain ];
-          buildPhaseCargoCommand = ''
-            cargo -Zscript --offline scripts/check-remote-hexagon.rs --self-test
-            cargo -Zscript --offline scripts/check-remote-hexagon.rs --root .
-          '';
-          doInstallCargoArtifacts = false;
-          installPhaseCommand = ''
-            mkdir -p "$out"
-            printf '%s\n' 'remote_hexagon_findings=0' > "$out/report.txt"
-          '';
-        };
-
-        rustPlanHexagonArchitectureCheck = craneLib.mkCargoDerivation {
-          pname = "mantle-rust-plan-hexagon-architecture-check";
-          inherit src cargoVendorDir;
-          cargoArtifacts = null;
-          nativeBuildInputs = nativeBuildInputs ++ [ rustToolchain ];
-          buildPhaseCargoCommand = ''
-            cargo -Zscript --offline scripts/check-rust-plan-hexagon.rs --self-test
-            cargo -Zscript --offline scripts/check-rust-plan-hexagon.rs --root .
-          '';
-          doInstallCargoArtifacts = false;
-          installPhaseCommand = ''
-            mkdir -p "$out"
-            printf '%s\n' 'rust_plan_hexagon_findings=0' > "$out/report.txt"
-          '';
-        };
-
-        buildPlanningArchitectureCheck = craneLib.mkCargoDerivation {
-          pname = "mantle-build-planning-architecture-check";
-          inherit src cargoVendorDir;
-          cargoArtifacts = null;
-          nativeBuildInputs = nativeBuildInputs ++ [ rustToolchain ];
-          buildPhaseCargoCommand = ''
-            cargo -Zscript --offline scripts/check-build-planning-architecture.rs --self-test
-            cargo -Zscript --offline scripts/check-build-planning-architecture.rs --root .
-          '';
-          doInstallCargoArtifacts = false;
-          installPhaseCommand = ''
-            mkdir -p "$out"
-            printf '%s\n' 'build_planning_findings=0' > "$out/report.txt"
-          '';
-        };
-
-        cliApplicationArchitectureCheck = craneLib.mkCargoDerivation {
-          pname = "mantle-cli-application-architecture-check";
-          inherit src cargoVendorDir;
-          cargoArtifacts = null;
-          nativeBuildInputs = nativeBuildInputs ++ [
-            rustToolchain
-            nickelCli
-          ];
-          buildPhaseCargoCommand = ''
-            cargo -Zscript --offline scripts/check-cli-application-architecture.rs --self-test
-            cargo -Zscript --offline scripts/check-cli-application-architecture.rs --root .
-            nickel typecheck config/cli-application-architecture.ncl
-          '';
-          doInstallCargoArtifacts = false;
-          installPhaseCommand = ''
-            mkdir -p "$out"
-            printf '%s\n' 'cli_application_architecture_findings=0' > "$out/report.txt"
-          '';
-        };
-
-        sourceObservationArchitectureCheck = craneLib.mkCargoDerivation {
-          pname = "mantle-source-observation-architecture-check";
-          inherit src cargoVendorDir;
-          cargoArtifacts = null;
-          nativeBuildInputs = nativeBuildInputs ++ [ rustToolchain ];
-          buildPhaseCargoCommand = ''
-            cargo -Zscript --offline scripts/check-source-observation-architecture.rs --self-test
-            cargo -Zscript --offline scripts/check-source-observation-architecture.rs --root .
-          '';
-          doInstallCargoArtifacts = false;
-          installPhaseCommand = ''
-            mkdir -p "$out"
-            printf '%s\n' 'source_observation_architecture_findings=0' > "$out/report.txt"
-          '';
-        };
-
-        radianceReferenceArchitectureCheck = craneLib.mkCargoDerivation {
-          pname = "mantle-radiance-reference-architecture-check";
-          inherit src cargoVendorDir;
-          cargoArtifacts = null;
-          nativeBuildInputs = nativeBuildInputs ++ [
-            rustToolchain
-            nickelCli
-            pkgs.jq
-          ];
-          buildPhaseCargoCommand = ''
-            cargo -Zscript --offline scripts/check-radiance-reference-architecture.rs --self-test
-            cargo -Zscript --offline scripts/check-radiance-reference-architecture.rs --root .
-            nickel typecheck config/radiance-reference.ncl
-            nickel typecheck bootstrap/radiance-reference/routes.ncl
-            nickel typecheck bootstrap/radiance-reference/native-tools.ncl
-            nickel export --format json config/radiance-reference.ncl > "$TMPDIR/radiance-reference.json"
-            jq --sort-keys . "$TMPDIR/radiance-reference.json" > "$TMPDIR/actual.sorted.json"
-            jq --sort-keys . config/generated/radiance-reference.json > "$TMPDIR/expected.sorted.json"
-            diff -u "$TMPDIR/expected.sorted.json" "$TMPDIR/actual.sorted.json"
-          '';
-          doInstallCargoArtifacts = false;
-          installPhaseCommand = ''
-            mkdir -p "$out"
-            printf '%s\n' 'radiance_reference_architecture_findings=0' > "$out/report.txt"
-          '';
-        };
-
-        resourcePolicyArchitectureCheck = craneLib.mkCargoDerivation {
-          pname = "mantle-resource-policy-architecture-check";
-          inherit src cargoVendorDir;
-          cargoArtifacts = null;
-          nativeBuildInputs = nativeBuildInputs ++ [
-            rustToolchain
-            nickelCli
-            pkgs.jq
-          ];
-          buildPhaseCargoCommand = ''
-            cargo -Zscript --offline scripts/check-resource-policy-architecture.rs --self-test
-            cargo -Zscript --offline scripts/check-resource-policy-architecture.rs --root .
-            nickel typecheck config/resource-policy.ncl
-            nickel export --format json config/resource-policy.ncl > "$TMPDIR/resource-policy.json"
-            jq --sort-keys . "$TMPDIR/resource-policy.json" > "$TMPDIR/actual.sorted.json"
-            jq --sort-keys . config/generated/resource-policy.json > "$TMPDIR/expected.sorted.json"
-            diff -u "$TMPDIR/expected.sorted.json" "$TMPDIR/actual.sorted.json"
-          '';
-          doInstallCargoArtifacts = false;
-          installPhaseCommand = ''
-            mkdir -p "$out"
-            printf '%s\n' 'resource_policy_architecture_findings=0' > "$out/report.txt"
-          '';
-        };
-
-        devResumeArchitectureCheck = craneLib.mkCargoDerivation {
-          pname = "mantle-dev-resume-architecture-check";
-          inherit src cargoVendorDir;
-          cargoArtifacts = null;
-          nativeBuildInputs = nativeBuildInputs ++ [ rustToolchain ];
-          buildPhaseCargoCommand = ''
-            cargo -Zscript --offline scripts/check-dev-resume-architecture.rs --self-test
-            cargo -Zscript --offline scripts/check-dev-resume-architecture.rs --root .
-          '';
-          doInstallCargoArtifacts = false;
-          installPhaseCommand = ''
-            mkdir -p "$out"
-            printf '%s\n' 'dev_resume_architecture_findings=0' > "$out/report.txt"
-          '';
-        };
-
-        trellisRemoteAdmissionEvidenceCheck = craneLib.mkCargoDerivation {
-          pname = "mantle-trellis-remote-admission-evidence-check";
-          inherit src cargoVendorDir;
-          cargoArtifacts = null;
-          nativeBuildInputs = nativeBuildInputs ++ [
-            rustToolchain
-            nickelCli
-            pkgs.jq
-          ];
-          buildPhaseCargoCommand = ''
-            cargo test -p crunch-release-core --lib trellis_admission --offline
-            cargo -Zscript --offline tools/check-trellis-remote-admission.rs --self-test
-            nickel typecheck config/trellis-remote-admission.ncl
-            nickel export --format json config/trellis-remote-admission.ncl > "$TMPDIR/trellis-remote-admission.json"
-            jq --sort-keys . "$TMPDIR/trellis-remote-admission.json" > "$TMPDIR/actual.sorted.json"
-            jq --sort-keys . config/generated/trellis-remote-admission.json > "$TMPDIR/expected.sorted.json"
-            diff -u "$TMPDIR/expected.sorted.json" "$TMPDIR/actual.sorted.json"
-          '';
-          doInstallCargoArtifacts = false;
-          installPhaseCommand = ''
-            mkdir -p "$out"
-            printf '%s\n' 'trellis_remote_admission_evidence=valid' > "$out/report.txt"
           '';
         };
 
@@ -1352,7 +1051,6 @@
           pkgs.runCommand "bootstrap-blocker-inventory"
             {
               nativeBuildInputs = nativeBuildInputs ++ [
-                pkgs.b3sum
                 pkgs.bash
                 pkgs.coreutils
                 rustToolchain
@@ -1384,7 +1082,7 @@
               nativeBuildInputs = [
                 pkgs.diffutils
                 pkgs.jq
-                nickelCli
+                pkgs.nickel
                 rustToolchain
               ];
             }
@@ -1473,7 +1171,7 @@
                 pkgs.b3sum
                 pkgs.diffutils
                 pkgs.jq
-                nickelCli
+                pkgs.nickel
               ];
               src = self;
             }
@@ -1505,14 +1203,11 @@
           crunch = crunch;
           ast-grep-toolchain = astGrepToolchain;
           ast-grep-package-identity = astGrepPackageIdentity;
-          nickel = nickelCli;
-          wasi-virt = wasiVirt;
           wasm-component-toolchain = wasmComponentToolchain;
           wasm-component-toolchain-identity = wasmComponentToolchainIdentity;
           wasm-component-toolchain-compatibility = wasmComponentToolchainCompatibility;
           mantle-transcript-quality = mantleTranscriptQuality;
           release-nix-witness-quality = releaseNixWitnessQuality;
-          check-nickel-configs = checkNickelConfigs;
           check-store-retention-policy = checkStoreRetentionPolicy;
           check-store-overlay-policy = checkStoreOverlayPolicy;
         }
@@ -1584,18 +1279,7 @@
           wasm-component-toolchain-compatibility = wasmComponentToolchainCompatibility;
           mantle-transcript-quality = mantleTranscriptQuality;
           bootstrap-blocker-inventory = bootstrapBlockerInventory;
-          nickel-cohort = nickelCohortCheck;
           nickel-export-core-pin = nickelExportCorePin;
-          store-capability-architecture = storeCapabilityArchitectureCheck;
-          remote-hexagon-architecture = remoteHexagonArchitectureCheck;
-          rust-plan-hexagon-architecture = rustPlanHexagonArchitectureCheck;
-          build-planning-architecture = buildPlanningArchitectureCheck;
-          cli-application-architecture = cliApplicationArchitectureCheck;
-          source-observation-architecture = sourceObservationArchitectureCheck;
-          radiance-reference-architecture = radianceReferenceArchitectureCheck;
-          resource-policy-architecture = resourcePolicyArchitectureCheck;
-          dev-resume-architecture = devResumeArchitectureCheck;
-          trellis-remote-admission-evidence = trellisRemoteAdmissionEvidenceCheck;
           content-bound-requirement-source-closure = contentBoundRequirementSourceClosure;
           content-bound-requirement-evidence = contentBoundRequirementEvidence;
           store-retention-policy =
@@ -1634,7 +1318,7 @@
                 nativeBuildInputs = [
                   pkgs.b3sum
                   pkgs.jq
-                  nickelCli
+                  pkgs.nickel
                   pkgs.nix
                   pkgs.ripgrep
                 ];
@@ -1749,7 +1433,7 @@
                 nativeBuildInputs = [
                   pkgs.b3sum
                   pkgs.jq
-                  nickelCli
+                  pkgs.nickel
                   pkgs.ripgrep
                 ];
                 src = self;
@@ -1819,260 +1503,9 @@
                 rg -Fq 'ImmutablePublicationBackend::Legacy' src/remote_attempt_log_store.rs
                 rg -Fq 'CommittedDurabilityUnknown' src/remote_attempt_log_store.rs
                 rg -Fq 'commit_manifest_with_hook' src/remote_attempt_log_store.rs
-                rg -Fq 'publish_one_file' src/source_bundle/monotonic_ingest.rs
-                rg -Fq 'ReplacementMode::NoReplace' src/source_bundle/monotonic_ingest.rs
-                rg -Fq 'DurabilityMode::DurabilityRequired' src/source_bundle/monotonic_ingest.rs
-                rg -Fq 'CommittedDurabilityUnknown' src/source_bundle/monotonic_ingest.rs
 
                 touch "$out"
               '';
-
-          remote-core = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p crunch-remote-core -p crunch-remote --all-targets";
-          };
-
-          remote-core-wasm = craneLib.cargoBuild {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoExtraArgs = "-p crunch-remote-core --lib --target wasm32-unknown-unknown";
-          };
-
-          rust-plan-core = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p mantle-rust-plan-core -p mantle-rust-plan --all-targets";
-          };
-
-          rust-plan-core-wasm = craneLib.cargoBuild {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoExtraArgs = "-p mantle-rust-plan-core --lib --target wasm32-unknown-unknown";
-          };
-
-          build-planning-core = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p crunch-build-planning-core --all-targets";
-          };
-
-          build-planning-core-wasm = craneLib.cargoBuild {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoExtraArgs = "-p crunch-build-planning-core --lib --target wasm32-unknown-unknown";
-          };
-
-          application-core = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p mantle-application-core -p mantle-application --all-targets";
-          };
-
-          application-core-wasm = craneLib.cargoBuild {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoExtraArgs = "-p mantle-application-core -p mantle-application --lib --target wasm32-unknown-unknown";
-          };
-
-          source-core = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p crunch-source-core --all-targets";
-          };
-
-          source-core-wasm = craneLib.cargoBuild {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoExtraArgs = "-p crunch-source-core --lib --target wasm32-unknown-unknown";
-          };
-
-          radiance-reference-core = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p crunch-radiance-reference-core --all-targets";
-          };
-
-          radiance-reference-core-wasm = craneLib.cargoBuild {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoExtraArgs = "-p crunch-radiance-reference-core --lib --target wasm32-unknown-unknown";
-          };
-
-          radiance-reference-shell = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p mantle --bin mantle radiance::";
-            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
-          };
-
-          resource-policy-core = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p crunch-resource-policy-core -p crunch-resource-policy --all-targets";
-          };
-
-          resource-policy-core-wasm = craneLib.cargoBuild {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoExtraArgs = "-p crunch-resource-policy-core --lib --target wasm32-unknown-unknown";
-          };
-
-          resource-policy-integration = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p mantle --test resource_policy_evidence";
-            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
-          };
-
-          dev-resume-core = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p crunch-dev-resume-core --all-targets";
-          };
-
-          dev-resume-core-wasm = craneLib.cargoBuild {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoExtraArgs = "-p crunch-dev-resume-core --lib --target wasm32-unknown-unknown";
-          };
-
-          rust-plan-source-admission = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p mantle --bin mantle rust_plan::";
-            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
-          };
-
-          rust-plan-child-action-preflight = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p mantle --test rust_plan_cli child_action_preflight";
-            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
-          };
-
-          dev-resume-stage-publication = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p mantle --bin mantle prefix_publication_tests";
-            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
-          };
-
-          dev-resume-integration = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p mantle --bin mantle source_built_fixed_point";
-            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
-          };
-
-          trellis-remote-admission = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p crunch-build --lib remote_attempt_trellis";
-          };
-
-          trellis-remote-admission-evidence-integration = craneLib.cargoTest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
-            cargoTestExtraArgs = "-p mantle --test trellis_remote_admission_evidence";
-            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
-          };
 
           mantle-build-contract = craneLib.cargoTest {
             inherit
@@ -2094,13 +1527,10 @@
             cargoExtraArgs = "-p mantle-build-contract --lib --target wasm32-unknown-unknown";
           };
 
-          mantle-build-contract-hash-minimum = buildContractHashCheck "minimum";
-          mantle-build-contract-hash-current = buildContractHashCheck "current";
-
           mantle-build-contract-nickel =
             pkgs.runCommand "mantle-build-contract-nickel"
               {
-                nativeBuildInputs = [ nickelCli ];
+                nativeBuildInputs = [ pkgs.nickel ];
               }
               ''
                 for fixture in ${self}/fixtures/mantle-build-contract/positive/*.ncl; do
@@ -2129,9 +1559,12 @@
 
           # Run tests with nextest
           nextest = craneLib.cargoNextest {
-            inherit src cargoArtifacts buildInputs;
-            nativeBuildInputs = nativeBuildInputs ++ nativeCheckInputs;
-            preBuild = prepareEvaluatorTestBinary;
+            inherit
+              src
+              cargoArtifacts
+              nativeBuildInputs
+              buildInputs
+              ;
             partitions = 1;
             partitionType = "count";
             SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
@@ -2187,11 +1620,10 @@
               cargo-deny
               cargo-nextest
               cargo-watch
+              nickel
               rust-analyzer
             ]
-            ++ nativeCheckInputs
             ++ [
-              nickelCli
               astGrepToolchain
               cairn.packages.${system}.default
               checkNickelConfigs

@@ -4,12 +4,10 @@
 // r[impl foreign_derivation_import.realization_receipt]
 // r[impl foreign_derivation_import.cache_only_runtime_closure]
 // r[impl foreign_derivation_import.live_nixpkgs_realization_proof]
-// r[impl build_correctness.pipeline_tiger_conformance]
 
 mod derivation_file;
 mod evaluation_stream;
 
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -68,24 +66,6 @@ const EVAL_MESSAGE_CHANNEL_CAPACITY: usize = 16;
 #[cfg(test)]
 const EVAL_POLICY_TEST_MAX_JOBS: u32 = 4;
 
-pub struct EagerDerivationEvaluationConfig<'a> {
-    pub file: &'a std::path::Path,
-    pub import_paths: &'a [OsString],
-    pub store_dir: &'a str,
-    pub max_jobs: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EagerDerivationRoot {
-    pub label: String,
-    pub drv_path: StorePath<String>,
-}
-
-pub struct EagerDerivationEvaluation {
-    pub roots: Vec<EagerDerivationRoot>,
-    pub entries: Vec<crunch_glue::PendingEntry>,
-}
-
 pub struct BuildConfig {
     pub file: PathBuf,
     pub import_paths: Vec<OsString>,
@@ -131,7 +111,6 @@ pub struct PipelineResult {
     pub network_policy_reports: Vec<BuildNetworkPolicyReport>,
     pub workspace_reports: Vec<crunch_build::WorkspaceExecutionReport>,
     pub action_result_reports: Vec<crunch_build::ActionResultRuntimeReport>,
-    pub publication_observations: Vec<crunch_store::PublicationObservation>,
     pub native_dynamic_plans: Vec<NativeDynamicPlanReport>,
     pub priority_decisions: Vec<PriorityDecisionEvidence>,
     pub overlay_report: Option<crunch_store::StoreOverlayReport>,
@@ -170,7 +149,6 @@ pub struct RegisteredBuildResult {
     pub network_policy_reports: Vec<BuildNetworkPolicyReport>,
     pub workspace_reports: Vec<crunch_build::WorkspaceExecutionReport>,
     pub action_result_reports: Vec<crunch_build::ActionResultRuntimeReport>,
-    pub publication_observations: Vec<crunch_store::PublicationObservation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -195,108 +173,11 @@ pub enum Error {
 }
 
 pub fn resolve_max_jobs(user: Option<u32>) -> u32 {
-    let observed_parallelism = if user.is_some() {
-        crunch_build_planning_core::ParallelismObservation::Unavailable
-    } else {
-        observe_available_parallelism()
-    };
-    let facts = crunch_build_planning_core::ParallelismFacts::legacy_compatible(user, observed_parallelism);
-    match resolve_max_jobs_from_facts(facts) {
-        Ok(decision) => decision.effective_jobs,
-        Err(_) => crunch_build_planning_core::DEFAULT_FALLBACK_JOBS,
+    const MAX_JOBS_CAP: u32 = 16;
+    match user {
+        Some(j) => j.clamp(1, MAX_JOBS_CAP),
+        None => std::thread::available_parallelism().map(|n| (n.get() as u32).min(MAX_JOBS_CAP)).unwrap_or(1),
     }
-}
-
-pub fn resolve_max_jobs_from_facts(
-    facts: crunch_build_planning_core::ParallelismFacts,
-) -> Result<crunch_build_planning_core::JobLimitDecision, crunch_build_planning_core::ParallelismBlocker> {
-    crunch_build_planning_core::plan_parallelism(facts)
-}
-
-fn observe_available_parallelism() -> crunch_build_planning_core::ParallelismObservation {
-    let Ok(parallelism) = std::thread::available_parallelism() else {
-        return crunch_build_planning_core::ParallelismObservation::Unavailable;
-    };
-    match u32::try_from(parallelism.get()) {
-        Ok(value) => crunch_build_planning_core::ParallelismObservation::Available(value),
-        Err(_) => crunch_build_planning_core::ParallelismObservation::ConversionFailed,
-    }
-}
-
-pub async fn evaluate_derivations_eager(
-    config: EagerDerivationEvaluationConfig<'_>,
-) -> Result<EagerDerivationEvaluation, Error> {
-    if config.max_jobs == 0 || config.store_dir.is_empty() || !config.store_dir.starts_with('/') {
-        return Err(Error::Eval(
-            "eager derivation evaluation requires positive jobs and an absolute store prefix".to_string(),
-        ));
-    }
-    let session = crunch_eval::session::EvaluationSession::open_file(config.file, config.import_paths)
-        .map_err(|error| Error::Eval(error.to_string()))?;
-    let expected_root_count = session.root_labels().len();
-    let (tx, rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
-    let evaluation = stream_roots_into_worker(EvalStreamRequest {
-        max_jobs: config.max_jobs,
-        store_dir: config.store_dir,
-        root_force_policy: RootForceExecutionPolicy::Inline,
-        root_file: config.file,
-        import_paths: config.import_paths,
-        session: &session,
-        tx,
-        cancellation: EvaluationCancellation::new(),
-        stream_tx: None,
-        worker_control: EvalWorkerControl::default(),
-    });
-    let collection = collect_eager_evaluation_messages(rx, config.store_dir, expected_root_count);
-    let (evaluation, collected) = tokio::join!(evaluation, collection);
-    let evaluation = evaluation?;
-    let mut collected = collected?;
-    if evaluation.root_drv_paths.len() != expected_root_count
-        || collected.roots.len() != expected_root_count
-        || collected.entries.is_empty()
-    {
-        return Err(Error::Eval(format!(
-            "eager derivation evaluation completed {} of {expected_root_count} roots and discovered {} actions",
-            evaluation.root_drv_paths.len(),
-            collected.entries.len()
-        )));
-    }
-    collected
-        .roots
-        .sort_by(|left, right| left.label.cmp(&right.label).then(left.drv_path.cmp(&right.drv_path)));
-    assert_eq!(collected.roots.len(), expected_root_count);
-    debug_assert!(!collected.entries.is_empty());
-    Ok(collected)
-}
-
-async fn collect_eager_evaluation_messages(
-    mut rx: mpsc::Receiver<EvalMessage>,
-    store_dir: &str,
-    root_count_max: usize,
-) -> Result<EagerDerivationEvaluation, Error> {
-    let mut roots = Vec::with_capacity(root_count_max);
-    let mut entries = BTreeMap::new();
-    while let Some(message) = rx.recv().await {
-        if roots.len() >= root_count_max {
-            return Err(Error::Eval(format!(
-                "eager derivation evaluation exceeded its admitted root count {root_count_max}"
-            )));
-        }
-        roots.push(EagerDerivationRoot {
-            label: message.label,
-            drv_path: message.drv_path,
-        });
-        for entry in message.new_entries {
-            let action_id = entry.0.to_absolute_path_with_prefix(store_dir);
-            if entries.insert(action_id.clone(), entry).is_some() {
-                return Err(Error::Convert(format!("eager derivation evaluation duplicated {action_id}")));
-            }
-        }
-    }
-    let entries = entries.into_values().collect::<Vec<_>>();
-    debug_assert!(roots.len() <= root_count_max);
-    debug_assert!(entries.is_empty() || entries.len() >= roots.len());
-    Ok(EagerDerivationEvaluation { roots, entries })
 }
 
 pub fn parse_fod_mismatch_error(err: &str) -> Option<FodMismatch> {
@@ -359,7 +240,7 @@ async fn build_with_stream_sender(
         .map_err(map_eval_error)?;
 
     let store = if config.base_state_dirs.is_empty() {
-        match crunch_store::open_pipeline_store_parts(crunch_store::StoreConfig {
+        match crunch_store::StoreHandle::open(crunch_store::StoreConfig {
             state_dir: config.state_dir.clone(),
             output_dir: config.output_dir.clone(),
             remote_cache_urls: config.substituter_urls.clone(),
@@ -378,7 +259,7 @@ async fn build_with_stream_sender(
             Err(e) => return Err(Error::Internal(format!("opening store: {e}"))),
         }
     } else {
-        match crunch_store::open_overlay_pipeline_store_parts(crunch_store::StoreConfig {
+        match crunch_store::StoreHandle::open_overlay(crunch_store::StoreConfig {
             state_dir: config.state_dir.clone(),
             output_dir: config.output_dir.clone(),
             remote_cache_urls: config.substituter_urls.clone(),
@@ -398,7 +279,7 @@ async fn build_with_stream_sender(
         }
     };
     let mut hermeticity_audit_events = mode_audit_events(config.hermeticity_mode);
-    hermeticity_audit_events.extend(map_store_audit_events(store.build_store.startup_audit_events()));
+    hermeticity_audit_events.extend(map_store_audit_events(store.startup_audit_events()));
 
     #[cfg(target_os = "linux")]
     {
@@ -431,7 +312,7 @@ struct PipelineBuilderBundle<S> {
 #[cfg(target_os = "linux")]
 struct LinuxBuildRequest<'a> {
     config: &'a BuildConfig,
-    store: crunch_store::PipelineStoreParts,
+    store: crunch_store::StoreHandle,
     session: crunch_eval::session::EvaluationSession,
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
     cancellation: EvaluationCancellation,
@@ -486,7 +367,6 @@ async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, E
         network_policy_rows: builder.take_network_policy_reports(),
         workspace_rows: workspace_evidence_sink.take(),
         action_result_rows: builder.take_action_result_reports(),
-        publication_observations: builder.take_publication_observations(),
         overlay_report: overlay_evidence,
         store_layer_selections,
     };
@@ -497,21 +377,21 @@ async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, E
         eval_stream,
         pipeline_evidence,
     );
-    register_managed_generation(ManagedGenerationRequest {
-        base_registration: config.root_registration.as_ref(),
-        root_retention_source: config.root_retention_source,
-        root_registry: &root_registry,
-        outcomes: &result.outcomes,
-        source_paths: &source_generation_paths,
-        is_source_generation_included: result.failed.is_empty(),
-    })
+    register_managed_generation(
+        config.root_registration.as_ref(),
+        config.root_retention_source,
+        &root_registry,
+        &result.outcomes,
+        &source_generation_paths,
+        result.failed.is_empty(),
+    )
     .await?;
     Ok(result)
 }
 
 pub async fn build_registered_derivations(
     config: &BuildConfig,
-    store: crunch_store::PipelineStoreParts,
+    store: crunch_store::StoreHandle,
     known_paths: &mut DerivationRegistry,
     request: RegisteredBuildRequest<'_>,
 ) -> Result<RegisteredBuildResult, Error> {
@@ -527,50 +407,47 @@ pub async fn build_registered_derivations(
         }
         if request.cache_only {
             let bundle = create_cache_only_observer(config, store)?;
-            return run_registered_builder(config, bundle, known_paths, request).await;
+            return run_registered_builder(
+                config,
+                bundle.builder,
+                known_paths,
+                request,
+                bundle.output_lookup,
+                bundle.root_registry,
+                bundle.workspace_evidence_sink,
+            )
+            .await;
         }
         let bundle = create_pipeline_builder_with_source_policy(config, store, request.source_policy)?;
-        run_registered_builder(config, bundle, known_paths, request).await
+        run_registered_builder(
+            config,
+            bundle.builder,
+            known_paths,
+            request,
+            bundle.output_lookup,
+            bundle.root_registry,
+            bundle.workspace_evidence_sink,
+        )
+        .await
     }
 }
 
 #[cfg(target_os = "linux")]
-type ManagedRootRegistration = (StorePath<String>, GcRootSource, crunch_store::RootRegistration);
-
-#[cfg(target_os = "linux")]
-struct ManagedGenerationRequest<'a> {
-    base_registration: Option<&'a crunch_store::RootRegistration>,
+async fn register_managed_generation(
+    base_registration: Option<&crunch_store::RootRegistration>,
     root_retention_source: Option<GcRootSource>,
-    root_registry: &'a crunch_store::RootRegistry,
-    outcomes: &'a [BuildOutcome],
-    source_paths: &'a [StorePath<String>],
-    is_source_generation_included: bool,
-}
-
-#[cfg(target_os = "linux")]
-fn plan_managed_generation(
-    request: &ManagedGenerationRequest<'_>,
-    base_registration: &crunch_store::RootRegistration,
-) -> Result<Vec<ManagedRootRegistration>, Error> {
-    let output_count = request
-        .outcomes
-        .iter()
-        .try_fold(0usize, |count, outcome| count.checked_add(outcome.outputs.len()))
-        .ok_or_else(|| Error::Build("managed output count exceeds the platform limit".to_string()))?;
-    let is_source_generation_planned = request.is_source_generation_included
-        && base_registration.class == crunch_store::GcRootClass::ProjectOutputGeneration;
-    let source_count = if is_source_generation_planned {
-        request.source_paths.len()
-    } else {
-        0
+    root_registry: &crunch_store::RootRegistry,
+    outcomes: &[BuildOutcome],
+    source_paths: &[nix_compat::store_path::StorePath<String>],
+    include_source_generation: bool,
+) -> Result<(), Error> {
+    let Some(base_registration) = base_registration else {
+        return Ok(());
     };
-    let registration_count_max = output_count
-        .checked_add(source_count)
-        .ok_or_else(|| Error::Build("managed registration count exceeds the platform limit".to_string()))?;
-    let local_source = request.root_retention_source.unwrap_or(GcRootSource::Build);
+    let local_source = root_retention_source.unwrap_or(GcRootSource::Build);
     let mut seen_paths = BTreeSet::new();
-    let mut registrations = Vec::with_capacity(registration_count_max);
-    for outcome in request.outcomes {
+    let mut registrations = Vec::new();
+    for outcome in outcomes {
         for (output_name, path_info) in &outcome.outputs {
             if !seen_paths.insert(path_info.store_path.clone()) {
                 continue;
@@ -583,8 +460,8 @@ fn plan_managed_generation(
             registrations.push((path_info.store_path.clone(), source, base_registration.clone()));
         }
     }
-    if is_source_generation_planned {
-        for source_path in request.source_paths {
+    if include_source_generation && base_registration.class == crunch_store::GcRootClass::ProjectOutputGeneration {
+        for source_path in source_paths {
             if !seen_paths.insert(source_path.clone()) {
                 continue;
             }
@@ -595,19 +472,7 @@ fn plan_managed_generation(
             registrations.push((source_path.clone(), GcRootSource::Source, source_registration));
         }
     }
-    assert_eq!(seen_paths.len(), registrations.len());
-    assert!(registrations.len() <= registration_count_max);
-    Ok(registrations)
-}
-
-#[cfg(target_os = "linux")]
-async fn register_managed_generation(request: ManagedGenerationRequest<'_>) -> Result<(), Error> {
-    let Some(base_registration) = request.base_registration else {
-        return Ok(());
-    };
-    let registrations = plan_managed_generation(&request, base_registration)?;
-    request
-        .root_registry
+    root_registry
         .register_managed_batch(registrations)
         .await
         .map_err(|error| Error::Build(format!("committing managed root generation: {error}")))?;
@@ -617,16 +482,13 @@ async fn register_managed_generation(request: ManagedGenerationRequest<'_>) -> R
 #[cfg(target_os = "linux")]
 async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'static>(
     config: &BuildConfig,
-    bundle: PipelineBuilderBundle<S>,
+    mut builder: Builder<S>,
     known_paths: &mut DerivationRegistry,
     request: RegisteredBuildRequest<'_>,
+    output_lookup: crunch_store::OutputLookup,
+    root_registry: crunch_store::RootRegistry,
+    workspace_evidence_sink: crunch_build::WorkspaceReportCollector,
 ) -> Result<RegisteredBuildResult, Error> {
-    let PipelineBuilderBundle {
-        mut builder,
-        output_lookup,
-        root_registry,
-        workspace_evidence_sink,
-    } = bundle;
     let mut worker_result = builder
         .build_all_report(request.roots, known_paths, config.max_jobs)
         .await
@@ -653,14 +515,14 @@ async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'sta
             });
         }
     }
-    register_managed_generation(ManagedGenerationRequest {
-        base_registration: config.root_registration.as_ref(),
-        root_retention_source: config.root_retention_source,
-        root_registry: &root_registry,
-        outcomes: &worker_result.outcomes,
-        source_paths: &source_generation_paths,
-        is_source_generation_included: worker_result.failed.is_empty(),
-    })
+    register_managed_generation(
+        config.root_registration.as_ref(),
+        config.root_retention_source,
+        &root_registry,
+        &worker_result.outcomes,
+        &source_generation_paths,
+        worker_result.failed.is_empty(),
+    )
     .await?;
     for retained_output in request.retained_outputs {
         root_registry
@@ -681,47 +543,28 @@ async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'sta
         network_policy_reports: builder.take_network_policy_reports(),
         workspace_reports: workspace_evidence_sink.take(),
         action_result_reports: builder.take_action_result_reports(),
-        publication_observations: builder.take_publication_observations(),
     })
 }
 
 #[cfg(target_os = "linux")]
 fn create_cache_only_observer(
     config: &BuildConfig,
-    store: crunch_store::PipelineStoreParts,
+    store: crunch_store::StoreHandle,
 ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
-    Ok(create_cache_only_bundle(config, store))
-}
-
-#[cfg(target_os = "linux")]
-fn create_cache_only_bundle(
-    config: &BuildConfig,
-    parts: crunch_store::PipelineStoreParts,
-) -> PipelineBuilderBundle<FetchBuildService> {
-    let service =
-        FetchBuildService::new(parts.build_service_store).with_source_policy(FetchSourcePolicy::RequireOverride);
+    let crunch_store::PipelineStoreParts {
+        build_store,
+        action_results,
+        build_service_store,
+        output_lookup,
+        root_registry,
+    } = store.into_pipeline_store_parts();
+    let service = FetchBuildService::new(build_service_store).with_source_policy(FetchSourcePolicy::RequireOverride);
     let workspace_evidence_sink = empty_workspace_report_collector();
-    let store_parts = crunch_store::BuilderStoreParts {
-        build_store: parts.build_store,
-        action_results: parts.action_results,
-    };
-    let builder = create_cache_only_builder(config, store_parts, service);
-    PipelineBuilderBundle {
-        builder,
-        output_lookup: parts.output_lookup,
-        root_registry: parts.root_registry,
-        workspace_evidence_sink,
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn create_cache_only_builder(
-    config: &BuildConfig,
-    store_parts: crunch_store::BuilderStoreParts,
-    service: FetchBuildService,
-) -> Builder<FetchBuildService> {
     let mut builder = Builder::from_store_parts(
-        store_parts,
+        crunch_store::BuilderStoreParts {
+            build_store,
+            action_results,
+        },
         service,
         config.keypair.clone(),
         config.trusted_keys.clone(),
@@ -729,13 +572,18 @@ fn create_cache_only_builder(
         config.verbose,
     );
     builder.set_hermeticity_mode(HermeticityMode::Strict);
-    builder
+    Ok(PipelineBuilderBundle {
+        builder,
+        output_lookup,
+        root_registry,
+        workspace_evidence_sink,
+    })
 }
 
 #[cfg(target_os = "linux")]
 fn create_pipeline_builder(
     config: &BuildConfig,
-    store: crunch_store::PipelineStoreParts,
+    store: crunch_store::StoreHandle,
 ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
     let source_policy = if config.source_fetch_overrides.is_empty() {
         FetchSourcePolicy::AllowNetwork
@@ -748,7 +596,7 @@ fn create_pipeline_builder(
 #[cfg(target_os = "linux")]
 fn create_pipeline_builder_with_source_policy(
     config: &BuildConfig,
-    store: crunch_store::PipelineStoreParts,
+    store: crunch_store::StoreHandle,
     source_policy: FetchSourcePolicy,
 ) -> Result<PipelineBuilderBundle<impl snix_build::buildservice::BuildService + use<>>, Error> {
     debug_assert!(!config.store_dir.is_empty(), "store prefix must not be empty");
@@ -760,7 +608,7 @@ fn create_pipeline_builder_with_source_policy(
         build_service_store,
         output_lookup,
         root_registry,
-    } = store;
+    } = store.into_pipeline_store_parts();
     let state_dir = build_store.state_dir().to_path_buf();
     let workdir = std::env::temp_dir().join("crunch-builds");
     std::fs::create_dir_all(&workdir).map_err(|error| Error::Internal(format!("create workdir: {error}")))?;
@@ -820,7 +668,6 @@ struct PipelineRunEvidence {
     network_policy_rows: Vec<BuildNetworkPolicyReport>,
     workspace_rows: Vec<crunch_build::WorkspaceExecutionReport>,
     action_result_rows: Vec<crunch_build::ActionResultRuntimeReport>,
-    publication_observations: Vec<crunch_store::PublicationObservation>,
     overlay_report: Option<crunch_store::StoreOverlayReport>,
     store_layer_selections: Vec<crunch_store::layer::StoreLayerSelection>,
 }
@@ -881,7 +728,6 @@ fn finish_pipeline_result(
         network_policy_reports: evidence.network_policy_rows,
         workspace_reports: evidence.workspace_rows,
         action_result_reports: evidence.action_result_rows,
-        publication_observations: evidence.publication_observations,
         native_dynamic_plans: worker_result.native_dynamic_plans,
         priority_decisions: worker_result.priority_decisions,
         overlay_report: evidence.overlay_report,
@@ -1007,7 +853,6 @@ fn build_preflight_failure(
         network_policy_reports: Vec::new(),
         workspace_reports: Vec::new(),
         action_result_reports: Vec::new(),
-        publication_observations: Vec::new(),
         native_dynamic_plans: Vec::new(),
         priority_decisions: Vec::new(),
         overlay_report: None,
@@ -1031,30 +876,19 @@ fn convert_root_drv_paths(
 
 fn normalize_failed_goal_keys(failed: &mut [FailedGoal], store_dir: &str) {
     for failed_goal in failed {
-        failed_goal.drv_key = normalized_failed_drv_key(FailedGoalKeyInput {
-            failed_key: &failed_goal.drv_key,
-            logical_store_prefix: store_dir,
-        });
-        failed_goal.origin_drv_key = normalized_failed_drv_key(FailedGoalKeyInput {
-            failed_key: &failed_goal.origin_drv_key,
-            logical_store_prefix: store_dir,
-        });
+        failed_goal.drv_key = normalized_failed_drv_key(&failed_goal.drv_key, store_dir);
+        failed_goal.origin_drv_key = normalized_failed_drv_key(&failed_goal.origin_drv_key, store_dir);
     }
 }
 
-struct FailedGoalKeyInput<'a> {
-    failed_key: &'a str,
-    logical_store_prefix: &'a str,
-}
-
-fn normalized_failed_drv_key(input: FailedGoalKeyInput<'_>) -> String {
-    if parse_drv_key(input.logical_store_prefix, input.failed_key).is_some() {
-        return input.failed_key.to_string();
+fn normalized_failed_drv_key(drv_key: &str, store_dir: &str) -> String {
+    if parse_drv_key(store_dir, drv_key).is_some() {
+        return drv_key.to_string();
     }
-    let Ok(drv_path) = StorePath::from_absolute_path(input.failed_key.as_bytes()) else {
-        return input.failed_key.to_string();
+    let Ok(drv_path) = StorePath::from_absolute_path(drv_key.as_bytes()) else {
+        return drv_key.to_string();
     };
-    drv_key_for(input.logical_store_prefix, &drv_path)
+    drv_key_for(store_dir, &drv_path)
 }
 
 fn collect_fod_mismatches(failed: &[FailedGoal]) -> Vec<FodMismatch> {
@@ -1108,7 +942,6 @@ mod tests {
     const SINGLE_ROOT_COUNT: u32 = 1;
     const TWO_ROOT_COUNT: u32 = 2;
     const THREE_ROOT_COUNT: u32 = 3;
-    const EAGER_DERIVATION_ENTRY_COUNT: usize = 2;
     const ROOT_ALPHA_INDEX: usize = 0;
     const ROOT_BETA_INDEX: usize = 1;
     const ROOT_GAMMA_INDEX: usize = 2;
@@ -1187,46 +1020,6 @@ mod tests {
         assert_eq!(resolve_max_jobs(Some(0)), 1);
         assert_eq!(resolve_max_jobs(Some(1)), 1);
         assert_eq!(resolve_max_jobs(Some(99)), 16);
-    }
-
-    #[test]
-    fn explicit_parallelism_facts_apply_policy_and_executor_caps() {
-        const REQUESTED_JOBS: u32 = 32;
-        const POLICY_JOBS_MAX: u32 = 12;
-        const EXECUTOR_JOBS_MAX: u32 = 7;
-        let decision = resolve_max_jobs_from_facts(crunch_build_planning_core::ParallelismFacts {
-            requested_jobs: Some(REQUESTED_JOBS),
-            observed_parallelism: crunch_build_planning_core::ParallelismObservation::Available(1),
-            policy_jobs_max: POLICY_JOBS_MAX,
-            executor_jobs_max: Some(EXECUTOR_JOBS_MAX),
-            unavailable_policy: crunch_build_planning_core::UnavailableParallelismPolicy::Block,
-            zero_request_policy: crunch_build_planning_core::ZeroRequestPolicy::ClampToOne,
-        })
-        .unwrap();
-        assert_eq!(decision.effective_jobs, EXECUTOR_JOBS_MAX);
-        assert_eq!(decision.reason_codes, vec!["requested-jobs", "policy-cap", "executor-cap"]);
-    }
-
-    #[test]
-    fn explicit_parallelism_facts_reject_conversion_and_zero_limits() {
-        let conversion = resolve_max_jobs_from_facts(crunch_build_planning_core::ParallelismFacts {
-            requested_jobs: None,
-            observed_parallelism: crunch_build_planning_core::ParallelismObservation::ConversionFailed,
-            policy_jobs_max: crunch_build_planning_core::DEFAULT_POLICY_JOBS_MAX,
-            executor_jobs_max: None,
-            unavailable_policy: crunch_build_planning_core::UnavailableParallelismPolicy::Block,
-            zero_request_policy: crunch_build_planning_core::ZeroRequestPolicy::Block,
-        });
-        let zero_executor = resolve_max_jobs_from_facts(crunch_build_planning_core::ParallelismFacts {
-            requested_jobs: Some(1),
-            observed_parallelism: crunch_build_planning_core::ParallelismObservation::Unavailable,
-            policy_jobs_max: crunch_build_planning_core::DEFAULT_POLICY_JOBS_MAX,
-            executor_jobs_max: Some(0),
-            unavailable_policy: crunch_build_planning_core::UnavailableParallelismPolicy::Block,
-            zero_request_policy: crunch_build_planning_core::ZeroRequestPolicy::ClampToOne,
-        });
-        assert_eq!(conversion, Err(crunch_build_planning_core::ParallelismBlocker::ParallelismConversionFailed));
-        assert_eq!(zero_executor, Err(crunch_build_planning_core::ParallelismBlocker::ExecutorLimitZero));
     }
 
     #[test]
@@ -1373,99 +1166,6 @@ mod tests {
         (directory, file)
     }
 
-    fn eager_derivation_fixture(missing_child: bool) -> (tempfile::TempDir, PathBuf, Vec<OsString>) {
-        let directory = tempfile::tempdir().unwrap();
-        let root = directory.path().join("root.ncl");
-        let child = directory.path().join("child.ncl");
-        let child_reference = if missing_child { "missing.ncl" } else { "child.ncl" };
-        let root_source = format!(
-            r#"let mantle = import "lib.ncl" in
-{{
-  name = "eager-root",
-  builder = "/bin/sh",
-  args = ["-c", "echo root > $out"],
-  inputs = [mantle.derivationFile "{child_reference}"],
-}} | mantle.Derivation
-"#
-        );
-        let child_source = r#"let mantle = import "lib.ncl" in
-{
-  name = "eager-child",
-  builder = "/bin/sh",
-  args = ["-c", "echo child > $out"],
-  inputs = [],
-} | mantle.Derivation
-"#;
-        std::fs::write(&root, root_source).unwrap();
-        std::fs::write(&child, child_source).unwrap();
-        let repository = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let import_paths = vec![repository.join("lib").into_os_string()];
-        assert!(root.is_file());
-        assert!(child.is_file());
-        (directory, root, import_paths)
-    }
-
-    #[tokio::test]
-    async fn eager_derivation_evaluation_resolves_all_actions_without_execution() {
-        let (_directory, root, import_paths) = eager_derivation_fixture(false);
-
-        let evaluated = evaluate_derivations_eager(EagerDerivationEvaluationConfig {
-            file: &root,
-            import_paths: &import_paths,
-            store_dir: MANAGED_TEST_STORE_PREFIX,
-            max_jobs: SINGLE_EVAL_JOB,
-        })
-        .await
-        .unwrap();
-
-        assert_eq!(evaluated.roots.len(), usize::try_from(SINGLE_ROOT_COUNT).unwrap());
-        assert_eq!(evaluated.entries.len(), EAGER_DERIVATION_ENTRY_COUNT);
-        assert!(evaluated.entries.iter().any(|entry| entry.2.input_derivations.is_empty()));
-        assert!(evaluated.entries.iter().any(|entry| !entry.2.input_derivations.is_empty()));
-    }
-
-    #[tokio::test]
-    async fn eager_derivation_evaluation_rejects_missing_child_action() {
-        let (_directory, root, import_paths) = eager_derivation_fixture(true);
-
-        let error = match evaluate_derivations_eager(EagerDerivationEvaluationConfig {
-            file: &root,
-            import_paths: &import_paths,
-            store_dir: MANAGED_TEST_STORE_PREFIX,
-            max_jobs: SINGLE_EVAL_JOB,
-        })
-        .await
-        {
-            Ok(_) => panic!("missing derivation file must fail eager evaluation"),
-            Err(error) => error,
-        };
-
-        let message = error.to_string();
-        assert!(message.contains("completed 0 of 1 roots"), "{message}");
-        assert!(message.contains("discovered 0 actions"), "{message}");
-    }
-
-    #[tokio::test]
-    async fn eager_message_collection_rejects_root_count_overflow() {
-        let (tx, rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
-        tx.send(EvalMessage {
-            label: "unexpected-root".to_string(),
-            drv_path: managed_test_path("unexpected.drv", MANAGED_TEST_DRV_DIGEST_BYTE),
-            new_entries: Vec::new(),
-        })
-        .await
-        .unwrap();
-        drop(tx);
-
-        let error = match collect_eager_evaluation_messages(rx, MANAGED_TEST_STORE_PREFIX, 0).await {
-            Ok(_) => panic!("a message beyond the admitted root count must fail"),
-            Err(error) => error,
-        };
-
-        assert!(matches!(error, Error::Eval(_)));
-        assert!(error.to_string().contains("exceeded its admitted root count 0"));
-    }
-
     #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn managed_generation_defers_sources_until_success_then_commits_output_and_source() {
@@ -1490,38 +1190,35 @@ mod tests {
         let root_registry = store.into_pipeline_store_parts().root_registry;
         let outcome = BuildOutcome {
             drv_path: managed_test_path("managed.drv", MANAGED_TEST_DRV_DIGEST_BYTE),
-            outputs: BTreeMap::from([
-                ("duplicate".to_string(), output_path_info.clone()),
-                ("out".to_string(), output_path_info),
-            ]),
+            outputs: BTreeMap::from([("out".to_string(), output_path_info)]),
             substitutions: BTreeMap::new(),
             cached: false,
             log: None,
         };
         let registration = managed_test_registration();
 
-        register_managed_generation(ManagedGenerationRequest {
-            base_registration: Some(&registration),
-            root_retention_source: Some(GcRootSource::Build),
-            root_registry: &root_registry,
-            outcomes: std::slice::from_ref(&outcome),
-            source_paths: std::slice::from_ref(&source_path),
-            is_source_generation_included: false,
-        })
+        register_managed_generation(
+            Some(&registration),
+            Some(GcRootSource::Build),
+            &root_registry,
+            std::slice::from_ref(&outcome),
+            std::slice::from_ref(&source_path),
+            false,
+        )
         .await
         .expect("failed pipeline keeps source generation deferred");
         let incomplete_roots = root_registry.list().expect("list incomplete generation roots");
         assert_eq!(incomplete_roots.len(), 1);
         assert_eq!(incomplete_roots[0].root_class, crunch_store::GcRootClass::ProjectOutputGeneration);
 
-        register_managed_generation(ManagedGenerationRequest {
-            base_registration: Some(&registration),
-            root_retention_source: Some(GcRootSource::Build),
-            root_registry: &root_registry,
-            outcomes: std::slice::from_ref(&outcome),
-            source_paths: std::slice::from_ref(&source_path),
-            is_source_generation_included: true,
-        })
+        register_managed_generation(
+            Some(&registration),
+            Some(GcRootSource::Build),
+            &root_registry,
+            std::slice::from_ref(&outcome),
+            std::slice::from_ref(&source_path),
+            true,
+        )
         .await
         .expect("successful pipeline commits output and source generation");
         let complete_roots = root_registry.list().expect("list complete generation roots");

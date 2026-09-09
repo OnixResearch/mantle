@@ -11,17 +11,24 @@ Success looks like: the run is queued as a pueue task, its stdout/stderr is capt
 
 ## Core rule
 
-- Commands that can exceed ~30 seconds: queue with `pueue_run` **without** `wait`.
-- Quick commands whose output you need now: `pueue_run` with `wait=true`.
+- Queue long commands through Pueue.
+- While independent work remains, queue with `pueue_run` without `wait` and continue that work.
+- When the next action needs a new result, use supported `pueue_run wait=true`, subject to repository limits.
+- When the next action needs an existing task's result, use supported `pueue_wait`.
+- Keep waits and displayed output bounded.
+- Preserve explicit repository limits: Mantle's long builds and proofs must start detached, including the source-built fixed-point proof.
 - Do not run a long build in the foreground.
 
 ## The pattern
 
 1. Set up a run directory and point the log at it. Redirect the process output to the log so the pueue task's own output stays small.
 2. Export the build environment for the command. Do not assume it persists between pueue tasks.
-3. Queue it detached (`pueue_run` with `wait=false`).
-4. Poll with `pueue_status query="id=<id>"`. Inspect with `pueue_log id=<id>`. Stream with `pueue_wait id=<id>` only when you want to watch it now.
-5. After it finishes, read the log file and the staging evidence (for proofs, `attempt-status.json`). Never quote a result from memory.
+3. Select detached or bounded-wait submission under the core rule. Retain the Pueue task ID.
+4. While independent work remains, continue that work. Use `pueue_status query="id=<id>"` for status checks.
+5. When the result is required, use supported `pueue_wait id=<id>` for the existing task. Inspect `pueue_log id=<id>` for decisive output.
+6. After the run finishes, inspect the command, exit status, exact subject revision and inputs, and decisive log output.
+7. For proofs, inspect the staging evidence, including `attempt-status.json`.
+8. If relevant inputs changed or evidence is incomplete, rerun the affected check. Otherwise, reuse the captured evidence.
 
 ## Environment setup for Mantle builds
 
@@ -79,6 +86,9 @@ Monitor: `tail -f $RUN/run.log`, the staging dir `.proof.source-built-fixed-poin
 
 ## What to report
 
-- Cite the pueue task id and the exact `test result:` line or `attempt-status.json` blocker from the current log.
-- Distinguish "compiled and passed" from "ran and passed". Only `--nocapture`/visible output proves execution.
+- Cite the Pueue task ID, captured command, exit status, and exact subject revision and inputs.
+- Include the exact `test result:` line or `attempt-status.json` blocker from the captured log.
+- Cite the test runner's execution result. Compilation or discovery alone does not prove execution.
+- `--nocapture` is not generally necessary for execution evidence. Mantle's ignored integration tests still require `--ignored --nocapture` and captured output.
+- Preserve all proof-specific receipt requirements.
 - If a run is still going, say so and give the current stage, not a guess about the outcome.

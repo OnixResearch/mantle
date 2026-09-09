@@ -1,7 +1,3 @@
-#[cfg(target_os = "linux")]
-#[path = "rust_plan_cli/child_action_preflight.rs"]
-mod child_action_preflight;
-
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;

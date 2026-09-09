@@ -42,13 +42,3 @@ The accepted disposition means only that the bounded release binding points to m
 `crunch-release-core` validates typed metadata and observations. It does not parse Verus source, proof IR, verifier logs, or Preserves internals. Filesystem reads, bounded file-size enforcement, BLAKE3 hashing, and extraction of public JSON identity fields belong in a shell adapter. The optional JSON file remains a projection and never replaces canonical Preserves identity.
 
 The checked fixtures under `tests/fixtures/trellis-proof-release-sidecars/` are synthetic contract fixtures. They prove Mantle's deterministic role-pair, identity-linkage, and fail-closed logic only. Valence's focused accepted/negative profile tests remain the authority for proof acceptance semantics.
-
-## Fenced-attempt evidence
-
-The remote-admission profile uses this accepted v1 path. Its exact artifacts are under `evidence/trellis/remote-admission-v1/`.
-
-The profile binds Trellis revision `8de4b24aa2d66cc2e6ec966d686df023492265d3`. It also binds the executable oracle and Mantle projection source.
-
-Read [Trellis remote-admission evidence](trellis-remote-admission.md) for the mapping, unsupported cases, validation commands, and claim boundary.
-
-This evidence does not satisfy a release requirement by itself. A release bundle must still bind its own source and binary identities.

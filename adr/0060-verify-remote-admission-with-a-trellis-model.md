@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Proposed
 
 ## Context
 
@@ -27,10 +27,6 @@ A paired Trellis change will add a product-neutral `fenced_attempt_admission` mo
 The first proof set covers stale and mismatched fence rejection, terminal-state closure, duplicate-event idempotence, conflicting-event rejection, completion linkage, representable fence advance, and rejection preservation.
 
 Mantle will add a pure projection from admitted remote-attempt facts into the Trellis model. A bounded complete parity rail will compare Mantle and Trellis executable decisions across supported phase, report, fence, event, authorization, and result-linkage classes. Unmapped variants fail closed.
-
-The durable attempt state records `progress_events_applied`. Legacy states decode a missing field as zero. Progress reports increment this bounded value.
-
-The first oracle has 6,720 cases. The projection supports 5,882 cases and rejects 838 semantic differences with stable reason classes.
 
 Trellis proof artifacts flow through Kamacite and Valence. Mantle binds accepted evidence through its existing opaque sidecar profile. Ordinary remote admission continues to use Mantle's Rust core.
 

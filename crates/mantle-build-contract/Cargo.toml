@@ -7,8 +7,7 @@ publish = false
 description = "Versioned no-std build request and observation contract for Mantle consumers"
 
 [dependencies]
-# This wire-only crate uses inherent APIs, not the store's digest preview traits.
-blake3 = { version = "1.8.2", default-features = false, features = ["pure"] }
+blake3 = { version = "=1.8.2", default-features = false, features = ["pure"] }
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
 
 [dev-dependencies]

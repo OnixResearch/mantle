@@ -19,12 +19,6 @@ members = [
   "crates/crunch-repair-core",
   "crates/crunch-store",
   "crates/crunch-build",
-  "crates/crunch-build-planning-core",
-  "crates/crunch-dev-resume-core",
-  "crates/crunch-source-core",
-  "crates/crunch-radiance-reference-core",
-  "crates/crunch-resource-policy-core",
-  "crates/crunch-resource-policy",
   "crates/crunch-pipeline",
   "crates/crunch-project",
   "crates/crunch-project-core",
@@ -35,12 +29,6 @@ members = [
   "crates/crunch-shell",
   "crates/crunch-shell-core",
   "crates/crunch-release-core",
-  "crates/crunch-remote-core",
-  "crates/crunch-remote",
-  "crates/mantle-rust-plan-core",
-  "crates/mantle-rust-plan",
-  "crates/mantle-application-core",
-  "crates/mantle-application",
   "crates/crunch-bootstrap-core",
   "crates/crunch-hardware-simulation-core",
   "crates/crunch-hardware-simulation",
@@ -79,12 +67,6 @@ default_scope = [
   "-p", "crunch-attestation",
   "-p", "crunch-attestation-core",
   "-p", "crunch-build",
-  "-p", "crunch-build-planning-core",
-  "-p", "crunch-dev-resume-core",
-  "-p", "crunch-source-core",
-  "-p", "crunch-radiance-reference-core",
-  "-p", "crunch-resource-policy-core",
-  "-p", "crunch-resource-policy",
   "-p", "crunch-delta",
   "-p", "crunch-delta-core",
   "-p", "crunch-eval",
@@ -103,12 +85,6 @@ default_scope = [
   "-p", "crunch-project",
   "-p", "crunch-project-core",
   "-p", "crunch-release-core",
-  "-p", "crunch-remote-core",
-  "-p", "crunch-remote",
-  "-p", "mantle-rust-plan-core",
-  "-p", "mantle-rust-plan",
-  "-p", "mantle-application-core",
-  "-p", "mantle-application",
   "-p", "crunch-repair-core",
   "-p", "crunch-rust-cache-core",
   "-p", "crunch-rust-cache",
@@ -208,12 +184,6 @@ crunch-rustc-wrapper = { path = "crates/crunch-rustc-wrapper" }
 mantlepkgs-core = { path = "crates/mantlepkgs-core" }
 mantle-portable-client-core = { path = "crates/mantle-portable-client-core" }
 crunch-build = { path = "crates/crunch-build" }
-crunch-build-planning-core = { path = "crates/crunch-build-planning-core" }
-crunch-dev-resume-core = { path = "crates/crunch-dev-resume-core" }
-crunch-source-core = { path = "crates/crunch-source-core" }
-crunch-radiance-reference-core = { path = "crates/crunch-radiance-reference-core" }
-crunch-resource-policy-core = { path = "crates/crunch-resource-policy-core" }
-crunch-resource-policy = { path = "crates/crunch-resource-policy" }
 crunch-store = { path = "crates/crunch-store" }
 crunch-wasm-component = { path = "crates/crunch-wasm-component" }
 crunch-project = { path = "crates/crunch-project" }
@@ -221,12 +191,6 @@ crunch-attestation = { path = "crates/crunch-attestation" }
 crunch-shell = { path = "crates/crunch-shell" }
 crunch-bootstrap-core = { path = "crates/crunch-bootstrap-core" }
 crunch-release-core = { path = "crates/crunch-release-core" }
-crunch-remote-core = { path = "crates/crunch-remote-core" }
-crunch-remote = { path = "crates/crunch-remote" }
-mantle-rust-plan-core = { path = "crates/mantle-rust-plan-core" }
-mantle-rust-plan = { path = "crates/mantle-rust-plan" }
-mantle-application-core = { path = "crates/mantle-application-core" }
-mantle-application = { path = "crates/mantle-application" }
 bounded-tree-core = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "b0fd0103bc9eed2c1b6d852045959462d105d8f1" }
 bounded-tree-cap = { git = "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git", rev = "b0fd0103bc9eed2c1b6d852045959462d105d8f1" }
 durable-file-publication = { git = "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git", rev = "951c27f59003cea9bfdb40ed4d89653d50fada1f" }
@@ -246,8 +210,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 clap = { version = "4", features = ["derive", "env"] }
 data-encoding = "2.6"
 ed25519-dalek = "2.1.1"
-artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
-artifact-auth-ed25519 = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
 tempfile = "3"
 bstr = "=1.12.1"
 base64 = "0.22"

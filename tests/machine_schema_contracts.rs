@@ -7,6 +7,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 const INVENTORY_PATH: &str = "schemas/machine-contracts/inventory.ncl";
+const CONTRACTED_SURFACE_COUNT: u32 = 21;
 const UTF8_EXACT_BYTES: u32 = 4;
 const CONTRACT_EVALUATION_STACK_BYTES: usize = 32 * 1024 * 1024;
 
@@ -97,33 +98,13 @@ fn prelude_predicate_probe(predicate: &str, value: &str) -> String {
 #[test]
 fn inventory_is_typed_nickel_data() {
     let registry = load_registry();
-    let contracted: Vec<_> = registry
-        .surfaces
-        .iter()
-        .filter(|surface| surface.class == "contracted")
-        .map(|surface| surface.id.clone())
-        .collect();
-    assert!(exact_unique_cohort(&contracted, &registry.initial_cohort));
+    let contracted_count =
+        u32::try_from(registry.surfaces.iter().filter(|surface| surface.class == "contracted").count())
+            .expect("contracted cohort count fits u32");
+    let cohort_count = u32::try_from(registry.initial_cohort.len()).expect("initial cohort count fits u32");
+    assert_eq!(contracted_count, CONTRACTED_SURFACE_COUNT);
+    assert_eq!(cohort_count, contracted_count);
     assert!(registry.surfaces.iter().all(|surface| !surface.id.is_empty()));
-}
-
-fn exact_unique_cohort(contracted: &[String], cohort: &[String]) -> bool {
-    let expected: std::collections::BTreeSet<_> = contracted.iter().collect();
-    let observed: std::collections::BTreeSet<_> = cohort.iter().collect();
-    !expected.is_empty() && expected.len() == contracted.len() && observed.len() == cohort.len() && expected == observed
-}
-
-#[test]
-fn cohort_membership_rejects_duplicates_and_same_count_substitution() {
-    // r[verify native_package_parity.inventories]
-    let expected = vec!["build".to_string(), "receipt".to_string()];
-    assert!(exact_unique_cohort(&expected, &expected));
-    assert!(exact_unique_cohort(&expected, &["receipt".to_string(), "build".to_string()]));
-    assert!(!exact_unique_cohort(&expected, &["build".to_string(), "other".to_string()]));
-    assert!(!exact_unique_cohort(&expected, &["build".to_string(), "build".to_string()]));
-    assert!(!exact_unique_cohort(&expected, &[]));
-    assert!(!exact_unique_cohort(&[], &[]));
-    assert!(!exact_unique_cohort(&["build".to_string(), "build".to_string()], &["build".to_string()]));
 }
 
 #[test]

@@ -17,6 +17,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -42,6 +43,9 @@ use serde::Deserialize;
 use serde::Serialize;
 use snix_castore::B3Digest;
 use snix_castore::Node;
+use snix_castore::blobservice::BlobService;
+use snix_castore::directoryservice::DirectoryService;
+use snix_castore::import::fs::ingest_path;
 use tempfile::Builder;
 use thiserror::Error;
 
@@ -116,7 +120,8 @@ pub struct RustCache {
     indexes_dir: PathBuf,
     results_dir: PathBuf,
     staging_dir: PathBuf,
-    store: crunch_store::RustCacheStore,
+    blob_service: Arc<dyn BlobService>,
+    directory_service: Arc<dyn DirectoryService>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -245,18 +250,20 @@ impl RustCache {
     }
 
     pub async fn open_async(config: crunch_store::StoreConfig) -> Result<Self, Error> {
-        let store = crunch_store::RustCacheStore::open(config)
+        let handle = crunch_store::StoreHandle::open(config)
             .await
             .map_err(|error| Error::Castore(format!("open-store:{error}")))?;
-        let state_dir = store.state_dir().to_path_buf();
-        let cache = Self::new(store)?;
-        assert_eq!(cache.state_dir(), state_dir);
-        assert!(cache.cache_dir.starts_with(&state_dir));
+        let cache = Self::new(handle.state_dir().to_path_buf(), handle.blob_service(), handle.directory_service())?;
+        assert_eq!(cache.state_dir(), handle.state_dir());
+        assert!(cache.cache_dir.starts_with(handle.state_dir()));
         Ok(cache)
     }
 
-    pub fn new(store: crunch_store::RustCacheStore) -> Result<Self, Error> {
-        let state_dir = store.state_dir().to_path_buf();
+    pub fn new(
+        state_dir: PathBuf,
+        blob_service: Arc<dyn BlobService>,
+        directory_service: Arc<dyn DirectoryService>,
+    ) -> Result<Self, Error> {
         if state_dir.as_os_str().is_empty() {
             return Err(Error::State("state-directory-empty".to_string()));
         }
@@ -275,7 +282,8 @@ impl RustCache {
             indexes_dir,
             results_dir,
             staging_dir,
-            store,
+            blob_service,
+            directory_service,
         })
     }
 
@@ -307,11 +315,14 @@ impl RustCache {
             .map_err(|error| Error::State(format!("store-mutation-lock:{error}")))?;
         let manifest = scan_output_artifacts(request.output_dir, request.policy)?;
         let snapshot = self.snapshot_declared_artifacts(request.output_dir, &manifest)?;
-        let node = self
-            .store
-            .ingest_path(snapshot.path())
-            .await
-            .map_err(|error| Error::Castore(format!("ingest:{error}")))?;
+        let node = ingest_path(
+            &self.blob_service,
+            &self.directory_service,
+            snapshot.path(),
+            None::<&snix_castore::refscan::ReferenceScanner<Vec<u8>>>,
+        )
+        .await
+        .map_err(|error| Error::Castore(format!("ingest:{error}")))?;
         let root_node = node_identity(&node)?;
         let result = canonical_rust_result(RustUnitResultInput {
             action_ref: request.action.action_ref.clone(),
@@ -320,11 +331,10 @@ impl RustCache {
             producer_receipt_ref: request.producer_receipt_ref.to_string(),
         })
         .map_err(Error::Core)?;
-        let is_complete = self
-            .store
-            .has_complete_content(&node)
-            .await
-            .map_err(|error| Error::Castore(format!("completeness:{error}")))?;
+        let is_complete =
+            crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
+                .await
+                .map_err(|error| Error::Castore(format!("completeness:{error}")))?;
         if !is_complete {
             return Err(Error::Castore("ingested-tree-incomplete".to_string()));
         }
@@ -545,11 +555,10 @@ impl RustCache {
         for result_ref in &index.result_refs {
             let result = self.read_result(result_ref)?;
             let node = node_from_identity(&result.input.root_node)?;
-            let is_complete = self
-                .store
-                .has_complete_content(&node)
-                .await
-                .map_err(|error| Error::Castore(format!("candidate-completeness:{error}")))?;
+            let is_complete =
+                crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
+                    .await
+                    .map_err(|error| Error::Castore(format!("candidate-completeness:{error}")))?;
             candidates.push(LocalCandidateFacts {
                 result,
                 content_complete: is_complete,
@@ -576,8 +585,8 @@ impl RustCache {
         let temp = RestoreStaging::new(temp);
         let node = node_from_identity(&result.input.root_node)?;
         let staging_path = temp.path()?;
-        self.store
-            .export_node(&node, staging_path)
+        let staging_text = staging_path.to_str().ok_or_else(|| Error::State("restore-path-non-utf8".to_string()))?;
+        crunch_store::export_castore_to_disk(&node, staging_text, &self.blob_service, &self.directory_service)
             .await
             .map_err(|error| Error::Castore(format!("restore-export:{error}")))?;
         let observed = scan_output_artifacts(staging_path, policy)?;
@@ -1422,6 +1431,9 @@ mod tests {
     use crunch_rust_cache_core::RustUnitActionInput;
     use crunch_rust_cache_core::canonical_rust_action;
     use pretty_assertions::assert_eq;
+    use snix_castore::blobservice::MemoryBlobService;
+    use snix_castore::directoryservice::RedbDirectoryService;
+    use snix_castore::directoryservice::RedbDirectoryServiceConfig;
 
     use super::*;
 
@@ -1433,8 +1445,14 @@ mod tests {
     const TEST_DEVICE_B: u64 = 11;
 
     async fn test_cache(state_dir: &Path) -> RustCache {
-        let store = crunch_store::RustCacheStore::memory(state_dir.to_path_buf()).await.unwrap();
-        RustCache::new(store).unwrap()
+        let directories = RedbDirectoryService::new("rust-cache-test".to_string(), RedbDirectoryServiceConfig {
+            path: None,
+            read_only: false,
+            cache_size: None,
+        })
+        .await
+        .unwrap();
+        RustCache::new(state_dir.to_path_buf(), Arc::new(MemoryBlobService::default()), Arc::new(directories)).unwrap()
     }
 
     fn test_action() -> RustUnitAction {

@@ -6,7 +6,6 @@ license.workspace = true
 
 [dependencies]
 crunch-build = { path = "../crunch-build" }
-crunch-build-planning-core = { path = "../crunch-build-planning-core" }
 crunch-eval = { path = "../crunch-eval" }
 crunch-evaluation-stream-core = { path = "../crunch-evaluation-stream-core" }
 crunch-glue = { path = "../crunch-glue" }

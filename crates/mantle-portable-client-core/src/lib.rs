@@ -160,133 +160,83 @@ pub fn find_command_profile(root: &str) -> Option<CommandProfile> {
     COMMAND_PROFILES.iter().copied().find(|profile| profile.root == root)
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum BlockerKind {
-    CommandUnclassified,
-    ClientPlatformUnsupported,
-    RemoteRouteRequired,
-    WorkerServerUnsupported,
-    LocalExecutorUnsupported,
-    BootstrapUnsupported,
-    ProofUnsupported,
-    StorePrefixInvalid,
-    RemoteCapabilityRequired,
-    BuilderTrustRequired,
-    PayloadCountInvalid,
-    RawFrontendPayloadRejected,
-    PlatformLabelInvalid,
-}
-
-impl BlockerKind {
-    const fn code(self) -> &'static str {
-        match self {
-            Self::CommandUnclassified => "portable-command-unclassified",
-            Self::ClientPlatformUnsupported => "portable-client-platform-unsupported",
-            Self::RemoteRouteRequired => "portable-remote-route-required",
-            Self::WorkerServerUnsupported => "portable-worker-server-unsupported",
-            Self::LocalExecutorUnsupported => "portable-local-executor-unsupported",
-            Self::BootstrapUnsupported => "portable-bootstrap-unsupported",
-            Self::ProofUnsupported => "portable-proof-unsupported",
-            Self::StorePrefixInvalid => "portable-store-prefix-invalid",
-            Self::RemoteCapabilityRequired => "portable-remote-capability-required",
-            Self::BuilderTrustRequired => "portable-builder-trust-required",
-            Self::PayloadCountInvalid => "portable-payload-count-invalid",
-            Self::RawFrontendPayloadRejected => "portable-raw-frontend-payload-rejected",
-            Self::PlatformLabelInvalid => "portable-platform-label-invalid",
-        }
-    }
-
-    const fn detail(self) -> &'static str {
-        match self {
-            Self::CommandUnclassified => "command has no reviewed platform profile",
-            Self::ClientPlatformUnsupported => "the client platform is outside the reviewed Linux and Darwin matrix",
-            Self::RemoteRouteRequired => {
-                "select an admitted remote builder; local execution is unavailable on this client platform"
-            }
-            Self::WorkerServerUnsupported => "the selected operation requires a Linux worker or server",
-            Self::LocalExecutorUnsupported => "the command requires the Linux local executor",
-            Self::BootstrapUnsupported => "bootstrap execution is outside the portable client boundary",
-            Self::ProofUnsupported => "proof execution is outside the portable client boundary",
-            Self::StorePrefixInvalid => "the logical store prefix must be absolute and within its size bound",
-            Self::RemoteCapabilityRequired => "the remote route must bind one admitted capability identity",
-            Self::BuilderTrustRequired => "at least one trusted remote builder key is required",
-            Self::PayloadCountInvalid => "frontend-neutral payload kinds must be nonempty and within the bounded count",
-            Self::RawFrontendPayloadRejected => {
-                "only concrete frontend-neutral payload kinds can cross the remote boundary"
-            }
-            Self::PlatformLabelInvalid => "the platform label is empty or exceeds its byte bound",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct AdmissionRoute {
-    local_executor_allowed: bool,
-    remote_route_required: bool,
-}
-
-const LOCAL_ROUTE: AdmissionRoute = AdmissionRoute {
-    local_executor_allowed: true,
-    remote_route_required: false,
-};
-const PORTABLE_ROUTE: AdmissionRoute = AdmissionRoute {
-    local_executor_allowed: false,
-    remote_route_required: false,
-};
-const REMOTE_ROUTE: AdmissionRoute = AdmissionRoute {
-    local_executor_allowed: false,
-    remote_route_required: true,
-};
-
 pub fn admit_command(
     client_platform: PlatformFamily,
     root: &str,
     facts: AdmissionFacts,
 ) -> Result<CommandAdmission, AdmissionBlocker> {
     let Some(profile) = find_command_profile(root) else {
-        return Err(blocker(BlockerKind::CommandUnclassified, root));
+        return Err(blocker("portable-command-unclassified", root, "command has no reviewed platform profile"));
     };
-    debug_assert_eq!(profile.root, root);
-    debug_assert_eq!(COMMAND_PROFILES.len(), ROOT_COMMAND_COUNT);
     if client_platform == PlatformFamily::Linux {
-        return Ok(admission(root, client_platform, LOCAL_ROUTE));
+        return Ok(admission(root, true, false, client_platform));
     }
     if client_platform == PlatformFamily::Other {
-        return Err(blocker(BlockerKind::ClientPlatformUnsupported, root));
+        return Err(blocker(
+            "portable-client-platform-unsupported",
+            root,
+            "the client platform is outside the reviewed Linux and Darwin matrix",
+        ));
     }
     match profile.role {
-        CommandRole::PortableClient | CommandRole::Internal => Ok(admission(root, client_platform, PORTABLE_ROUTE)),
+        CommandRole::PortableClient | CommandRole::Internal => Ok(admission(root, false, false, client_platform)),
         CommandRole::PortableRemoteBuild if facts.remote_route_selected => {
-            Ok(admission(root, client_platform, REMOTE_ROUTE))
+            Ok(admission(root, false, true, client_platform))
         }
-        CommandRole::PortableRemoteBuild => Err(blocker(BlockerKind::RemoteRouteRequired, root)),
+        CommandRole::PortableRemoteBuild => Err(blocker(
+            "portable-remote-route-required",
+            root,
+            "select an admitted remote builder; local execution is unavailable on this client platform",
+        )),
         CommandRole::RemoteMixed if facts.remote_operation_is_client => {
-            Ok(admission(root, client_platform, PORTABLE_ROUTE))
+            Ok(admission(root, false, false, client_platform))
         }
-        CommandRole::RemoteMixed | CommandRole::LinuxWorkerServer => {
-            Err(blocker(BlockerKind::WorkerServerUnsupported, root))
+        CommandRole::RemoteMixed => Err(blocker(
+            "portable-worker-server-unsupported",
+            root,
+            "the selected remote operation requires a Linux worker or server",
+        )),
+        CommandRole::LinuxLocalExecutor => Err(blocker(
+            "portable-local-executor-unsupported",
+            root,
+            "the command requires the Linux local executor",
+        )),
+        CommandRole::LinuxWorkerServer => {
+            Err(blocker("portable-worker-server-unsupported", root, "the command requires a Linux worker or server"))
         }
-        CommandRole::LinuxLocalExecutor => Err(blocker(BlockerKind::LocalExecutorUnsupported, root)),
-        CommandRole::Bootstrap => Err(blocker(BlockerKind::BootstrapUnsupported, root)),
-        CommandRole::Proof => Err(blocker(BlockerKind::ProofUnsupported, root)),
+        CommandRole::Bootstrap => Err(blocker(
+            "portable-bootstrap-unsupported",
+            root,
+            "bootstrap execution is outside the portable client boundary",
+        )),
+        CommandRole::Proof => Err(blocker(
+            "portable-proof-unsupported",
+            root,
+            "proof execution is outside the portable client boundary",
+        )),
     }
 }
 
-fn admission(root: &str, client_platform: PlatformFamily, route: AdmissionRoute) -> CommandAdmission {
+fn admission(
+    root: &str,
+    local_executor_allowed: bool,
+    remote_route_required: bool,
+    client_platform: PlatformFamily,
+) -> CommandAdmission {
     CommandAdmission {
         schema: PORTABLE_CLIENT_PLAN_SCHEMA,
         command_root: root.to_string(),
         client_platform,
-        local_executor_allowed: route.local_executor_allowed,
-        remote_route_required: route.remote_route_required,
+        local_executor_allowed,
+        remote_route_required,
     }
 }
 
-fn blocker(kind: BlockerKind, command_root: &str) -> AdmissionBlocker {
+fn blocker(code: &'static str, root: &str, detail: &'static str) -> AdmissionBlocker {
     AdmissionBlocker {
-        code: kind.code(),
-        command_root: command_root.to_string(),
-        detail: kind.detail(),
+        code,
+        command_root: root.to_string(),
+        detail,
     }
 }
 
@@ -312,30 +262,50 @@ pub struct PortableBuildPlan {
 }
 
 pub fn plan_portable_build(facts: PortableBuildFacts<'_>) -> Result<PortableBuildPlan, AdmissionBlocker> {
-    validate_label(facts.client_platform)?;
-    validate_label(facts.target_platform)?;
+    validate_label("client", facts.client_platform)?;
+    validate_label("target", facts.target_platform)?;
     if !facts.store_prefix.starts_with('/') || facts.store_prefix.len() > STORE_PREFIX_BYTES_MAX {
-        return Err(blocker(BlockerKind::StorePrefixInvalid, "build"));
+        return Err(blocker(
+            "portable-store-prefix-invalid",
+            "build",
+            "the logical store prefix must be absolute and within its size bound",
+        ));
     }
     let Some(capability_id) = facts.remote_capability_id.filter(|value| !value.is_empty()) else {
-        return Err(blocker(BlockerKind::RemoteCapabilityRequired, "build"));
+        return Err(blocker(
+            "portable-remote-capability-required",
+            "build",
+            "the remote route must bind one admitted capability identity",
+        ));
     };
     if facts.trusted_builder_key_count == 0 {
-        return Err(blocker(BlockerKind::BuilderTrustRequired, "build"));
+        return Err(blocker(
+            "portable-builder-trust-required",
+            "build",
+            "at least one trusted remote builder key is required",
+        ));
     }
     if facts.payload_kinds.is_empty() || facts.payload_kinds.len() > PAYLOAD_KIND_COUNT_MAX {
-        return Err(blocker(BlockerKind::PayloadCountInvalid, "build"));
+        return Err(blocker(
+            "portable-payload-count-invalid",
+            "build",
+            "frontend-neutral payload kinds must be nonempty and within the bounded count",
+        ));
     }
     let mut payload_kinds = Vec::with_capacity(facts.payload_kinds.len());
     for kind in facts.payload_kinds {
         if !FRONTEND_PAYLOAD_KINDS.contains(kind) {
-            return Err(blocker(BlockerKind::RawFrontendPayloadRejected, "build"));
+            return Err(blocker(
+                "portable-raw-frontend-payload-rejected",
+                "build",
+                "only concrete frontend-neutral payload kinds can cross the remote boundary",
+            ));
         }
         payload_kinds.push((*kind).to_string());
     }
     payload_kinds.sort();
     payload_kinds.dedup();
-    let plan = PortableBuildPlan {
+    Ok(PortableBuildPlan {
         schema: PORTABLE_CLIENT_PLAN_SCHEMA,
         client_platform: facts.client_platform.to_string(),
         target_platform: facts.target_platform.to_string(),
@@ -343,15 +313,15 @@ pub fn plan_portable_build(facts: PortableBuildFacts<'_>) -> Result<PortableBuil
         remote_capability_id: capability_id.to_string(),
         payload_kinds,
         materialize_output: true,
-    };
-    debug_assert!(!plan.remote_capability_id.is_empty());
-    debug_assert!(plan.payload_kinds.len() <= PAYLOAD_KIND_COUNT_MAX);
-    Ok(plan)
+    })
 }
 
-fn validate_label(value: &str) -> Result<(), AdmissionBlocker> {
+fn validate_label(field: &'static str, value: &str) -> Result<(), AdmissionBlocker> {
     if value.is_empty() || value.len() > PLATFORM_LABEL_BYTES_MAX {
-        return Err(blocker(BlockerKind::PlatformLabelInvalid, "build"));
+        return Err(blocker("portable-platform-label-invalid", "build", match field {
+            "client" => "the client platform label is invalid",
+            _ => "the target platform label is invalid",
+        }));
     }
     Ok(())
 }

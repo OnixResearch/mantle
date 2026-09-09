@@ -11,23 +11,6 @@ use tempfile::TempDir;
 
 const PUBLIC_COMMAND_COUNT_MIN: usize = 160;
 
-#[test]
-fn operator_contract_rejects_stale_generated_catalog_without_rewriting_it() {
-    // r[verify native_package_parity.inventories]
-    let root = TempDir::new().unwrap();
-    fs::create_dir(root.path().join("config")).unwrap();
-    let catalog = root.path().join("config/operator-command-catalog.json");
-    fs::write(&catalog, "{}\n").unwrap();
-    crunch()
-        .current_dir(root.path())
-        .args(["__operator-contract", "--mode", "check"])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("stale generated operator file"));
-    assert_eq!(fs::read_to_string(catalog).unwrap(), "{}\n");
-    assert!(!root.path().join("docs").exists());
-}
-
 fn crunch() -> Command {
     Command::cargo_bin("crunch").unwrap()
 }

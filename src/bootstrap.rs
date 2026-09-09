@@ -806,18 +806,9 @@ struct FetchRawSeedRequest<'a> {
     source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
 }
 
-async fn raw_seed_store_parts(
-    state_dir: &Path,
-    store_dir: &Path,
-) -> Result<crunch_store::PipelineStoreParts, RunError> {
-    debug_assert!(state_dir.is_absolute());
-    debug_assert!(store_dir.is_absolute());
-    crunch_store::open_raw_seed_store_parts(state_dir, store_dir, LOGICAL_STORE_DIR)
-        .await
-        .map_err(|error| RunError::Internal(format!("opening raw seed store: {error}")))
-}
-
 async fn fetch_raw_seed(request: FetchRawSeedRequest<'_>) -> Result<String, RunError> {
+    use snix_castore::directoryservice::RedbDirectoryService;
+    use snix_castore::directoryservice::RedbDirectoryServiceConfig;
     debug_assert!(request.store_dir.is_absolute());
     debug_assert!(!request.display_prefix.is_empty());
 
@@ -827,18 +818,49 @@ async fn fetch_raw_seed(request: FetchRawSeedRequest<'_>) -> Result<String, RunE
     std::fs::create_dir_all(&state_dir)
         .map_err(|e| RunError::Internal(format!("creating state dir {}: {e}", state_dir.display())))?;
 
+    let blob_service = {
+        use snix_castore::blobservice::ObjectStoreBlobService;
+        let blob_dir = state_dir.join("blobs");
+        std::fs::create_dir_all(&blob_dir).map_err(|e| RunError::Internal(format!("creating blob dir: {e}")))?;
+        std::sync::Arc::new(
+            ObjectStoreBlobService::new_local(&blob_dir)
+                .map_err(|e| RunError::Internal(format!("blob service: {e}")))?,
+        )
+    };
+    let directory_service = RedbDirectoryService::new_temporary("bootstrap".to_string(), RedbDirectoryServiceConfig {
+        path: None,
+        read_only: false,
+        cache_size: None,
+    })
+    .map_err(|e| RunError::Internal(format!("directory service: {e}")))?;
+
+    let pathinfo_service = open_bootstrap_pathinfo(&state_dir).await?;
     let source_policy = if request.source_fetch_overrides.is_empty() {
         crunch_build::FetchSourcePolicy::AllowNetwork
     } else {
         crunch_build::FetchSourcePolicy::RequireOverride
     };
+    let store = crunch_store::StoreHandle::from_services_with_store_dir(
+        crunch_store::StoreHandleServices {
+            blob_service: blob_service as std::sync::Arc<dyn snix_castore::blobservice::BlobService>,
+            directory_service: std::sync::Arc::new(directory_service)
+                as std::sync::Arc<dyn snix_castore::directoryservice::DirectoryService>,
+            pathinfo_service: std::sync::Arc::new(pathinfo_service)
+                as std::sync::Arc<dyn snix_store::pathinfoservice::PathInfoService>,
+            remote_pathinfo: None,
+            state_dir,
+            output_dir_str: request.store_dir.to_string_lossy().into_owned(),
+            publishers: Vec::new(),
+        },
+        LOGICAL_STORE_DIR.to_string(),
+    );
     let crunch_store::PipelineStoreParts {
         build_store,
         action_results,
         build_service_store,
         output_lookup: _output_lookup,
         root_registry: _root_registry,
-    } = raw_seed_store_parts(&state_dir, request.store_dir).await?;
+    } = store.into_pipeline_store_parts();
     let fetch_service = crunch_build::FetchBuildService::new(build_service_store)
         .with_source_overrides(request.source_fetch_overrides)
         .with_source_policy(source_policy);
@@ -957,6 +979,40 @@ pub async fn bootstrap_fetch(
 
     eprintln!("Wrote {}", output.display());
     Ok(())
+}
+
+/// Open PathInfo database for bootstrap (reused from main).
+async fn open_bootstrap_pathinfo(
+    state_dir: &Path,
+) -> Result<snix_store::pathinfoservice::RedbPathInfoService, RunError> {
+    use snix_store::pathinfoservice::RedbPathInfoService;
+    use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
+    debug_assert!(!state_dir.as_os_str().is_empty());
+    debug_assert!(state_dir.is_absolute());
+
+    let db_path = state_dir.join("pathinfo.redb");
+    match RedbPathInfoService::new("crunch".to_string(), RedbPathInfoServiceConfig {
+        path: Some(db_path.clone()),
+        read_only: false,
+        cache_size: None,
+    })
+    .await
+    {
+        Ok(svc) => Ok(svc),
+        Err(e) => {
+            tracing::warn!(
+                path = %db_path.display(),
+                err = %e,
+                "failed to open PathInfo database, using in-memory fallback"
+            );
+            RedbPathInfoService::new_temporary("crunch".to_string(), RedbPathInfoServiceConfig {
+                path: None,
+                read_only: false,
+                cache_size: None,
+            })
+            .map_err(|e| RunError::Internal(format!("in-memory PathInfo: {e}")))
+        }
+    }
 }
 
 #[cfg(test)]

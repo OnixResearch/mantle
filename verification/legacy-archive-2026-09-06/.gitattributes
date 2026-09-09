@@ -1,2 +1,0 @@
-# Preserve the exact libtest/Clippy transcripts, including their final blank line.
-*.log whitespace=-blank-at-eof

@@ -65,8 +65,8 @@ compatibility surface, crate name, or historical decision.
 | [0056](0056-generate-mantlepkgs-from-concrete-package-graphs.md) | Generate Mantlepkgs from concrete package graphs | Proposed |
 | [0057](0057-keep-composition-plans-concrete-and-frontend-neutral.md) | Keep composition plans concrete and frontend-neutral | Accepted |
 | [0058](0058-limit-store-access-with-concrete-capability-views.md) | Limit store access with concrete capability views | Proposed |
-| [0059](0059-bind-source-observations-without-new-signature-authority.md) | Bind source observations without new signature authority | Accepted |
-| [0060](0060-verify-remote-admission-with-a-trellis-model.md) | Verify remote admission with a Trellis model | Accepted |
+| [0059](0059-bind-source-observations-without-new-signature-authority.md) | Bind source observations without new signature authority | Proposed |
+| [0060](0060-verify-remote-admission-with-a-trellis-model.md) | Verify remote admission with a Trellis model | Proposed |
 | [0061](0061-keep-remote-bearers-out-of-durable-state.md) | Keep remote bearers out of durable state | Accepted |
 | [0062](0062-adapt-ekala-package-maintenance-patterns-without-transferring-authority.md) | Adapt Ekala package-maintenance patterns without transferring authority | Proposed |
 | [0063](0063-keep-chaptered-release-archives-as-receipt-bound-transport.md) | Keep chaptered release archives as receipt-bound transport | Accepted |
@@ -85,49 +85,3 @@ compatibility surface, crate name, or historical decision.
 | [0076](0076-resolve-historical-nixpkgs-versions-before-mantlepkgs-production.md) | Resolve historical Nixpkgs versions before Mantlepkgs production | Accepted |
 | [0077](0077-adopt-nix-derivation-at-the-nix-compatibility-boundary.md) | Adopt `nix-derivation` at the Nix compatibility boundary | Accepted |
 | [0078](0078-explore-distributed-evaluation.md) | Explore distributed evaluation feasibility | Accepted |
-| [0079](0079-separate-source-fixed-point-evidence-from-working-scratch.md) | Separate source fixed-point evidence from working scratch | Accepted |
-| [0080](0080-refresh-source-and-vendor-inputs-as-one-authority-pair.md) | Refresh source and vendor inputs as one authority pair | Accepted |
-| [0081](0081-expose-remapped-rust-manifests-through-the-compiler-working-directory.md) | Expose remapped Rust manifests through the compiler working directory | Accepted |
-| [0082](0082-compose-promoted-source-proofs-from-stage-checkpoints.md) | Compose promoted source proofs from stage checkpoints | Accepted |
-| [0083](0083-bind-receipt-source-through-an-aggregate-closure-root.md) | Bind receipt source through an aggregate closure root | Accepted |
-| [0084](0084-isolate-native-prefix-imports-before-downstream-execution.md) | Isolate native-prefix imports before downstream execution | Accepted |
-| [0085](0085-bind-seccomp-audit-decisions-to-kernel-responses.md) | Bind seccomp audit decisions to kernel responses | Accepted |
-| [0086](0086-supervise-exec-with-ptrace-stops.md) | Supervise exec with ptrace stops instead of user-notify continue | Accepted |
-| [0087](0087-acknowledge-ptrace-seize-before-root-stop.md) | Acknowledge ptrace seize before the root stop | Accepted |
-| [0088](0088-derive-rust-provider-aggregate-event-bounds.md) | Derive Rust-provider aggregate event bounds from stage bounds | Accepted |
-| [0089](0089-resolve-native-bindings-through-the-validated-closure.md) | Resolve native bindings through the validated closure | Accepted |
-| [0090](0090-bind-rust-sysroot-relocation-to-the-binding-rewrite.md) | Bind Rust sysroot relocation to the binding rewrite | Accepted |
-| [0091](0091-launch-restored-rustc-through-the-bound-loader.md) | Launch restored rustc through the bound loader | Accepted |
-| [0092](0092-frame-rust-source-identities-with-blake3.md) | Frame Rust source identities with BLAKE3 | Accepted |
-| [0093](0093-resolve-rust-dependency-producers-from-consumed-host-artifacts.md) | Resolve Rust dependency producers from consumed host artifacts | Accepted |
-| [0094](0094-resolve-target-dependency-producers-from-the-ready-rust-graph.md) | Resolve target dependency producers from the ready Rust graph | Accepted |
-| [0095](0095-bind-rustc-linker-before-ptrace.md) | Bind the rustc linker before ptrace | Accepted |
-| [0096](0096-bind-unavailable-rust-tool-probes.md) | Bind unavailable Rust tool probes | Accepted |
-| [0097](0097-compose-rust-guard-path-once.md) | Compose the Rust guard path once | Accepted |
-| [0098](0098-bind-gcc-subprogram-prefix.md) | Bind the GCC subprogram prefix | Accepted |
-| [0099](0099-bind-rust-actions-to-executed-topology.md) | Bind Rust actions to the executed topology | Accepted |
-| [0100](0100-normalize-ptrace-request-types.md) | Normalize ptrace request types at the libc boundary | Accepted |
-| [0101](0101-export-full-bootstrap-parity-as-an-independent-bundle.md) | Export full-bootstrap parity as an independent bundle | Accepted |
-| [0102](0102-vendor-wasi-virt-with-crane.md) | Vendor wasi-virt with Crane | Accepted |
-| [0103](0103-retire-bootstrap-markers-through-proof-bound-identities.md) | Retire bootstrap markers through proof-bound identities | Accepted |
-| [0104](0104-vendor-spacewasm-with-crane.md) | Vendor SpaceWasm with Crane | Accepted |
-| [0105](0105-repair-store-structure-without-changing-authority.md) | Repair store structure without changing authority | Accepted |
-| [0106](0106-make-build-boundary-admission-fallible-and-explicit.md) | Make build boundary admission fallible and explicit | Accepted |
-| [0107](0107-bound-pipeline-growth-before-root-effects.md) | Bound pipeline growth before root effects | Accepted |
-| [0108](0108-close-repository-tigerstyle-without-widening-authority.md) | Close repository Tiger Style without widening authority | Accepted |
-| [0109](0109-bind-nickel-embedded-cli-and-vendor-as-one-cohort.md) | Bind Nickel embedded, CLI, and vendor inputs as one cohort | Accepted |
-| [0110](0110-complete-store-authority-with-role-capabilities.md) | Complete store authority with role capabilities | Accepted |
-| [0111](0111-bind-source-review-evidence-through-artifact-auth.md) | Bind source-review evidence to releases through Artifact Auth | Accepted |
-| [0112](0112-separate-remote-decisions-from-host-authority.md) | Separate remote decisions from host authority | Accepted |
-| [0113](0113-separate-rust-planning-from-host-authority.md) | Separate Rust planning from host authority | Accepted |
-| [0114](0114-plan-build-routes-from-explicit-observations.md) | Plan build routes from explicit observations | Accepted |
-| [0115](0115-keep-the-cli-root-mechanical.md) | Keep the CLI root mechanical | Accepted |
-| [0116](0116-adapt-nix-remote-clients-without-transferring-authority.md) | Adapt Nix remote clients without transferring authority | Accepted |
-| [0117](0117-bound-radiance-as-an-optional-external-reference.md) | Bound Radiance as an optional external reference | Accepted |
-| [0118](0118-select-remote-resources-from-bounded-evidence.md) | Select remote resources from bounded evidence | Accepted |
-| [0119](0119-isolate-evaluator-fault-fixtures-from-release.md) | Isolate evaluator fault fixtures from the release CLI | Proposed |
-| [0120](0120-restore-native-package-contract-parity.md) | Restore native package contract parity | Proposed |
-| [0121](0121-migrate-legacy-archive-representations-without-resigning.md) | Migrate legacy archive representations without re-signing | Accepted |
-| [0122](0122-separate-contract-hash-range-from-store-traits.md) | Separate the contract hash range from store traits | Accepted |
-| [0123](0123-restore-dev-stages-from-remeasured-content.md) | Restore dev stages from remeasured content | Accepted |
-| [0124](0124-separate-cargo-directory-sources-by-immutable-source.md) | Separate Cargo directory sources by immutable source | Accepted |

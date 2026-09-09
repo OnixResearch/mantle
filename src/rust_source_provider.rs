@@ -61,7 +61,7 @@ const GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS: u32 = 16;
 const GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS: u64 = 20;
 const SHELL_COMMAND_NOT_EXECUTABLE_EXIT_CODE: i32 = 126;
 const TEXT_FILE_BUSY_MESSAGE: &str = "Text file busy";
-pub(crate) const RUST_BOOTSTRAP_JOB_COUNT: u32 = 4;
+const RUST_BOOTSTRAP_JOB_COUNT: u32 = 4;
 #[cfg(test)]
 #[cfg(unix)]
 const UNIX_EXIT_STATUS_SHIFT_BITS: u32 = 8;
@@ -74,8 +74,6 @@ const ELF_MAGIC: [u8; ELF_MAGIC_LEN] = [0x7f, b'E', b'L', b'F'];
 const ELF_MAGIC_LEN: usize = 4;
 const BLAKE3_DIGEST_HEX_LEN: usize = 64;
 const RUST_SOURCE_PROVIDER_PLAN_FILE: &str = "rust-source-plan.ncl";
-const RUST_PROVIDER_ACTION_EVIDENCE_DIR: &str = "rust-provider-action-trust";
-pub(crate) const RUST_PROVIDER_ACTION_EVIDENCE_RELATIVE_PATH: &str = "share/mantle-rust-provider/action-trust";
 const FIRST_STAGE_PLAN_SCHEMA: &str = "mantle-rust-source-provider-first-stage-plan-v1";
 const FIRST_STAGE_PLAN_FILE: &str = "mrustc-first-stage-plan.json";
 const FIRST_STAGE_SOURCES_MANIFEST_SCHEMA: &str = "mantle-rust-source-provider-first-stage-sources-v1";
@@ -160,127 +158,6 @@ const RUSTC_SOURCE_BOOTSTRAP_MANIFEST: &str = "src/bootstrap/Cargo.toml";
 const RUSTC_SOURCE_CRANELIFT_MANIFEST: &str = "compiler/rustc_codegen_cranelift/Cargo.toml";
 const RUSTC_SOURCE_CODEGEN_GCC_MANIFEST: &str = "compiler/rustc_codegen_gcc/Cargo.toml";
 const RUSTC_SOURCE_RUSTC_DRIVER_MANIFEST: &str = "compiler/rustc_driver/Cargo.toml";
-const RUSTC_SOURCE_LLVM_TABLEGEN_CMAKE: &str = "src/llvm-project/llvm/cmake/modules/TableGen.cmake";
-const RUSTC_SOURCE_LLVM_TABLEGEN_EXE_ORIGINAL_LINE: &str = "  set(tablegen_exe ${${project}_TABLEGEN_EXE})";
-const RUSTC_SOURCE_LLVM_TABLEGEN_TARGET_MARKER_LINE: &str = "  if(TARGET ${${project}_TABLEGEN_EXE})";
-const RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_ORIGINAL_LINE: &str = "    COMMAND ${tablegen_exe} ${ARG_UNPARSED_ARGUMENTS}";
-const RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_PROTECTED_LINE: &str =
-    "    COMMAND ${CMAKE_COMMAND} -E env -- ${tablegen_exe} ${ARG_UNPARSED_ARGUMENTS}";
-const RUSTC_SOURCE_OPENSSL_CONFIG_GLOB: &str = "vendor/openssl-src-300.*/src/lib.rs";
-const RUSTC_SOURCE_OPENSSL_NO_ASM_ANCHOR: &str =
-    "        // On Android it looks like not passing no-stdio may cause a build";
-const RUSTC_SOURCE_OPENSSL_NO_ASM_MARKER: &str =
-    "        // Mantle: avoid Perl assembly pipes that require ambient /bin/sh.";
-const RUSTC_SOURCE_OPENSSL_NO_ASM_LINE: &str = "        configure.arg(\"no-asm\");";
-const RUSTC_SOURCE_OPENSSL_CONFIG_COUNT_MAX: usize = 8;
-const RUSTC_SOURCE_OPENSSL_CONFIG_BYTES_MAX: usize = 2_097_152;
-const RUSTC_SOURCE_CARGO_CHECKSUM_BYTES_MAX: usize = 1_048_576;
-const RUSTC_SOURCE_OPENSSL_READ_CHUNK_BYTES: usize = 65_536;
-const RUSTC_SOURCE_OPENSSL_READ_ITERATIONS_MAX: usize =
-    RUSTC_SOURCE_OPENSSL_CONFIG_BYTES_MAX / RUSTC_SOURCE_OPENSSL_READ_CHUNK_BYTES + 2;
-const _: () = assert!(RUSTC_SOURCE_CARGO_CHECKSUM_BYTES_MAX < RUSTC_SOURCE_OPENSSL_CONFIG_BYTES_MAX);
-const _: () = assert!(RUSTC_SOURCE_OPENSSL_READ_ITERATIONS_MAX > 1);
-const RUSTC_SOURCE_CARGO_CHECKSUM_MEMBER: &str = "src/lib.rs";
-const RUSTC_SOURCE_CARGO_CHECKSUM_ARGUMENT_COUNT: usize = 4;
-const SHA256_DIGEST_HEX_LENGTH: usize = 64;
-const RUSTC_SOURCE_CARGO_CHECKSUM_NORMALIZER_PY: &str = r#"import hashlib
-import json
-import os
-import stat
-import sys
-
-ARGUMENT_COUNT = __MANTLE_ARGUMENT_COUNT__
-SOURCE_BYTES_MAX = __MANTLE_SOURCE_BYTES_MAX__
-CHECKSUM_BYTES_MAX = __MANTLE_CHECKSUM_BYTES_MAX__
-READ_CHUNK_BYTES = __MANTLE_READ_CHUNK_BYTES__
-READ_ITERATIONS_MAX = __MANTLE_READ_ITERATIONS_MAX__
-WRITE_ITERATIONS_MAX = CHECKSUM_BYTES_MAX
-SHA256_HEX_LENGTH = __MANTLE_SHA256_HEX_LENGTH__
-CHECKSUM_MEMBER = "__MANTLE_CHECKSUM_MEMBER__"
-
-
-def read_regular_nofollow(path, size_bytes_max):
-    observed = os.lstat(path)
-    if not stat.S_ISREG(observed.st_mode):
-        raise RuntimeError("expected regular file: %s" % path)
-    if not hasattr(os, "O_NOFOLLOW"):
-        raise RuntimeError("O_NOFOLLOW is unavailable")
-    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-    try:
-        opened = os.fstat(descriptor)
-        if (opened.st_dev, opened.st_ino) != (observed.st_dev, observed.st_ino):
-            raise RuntimeError("file identity changed while opening: %s" % path)
-        parts = []
-        total_bytes = 0
-        iteration_count = 0
-        while True:
-            iteration_count += 1
-            if iteration_count > READ_ITERATIONS_MAX:
-                raise RuntimeError("file read exceeded iteration bound: %s" % path)
-            chunk = os.read(descriptor, READ_CHUNK_BYTES)
-            if not chunk:
-                break
-            total_bytes += len(chunk)
-            if total_bytes > size_bytes_max:
-                raise RuntimeError("file exceeds byte bound: %s" % path)
-            parts.append(chunk)
-        return b"".join(parts)
-    finally:
-        os.close(descriptor)
-
-
-if len(sys.argv) != ARGUMENT_COUNT:
-    raise RuntimeError("unexpected OpenSSL checksum argument count")
-source_path, patched_path, checksum_path = sys.argv[1:]
-source_bytes = read_regular_nofollow(source_path, SOURCE_BYTES_MAX)
-patched_bytes = read_regular_nofollow(patched_path, SOURCE_BYTES_MAX)
-checksum_bytes = read_regular_nofollow(checksum_path, CHECKSUM_BYTES_MAX)
-document = json.loads(checksum_bytes)
-if not isinstance(document, dict) or set(document.keys()) != set(("files", "package")):
-    raise RuntimeError("unexpected Cargo checksum top-level shape")
-files = document.get("files")
-if not isinstance(files, dict):
-    raise RuntimeError("Cargo checksum files entry is not an object")
-current_digest = files.get(CHECKSUM_MEMBER)
-if not isinstance(current_digest, str) or len(current_digest) != SHA256_HEX_LENGTH:
-    raise RuntimeError("Cargo checksum source entry is malformed")
-if any(character not in "0123456789abcdef" for character in current_digest):
-    raise RuntimeError("Cargo checksum source entry is not lowercase hexadecimal")
-source_digest = hashlib.sha256(source_bytes).hexdigest()
-patched_digest = hashlib.sha256(patched_bytes).hexdigest()
-if current_digest != source_digest:
-    raise RuntimeError("Cargo checksum source entry does not bind the pre-patch source")
-needle = ('"%s":"%s"' % (CHECKSUM_MEMBER, current_digest)).encode("ascii")
-replacement = ('"%s":"%s"' % (CHECKSUM_MEMBER, patched_digest)).encode("ascii")
-if checksum_bytes.count(needle) != 1:
-    raise RuntimeError("Cargo checksum source entry is not uniquely encoded")
-rewritten = checksum_bytes.replace(needle, replacement, 1)
-if len(rewritten) != len(checksum_bytes):
-    raise RuntimeError("Cargo checksum normalization changed metadata length")
-temporary_path = checksum_path + ".mantle-tmp"
-flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
-descriptor = os.open(temporary_path, flags, stat.S_IMODE(os.lstat(checksum_path).st_mode))
-try:
-    os.fchmod(descriptor, stat.S_IMODE(os.lstat(checksum_path).st_mode))
-    offset = 0
-    iteration_count = 0
-    while offset < len(rewritten):
-        iteration_count += 1
-        if iteration_count > WRITE_ITERATIONS_MAX:
-            raise RuntimeError("Cargo checksum write exceeded iteration bound")
-        written = os.write(descriptor, rewritten[offset:])
-        if written <= 0:
-            raise RuntimeError("Cargo checksum write made no progress")
-        offset += written
-    os.fsync(descriptor)
-except BaseException:
-    os.close(descriptor)
-    os.unlink(temporary_path)
-    raise
-else:
-    os.close(descriptor)
-os.replace(temporary_path, checksum_path)
-"#;
 const RUSTC_SOURCE_FILESEARCH_SOURCE: &str = "compiler/rustc_session/src/filesearch.rs";
 const RUSTC_SOURCE_TOOL_BUILD_SOURCE: &str = "src/bootstrap/src/core/build_steps/tool.rs";
 const RUSTC_SOURCE_TOOL_BUILD_CARGO_ANCHOR_LINE: &str = "        let mut cargo = prepare_tool_cargo(";
@@ -350,14 +227,10 @@ const FIRST_STAGE_PROC_MACRO_WORKSPACE_MEMBER: &str = "lib/libproc_macro";
 const FIRST_STAGE_MINICARGO_WORKSPACE_RESOLVER: &str = "2";
 const FIRST_STAGE_MAKE_PROGRAM: &str = "make";
 const FIRST_STAGE_MAKE_PARALLEL_ARG: &str = "-j \"$PARLEVEL\"";
-const FIRST_STAGE_TRANSLATED_CARGO_MINICARGO_JOB_COUNT: u32 = 1;
 const FIRST_STAGE_COPY_PROGRAM: &str = "cp";
 const FIRST_STAGE_PKG_CONFIG_PROGRAM: &str = "pkg-config";
 const FIRST_STAGE_CMAKE_PROGRAM: &str = "cmake";
 const FULL_SOURCE_PERL_LIBRARY_RELATIVE_PATH: &str = "lib/5.10.1";
-const FULL_SOURCE_GCC_SUBPROGRAM_PREFIX_RELATIVE_PATH: &str = "libexec/gcc/x86_64-unknown-linux-musl/10.5.0";
-const GCC_EXEC_PREFIX_ENV: &str = "GCC_EXEC_PREFIX";
-const COMPILER_PATH_ENV: &str = "COMPILER_PATH";
 const FIRST_STAGE_CC_PROGRAM: &str = "cc";
 const FIRST_STAGE_CXX_PROGRAM: &str = "c++";
 const FIRST_STAGE_MUSL_TRIPLE: &str = "x86_64-unknown-linux-musl";
@@ -403,37 +276,6 @@ const FIRST_STAGE_MINICARGO_RUSTC_THREADS_MARKER_LINE: &str =
     "        // Mantle: keep static musl first-stage rustc single-threaded.";
 const FIRST_STAGE_MINICARGO_RUSTC_THREADS_FLAG_LINE: &str = "        args.push_back(\"-Z\");";
 const FIRST_STAGE_MINICARGO_RUSTC_THREADS_VALUE_LINE: &str = "        args.push_back(\"threads=1\");";
-const FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_ORIGINAL_LINE: &str = "MINICARGO ?= bin/minicargo$(EXESUF)";
-const FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE: &str = "MINICARGO ?= $(CURDIR)/bin/minicargo$(EXESUF)";
-const FIRST_STAGE_RUN_RUSTC_MINICARGO_ORIGINAL_LINE: &str = "MINICARGO ?= ../bin/minicargo$(EXESUF)";
-const FIRST_STAGE_RUN_RUSTC_MINICARGO_PROTECTED_LINE: &str = "MINICARGO ?= $(abspath ../bin/minicargo$(EXESUF))";
-const FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_ORIGINAL_TOKEN: &str = "$(BINDIR_S)rustc ";
-const FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_PROTECTED_TOKEN: &str = "$(abspath $(BINDIR_S)rustc) ";
-const FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_ORIGINAL_TOKEN: &str = "$(BINDIR_S)cargo ";
-const FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_PROTECTED_TOKEN: &str = "$(abspath $(BINDIR_S)cargo) ";
-const FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_ORIGINAL_LINE: &str = "\t$V$(DBG) $(BINDIR)rustc -L $(LIBDIR) $< -o $@";
-const FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_PROTECTED_LINE: &str =
-    "\t$V$(DBG) $(abspath $(BINDIR)rustc) -C linker=$(MANTLE_TARGET_LINKER) -L $(LIBDIR) $< -o $@";
-const FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_EXEC_ORIGINAL_LINE: &str = "\t./$@";
-const FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_EXEC_PROTECTED_LINE: &str = "\t$(abspath $@)";
-const FIRST_STAGE_RUN_RUSTC_PROXY_PATH: &str = "run_rustc/rustc_proxy.sh";
-const FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_ORIGINAL_LINE: &str = "    ${PROXY_RUSTC} \"$@\"";
-const FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_PROTECTED_LINE: &str =
-    "    ${PROXY_RUSTC} -C linker=\"$MANTLE_TARGET_LINKER\" \"$@\"";
-const FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_ORIGINAL_LINE: &str = "    ${PROXY_MRUSTC} \"$@\"";
-const FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_PROTECTED_LINE: &str =
-    "    ${PROXY_MRUSTC} -C linker=\"$MANTLE_TARGET_LINKER\" \"$@\"";
-const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_ORIGINAL_LINE: &str =
-    "\t$Vcd $(RUSTCSRC)build && cmake $(addprefix -D , $(LLVM_CMAKE_OPTS)) ../$(LLVM_DIR)";
-const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE: &str = "\t$Vcd $(RUSTCSRC)build && cmake $(addprefix -D , $(LLVM_CMAKE_OPTS)) ../$(LLVM_DIR) && $(MANTLE_LLVM_RULE_NORMALIZER) $(abspath $(RUSTCSRC)build)";
-const FIRST_STAGE_MRUSTC_CODEGEN_C_SOURCE: &str = "src/trans/codegen_c.cpp";
-const FIRST_STAGE_MRUSTC_SYSTEM_ORIGINAL_LINE: &str = "                int ec = system(cmd_ss.str().c_str());";
-const FIRST_STAGE_MRUSTC_PROC_MACRO_SOURCE: &str = "src/expand/proc_macro.cpp";
-const FIRST_STAGE_MRUSTC_PROC_MACRO_ARGV_ORIGINAL_LINE: &str = "    char*   argv[3] = { const_cast<char*>(executable), const_cast<char*>(proc_macro_desc.name.c_str()), nullptr };";
-const FIRST_STAGE_MRUSTC_PROC_MACRO_SPAWN_ORIGINAL_LINE: &str =
-    "    int rv = posix_spawn(&this->handles.child_pid, executable, &file_actions, nullptr, argv, environ);";
-const FIRST_STAGE_LLVM_RULE_FILES_MAX: u32 = 4_096;
-const FIRST_STAGE_LLVM_RULE_REPLACEMENTS_MAX: u32 = 4_096;
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE: &str =
     "LLVM_CMAKE_OPTS += LLVM_ENABLE_ZLIB=OFF LLVM_ENABLE_TERMINFO=OFF LLVM_ENABLE_LIBEDIT=OFF WITH_POLLY=OFF";
 const FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_PATCHED_LINE: &str = "LLVM_CMAKE_OPTS += LLVM_ENABLE_ZLIB=OFF LLVM_ENABLE_ZSTD=OFF LLVM_ENABLE_TERMINFO=OFF LLVM_ENABLE_LIBEDIT=OFF WITH_POLLY=OFF LLVM_ENABLE_BACKTRACES=OFF CMAKE_DISABLE_FIND_PACKAGE_Backtrace=ON CMAKE_DISABLE_FIND_PACKAGE_zstd=ON LLVM_TOOL_LTO_BUILD=OFF LLVM_BUILD_TOOLS=OFF";
@@ -465,8 +307,6 @@ const FIRST_STAGE_RUN_RUSTC_FINAL_ENV_LINE: &str = "CARGO_ENV_RUSTC := CARGO_TAR
 const FIRST_STAGE_RUN_RUSTC_FINAL_PREFIX2_ENV_LINE: &str = "CARGO_ENV_RUSTC := CARGO_TARGET_DIR=$(OUTDIR)build-rustc RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_2)rustc) $(CARGO_ENV)";
 const FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_LINE: &str = "\t$VTMPDIR=$(abspath $(PREFIX)tmp) $(CARGO_ENV_RUSTC) $(BINDIR_S)cargo build $(CARGO_FLAGS) --manifest-path $(RUST_SRC_CARGO)Cargo.toml";
 const FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_ALL_STATIC_LINE: &str = "\t$VTMPDIR=$(abspath $(PREFIX)tmp) $(CARGO_ENV_RUSTC) $(BINDIR_S)cargo build $(CARGO_FLAGS) --manifest-path $(RUST_SRC_CARGO)Cargo.toml --features all-static";
-const FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_PROTECTED_LINE: &str = "\t$VTMPDIR=$(abspath $(PREFIX)tmp) $(CARGO_ENV_RUSTC) $(abspath $(BINDIR_S)cargo) build $(CARGO_FLAGS) --manifest-path $(RUST_SRC_CARGO)Cargo.toml";
-const FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_PROTECTED_ALL_STATIC_LINE: &str = "\t$VTMPDIR=$(abspath $(PREFIX)tmp) $(CARGO_ENV_RUSTC) $(abspath $(BINDIR_S)cargo) build $(CARGO_FLAGS) --manifest-path $(RUST_SRC_CARGO)Cargo.toml --features all-static";
 const FIRST_STAGE_RUN_RUSTC_STAGE1_RUSTC_RULE_LINE: &str = "$(BINDIR_S)rustc: ../output$(OUTDIR_SUF)/rustc";
 const FIRST_STAGE_RUN_RUSTC_STAGE2_RUSTC_RULE_LINE: &str = "$(BINDIR_2)rustc: ../output$(OUTDIR_SUF)/rustc";
 const FIRST_STAGE_RUN_RUSTC_COPY_PREREQ_LINE: &str = "\tcp $< $@";
@@ -554,8 +394,6 @@ const FIRST_STAGE_ENV_SCRUB_VARS: &[&str] = &[
     "CARGO_PRIMARY_PACKAGE",
     "CARGO_TARGET_DIR",
     "DEBUG",
-    GCC_EXEC_PREFIX_ENV,
-    COMPILER_PATH_ENV,
     "HOST",
     "MANTLE_RUST_CACHE_POLICY",
     "MANTLE_RUSTC_MANIFEST",
@@ -636,7 +474,6 @@ pub(crate) struct RustSourceProviderMaterialization {
     pub(crate) recipe_digest_blake3: String,
     pub(crate) metadata_path: PathBuf,
     pub(crate) metadata_digest_blake3: String,
-    pub(crate) action_trust: Option<crate::source_built_rust_provider_action::RustProviderActionEvidence>,
 }
 
 #[derive(Debug, Clone)]
@@ -1095,17 +932,7 @@ pub(crate) fn materialize_rust_source_provider(
     scratch_dir: &Path,
     verbose: bool,
 ) -> Result<RustSourceProviderMaterialization, RustSourceProviderError> {
-    materialize_rust_source_provider_internal(
-        recipe_path,
-        None,
-        None,
-        None,
-        None,
-        None,
-        output_dir,
-        scratch_dir,
-        verbose,
-    )
+    materialize_rust_source_provider_internal(recipe_path, None, None, None, None, output_dir, scratch_dir, verbose)
 }
 
 pub(crate) fn materialize_rust_source_provider_with_route_plan(
@@ -1121,7 +948,6 @@ pub(crate) fn materialize_rust_source_provider_with_route_plan(
         None,
         None,
         None,
-        None,
         output_dir,
         scratch_dir,
         verbose,
@@ -1134,7 +960,6 @@ pub(crate) fn materialize_full_source_bound_rust_provider_with_route_plan(
     admission_report_path: &Path,
     host_tool_manifest_path: &Path,
     rust_source_archive_dir: &Path,
-    action_limits: Option<crate::source_built_rust_provider_action::RustProviderActionLimits>,
     output_dir: &Path,
     scratch_dir: &Path,
     verbose: bool,
@@ -1145,7 +970,6 @@ pub(crate) fn materialize_full_source_bound_rust_provider_with_route_plan(
         Some(admission_report_path),
         Some(host_tool_manifest_path),
         Some(rust_source_archive_dir),
-        action_limits,
         output_dir,
         scratch_dir,
         verbose,
@@ -1158,7 +982,6 @@ fn materialize_rust_source_provider_internal(
     admission_report_path: Option<&Path>,
     host_tool_manifest_path: Option<&Path>,
     rust_source_archive_dir: Option<&Path>,
-    action_limits: Option<crate::source_built_rust_provider_action::RustProviderActionLimits>,
     output_dir: &Path,
     scratch_dir: &Path,
     verbose: bool,
@@ -1194,49 +1017,23 @@ fn materialize_rust_source_provider_internal(
     write_first_stage_boundary(&boundary)?;
     let first_stage_sources = acquire_first_stage_sources(&boundary, verbose)?;
     write_first_stage_sources_manifest(&boundary, &first_stage_sources)?;
-    let mut action_runtime = start_rust_provider_action_runtime(&plan, &route, action_limits)?;
-    let first_scope = begin_rust_provider_action_stage(action_runtime.as_mut(), first_stage_action_input(&boundary))?;
-    let first_result = (|| {
-        let first_stage_build = run_first_stage_build(&boundary, action_runtime.as_ref(), verbose)?;
-        write_first_stage_build_manifest(&boundary, &first_stage_build)?;
-        let first_stage_candidate =
-            assemble_first_stage_provider_candidate(&boundary, &route, &first_stage_sources, &first_stage_build)?;
-        let first_stage_candidate_smoke =
-            smoke_first_stage_provider_candidate(&boundary, &first_stage_candidate, action_runtime.as_ref())?;
-        write_first_stage_provider_candidate_manifest(&boundary, &first_stage_candidate)?;
-        Ok((first_stage_candidate, first_stage_candidate_smoke))
-    })();
-    let (first_stage_candidate, first_stage_candidate_smoke) =
-        finish_rust_provider_action_stage(action_runtime.as_mut(), first_scope, first_result)?;
+    let first_stage_build = run_first_stage_build(&boundary, verbose)?;
+    write_first_stage_build_manifest(&boundary, &first_stage_build)?;
+    let first_stage_candidate =
+        assemble_first_stage_provider_candidate(&boundary, &route, &first_stage_sources, &first_stage_build)?;
+    let first_stage_candidate_smoke = smoke_first_stage_provider_candidate(&boundary, &first_stage_candidate)?;
+    write_first_stage_provider_candidate_manifest(&boundary, &first_stage_candidate)?;
     let first_stage_bootstrap_candidate = bootstrap_candidate_from_first_stage(&first_stage_candidate);
-    let rustc_stage1_runs = run_rustc_stage1_provider_candidate_chain(
-        &plan,
-        &route,
-        &first_stage_bootstrap_candidate,
-        action_runtime.as_mut(),
-        verbose,
-    )?;
+    let rustc_stage1_runs =
+        run_rustc_stage1_provider_candidate_chain(&plan, &route, &first_stage_bootstrap_candidate, verbose)?;
     let rustc_final_bootstrap_candidate = bootstrap_candidate_from_rustc_stage1(
         &rustc_stage1_runs
             .last()
             .ok_or_else(|| RustSourceProviderError::Validate("rustc stage1 chain produced no candidates".to_string()))?
             .candidate,
     );
-    let rustc_final_run = run_rustc_final_provider_candidate(
-        &plan,
-        &route,
-        &rustc_final_bootstrap_candidate,
-        action_runtime.as_mut(),
-        verbose,
-    )?;
+    let rustc_final_run = run_rustc_final_provider_candidate(&plan, &route, &rustc_final_bootstrap_candidate, verbose)?;
     persist_stage_construction_evidence(&boundary, &first_stage_candidate, &rustc_stage1_runs, &rustc_final_run)?;
-    let action_trust = action_runtime
-        .take()
-        .map(crate::source_built_rust_provider_action::RustProviderActionRuntime::finish)
-        .transpose()?;
-    if let Some(evidence) = &action_trust {
-        embed_rust_provider_action_evidence(&rustc_final_run.candidate.candidate_dir, evidence)?;
-    }
     let binding_publication = admission_report_path
         .map(|report_path| {
             let host_tools = host_tool_manifest_path.ok_or_else(|| {
@@ -1251,15 +1048,8 @@ fn materialize_rust_source_provider_internal(
             )
         })
         .transpose()?;
-    let mut materialized = promote_rustc_final_provider_candidate(&plan, &rustc_final_run)?;
+    let materialized = promote_rustc_final_provider_candidate(&plan, &rustc_final_run)?;
     verify_optional_full_source_binding(&materialized.output_path, binding_publication.as_ref())?;
-    materialized.action_trust = action_trust
-        .map(|_evidence| {
-            crate::source_built_rust_provider_action::validate_rust_provider_action_evidence(
-                &materialized.output_path.join(RUST_PROVIDER_ACTION_EVIDENCE_RELATIVE_PATH),
-            )
-        })
-        .transpose()?;
     if let Err(err) =
         write_rustc_final_provider_candidate_manifest(&rustc_final_run.boundary, &rustc_final_run.candidate, true)
     {
@@ -1277,154 +1067,6 @@ fn materialize_rust_source_provider_internal(
         });
     }
     Ok(materialized)
-}
-
-fn start_rust_provider_action_runtime(
-    plan: &RustSourceProviderMaterializationPlan,
-    route: &LoadedRustSourceProviderRoute,
-    action_limits: Option<crate::source_built_rust_provider_action::RustProviderActionLimits>,
-) -> Result<Option<crate::source_built_rust_provider_action::RustProviderActionRuntime>, RustSourceProviderError> {
-    match (&plan.full_source_context, action_limits) {
-        (Some(context), Some(limits)) => crate::source_built_rust_provider_action::RustProviderActionRuntime::start(
-            context,
-            &route.plan,
-            &route.plan_digest_blake3,
-            &plan.scratch_dir.join(RUST_PROVIDER_ACTION_EVIDENCE_DIR),
-            limits,
-        )
-        .map(Some),
-        (Some(_), None) | (None, None) => Ok(None),
-        (None, Some(_limits)) => Err(RustSourceProviderError::Validate(
-            "Rust provider action limits require full-source execution authority".to_string(),
-        )),
-    }
-}
-
-fn first_stage_action_input(
-    boundary: &RustSourceProviderFirstStageBoundary,
-) -> crate::source_built_rust_provider_action::RustProviderStageActionInput {
-    crate::source_built_rust_provider_action::RustProviderStageActionInput {
-        stage_id: boundary.stage_id.clone(),
-        stage_kind: boundary.stage_kind,
-        predecessor_stage_id: None,
-        plan_path: boundary.plan_path.clone(),
-        script_path: boundary.script_path.clone(),
-        sources_manifest_path: boundary.sources_manifest_path.clone(),
-        bootstrap_metadata_path: None,
-        output_roots: vec![
-            boundary.source_dir.clone(),
-            boundary.build_dir.clone(),
-            boundary.provider_candidate_dir.clone(),
-            boundary.provider_candidate_smoke_work_dir.clone(),
-        ],
-    }
-}
-
-fn rustc_stage1_action_input(
-    boundary: &RustSourceProviderRustcStage1Boundary,
-) -> crate::source_built_rust_provider_action::RustProviderStageActionInput {
-    crate::source_built_rust_provider_action::RustProviderStageActionInput {
-        stage_id: boundary.stage_id.clone(),
-        stage_kind: boundary.stage_kind,
-        predecessor_stage_id: Some(boundary.bootstrap_stage_id.clone()),
-        plan_path: boundary.plan_path.clone(),
-        script_path: boundary.script_path.clone(),
-        sources_manifest_path: boundary.sources_manifest_path.clone(),
-        bootstrap_metadata_path: Some(
-            boundary.bootstrap_provider_candidate_dir.join(RUST_SOURCE_PROVIDER_METADATA_PATH),
-        ),
-        output_roots: vec![
-            boundary.source_dir.clone(),
-            boundary.build_dir.clone(),
-            boundary.stage_output_dir.clone(),
-            boundary.provider_candidate_dir.clone(),
-            boundary.provider_candidate_smoke_work_dir.clone(),
-        ],
-    }
-}
-
-fn rustc_final_action_input(
-    boundary: &RustSourceProviderRustcFinalBoundary,
-) -> crate::source_built_rust_provider_action::RustProviderStageActionInput {
-    crate::source_built_rust_provider_action::RustProviderStageActionInput {
-        stage_id: boundary.stage_id.clone(),
-        stage_kind: boundary.stage_kind,
-        predecessor_stage_id: Some(boundary.bootstrap_stage_id.clone()),
-        plan_path: boundary.plan_path.clone(),
-        script_path: boundary.script_path.clone(),
-        sources_manifest_path: boundary.sources_manifest_path.clone(),
-        bootstrap_metadata_path: Some(
-            boundary.bootstrap_provider_candidate_dir.join(RUST_SOURCE_PROVIDER_METADATA_PATH),
-        ),
-        output_roots: vec![
-            boundary.source_dir.clone(),
-            boundary.build_dir.clone(),
-            boundary.stage_output_dir.clone(),
-            boundary.provider_candidate_dir.clone(),
-            boundary.provider_candidate_smoke_work_dir.clone(),
-        ],
-    }
-}
-
-fn begin_rust_provider_action_stage(
-    runtime: Option<&mut crate::source_built_rust_provider_action::RustProviderActionRuntime>,
-    input: crate::source_built_rust_provider_action::RustProviderStageActionInput,
-) -> Result<Option<crate::source_built_rust_provider_action::RustProviderStageScope>, RustSourceProviderError> {
-    runtime.map(|runtime| runtime.begin_stage(input)).transpose()
-}
-
-fn finish_rust_provider_action_stage<T>(
-    runtime: Option<&mut crate::source_built_rust_provider_action::RustProviderActionRuntime>,
-    scope: Option<crate::source_built_rust_provider_action::RustProviderStageScope>,
-    result: Result<T, RustSourceProviderError>,
-) -> Result<T, RustSourceProviderError> {
-    let reconciliation = match (runtime, scope) {
-        (Some(runtime), Some(scope)) => runtime.end_stage(scope, result.is_ok()),
-        (None, None) => Ok(()),
-        _ => Err(RustSourceProviderError::Build("Rust provider action runtime and scope presence differ".to_string())),
-    };
-    match (result, reconciliation) {
-        (Ok(value), Ok(())) => Ok(value),
-        (Err(error), Ok(())) => Err(error),
-        (Ok(_value), Err(error)) => Err(error),
-        (Err(error), Err(reconciliation_error)) => Err(RustSourceProviderError::Build(format!(
-            "{error}; Rust provider action reconciliation also failed: {reconciliation_error}"
-        ))),
-    }
-}
-
-fn embed_rust_provider_action_evidence(
-    candidate_dir: &Path,
-    evidence: &crate::source_built_rust_provider_action::RustProviderActionEvidence,
-) -> Result<(), RustSourceProviderError> {
-    let source = evidence
-        .plan_path
-        .parent()
-        .filter(|parent| evidence.audit_path.parent() == Some(*parent))
-        .filter(|parent| evidence.reconciliation_path.parent() == Some(*parent))
-        .ok_or_else(|| {
-            RustSourceProviderError::Validate(
-                "Rust provider action evidence paths do not share one directory".to_string(),
-            )
-        })?;
-    let destination = candidate_dir.join(RUST_PROVIDER_ACTION_EVIDENCE_RELATIVE_PATH);
-    if destination.exists() {
-        return Err(RustSourceProviderError::Copy(format!(
-            "Rust provider action evidence destination already exists: {}",
-            destination.display()
-        )));
-    }
-    fs::create_dir_all(&destination)
-        .map_err(|error| RustSourceProviderError::Copy(format!("create {}: {error}", destination.display())))?;
-    copy_provider_prefix(source, &destination)?;
-    crate::source_built_rust_provider_action::validate_rust_provider_action_evidence(&destination)?;
-    assert!(destination.join(crate::source_built_rust_provider_action::RUST_PROVIDER_ACTION_PLAN_FILE).is_file());
-    assert!(
-        destination
-            .join(crate::source_built_rust_provider_action::RUST_PROVIDER_ACTION_RECONCILIATION_FILE)
-            .is_file()
-    );
-    Ok(())
 }
 
 struct RustStageConstructionEvidenceSource<'a> {
@@ -1642,7 +1284,6 @@ fn promote_rustc_final_provider_candidate(
         recipe_digest_blake3: materialization.recipe_digest_blake3.clone(),
         metadata_path: output_validation.metadata_path,
         metadata_digest_blake3: output_validation.metadata_digest_blake3,
-        action_trust: None,
     })
 }
 
@@ -1739,14 +1380,6 @@ pub(crate) fn smoke_rust_source_provider(
     provider_dir: &Path,
     scratch_dir: &Path,
 ) -> Result<RustSourceProviderSmoke, RustSourceProviderError> {
-    smoke_rust_source_provider_with_action_runtime(provider_dir, scratch_dir, None)
-}
-
-fn smoke_rust_source_provider_with_action_runtime(
-    provider_dir: &Path,
-    scratch_dir: &Path,
-    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
-) -> Result<RustSourceProviderSmoke, RustSourceProviderError> {
     let validation = validate_materialized_rust_source_provider(provider_dir)?;
     let plan = plan_smoke(provider_dir, scratch_dir, &validation.metadata)?;
     fs::create_dir_all(&plan.scratch_dir).map_err(|err| {
@@ -1759,7 +1392,7 @@ fn smoke_rust_source_provider_with_action_runtime(
         RustSourceProviderError::Smoke(format!("write smoke source {}: {err}", plan.source_path.display()))
     })?;
     let rustc_args = smoke_rustc_args(&plan);
-    let output = run_smoke_rustc_with_bounded_launch_retry(&plan.rustc_path, &rustc_args, action_runtime)
+    let output = run_smoke_rustc_with_bounded_launch_retry(&plan.rustc_path, &rustc_args)
         .map_err(|err| RustSourceProviderError::Smoke(format!("launch {}: {err}", plan.rustc_path.display())))?;
     let stdout = bounded_output_text(&output.stdout);
     let stderr = bounded_output_text(&output.stderr);
@@ -2223,7 +1856,6 @@ fn run_rustc_stage1_provider_candidate_chain(
     materialization: &RustSourceProviderMaterializationPlan,
     route: &LoadedRustSourceProviderRoute,
     bootstrap_candidate: &RustSourceProviderBootstrapProviderCandidate,
-    mut action_runtime: Option<&mut crate::source_built_rust_provider_action::RustProviderActionRuntime>,
     verbose: bool,
 ) -> Result<Vec<RustSourceProviderRustcStage1ProviderCandidateRun>, RustSourceProviderError> {
     debug_assert!(!bootstrap_candidate.stage_id.is_empty());
@@ -2234,14 +1866,8 @@ fn run_rustc_stage1_provider_candidate_chain(
         if !has_next_rustc_stage1_stage(&route.plan, &current_bootstrap) {
             break;
         }
-        let run = run_rustc_stage1_provider_candidate(
-            materialization,
-            route,
-            &current_bootstrap,
-            scratch_layout,
-            action_runtime.as_deref_mut(),
-            verbose,
-        )?;
+        let run =
+            run_rustc_stage1_provider_candidate(materialization, route, &current_bootstrap, scratch_layout, verbose)?;
         current_bootstrap = bootstrap_candidate_from_rustc_stage1(&run.candidate);
         scratch_layout = RustcStage1ScratchLayout::Scoped;
         runs.push(run);
@@ -2266,27 +1892,22 @@ fn run_rustc_stage1_provider_candidate(
     route: &LoadedRustSourceProviderRoute,
     bootstrap_candidate: &RustSourceProviderBootstrapProviderCandidate,
     scratch_layout: RustcStage1ScratchLayout,
-    mut action_runtime: Option<&mut crate::source_built_rust_provider_action::RustProviderActionRuntime>,
     verbose: bool,
 ) -> Result<RustSourceProviderRustcStage1ProviderCandidateRun, RustSourceProviderError> {
     let boundary = prepare_rustc_stage1_boundary(materialization, route, bootstrap_candidate, scratch_layout)?;
     write_rustc_stage1_boundary(&boundary)?;
     let sources = acquire_rustc_stage1_sources(&boundary, verbose)?;
     write_rustc_stage1_sources_manifest(&boundary, &sources)?;
-    let scope = begin_rust_provider_action_stage(action_runtime.as_deref_mut(), rustc_stage1_action_input(&boundary))?;
-    let result = (|| {
-        let build = run_rustc_stage1_build(&boundary, action_runtime.as_deref(), verbose)?;
-        write_rustc_stage1_build_manifest(&boundary, &build)?;
-        let candidate = assemble_rustc_stage1_provider_candidate(&boundary, route, &sources, &build)?;
-        let smoke = smoke_rustc_stage1_provider_candidate(&boundary, &candidate, action_runtime.as_deref())?;
-        write_rustc_stage1_provider_candidate_manifest(&boundary, &candidate)?;
-        Ok(RustSourceProviderRustcStage1ProviderCandidateRun {
-            boundary,
-            candidate,
-            smoke,
-        })
-    })();
-    finish_rust_provider_action_stage(action_runtime, scope, result)
+    let build = run_rustc_stage1_build(&boundary, verbose)?;
+    write_rustc_stage1_build_manifest(&boundary, &build)?;
+    let candidate = assemble_rustc_stage1_provider_candidate(&boundary, route, &sources, &build)?;
+    let smoke = smoke_rustc_stage1_provider_candidate(&boundary, &candidate)?;
+    write_rustc_stage1_provider_candidate_manifest(&boundary, &candidate)?;
+    Ok(RustSourceProviderRustcStage1ProviderCandidateRun {
+        boundary,
+        candidate,
+        smoke,
+    })
 }
 
 fn prepare_rustc_final_boundary(
@@ -2364,27 +1985,22 @@ fn run_rustc_final_provider_candidate(
     materialization: &RustSourceProviderMaterializationPlan,
     route: &LoadedRustSourceProviderRoute,
     bootstrap_candidate: &RustSourceProviderBootstrapProviderCandidate,
-    mut action_runtime: Option<&mut crate::source_built_rust_provider_action::RustProviderActionRuntime>,
     verbose: bool,
 ) -> Result<RustSourceProviderRustcFinalProviderCandidateRun, RustSourceProviderError> {
     let boundary = prepare_rustc_final_boundary(materialization, route, bootstrap_candidate)?;
     write_rustc_final_boundary(&boundary)?;
     let sources = acquire_rustc_final_sources(&boundary, verbose)?;
     write_rustc_final_sources_manifest(&boundary, &sources)?;
-    let scope = begin_rust_provider_action_stage(action_runtime.as_deref_mut(), rustc_final_action_input(&boundary))?;
-    let result = (|| {
-        let build = run_rustc_final_build(&boundary, action_runtime.as_deref(), verbose)?;
-        write_rustc_final_build_manifest(&boundary, &build)?;
-        let candidate = assemble_rustc_final_provider_candidate(&boundary, route, &sources, &build)?;
-        let smoke = smoke_rustc_final_provider_candidate(&boundary, &candidate, action_runtime.as_deref())?;
-        write_rustc_final_provider_candidate_manifest(&boundary, &candidate, false)?;
-        Ok(RustSourceProviderRustcFinalProviderCandidateRun {
-            boundary,
-            candidate,
-            smoke,
-        })
-    })();
-    finish_rust_provider_action_stage(action_runtime, scope, result)
+    let build = run_rustc_final_build(&boundary, verbose)?;
+    write_rustc_final_build_manifest(&boundary, &build)?;
+    let candidate = assemble_rustc_final_provider_candidate(&boundary, route, &sources, &build)?;
+    let smoke = smoke_rustc_final_provider_candidate(&boundary, &candidate)?;
+    write_rustc_final_provider_candidate_manifest(&boundary, &candidate, false)?;
+    Ok(RustSourceProviderRustcFinalProviderCandidateRun {
+        boundary,
+        candidate,
+        smoke,
+    })
 }
 
 fn validate_rustc_stage1_outputs(stage: &RustSourceProviderBootstrapStage) -> Result<(), RustSourceProviderError> {
@@ -2879,8 +2495,8 @@ fn push_rustc_source_llvm_config(script: &mut String, full_source_context: Optio
     script.push_str("download-ci-llvm = false\n");
     script.push_str("ninja = false\n");
     if full_source_context.is_some() {
-        script.push_str("cflags = \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MANTLE_LINUX_HEADERS_CFLAGS\"\n");
-        script.push_str("cxxflags = \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MANTLE_LINUX_HEADERS_CFLAGS\"\n");
+        script.push_str("cflags = \"$MANTLE_LINUX_HEADERS_CFLAGS\"\n");
+        script.push_str("cxxflags = \"$MANTLE_LINUX_HEADERS_CFLAGS\"\n");
     }
     script.push_str(RUSTC_SOURCE_LLVM_BUILD_CONFIG);
     assert!(script.contains("download-ci-llvm = false"));
@@ -2911,12 +2527,6 @@ fn push_rustc_source_patch_plan_operation(
         RustBootstrapPatchOperationKind::RustBootstrapTargetToolConfig => {
             push_rustc_source_build_target_tool_config(script);
         }
-        RustBootstrapPatchOperationKind::OpenSslNoAsm => {
-            push_rustc_source_openssl_no_asm_patch(script);
-        }
-        RustBootstrapPatchOperationKind::RustBootstrapLlvmAbsoluteTablegen => {
-            push_rustc_source_llvm_absolute_tablegen_patch(script);
-        }
         RustBootstrapPatchOperationKind::RustBootstrapWorkspaceIsolation => {
             push_rustc_source_bootstrap_workspace_isolation(script);
         }
@@ -2937,148 +2547,6 @@ fn push_rustc_source_patch_plan_operation(
         }
     }
     Ok(())
-}
-
-fn push_rustc_source_openssl_no_asm_patch(script: &mut String) {
-    debug_assert!(script.len() <= script.capacity());
-    debug_assert!(!script.contains('\0'));
-    script.push_str(&format!("if [ \"$MANTLE_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
-    script.push_str("  printf '%s\\n' 'disabling OpenSSL assembly generators for protected Rust bootstrap'\n");
-    script.push_str("  set -- \"$MANTLE_RUST_SOURCE\"/");
-    script.push_str(RUSTC_SOURCE_OPENSSL_CONFIG_GLOB);
-    script.push('\n');
-    script.push_str(&format!(
-        "  if [ \"$#\" -gt {RUSTC_SOURCE_OPENSSL_CONFIG_COUNT_MAX} ]; then printf '%s\\n' 'vendored OpenSSL source configuration count exceeds the bound' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str("  openssl_src_index=0\n");
-    script.push_str("  for openssl_src_config in \"$@\"; do\n");
-    script.push_str(&format!(
-        "    if [ ! -f \"$openssl_src_config\" ]; then printf '%s\\n' 'vendored OpenSSL source configuration is missing' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str("    openssl_src_index=$((openssl_src_index + 1))\n");
-    script.push_str("    openssl_src_tmp=\"$MANTLE_BUILD_DIR/openssl-src-no-asm-$openssl_src_index.rs\"\n");
-    script.push_str("    openssl_anchor_matches=0\n    openssl_marker_matches=0\n    openssl_line_matches=0\n    openssl_inserted=false\n");
-    script.push_str("    : > \"$openssl_src_tmp\"\n");
-    script.push_str("    while IFS= read -r line || [ -n \"$line\" ]; do\n");
-    script.push_str(&format!(
-        "      if [ \"$line\" = {anchor} ]; then\n        openssl_anchor_matches=$((openssl_anchor_matches + 1))\n        if [ \"$openssl_marker_matches\" -eq 0 ] && [ \"$openssl_line_matches\" -eq 0 ]; then\n          printf '%s\\n' {marker} {no_asm} >> \"$openssl_src_tmp\"\n          openssl_inserted=true\n        fi\n      fi\n",
-        anchor = shell_quote(RUSTC_SOURCE_OPENSSL_NO_ASM_ANCHOR),
-        marker = shell_quote(RUSTC_SOURCE_OPENSSL_NO_ASM_MARKER),
-        no_asm = shell_quote(RUSTC_SOURCE_OPENSSL_NO_ASM_LINE),
-    ));
-    script.push_str(&format!(
-        "      if [ \"$line\" = {marker} ]; then openssl_marker_matches=$((openssl_marker_matches + 1)); fi\n      if [ \"$line\" = {no_asm} ]; then openssl_line_matches=$((openssl_line_matches + 1)); fi\n",
-        marker = shell_quote(RUSTC_SOURCE_OPENSSL_NO_ASM_MARKER),
-        no_asm = shell_quote(RUSTC_SOURCE_OPENSSL_NO_ASM_LINE),
-    ));
-    script.push_str("      printf '%s\\n' \"$line\" >> \"$openssl_src_tmp\"\n    done < \"$openssl_src_config\"\n");
-    script.push_str(&format!(
-        "    if [ \"$openssl_anchor_matches\" -ne 1 ]; then printf '%s\\n' 'vendored OpenSSL configuration lacks one expected insertion point' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str(&format!(
-        "    if [ \"$openssl_inserted\" = false ] && {{ [ \"$openssl_marker_matches\" -ne 1 ] || [ \"$openssl_line_matches\" -ne 1 ]; }}; then printf '%s\\n' 'vendored OpenSSL no-asm normalization is incomplete' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str(&format!(
-        "    if [ \"$openssl_inserted\" = true ] && {{ [ \"$openssl_marker_matches\" -ne 0 ] || [ \"$openssl_line_matches\" -ne 0 ]; }}; then printf '%s\\n' 'vendored OpenSSL no-asm normalization conflicts with existing source' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    push_rustc_source_cargo_checksum_normalization(script);
-    script.push_str("    mv \"$openssl_src_tmp\" \"$openssl_src_config\"\n  done\nfi\n");
-}
-
-fn push_rustc_source_cargo_checksum_normalization(script: &mut String) {
-    let normalizer = rustc_source_cargo_checksum_normalizer_python();
-    script.push_str("    openssl_src_root=${openssl_src_config%/src/lib.rs}\n");
-    script.push_str("    openssl_checksum_config=\"$openssl_src_root/.cargo-checksum.json\"\n");
-    script.push_str(&format!(
-        "    if [ ! -f \"$openssl_checksum_config\" ]; then printf '%s\\n' 'vendored OpenSSL Cargo checksum metadata is missing' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str(
-        "    \"$MANTLE_PYTHON_PROGRAM\" - \"$openssl_src_config\" \"$openssl_src_tmp\" \"$openssl_checksum_config\" <<'MANTLE_OPENSSL_CHECKSUM_PY'\n",
-    );
-    script.push_str(&normalizer);
-    script.push_str("MANTLE_OPENSSL_CHECKSUM_PY\n");
-}
-
-fn rustc_source_cargo_checksum_normalizer_python() -> String {
-    let normalizer = RUSTC_SOURCE_CARGO_CHECKSUM_NORMALIZER_PY
-        .replace("__MANTLE_ARGUMENT_COUNT__", &RUSTC_SOURCE_CARGO_CHECKSUM_ARGUMENT_COUNT.to_string())
-        .replace("__MANTLE_SOURCE_BYTES_MAX__", &RUSTC_SOURCE_OPENSSL_CONFIG_BYTES_MAX.to_string())
-        .replace("__MANTLE_CHECKSUM_BYTES_MAX__", &RUSTC_SOURCE_CARGO_CHECKSUM_BYTES_MAX.to_string())
-        .replace("__MANTLE_READ_CHUNK_BYTES__", &RUSTC_SOURCE_OPENSSL_READ_CHUNK_BYTES.to_string())
-        .replace("__MANTLE_READ_ITERATIONS_MAX__", &RUSTC_SOURCE_OPENSSL_READ_ITERATIONS_MAX.to_string())
-        .replace("__MANTLE_SHA256_HEX_LENGTH__", &SHA256_DIGEST_HEX_LENGTH.to_string())
-        .replace("__MANTLE_CHECKSUM_MEMBER__", RUSTC_SOURCE_CARGO_CHECKSUM_MEMBER);
-    assert!(!normalizer.contains("__MANTLE_"));
-    debug_assert!(normalizer.ends_with('\n'));
-    normalizer
-}
-
-fn push_rustc_source_llvm_absolute_tablegen_patch(script: &mut String) {
-    debug_assert!(script.len() <= script.capacity());
-    debug_assert!(!script.contains('\0'));
-    script.push_str(&format!("if [ \"$MANTLE_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
-    script
-        .push_str("  printf '%s\\n' 'normalizing generated LLVM tablegen executions to target-file absolute paths'\n");
-    script.push_str("  llvm_tablegen_cmake=\"$MANTLE_RUST_SOURCE/");
-    script.push_str(RUSTC_SOURCE_LLVM_TABLEGEN_CMAKE);
-    script.push_str("\"\n");
-    script.push_str(&format!(
-        "  if [ ! -f \"$llvm_tablegen_cmake\" ]; then printf '%s\\n' 'LLVM TableGen CMake source missing before executable-path normalization' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str("  llvm_tablegen_tmp=\"$MANTLE_BUILD_DIR/llvm-TableGen.cmake\"\n");
-    script.push_str("  llvm_tablegen_replaced=false\n");
-    script.push_str("  llvm_tablegen_seen_absolute=false\n");
-    script.push_str("  llvm_tablegen_in_absolute_block=false\n");
-    script.push_str("  llvm_tablegen_command_replaced=false\n");
-    script.push_str("  llvm_tablegen_command_seen_protected=false\n");
-    script.push_str("  : > \"$llvm_tablegen_tmp\"\n");
-    script.push_str("  while IFS= read -r line || [ -n \"$line\" ]; do\n");
-    script.push_str("    if [ \"$llvm_tablegen_in_absolute_block\" = true ]; then\n");
-    script.push_str("      printf '%s\\n' \"$line\" >> \"$llvm_tablegen_tmp\"\n");
-    script.push_str("      if [ \"$line\" = '  endif()' ]; then llvm_tablegen_in_absolute_block=false; fi\n");
-    script.push_str("      continue\n");
-    script.push_str("    fi\n");
-    script.push_str("    case \"$line\" in\n");
-    script.push_str(&format!(
-        "      {original})\n",
-        original = shell_quote(RUSTC_SOURCE_LLVM_TABLEGEN_EXE_ORIGINAL_LINE),
-    ));
-    for replacement_line in [
-        RUSTC_SOURCE_LLVM_TABLEGEN_TARGET_MARKER_LINE,
-        "    set(tablegen_exe \"${LLVM_TOOLS_BINARY_DIR}/${${project}_TABLEGEN_EXE}${CMAKE_EXECUTABLE_SUFFIX}\")",
-        "  else()",
-        RUSTC_SOURCE_LLVM_TABLEGEN_EXE_ORIGINAL_LINE,
-        "  endif()",
-    ] {
-        script
-            .push_str(&format!("        printf '%s\\n' {} >> \"$llvm_tablegen_tmp\"\n", shell_quote(replacement_line)));
-    }
-    script.push_str("        llvm_tablegen_replaced=true\n");
-    script.push_str("        ;;\n");
-    script.push_str(&format!(
-        "      {marker}) llvm_tablegen_seen_absolute=true; llvm_tablegen_in_absolute_block=true; printf '%s\\n' \"$line\" >> \"$llvm_tablegen_tmp\" ;;\n",
-        marker = shell_quote(RUSTC_SOURCE_LLVM_TABLEGEN_TARGET_MARKER_LINE),
-    ));
-    script.push_str(&format!(
-        "      {command_original}) printf '%s\\n' {command_protected} >> \"$llvm_tablegen_tmp\"; llvm_tablegen_command_replaced=true ;;\n",
-        command_original = shell_quote(RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_ORIGINAL_LINE),
-        command_protected = shell_quote(RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_PROTECTED_LINE),
-    ));
-    script.push_str(&format!(
-        "      {command_protected}) llvm_tablegen_command_seen_protected=true; printf '%s\\n' \"$line\" >> \"$llvm_tablegen_tmp\" ;;\n",
-        command_protected = shell_quote(RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_PROTECTED_LINE),
-    ));
-    script.push_str("      *) printf '%s\\n' \"$line\" >> \"$llvm_tablegen_tmp\" ;;\n");
-    script.push_str("    esac\n");
-    script.push_str("  done < \"$llvm_tablegen_cmake\"\n");
-    script.push_str(&format!(
-        "  if [ \"$llvm_tablegen_replaced\" = false ] && [ \"$llvm_tablegen_seen_absolute\" = false ]; then printf '%s\\n' 'LLVM TableGen CMake source lacks expected executable selection for absolute-path normalization' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str(&format!(
-        "  if [ \"$llvm_tablegen_command_replaced\" = false ] && [ \"$llvm_tablegen_command_seen_protected\" = false ]; then printf '%s\\n' 'LLVM TableGen CMake source lacks expected command for absolute-path launcher normalization' >&2; exit {RUSTC_STAGE1_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str("  mv \"$llvm_tablegen_tmp\" \"$llvm_tablegen_cmake\"\n");
-    script.push_str("fi\n");
 }
 
 fn push_rustc_source_musl_rustc_driver_rlib_patch(script: &mut String) {
@@ -3360,17 +2828,16 @@ fn push_rustc_source_build_tool_discovery(
     debug_assert!(!script.contains('\0'));
     if let Some(context) = full_source_context {
         push_full_source_tool_bindings(script, context)?;
-        script.push_str("export CFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MANTLE_LINUX_HEADERS_CFLAGS\"\n");
+        script.push_str("export CFLAGS=\"$MANTLE_LINUX_HEADERS_CFLAGS\"\n");
         script.push_str("export CPPFLAGS=\"$MANTLE_LINUX_HEADERS_CFLAGS\"\n");
-        script.push_str("export CXXFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MANTLE_LINUX_HEADERS_CFLAGS\"\n");
-        script.push_str("export LDFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\"\n");
+        script.push_str("export CXXFLAGS=\"$MANTLE_LINUX_HEADERS_CFLAGS\"\n");
         push_rustc_source_explicit_target_compiler(script);
     } else {
         push_rustc_source_make_and_cmake_discovery(script);
         push_rustc_source_target_compiler_discovery(script);
     }
     push_rustc_source_target_tool_prefix(script);
-    push_rustc_source_target_runtime_config(script, full_source_context.is_some());
+    push_rustc_source_target_runtime_config(script);
     Ok(())
 }
 
@@ -3527,7 +2994,7 @@ fn push_rustc_source_target_tool_prefix(script: &mut String) {
     push_rustc_source_target_toolchain_root_validation(script);
 }
 
-fn push_rustc_source_target_runtime_config(script: &mut String, full_source_bound: bool) {
+fn push_rustc_source_target_runtime_config(script: &mut String) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     script.push_str("  target_wrapper_root=${target_tool_dir%/*}\n");
@@ -3570,7 +3037,7 @@ fn push_rustc_source_target_runtime_config(script: &mut String, full_source_boun
     script.push_str("/lib/crt1.o\" ] && [ -f \"$");
     script.push_str(RUSTC_SOURCE_TARGET_MUSL_ROOT_VAR);
     script.push_str("/lib/rcrt1.o\" ]; then\n");
-    push_rustc_source_target_linker_wrapper(script, full_source_bound);
+    push_rustc_source_target_linker_wrapper(script);
     script.push_str("    PATH=\"$target_alias_dir:$target_tool_dir:$PATH\"\n");
     script.push_str("    export ");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
@@ -3613,12 +3080,12 @@ fn push_rustc_source_target_libgcc_shared_copy(script: &mut String) {
     script.push_str("    done\n");
 }
 
-fn push_rustc_source_target_linker_wrapper(script: &mut String, full_source_bound: bool) {
+fn push_rustc_source_target_linker_wrapper(script: &mut String) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     push_rustc_source_target_linker_runtime(script);
     push_rustc_source_target_cc_wrapper(script);
-    push_rustc_source_target_companion_wrappers(script, full_source_bound);
+    push_rustc_source_target_companion_wrappers(script);
 }
 
 fn push_rustc_source_target_linker_runtime(script: &mut String) {
@@ -3752,16 +3219,13 @@ fn push_rustc_source_target_cc_wrapper(script: &mut String) {
     script.push_str(&format!(
         "    printf '%s\\n' 'if [ \"$link_command\" = true ] && [ \"$shared_link\" = true ]; then set -- \"$@\" -Wl,-Bstatic -lunwind -lgcc -Wl,-Bdynamic; elif [ \"$link_command\" = true ] && {{ [ \"$dynamic_rustc_link\" = true ] || [ \"$dynamic_executable_link\" = true ]; }}; then set -- \"$@\" -no-pie -Wl,-Bdynamic \"-Wl,-dynamic-linker,$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\" -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; elif [ \"$link_command\" = true ] && [ \"$static_support_link\" = true ]; then set -- \"$@\" -static -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n"
     ));
-    script.push_str(
-        "    printf '%s\\n' 'if [ -n \"${MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG:-}\" ]; then set -- \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" \"$@\"; fi' >> \"$target_alias_dir/cc\"\n",
-    );
     script.push_str(&format!(
         "    printf '%s\\n' 'exec \"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
     ));
     script.push_str("    chmod +x \"$target_alias_dir/cc\"\n");
 }
 
-fn push_rustc_source_target_companion_wrappers(script: &mut String, full_source_bound: bool) {
+fn push_rustc_source_target_companion_wrappers(script: &mut String) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     script.push_str("    printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/c++\"\n");
@@ -3775,30 +3239,7 @@ fn push_rustc_source_target_companion_wrappers(script: &mut String, full_source_
     );
     script.push_str("    chmod +x \"$target_alias_dir/c++\"\n");
     script.push_str("    for target_tool in ar ranlib; do case \"$target_tool\" in ar) target_program=\"$target_ar_path\" ;; ranlib) target_program=\"$target_ranlib_path\" ;; esac; printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/$target_tool\"; printf '%s\\n' \"exec \\\"$target_program\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/$target_tool\"; chmod +x \"$target_alias_dir/$target_tool\"; done\n");
-    if full_source_bound {
-        script.push_str(
-            "    printf '%s\\n' \"#!$SHELL_PROGRAM\" 'set -eu' \"MANTLE_TARGET_CC_PATH=\\\"$target_cxx_path\\\"\" 'export MANTLE_TARGET_CC_PATH' \"exec \\\"$SHELL_PROGRAM\\\" \\\"$target_alias_dir/cc\\\" \\\"\\$@\\\"\" > \"$target_alias_dir/g++\"\n",
-        );
-        script.push_str("    chmod +x \"$target_alias_dir/g++\"\n");
-        for (alias, program) in [
-            ("sh", "$SHELL_PROGRAM"),
-            ("cmake", "$CMAKE_PROGRAM"),
-            ("make", "$MAKE_PROGRAM"),
-            ("perl", "$PERL_PROGRAM"),
-        ] {
-            script.push_str(&format!(
-                "    printf '%s\\n' \"#!$SHELL_PROGRAM\" \"exec \\\"{program}\\\" \\\"\\$@\\\"\" > \"$target_alias_dir/{alias}\"\n"
-            ));
-            script.push_str(&format!("    chmod +x \"$target_alias_dir/{alias}\"\n"));
-        }
-        for unavailable_tool in ["emcc", "pkg-config", "pkgconf", "git"] {
-            script.push_str(&format!(
-                "    printf '%s\\n' \"#!$SHELL_PROGRAM\" 'exit 127' > \"$target_alias_dir/{unavailable_tool}\"\n"
-            ));
-            script.push_str(&format!("    chmod +x \"$target_alias_dir/{unavailable_tool}\"\n"));
-        }
-    }
-    push_first_stage_target_musl_libatomic_shim(script, full_source_bound);
+    push_first_stage_target_musl_libatomic_shim(script);
     script.push_str("    ");
     script.push_str(RUSTC_SOURCE_TARGET_CC_VAR);
     script.push_str("=\"$target_alias_dir/cc\"\n");
@@ -4379,20 +3820,11 @@ fn should_retry_smoke_process_output(output: &Output, attempt: u32) -> bool {
     shell_rejected_exec && text_file_busy
 }
 
-fn run_smoke_rustc_with_bounded_launch_retry(
-    rustc_path: &Path,
-    rustc_args: &[OsString],
-    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
-) -> std::io::Result<Output> {
+fn run_smoke_rustc_with_bounded_launch_retry(rustc_path: &Path, rustc_args: &[OsString]) -> std::io::Result<Output> {
     debug_assert!(!rustc_path.as_os_str().is_empty());
     debug_assert!(!rustc_args.is_empty());
     for attempt in 1..=GENERATED_SCRIPT_LAUNCH_MAX_ATTEMPTS {
-        let mut command = Command::new(rustc_path);
-        command.env_clear().args(rustc_args);
-        let result = match action_runtime {
-            Some(runtime) => runtime.run_output(&mut command),
-            None => command.output(),
-        };
+        let result = Command::new(rustc_path).env_clear().args(rustc_args).output();
         match result {
             Ok(output) if should_retry_smoke_process_output(&output, attempt) => {
                 std::thread::sleep(Duration::from_millis(GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS));
@@ -4422,7 +3854,6 @@ fn run_generated_script_with_log(
     script_path: &Path,
     log_path: &Path,
     full_source_context: Option<&FullSourceRustExecutionContext>,
-    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
 ) -> Result<ExitStatus, RustSourceProviderError> {
     if script_path == log_path {
         return Err(RustSourceProviderError::Build("generated script path and build log path must differ".to_string()));
@@ -4442,12 +3873,7 @@ fn run_generated_script_with_log(
         if full_source_context.is_some() {
             command.env_clear();
         }
-        command.stdout(stdout).stderr(stderr);
-        let result = match action_runtime {
-            Some(runtime) => runtime.run_status(&mut command),
-            None => command.status(),
-        };
-        match result {
+        match command.stdout(stdout).stderr(stderr).status() {
             Ok(status) => return Ok(status),
             Err(error) if should_retry_generated_script_launch(&error, attempt) => {
                 std::thread::sleep(Duration::from_millis(GENERATED_SCRIPT_LAUNCH_RETRY_DELAY_MS));
@@ -4465,7 +3891,6 @@ fn run_generated_script_with_log(
 
 fn run_rustc_stage1_build(
     boundary: &RustSourceProviderRustcStage1Boundary,
-    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
     verbose: bool,
 ) -> Result<RustSourceProviderRustcStage1Build, RustSourceProviderError> {
     validate_rustc_stage1_build_inputs(boundary)?;
@@ -4478,7 +3903,6 @@ fn run_rustc_stage1_build(
         &boundary.script_path,
         &boundary.build_log_path,
         boundary.full_source_context.as_ref(),
-        action_runtime,
     )?;
     if !status.success() {
         let log_tail = fs::read(&boundary.build_log_path)
@@ -4520,7 +3944,6 @@ fn validate_rustc_stage1_build_inputs(
 
 fn run_rustc_final_build(
     boundary: &RustSourceProviderRustcFinalBoundary,
-    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
     verbose: bool,
 ) -> Result<RustSourceProviderRustcFinalBuild, RustSourceProviderError> {
     validate_rustc_final_build_inputs(boundary)?;
@@ -4533,7 +3956,6 @@ fn run_rustc_final_build(
         &boundary.script_path,
         &boundary.build_log_path,
         boundary.full_source_context.as_ref(),
-        action_runtime,
     )?;
     if !status.success() {
         let log_tail = fs::read(&boundary.build_log_path)
@@ -5008,15 +4430,9 @@ LD_LIBRARY_PATH=\"$ld_path\" exec \"$loader\" \"$self_dir/{tool_binary_name}\" \
 fn smoke_rustc_stage1_provider_candidate(
     boundary: &RustSourceProviderRustcStage1Boundary,
     candidate: &RustSourceProviderRustcStage1ProviderCandidate,
-    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
 ) -> Result<RustSourceProviderSmokeEvidence, RustSourceProviderError> {
     let validation = validate_materialized_rust_source_provider(&candidate.candidate_dir)?;
-    let smoke = smoke_rust_source_provider_with_action_runtime(
-        &candidate.candidate_dir,
-        &boundary.provider_candidate_smoke_work_dir,
-        action_runtime,
-    )?;
-    smoke_rust_source_provider_cargo(&candidate.candidate_dir, action_runtime)?;
+    let smoke = smoke_rust_source_provider(&candidate.candidate_dir, &boundary.provider_candidate_smoke_work_dir)?;
     persist_rust_source_provider_smoke_evidence(&boundary.provider_candidate_smoke_dir, &smoke, &validation)
 }
 
@@ -5328,15 +4744,9 @@ fn assemble_rustc_final_provider_candidate(
 fn smoke_rustc_final_provider_candidate(
     boundary: &RustSourceProviderRustcFinalBoundary,
     candidate: &RustSourceProviderRustcFinalProviderCandidate,
-    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
 ) -> Result<RustSourceProviderSmokeEvidence, RustSourceProviderError> {
     let validation = validate_materialized_rust_source_provider(&candidate.candidate_dir)?;
-    let smoke = smoke_rust_source_provider_with_action_runtime(
-        &candidate.candidate_dir,
-        &boundary.provider_candidate_smoke_work_dir,
-        action_runtime,
-    )?;
-    smoke_rust_source_provider_cargo(&candidate.candidate_dir, action_runtime)?;
+    let smoke = smoke_rust_source_provider(&candidate.candidate_dir, &boundary.provider_candidate_smoke_work_dir)?;
     persist_rust_source_provider_smoke_evidence(&boundary.provider_candidate_smoke_dir, &smoke, &validation)
 }
 
@@ -5592,7 +5002,6 @@ fn write_rustc_final_provider_candidate_manifest(
 
 fn run_first_stage_build(
     boundary: &RustSourceProviderFirstStageBoundary,
-    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
     verbose: bool,
 ) -> Result<RustSourceProviderFirstStageBuild, RustSourceProviderError> {
     let build_sources = first_stage_build_sources(boundary)?;
@@ -5605,7 +5014,6 @@ fn run_first_stage_build(
         &boundary.script_path,
         &boundary.build_log_path,
         boundary.full_source_context.as_ref(),
-        action_runtime,
     )?;
     if !status.success() {
         let log_tail = fs::read(&boundary.build_log_path)
@@ -5730,46 +5138,10 @@ fn assemble_first_stage_provider_candidate(
 fn smoke_first_stage_provider_candidate(
     boundary: &RustSourceProviderFirstStageBoundary,
     candidate: &RustSourceProviderFirstStageProviderCandidate,
-    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
 ) -> Result<RustSourceProviderSmokeEvidence, RustSourceProviderError> {
     let validation = validate_materialized_rust_source_provider(&candidate.candidate_dir)?;
-    let smoke = smoke_rust_source_provider_with_action_runtime(
-        &candidate.candidate_dir,
-        &boundary.provider_candidate_smoke_work_dir,
-        action_runtime,
-    )?;
-    smoke_rust_source_provider_cargo(&candidate.candidate_dir, action_runtime)?;
+    let smoke = smoke_rust_source_provider(&candidate.candidate_dir, &boundary.provider_candidate_smoke_work_dir)?;
     persist_rust_source_provider_smoke_evidence(&boundary.provider_candidate_smoke_dir, &smoke, &validation)
-}
-
-fn smoke_rust_source_provider_cargo(
-    candidate_dir: &Path,
-    action_runtime: Option<&crate::source_built_rust_provider_action::RustProviderActionRuntime>,
-) -> Result<(), RustSourceProviderError> {
-    let cargo_path = candidate_dir.join(PROVIDER_CARGO_RELATIVE_PATH);
-    if !cargo_path.is_file() {
-        return Err(RustSourceProviderError::Smoke(format!(
-            "provider Cargo smoke executable is missing: {}",
-            cargo_path.display()
-        )));
-    }
-    let args = [OsString::from("--version")];
-    let output = run_smoke_rustc_with_bounded_launch_retry(&cargo_path, &args, action_runtime)
-        .map_err(|error| RustSourceProviderError::Smoke(format!("launch {}: {error}", cargo_path.display())))?;
-    let stdout = bounded_output_text(&output.stdout);
-    let stderr = bounded_output_text(&output.stderr);
-    if !output.status.success() {
-        return Err(RustSourceProviderError::Smoke(format!(
-            "provider Cargo smoke failed with status {}; stdout={stdout:?}; stderr={stderr:?}",
-            output.status
-        )));
-    }
-    if stdout.is_empty() {
-        return Err(RustSourceProviderError::Smoke("provider Cargo smoke returned empty version output".to_string()));
-    }
-    assert!(output.status.success());
-    assert!(!stdout.is_empty());
-    Ok(())
 }
 
 fn validate_first_stage_candidate_request(
@@ -6903,8 +6275,6 @@ fn push_full_source_tool_bindings(
     let native_gxx = native_bin.join("x86_64-linux-musl-g++");
     let native_ar = native_bin.join("x86_64-linux-musl-ar");
     let native_ranlib = native_bin.join("x86_64-linux-musl-ranlib");
-    let gcc_subprogram_prefix = context.native_provider_dir.join(FULL_SOURCE_GCC_SUBPROGRAM_PREFIX_RELATIVE_PATH);
-    let gcc_subprogram_prefix_flag = format!("-B{}/", gcc_subprogram_prefix.display());
     let controlled_path = [
         busybox_dir,
         make_dir,
@@ -6938,8 +6308,6 @@ fn push_full_source_tool_bindings(
         shell_quote(&context.native_provider_dir.display().to_string())
     ));
     script.push_str(&format!("SOURCE_ROOT={}\n", shell_quote(&context.native_provider_dir.display().to_string())));
-    script.push_str(&format!("MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG={}\n", shell_quote(&gcc_subprogram_prefix_flag)));
-    script.push_str(&format!("unset {GCC_EXEC_PREFIX_ENV} {COMPILER_PATH_ENV}\n"));
     script.push_str(&format!("PATH={}\n", shell_quote(&controlled_path)));
     script
         .push_str("SHELL=\"$SHELL_PROGRAM\"\nCONFIG_SHELL=\"$SHELL_PROGRAM\"\nGNUMAKEFLAGS=\"SHELL=$SHELL_PROGRAM\"\n");
@@ -6957,7 +6325,7 @@ fn push_full_source_tool_bindings(
         "MANTLE_LINUX_HEADERS_CFLAGS={}\n",
         shell_quote(&format!("-I{}", linux_headers_include.display()))
     ));
-    script.push_str("export PATH PYTHONHOME PERL5LIB LIBRARY_PATH MAKE_PROGRAM CMAKE_PROGRAM MANTLE_PYTHON_PROGRAM PERL_PROGRAM COPY_PROGRAM SHELL_PROGRAM SHELL CONFIG_SHELL GNUMAKEFLAGS CC_PROGRAM CXX_PROGRAM TARGET_CC_PROGRAM TARGET_CXX_PROGRAM TARGET_AR_PROGRAM TARGET_RANLIB_PROGRAM MANTLE_TARGET_CC MANTLE_TARGET_TOOLCHAIN_ROOT SOURCE_ROOT MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG MANTLE_ZLIB_HEADER MANTLE_ZLIB_ARCHIVE ZLIB_CFLAGS ZLIB_LIBS MANTLE_LINUX_HEADERS_ROOT MANTLE_LINUX_HEADERS_CFLAGS\n");
+    script.push_str("export PATH PYTHONHOME PERL5LIB LIBRARY_PATH MAKE_PROGRAM CMAKE_PROGRAM MANTLE_PYTHON_PROGRAM PERL_PROGRAM COPY_PROGRAM SHELL_PROGRAM SHELL CONFIG_SHELL GNUMAKEFLAGS CC_PROGRAM CXX_PROGRAM TARGET_CC_PROGRAM TARGET_CXX_PROGRAM TARGET_AR_PROGRAM TARGET_RANLIB_PROGRAM MANTLE_TARGET_CC MANTLE_TARGET_TOOLCHAIN_ROOT SOURCE_ROOT MANTLE_ZLIB_HEADER MANTLE_ZLIB_ARCHIVE ZLIB_CFLAGS ZLIB_LIBS MANTLE_LINUX_HEADERS_ROOT MANTLE_LINUX_HEADERS_CFLAGS\n");
     script
         .push_str("printf '%s\\n' 'using receipt-bound full-source Rust host tools with ambient discovery disabled'\n");
     Ok(())
@@ -7214,7 +6582,7 @@ fn push_first_stage_minicargo_workspace_boundary(script: &mut String) {
     ));
 }
 
-fn push_first_stage_target_musl_lfs_compat(script: &mut String, full_source_bound: bool) {
+fn push_first_stage_target_musl_lfs_compat(script: &mut String) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     push_first_stage_target_musl_lfs_compat_preamble(script);
@@ -7224,7 +6592,7 @@ fn push_first_stage_target_musl_lfs_compat(script: &mut String, full_source_boun
         FIRST_STAGE_TARGET_MUSL_TLS_KEY_CAPACITY
     ));
     script.push_str(FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_BODY_TEXT);
-    push_first_stage_target_musl_lfs_compat_compile(script, full_source_bound);
+    push_first_stage_target_musl_lfs_compat_compile(script);
 }
 
 fn push_first_stage_target_musl_lfs_compat_preamble(script: &mut String) {
@@ -7448,37 +6816,21 @@ int stat64(const char *pathname, struct stat *buf) {
 }
 "#;
 
-fn push_first_stage_target_cc_compile_command(script: &mut String, full_source_bound: bool, arguments: &str) {
-    let original_len = script.len();
-    assert!(!arguments.is_empty());
-    assert!(!arguments.contains('\n'));
-    if full_source_bound {
-        script.push_str("\"$target_cc_path\" \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" ");
-    } else {
-        script.push_str("\"$target_cc_path\" ");
-    }
-    script.push_str(arguments);
-    script.push('\n');
-    assert!(script.len() > original_len);
-    assert_eq!(script[original_len..].contains("MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG"), full_source_bound);
-}
-
-fn push_first_stage_target_musl_lfs_compat_compile(script: &mut String, full_source_bound: bool) {
+fn push_first_stage_target_musl_lfs_compat_compile(script: &mut String) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     script.push_str("MANTLE_MUSL_LFS_COMPAT_C\n");
-    let arguments = format!(
-        "-D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -fPIC -c \"$target_lfs_compat_source\" -o \"$target_lfs_compat_object\""
-    );
-    push_first_stage_target_cc_compile_command(script, full_source_bound, &arguments);
+    script.push_str(&format!(
+        "\"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -fPIC -c \"$target_lfs_compat_source\" -o \"$target_lfs_compat_object\"\n"
+    ));
 }
 
-fn push_first_stage_target_musl_libatomic_shim(script: &mut String, full_source_bound: bool) {
+fn push_first_stage_target_musl_libatomic_shim(script: &mut String) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     push_first_stage_target_musl_libatomic_preamble(script);
     script.push_str(FIRST_STAGE_TARGET_MUSL_LIBATOMIC_SOURCE_TEXT);
-    push_first_stage_target_musl_libatomic_compile(script, full_source_bound);
+    push_first_stage_target_musl_libatomic_compile(script);
 }
 
 fn push_first_stage_target_musl_libatomic_preamble(script: &mut String) {
@@ -7551,14 +6903,13 @@ _Bool __atomic_compare_exchange_16(
 }
 "#;
 
-fn push_first_stage_target_musl_libatomic_compile(script: &mut String, full_source_bound: bool) {
+fn push_first_stage_target_musl_libatomic_compile(script: &mut String) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     script.push_str("MANTLE_MUSL_LIBATOMIC_C\n");
-    let arguments = format!(
-        "-fPIC {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -c \"$target_libatomic_source\" -o \"$target_libatomic_object\""
-    );
-    push_first_stage_target_cc_compile_command(script, full_source_bound, &arguments);
+    script.push_str(&format!(
+        "\"$target_cc_path\" -fPIC {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -c \"$target_libatomic_source\" -o \"$target_libatomic_object\"\n"
+    ));
     script.push_str(&format!(
         "rm -f \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE}\"; \"$target_alias_dir/ar\" rcs \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBATOMIC_STATIC_ARCHIVE}\" \"$target_libatomic_object\"\n"
     ));
@@ -7581,7 +6932,7 @@ fn push_first_stage_target_linker_wrapper(script: &mut String, full_source_bound
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     push_first_stage_target_linker_discovery(script, full_source_bound);
-    push_first_stage_target_linker_runtime(script, full_source_bound);
+    push_first_stage_target_linker_runtime(script);
     push_first_stage_target_cc_wrapper(script, full_source_bound);
     push_first_stage_target_companion_wrappers(script, full_source_bound);
 }
@@ -7646,7 +6997,7 @@ fn push_first_stage_target_linker_discovery(script: &mut String, full_source_bou
     ));
 }
 
-fn push_first_stage_target_linker_runtime(script: &mut String, full_source_bound: bool) {
+fn push_first_stage_target_linker_runtime(script: &mut String) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     script.push_str(&format!("export {FIRST_STAGE_TARGET_NIX_CC_WRAPPER_HOST_ROLE_VAR}=1\n"));
@@ -7678,31 +7029,13 @@ fn push_first_stage_target_linker_runtime(script: &mut String, full_source_bound
     ));
     script.push_str("$COPY_PROGRAM \"$target_gcc_crt_dir/libgcc.a\" \"$target_runtime_dir/libgcc_s.a\"\n");
     push_first_stage_target_libgcc_shared_copy(script);
-    push_first_stage_target_musl_lfs_compat(script, full_source_bound);
+    push_first_stage_target_musl_lfs_compat(script);
 }
 
 fn push_first_stage_target_cc_wrapper(script: &mut String, full_source_bound: bool) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     if full_source_bound {
-        script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$target_alias_dir/sh\"\n");
-        script.push_str("printf '%s\\n' \"exec \\\"$SHELL_PROGRAM\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/sh\"\n");
-        script.push_str("chmod +x \"$target_alias_dir/sh\"\n");
-        script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$target_alias_dir/emcc\"\n");
-        script.push_str("printf '%s\\n' 'exit 127' >> \"$target_alias_dir/emcc\"\n");
-        script.push_str("chmod +x \"$target_alias_dir/emcc\"\n");
-        for unavailable_tool in ["pkg-config", "pkgconf", "git"] {
-            script.push_str(&format!(
-                "printf '%s\\n' \"#!$SHELL_PROGRAM\" 'exit 127' > \"$target_alias_dir/{unavailable_tool}\"\n"
-            ));
-            script.push_str(&format!("chmod +x \"$target_alias_dir/{unavailable_tool}\"\n"));
-        }
-        script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$target_alias_dir/perl\"\n");
-        script.push_str("printf '%s\\n' \"exec \\\"$PERL_PROGRAM\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/perl\"\n");
-        script.push_str("chmod +x \"$target_alias_dir/perl\"\n");
-        script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$target_alias_dir/make\"\n");
-        script.push_str("printf '%s\\n' \"exec \\\"$MAKE_PROGRAM\\\" \\\"\\$@\\\"\" >> \"$target_alias_dir/make\"\n");
-        script.push_str("chmod +x \"$target_alias_dir/make\"\n");
         script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$target_alias_dir/cc\"\n");
     } else {
         script.push_str("printf '%s\\n' '#!/bin/sh' > \"$target_alias_dir/cc\"\n");
@@ -7764,15 +7097,9 @@ fn push_first_stage_target_cc_wrapper(script: &mut String, full_source_bound: bo
     script.push_str(&format!(
         "printf '%s\\n' 'if [ \"$link_command\" = true ] && [ \"$dynamic_rustc_link\" = true ]; then set -- \"$@\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_OBJECT}\" -no-pie -Wl,-Bdynamic \"-Wl,-dynamic-linker,$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LIBC_SHARED_OBJECT}\" {FIRST_STAGE_TARGET_MUSL_PTHREAD_TLS_WRAP_FLAGS} -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; elif [ \"$link_command\" = true ] && [ \"$static_support_link\" = true ]; then set -- \"$@\" \"$target_runtime_dir/{FIRST_STAGE_TARGET_MUSL_LFS_COMPAT_OBJECT}\" -static {FIRST_STAGE_TARGET_MUSL_PTHREAD_TLS_WRAP_FLAGS} -Wl,--start-group -latomic -lunwind -lgcc -Wl,--end-group; fi' >> \"$target_alias_dir/cc\"\n"
     ));
-    if full_source_bound {
-        script.push_str(&format!(
-            "printf '%s\\n' 'exec \"$target_cc_path\" \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
-        ));
-    } else {
-        script.push_str(&format!(
-            "printf '%s\\n' 'exec \"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
-        ));
-    }
+    script.push_str(&format!(
+        "printf '%s\\n' 'exec \"$target_cc_path\" -D{FIRST_STAGE_TARGET_LARGEFILE64_FEATURE_DEFINE} {FIRST_STAGE_TARGET_NO_ASYNC_UNWIND_TABLES_FLAG} -B\"$target_runtime_dir/\" -L\"$target_runtime_dir\" \"$@\"' >> \"$target_alias_dir/cc\"\n"
+    ));
     script.push_str("chmod +x \"$target_alias_dir/cc\"\n");
 }
 
@@ -7821,7 +7148,7 @@ fn push_first_stage_musl_host_llvm_runtime(script: &mut String, full_source_boun
     script.push_str(&format!(
         "if [ ! -x \"$target_alias_dir/cc\" ] || [ ! -x \"$target_alias_dir/c++\" ] || [ ! -x \"$target_alias_dir/ar\" ] || [ ! -x \"$target_alias_dir/ranlib\" ]; then printf '%s\\n' 'source-root musl LLVM host wrapper tools are incomplete' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
     ));
-    push_first_stage_target_musl_libatomic_shim(script, full_source_bound);
+    push_first_stage_target_musl_libatomic_shim(script);
     script.push_str("MINICARGO_FLAGS=\"${MINICARGO_FLAGS:-} --target $RUSTC_HOST_TRIPLE\"\n");
     script.push_str("export MINICARGO_FLAGS\n");
     script.push_str(&format!(
@@ -7862,16 +7189,10 @@ fn push_first_stage_musl_host_llvm_runtime(script: &mut String, full_source_boun
     }
     script.push_str("CC=\"$CC_PROGRAM\"\n");
     script.push_str("CXX=\"$CXX_PROGRAM\"\n");
-    if full_source_bound {
-        script.push_str("CFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $ZLIB_CFLAGS\"\n");
-        script.push_str("CXXFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MRUSTC_CXXFLAGS $ZLIB_CFLAGS\"\n");
-        script.push_str("LDFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $ZLIB_LIBS\"\n");
-    } else {
-        script.push_str("CFLAGS=\"$ZLIB_CFLAGS\"\n");
-        script.push_str("CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS\"\n");
-        script.push_str("LDFLAGS=\"$ZLIB_LIBS\"\n");
-    }
+    script.push_str("CFLAGS=\"$ZLIB_CFLAGS\"\n");
     script.push_str("CPPFLAGS=\"$ZLIB_CFLAGS\"\n");
+    script.push_str("CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS\"\n");
+    script.push_str("LDFLAGS=\"$ZLIB_LIBS\"\n");
     script.push_str("LIBS=\"$ZLIB_LIBS\"\n");
     script.push_str("if [ -n \"${LLVM_LINKER_FLAGS:-}\" ]; then LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind $LLVM_LINKER_FLAGS\"; else LLVM_LINKER_FLAGS=\"-L$target_runtime_dir -lgcc -lunwind\"; fi\n");
     script.push_str("export CC_PROGRAM CXX_PROGRAM CC CXX CFLAGS CPPFLAGS CXXFLAGS LDFLAGS LIBS AR RANLIB CMAKE_C_COMPILER CMAKE_CXX_COMPILER CMAKE_AR CMAKE_RANLIB CMAKE_C_COMPILER_AR CMAKE_CXX_COMPILER_AR CMAKE_C_COMPILER_RANLIB CMAKE_CXX_COMPILER_RANLIB LLVM_STATIC_STDCPP LLVM_LINKER_FLAGS\n");
@@ -7945,39 +7266,6 @@ fn push_generated_scratch_temp_environment(script: &mut String) {
     assert!(script.contains("export TMPDIR=\"$TEMP_ROOT\""));
 }
 
-fn push_first_stage_mrustc_make_command(script: &mut String, full_source_bound: bool) {
-    let original_len = script.len();
-    debug_assert!(!script.contains('\0'));
-    if full_source_bound {
-        script.push_str(&format!(
-            "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} CC=\"$CC\" CXX=\"$CXX\" CXXFLAGS=\"$CXXFLAGS\" LDFLAGS=\"$LDFLAGS\" LINKFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" LIBS=\"$LIBS\"\n"
-        ));
-    } else {
-        script.push_str(&format!(
-            "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} CC=\"$CC\" CXX=\"$CXX\" CXXFLAGS=\"$CXXFLAGS\" LDFLAGS=\"$LDFLAGS\" LIBS=\"$LIBS\"\n"
-        ));
-    }
-    assert!(script.len() > original_len);
-    assert_eq!(script[original_len..].contains("LINKFLAGS_EXTRA"), full_source_bound);
-}
-
-fn push_first_stage_minicargo_make_command(script: &mut String, full_source_bound: bool) {
-    let original_len = script.len();
-    debug_assert!(!script.contains('\0'));
-    if full_source_bound {
-        script.push_str(&format!(
-            "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} CXXFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" LINKFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" {FIRST_STAGE_MINICARGO_BINARY}\n"
-        ));
-    } else {
-        script.push_str(&format!(
-            "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}\n"
-        ));
-    }
-    assert!(script.len() > original_len);
-    assert_eq!(script[original_len..].contains("CXXFLAGS_EXTRA"), full_source_bound);
-    assert_eq!(script[original_len..].contains("LINKFLAGS_EXTRA"), full_source_bound);
-}
-
 fn push_first_stage_build_pipeline(
     script: &mut String,
     patch_plan: &RustBootstrapPatchPlan,
@@ -8003,20 +7291,15 @@ fn push_first_stage_build_pipeline(
     script.push_str("export CC=\"$CC_PROGRAM\"\n");
     script.push_str("export CXX=\"$CXX_PROGRAM\"\n");
     if full_source_bound {
-        script.push_str(
-            "export CFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\"\n",
-        );
+        script.push_str("export CFLAGS=\"$ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\"\n");
         script.push_str("export CPPFLAGS=\"$ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\"\n");
-        script.push_str(
-            "export CXXFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MRUSTC_CXXFLAGS $ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\"\n",
-        );
-        script.push_str("export LDFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $ZLIB_LIBS\"\n");
+        script.push_str("export CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\"\n");
     } else {
         script.push_str("export CFLAGS=\"$ZLIB_CFLAGS\"\n");
         script.push_str("export CPPFLAGS=\"$ZLIB_CFLAGS\"\n");
         script.push_str("export CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS\"\n");
-        script.push_str("export LDFLAGS=\"$ZLIB_LIBS\"\n");
     }
+    script.push_str("export LDFLAGS=\"$ZLIB_LIBS\"\n");
     script.push_str("export LIBS=\"$ZLIB_LIBS\"\n");
     push_first_stage_patch_plan_operations(
         script,
@@ -8024,8 +7307,12 @@ fn push_first_stage_build_pipeline(
         RustBootstrapPatchPhase::BeforeFirstStageMainMake,
         full_source_bound,
     )?;
-    push_first_stage_mrustc_make_command(script, full_source_bound);
-    push_first_stage_minicargo_make_command(script, full_source_bound);
+    script.push_str(&format!(
+        "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} CC=\"$CC\" CXX=\"$CXX\" CXXFLAGS=\"$CXXFLAGS\" LDFLAGS=\"$LDFLAGS\" LIBS=\"$LIBS\"\n"
+    ));
+    script.push_str(&format!(
+        "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_MINICARGO_BINARY}\n"
+    ));
     push_first_stage_patch_plan_operations(
         script,
         patch_plan,
@@ -8050,14 +7337,15 @@ fn push_first_stage_build_pipeline(
     script.push_str(&format!(
         "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_RUSTC_BINARY}\n"
     ));
-    push_first_stage_translated_cargo_build(script, full_source_bound);
+    script.push_str(&format!(
+        "$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_CARGO_BINARY}\n"
+    ));
     push_first_stage_patch_plan_operations(
         script,
         patch_plan,
         RustBootstrapPatchPhase::AfterFirstStageTranslatedCargo,
         full_source_bound,
     )?;
-    push_first_stage_run_rustc_stage_tool_absolute_patch(script, full_source_bound);
     push_first_stage_patch_plan_operations(
         script,
         patch_plan,
@@ -8071,18 +7359,6 @@ fn push_first_stage_build_pipeline(
         full_source_bound,
     )?;
     Ok(())
-}
-
-fn push_first_stage_translated_cargo_build(script: &mut String, full_source_bound: bool) {
-    let original_len = script.len();
-    debug_assert!(!script.contains('\0'));
-    script.push_str(&format!("$MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -f {FIRST_STAGE_MINICARGO_MAKEFILE}"));
-    if full_source_bound {
-        script.push_str(&format!(" PARLEVEL={FIRST_STAGE_TRANSLATED_CARGO_MINICARGO_JOB_COUNT}"));
-    }
-    script.push_str(&format!(" {FIRST_STAGE_TRANSLATED_CARGO_BINARY}\n"));
-    assert!(script.len() > original_len);
-    assert!(script[original_len..].contains(FIRST_STAGE_TRANSLATED_CARGO_BINARY));
 }
 
 fn push_first_stage_busybox_patch_normalization(script: &mut String) {
@@ -8211,17 +7487,11 @@ fn push_first_stage_patch_plan_operation(
         RustBootstrapPatchOperationKind::MinicargoRustcThreads => {
             push_first_stage_minicargo_rustc_threads_patch(script)
         }
-        RustBootstrapPatchOperationKind::MinicargoProtectedExecutionPaths => {
-            push_first_stage_minicargo_protected_execution_paths(script, full_source_bound)
-        }
         RustBootstrapPatchOperationKind::MinicargoLlvmStaticArchiveTargets => {
-            push_first_stage_minicargo_llvm_backtrace_patch(script, full_source_bound)
+            push_first_stage_minicargo_llvm_backtrace_patch(script)
         }
         RustBootstrapPatchOperationKind::SourceRootMuslLlvmRuntime => {
             push_first_stage_musl_host_llvm_runtime(script, full_source_bound)
-        }
-        RustBootstrapPatchOperationKind::OpenSslNoAsm => {
-            push_first_stage_openssl_no_asm_patch(script, full_source_bound)
         }
         RustBootstrapPatchOperationKind::RustExplicitSysroot => push_first_stage_rustc_explicit_sysroot_patch(script),
         RustBootstrapPatchOperationKind::RustcDriverRlib => push_first_stage_musl_rustc_driver_rlib_patch(script),
@@ -8301,408 +7571,7 @@ fn first_stage_minicargo_makefile_llvm_config_build_patched_line() -> String {
     )
 }
 
-fn push_first_stage_minicargo_protected_execution_paths(script: &mut String, full_source_bound: bool) {
-    let original_len = script.len();
-    debug_assert!(!script.contains('\0'));
-    if !full_source_bound {
-        return;
-    }
-    script.push_str("printf '%s\\n' 'binding minicargo and Make recipes to protected absolute executables'\n");
-    script.push_str("minicargo_makefile=minicargo.mk\n");
-    script.push_str("minicargo_exec_tmp=\"$BUILD_DIR/minicargo-protected-exec.mk\"\n");
-    script.push_str(&format!(
-        "minicargo_exec_original={}\n",
-        shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_ORIGINAL_LINE)
-    ));
-    script.push_str(&format!(
-        "minicargo_exec_patched={}\n",
-        shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE)
-    ));
-    script.push_str("minicargo_exec_replaced=false\n");
-    script.push_str("minicargo_exec_seen=false\n");
-    script.push_str(": > \"$minicargo_exec_tmp\"\n");
-    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
-    script.push_str("  if [ \"$line\" = \"$minicargo_exec_original\" ]; then\n");
-    script.push_str("    printf '%s\\n' \"$minicargo_exec_patched\" >> \"$minicargo_exec_tmp\"\n");
-    script.push_str("    minicargo_exec_replaced=true\n");
-    script.push_str("  else\n");
-    script.push_str("    if [ \"$line\" = \"$minicargo_exec_patched\" ]; then minicargo_exec_seen=true; fi\n");
-    script.push_str("    printf '%s\\n' \"$line\" >> \"$minicargo_exec_tmp\"\n");
-    script.push_str("  fi\n");
-    script.push_str("done < \"$minicargo_makefile\"\n");
-    script.push_str(&format!(
-        "if [ \"$minicargo_exec_replaced\" = false ] && [ \"$minicargo_exec_seen\" = false ]; then printf '%s\\n' 'minicargo Makefile lacks the expected protected executable variable' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str("$COPY_PROGRAM \"$minicargo_exec_tmp\" \"$minicargo_makefile\"\n");
-    script.push_str("rm -f \"$minicargo_exec_tmp\"\n");
-    push_first_stage_run_rustc_minicargo_absolute_patch(script);
-    push_first_stage_mrustc_bound_shell_patch(script);
-    push_first_stage_mrustc_proc_macro_absolute_patch(script);
-    push_first_stage_llvm_rule_normalizer(script);
-    script.push_str("RECEIPT_MAKE_PROGRAM=\"$MAKE_PROGRAM\"\n");
-    script.push_str("receipt_make_dir=\"$BUILD_DIR/receipt-make-bin\"\n");
-    script.push_str("mkdir -p \"$receipt_make_dir\"\n");
-    script.push_str("MAKE_PROGRAM=\"$receipt_make_dir/make\"\n");
-    script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$MAKE_PROGRAM\"\n");
-    script.push_str(
-        "printf '%s\\n' \"exec \\\"$RECEIPT_MAKE_PROGRAM\\\" \\\"SHELL=$SHELL_PROGRAM\\\" \\\"\\$@\\\"\" >> \"$MAKE_PROGRAM\"\n",
-    );
-    script.push_str("chmod +x \"$MAKE_PROGRAM\"\n");
-    script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$receipt_make_dir/sh\"\n");
-    script.push_str("printf '%s\\n' \"exec \\\"$SHELL_PROGRAM\\\" \\\"\\$@\\\"\" >> \"$receipt_make_dir/sh\"\n");
-    script.push_str("chmod +x \"$receipt_make_dir/sh\"\n");
-    script.push_str("PATH=\"$receipt_make_dir:$PATH\"\n");
-    script.push_str("MRUSTC_SHELL=\"$SHELL_PROGRAM\"\n");
-    script.push_str("export PATH MAKE_PROGRAM RECEIPT_MAKE_PROGRAM MRUSTC_SHELL MANTLE_LLVM_RULE_NORMALIZER\n");
-    assert!(script.len() > original_len);
-    assert!(script[original_len..].contains(FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE));
-    assert!(script[original_len..].contains("SHELL=$SHELL_PROGRAM"));
-}
-
-fn push_first_stage_run_rustc_minicargo_absolute_patch(script: &mut String) {
-    debug_assert!(!script.contains('\0'));
-    script.push_str("run_rustc_makefile=run_rustc/Makefile\n");
-    script.push_str("run_rustc_minicargo_tmp=\"$BUILD_DIR/run-rustc-minicargo.mk\"\n");
-    script.push_str(&format!(
-        "run_rustc_minicargo_original={}\n",
-        shell_quote(FIRST_STAGE_RUN_RUSTC_MINICARGO_ORIGINAL_LINE)
-    ));
-    script.push_str(&format!(
-        "run_rustc_minicargo_patched={}\n",
-        shell_quote(FIRST_STAGE_RUN_RUSTC_MINICARGO_PROTECTED_LINE)
-    ));
-    script.push_str("run_rustc_minicargo_replaced=false\nrun_rustc_minicargo_seen=false\n");
-    script.push_str(": > \"$run_rustc_minicargo_tmp\"\n");
-    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
-    script.push_str("  if [ \"$line\" = \"$run_rustc_minicargo_original\" ]; then\n");
-    script.push_str("    printf '%s\\n' \"$run_rustc_minicargo_patched\" >> \"$run_rustc_minicargo_tmp\"\n");
-    script.push_str("    run_rustc_minicargo_replaced=true\n  else\n");
-    script
-        .push_str("    if [ \"$line\" = \"$run_rustc_minicargo_patched\" ]; then run_rustc_minicargo_seen=true; fi\n");
-    script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_minicargo_tmp\"\n  fi\n");
-    script.push_str("done < \"$run_rustc_makefile\"\n");
-    script.push_str(&format!(
-        "if [ \"$run_rustc_minicargo_replaced\" = false ] && [ \"$run_rustc_minicargo_seen\" = false ]; then printf '%s\\n' 'run_rustc Makefile lacks the expected protected minicargo executable' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str("$COPY_PROGRAM \"$run_rustc_minicargo_tmp\" \"$run_rustc_makefile\"\n");
-    script.push_str("rm -f \"$run_rustc_minicargo_tmp\"\n");
-    assert!(script.contains(FIRST_STAGE_RUN_RUSTC_MINICARGO_PROTECTED_LINE));
-    assert!(script.contains("run_rustc Makefile lacks the expected protected minicargo executable"));
-}
-
-fn push_first_stage_run_rustc_stage_tool_absolute_patch(script: &mut String, full_source_bound: bool) {
-    let original_len = script.len();
-    debug_assert!(!script.contains('\0'));
-    if !full_source_bound {
-        return;
-    }
-    push_first_stage_run_rustc_stage_tool_bindings(script);
-    push_first_stage_run_rustc_stage_tool_rewrite(script);
-    push_first_stage_run_rustc_stage_tool_validation(script);
-    push_first_stage_run_rustc_final_smoke_patch(script);
-    push_first_stage_run_rustc_final_smoke_exec_patch(script);
-    assert!(script.len() > original_len);
-    assert!(script[original_len..].contains(FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_PROTECTED_TOKEN));
-    assert!(script[original_len..].contains(FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_PROTECTED_TOKEN));
-    assert!(script[original_len..].contains(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_PROTECTED_LINE));
-    assert!(script[original_len..].contains(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_EXEC_PROTECTED_LINE));
-}
-
-fn push_first_stage_run_rustc_stage_tool_bindings(script: &mut String) {
-    debug_assert!(!script.contains('\0'));
-    script.push_str("printf '%s\\n' 'binding run_rustc stage tools to protected absolute executables'\n");
-    script.push_str("run_rustc_stage_tool_makefile=run_rustc/Makefile\n");
-    script.push_str("run_rustc_stage_tool_tmp=\"$BUILD_DIR/run-rustc-stage-tools.mk\"\n");
-    script.push_str("run_rustc_stage_tool_tab=$(printf '\\t')\n");
-    for (name, token) in [
-        ("rustc_original", FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_ORIGINAL_TOKEN),
-        ("rustc_patched", FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_PROTECTED_TOKEN),
-        ("cargo_original", FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_ORIGINAL_TOKEN),
-        ("cargo_patched", FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_PROTECTED_TOKEN),
-    ] {
-        script.push_str(&format!("run_rustc_stage_{name}={}\n", shell_quote(token)));
-    }
-    script.push_str("run_rustc_stage_rustc_seen=false\nrun_rustc_stage_cargo_seen=false\n");
-    assert!(script.contains("run_rustc_stage_rustc_original"));
-    assert!(script.contains("run_rustc_stage_cargo_patched"));
-}
-
-fn push_first_stage_run_rustc_stage_tool_rewrite(script: &mut String) {
-    debug_assert!(!script.contains('\0'));
-    script.push_str(": > \"$run_rustc_stage_tool_tmp\"\n");
-    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
-    script.push_str("  case \"$line\" in\n");
-    script.push_str("    \"$run_rustc_stage_tool_tab\"*)\n");
-    script.push_str("      case \"$line\" in\n");
-    push_first_stage_run_rustc_stage_tool_rewrite_arm(script, "rustc");
-    push_first_stage_run_rustc_stage_tool_rewrite_arm(script, "cargo");
-    script.push_str("        *) printf '%s\\n' \"$line\" >> \"$run_rustc_stage_tool_tmp\" ;;\n");
-    script.push_str("      esac\n      ;;\n");
-    script.push_str("    *) printf '%s\\n' \"$line\" >> \"$run_rustc_stage_tool_tmp\" ;;\n");
-    script.push_str("  esac\n");
-    script.push_str("done < \"$run_rustc_stage_tool_makefile\"\n");
-    assert!(script.contains("run_rustc_stage_prefix"));
-    assert!(script.contains("run_rustc_stage_suffix"));
-}
-
-fn push_first_stage_run_rustc_stage_tool_rewrite_arm(script: &mut String, tool: &str) {
-    debug_assert!(tool == "rustc" || tool == "cargo");
-    debug_assert!(!script.contains('\0'));
-    script.push_str(&format!("        *\"$run_rustc_stage_{tool}_original\"*)\n"));
-    script.push_str(&format!("          run_rustc_stage_prefix=${{line%%\"$run_rustc_stage_{tool}_original\"*}}\n"));
-    script.push_str(&format!("          run_rustc_stage_suffix=${{line#*\"$run_rustc_stage_{tool}_original\"}}\n"));
-    script.push_str(&format!(
-        "          case \"$run_rustc_stage_suffix\" in *\"$run_rustc_stage_{tool}_original\"*) printf '%s\\n' 'run_rustc {tool} recipe contains repeated executable tokens' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE} ;; esac\n"
-    ));
-    script.push_str(&format!(
-        "          printf '%s%s%s\\n' \"$run_rustc_stage_prefix\" \"$run_rustc_stage_{tool}_patched\" \"$run_rustc_stage_suffix\" >> \"$run_rustc_stage_tool_tmp\"\n"
-    ));
-    script.push_str(&format!("          run_rustc_stage_{tool}_seen=true\n          ;;\n"));
-    assert!(script.contains(&format!("run_rustc_stage_{tool}_seen=true")));
-}
-
-fn push_first_stage_run_rustc_stage_tool_validation(script: &mut String) {
-    debug_assert!(!script.contains('\0'));
-    for tool in ["rustc", "cargo"] {
-        script.push_str(&format!(
-            "if [ \"$run_rustc_stage_{tool}_seen\" = false ]; then printf '%s\\n' 'run_rustc Makefile lacks a protected stage {tool} recipe' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
-        ));
-    }
-    script.push_str("$COPY_PROGRAM \"$run_rustc_stage_tool_tmp\" \"$run_rustc_stage_tool_makefile\"\n");
-    script.push_str("rm -f \"$run_rustc_stage_tool_tmp\"\n");
-    assert!(script.contains("lacks a protected stage rustc recipe"));
-    assert!(script.contains("lacks a protected stage cargo recipe"));
-}
-
-fn push_first_stage_run_rustc_final_smoke_patch(script: &mut String) {
-    debug_assert!(!script.contains('\0'));
-    script.push_str("run_rustc_final_smoke_tmp=\"$BUILD_DIR/run-rustc-final-smoke.mk\"\n");
-    script.push_str(&format!(
-        "run_rustc_final_smoke_original={}\n",
-        shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_ORIGINAL_LINE)
-    ));
-    script.push_str(&format!(
-        "run_rustc_final_smoke_protected={}\n",
-        shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_PROTECTED_LINE)
-    ));
-    script.push_str("run_rustc_final_smoke_replaced=false\nrun_rustc_final_smoke_seen=false\n");
-    script.push_str(": > \"$run_rustc_final_smoke_tmp\"\n");
-    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
-    script.push_str("  if [ \"$line\" = \"$run_rustc_final_smoke_original\" ]; then\n");
-    script.push_str("    printf '%s\\n' \"$run_rustc_final_smoke_protected\" >> \"$run_rustc_final_smoke_tmp\"\n");
-    script.push_str("    run_rustc_final_smoke_replaced=true\n");
-    script.push_str("  elif [ \"$line\" = \"$run_rustc_final_smoke_protected\" ]; then\n");
-    script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_final_smoke_tmp\"\n");
-    script.push_str("    run_rustc_final_smoke_seen=true\n");
-    script.push_str("  else\n");
-    script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_final_smoke_tmp\"\n");
-    script.push_str("  fi\n");
-    script.push_str("done < \"$run_rustc_stage_tool_makefile\"\n");
-    script.push_str(&format!(
-        "if [ \"$run_rustc_final_smoke_replaced\" = false ] && [ \"$run_rustc_final_smoke_seen\" = false ]; then printf '%s\\n' 'run_rustc Makefile lacks the protected final rustc smoke recipe' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str("$COPY_PROGRAM \"$run_rustc_final_smoke_tmp\" \"$run_rustc_stage_tool_makefile\"\n");
-    script.push_str("rm -f \"$run_rustc_final_smoke_tmp\"\n");
-    assert!(script.contains("run_rustc_final_smoke_replaced=true"));
-    assert!(script.contains(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_PROTECTED_LINE));
-}
-
-fn push_first_stage_run_rustc_final_smoke_exec_patch(script: &mut String) {
-    debug_assert!(!script.contains('\0'));
-    script.push_str("run_rustc_final_smoke_exec_tmp=\"$BUILD_DIR/run-rustc-final-smoke-exec.mk\"\n");
-    script.push_str(&format!(
-        "run_rustc_final_smoke_exec_original={}\n",
-        shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_EXEC_ORIGINAL_LINE)
-    ));
-    script.push_str(&format!(
-        "run_rustc_final_smoke_exec_protected={}\n",
-        shell_quote(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_EXEC_PROTECTED_LINE)
-    ));
-    script.push_str("run_rustc_final_smoke_exec_replaced=false\nrun_rustc_final_smoke_exec_seen=false\n");
-    script.push_str(": > \"$run_rustc_final_smoke_exec_tmp\"\n");
-    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
-    script.push_str("  if [ \"$line\" = \"$run_rustc_final_smoke_exec_original\" ]; then\n");
-    script.push_str(
-        "    printf '%s\\n' \"$run_rustc_final_smoke_exec_protected\" >> \"$run_rustc_final_smoke_exec_tmp\"\n",
-    );
-    script.push_str("    run_rustc_final_smoke_exec_replaced=true\n");
-    script.push_str("  elif [ \"$line\" = \"$run_rustc_final_smoke_exec_protected\" ]; then\n");
-    script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_final_smoke_exec_tmp\"\n");
-    script.push_str("    run_rustc_final_smoke_exec_seen=true\n");
-    script.push_str("  else\n");
-    script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_final_smoke_exec_tmp\"\n");
-    script.push_str("  fi\n");
-    script.push_str("done < \"$run_rustc_stage_tool_makefile\"\n");
-    script.push_str(&format!(
-        "if [ \"$run_rustc_final_smoke_exec_replaced\" = false ] && [ \"$run_rustc_final_smoke_exec_seen\" = false ]; then printf '%s\\n' 'run_rustc Makefile lacks the protected final smoke execution' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str("$COPY_PROGRAM \"$run_rustc_final_smoke_exec_tmp\" \"$run_rustc_stage_tool_makefile\"\n");
-    script.push_str("rm -f \"$run_rustc_final_smoke_exec_tmp\"\n");
-    assert!(script.contains("run_rustc_final_smoke_exec_replaced=true"));
-    assert!(script.contains(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_EXEC_PROTECTED_LINE));
-}
-
-fn push_first_stage_mrustc_bound_shell_patch(script: &mut String) {
-    debug_assert!(!script.contains('\0'));
-    let replacement = [
-        "                // Mantle: execute compiler commands through the receipt-bound shell.",
-        "                int ec = 0;",
-        "                const char* mantle_shell = getenv(\"MRUSTC_SHELL\");",
-        "                if(mantle_shell != nullptr && mantle_shell[0] != '\\0')",
-        "                {",
-        "                    pid_t child_pid = ::fork();",
-        "                    if(child_pid == -1)",
-        "                    {",
-        "                        ec = -1;",
-        "                    }",
-        "                    else if(child_pid == 0)",
-        "                    {",
-        "                        ::execl(mantle_shell, mantle_shell, \"-c\", cmd_ss.str().c_str(), static_cast<char*>(nullptr));",
-        "                        ::_exit(127);",
-        "                    }",
-        "                    else",
-        "                    {",
-        "                        int child_status = 0;",
-        "                        pid_t wait_result;",
-        "                        do",
-        "                        {",
-        "                            wait_result = ::waitpid(child_pid, &child_status, 0);",
-        "                        } while(wait_result == -1 && errno == EINTR);",
-        "                        ec = wait_result == -1 ? -1 : child_status;",
-        "                    }",
-        "                }",
-        "                else",
-        "                {",
-        "                    ec = system(cmd_ss.str().c_str());",
-        "                }",
-    ];
-    script.push_str(&format!("mrustc_codegen_source={FIRST_STAGE_MRUSTC_CODEGEN_C_SOURCE}\n"));
-    script.push_str("mrustc_codegen_tmp=\"$BUILD_DIR/codegen-c-bound-shell.cpp\"\n");
-    script.push_str("mrustc_system_matches=0\n");
-    script.push_str(": > \"$mrustc_codegen_tmp\"\n");
-    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
-    script.push_str(&format!("  if [ \"$line\" = {} ]; then\n", shell_quote(FIRST_STAGE_MRUSTC_SYSTEM_ORIGINAL_LINE)));
-    for line in replacement {
-        script.push_str(&format!("    printf '%s\\n' {} >> \"$mrustc_codegen_tmp\"\n", shell_quote(line)));
-    }
-    script.push_str("    mrustc_system_matches=$((mrustc_system_matches + 1))\n");
-    script.push_str("  elif [ \"$line\" = '#include <cmath>' ]; then\n");
-    for line in [
-        "#include <cmath>",
-        "#include <cerrno>",
-        "#include <cstdlib>",
-        "#include <sys/wait.h>",
-        "#include <unistd.h>",
-    ] {
-        script.push_str(&format!("    printf '%s\\n' {} >> \"$mrustc_codegen_tmp\"\n", shell_quote(line)));
-    }
-    script.push_str("  else\n    printf '%s\\n' \"$line\" >> \"$mrustc_codegen_tmp\"\n  fi\n");
-    script.push_str("done < \"$mrustc_codegen_source\"\n");
-    script.push_str(&format!(
-        "if [ \"$mrustc_system_matches\" -ne 1 ]; then printf '%s\\n' 'mrustc codegen C source lacks one expected system call' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str("$COPY_PROGRAM \"$mrustc_codegen_tmp\" \"$mrustc_codegen_source\"\n");
-    script.push_str("rm -f \"$mrustc_codegen_tmp\"\n");
-}
-
-fn push_first_stage_mrustc_proc_macro_absolute_patch(script: &mut String) {
-    debug_assert!(!script.contains('\0'));
-    let argv_replacement = [
-        "    char resolved_executable[PATH_MAX];",
-        "    const char* spawn_executable = executable;",
-        "    if(executable[0] != '/')",
-        "    {",
-        "        if(realpath(executable, resolved_executable) == nullptr)",
-        "        {",
-        "            BUG(sp, \"Unable to resolve proc-macro executable `\" << executable << \"`, \" << strerror(errno));",
-        "        }",
-        "        spawn_executable = resolved_executable;",
-        "    }",
-        "    char*   argv[3] = { const_cast<char*>(spawn_executable), const_cast<char*>(proc_macro_desc.name.c_str()), nullptr };",
-    ];
-    script.push_str(&format!("mrustc_proc_macro_source={FIRST_STAGE_MRUSTC_PROC_MACRO_SOURCE}\n"));
-    script.push_str("mrustc_proc_macro_tmp=\"$BUILD_DIR/proc-macro-absolute.cpp\"\n");
-    script.push_str("mrustc_proc_macro_argv_matches=0\n");
-    script.push_str("mrustc_proc_macro_spawn_matches=0\n");
-    script.push_str(": > \"$mrustc_proc_macro_tmp\"\n");
-    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
-    script.push_str("  if [ \"$line\" = '#include <unordered_set>' ]; then\n");
-    for line in ["#include <unordered_set>", "#include <limits.h>", "#include <stdlib.h>"] {
-        script.push_str(&format!("    printf '%s\\n' {} >> \"$mrustc_proc_macro_tmp\"\n", shell_quote(line)));
-    }
-    script.push_str(&format!(
-        "  elif [ \"$line\" = {} ]; then\n",
-        shell_quote(FIRST_STAGE_MRUSTC_PROC_MACRO_ARGV_ORIGINAL_LINE)
-    ));
-    for line in argv_replacement {
-        script.push_str(&format!("    printf '%s\\n' {} >> \"$mrustc_proc_macro_tmp\"\n", shell_quote(line)));
-    }
-    script.push_str("    mrustc_proc_macro_argv_matches=$((mrustc_proc_macro_argv_matches + 1))\n");
-    script.push_str(&format!(
-        "  elif [ \"$line\" = {} ]; then\n",
-        shell_quote(FIRST_STAGE_MRUSTC_PROC_MACRO_SPAWN_ORIGINAL_LINE)
-    ));
-    script.push_str(
-        "    printf '%s\\n' '    int rv = posix_spawn(&this->handles.child_pid, spawn_executable, &file_actions, nullptr, argv, environ);' >> \"$mrustc_proc_macro_tmp\"\n",
-    );
-    script.push_str("    mrustc_proc_macro_spawn_matches=$((mrustc_proc_macro_spawn_matches + 1))\n");
-    script.push_str("  else\n    printf '%s\\n' \"$line\" >> \"$mrustc_proc_macro_tmp\"\n  fi\n");
-    script.push_str("done < \"$mrustc_proc_macro_source\"\n");
-    script.push_str(&format!(
-        "if [ \"$mrustc_proc_macro_argv_matches\" -ne 1 ] || [ \"$mrustc_proc_macro_spawn_matches\" -ne 1 ]; then printf '%s\\n' 'mrustc proc-macro source lacks one expected spawn boundary' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str("$COPY_PROGRAM \"$mrustc_proc_macro_tmp\" \"$mrustc_proc_macro_source\"\n");
-    script.push_str("rm -f \"$mrustc_proc_macro_tmp\"\n");
-}
-
-fn push_first_stage_llvm_rule_normalizer(script: &mut String) {
-    debug_assert!(!script.contains('\0'));
-    script.push_str("MANTLE_LLVM_RULE_NORMALIZER=\"$BUILD_DIR/normalize-llvm-rules\"\n");
-    script.push_str("printf '%s\\n' \"#!$SHELL_PROGRAM\" > \"$MANTLE_LLVM_RULE_NORMALIZER\"\n");
-    let normalizer_lines = vec![
-        "set -eu".to_string(),
-        "build_root=$1".to_string(),
-        "busybox_dir=${SHELL_PROGRAM%/sh}".to_string(),
-        "file_list=$build_root/.mantle-build-makefiles".to_string(),
-        "files_seen=0".to_string(),
-        "replacements=0".to_string(),
-        format!("files_max={FIRST_STAGE_LLVM_RULE_FILES_MAX}"),
-        format!("replacements_max={FIRST_STAGE_LLVM_RULE_REPLACEMENTS_MAX}"),
-        "\"$busybox_dir/find\" \"$build_root\" -name build.make -type f > \"$file_list\"".to_string(),
-        "while IFS= read -r file || [ -n \"$file\" ]; do".to_string(),
-        "  files_seen=$((files_seen + 1))".to_string(),
-        "  if [ \"$files_seen\" -gt \"$files_max\" ]; then echo 'LLVM Makefile count exceeds bound' >&2; exit 3; fi".to_string(),
-        "  tmp=$file.mantle-absolute-exec".to_string(),
-        "  : > \"$tmp\"".to_string(),
-        "  while IFS= read -r line || [ -n \"$line\" ]; do".to_string(),
-        "    for tool_name in llvm-min-tblgen llvm-tblgen; do".to_string(),
-        "      for relative_prefix in ../../../../bin ../../../bin; do".to_string(),
-        "        needle=$relative_prefix/$tool_name".to_string(),
-        "        case \"$line\" in".to_string(),
-        "        *\"$needle\"*)".to_string(),
-        "          prefix=${line%%${needle}*}".to_string(),
-        "          suffix=${line#*${needle}}".to_string(),
-        "          line=${prefix}${build_root}/bin/${tool_name}${suffix}".to_string(),
-        "          replacements=$((replacements + 1))".to_string(),
-        "          if [ \"$replacements\" -gt \"$replacements_max\" ]; then echo 'LLVM rule replacement count exceeds bound' >&2; exit 3; fi".to_string(),
-        "          ;;".to_string(),
-        "        esac".to_string(),
-        "      done".to_string(),
-        "    done".to_string(),
-        "    printf '%s\\n' \"$line\" >> \"$tmp\"".to_string(),
-        "  done < \"$file\"".to_string(),
-        "  \"$busybox_dir/mv\" \"$tmp\" \"$file\"".to_string(),
-        "done < \"$file_list\"".to_string(),
-        "\"$busybox_dir/rm\" -f \"$file_list\"".to_string(),
-        "if [ \"$replacements\" -eq 0 ]; then echo 'LLVM generated rules contain no bounded tblgen paths' >&2; exit 3; fi".to_string(),
-    ];
-    for line in normalizer_lines {
-        script.push_str(&format!("printf '%s\\n' {} >> \"$MANTLE_LLVM_RULE_NORMALIZER\"\n", shell_quote(&line)));
-    }
-    script.push_str("chmod +x \"$MANTLE_LLVM_RULE_NORMALIZER\"\n");
-}
-
-fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String, full_source_bound: bool) {
+fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String) {
     debug_assert!(script.len() <= script.capacity());
     debug_assert!(!script.contains('\0'));
     script.push_str(&format!("if [ \"$RUSTC_HOST_TRIPLE\" = \"{FIRST_STAGE_MUSL_TRIPLE}\" ]; then\n"));
@@ -8716,10 +7585,6 @@ fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String, full_sou
     script.push_str("minicargo_llvm_options_seen_patched=false\n");
     script.push_str("minicargo_llvm_config_replaced=false\n");
     script.push_str("minicargo_llvm_config_seen_patched=false\n");
-    if full_source_bound {
-        script.push_str("minicargo_cmake_command_replaced=false\n");
-        script.push_str("minicargo_cmake_command_seen_patched=false\n");
-    }
     script.push_str(&format!(
         "minicargo_llvm_options_original={}\n",
         shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_BACKTRACE_ORIGINAL_LINE)
@@ -8734,16 +7599,6 @@ fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String, full_sou
     ));
     let minicargo_llvm_config_patched = first_stage_minicargo_makefile_llvm_config_build_patched_line();
     script.push_str(&format!("minicargo_llvm_config_patched={}\n", shell_quote(&minicargo_llvm_config_patched)));
-    if full_source_bound {
-        script.push_str(&format!(
-            "minicargo_cmake_command_original={}\n",
-            shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_ORIGINAL_LINE)
-        ));
-        script.push_str(&format!(
-            "minicargo_cmake_command_patched={}\n",
-            shell_quote(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE)
-        ));
-    }
     script.push_str("while IFS= read -r line; do\n");
     script.push_str("  if [ \"$line\" = \"$minicargo_llvm_options_original\" ]; then\n");
     script.push_str("    printf '%s\\n' \"$minicargo_llvm_options_patched\" >> \"$minicargo_llvm_tmp\"\n");
@@ -8751,21 +7606,11 @@ fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String, full_sou
     script.push_str("  elif [ \"$line\" = \"$minicargo_llvm_config_original\" ]; then\n");
     script.push_str("    printf '%s\\n' \"$minicargo_llvm_config_patched\" >> \"$minicargo_llvm_tmp\"\n");
     script.push_str("    minicargo_llvm_config_replaced=true\n");
-    if full_source_bound {
-        script.push_str("  elif [ \"$line\" = \"$minicargo_cmake_command_original\" ]; then\n");
-        script.push_str("    printf '%s\\n' \"$minicargo_cmake_command_patched\" >> \"$minicargo_llvm_tmp\"\n");
-        script.push_str("    minicargo_cmake_command_replaced=true\n");
-    }
     script.push_str("  else\n");
     script.push_str("    if [ \"$line\" = \"$minicargo_llvm_options_patched\" ]; then minicargo_llvm_options_seen_patched=true; fi\n");
     script.push_str(
         "    if [ \"$line\" = \"$minicargo_llvm_config_patched\" ]; then minicargo_llvm_config_seen_patched=true; fi\n",
     );
-    if full_source_bound {
-        script.push_str(
-            "    if [ \"$line\" = \"$minicargo_cmake_command_patched\" ]; then minicargo_cmake_command_seen_patched=true; fi\n",
-        );
-    }
     script.push_str("    printf '%s\\n' \"$line\" >> \"$minicargo_llvm_tmp\"\n");
     script.push_str("  fi\n");
     script.push_str("done < \"$minicargo_makefile\"\n");
@@ -8775,11 +7620,6 @@ fn push_first_stage_minicargo_llvm_backtrace_patch(script: &mut String, full_sou
     script.push_str(&format!(
         "if [ \"$minicargo_llvm_config_replaced\" = false ] && [ \"$minicargo_llvm_config_seen_patched\" = false ]; then printf '%s\\n' 'minicargo Makefile lacks expected llvm-config build line for musl normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
     ));
-    if full_source_bound {
-        script.push_str(&format!(
-            "if [ \"$minicargo_cmake_command_replaced\" = false ] && [ \"$minicargo_cmake_command_seen_patched\" = false ]; then printf '%s\\n' 'minicargo Makefile lacks expected LLVM configure command for protected rule normalization' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
-        ));
-    }
     script.push_str("$COPY_PROGRAM \"$minicargo_llvm_tmp\" \"$minicargo_makefile\"\n");
     script.push_str("rm -f \"$minicargo_llvm_tmp\"\n");
     script.push_str("fi\n");
@@ -8842,37 +7682,6 @@ fn push_first_stage_minicargo_rustc_threads_patch(script: &mut String) {
     script.push_str("$COPY_PROGRAM \"$minicargo_threads_tmp\" \"$minicargo_threads_source\"\n");
     script.push_str("rm -f \"$minicargo_threads_tmp\"\n");
     script.push_str("fi\n");
-}
-
-fn push_first_stage_openssl_no_asm_patch(script: &mut String, full_source_bound: bool) {
-    debug_assert!(!script.contains('\0'));
-    if !full_source_bound {
-        return;
-    }
-    script.push_str("printf '%s\\n' 'disabling OpenSSL assembly generators for protected source bootstrap'\n");
-    script.push_str("set -- rustc-${RUSTC_VERSION}-src/vendor/openssl-src-300.*/src/lib.rs\n");
-    script.push_str(&format!(
-        "if [ \"$#\" -ne 1 ] || [ ! -f \"$1\" ]; then printf '%s\\n' 'vendored OpenSSL source configuration is not unique' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str("openssl_src_config=$1\n");
-    script.push_str("openssl_src_tmp=\"$BUILD_DIR/openssl-src-no-asm.rs\"\n");
-    script.push_str("openssl_no_asm_matches=0\n");
-    script.push_str(": > \"$openssl_src_tmp\"\n");
-    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
-    script.push_str(
-        "  if [ \"$line\" = '        // On Android it looks like not passing no-stdio may cause a build' ]; then\n",
-    );
-    script.push_str("    printf '%s\\n' '        // Mantle: avoid Perl assembly pipes that require ambient /bin/sh.' >> \"$openssl_src_tmp\"\n");
-    script.push_str("    printf '%s\\n' '        configure.arg(\"no-asm\");' >> \"$openssl_src_tmp\"\n");
-    script.push_str("    openssl_no_asm_matches=$((openssl_no_asm_matches + 1))\n");
-    script.push_str("  fi\n");
-    script.push_str("  printf '%s\\n' \"$line\" >> \"$openssl_src_tmp\"\n");
-    script.push_str("done < \"$openssl_src_config\"\n");
-    script.push_str(&format!(
-        "if [ \"$openssl_no_asm_matches\" -ne 1 ]; then printf '%s\\n' 'vendored OpenSSL configuration lacks one expected insertion point' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
-    ));
-    script.push_str("$COPY_PROGRAM \"$openssl_src_tmp\" \"$openssl_src_config\"\n");
-    script.push_str("rm -f \"$openssl_src_tmp\"\n");
 }
 
 fn push_first_stage_rustc_explicit_sysroot_patch(script: &mut String) {
@@ -8966,94 +7775,11 @@ fn push_first_stage_musl_rustc_driver_rlib_patch(script: &mut String) {
 fn push_first_stage_run_rustc_host(script: &mut String, full_source_bound: bool) {
     script.push_str("RUSTC_TARGET=\"$RUSTC_HOST_TRIPLE\"\n");
     push_first_stage_target_linker_wrapper(script, full_source_bound);
-    if full_source_bound {
-        script.push_str("export MANTLE_TARGET_LINKER=\"$target_alias_dir/cc\"\n");
-        push_first_stage_run_rustc_sysroot_linker_aliases(script);
-        push_first_stage_run_rustc_proxy_linker_patch(script);
-    }
     push_first_stage_musl_proc_macro_runtime(script);
     push_first_stage_run_rustc_dylib_ext(script);
-    if full_source_bound {
-        script.push_str(&format!(
-            "if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -C {FIRST_STAGE_RUN_RUSTC_DIR} DYLIB_EXT=\"$RUN_RUSTC_DYLIB_EXT\" MANTLE_TARGET_LINKER=\"$target_alias_dir/cc\"; else $MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -C {FIRST_STAGE_RUN_RUSTC_DIR} MANTLE_TARGET_LINKER=\"$target_alias_dir/cc\"; fi\n"
-        ));
-    } else {
-        script.push_str(&format!(
-            "if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -C {FIRST_STAGE_RUN_RUSTC_DIR} DYLIB_EXT=\"$RUN_RUSTC_DYLIB_EXT\"; else $MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -C {FIRST_STAGE_RUN_RUSTC_DIR}; fi\n"
-        ));
-    }
-}
-
-fn push_first_stage_run_rustc_sysroot_linker_aliases(script: &mut String) {
-    debug_assert!(!script.contains('\0'));
-    script.push_str("printf '%s\\n' 'binding run_rustc sysroot linker aliases to the protected wrapper'\n");
-    script
-        .push_str("run_rustc_sysroot_linker_dir=\"$(pwd)/run_rustc/output/prefix-s/lib/rustlib/$RUSTC_TARGET/bin\"\n");
-    script.push_str("run_rustc_self_contained_linker_dir=\"$run_rustc_sysroot_linker_dir/self-contained\"\n");
-    script.push_str("mkdir -p \"$run_rustc_sysroot_linker_dir\" \"$run_rustc_self_contained_linker_dir\"\n");
-    script.push_str(
-        "for linker_alias in \"$run_rustc_sysroot_linker_dir/cc\" \"$run_rustc_self_contained_linker_dir/cc\"; do\n",
-    );
-    script.push_str("  rm -f \"$linker_alias\"\n");
-    script.push_str("  $COPY_PROGRAM \"$MANTLE_TARGET_LINKER\" \"$linker_alias\"\n");
-    script.push_str("  chmod +x \"$linker_alias\"\n");
-    script.push_str("done\n");
-    script.push_str("test -x \"$run_rustc_sysroot_linker_dir/cc\"\n");
-    script.push_str("test -x \"$run_rustc_self_contained_linker_dir/cc\"\n");
-    assert!(script.contains("run_rustc/output/prefix-s/lib/rustlib/$RUSTC_TARGET/bin"));
-    assert!(script.contains("$run_rustc_self_contained_linker_dir/cc"));
-}
-
-fn push_first_stage_run_rustc_proxy_linker_patch(script: &mut String) {
-    debug_assert!(!script.contains('\0'));
-    script.push_str(&format!("run_rustc_proxy={}\n", shell_quote(FIRST_STAGE_RUN_RUSTC_PROXY_PATH)));
-    script.push_str("run_rustc_proxy_tmp=\"$BUILD_DIR/rustc-proxy.sh\"\n");
-    for (name, original, protected) in [
-        (
-            "target",
-            FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_ORIGINAL_LINE,
-            FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_PROTECTED_LINE,
-        ),
-        (
-            "bootstrap",
-            FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_ORIGINAL_LINE,
-            FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_PROTECTED_LINE,
-        ),
-    ] {
-        script.push_str(&format!("run_rustc_proxy_{name}_original={}\n", shell_quote(original)));
-        script.push_str(&format!("run_rustc_proxy_{name}_protected={}\n", shell_quote(protected)));
-        script.push_str(&format!("run_rustc_proxy_{name}_replaced=false\nrun_rustc_proxy_{name}_seen=false\n"));
-    }
-    script.push_str(": > \"$run_rustc_proxy_tmp\"\n");
-    script.push_str("while IFS= read -r line || [ -n \"$line\" ]; do\n");
-    script.push_str("  if [ \"$line\" = \"$run_rustc_proxy_target_original\" ]; then\n");
-    script.push_str("    printf '%s\\n' \"$run_rustc_proxy_target_protected\" >> \"$run_rustc_proxy_tmp\"\n");
-    script.push_str("    run_rustc_proxy_target_replaced=true\n");
-    script.push_str("  elif [ \"$line\" = \"$run_rustc_proxy_target_protected\" ]; then\n");
-    script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_proxy_tmp\"\n");
-    script.push_str("    run_rustc_proxy_target_seen=true\n");
-    script.push_str("  elif [ \"$line\" = \"$run_rustc_proxy_bootstrap_original\" ]; then\n");
-    script.push_str("    printf '%s\\n' \"$run_rustc_proxy_bootstrap_protected\" >> \"$run_rustc_proxy_tmp\"\n");
-    script.push_str("    run_rustc_proxy_bootstrap_replaced=true\n");
-    script.push_str("  elif [ \"$line\" = \"$run_rustc_proxy_bootstrap_protected\" ]; then\n");
-    script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_proxy_tmp\"\n");
-    script.push_str("    run_rustc_proxy_bootstrap_seen=true\n");
-    script.push_str("  else\n");
-    script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_proxy_tmp\"\n");
-    script.push_str("  fi\n");
-    script.push_str("done < \"$run_rustc_proxy\"\n");
-    for name in ["target", "bootstrap"] {
-        script.push_str(&format!(
-            "if [ \"$run_rustc_proxy_{name}_replaced\" = false ] && [ \"$run_rustc_proxy_{name}_seen\" = false ]; then printf '%s\\n' 'run_rustc proxy lacks the protected {name} linker invocation' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
-        ));
-    }
-    script.push_str("$COPY_PROGRAM \"$run_rustc_proxy_tmp\" \"$run_rustc_proxy\"\n");
-    script.push_str("chmod +x \"$run_rustc_proxy\"\n");
-    script.push_str("rm -f \"$run_rustc_proxy_tmp\"\n");
-    assert!(script.contains("run_rustc_proxy_target_replaced=true"));
-    assert!(script.contains("run_rustc_proxy_bootstrap_replaced=true"));
-    assert!(script.contains(FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_PROTECTED_LINE));
-    assert!(script.contains(FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_PROTECTED_LINE));
+    script.push_str(&format!(
+        "if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -C {FIRST_STAGE_RUN_RUSTC_DIR} DYLIB_EXT=\"$RUN_RUSTC_DYLIB_EXT\"; else $MAKE_PROGRAM {FIRST_STAGE_MAKE_PARALLEL_ARG} -C {FIRST_STAGE_RUN_RUSTC_DIR}; fi\n"
+    ));
 }
 
 fn push_first_stage_musl_proc_macro_runtime(script: &mut String) {
@@ -9157,14 +7883,12 @@ fn push_first_stage_run_rustc_cargo_all_static_patch(script: &mut String) {
     debug_assert!(!script.contains('\0'));
     script.push_str("printf '%s\\n' 'normalizing run_rustc Cargo static feature set for source-root musl host'\n");
     script.push_str("run_rustc_cargo_tmp=\"$BUILD_DIR/run-rustc-cargo-all-static-Makefile\"\n");
-    for (name, line) in [
-        ("original", FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_LINE),
-        ("patched", FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_ALL_STATIC_LINE),
-        ("protected_original", FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_PROTECTED_LINE),
-        ("protected_patched", FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_PROTECTED_ALL_STATIC_LINE),
-    ] {
-        script.push_str(&format!("run_rustc_cargo_{name}_line={}\n", shell_quote(line)));
-    }
+    script
+        .push_str(&format!("run_rustc_cargo_original_line={}\n", shell_quote(FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_LINE)));
+    script.push_str(&format!(
+        "run_rustc_cargo_patched_line={}\n",
+        shell_quote(FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_ALL_STATIC_LINE)
+    ));
     script.push_str("run_rustc_cargo_replaced=false\n");
     script.push_str("run_rustc_cargo_seen_patched=false\n");
     script.push_str(": > \"$run_rustc_cargo_tmp\"\n");
@@ -9172,12 +7896,7 @@ fn push_first_stage_run_rustc_cargo_all_static_patch(script: &mut String) {
     script.push_str("  if [ \"$line\" = \"$run_rustc_cargo_original_line\" ]; then\n");
     script.push_str("    printf '%s\\n' \"$run_rustc_cargo_patched_line\" >> \"$run_rustc_cargo_tmp\"\n");
     script.push_str("    run_rustc_cargo_replaced=true\n");
-    script.push_str("  elif [ \"$line\" = \"$run_rustc_cargo_protected_original_line\" ]; then\n");
-    script.push_str("    printf '%s\\n' \"$run_rustc_cargo_protected_patched_line\" >> \"$run_rustc_cargo_tmp\"\n");
-    script.push_str("    run_rustc_cargo_replaced=true\n");
-    script.push_str(
-        "  elif [ \"$line\" = \"$run_rustc_cargo_patched_line\" ] || [ \"$line\" = \"$run_rustc_cargo_protected_patched_line\" ]; then\n",
-    );
+    script.push_str("  elif [ \"$line\" = \"$run_rustc_cargo_patched_line\" ]; then\n");
     script.push_str("    printf '%s\\n' \"$line\" >> \"$run_rustc_cargo_tmp\"\n");
     script.push_str("    run_rustc_cargo_seen_patched=true\n");
     script.push_str("  else\n");
@@ -9322,7 +8041,7 @@ fn push_first_stage_run_rustc_target(script: &mut String, full_source_bound: boo
     script.push_str("$COPY_PROGRAM output/cargo \"$target_bin_dir/cargo\"\n");
     script.push_str("chmod +x \"$target_bin_dir/rustc\" \"$target_bin_dir/cargo\"\n");
     script.push_str(
-        "STD_ENV_ARCH=\"$target_std_env_arch\" MRUSTC_PATH=\"$(pwd)/$target_bin_dir/rustc\" \"$(pwd)/bin/minicargo\" --vendor-dir \"rustc-${RUSTC_VERSION}-src/vendor\" --script-overrides \"script-overrides/stable-${RUSTC_VERSION}-linux/\" --output-dir \"$target_libdir\" $target_minicargo_flags \"$target_sysroot_source\"\n",
+        "STD_ENV_ARCH=\"$target_std_env_arch\" MRUSTC_PATH=\"$(pwd)/$target_bin_dir/rustc\" bin/minicargo --vendor-dir \"rustc-${RUSTC_VERSION}-src/vendor\" --script-overrides \"script-overrides/stable-${RUSTC_VERSION}-linux/\" --output-dir \"$target_libdir\" $target_minicargo_flags \"$target_sysroot_source\"\n",
     );
     script.push_str(&format!(
         "if [ ! -f \"$target_libstd\" ]; then printf '%s\\n' 'target rustlib build did not produce libstd.rlib' >&2; exit {FIRST_STAGE_BUILD_FAILED_EXIT_CODE}; fi\n"
@@ -10058,171 +8777,6 @@ mod tests {
         }
     }
 
-    #[cfg(unix)]
-    #[test]
-    fn rust_bootstrap_openssl_no_asm_patch_covers_all_configs_and_is_idempotent() {
-        let temp = tempfile::tempdir().unwrap();
-        let source_root = temp.path().join("source");
-        let build_root = temp.path().join("build");
-        let first_config = source_root.join("vendor/openssl-src-300.5.0/src/lib.rs");
-        let second_config = source_root.join("vendor/openssl-src-300.5.2/src/lib.rs");
-        for config in [&first_config, &second_config] {
-            write_test_openssl_source_config(config, test_openssl_source_config());
-        }
-        fs::create_dir(&build_root).unwrap();
-        let script = openssl_no_asm_patch_test_script(&source_root, &build_root);
-
-        let first = Command::new("/bin/sh").arg("-c").arg(&script).output().unwrap();
-        let second = Command::new("/bin/sh").arg("-c").arg(&script).output().unwrap();
-
-        assert!(first.status.success(), "{}", String::from_utf8_lossy(&first.stderr));
-        assert!(second.status.success(), "{}", String::from_utf8_lossy(&second.stderr));
-        for config in [&first_config, &second_config] {
-            let patched = fs::read_to_string(config).unwrap();
-            let checksum: serde_json::Value =
-                serde_json::from_slice(&fs::read(test_openssl_checksum_path(config)).unwrap()).unwrap();
-            assert_eq!(patched.matches(RUSTC_SOURCE_OPENSSL_NO_ASM_MARKER).count(), 1);
-            assert_eq!(patched.matches(RUSTC_SOURCE_OPENSSL_NO_ASM_LINE).count(), 1);
-            assert_eq!(patched.matches(RUSTC_SOURCE_OPENSSL_NO_ASM_ANCHOR).count(), 1);
-            assert_eq!(
-                checksum["files"][RUSTC_SOURCE_CARGO_CHECKSUM_MEMBER].as_str().unwrap(),
-                sha256_hex(patched.as_bytes())
-            );
-        }
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn rust_bootstrap_openssl_no_asm_patch_rejects_unknown_source() {
-        let temp = tempfile::tempdir().unwrap();
-        let source_root = temp.path().join("source");
-        let build_root = temp.path().join("build");
-        let config = source_root.join("vendor/openssl-src-300.5.2/src/lib.rs");
-        fs::create_dir_all(config.parent().unwrap()).unwrap();
-        fs::create_dir(&build_root).unwrap();
-        fs::write(&config, "unknown OpenSSL recipe\n").unwrap();
-        let script = openssl_no_asm_patch_test_script(&source_root, &build_root);
-
-        let output = Command::new("/bin/sh").arg("-c").arg(script).output().unwrap();
-
-        assert!(!output.status.success());
-        assert!(String::from_utf8_lossy(&output.stderr).contains("lacks one expected insertion point"));
-        assert_eq!(fs::read_to_string(config).unwrap(), "unknown OpenSSL recipe\n");
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn rust_bootstrap_openssl_no_asm_patch_rejects_missing_checksum_metadata() {
-        let temp = tempfile::tempdir().unwrap();
-        let source_root = temp.path().join("source");
-        let build_root = temp.path().join("build");
-        let config = source_root.join("vendor/openssl-src-300.5.2/src/lib.rs");
-        fs::create_dir_all(config.parent().unwrap()).unwrap();
-        fs::create_dir(&build_root).unwrap();
-        fs::write(&config, test_openssl_source_config()).unwrap();
-        let script = openssl_no_asm_patch_test_script(&source_root, &build_root);
-
-        let output = Command::new("/bin/sh").arg("-c").arg(script).output().unwrap();
-
-        assert!(!output.status.success());
-        assert!(String::from_utf8_lossy(&output.stderr).contains("Cargo checksum metadata is missing"));
-        assert_eq!(fs::read(&config).unwrap(), test_openssl_source_config());
-        assert!(!test_openssl_checksum_path(&config).exists());
-    }
-
-    #[cfg(unix)]
-    fn openssl_no_asm_patch_test_script(source_root: &Path, build_root: &Path) -> String {
-        let mut script = format!(
-            "set -eu\nMANTLE_HOST_TRIPLE={}\nMANTLE_RUST_SOURCE={}\nMANTLE_BUILD_DIR={}\nMANTLE_PYTHON_PROGRAM=python3\n",
-            shell_quote(FIRST_STAGE_MUSL_TRIPLE),
-            shell_quote(&source_root.display().to_string()),
-            shell_quote(&build_root.display().to_string()),
-        );
-        push_rustc_source_openssl_no_asm_patch(&mut script);
-        script
-    }
-
-    #[cfg(unix)]
-    fn write_test_openssl_source_config(config: &Path, source: &[u8]) {
-        fs::create_dir_all(config.parent().unwrap()).unwrap();
-        fs::write(config, source).unwrap();
-        let checksum = format!(
-            "{{\"files\":{{\"{}\":\"{}\"}},\"package\":null}}",
-            RUSTC_SOURCE_CARGO_CHECKSUM_MEMBER,
-            sha256_hex(source)
-        );
-        fs::write(test_openssl_checksum_path(config), checksum).unwrap();
-    }
-
-    #[cfg(unix)]
-    fn test_openssl_checksum_path(config: &Path) -> PathBuf {
-        config.parent().unwrap().parent().unwrap().join(".cargo-checksum.json")
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn rust_bootstrap_llvm_tablegen_patch_emits_absolute_target_file_and_is_idempotent() {
-        let temp = tempfile::tempdir().unwrap();
-        let source_root = temp.path().join("source");
-        let build_root = temp.path().join("build");
-        let tablegen_path = source_root.join(RUSTC_SOURCE_LLVM_TABLEGEN_CMAKE);
-        fs::create_dir_all(tablegen_path.parent().unwrap()).unwrap();
-        fs::create_dir(&build_root).unwrap();
-        fs::write(
-            &tablegen_path,
-            format!(
-                "before\n{RUSTC_SOURCE_LLVM_TABLEGEN_EXE_ORIGINAL_LINE}\n{RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_ORIGINAL_LINE}\nafter\n"
-            ),
-        )
-        .unwrap();
-        let script = llvm_tablegen_patch_test_script(&source_root, &build_root);
-
-        let first = Command::new("/bin/sh").arg("-c").arg(&script).output().unwrap();
-        let second = Command::new("/bin/sh").arg("-c").arg(&script).output().unwrap();
-        let patched = fs::read_to_string(&tablegen_path).unwrap();
-
-        assert!(first.status.success(), "{}", String::from_utf8_lossy(&first.stderr));
-        assert!(second.status.success(), "{}", String::from_utf8_lossy(&second.stderr));
-        assert_eq!(patched.matches(RUSTC_SOURCE_LLVM_TABLEGEN_TARGET_MARKER_LINE).count(), 1);
-        assert!(patched.contains(
-            "set(tablegen_exe \"${LLVM_TOOLS_BINARY_DIR}/${${project}_TABLEGEN_EXE}${CMAKE_EXECUTABLE_SUFFIX}\")"
-        ));
-        assert!(patched.contains(RUSTC_SOURCE_LLVM_TABLEGEN_EXE_ORIGINAL_LINE));
-        assert!(patched.contains(RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_PROTECTED_LINE));
-        assert!(!patched.contains(RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_ORIGINAL_LINE));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn rust_bootstrap_llvm_tablegen_patch_rejects_unknown_recipe() {
-        let temp = tempfile::tempdir().unwrap();
-        let source_root = temp.path().join("source");
-        let build_root = temp.path().join("build");
-        let tablegen_path = source_root.join(RUSTC_SOURCE_LLVM_TABLEGEN_CMAKE);
-        fs::create_dir_all(tablegen_path.parent().unwrap()).unwrap();
-        fs::create_dir(&build_root).unwrap();
-        fs::write(&tablegen_path, "set(tablegen_exe unknown-recipe)\n").unwrap();
-        let script = llvm_tablegen_patch_test_script(&source_root, &build_root);
-
-        let output = Command::new("/bin/sh").arg("-c").arg(script).output().unwrap();
-
-        assert!(!output.status.success());
-        assert!(String::from_utf8_lossy(&output.stderr).contains("lacks expected executable selection"));
-        assert_eq!(fs::read_to_string(tablegen_path).unwrap(), "set(tablegen_exe unknown-recipe)\n");
-    }
-
-    #[cfg(unix)]
-    fn llvm_tablegen_patch_test_script(source_root: &Path, build_root: &Path) -> String {
-        let mut script = format!(
-            "set -eu\nMANTLE_HOST_TRIPLE={}\nMANTLE_RUST_SOURCE={}\nMANTLE_BUILD_DIR={}\n",
-            shell_quote(FIRST_STAGE_MUSL_TRIPLE),
-            shell_quote(&source_root.display().to_string()),
-            shell_quote(&build_root.display().to_string()),
-        );
-        push_rustc_source_llvm_absolute_tablegen_patch(&mut script);
-        script
-    }
-
     #[test]
     fn stage_construction_evidence_rejects_missing_source_file() {
         let temp = tempfile::tempdir().unwrap();
@@ -10291,7 +8845,6 @@ mod tests {
         push_generated_script_shebang(&mut script, Some(&context)).unwrap();
         push_full_source_tool_bindings(&mut script, &context).unwrap();
         push_first_stage_target_linker_wrapper(&mut script, true);
-        push_rustc_source_target_companion_wrappers(&mut script, true);
         push_rustc_source_build_tool_discovery(&mut script, Some(&context)).unwrap();
 
         assert!(script.starts_with("#!/receipt-bound/sh\n"));
@@ -10304,36 +8857,11 @@ mod tests {
         assert!(script.contains("MANTLE_ZLIB_ARCHIVE='/lib/libz.a'"));
         assert!(script.contains("MANTLE_LINUX_HEADERS_ROOT='/receipt-bound/linux-headers'"));
         assert!(script.contains("MANTLE_LINUX_HEADERS_CFLAGS='-I/receipt-bound/linux-headers/include'"));
-        assert!(script.contains(
-            "MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG='-B/native-provider/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/'"
-        ));
-        assert!(script.contains("export CFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MANTLE_LINUX_HEADERS_CFLAGS\""));
-        assert!(script.contains("unset GCC_EXEC_PREFIX COMPILER_PATH"));
+        assert!(script.contains("export CFLAGS=\"$MANTLE_LINUX_HEADERS_CFLAGS\""));
         assert!(script.contains("MANTLE_TARGET_CC='/native-provider/bin/x86_64-linux-musl-gcc'"));
-        assert!(script.contains("$target_alias_dir/emcc"));
-        assert!(script.contains("$target_alias_dir/pkg-config"));
-        assert!(script.contains("$target_alias_dir/git"));
-        assert!(script.contains("$target_alias_dir/g++"));
-        assert!(script.contains("exec \\\"$SHELL_PROGRAM\\\" \\\"$target_alias_dir/cc\\\""));
-        assert!(script.contains("$target_alias_dir/cmake"));
-        assert!(script.contains("$target_alias_dir/sh"));
         assert!(!script.contains("ZLIB_CFLAGS=\nZLIB_LIBS=\n"));
         assert!(!script.contains("command -v"));
         assert!(!script.contains("/nix/store"));
-    }
-
-    #[test]
-    fn rust_bootstrap_gxx_alias_is_full_source_only() {
-        let mut compatibility_script = String::new();
-        let mut full_source_script = String::new();
-
-        push_rustc_source_target_companion_wrappers(&mut compatibility_script, false);
-        push_rustc_source_target_companion_wrappers(&mut full_source_script, true);
-
-        assert!(!compatibility_script.contains("$target_alias_dir/g++"));
-        assert!(full_source_script.contains("$target_alias_dir/g++"));
-        assert!(full_source_script.contains("#!$SHELL_PROGRAM"));
-        assert!(full_source_script.contains("exec \\\"$SHELL_PROGRAM\\\" \\\"$target_alias_dir/cc\\\""));
     }
 
     #[test]
@@ -10345,77 +8873,10 @@ mod tests {
         push_rustc_source_llvm_config(&mut full_source_config, Some(&context));
         push_rustc_source_llvm_config(&mut compatibility_config, None);
 
-        assert!(
-            full_source_config.contains("cflags = \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MANTLE_LINUX_HEADERS_CFLAGS\"")
-        );
-        assert!(
-            full_source_config
-                .contains("cxxflags = \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MANTLE_LINUX_HEADERS_CFLAGS\"")
-        );
+        assert!(full_source_config.contains("cflags = \"$MANTLE_LINUX_HEADERS_CFLAGS\""));
+        assert!(full_source_config.contains("cxxflags = \"$MANTLE_LINUX_HEADERS_CFLAGS\""));
         assert!(!full_source_config.contains("/usr/include"));
         assert!(!compatibility_config.contains("MANTLE_LINUX_HEADERS_CFLAGS"));
-        assert!(!compatibility_config.contains("MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG"));
-    }
-
-    #[test]
-    fn full_source_mrustc_link_uses_receipt_bound_gcc_subprogram_prefix() {
-        let mut script = String::new();
-
-        push_first_stage_mrustc_make_command(&mut script, true);
-
-        assert!(script.contains("LINKFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
-        assert!(script.contains("LDFLAGS=\"$LDFLAGS\""));
-    }
-
-    #[test]
-    fn compatibility_mrustc_link_does_not_invent_full_source_gcc_prefix() {
-        let mut script = String::new();
-
-        push_first_stage_mrustc_make_command(&mut script, false);
-
-        assert!(!script.contains("LINKFLAGS_EXTRA"));
-        assert!(!script.contains("MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG"));
-    }
-
-    #[test]
-    fn full_source_minicargo_compile_and_link_use_receipt_bound_gcc_prefix() {
-        let mut script = String::new();
-
-        push_first_stage_minicargo_make_command(&mut script, true);
-
-        assert!(script.contains("CXXFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
-        assert!(script.contains("LINKFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
-    }
-
-    #[test]
-    fn compatibility_minicargo_does_not_invent_full_source_gcc_prefix() {
-        let mut script = String::new();
-
-        push_first_stage_minicargo_make_command(&mut script, false);
-
-        assert!(!script.contains("CXXFLAGS_EXTRA"));
-        assert!(!script.contains("LINKFLAGS_EXTRA"));
-        assert!(!script.contains("MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG"));
-    }
-
-    #[test]
-    fn full_source_runtime_shim_compile_uses_receipt_bound_gcc_prefix() {
-        let mut script = String::new();
-
-        push_first_stage_target_cc_compile_command(&mut script, true, "-c input.c -o output.o");
-
-        assert!(script.starts_with("\"$target_cc_path\" \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
-        assert!(script.ends_with("-c input.c -o output.o\n"));
-    }
-
-    #[test]
-    fn compatibility_runtime_shim_compile_does_not_invent_full_source_gcc_prefix() {
-        let mut script = String::new();
-
-        push_first_stage_target_cc_compile_command(&mut script, false, "-c input.c -o output.o");
-
-        assert!(script.starts_with("\"$target_cc_path\" -c input.c"));
-        assert!(!script.contains("MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG"));
     }
 
     #[test]
@@ -10428,239 +8889,6 @@ mod tests {
 
         assert!(script.is_empty());
         assert!(error.to_string().contains("host-tool role Perl is missing"));
-    }
-
-    #[test]
-    fn protected_execution_paths_are_full_source_only() {
-        let mut compatibility_script = String::new();
-        let mut full_source_script = String::new();
-
-        push_first_stage_minicargo_protected_execution_paths(&mut compatibility_script, false);
-        push_first_stage_minicargo_protected_execution_paths(&mut full_source_script, true);
-
-        assert!(compatibility_script.is_empty());
-        assert!(full_source_script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE));
-        assert!(full_source_script.contains(FIRST_STAGE_RUN_RUSTC_MINICARGO_PROTECTED_LINE));
-        assert!(full_source_script.contains("run_rustc Makefile lacks the expected protected minicargo executable"));
-        assert!(full_source_script.contains("receipt-make-bin"));
-        assert!(full_source_script.contains("SHELL=$SHELL_PROGRAM"));
-        assert!(full_source_script.contains("MRUSTC_SHELL=\"$SHELL_PROGRAM\""));
-        assert!(full_source_script.contains("MANTLE_LLVM_RULE_NORMALIZER"));
-        assert!(full_source_script.contains("llvm-min-tblgen"));
-        assert!(full_source_script.contains("llvm-tblgen"));
-        assert!(full_source_script.contains("::execl(mantle_shell"));
-        assert!(full_source_script.contains("spawn_executable"));
-        assert!(full_source_script.contains("realpath(executable"));
-        assert!(!full_source_script.contains("SHELL=/bin/sh"));
-        push_first_stage_run_rustc_stage_tool_absolute_patch(&mut compatibility_script, false);
-        push_first_stage_run_rustc_stage_tool_absolute_patch(&mut full_source_script, true);
-        assert!(compatibility_script.is_empty());
-        assert!(full_source_script.contains(FIRST_STAGE_RUN_RUSTC_STAGE_RUSTC_EXEC_PROTECTED_TOKEN));
-        assert!(full_source_script.contains(FIRST_STAGE_RUN_RUSTC_STAGE_CARGO_EXEC_PROTECTED_TOKEN));
-    }
-
-    #[test]
-    fn full_source_translated_cargo_build_serializes_minicargo_jobs() {
-        let mut script = String::new();
-        push_first_stage_translated_cargo_build(&mut script, true);
-
-        assert!(script.contains(&format!(
-            "PARLEVEL={FIRST_STAGE_TRANSLATED_CARGO_MINICARGO_JOB_COUNT} {FIRST_STAGE_TRANSLATED_CARGO_BINARY}"
-        )));
-        assert!(script.contains(FIRST_STAGE_MAKE_PARALLEL_ARG));
-    }
-
-    #[test]
-    fn compatibility_translated_cargo_build_keeps_parallel_minicargo_jobs() {
-        let mut script = String::new();
-        push_first_stage_translated_cargo_build(&mut script, false);
-
-        assert!(script.contains(&format!("-f {FIRST_STAGE_MINICARGO_MAKEFILE} {FIRST_STAGE_TRANSLATED_CARGO_BINARY}")));
-        assert!(!script.contains(&format!("PARLEVEL={FIRST_STAGE_TRANSLATED_CARGO_MINICARGO_JOB_COUNT}")));
-    }
-
-    #[test]
-    fn run_rustc_stage_tool_patch_rewrites_only_recipe_executables() {
-        let makefile = format!(
-            "target: $(BINDIR_S)rustc $(BINDIR_S)cargo\n\t$(BINDIR_S)rustc --version\n\t$(BINDIR_S)cargo --version\n{FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_ORIGINAL_LINE}\n{FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_EXEC_ORIGINAL_LINE}\n"
-        );
-        let (output, rewritten) = run_test_run_rustc_stage_tool_patch(&makefile);
-
-        assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
-        assert!(rewritten.contains("target: $(BINDIR_S)rustc $(BINDIR_S)cargo"));
-        assert!(rewritten.contains("\t$(abspath $(BINDIR_S)rustc) --version"));
-        assert!(rewritten.contains("\t$(abspath $(BINDIR_S)cargo) --version"));
-        assert!(rewritten.contains(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_PROTECTED_LINE));
-        assert!(!rewritten.contains(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_ORIGINAL_LINE));
-        assert!(rewritten.contains(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_EXEC_PROTECTED_LINE));
-        assert!(!rewritten.contains(FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_EXEC_ORIGINAL_LINE));
-    }
-
-    #[test]
-    fn run_rustc_stage_tool_patch_rejects_repeated_executable_token() {
-        let makefile = "target:\n\t$(BINDIR_S)rustc $(BINDIR_S)rustc --version\n\t$(BINDIR_S)cargo --version\n";
-        let (output, rewritten) = run_test_run_rustc_stage_tool_patch(makefile);
-
-        assert!(!output.status.success());
-        assert!(
-            String::from_utf8_lossy(&output.stderr)
-                .contains("run_rustc rustc recipe contains repeated executable tokens")
-        );
-        assert_eq!(rewritten, makefile);
-    }
-
-    #[test]
-    fn run_rustc_stage_tool_and_all_static_patches_compose() {
-        let makefile = format!(
-            "target:\n\t$(BINDIR_S)rustc --version\n{FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_LINE}\n{FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_ORIGINAL_LINE}\n{FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_EXEC_ORIGINAL_LINE}\n"
-        );
-        let (output, rewritten) = run_test_run_rustc_composed_patches(&makefile);
-
-        assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
-        assert!(rewritten.lines().any(|line| line == FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_PROTECTED_ALL_STATIC_LINE));
-        assert!(!rewritten.lines().any(|line| line == FIRST_STAGE_RUN_RUSTC_CARGO_BUILD_PROTECTED_LINE));
-    }
-
-    #[test]
-    fn run_rustc_all_static_patch_rejects_unknown_protected_cargo_recipe() {
-        let makefile = format!(
-            "target:\n\t$(BINDIR_S)rustc --version\n\t$(BINDIR_S)cargo build --unexpected\n{FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_ORIGINAL_LINE}\n{FIRST_STAGE_RUN_RUSTC_FINAL_SMOKE_EXEC_ORIGINAL_LINE}\n"
-        );
-        let (output, rewritten) = run_test_run_rustc_composed_patches(&makefile);
-
-        assert!(!output.status.success());
-        assert!(
-            String::from_utf8_lossy(&output.stderr)
-                .contains("mrustc run_rustc Makefile lacks expected Cargo build line for all-static normalization")
-        );
-        assert!(rewritten.contains("\t$(abspath $(BINDIR_S)cargo) build --unexpected"));
-    }
-
-    #[test]
-    fn run_rustc_stage_tool_patch_rejects_unknown_final_smoke_recipe() {
-        let makefile = "target:\n\t$(BINDIR_S)rustc --version\n\t$(BINDIR_S)cargo --version\n\t$V$(DBG) $(BINDIR)rustc --unexpected\n";
-        let (output, rewritten) = run_test_run_rustc_stage_tool_patch(makefile);
-
-        assert!(!output.status.success());
-        assert!(
-            String::from_utf8_lossy(&output.stderr)
-                .contains("run_rustc Makefile lacks the protected final rustc smoke recipe")
-        );
-        assert!(rewritten.contains("\t$V$(DBG) $(BINDIR)rustc --unexpected"));
-    }
-
-    #[test]
-    fn run_rustc_sysroot_linker_aliases_copy_protected_wrapper() {
-        let dir = tempfile::tempdir().unwrap();
-        let linker = dir.path().join("protected-linker");
-        fs::write(&linker, "protected linker\n").unwrap();
-        let mut script = format!(
-            "set -eu\nCOPY_PROGRAM=cp\nMANTLE_TARGET_LINKER={}\nRUSTC_TARGET={}\n",
-            shell_quote(linker.to_str().unwrap()),
-            shell_quote(FIRST_STAGE_MUSL_TRIPLE)
-        );
-        push_first_stage_run_rustc_sysroot_linker_aliases(&mut script);
-        let output = Command::new("/bin/sh").arg("-c").arg(script).current_dir(dir.path()).output().unwrap();
-        let linker_dir =
-            dir.path().join("run_rustc/output/prefix-s/lib/rustlib").join(FIRST_STAGE_MUSL_TRIPLE).join("bin");
-
-        assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
-        assert_eq!(fs::read_to_string(linker_dir.join("cc")).unwrap(), "protected linker\n");
-        assert_eq!(fs::read_to_string(linker_dir.join("self-contained/cc")).unwrap(), "protected linker\n");
-    }
-
-    #[test]
-    fn run_rustc_sysroot_linker_aliases_reject_missing_wrapper() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut script = format!(
-            "set -eu\nCOPY_PROGRAM=cp\nMANTLE_TARGET_LINKER={}\nRUSTC_TARGET={}\n",
-            shell_quote(dir.path().join("missing-linker").to_str().unwrap()),
-            shell_quote(FIRST_STAGE_MUSL_TRIPLE)
-        );
-        push_first_stage_run_rustc_sysroot_linker_aliases(&mut script);
-        let output = Command::new("/bin/sh").arg("-c").arg(script).current_dir(dir.path()).output().unwrap();
-        let linker_dir =
-            dir.path().join("run_rustc/output/prefix-s/lib/rustlib").join(FIRST_STAGE_MUSL_TRIPLE).join("bin");
-
-        assert!(!output.status.success());
-        assert!(!linker_dir.join("cc").exists());
-        assert!(!linker_dir.join("self-contained/cc").exists());
-    }
-
-    #[test]
-    fn run_rustc_proxy_patch_binds_bootstrap_linker() {
-        let proxy = format!(
-            "#!/bin/sh\n{FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_ORIGINAL_LINE}\n{FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_ORIGINAL_LINE}\n"
-        );
-        let (output, rewritten) = run_test_run_rustc_proxy_patch(&proxy);
-
-        assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
-        assert!(rewritten.contains(FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_PROTECTED_LINE));
-        assert!(!rewritten.contains(FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_ORIGINAL_LINE));
-        assert!(rewritten.contains(FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_PROTECTED_LINE));
-        assert!(!rewritten.contains(FIRST_STAGE_RUN_RUSTC_PROXY_BOOTSTRAP_ORIGINAL_LINE));
-    }
-
-    #[test]
-    fn run_rustc_proxy_patch_rejects_unknown_bootstrap_invocation() {
-        let proxy = format!(
-            "#!/bin/sh\n{FIRST_STAGE_RUN_RUSTC_PROXY_TARGET_ORIGINAL_LINE}\n    ${{PROXY_MRUSTC}} --unexpected \"$@\"\n"
-        );
-        let (output, rewritten) = run_test_run_rustc_proxy_patch(&proxy);
-
-        assert!(!output.status.success());
-        assert!(
-            String::from_utf8_lossy(&output.stderr)
-                .contains("run_rustc proxy lacks the protected bootstrap linker invocation")
-        );
-        assert_eq!(rewritten, proxy);
-    }
-
-    fn run_test_run_rustc_proxy_patch(proxy: &str) -> (std::process::Output, String) {
-        let dir = tempfile::tempdir().unwrap();
-        let run_rustc_dir = dir.path().join(FIRST_STAGE_RUN_RUSTC_DIR);
-        let build_dir = dir.path().join("build");
-        fs::create_dir_all(&run_rustc_dir).unwrap();
-        fs::create_dir_all(&build_dir).unwrap();
-        let proxy_path = dir.path().join(FIRST_STAGE_RUN_RUSTC_PROXY_PATH);
-        fs::write(&proxy_path, proxy).unwrap();
-        let mut script = format!("set -eu\nBUILD_DIR={}\nCOPY_PROGRAM=cp\n", shell_quote(build_dir.to_str().unwrap()));
-        push_first_stage_run_rustc_proxy_linker_patch(&mut script);
-        let output = Command::new("/bin/sh").arg("-c").arg(script).current_dir(dir.path()).output().unwrap();
-        let rewritten = fs::read_to_string(proxy_path).unwrap();
-        (output, rewritten)
-    }
-
-    fn run_test_run_rustc_stage_tool_patch(makefile: &str) -> (std::process::Output, String) {
-        let dir = tempfile::tempdir().unwrap();
-        let run_rustc_dir = dir.path().join(FIRST_STAGE_RUN_RUSTC_DIR);
-        let build_dir = dir.path().join("build");
-        fs::create_dir_all(&run_rustc_dir).unwrap();
-        fs::create_dir_all(&build_dir).unwrap();
-        let makefile_path = run_rustc_dir.join(FIRST_STAGE_MAKEFILE);
-        fs::write(&makefile_path, makefile).unwrap();
-        let mut script = format!("set -eu\nBUILD_DIR={}\nCOPY_PROGRAM=cp\n", shell_quote(build_dir.to_str().unwrap()));
-        push_first_stage_run_rustc_stage_tool_absolute_patch(&mut script, true);
-        let output = Command::new("/bin/sh").arg("-c").arg(script).current_dir(dir.path()).output().unwrap();
-        let rewritten = fs::read_to_string(makefile_path).unwrap();
-        (output, rewritten)
-    }
-
-    fn run_test_run_rustc_composed_patches(makefile: &str) -> (std::process::Output, String) {
-        let dir = tempfile::tempdir().unwrap();
-        let run_rustc_dir = dir.path().join(FIRST_STAGE_RUN_RUSTC_DIR);
-        let build_dir = dir.path().join("build");
-        fs::create_dir_all(&run_rustc_dir).unwrap();
-        fs::create_dir_all(&build_dir).unwrap();
-        let makefile_path = run_rustc_dir.join(FIRST_STAGE_MAKEFILE);
-        fs::write(&makefile_path, makefile).unwrap();
-        let mut script = format!("set -eu\nBUILD_DIR={}\nCOPY_PROGRAM=cp\n", shell_quote(build_dir.to_str().unwrap()));
-        push_first_stage_run_rustc_stage_tool_absolute_patch(&mut script, true);
-        script.push_str(&format!("run_rustc_makefile={FIRST_STAGE_RUN_RUSTC_DIR}/{FIRST_STAGE_MAKEFILE}\n"));
-        push_first_stage_run_rustc_cargo_all_static_patch(&mut script);
-        let output = Command::new("/bin/sh").arg("-c").arg(script).current_dir(dir.path()).output().unwrap();
-        let rewritten = fs::read_to_string(makefile_path).unwrap();
-        (output, rewritten)
     }
 
     #[test]
@@ -10690,44 +8918,7 @@ mod tests {
         assert!(script.contains("ambient discovery disabled"));
         assert!(script.contains("MANTLE_ZLIB_ARCHIVE='/lib/libz.a'"));
         assert!(script.contains("MANTLE_LINUX_HEADERS_ROOT='/receipt-bound/linux-headers'"));
-        assert!(script.contains(
-            "MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG='-B/native-provider/libexec/gcc/x86_64-unknown-linux-musl/10.5.0/'"
-        ));
-        assert!(script.contains("unset GCC_EXEC_PREFIX COMPILER_PATH"));
-        assert!(script.contains(
-            "export CXXFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $MRUSTC_CXXFLAGS $ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\""
-        ));
-        assert!(script.contains("export LDFLAGS=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG $ZLIB_LIBS\""));
-        assert!(script.contains("CXXFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
-        assert!(script.contains("LINKFLAGS_EXTRA=\"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_MINICARGO_PROTECTED_LINE));
-        assert!(script.contains("receipt-make-bin"));
-        assert!(script.contains("SHELL=$SHELL_PROGRAM"));
-        assert!(script.contains("MRUSTC_SHELL=\"$SHELL_PROGRAM\""));
-        assert!(script.contains("$target_alias_dir/sh"));
-        assert!(script.contains("$target_alias_dir/emcc"));
-        assert!(script.contains("$target_alias_dir/pkg-config"));
-        assert!(script.contains("$target_alias_dir/pkgconf"));
-        assert!(script.contains("$target_alias_dir/git"));
-        assert!(script.contains("$target_alias_dir/perl"));
-        assert!(script.contains("$target_alias_dir/make"));
-        assert!(script.contains("disabling OpenSSL assembly generators for protected source bootstrap"));
-        assert!(script.contains("configure.arg(\"no-asm\");"));
-        assert!(script.contains(FIRST_STAGE_MINICARGO_MAKEFILE_LLVM_CONFIG_PROTECTED_LINE));
-        assert!(script.contains(FIRST_STAGE_RUN_RUSTC_MINICARGO_PROTECTED_LINE));
-        assert!(script.contains("run_rustc Makefile lacks the expected protected minicargo executable"));
-        let stage_tool_binding_position =
-            script.find("binding run_rustc stage tools to protected absolute executables").unwrap();
-        let run_rustc_build_position = script.find("if [ -n \"$RUN_RUSTC_DYLIB_EXT\" ]; then $MAKE_PROGRAM").unwrap();
-        assert!(stage_tool_binding_position < run_rustc_build_position);
-        assert!(script.contains("::waitpid(child_pid"));
-        assert!(script.contains("\"$(pwd)/bin/minicargo\" --vendor-dir"));
-        assert!(!script.contains(
-            "STD_ENV_ARCH=\"$target_std_env_arch\" MRUSTC_PATH=\"$(pwd)/$target_bin_dir/rustc\" bin/minicargo"
-        ));
-        assert!(script.contains("\"$target_cc_path\" \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" -fPIC"));
-        assert!(script.contains("exec \"$target_cc_path\" \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\""));
-        assert!(!script.contains("GCC_EXEC_PREFIX='/native-provider"));
+        assert!(script.contains("export CXXFLAGS=\"$MRUSTC_CXXFLAGS $ZLIB_CFLAGS $MANTLE_LINUX_HEADERS_CFLAGS\""));
         assert!(script.contains("target_toolchain_root=\"$MANTLE_TARGET_TOOLCHAIN_ROOT\""));
         assert!(script.contains("authenticated-mrustc-0.12.0"));
         assert!(script.contains("authenticated Rust source rewrite mrustc-ivar-bounds"));
@@ -11450,13 +9641,6 @@ mod tests {
         assert!(rustc_stage1_script.contains("export TMPDIR=\"$TEMP_ROOT\""));
         assert!(!rustc_stage1_script.contains("TMPDIR=/tmp"));
         assert!(rustc_stage1_script.contains(RUSTC_SOURCE_LLVM_BUILD_CONFIG.trim_end()));
-        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_LLVM_TABLEGEN_CMAKE));
-        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_LLVM_TABLEGEN_TARGET_MARKER_LINE));
-        assert!(rustc_stage1_script.contains(RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_PROTECTED_LINE));
-        assert!(
-            rustc_stage1_script
-                .contains("${LLVM_TOOLS_BINARY_DIR}/${${project}_TABLEGEN_EXE}${CMAKE_EXECUTABLE_SUFFIX}")
-        );
         assert!(rustc_stage1_script.contains("\"LLVM_ENABLE_ZLIB\" = \"OFF\""));
         assert!(!rustc_stage1_script.contains("\"LLVM_ENABLE_ZLIB\" = \"ON\""));
         assert!(rustc_stage1_script.contains("LLVM_TOOL_LTO_BUILD"));
@@ -11531,9 +9715,6 @@ mod tests {
         assert!(rustc_stage1_script.contains("crt-static = false"));
         assert!(rustc_stage1_script.contains("__atomic_compare_exchange_16"));
         assert!(rustc_stage1_script.contains("linker = \"$MANTLE_TARGET_CC\""));
-        assert!(rustc_stage1_script.contains(
-            "if [ -n \"${MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG:-}\" ]; then set -- \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" \"$@\"; fi"
-        ));
         let script = fs::read_to_string(scratch.join(FIRST_STAGE_SCRIPT_FILE)).unwrap();
         assert!(script.contains("missing verified source"));
         assert!(script.contains("verified sources manifest"));
@@ -12084,9 +10265,6 @@ mod tests {
         assert!(generated_stage1_script.contains("[target.$MANTLE_TARGET_TRIPLE]"));
         assert!(generated_stage1_script.contains("cc = \"$MANTLE_TARGET_CC\""));
         assert!(generated_stage1_script.contains("linker = \"$MANTLE_TARGET_CC\""));
-        assert!(generated_stage1_script.contains(
-            "if [ -n \"${MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG:-}\" ]; then set -- \"$MANTLE_GCC_SUBPROGRAM_PREFIX_FLAG\" \"$@\"; fi"
-        ));
         assert!(generated_stage1_script.contains(FIRST_STAGE_TARGET_NIX_ORIG_LIBC_FILE));
         assert!(generated_stage1_script.contains("musl-root = \"$MANTLE_TARGET_MUSL_ROOT\""));
         let rustc_source_root_preference_index = generated_stage1_script
@@ -12517,12 +10695,9 @@ mod tests {
         normalize_first_stage_provider_wrappers(&provider_dir, HOST_TRIPLE).unwrap();
         let wrapper = fs::read_to_string(provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH)).unwrap();
         let rustc_args = [OsString::from("-o"), output_path.as_os_str().to_os_string()];
-        let output = run_smoke_rustc_with_bounded_launch_retry(
-            &provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH),
-            &rustc_args,
-            None,
-        )
-        .unwrap();
+        let output =
+            run_smoke_rustc_with_bounded_launch_retry(&provider_dir.join(PROVIDER_RUSTC_RELATIVE_PATH), &rustc_args)
+                .unwrap();
 
         assert!(!wrapper.contains(MRUSTC_RUSTC_WRAPPER_DIRNAME_MARKER));
         assert!(wrapper.contains("self_dir=${self%/*}"));
@@ -12809,36 +10984,6 @@ mod tests {
         assert_eq!(smoke.output_digest_blake3, blake3::hash(SYNTHETIC_RLIB_BYTES).to_hex().to_string());
         assert!(smoke.stdout.contains("synthetic rustc smoke"));
         assert!(smoke.stderr.is_empty());
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn first_stage_cargo_smoke_promotes_successful_candidate() {
-        let dir = tempfile::tempdir().unwrap();
-        let cargo_path = dir.path().join(PROVIDER_CARGO_RELATIVE_PATH);
-        fs::create_dir_all(cargo_path.parent().unwrap()).unwrap();
-        fs::write(&cargo_path, "#!/bin/sh\nprintf 'cargo 0.0.0\\n'\n").unwrap();
-        make_executable(&cargo_path);
-
-        smoke_rust_source_provider_cargo(dir.path(), None).unwrap();
-
-        assert!(cargo_path.is_file());
-        assert_eq!(script_mode(&cargo_path), EXECUTABLE_MODE);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn first_stage_cargo_smoke_rejects_failed_candidate() {
-        let dir = tempfile::tempdir().unwrap();
-        let cargo_path = dir.path().join(PROVIDER_CARGO_RELATIVE_PATH);
-        fs::create_dir_all(cargo_path.parent().unwrap()).unwrap();
-        fs::write(&cargo_path, "#!/bin/sh\nexit 1\n").unwrap();
-        make_executable(&cargo_path);
-
-        let error = smoke_rust_source_provider_cargo(dir.path(), None).unwrap_err();
-
-        assert!(error.to_string().contains("provider Cargo smoke failed"));
-        assert!(cargo_path.is_file());
     }
 
     #[test]
@@ -13338,37 +11483,11 @@ let Plan = {
         let encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
         let mut builder = tar::Builder::new(encoder);
         append_test_tar_file(&mut builder, &format!("{top_dir}/README.txt"), readme);
-        if matches!(top_dir, "rust-1.91.1" | "rust-1.92.0" | "rust-1.93.1" | "rust-1.94.0") {
-            let openssl_source = test_openssl_source_config();
-            append_test_tar_file(
-                &mut builder,
-                &format!("{top_dir}/vendor/openssl-src-300.5.2/src/lib.rs"),
-                openssl_source,
-            );
-            let openssl_checksum = format!(
-                "{{\"files\":{{\"{}\":\"{}\"}},\"package\":null}}",
-                RUSTC_SOURCE_CARGO_CHECKSUM_MEMBER,
-                sha256_hex(openssl_source)
-            );
-            append_test_tar_file(
-                &mut builder,
-                &format!("{top_dir}/vendor/openssl-src-300.5.2/.cargo-checksum.json"),
-                openssl_checksum.as_bytes(),
-            );
-        }
         if use_xpy_adapters && matches!(top_dir, "rust-1.91.1" | "rust-1.92.0" | "rust-1.93.1" | "rust-1.94.0") {
             append_test_tar_file(
                 &mut builder,
                 &format!("{top_dir}/{RUSTC_SOURCE_BOOTSTRAP_MANIFEST}"),
                 b"[package]\nname = \"bootstrap\"\nversion = \"0.0.0\"\nedition = \"2024\"\n",
-            );
-            append_test_tar_file(
-                &mut builder,
-                &format!("{top_dir}/{RUSTC_SOURCE_LLVM_TABLEGEN_CMAKE}"),
-                format!(
-                    "before\n{RUSTC_SOURCE_LLVM_TABLEGEN_EXE_ORIGINAL_LINE}\n{RUSTC_SOURCE_LLVM_TABLEGEN_COMMAND_ORIGINAL_LINE}\nafter\n"
-                )
-                .as_bytes(),
             );
         }
         if top_dir == "rust-1.90.0" {
@@ -13389,12 +11508,6 @@ let Plan = {
                 &mut builder,
                 &format!("{top_dir}/{FIRST_STAGE_RUN_RUSTC_DIR}/{FIRST_STAGE_MAKEFILE}"),
                 test_mrustc_run_rustc_makefile(),
-            );
-            append_test_tar_file_with_mode(
-                &mut builder,
-                &format!("{top_dir}/{FIRST_STAGE_RUN_RUSTC_PROXY_PATH}"),
-                test_mrustc_run_rustc_proxy(),
-                SOURCE_ARCHIVE_EXECUTABLE_FILE_MODE,
             );
             append_test_tar_file(
                 &mut builder,
@@ -13499,31 +11612,23 @@ let Plan = {
     }
 
     fn test_mrustc_run_rustc_makefile() -> &'static [u8] {
-        b"RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))\nCARGO_ENV_STAGE2_STD := CARGO_TARGET_DIR=$(OUTDIR)build-std2 RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)\nCARGO_ENV_RUSTC := CARGO_TARGET_DIR=$(OUTDIR)build-rustc RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)\n\nall:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf '%s\\n' '#!/bin/sh' 'd=$$(dirname $$0)' 'LD_LIBRARY_PATH=/old/build/prefix/lib $$d/rustc_binary \"$$@\"' > output/prefix/bin/rustc\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc_binary\n\tprintf '%s\\n' '#!/bin/sh' 'echo cargo 0.0.0' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib\n\tprintf 'synthetic prefix musl host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/rustc_binary output/prefix/bin/cargo\n\nfinal-smoke:\n\t$V$(DBG) $(BINDIR)rustc -L $(LIBDIR) $< -o $@\n\t./$@\n\n$(BINDIR_S)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR_2)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR)rustc: $(BINDIR_2)rustc\n\t@mkdir -p $(BINDIR)\n\t$Vprintf '#!/bin/sh\\nd=$$(dirname $$0)\\nLD_LIBRARY_PATH=\"$(abspath $(OUTDIR)prefix/lib):$(abspath $(LIBDIR))\" $$d/rustc_binary \"$$@\"' >$@\n\t$Vchmod +x $@\n\n$(BINDIR)cargo: $(BINDIR)rustc\n\t$VTMPDIR=$(abspath $(PREFIX)tmp) $(CARGO_ENV_RUSTC) $(BINDIR_S)cargo build $(CARGO_FLAGS) --manifest-path $(RUST_SRC_CARGO)Cargo.toml\n\t$Vcp $(CARGO_OUTDIR_RUSTC)cargo $(BINDIR)cargo\n\noutput%/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib:\n\tmkdir -p $(@D)\n\tprintf 'synthetic target std\\n' > $@\n"
-    }
-
-    fn test_mrustc_run_rustc_proxy() -> &'static [u8] {
-        b"#!/bin/sh\nif [ -n \"${PROXY_RUSTC:-}\" ]; then\n    ${PROXY_RUSTC} \"$@\"\nelse\n    ${PROXY_MRUSTC} \"$@\"\nfi\n"
+        b"RUSTC_ENV_VARS += LD_LIBRARY_PATH=$(abspath $(LIBDIR))\nCARGO_ENV_STAGE2_STD := CARGO_TARGET_DIR=$(OUTDIR)build-std2 RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)\nCARGO_ENV_RUSTC := CARGO_TARGET_DIR=$(OUTDIR)build-rustc RUSTC=$(abspath rustc_proxy.sh) PROXY_RUSTC=$(abspath $(BINDIR_2)rustc) PROXY_MRUSTC=$(abspath $(BINDIR_S)rustc) $(CARGO_ENV)\n\nall:\n\tmkdir -p output/prefix/bin output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib\n\tprintf '%s\\n' '#!/bin/sh' 'd=$$(dirname $$0)' 'LD_LIBRARY_PATH=/old/build/prefix/lib $$d/rustc_binary \"$$@\"' > output/prefix/bin/rustc\n\tprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$$@\"; do' '  if [ \"$$prev\" = \"-o\" ]; then out=\"$$arg\"; prev=\"\"; continue; fi' '  if [ \"$$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$$out\"' 'echo synthetic rustc smoke' > output/prefix/bin/rustc_binary\n\tprintf 'synthetic prefix cargo\\n' > output/prefix/bin/cargo\n\tprintf 'synthetic prefix host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd.rlib\n\tprintf 'synthetic prefix musl host std\\n' > output/prefix/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib\n\tchmod +x output/prefix/bin/rustc output/prefix/bin/rustc_binary output/prefix/bin/cargo\n\n$(BINDIR_S)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR_2)rustc: ../output$(OUTDIR_SUF)/rustc\n\t@mkdir -p $(dir $@)\n\tcp $< $@\n$(BINDIR)rustc: $(BINDIR_2)rustc\n\t@mkdir -p $(BINDIR)\n\t$Vprintf '#!/bin/sh\\nd=$$(dirname $$0)\\nLD_LIBRARY_PATH=\"$(abspath $(OUTDIR)prefix/lib):$(abspath $(LIBDIR))\" $$d/rustc_binary \"$$@\"' >$@\n\t$Vchmod +x $@\n\n$(BINDIR)cargo: $(BINDIR)rustc\n\t$VTMPDIR=$(abspath $(PREFIX)tmp) $(CARGO_ENV_RUSTC) $(BINDIR_S)cargo build $(CARGO_FLAGS) --manifest-path $(RUST_SRC_CARGO)Cargo.toml\n\t$Vcp $(CARGO_OUTDIR_RUSTC)cargo $(BINDIR)cargo\n\noutput%/prefix-s/lib/rustlib/x86_64-unknown-linux-musl/lib/libstd.rlib:\n\tmkdir -p $(@D)\n\tprintf 'synthetic target std\\n' > $@\n"
     }
 
     fn test_rustc_driver_manifest() -> &'static [u8] {
         b"[package]\nname = \"rustc_driver\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[lib]\ncrate-type = [\"dylib\"]\n"
     }
 
-    fn test_openssl_source_config() -> &'static [u8] {
-        b"before\n        // On Android it looks like not passing no-stdio may cause a build\nafter\n"
-    }
-
     fn test_rustc_stage1_build_script() -> &'static [u8] {
-        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf 'synthetic shared libgcc runtime\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so.1\"\nprintf 'synthetic shared libgcc linker name\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic stage1 rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf '%s\\n' '#!/bin/sh' 'echo cargo 0.0.0' > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic stage1 host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic stage1 target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\n"
+        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf 'synthetic shared libgcc runtime\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so.1\"\nprintf 'synthetic shared libgcc linker name\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic stage1 rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic stage1 cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic stage1 host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic stage1 target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\n"
     }
 
     fn test_rustc_final_build_script() -> &'static [u8] {
-        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf 'synthetic shared libgcc runtime\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so.1\"\nprintf 'synthetic shared libgcc linker name\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic final rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf '%s\\n' '#!/bin/sh' 'echo cargo 0.0.0' > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic final rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic final host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic final target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
+        b"set -eu\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/rustc\"\ntest -f \"$MANTLE_BOOTSTRAP_PROVIDER/bin/cargo\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf 'synthetic shared libgcc runtime\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so.1\"\nprintf 'synthetic shared libgcc linker name\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic final rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic final cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic final rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic final host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic final target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
     }
 
     fn test_rustc_xpy_script() -> &'static [u8] {
-        b"#!/bin/sh\nset -eu\nprintf '%s\\n' \"synthetic x.py for $MANTLE_RUST_VERSION $*\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf 'synthetic shared libgcc runtime\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so.1\"\nprintf 'synthetic shared libgcc linker name\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic xpy rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf '%s\\n' '#!/bin/sh' 'echo cargo 0.0.0' > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic xpy rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic xpy host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic xpy target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
+        b"#!/bin/sh\nset -eu\nprintf '%s\\n' \"synthetic x.py for $MANTLE_RUST_VERSION $*\"\nmkdir -p \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime\" \"$MANTLE_STAGE_OUTPUT/bin\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib\" \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib\"\nrm -f \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf '%s\\n' '#!/bin/sh' 'exec \"$@\"' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nchmod +x \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libc.so\"\nprintf 'synthetic shared libgcc runtime\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so.1\"\nprintf 'synthetic shared libgcc linker name\\n' > \"$MANTLE_BUILD_DIR/rust-bootstrap-target-linker-runtime/libgcc_s.so\"\nprintf '%s\\n' '#!/bin/sh' 'out=' 'prev=' 'for arg in \"$@\"; do' '  if [ \"$prev\" = \"-o\" ]; then out=\"$arg\"; prev=\"\"; continue; fi' '  if [ \"$arg\" = \"-o\" ]; then prev=\"-o\"; continue; fi' 'done' 'if [ -z \"$out\" ]; then echo missing-output >&2; exit 2; fi' 'printf \"synthetic rlib\\\\n\" > \"$out\"' 'echo synthetic xpy rustc smoke' > \"$MANTLE_STAGE_OUTPUT/bin/rustc\"\nprintf 'synthetic xpy cargo for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/cargo\"\nprintf 'synthetic xpy rustdoc for %s\\n' \"$MANTLE_RUST_VERSION\" > \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\nprintf 'synthetic xpy host std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_HOST_TRIPLE/lib/libstd.rlib\"\nprintf 'synthetic xpy target std\\n' > \"$MANTLE_STAGE_OUTPUT/lib/rustlib/$MANTLE_TARGET_TRIPLE/lib/libstd.rlib\"\nchmod +x \"$MANTLE_STAGE_OUTPUT/bin/rustc\" \"$MANTLE_STAGE_OUTPUT/bin/cargo\" \"$MANTLE_STAGE_OUTPUT/bin/rustdoc\"\n"
     }
 
     fn sha256_file_hex(path: &Path) -> String {

@@ -352,12 +352,7 @@ pub fn seal_version_cohort(cohort: &VersionCohort) -> Result<VersionCohort, Core
     let supplied_identity = normalized.cohort_identity_blake3.clone();
     normalized.cohort_identity_blake3.clear();
     let identity = canonical_digest(COHORT_IDENTITY_DOMAIN, &normalized, "cohort-serialization-failed")?;
-    reject_stale_identity(BindingCheck {
-        actual: &supplied_identity,
-        expected: &identity,
-        path: "cohort_identity_blake3",
-        code: "stale-cohort-identity",
-    })?;
+    reject_stale_identity(&supplied_identity, &identity, "cohort_identity_blake3", "stale-cohort-identity")?;
     normalized.cohort_identity_blake3 = identity;
     debug_assert!(!normalized.attributes.is_empty());
     debug_assert!(!normalized.revisions.is_empty());
@@ -377,12 +372,12 @@ pub fn seal_version_observation(
     normalized.observation_identity_blake3.clear();
     let identity =
         canonical_digest(OBSERVATION_IDENTITY_DOMAIN, &normalized, "version-observation-serialization-failed")?;
-    reject_stale_identity(BindingCheck {
-        actual: &supplied_identity,
-        expected: &identity,
-        path: "observation_identity_blake3",
-        code: "stale-version-observation-identity",
-    })?;
+    reject_stale_identity(
+        &supplied_identity,
+        &identity,
+        "observation_identity_blake3",
+        "stale-version-observation-identity",
+    )?;
     normalized.observation_identity_blake3 = identity;
     debug_assert_eq!(normalized.cohort_identity_blake3, cohort.cohort_identity_blake3);
     debug_assert!(!normalized.observation_identity_blake3.is_empty());
@@ -394,18 +389,18 @@ pub fn build_version_observation_set(
     observations: &[VersionObservation],
 ) -> Result<VersionObservationSet, CoreFailure> {
     let cohort = seal_version_cohort(cohort)?;
-    let expected_count = bounded_product(ProductCheck {
-        left_count: cohort.revisions.len(),
-        right_count: cohort.attributes.len(),
-        named_limit: cohort.limits.max_observations,
-        code: "observation-count-overflow",
-    })?;
+    let expected_count = bounded_product(
+        cohort.revisions.len(),
+        cohort.attributes.len(),
+        cohort.limits.max_observations,
+        "observation-count-overflow",
+    )?;
     if observations.len() != expected_count {
-        return Err(failure(FailureInput {
-            code: "incomplete-version-observation-set",
-            path: "observations",
-            message: "the observation set must contain one record for every revision and attribute pair",
-        }));
+        return Err(failure(
+            "incomplete-version-observation-set",
+            "observations",
+            "the observation set must contain one record for every revision and attribute pair",
+        ));
     }
     let mut sealed = observations
         .iter()
@@ -435,19 +430,19 @@ pub fn build_version_index(
 ) -> Result<VersionIndex, CoreFailure> {
     let cohort = seal_version_cohort(cohort)?;
     let expected_set = build_version_observation_set(&cohort, &observation_set.observations)?;
-    require_equal(BindingCheck {
-        actual: &observation_set.schema,
-        expected: VERSION_OBSERVATION_SET_SCHEMA,
-        path: "observation_set.schema",
-        code: "unsupported-version-observation-set-schema",
-    })?;
-    require_equal(BindingCheck {
-        actual: &observation_set.observation_set_identity_blake3,
-        expected: &expected_set.observation_set_identity_blake3,
-        path: "observation_set.observation_set_identity_blake3",
-        code: "stale-version-observation-set-identity",
-    })?;
-    let (entries, status_counts) = compact_index_entries(&expected_set.observations)?;
+    require_equal(
+        &observation_set.schema,
+        VERSION_OBSERVATION_SET_SCHEMA,
+        "observation_set.schema",
+        "unsupported-version-observation-set-schema",
+    )?;
+    require_equal(
+        &observation_set.observation_set_identity_blake3,
+        &expected_set.observation_set_identity_blake3,
+        "observation_set.observation_set_identity_blake3",
+        "stale-version-observation-set-identity",
+    )?;
+    let (entries, status_counts) = compact_index_entries(&expected_set.observations);
     let mut index = VersionIndex {
         schema: VERSION_INDEX_SCHEMA.into(),
         index_identity_blake3: String::new(),
@@ -471,46 +466,30 @@ pub fn build_version_index(
 
 pub fn seal_version_selection_policy(policy: &VersionSelectionPolicy) -> Result<VersionSelectionPolicy, CoreFailure> {
     validate_limits(&policy.limits)?;
-    require_equal(BindingCheck {
-        actual: &policy.schema,
-        expected: VERSION_SELECTION_POLICY_SCHEMA,
-        path: "policy.schema",
-        code: "unsupported-version-selection-policy-schema",
-    })?;
-    require_equal(BindingCheck {
-        actual: &policy.method,
-        expected: VERSION_SELECTION_METHOD_NEWEST,
-        path: "policy.method",
-        code: "unsupported-version-selection-method",
-    })?;
-    require_equal(BindingCheck {
-        actual: &policy.system,
-        expected: SUPPORTED_SYSTEM_X86_64_LINUX,
-        path: "policy.system",
-        code: "unsupported-version-policy-system",
-    })?;
-    require_blake3(ValuePath {
-        value: &policy.accepted_cohort_identity_blake3,
-        path: "policy.accepted_cohort_identity_blake3",
-    })?;
-    require_blake3(ValuePath {
-        value: &policy.accepted_observation_set_identity_blake3,
-        path: "policy.accepted_observation_set_identity_blake3",
-    })?;
-    require_blake3(ValuePath {
-        value: &policy.accepted_index_identity_blake3,
-        path: "policy.accepted_index_identity_blake3",
-    })?;
+    require_equal(
+        &policy.schema,
+        VERSION_SELECTION_POLICY_SCHEMA,
+        "policy.schema",
+        "unsupported-version-selection-policy-schema",
+    )?;
+    require_equal(
+        &policy.method,
+        VERSION_SELECTION_METHOD_NEWEST,
+        "policy.method",
+        "unsupported-version-selection-method",
+    )?;
+    require_equal(&policy.system, SUPPORTED_SYSTEM_X86_64_LINUX, "policy.system", "unsupported-version-policy-system")?;
+    require_blake3(&policy.accepted_cohort_identity_blake3, "policy.accepted_cohort_identity_blake3")?;
+    require_blake3(
+        &policy.accepted_observation_set_identity_blake3,
+        "policy.accepted_observation_set_identity_blake3",
+    )?;
+    require_blake3(&policy.accepted_index_identity_blake3, "policy.accepted_index_identity_blake3")?;
     let supplied_identity = policy.policy_identity_blake3.clone();
     let mut sealed = policy.clone();
     sealed.policy_identity_blake3.clear();
     let identity = canonical_digest(POLICY_IDENTITY_DOMAIN, &sealed, "version-policy-serialization-failed")?;
-    reject_stale_identity(BindingCheck {
-        actual: &supplied_identity,
-        expected: &identity,
-        path: "policy_identity_blake3",
-        code: "stale-version-policy-identity",
-    })?;
+    reject_stale_identity(&supplied_identity, &identity, "policy_identity_blake3", "stale-version-policy-identity")?;
     sealed.policy_identity_blake3 = identity;
     debug_assert_eq!(sealed.method, VERSION_SELECTION_METHOD_NEWEST);
     debug_assert!(!sealed.policy_identity_blake3.is_empty());
@@ -522,31 +501,27 @@ pub fn seal_version_request_set(
     request_set: &VersionRequestSet,
 ) -> Result<VersionRequestSet, CoreFailure> {
     let policy = seal_version_selection_policy(policy)?;
-    require_equal(BindingCheck {
-        actual: &request_set.schema,
-        expected: VERSION_REQUEST_SET_SCHEMA,
-        path: "request_set.schema",
-        code: "unsupported-version-request-set-schema",
-    })?;
-    require_equal(BindingCheck {
-        actual: &request_set.policy_identity_blake3,
-        expected: &policy.policy_identity_blake3,
-        path: "request_set.policy_identity_blake3",
-        code: "version-request-policy-mismatch",
-    })?;
-    require_bounded_count(CountBoundCheck {
-        count: request_set.requests.len(),
-        named_limit: policy.limits.max_requests,
-        hard_limit: HARD_MAX_REQUESTS,
-        path: "requests",
-        code: "version-request-limit-exceeded",
-    })?;
+    require_equal(
+        &request_set.schema,
+        VERSION_REQUEST_SET_SCHEMA,
+        "request_set.schema",
+        "unsupported-version-request-set-schema",
+    )?;
+    require_equal(
+        &request_set.policy_identity_blake3,
+        &policy.policy_identity_blake3,
+        "request_set.policy_identity_blake3",
+        "version-request-policy-mismatch",
+    )?;
+    require_bounded_count(
+        request_set.requests.len(),
+        policy.limits.max_requests,
+        HARD_MAX_REQUESTS,
+        "requests",
+        "version-request-limit-exceeded",
+    )?;
     if request_set.requests.is_empty() {
-        return Err(failure(FailureInput {
-            code: "missing-version-request",
-            path: "requests",
-            message: "at least one version request is required",
-        }));
+        return Err(failure("missing-version-request", "requests", "at least one version request is required"));
     }
     let mut requests =
         request_set.requests.iter().map(|item| seal_request(&policy, item)).collect::<Result<Vec<_>, _>>()?;
@@ -560,12 +535,12 @@ pub fn seal_version_request_set(
         requests,
     };
     let identity = canonical_digest(REQUEST_SET_IDENTITY_DOMAIN, &sealed, "version-request-set-serialization-failed")?;
-    reject_stale_identity(BindingCheck {
-        actual: &supplied_identity,
-        expected: &identity,
-        path: "request_set_identity_blake3",
-        code: "stale-version-request-set-identity",
-    })?;
+    reject_stale_identity(
+        &supplied_identity,
+        &identity,
+        "request_set_identity_blake3",
+        "stale-version-request-set-identity",
+    )?;
     sealed.request_set_identity_blake3 = identity;
     debug_assert!(!sealed.requests.is_empty());
     debug_assert!(!sealed.request_set_identity_blake3.is_empty());
@@ -614,11 +589,11 @@ pub fn validate_version_resolution_set(
 ) -> Result<(), CoreFailure> {
     let expected = resolve_version_requests(index, policy, request_set)?;
     if expected != *resolution_set {
-        return Err(failure(FailureInput {
-            code: "version-resolution-receipt-mismatch",
-            path: "resolution_set",
-            message: "the resolution set differs from deterministic replay",
-        }));
+        return Err(failure(
+            "version-resolution-receipt-mismatch",
+            "resolution_set",
+            "the resolution set differs from deterministic replay",
+        ));
     }
     debug_assert_eq!(expected.resolution_set_identity_blake3, resolution_set.resolution_set_identity_blake3);
     debug_assert_eq!(expected.receipts.len(), resolution_set.receipts.len());
@@ -629,31 +604,22 @@ fn seal_resolution_set_artifact(
     resolution_set: &VersionResolutionSet,
     limits: &VersionResolutionLimits,
 ) -> Result<VersionResolutionSet, CoreFailure> {
-    require_equal(BindingCheck {
-        actual: &resolution_set.schema,
-        expected: VERSION_RESOLUTION_SET_SCHEMA,
-        path: "resolution_set.schema",
-        code: "unsupported-version-resolution-set-schema",
-    })?;
-    require_blake3(ValuePath {
-        value: &resolution_set.request_set_identity_blake3,
-        path: "resolution_set.request_set_identity_blake3",
-    })?;
-    require_blake3(ValuePath {
-        value: &resolution_set.policy_identity_blake3,
-        path: "resolution_set.policy_identity_blake3",
-    })?;
-    require_blake3(ValuePath {
-        value: &resolution_set.index_identity_blake3,
-        path: "resolution_set.index_identity_blake3",
-    })?;
-    require_bounded_count(CountBoundCheck {
-        count: resolution_set.receipts.len(),
-        named_limit: limits.max_requests,
-        hard_limit: HARD_MAX_REQUESTS,
-        path: "resolution_set.receipts",
-        code: "version-resolution-receipt-limit-exceeded",
-    })?;
+    require_equal(
+        &resolution_set.schema,
+        VERSION_RESOLUTION_SET_SCHEMA,
+        "resolution_set.schema",
+        "unsupported-version-resolution-set-schema",
+    )?;
+    require_blake3(&resolution_set.request_set_identity_blake3, "resolution_set.request_set_identity_blake3")?;
+    require_blake3(&resolution_set.policy_identity_blake3, "resolution_set.policy_identity_blake3")?;
+    require_blake3(&resolution_set.index_identity_blake3, "resolution_set.index_identity_blake3")?;
+    require_bounded_count(
+        resolution_set.receipts.len(),
+        limits.max_requests,
+        HARD_MAX_REQUESTS,
+        "resolution_set.receipts",
+        "version-resolution-receipt-limit-exceeded",
+    )?;
     let mut receipts = resolution_set.receipts.clone();
     receipts.sort_by(|left, right| left.request_identity_blake3.cmp(&right.request_identity_blake3));
     let mut request_ids = BTreeSet::new();
@@ -661,18 +627,18 @@ fn seal_resolution_set_artifact(
     for receipt in &receipts {
         validate_resolution_receipt(receipt)?;
         if !request_ids.insert(receipt.request_identity_blake3.clone()) {
-            return Err(failure(FailureInput {
-                code: "duplicate-version-resolution-request",
-                path: "resolution_set.receipts",
-                message: "a request has two receipts",
-            }));
+            return Err(failure(
+                "duplicate-version-resolution-request",
+                "resolution_set.receipts",
+                "a request has two receipts",
+            ));
         }
         if !receipt_ids.insert(receipt.receipt_identity_blake3.clone()) {
-            return Err(failure(FailureInput {
-                code: "duplicate-version-resolution-receipt",
-                path: "resolution_set.receipts",
-                message: "a receipt identity repeats",
-            }));
+            return Err(failure(
+                "duplicate-version-resolution-receipt",
+                "resolution_set.receipts",
+                "a receipt identity repeats",
+            ));
         }
     }
     let supplied_identity = resolution_set.resolution_set_identity_blake3.clone();
@@ -686,12 +652,12 @@ fn seal_resolution_set_artifact(
     };
     let identity =
         canonical_digest(RESOLUTION_SET_IDENTITY_DOMAIN, &sealed, "version-resolution-set-serialization-failed")?;
-    reject_stale_identity(BindingCheck {
-        actual: &supplied_identity,
-        expected: &identity,
-        path: "resolution_set.resolution_set_identity_blake3",
-        code: "stale-version-resolution-set-identity",
-    })?;
+    reject_stale_identity(
+        &supplied_identity,
+        &identity,
+        "resolution_set.resolution_set_identity_blake3",
+        "stale-version-resolution-set-identity",
+    )?;
     sealed.resolution_set_identity_blake3 = identity;
     debug_assert_eq!(request_ids.len(), sealed.receipts.len());
     debug_assert_eq!(receipt_ids.len(), sealed.receipts.len());
@@ -705,7 +671,7 @@ pub fn group_version_resolutions(
     validate_limits(limits)?;
     let resolution_set = seal_resolution_set_artifact(resolution_set, limits)?;
     let mut groups = BTreeMap::<(String, String, String, String, u32), Vec<VersionGroupSelector>>::new();
-    let mut blocked = Vec::with_capacity(resolution_set.receipts.len());
+    let mut blocked = Vec::new();
     let mut public_keys = BTreeSet::new();
     for receipt in &resolution_set.receipts {
         validate_resolution_receipt(receipt)?;
@@ -714,18 +680,14 @@ pub fn group_version_resolutions(
             continue;
         }
         let selected = receipt.selected.as_ref().ok_or_else(|| {
-            failure(FailureInput {
-                code: "resolved-receipt-missing-source",
-                path: "receipt.selected",
-                message: "a resolved receipt must contain a source",
-            })
+            failure("resolved-receipt-missing-source", "receipt.selected", "a resolved receipt must contain a source")
         })?;
         if !public_keys.insert((receipt.system.clone(), receipt.public_selector.clone())) {
-            return Err(failure(FailureInput {
-                code: "ambiguous-versioned-public-selector",
-                path: "receipts",
-                message: "two resolved requests use the same public selector",
-            }));
+            return Err(failure(
+                "ambiguous-versioned-public-selector",
+                "receipts",
+                "two resolved requests use the same public selector",
+            ));
         }
         let key = (
             receipt.system.clone(),
@@ -743,13 +705,7 @@ pub fn group_version_resolutions(
             aliases: receipt.aliases.clone(),
         });
     }
-    require_bounded_count(CountBoundCheck {
-        count: groups.len(),
-        named_limit: limits.max_groups,
-        hard_limit: HARD_MAX_GROUPS,
-        path: "groups",
-        code: "version-group-limit-exceeded",
-    })?;
+    require_bounded_count(groups.len(), limits.max_groups, HARD_MAX_GROUPS, "groups", "version-group-limit-exceeded")?;
     let mut sealed_groups = groups
         .into_iter()
         .map(|(key, selectors)| seal_revision_group(key, selectors))
@@ -772,30 +728,27 @@ pub fn group_version_resolutions(
 }
 
 pub fn seal_version_production_plan(plan: &VersionProductionPlan) -> Result<VersionProductionPlan, CoreFailure> {
-    require_equal(BindingCheck {
-        actual: &plan.schema,
-        expected: VERSION_PRODUCTION_PLAN_SCHEMA,
-        path: "plan.schema",
-        code: "unsupported-version-production-plan-schema",
-    })?;
-    require_blake3(ValuePath {
-        value: &plan.resolution_set_identity_blake3,
-        path: "plan.resolution_set_identity_blake3",
-    })?;
-    require_bounded_count(CountBoundCheck {
-        count: plan.groups.len(),
-        named_limit: HARD_MAX_GROUPS,
-        hard_limit: HARD_MAX_GROUPS,
-        path: "plan.groups",
-        code: "version-group-limit-exceeded",
-    })?;
-    require_bounded_count(CountBoundCheck {
-        count: plan.blocked_receipt_identity_blake3.len(),
-        named_limit: HARD_MAX_REQUESTS,
-        hard_limit: HARD_MAX_REQUESTS,
-        path: "plan.blocked_receipt_identity_blake3",
-        code: "version-blocked-receipt-limit-exceeded",
-    })?;
+    require_equal(
+        &plan.schema,
+        VERSION_PRODUCTION_PLAN_SCHEMA,
+        "plan.schema",
+        "unsupported-version-production-plan-schema",
+    )?;
+    require_blake3(&plan.resolution_set_identity_blake3, "plan.resolution_set_identity_blake3")?;
+    require_bounded_count(
+        plan.groups.len(),
+        HARD_MAX_GROUPS,
+        HARD_MAX_GROUPS,
+        "plan.groups",
+        "version-group-limit-exceeded",
+    )?;
+    require_bounded_count(
+        plan.blocked_receipt_identity_blake3.len(),
+        HARD_MAX_REQUESTS,
+        HARD_MAX_REQUESTS,
+        "plan.blocked_receipt_identity_blake3",
+        "version-blocked-receipt-limit-exceeded",
+    )?;
     let mut groups = plan.groups.iter().map(seal_existing_revision_group).collect::<Result<Vec<_>, _>>()?;
     groups.sort_by(|left, right| left.group_identity_blake3.cmp(&right.group_identity_blake3));
     let mut blocked = plan.blocked_receipt_identity_blake3.clone();
@@ -811,12 +764,12 @@ pub fn seal_version_production_plan(plan: &VersionProductionPlan) -> Result<Vers
     };
     let identity =
         canonical_digest(PRODUCTION_PLAN_IDENTITY_DOMAIN, &sealed, "version-production-plan-serialization-failed")?;
-    reject_stale_identity(BindingCheck {
-        actual: &supplied_identity,
-        expected: &identity,
-        path: "plan.plan_identity_blake3",
-        code: "stale-version-production-plan-identity",
-    })?;
+    reject_stale_identity(
+        &supplied_identity,
+        &identity,
+        "plan.plan_identity_blake3",
+        "stale-version-production-plan-identity",
+    )?;
     sealed.plan_identity_blake3 = identity;
     debug_assert!(!sealed.plan_identity_blake3.is_empty());
     debug_assert!(sealed.groups.windows(2).all(|pair| pair[0].group_identity_blake3 < pair[1].group_identity_blake3));
@@ -828,24 +781,24 @@ pub fn seal_version_recheck_set(
     recheck_set: &VersionRecheckSet,
 ) -> Result<VersionRecheckSet, CoreFailure> {
     let plan = seal_version_production_plan(plan)?;
-    require_equal(BindingCheck {
-        actual: &recheck_set.schema,
-        expected: VERSION_RECHECK_SET_SCHEMA,
-        path: "recheck_set.schema",
-        code: "unsupported-version-recheck-set-schema",
-    })?;
-    require_equal(BindingCheck {
-        actual: &recheck_set.plan_identity_blake3,
-        expected: &plan.plan_identity_blake3,
-        path: "recheck_set.plan_identity_blake3",
-        code: "version-recheck-plan-mismatch",
-    })?;
+    require_equal(
+        &recheck_set.schema,
+        VERSION_RECHECK_SET_SCHEMA,
+        "recheck_set.schema",
+        "unsupported-version-recheck-set-schema",
+    )?;
+    require_equal(
+        &recheck_set.plan_identity_blake3,
+        &plan.plan_identity_blake3,
+        "recheck_set.plan_identity_blake3",
+        "version-recheck-plan-mismatch",
+    )?;
     if recheck_set.rechecks.len() != plan.groups.len() {
-        return Err(failure(FailureInput {
-            code: "incomplete-version-recheck-set",
-            path: "rechecks",
-            message: "the recheck set must contain one record for each revision group",
-        }));
+        return Err(failure(
+            "incomplete-version-recheck-set",
+            "rechecks",
+            "the recheck set must contain one record for each revision group",
+        ));
     }
     let groups = plan
         .groups
@@ -857,11 +810,7 @@ pub fn seal_version_recheck_set(
         .iter()
         .map(|item| {
             let group = groups.get(item.group_identity_blake3.as_str()).ok_or_else(|| {
-                failure(FailureInput {
-                    code: "unknown-version-recheck-group",
-                    path: "recheck.group_identity_blake3",
-                    message: "the recheck group is absent",
-                })
+                failure("unknown-version-recheck-group", "recheck.group_identity_blake3", "the recheck group is absent")
             })?;
             seal_group_recheck(group, item)
         })
@@ -875,12 +824,12 @@ pub fn seal_version_recheck_set(
         rechecks,
     };
     let identity = canonical_digest(RECHECK_SET_IDENTITY_DOMAIN, &sealed, "version-recheck-set-serialization-failed")?;
-    reject_stale_identity(BindingCheck {
-        actual: &supplied_identity,
-        expected: &identity,
-        path: "recheck_set_identity_blake3",
-        code: "stale-version-recheck-set-identity",
-    })?;
+    reject_stale_identity(
+        &supplied_identity,
+        &identity,
+        "recheck_set_identity_blake3",
+        "stale-version-recheck-set-identity",
+    )?;
     sealed.recheck_set_identity_blake3 = identity;
     debug_assert_eq!(sealed.rechecks.len(), plan.groups.len());
     debug_assert!(!sealed.recheck_set_identity_blake3.is_empty());
@@ -902,20 +851,16 @@ pub fn build_version_group_manifests(
         .collect::<BTreeMap<_, _>>();
     let mut manifests = Vec::with_capacity(plan.groups.len());
     for group in &plan.groups {
-        let recheck = rechecks.get(group.group_identity_blake3.as_str()).ok_or_else(|| {
-            failure(FailureInput {
-                code: "missing-version-recheck",
-                path: "rechecks",
-                message: "the production group has no recheck",
-            })
-        })?;
+        let recheck = rechecks
+            .get(group.group_identity_blake3.as_str())
+            .ok_or_else(|| failure("missing-version-recheck", "rechecks", "the production group has no recheck"))?;
         require_successful_recheck(group, recheck)?;
         let source_tree_blake3 = recheck.source_tree_blake3.as_ref().ok_or_else(|| {
-            failure(FailureInput {
-                code: "missing-version-source-tree-identity",
-                path: "recheck.source_tree_blake3",
-                message: "a successful recheck needs a source identity",
-            })
+            failure(
+                "missing-version-source-tree-identity",
+                "recheck.source_tree_blake3",
+                "a successful recheck needs a source identity",
+            )
         })?;
         let mut manifest = template.clone();
         manifest.source.reference = group.source_reference.clone();
@@ -945,37 +890,24 @@ pub fn build_version_group_manifests(
 fn validate_cohort(cohort: &VersionCohort) -> Result<(), CoreFailure> {
     let mut diagnostics = Vec::new();
     collect_equal(
-        BindingCheck {
-            actual: &cohort.schema,
-            expected: VERSION_COHORT_SCHEMA,
-            path: "schema",
-            code: "unsupported-version-cohort-schema",
-        },
+        &cohort.schema,
+        VERSION_COHORT_SCHEMA,
+        "schema",
+        "unsupported-version-cohort-schema",
         &mut diagnostics,
     );
     collect_equal(
-        BindingCheck {
-            actual: &cohort.system,
-            expected: SUPPORTED_SYSTEM_X86_64_LINUX,
-            path: "system",
-            code: "unsupported-version-cohort-system",
-        },
+        &cohort.system,
+        SUPPORTED_SYSTEM_X86_64_LINUX,
+        "system",
+        "unsupported-version-cohort-system",
         &mut diagnostics,
     );
-    collect_text(
-        TextCheck {
-            value: &cohort.generator_identity,
-            path: "generator_identity",
-            max_bytes: cohort.limits.max_text_bytes,
-        },
-        &mut diagnostics,
-    );
+    collect_text(&cohort.generator_identity, "generator_identity", cohort.limits.max_text_bytes, &mut diagnostics);
     collect_safe_relative_path(
-        TextCheck {
-            value: &cohort.index_relative_path,
-            path: "index_relative_path",
-            max_bytes: cohort.limits.max_text_bytes,
-        },
+        &cohort.index_relative_path,
+        "index_relative_path",
+        cohort.limits.max_text_bytes,
         &mut diagnostics,
     );
     collect_limits(&cohort.limits, &mut diagnostics);
@@ -999,13 +931,11 @@ fn collect_cohort_revisions(cohort: &VersionCohort, diagnostics: &mut Vec<Diagno
         ));
     }
     collect_bounded_count(
-        CountBoundCheck {
-            count: cohort.revisions.len(),
-            named_limit: cohort.limits.max_revisions,
-            hard_limit: HARD_MAX_REVISIONS,
-            path: "revisions",
-            code: "version-revision-limit-exceeded",
-        },
+        cohort.revisions.len(),
+        cohort.limits.max_revisions,
+        HARD_MAX_REVISIONS,
+        "revisions",
+        "version-revision-limit-exceeded",
         diagnostics,
     );
     let mut orders = BTreeSet::new();
@@ -1022,20 +952,8 @@ fn collect_cohort_revisions(cohort: &VersionCohort, diagnostics: &mut Vec<Diagno
         if !revisions.insert(revision.revision.as_str()) {
             diagnostics.push(Diagnostic::new("duplicate-version-revision", &path, "the cohort repeats a revision"));
         }
-        collect_exact_revision(
-            ValuePath {
-                value: &revision.revision,
-                path: &format!("{path}.revision"),
-            },
-            diagnostics,
-        );
-        collect_nar_hash(
-            ValuePath {
-                value: &revision.nar_hash,
-                path: &format!("{path}.nar_hash"),
-            },
-            diagnostics,
-        );
+        collect_exact_revision(&revision.revision, &format!("{path}.revision"), diagnostics);
+        collect_nar_hash(&revision.nar_hash, &format!("{path}.nar_hash"), diagnostics);
         let expected_reference = format!("github:NixOS/nixpkgs/{}", revision.revision);
         if revision.reference != expected_reference {
             diagnostics.push(Diagnostic::new(
@@ -1058,60 +976,46 @@ fn collect_cohort_attributes(cohort: &VersionCohort, diagnostics: &mut Vec<Diagn
         ));
     }
     collect_bounded_count(
-        CountBoundCheck {
-            count: cohort.attributes.len(),
-            named_limit: cohort.limits.max_attributes,
-            hard_limit: HARD_MAX_ATTRIBUTES,
-            path: "attributes",
-            code: "version-attribute-limit-exceeded",
-        },
+        cohort.attributes.len(),
+        cohort.limits.max_attributes,
+        HARD_MAX_ATTRIBUTES,
+        "attributes",
+        "version-attribute-limit-exceeded",
         diagnostics,
     );
     let mut attributes = BTreeSet::new();
     for (index, attribute) in cohort.attributes.iter().enumerate() {
         let path = format!("attributes[{index}]");
-        collect_attribute(
-            ValuePath {
-                value: attribute,
-                path: &path,
-            },
-            diagnostics,
-        );
+        collect_attribute(attribute, &path, diagnostics);
         if !attributes.insert(attribute.as_str()) {
             diagnostics.push(Diagnostic::new("duplicate-version-attribute", &path, "the cohort repeats an attribute"));
         }
     }
     debug_assert!(attributes.len() <= cohort.attributes.len());
-    debug_assert!(cohort.attributes.is_empty() || !attributes.is_empty());
+    debug_assert!(diagnostics.len() <= usize::MAX);
 }
 
 fn validate_observation(cohort: &VersionCohort, observation: &VersionObservation) -> Result<(), CoreFailure> {
     let mut diagnostics = Vec::new();
     collect_equal(
-        BindingCheck {
-            actual: &observation.schema,
-            expected: VERSION_OBSERVATION_SCHEMA,
-            path: "schema",
-            code: "unsupported-version-observation-schema",
-        },
+        &observation.schema,
+        VERSION_OBSERVATION_SCHEMA,
+        "schema",
+        "unsupported-version-observation-schema",
         &mut diagnostics,
     );
     collect_equal(
-        BindingCheck {
-            actual: &observation.cohort_identity_blake3,
-            expected: &cohort.cohort_identity_blake3,
-            path: "cohort_identity_blake3",
-            code: "version-observation-cohort-mismatch",
-        },
+        &observation.cohort_identity_blake3,
+        &cohort.cohort_identity_blake3,
+        "cohort_identity_blake3",
+        "version-observation-cohort-mismatch",
         &mut diagnostics,
     );
     collect_equal(
-        BindingCheck {
-            actual: &observation.system,
-            expected: &cohort.system,
-            path: "system",
-            code: "version-observation-system-mismatch",
-        },
+        &observation.system,
+        &cohort.system,
+        "system",
+        "version-observation-system-mismatch",
         &mut diagnostics,
     );
     if observation.method != cohort.observation_method {
@@ -1149,21 +1053,17 @@ fn collect_observation_source(
     }
     let expected = matches[0];
     collect_equal(
-        BindingCheck {
-            actual: &observation.source_reference,
-            expected: &expected.reference,
-            path: "source_reference",
-            code: "version-observation-reference-mismatch",
-        },
+        &observation.source_reference,
+        &expected.reference,
+        "source_reference",
+        "version-observation-reference-mismatch",
         diagnostics,
     );
     collect_equal(
-        BindingCheck {
-            actual: &observation.nar_hash,
-            expected: &expected.nar_hash,
-            path: "nar_hash",
-            code: "version-observation-nar-hash-mismatch",
-        },
+        &observation.nar_hash,
+        &expected.nar_hash,
+        "nar_hash",
+        "version-observation-nar-hash-mismatch",
         diagnostics,
     );
     if observation.published_order != expected.published_order {
@@ -1182,13 +1082,7 @@ fn collect_observation_attribute(
     observation: &VersionObservation,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    collect_attribute(
-        ValuePath {
-            value: &observation.attribute,
-            path: "attribute",
-        },
-        diagnostics,
-    );
+    collect_attribute(&observation.attribute, "attribute", diagnostics);
     if !cohort.attributes.contains(&observation.attribute) {
         diagnostics.push(Diagnostic::new(
             "unknown-version-observation-attribute",
@@ -1197,10 +1091,7 @@ fn collect_observation_attribute(
         ));
     }
     debug_assert!(!cohort.attributes.is_empty());
-    debug_assert!(
-        usize::try_from(HARD_MAX_ATTRIBUTES).is_ok_and(|maximum| cohort.attributes.len() <= maximum)
-            || !diagnostics.is_empty()
-    );
+    debug_assert!(cohort.attributes.len() <= HARD_MAX_ATTRIBUTES as usize || !diagnostics.is_empty());
 }
 
 fn collect_observation_status(
@@ -1218,14 +1109,7 @@ fn collect_observation_status(
                 ));
                 return;
             };
-            collect_text(
-                TextCheck {
-                    value: version,
-                    path: "reported_version",
-                    max_bytes: max_text_bytes,
-                },
-                diagnostics,
-            );
+            collect_text(version, "reported_version", max_text_bytes, diagnostics);
             if observation.response_identity_blake3.as_ref().is_none_or(|digest| !is_blake3(digest)) {
                 diagnostics.push(Diagnostic::new(
                     "missing-version-response-identity",
@@ -1259,10 +1143,7 @@ fn collect_observation_status(
         }
     }
     collect_reason_codes(&observation.reason_codes, max_text_bytes, diagnostics);
-    debug_assert!(
-        usize::try_from(HARD_MAX_DIAGNOSTICS).is_ok_and(|maximum| observation.reason_codes.len() <= maximum)
-            || !diagnostics.is_empty()
-    );
+    debug_assert!(observation.reason_codes.len() <= HARD_MAX_DIAGNOSTICS as usize || !diagnostics.is_empty());
     debug_assert!(
         matches!(observation.status, VersionObservationStatus::Success) || observation.reported_version.is_none()
     );
@@ -1273,11 +1154,11 @@ fn reject_duplicate_observation_keys(observations: &[VersionObservation]) -> Res
     for observation in observations {
         let key = (observation.revision.as_str(), observation.attribute.as_str());
         if !keys.insert(key) {
-            return Err(failure(FailureInput {
-                code: "duplicate-version-observation",
-                path: "observations",
-                message: "the observation set repeats a revision and attribute pair",
-            }));
+            return Err(failure(
+                "duplicate-version-observation",
+                "observations",
+                "the observation set repeats a revision and attribute pair",
+            ));
         }
     }
     debug_assert_eq!(keys.len(), observations.len());
@@ -1287,7 +1168,7 @@ fn reject_duplicate_observation_keys(observations: &[VersionObservation]) -> Res
 
 fn compact_index_entries(
     observations: &[VersionObservation],
-) -> Result<(Vec<VersionIndexEntry>, [u32; OBSERVATION_STATUS_COUNT]), CoreFailure> {
+) -> (Vec<VersionIndexEntry>, [u32; OBSERVATION_STATUS_COUNT]) {
     let mut entries = BTreeMap::<(String, String, String), VersionIndexEntry>::new();
     let mut counts = [0_u32; OBSERVATION_STATUS_COUNT];
     for observation in observations {
@@ -1300,13 +1181,7 @@ fn compact_index_entries(
         if observation.status != VersionObservationStatus::Success {
             continue;
         }
-        let version = observation.reported_version.as_ref().ok_or_else(|| {
-            failure(FailureInput {
-                code: "missing-reported-version",
-                path: "observations.reported_version",
-                message: "a successful observation must contain a reported version",
-            })
-        })?;
+        let version = observation.reported_version.as_ref().expect("validated success has a version");
         let entry = VersionIndexEntry {
             system: observation.system.clone(),
             attribute: observation.attribute.clone(),
@@ -1318,212 +1193,105 @@ fn compact_index_entries(
             observation_identity_blake3: observation.observation_identity_blake3.clone(),
         };
         let key = (entry.system.clone(), entry.attribute.clone(), entry.reported_version.clone());
-        let is_replacement = entries.get(&key).is_none_or(|current| entry.published_order > current.published_order);
-        if is_replacement {
-            if entries.len() >= observations.len() && !entries.contains_key(&key) {
-                return Err(failure(FailureInput {
-                    code: "version-index-entry-limit-exceeded",
-                    path: "observations",
-                    message: "the compact index exceeded the observation bound",
-                }));
-            }
+        let replace = entries.get(&key).is_none_or(|current| entry.published_order > current.published_order);
+        if replace {
             entries.insert(key, entry);
         }
     }
     let result = entries.into_values().collect::<Vec<_>>();
     debug_assert!(result.len() <= observations.len());
-    debug_assert!(usize::try_from(counts.iter().copied().sum::<u32>()).is_ok_and(|count| count == observations.len()));
-    Ok((result, counts))
+    debug_assert_eq!(counts.iter().copied().sum::<u32>() as usize, observations.len());
+    (result, counts)
 }
 
 fn validate_version_index(index: &VersionIndex, limits: &VersionResolutionLimits) -> Result<(), CoreFailure> {
-    validate_version_index_header(index, limits)?;
-    validate_version_index_entries(index, limits)?;
-    validate_version_index_identity(index)?;
-    Ok(())
-}
-
-fn validate_version_index_header(index: &VersionIndex, limits: &VersionResolutionLimits) -> Result<(), CoreFailure> {
-    require_equal(BindingCheck {
-        actual: &index.schema,
-        expected: VERSION_INDEX_SCHEMA,
-        path: "index.schema",
-        code: "unsupported-version-index-schema",
-    })?;
-    for check in [
-        ValuePath {
-            value: &index.index_identity_blake3,
-            path: "index.index_identity_blake3",
-        },
-        ValuePath {
-            value: &index.cohort_identity_blake3,
-            path: "index.cohort_identity_blake3",
-        },
-        ValuePath {
-            value: &index.observation_set_identity_blake3,
-            path: "index.observation_set_identity_blake3",
-        },
-    ] {
-        require_blake3(check)?;
-    }
-    require_equal(BindingCheck {
-        actual: &index.system,
-        expected: SUPPORTED_SYSTEM_X86_64_LINUX,
-        path: "index.system",
-        code: "unsupported-version-index-system",
-    })?;
-    require_bounded_count(CountBoundCheck {
-        count: index.entries.len(),
-        named_limit: limits.max_observations,
-        hard_limit: HARD_MAX_OBSERVATIONS,
-        path: "index.entries",
-        code: "version-index-entry-limit-exceeded",
-    })?;
-    debug_assert_eq!(index.system, SUPPORTED_SYSTEM_X86_64_LINUX);
-    debug_assert!(u32::try_from(index.entries.len()).is_ok_and(|count| count <= limits.max_observations));
-    Ok(())
-}
-
-fn validate_version_index_entries(index: &VersionIndex, limits: &VersionResolutionLimits) -> Result<(), CoreFailure> {
+    require_equal(&index.schema, VERSION_INDEX_SCHEMA, "index.schema", "unsupported-version-index-schema")?;
+    require_blake3(&index.index_identity_blake3, "index.index_identity_blake3")?;
+    require_blake3(&index.cohort_identity_blake3, "index.cohort_identity_blake3")?;
+    require_blake3(&index.observation_set_identity_blake3, "index.observation_set_identity_blake3")?;
+    require_equal(&index.system, SUPPORTED_SYSTEM_X86_64_LINUX, "index.system", "unsupported-version-index-system")?;
+    require_bounded_count(
+        index.entries.len(),
+        limits.max_observations,
+        HARD_MAX_OBSERVATIONS,
+        "index.entries",
+        "version-index-entry-limit-exceeded",
+    )?;
     let mut keys = BTreeSet::new();
     for entry in &index.entries {
         let key = (&entry.system, &entry.attribute, &entry.reported_version);
         if !keys.insert(key) {
-            return Err(failure(FailureInput {
-                code: "duplicate-version-index-key",
-                path: "index.entries",
-                message: "the compact index repeats a lookup key",
-            }));
+            return Err(failure(
+                "duplicate-version-index-key",
+                "index.entries",
+                "the compact index repeats a lookup key",
+            ));
         }
-        require_equal(BindingCheck {
-            actual: &entry.system,
-            expected: &index.system,
-            path: "index.entries.system",
-            code: "version-index-entry-system-mismatch",
-        })?;
-        require_attribute(ValuePath {
-            value: &entry.attribute,
-            path: "index.entries.attribute",
-        })?;
-        require_text(TextCheck {
-            value: &entry.reported_version,
-            path: "index.entries.reported_version",
-            max_bytes: limits.max_text_bytes,
-        })?;
-        require_exact_revision(ValuePath {
-            value: &entry.revision,
-            path: "index.entries.revision",
-        })?;
-        require_nar_hash(ValuePath {
-            value: &entry.nar_hash,
-            path: "index.entries.nar_hash",
-        })?;
-        require_blake3(ValuePath {
-            value: &entry.observation_identity_blake3,
-            path: "index.entries.observation_identity_blake3",
-        })?;
+        require_equal(&entry.system, &index.system, "index.entries.system", "version-index-entry-system-mismatch")?;
+        require_attribute(&entry.attribute, "index.entries.attribute")?;
+        require_text(&entry.reported_version, "index.entries.reported_version", limits.max_text_bytes)?;
+        require_exact_revision(&entry.revision, "index.entries.revision")?;
+        require_nar_hash(&entry.nar_hash, "index.entries.nar_hash")?;
+        require_blake3(&entry.observation_identity_blake3, "index.entries.observation_identity_blake3")?;
     }
-    debug_assert_eq!(keys.len(), index.entries.len());
-    debug_assert!(u32::try_from(index.entries.len()).is_ok_and(|count| count <= HARD_MAX_OBSERVATIONS));
-    Ok(())
-}
-
-fn validate_version_index_identity(index: &VersionIndex) -> Result<(), CoreFailure> {
     let mut normalized = index.clone();
     let supplied_identity = normalized.index_identity_blake3.clone();
     normalized.index_identity_blake3.clear();
     normalized.entries.sort();
     let expected = canonical_digest(INDEX_IDENTITY_DOMAIN, &normalized, "version-index-serialization-failed")?;
-    require_equal(BindingCheck {
-        actual: &supplied_identity,
-        expected: &expected,
-        path: "index.index_identity_blake3",
-        code: "stale-version-index-identity",
-    })?;
+    require_equal(&supplied_identity, &expected, "index.index_identity_blake3", "stale-version-index-identity")?;
+    debug_assert_eq!(keys.len(), index.entries.len());
     debug_assert!(!index.index_identity_blake3.is_empty());
-    debug_assert_eq!(supplied_identity, expected);
     Ok(())
 }
 
 fn seal_request(policy: &VersionSelectionPolicy, request: &VersionRequest) -> Result<VersionRequest, CoreFailure> {
-    require_equal(BindingCheck {
-        actual: &request.system,
-        expected: &policy.system,
-        path: "request.system",
-        code: "version-request-system-mismatch",
-    })?;
-    require_attribute(ValuePath {
-        value: &request.attribute,
-        path: "request.attribute",
-    })?;
-    require_text(TextCheck {
-        value: &request.reported_version,
-        path: "request.reported_version",
-        max_bytes: policy.limits.max_text_bytes,
-    })?;
-    require_selector(TextCheck {
-        value: &request.public_selector,
-        path: "request.public_selector",
-        max_bytes: policy.limits.max_text_bytes,
-    })?;
+    require_equal(&request.system, &policy.system, "request.system", "version-request-system-mismatch")?;
+    require_attribute(&request.attribute, "request.attribute")?;
+    require_text(&request.reported_version, "request.reported_version", policy.limits.max_text_bytes)?;
+    require_selector(&request.public_selector, "request.public_selector", policy.limits.max_text_bytes)?;
     if !request.public_selector.contains(&request.reported_version) {
-        return Err(failure(FailureInput {
-            code: "unversioned-public-selector",
-            path: "request.public_selector",
-            message: "the public selector must include the requested version",
-        }));
+        return Err(failure(
+            "unversioned-public-selector",
+            "request.public_selector",
+            "the public selector must include the requested version",
+        ));
     }
+    require_bounded_count(
+        request.aliases.len(),
+        policy.limits.max_aliases_per_request,
+        HARD_MAX_ALIASES,
+        "request.aliases",
+        "version-request-alias-limit-exceeded",
+    )?;
     let mut sealed = request.clone();
-    normalize_request_aliases(policy, &mut sealed)?;
+    sealed.aliases.sort();
+    sealed.aliases.dedup();
+    for alias in &sealed.aliases {
+        require_selector(alias, "request.aliases", policy.limits.max_text_bytes)?;
+    }
+    if sealed.unversioned_default && sealed.aliases.is_empty() {
+        return Err(failure(
+            "default-version-missing-alias",
+            "request.aliases",
+            "an unversioned default must declare its public alias",
+        ));
+    }
+    if !sealed.unversioned_default && sealed.aliases.iter().any(|alias| !alias.contains(&sealed.reported_version)) {
+        return Err(failure(
+            "unversioned-alias-without-default",
+            "request.aliases",
+            "an unversioned alias requires explicit default policy",
+        ));
+    }
     let supplied_identity = sealed.request_identity_blake3.clone();
     sealed.request_identity_blake3.clear();
     let identity = canonical_digest(REQUEST_IDENTITY_DOMAIN, &sealed, "version-request-serialization-failed")?;
-    reject_stale_identity(BindingCheck {
-        actual: &supplied_identity,
-        expected: &identity,
-        path: "request_identity_blake3",
-        code: "stale-version-request-identity",
-    })?;
+    reject_stale_identity(&supplied_identity, &identity, "request_identity_blake3", "stale-version-request-identity")?;
     sealed.request_identity_blake3 = identity;
     debug_assert!(!sealed.request_identity_blake3.is_empty());
     debug_assert!(sealed.public_selector.contains(&sealed.reported_version));
     Ok(sealed)
-}
-
-fn normalize_request_aliases(policy: &VersionSelectionPolicy, request: &mut VersionRequest) -> Result<(), CoreFailure> {
-    require_bounded_count(CountBoundCheck {
-        count: request.aliases.len(),
-        named_limit: policy.limits.max_aliases_per_request,
-        hard_limit: HARD_MAX_ALIASES,
-        path: "request.aliases",
-        code: "version-request-alias-limit-exceeded",
-    })?;
-    request.aliases.sort();
-    request.aliases.dedup();
-    for alias in &request.aliases {
-        require_selector(TextCheck {
-            value: alias,
-            path: "request.aliases",
-            max_bytes: policy.limits.max_text_bytes,
-        })?;
-    }
-    if request.unversioned_default && request.aliases.is_empty() {
-        return Err(failure(FailureInput {
-            code: "default-version-missing-alias",
-            path: "request.aliases",
-            message: "an unversioned default must declare its public alias",
-        }));
-    }
-    if !request.unversioned_default && request.aliases.iter().any(|alias| !alias.contains(&request.reported_version)) {
-        return Err(failure(FailureInput {
-            code: "unversioned-alias-without-default",
-            path: "request.aliases",
-            message: "an unversioned alias requires explicit default policy",
-        }));
-    }
-    debug_assert!(u32::try_from(request.aliases.len()).is_ok_and(|count| count <= HARD_MAX_ALIASES));
-    debug_assert!(request.aliases.windows(2).all(|pair| pair[0] < pair[1]));
-    Ok(())
 }
 
 fn validate_request_uniqueness(requests: &[VersionRequest]) -> Result<(), CoreFailure> {
@@ -1532,28 +1300,28 @@ fn validate_request_uniqueness(requests: &[VersionRequest]) -> Result<(), CoreFa
     for request in requests {
         let key = (request.system.as_str(), request.attribute.as_str(), request.reported_version.as_str());
         if !keys.insert(key) {
-            return Err(failure(FailureInput {
-                code: "duplicate-version-request",
-                path: "requests",
-                message: "the request set repeats an exact version request",
-            }));
+            return Err(failure(
+                "duplicate-version-request",
+                "requests",
+                "the request set repeats an exact version request",
+            ));
         }
         let selector_key = (request.system.as_str(), request.public_selector.as_str());
         if !public_names.insert(selector_key) {
-            return Err(failure(FailureInput {
-                code: "ambiguous-version-public-name",
-                path: "requests",
-                message: "two requests use the same selector or alias",
-            }));
+            return Err(failure(
+                "ambiguous-version-public-name",
+                "requests",
+                "two requests use the same selector or alias",
+            ));
         }
         for alias in &request.aliases {
             let alias_key = (request.system.as_str(), alias.as_str());
             if !public_names.insert(alias_key) {
-                return Err(failure(FailureInput {
-                    code: "ambiguous-version-public-name",
-                    path: "requests",
-                    message: "two requests use the same selector or alias",
-                }));
+                return Err(failure(
+                    "ambiguous-version-public-name",
+                    "requests",
+                    "two requests use the same selector or alias",
+                ));
             }
         }
     }
@@ -1564,30 +1332,25 @@ fn validate_request_uniqueness(requests: &[VersionRequest]) -> Result<(), CoreFa
 
 fn validate_resolution_inputs(index: &VersionIndex, policy: &VersionSelectionPolicy) -> Result<(), CoreFailure> {
     validate_version_index(index, &policy.limits)?;
-    require_equal(BindingCheck {
-        actual: &index.system,
-        expected: &policy.system,
-        path: "index.system",
-        code: "version-index-policy-system-mismatch",
-    })?;
-    require_equal(BindingCheck {
-        actual: &index.cohort_identity_blake3,
-        expected: &policy.accepted_cohort_identity_blake3,
-        path: "index.cohort_identity_blake3",
-        code: "stale-version-cohort",
-    })?;
-    require_equal(BindingCheck {
-        actual: &index.observation_set_identity_blake3,
-        expected: &policy.accepted_observation_set_identity_blake3,
-        path: "index.observation_set_identity_blake3",
-        code: "stale-version-observation-set",
-    })?;
-    require_equal(BindingCheck {
-        actual: &index.index_identity_blake3,
-        expected: &policy.accepted_index_identity_blake3,
-        path: "index.index_identity_blake3",
-        code: "stale-version-index",
-    })?;
+    require_equal(&index.system, &policy.system, "index.system", "version-index-policy-system-mismatch")?;
+    require_equal(
+        &index.cohort_identity_blake3,
+        &policy.accepted_cohort_identity_blake3,
+        "index.cohort_identity_blake3",
+        "stale-version-cohort",
+    )?;
+    require_equal(
+        &index.observation_set_identity_blake3,
+        &policy.accepted_observation_set_identity_blake3,
+        "index.observation_set_identity_blake3",
+        "stale-version-observation-set",
+    )?;
+    require_equal(
+        &index.index_identity_blake3,
+        &policy.accepted_index_identity_blake3,
+        "index.index_identity_blake3",
+        "stale-version-index",
+    )?;
     debug_assert_eq!(index.system, policy.system);
     debug_assert_eq!(index.index_identity_blake3, policy.accepted_index_identity_blake3);
     Ok(())
@@ -1646,198 +1409,121 @@ fn build_resolution_receipt(
 }
 
 fn validate_resolution_receipt(receipt: &VersionResolutionReceipt) -> Result<(), CoreFailure> {
-    validate_resolution_receipt_header(receipt)?;
+    require_equal(
+        &receipt.schema,
+        VERSION_RESOLUTION_RECEIPT_SCHEMA,
+        "receipt.schema",
+        "unsupported-version-resolution-receipt-schema",
+    )?;
+    require_blake3(&receipt.request_identity_blake3, "receipt.request_identity_blake3")?;
+    require_blake3(&receipt.policy_identity_blake3, "receipt.policy_identity_blake3")?;
+    require_blake3(&receipt.index_identity_blake3, "receipt.index_identity_blake3")?;
+    require_blake3(&receipt.observation_set_identity_blake3, "receipt.observation_set_identity_blake3")?;
+    require_blake3(&receipt.cohort_identity_blake3, "receipt.cohort_identity_blake3")?;
+    require_equal(
+        &receipt.system,
+        SUPPORTED_SYSTEM_X86_64_LINUX,
+        "receipt.system",
+        "unsupported-version-receipt-system",
+    )?;
+    require_attribute(&receipt.attribute, "receipt.attribute")?;
+    require_text(&receipt.reported_version, "receipt.reported_version", HARD_MAX_TEXT_BYTES)?;
+    require_selector(&receipt.public_selector, "receipt.public_selector", HARD_MAX_TEXT_BYTES)?;
+    require_equal(
+        &receipt.method,
+        VERSION_SELECTION_METHOD_NEWEST,
+        "receipt.method",
+        "unsupported-version-selection-method",
+    )?;
     validate_receipt_public_names(receipt)?;
     validate_reason_code_list(&receipt.blocker_codes, "receipt.blocker_codes")?;
     if let Some(selected) = &receipt.selected {
         validate_resolved_source(selected)?;
     }
-    validate_resolution_receipt_state(receipt)?;
-    validate_resolution_receipt_identity(receipt)?;
-    debug_assert_eq!(receipt.status == VersionResolutionStatus::Resolved, receipt.selected.is_some());
-    debug_assert!(!receipt.non_claims.is_empty());
-    Ok(())
-}
-
-fn validate_resolution_receipt_header(receipt: &VersionResolutionReceipt) -> Result<(), CoreFailure> {
-    require_equal(BindingCheck {
-        actual: &receipt.schema,
-        expected: VERSION_RESOLUTION_RECEIPT_SCHEMA,
-        path: "receipt.schema",
-        code: "unsupported-version-resolution-receipt-schema",
-    })?;
-    for check in [
-        ValuePath {
-            value: &receipt.request_identity_blake3,
-            path: "receipt.request_identity_blake3",
-        },
-        ValuePath {
-            value: &receipt.policy_identity_blake3,
-            path: "receipt.policy_identity_blake3",
-        },
-        ValuePath {
-            value: &receipt.index_identity_blake3,
-            path: "receipt.index_identity_blake3",
-        },
-        ValuePath {
-            value: &receipt.observation_set_identity_blake3,
-            path: "receipt.observation_set_identity_blake3",
-        },
-        ValuePath {
-            value: &receipt.cohort_identity_blake3,
-            path: "receipt.cohort_identity_blake3",
-        },
-    ] {
-        require_blake3(check)?;
-    }
-    require_equal(BindingCheck {
-        actual: &receipt.system,
-        expected: SUPPORTED_SYSTEM_X86_64_LINUX,
-        path: "receipt.system",
-        code: "unsupported-version-receipt-system",
-    })?;
-    require_attribute(ValuePath {
-        value: &receipt.attribute,
-        path: "receipt.attribute",
-    })?;
-    require_text(TextCheck {
-        value: &receipt.reported_version,
-        path: "receipt.reported_version",
-        max_bytes: HARD_MAX_TEXT_BYTES,
-    })?;
-    require_selector(TextCheck {
-        value: &receipt.public_selector,
-        path: "receipt.public_selector",
-        max_bytes: HARD_MAX_TEXT_BYTES,
-    })?;
-    require_equal(BindingCheck {
-        actual: &receipt.method,
-        expected: VERSION_SELECTION_METHOD_NEWEST,
-        path: "receipt.method",
-        code: "unsupported-version-selection-method",
-    })?;
-    debug_assert_eq!(receipt.system, SUPPORTED_SYSTEM_X86_64_LINUX);
-    debug_assert_eq!(receipt.method, VERSION_SELECTION_METHOD_NEWEST);
-    Ok(())
-}
-
-fn validate_resolution_receipt_state(receipt: &VersionResolutionReceipt) -> Result<(), CoreFailure> {
     if receipt.non_claims != VERSION_NON_CLAIMS.iter().map(|item| (*item).to_string()).collect::<Vec<_>>() {
-        return Err(failure(FailureInput {
-            code: "version-receipt-non-claim-mismatch",
-            path: "receipt.non_claims",
-            message: "the receipt non-claims changed",
-        }));
+        return Err(failure(
+            "version-receipt-non-claim-mismatch",
+            "receipt.non_claims",
+            "the receipt non-claims changed",
+        ));
     }
     match receipt.status {
         VersionResolutionStatus::Resolved if receipt.selected.is_none() || !receipt.blocker_codes.is_empty() => {
-            return Err(failure(FailureInput {
-                code: "malformed-resolved-version-receipt",
-                path: "receipt",
-                message: "a resolved receipt needs one source and no blocker",
-            }));
+            return Err(failure(
+                "malformed-resolved-version-receipt",
+                "receipt",
+                "a resolved receipt needs one source and no blocker",
+            ));
         }
         VersionResolutionStatus::Blocked if receipt.selected.is_some() || receipt.blocker_codes.is_empty() => {
-            return Err(failure(FailureInput {
-                code: "malformed-blocked-version-receipt",
-                path: "receipt",
-                message: "a blocked receipt needs blockers and no source",
-            }));
+            return Err(failure(
+                "malformed-blocked-version-receipt",
+                "receipt",
+                "a blocked receipt needs blockers and no source",
+            ));
         }
         _ => {}
     }
-    debug_assert_eq!(receipt.status == VersionResolutionStatus::Resolved, receipt.selected.is_some());
-    debug_assert_eq!(receipt.status == VersionResolutionStatus::Blocked, !receipt.blocker_codes.is_empty());
-    Ok(())
-}
-
-fn validate_resolution_receipt_identity(receipt: &VersionResolutionReceipt) -> Result<(), CoreFailure> {
     let supplied_identity = receipt.receipt_identity_blake3.clone();
     let mut normalized = receipt.clone();
     normalized.receipt_identity_blake3.clear();
     let expected =
         canonical_digest(RECEIPT_IDENTITY_DOMAIN, &normalized, "version-resolution-receipt-serialization-failed")?;
-    require_equal(BindingCheck {
-        actual: &supplied_identity,
-        expected: &expected,
-        path: "receipt.receipt_identity_blake3",
-        code: "stale-version-receipt-identity",
-    })?;
-    debug_assert_eq!(supplied_identity, expected);
-    debug_assert!(!receipt.receipt_identity_blake3.is_empty());
+    require_equal(&supplied_identity, &expected, "receipt.receipt_identity_blake3", "stale-version-receipt-identity")?;
+    debug_assert_eq!(receipt.status == VersionResolutionStatus::Resolved, receipt.selected.is_some());
+    debug_assert!(!receipt.non_claims.is_empty());
     Ok(())
 }
 
 fn validate_receipt_public_names(receipt: &VersionResolutionReceipt) -> Result<(), CoreFailure> {
     if !receipt.public_selector.contains(&receipt.reported_version) {
-        return Err(failure(FailureInput {
-            code: "unversioned-public-selector",
-            path: "receipt.public_selector",
-            message: "the selector omits its version",
-        }));
+        return Err(failure(
+            "unversioned-public-selector",
+            "receipt.public_selector",
+            "the selector omits its version",
+        ));
     }
-    require_bounded_count(CountBoundCheck {
-        count: receipt.aliases.len(),
-        named_limit: HARD_MAX_ALIASES,
-        hard_limit: HARD_MAX_ALIASES,
-        path: "receipt.aliases",
-        code: "version-receipt-alias-limit-exceeded",
-    })?;
+    require_bounded_count(
+        receipt.aliases.len(),
+        HARD_MAX_ALIASES,
+        HARD_MAX_ALIASES,
+        "receipt.aliases",
+        "version-receipt-alias-limit-exceeded",
+    )?;
     let mut names = BTreeSet::new();
     names.insert(receipt.public_selector.as_str());
     for alias in &receipt.aliases {
-        require_selector(TextCheck {
-            value: alias,
-            path: "receipt.aliases",
-            max_bytes: HARD_MAX_TEXT_BYTES,
-        })?;
+        require_selector(alias, "receipt.aliases", HARD_MAX_TEXT_BYTES)?;
         if !names.insert(alias.as_str()) {
-            return Err(failure(FailureInput {
-                code: "ambiguous-version-public-name",
-                path: "receipt.aliases",
-                message: "a selector or alias repeats",
-            }));
+            return Err(failure("ambiguous-version-public-name", "receipt.aliases", "a selector or alias repeats"));
         }
         if !receipt.unversioned_default && !alias.contains(&receipt.reported_version) {
-            return Err(failure(FailureInput {
-                code: "unversioned-alias-without-default",
-                path: "receipt.aliases",
-                message: "an alias omits its version",
-            }));
+            return Err(failure("unversioned-alias-without-default", "receipt.aliases", "an alias omits its version"));
         }
     }
     if receipt.unversioned_default && receipt.aliases.is_empty() {
-        return Err(failure(FailureInput {
-            code: "default-version-missing-alias",
-            path: "receipt.aliases",
-            message: "the default has no unversioned alias",
-        }));
+        return Err(failure(
+            "default-version-missing-alias",
+            "receipt.aliases",
+            "the default has no unversioned alias",
+        ));
     }
     debug_assert!(names.contains(receipt.public_selector.as_str()));
-    debug_assert!(receipt.aliases.len().checked_add(1).is_some_and(|count| names.len() == count));
+    debug_assert_eq!(names.len(), receipt.aliases.len() + 1);
     Ok(())
 }
 
 fn validate_resolved_source(selected: &ResolvedVersionSource) -> Result<(), CoreFailure> {
-    require_exact_revision(ValuePath {
-        value: &selected.revision,
-        path: "receipt.selected.revision",
-    })?;
-    require_nar_hash(ValuePath {
-        value: &selected.nar_hash,
-        path: "receipt.selected.nar_hash",
-    })?;
-    require_blake3(ValuePath {
-        value: &selected.observation_identity_blake3,
-        path: "receipt.selected.observation_identity_blake3",
-    })?;
+    require_exact_revision(&selected.revision, "receipt.selected.revision")?;
+    require_nar_hash(&selected.nar_hash, "receipt.selected.nar_hash")?;
+    require_blake3(&selected.observation_identity_blake3, "receipt.selected.observation_identity_blake3")?;
     let expected_reference = format!("github:NixOS/nixpkgs/{}", selected.revision);
-    require_equal(BindingCheck {
-        actual: &selected.source_reference,
-        expected: &expected_reference,
-        path: "receipt.selected.source_reference",
-        code: "version-receipt-reference-mismatch",
-    })?;
+    require_equal(
+        &selected.source_reference,
+        &expected_reference,
+        "receipt.selected.source_reference",
+        "version-receipt-reference-mismatch",
+    )?;
     debug_assert_eq!(selected.source_reference, expected_reference);
     debug_assert!(!selected.observation_identity_blake3.is_empty());
     Ok(())
@@ -1847,7 +1533,7 @@ fn validate_reason_code_list(reason_codes: &[String], path: &str) -> Result<(), 
     let mut diagnostics = Vec::new();
     collect_reason_codes(reason_codes, HARD_MAX_TEXT_BYTES, &mut diagnostics);
     if diagnostics.is_empty() {
-        debug_assert!(usize::try_from(HARD_MAX_DIAGNOSTICS).is_ok_and(|maximum| reason_codes.len() <= maximum));
+        debug_assert!(reason_codes.len() <= HARD_MAX_DIAGNOSTICS as usize);
         debug_assert!(reason_codes.iter().all(|code| !code.is_empty()));
         Ok(())
     } else {
@@ -1864,11 +1550,7 @@ fn seal_revision_group(
 ) -> Result<VersionRevisionGroup, CoreFailure> {
     selectors.sort();
     if selectors.is_empty() {
-        return Err(failure(FailureInput {
-            code: "empty-version-revision-group",
-            path: "group.selectors",
-            message: "a revision group needs a selector",
-        }));
+        return Err(failure("empty-version-revision-group", "group.selectors", "a revision group needs a selector"));
     }
     let mut group = VersionRevisionGroup {
         group_identity_blake3: String::new(),
@@ -1898,46 +1580,35 @@ fn seal_existing_revision_group(group: &VersionRevisionGroup) -> Result<VersionR
         ),
         group.selectors.clone(),
     )?;
-    require_equal(BindingCheck {
-        actual: &group.group_identity_blake3,
-        expected: &sealed.group_identity_blake3,
-        path: "group.group_identity_blake3",
-        code: "stale-version-group-identity",
-    })?;
+    require_equal(
+        &group.group_identity_blake3,
+        &sealed.group_identity_blake3,
+        "group.group_identity_blake3",
+        "stale-version-group-identity",
+    )?;
     debug_assert_eq!(sealed.group_identity_blake3, group.group_identity_blake3);
     debug_assert!(!sealed.selectors.is_empty());
     Ok(sealed)
 }
 
 fn validate_revision_group_content(group: &VersionRevisionGroup) -> Result<(), CoreFailure> {
-    require_equal(BindingCheck {
-        actual: &group.system,
-        expected: SUPPORTED_SYSTEM_X86_64_LINUX,
-        path: "group.system",
-        code: "unsupported-version-group-system",
-    })?;
-    require_exact_revision(ValuePath {
-        value: &group.revision,
-        path: "group.revision",
-    })?;
-    require_nar_hash(ValuePath {
-        value: &group.nar_hash,
-        path: "group.nar_hash",
-    })?;
+    require_equal(&group.system, SUPPORTED_SYSTEM_X86_64_LINUX, "group.system", "unsupported-version-group-system")?;
+    require_exact_revision(&group.revision, "group.revision")?;
+    require_nar_hash(&group.nar_hash, "group.nar_hash")?;
     let expected_reference = format!("github:NixOS/nixpkgs/{}", group.revision);
-    require_equal(BindingCheck {
-        actual: &group.source_reference,
-        expected: &expected_reference,
-        path: "group.source_reference",
-        code: "version-group-reference-mismatch",
-    })?;
-    require_bounded_count(CountBoundCheck {
-        count: group.selectors.len(),
-        named_limit: HARD_MAX_REQUESTS,
-        hard_limit: HARD_MAX_REQUESTS,
-        path: "group.selectors",
-        code: "version-group-selector-limit-exceeded",
-    })?;
+    require_equal(
+        &group.source_reference,
+        &expected_reference,
+        "group.source_reference",
+        "version-group-reference-mismatch",
+    )?;
+    require_bounded_count(
+        group.selectors.len(),
+        HARD_MAX_REQUESTS,
+        HARD_MAX_REQUESTS,
+        "group.selectors",
+        "version-group-selector-limit-exceeded",
+    )?;
     let mut receipt_ids = BTreeSet::new();
     let mut request_ids = BTreeSet::new();
     let mut public_names = BTreeSet::new();
@@ -1955,56 +1626,31 @@ fn validate_group_selector<'a>(
     request_ids: &mut BTreeSet<&'a str>,
     public_names: &mut BTreeSet<&'a str>,
 ) -> Result<(), CoreFailure> {
-    require_blake3(ValuePath {
-        value: &selector.request_identity_blake3,
-        path: "group.selectors.request_identity_blake3",
-    })?;
-    require_blake3(ValuePath {
-        value: &selector.receipt_identity_blake3,
-        path: "group.selectors.receipt_identity_blake3",
-    })?;
-    require_attribute(ValuePath {
-        value: &selector.attribute,
-        path: "group.selectors.attribute",
-    })?;
-    require_text(TextCheck {
-        value: &selector.reported_version,
-        path: "group.selectors.reported_version",
-        max_bytes: HARD_MAX_TEXT_BYTES,
-    })?;
-    require_selector(TextCheck {
-        value: &selector.public_selector,
-        path: "group.selectors.public_selector",
-        max_bytes: HARD_MAX_TEXT_BYTES,
-    })?;
+    require_blake3(&selector.request_identity_blake3, "group.selectors.request_identity_blake3")?;
+    require_blake3(&selector.receipt_identity_blake3, "group.selectors.receipt_identity_blake3")?;
+    require_attribute(&selector.attribute, "group.selectors.attribute")?;
+    require_text(&selector.reported_version, "group.selectors.reported_version", HARD_MAX_TEXT_BYTES)?;
+    require_selector(&selector.public_selector, "group.selectors.public_selector", HARD_MAX_TEXT_BYTES)?;
     if !selector.public_selector.contains(&selector.reported_version) {
-        return Err(failure(FailureInput {
-            code: "unversioned-public-selector",
-            path: "group.selectors.public_selector",
-            message: "the selector omits its version",
-        }));
+        return Err(failure(
+            "unversioned-public-selector",
+            "group.selectors.public_selector",
+            "the selector omits its version",
+        ));
     }
-    require_bounded_count(CountBoundCheck {
-        count: selector.aliases.len(),
-        named_limit: HARD_MAX_ALIASES,
-        hard_limit: HARD_MAX_ALIASES,
-        path: "group.selectors.aliases",
-        code: "version-group-alias-limit-exceeded",
-    })?;
+    require_bounded_count(
+        selector.aliases.len(),
+        HARD_MAX_ALIASES,
+        HARD_MAX_ALIASES,
+        "group.selectors.aliases",
+        "version-group-alias-limit-exceeded",
+    )?;
     require_unique_group_selector_names(selector, public_names)?;
     if !receipt_ids.insert(selector.receipt_identity_blake3.as_str()) {
-        return Err(failure(FailureInput {
-            code: "duplicate-version-group-receipt",
-            path: "group.selectors",
-            message: "a receipt repeats in one group",
-        }));
+        return Err(failure("duplicate-version-group-receipt", "group.selectors", "a receipt repeats in one group"));
     }
     if !request_ids.insert(selector.request_identity_blake3.as_str()) {
-        return Err(failure(FailureInput {
-            code: "duplicate-version-group-request",
-            path: "group.selectors",
-            message: "a request repeats in one group",
-        }));
+        return Err(failure("duplicate-version-group-request", "group.selectors", "a request repeats in one group"));
     }
     debug_assert!(receipt_ids.contains(selector.receipt_identity_blake3.as_str()));
     debug_assert!(request_ids.contains(selector.request_identity_blake3.as_str()));
@@ -2016,24 +1662,12 @@ fn require_unique_group_selector_names<'a>(
     public_names: &mut BTreeSet<&'a str>,
 ) -> Result<(), CoreFailure> {
     if !public_names.insert(selector.public_selector.as_str()) {
-        return Err(failure(FailureInput {
-            code: "ambiguous-version-public-name",
-            path: "group.selectors",
-            message: "a selector or alias repeats",
-        }));
+        return Err(failure("ambiguous-version-public-name", "group.selectors", "a selector or alias repeats"));
     }
     for alias in &selector.aliases {
-        require_selector(TextCheck {
-            value: alias,
-            path: "group.selectors.aliases",
-            max_bytes: HARD_MAX_TEXT_BYTES,
-        })?;
+        require_selector(alias, "group.selectors.aliases", HARD_MAX_TEXT_BYTES)?;
         if !public_names.insert(alias.as_str()) {
-            return Err(failure(FailureInput {
-                code: "ambiguous-version-public-name",
-                path: "group.selectors",
-                message: "a selector or alias repeats",
-            }));
+            return Err(failure("ambiguous-version-public-name", "group.selectors", "a selector or alias repeats"));
         }
     }
     debug_assert!(public_names.contains(selector.public_selector.as_str()));
@@ -2041,136 +1675,67 @@ fn require_unique_group_selector_names<'a>(
     Ok(())
 }
 
-struct PlanIdentitySets<'a> {
-    group_ids: BTreeSet<&'a str>,
-    receipt_ids: BTreeSet<&'a str>,
-    public_names: BTreeSet<(&'a str, &'a str)>,
-}
-
 fn reject_plan_identity_duplicates(groups: &[VersionRevisionGroup], blocked: &[String]) -> Result<(), CoreFailure> {
     if groups.is_empty() && blocked.is_empty() {
-        return Err(failure(FailureInput {
-            code: "empty-version-production-plan",
-            path: "plan",
-            message: "the production plan has no receipt",
-        }));
+        return Err(failure("empty-version-production-plan", "plan", "the production plan has no receipt"));
     }
-    let (mut identities, selector_count) = collect_plan_group_identities(groups)?;
-    if selector_count > HARD_MAX_REQUESTS {
-        return Err(failure(FailureInput {
-            code: "version-plan-selector-limit-exceeded",
-            path: "plan.groups",
-            message: "the selector count exceeds the hard limit",
-        }));
-    }
-    insert_blocked_receipts(blocked, &mut identities.receipt_ids)?;
-    let grouped_receipt_count = usize::try_from(selector_count).map_err(|_| {
-        failure(FailureInput {
-            code: "version-plan-selector-limit-exceeded",
-            path: "plan.groups",
-            message: "the selector count cannot be represented by this platform",
-        })
-    })?;
-    let expected_receipt_count = grouped_receipt_count.checked_add(blocked.len()).ok_or_else(|| {
-        failure(FailureInput {
-            code: "version-plan-selector-limit-exceeded",
-            path: "plan",
-            message: "the grouped and blocked receipt count overflowed",
-        })
-    })?;
-    debug_assert_eq!(identities.group_ids.len(), groups.len());
-    debug_assert_eq!(identities.receipt_ids.len(), expected_receipt_count);
-    Ok(())
-}
-
-fn collect_plan_group_identities<'a>(
-    groups: &'a [VersionRevisionGroup],
-) -> Result<(PlanIdentitySets<'a>, u32), CoreFailure> {
-    let mut identities = PlanIdentitySets {
-        group_ids: BTreeSet::new(),
-        receipt_ids: BTreeSet::new(),
-        public_names: BTreeSet::new(),
-    };
+    let mut group_ids = BTreeSet::new();
+    let mut receipt_ids = BTreeSet::new();
+    let mut public_names = BTreeSet::new();
     let mut selector_count = 0_u32;
     for group in groups {
-        if !identities.group_ids.insert(group.group_identity_blake3.as_str()) {
-            return Err(failure(FailureInput {
-                code: "duplicate-version-group",
-                path: "plan.groups",
-                message: "a revision group repeats",
-            }));
+        if !group_ids.insert(group.group_identity_blake3.as_str()) {
+            return Err(failure("duplicate-version-group", "plan.groups", "a revision group repeats"));
         }
-        let group_selector_count = u32::try_from(group.selectors.len()).map_err(|_| {
-            failure(FailureInput {
-                code: "version-plan-selector-limit-exceeded",
-                path: "plan.groups",
-                message: "the selector count overflowed",
-            })
-        })?;
-        selector_count = selector_count.checked_add(group_selector_count).ok_or_else(|| {
-            failure(FailureInput {
-                code: "version-plan-selector-limit-exceeded",
-                path: "plan.groups",
-                message: "the selector count overflowed",
-            })
-        })?;
-        collect_group_public_identities(group, &mut identities)?;
-    }
-    debug_assert_eq!(identities.group_ids.len(), groups.len());
-    debug_assert!(u32::try_from(groups.len()).is_ok());
-    Ok((identities, selector_count))
-}
-
-fn collect_group_public_identities<'a>(
-    group: &'a VersionRevisionGroup,
-    identities: &mut PlanIdentitySets<'a>,
-) -> Result<(), CoreFailure> {
-    for selector in &group.selectors {
-        if !identities.receipt_ids.insert(selector.receipt_identity_blake3.as_str()) {
-            return Err(failure(FailureInput {
-                code: "duplicate-version-plan-receipt",
-                path: "plan.groups",
-                message: "a receipt repeats across groups",
-            }));
-        }
-        if !identities.public_names.insert((group.system.as_str(), selector.public_selector.as_str())) {
-            return Err(failure(FailureInput {
-                code: "ambiguous-version-public-name",
-                path: "plan.groups",
-                message: "a public name repeats across groups",
-            }));
-        }
-        for alias in &selector.aliases {
-            if !identities.public_names.insert((group.system.as_str(), alias.as_str())) {
-                return Err(failure(FailureInput {
-                    code: "ambiguous-version-public-name",
-                    path: "plan.groups",
-                    message: "a public name repeats across groups",
-                }));
+        selector_count = selector_count
+            .checked_add(u32::try_from(group.selectors.len()).map_err(|_| {
+                failure("version-plan-selector-limit-exceeded", "plan.groups", "the selector count overflowed")
+            })?)
+            .ok_or_else(|| {
+                failure("version-plan-selector-limit-exceeded", "plan.groups", "the selector count overflowed")
+            })?;
+        for selector in &group.selectors {
+            if !receipt_ids.insert(selector.receipt_identity_blake3.as_str()) {
+                return Err(failure(
+                    "duplicate-version-plan-receipt",
+                    "plan.groups",
+                    "a receipt repeats across groups",
+                ));
+            }
+            let selector_key = (group.system.as_str(), selector.public_selector.as_str());
+            if !public_names.insert(selector_key) {
+                return Err(failure(
+                    "ambiguous-version-public-name",
+                    "plan.groups",
+                    "a public name repeats across groups",
+                ));
+            }
+            for alias in &selector.aliases {
+                if !public_names.insert((group.system.as_str(), alias.as_str())) {
+                    return Err(failure(
+                        "ambiguous-version-public-name",
+                        "plan.groups",
+                        "a public name repeats across groups",
+                    ));
+                }
             }
         }
     }
-    debug_assert!(identities.receipt_ids.len() >= group.selectors.len());
-    debug_assert!(identities.public_names.len() >= group.selectors.len());
-    Ok(())
-}
-
-fn insert_blocked_receipts<'a>(blocked: &'a [String], receipt_ids: &mut BTreeSet<&'a str>) -> Result<(), CoreFailure> {
+    if selector_count > HARD_MAX_REQUESTS {
+        return Err(failure(
+            "version-plan-selector-limit-exceeded",
+            "plan.groups",
+            "the selector count exceeds the hard limit",
+        ));
+    }
     for identity in blocked {
-        require_blake3(ValuePath {
-            value: identity,
-            path: "plan.blocked_receipt_identity_blake3",
-        })?;
+        require_blake3(identity, "plan.blocked_receipt_identity_blake3")?;
         if !receipt_ids.insert(identity.as_str()) {
-            return Err(failure(FailureInput {
-                code: "duplicate-version-plan-receipt",
-                path: "plan",
-                message: "a receipt is both grouped and blocked",
-            }));
+            return Err(failure("duplicate-version-plan-receipt", "plan", "a receipt is both grouped and blocked"));
         }
     }
-    debug_assert!(receipt_ids.len() >= blocked.len());
-    debug_assert!(blocked.iter().all(|identity| receipt_ids.contains(identity.as_str())));
+    debug_assert_eq!(group_ids.len(), groups.len());
+    debug_assert_eq!(receipt_ids.len(), usize::try_from(selector_count).unwrap_or(usize::MAX) + blocked.len());
     Ok(())
 }
 
@@ -2178,94 +1743,31 @@ fn seal_group_recheck(
     group: &VersionRevisionGroup,
     recheck: &VersionGroupRecheck,
 ) -> Result<VersionGroupRecheck, CoreFailure> {
-    validate_recheck_header(group, recheck)?;
-    let entries = normalize_recheck_entries(group, recheck)?;
-    validate_reason_code_list(&recheck.reason_codes, "recheck.reason_codes")?;
-    let supplied_identity = recheck.recheck_identity_blake3.clone();
-    let mut reasons = recheck.reason_codes.clone();
-    reasons.sort();
-    reasons.dedup();
-    let mut sealed = VersionGroupRecheck {
-        schema: VERSION_RECHECK_SCHEMA.into(),
-        recheck_identity_blake3: String::new(),
-        group_identity_blake3: group.group_identity_blake3.clone(),
-        source_reference: group.source_reference.clone(),
-        revision: group.revision.clone(),
-        nar_hash: group.nar_hash.clone(),
-        source_tree_blake3: recheck.source_tree_blake3.clone(),
-        entries,
-        reason_codes: reasons,
-    };
-    let identity = canonical_digest(RECHECK_IDENTITY_DOMAIN, &sealed, "version-recheck-serialization-failed")?;
-    reject_stale_identity(BindingCheck {
-        actual: &supplied_identity,
-        expected: &identity,
-        path: "recheck_identity_blake3",
-        code: "stale-version-recheck-identity",
-    })?;
-    sealed.recheck_identity_blake3 = identity;
-    debug_assert_eq!(sealed.entries.len(), group.selectors.len());
-    debug_assert!(!sealed.recheck_identity_blake3.is_empty());
-    Ok(sealed)
-}
-
-fn validate_recheck_header(group: &VersionRevisionGroup, recheck: &VersionGroupRecheck) -> Result<(), CoreFailure> {
-    for check in [
-        BindingCheck {
-            actual: &recheck.schema,
-            expected: VERSION_RECHECK_SCHEMA,
-            path: "recheck.schema",
-            code: "unsupported-version-recheck-schema",
-        },
-        BindingCheck {
-            actual: &recheck.group_identity_blake3,
-            expected: &group.group_identity_blake3,
-            path: "recheck.group_identity_blake3",
-            code: "version-recheck-group-mismatch",
-        },
-        BindingCheck {
-            actual: &recheck.source_reference,
-            expected: &group.source_reference,
-            path: "recheck.source_reference",
-            code: "version-recheck-reference-mismatch",
-        },
-        BindingCheck {
-            actual: &recheck.revision,
-            expected: &group.revision,
-            path: "recheck.revision",
-            code: "version-recheck-revision-mismatch",
-        },
-        BindingCheck {
-            actual: &recheck.nar_hash,
-            expected: &group.nar_hash,
-            path: "recheck.nar_hash",
-            code: "version-recheck-nar-hash-mismatch",
-        },
-    ] {
-        require_equal(check)?;
-    }
+    require_equal(&recheck.schema, VERSION_RECHECK_SCHEMA, "recheck.schema", "unsupported-version-recheck-schema")?;
+    require_equal(
+        &recheck.group_identity_blake3,
+        &group.group_identity_blake3,
+        "recheck.group_identity_blake3",
+        "version-recheck-group-mismatch",
+    )?;
+    require_equal(
+        &recheck.source_reference,
+        &group.source_reference,
+        "recheck.source_reference",
+        "version-recheck-reference-mismatch",
+    )?;
+    require_equal(&recheck.revision, &group.revision, "recheck.revision", "version-recheck-revision-mismatch")?;
+    require_equal(&recheck.nar_hash, &group.nar_hash, "recheck.nar_hash", "version-recheck-nar-hash-mismatch")?;
     if recheck.entries.len() != group.selectors.len() {
-        return Err(failure(FailureInput {
-            code: "incomplete-version-group-recheck",
-            path: "recheck.entries",
-            message: "each group selector needs a recheck",
-        }));
+        return Err(failure(
+            "incomplete-version-group-recheck",
+            "recheck.entries",
+            "each group selector needs a recheck",
+        ));
     }
     if let Some(digest) = &recheck.source_tree_blake3 {
-        require_blake3(ValuePath {
-            value: digest,
-            path: "recheck.source_tree_blake3",
-        })?;
+        require_blake3(digest, "recheck.source_tree_blake3")?;
     }
-    debug_assert_eq!(recheck.entries.len(), group.selectors.len());
-    debug_assert_eq!(recheck.group_identity_blake3, group.group_identity_blake3);
-    Ok(())
-}
-
-fn normalize_recheck_entries(
-    group: &VersionRevisionGroup,
-    recheck: &VersionGroupRecheck,
-) -> Result<Vec<VersionRecheckEntry>, CoreFailure> {
     let selectors = group
         .selectors
         .iter()
@@ -2278,90 +1780,98 @@ fn normalize_recheck_entries(
         entry.reason_codes.sort();
         entry.reason_codes.dedup();
         if !seen_receipts.insert(entry.receipt_identity_blake3.clone()) {
-            return Err(failure(FailureInput {
-                code: "duplicate-version-recheck-receipt",
-                path: "recheck.entries",
-                message: "the recheck repeats one receipt and omits another",
-            }));
+            return Err(failure(
+                "duplicate-version-recheck-receipt",
+                "recheck.entries",
+                "the recheck repeats one receipt and omits another",
+            ));
         }
         let selector = selectors.get(entry.receipt_identity_blake3.as_str()).ok_or_else(|| {
-            failure(FailureInput {
-                code: "unknown-version-recheck-receipt",
-                path: "recheck.entries",
-                message: "the recheck receipt is absent from the group",
-            })
+            failure(
+                "unknown-version-recheck-receipt",
+                "recheck.entries",
+                "the recheck receipt is absent from the group",
+            )
         })?;
-        require_equal(BindingCheck {
-            actual: &entry.attribute,
-            expected: &selector.attribute,
-            path: "recheck.entries.attribute",
-            code: "version-recheck-attribute-mismatch",
-        })?;
-        require_equal(BindingCheck {
-            actual: &entry.expected_version,
-            expected: &selector.reported_version,
-            path: "recheck.entries.expected_version",
-            code: "version-recheck-expected-version-mismatch",
-        })?;
+        require_equal(
+            &entry.attribute,
+            &selector.attribute,
+            "recheck.entries.attribute",
+            "version-recheck-attribute-mismatch",
+        )?;
+        require_equal(
+            &entry.expected_version,
+            &selector.reported_version,
+            "recheck.entries.expected_version",
+            "version-recheck-expected-version-mismatch",
+        )?;
         validate_recheck_entry(entry)?;
     }
+    validate_reason_code_list(&recheck.reason_codes, "recheck.reason_codes")?;
+    let supplied_identity = recheck.recheck_identity_blake3.clone();
+    let mut sealed = VersionGroupRecheck {
+        schema: VERSION_RECHECK_SCHEMA.into(),
+        recheck_identity_blake3: String::new(),
+        group_identity_blake3: group.group_identity_blake3.clone(),
+        source_reference: group.source_reference.clone(),
+        revision: group.revision.clone(),
+        nar_hash: group.nar_hash.clone(),
+        source_tree_blake3: recheck.source_tree_blake3.clone(),
+        entries,
+        reason_codes: {
+            let mut reasons = recheck.reason_codes.clone();
+            reasons.sort();
+            reasons.dedup();
+            reasons
+        },
+    };
+    let identity = canonical_digest(RECHECK_IDENTITY_DOMAIN, &sealed, "version-recheck-serialization-failed")?;
+    reject_stale_identity(&supplied_identity, &identity, "recheck_identity_blake3", "stale-version-recheck-identity")?;
+    sealed.recheck_identity_blake3 = identity;
+    debug_assert_eq!(sealed.entries.len(), group.selectors.len());
     debug_assert_eq!(seen_receipts.len(), group.selectors.len());
-    debug_assert_eq!(entries.len(), group.selectors.len());
-    Ok(entries)
+    debug_assert!(!sealed.recheck_identity_blake3.is_empty());
+    Ok(sealed)
 }
 
 fn validate_recheck_entry(entry: &VersionRecheckEntry) -> Result<(), CoreFailure> {
-    require_blake3(ValuePath {
-        value: &entry.receipt_identity_blake3,
-        path: "recheck.entries.receipt_identity_blake3",
-    })?;
-    require_attribute(ValuePath {
-        value: &entry.attribute,
-        path: "recheck.entries.attribute",
-    })?;
-    require_text(TextCheck {
-        value: &entry.expected_version,
-        path: "recheck.entries.expected_version",
-        max_bytes: HARD_MAX_TEXT_BYTES,
-    })?;
+    require_blake3(&entry.receipt_identity_blake3, "recheck.entries.receipt_identity_blake3")?;
+    require_attribute(&entry.attribute, "recheck.entries.attribute")?;
+    require_text(&entry.expected_version, "recheck.entries.expected_version", HARD_MAX_TEXT_BYTES)?;
     if let Some(observed) = &entry.observed_version {
-        require_text(TextCheck {
-            value: observed,
-            path: "recheck.entries.observed_version",
-            max_bytes: HARD_MAX_TEXT_BYTES,
-        })?;
+        require_text(observed, "recheck.entries.observed_version", HARD_MAX_TEXT_BYTES)?;
     }
     validate_reason_code_list(&entry.reason_codes, "recheck.entries.reason_codes")?;
     match entry.status {
         VersionObservationStatus::Success => {
             let observed = entry.observed_version.as_ref().ok_or_else(|| {
-                failure(FailureInput {
-                    code: "missing-rechecked-version",
-                    path: "recheck.entries.observed_version",
-                    message: "a successful recheck needs a version",
-                })
+                failure(
+                    "missing-rechecked-version",
+                    "recheck.entries.observed_version",
+                    "a successful recheck needs a version",
+                )
             })?;
-            require_equal(BindingCheck {
-                actual: observed,
-                expected: &entry.expected_version,
-                path: "recheck.entries.observed_version",
-                code: "rechecked-version-mismatch",
-            })?;
+            require_equal(
+                observed,
+                &entry.expected_version,
+                "recheck.entries.observed_version",
+                "rechecked-version-mismatch",
+            )?;
             if !entry.reason_codes.is_empty() {
-                return Err(failure(FailureInput {
-                    code: "successful-recheck-has-reasons",
-                    path: "recheck.entries.reason_codes",
-                    message: "a successful recheck has no failure reason",
-                }));
+                return Err(failure(
+                    "successful-recheck-has-reasons",
+                    "recheck.entries.reason_codes",
+                    "a successful recheck has no failure reason",
+                ));
             }
         }
         VersionObservationStatus::Unavailable | VersionObservationStatus::Failed => {
             if entry.reason_codes.is_empty() {
-                return Err(failure(FailureInput {
-                    code: "missing-recheck-reason",
-                    path: "recheck.entries.reason_codes",
-                    message: "an unsuccessful recheck needs a reason",
-                }));
+                return Err(failure(
+                    "missing-recheck-reason",
+                    "recheck.entries.reason_codes",
+                    "an unsuccessful recheck needs a reason",
+                ));
             }
         }
     }
@@ -2372,32 +1882,28 @@ fn validate_recheck_entry(entry: &VersionRecheckEntry) -> Result<(), CoreFailure
 
 fn require_successful_recheck(group: &VersionRevisionGroup, recheck: &VersionGroupRecheck) -> Result<(), CoreFailure> {
     if recheck.source_tree_blake3.is_none() {
-        return Err(failure(FailureInput {
-            code: "version-source-recheck-failed",
-            path: "recheck.source_tree_blake3",
-            message: "the selected source did not produce a source-tree identity",
-        }));
+        return Err(failure(
+            "version-source-recheck-failed",
+            "recheck.source_tree_blake3",
+            "the selected source did not produce a source-tree identity",
+        ));
     }
     if !recheck.reason_codes.is_empty() {
-        return Err(failure(FailureInput {
-            code: "version-source-recheck-failed",
-            path: "recheck.reason_codes",
-            message: "the selected source recheck failed",
-        }));
+        return Err(failure(
+            "version-source-recheck-failed",
+            "recheck.reason_codes",
+            "the selected source recheck failed",
+        ));
     }
     if recheck.entries.iter().any(|entry| entry.status != VersionObservationStatus::Success) {
-        return Err(failure(FailureInput {
-            code: "version-attribute-recheck-failed",
-            path: "recheck.entries",
-            message: "a selected package version recheck failed",
-        }));
+        return Err(failure(
+            "version-attribute-recheck-failed",
+            "recheck.entries",
+            "a selected package version recheck failed",
+        ));
     }
     if recheck.entries.len() != group.selectors.len() {
-        return Err(failure(FailureInput {
-            code: "incomplete-version-group-recheck",
-            path: "recheck.entries",
-            message: "the group recheck is incomplete",
-        }));
+        return Err(failure("incomplete-version-group-recheck", "recheck.entries", "the group recheck is incomplete"));
     }
     debug_assert!(recheck.source_tree_blake3.is_some());
     debug_assert!(recheck.entries.iter().all(|entry| entry.status == VersionObservationStatus::Success));
@@ -2414,45 +1920,6 @@ fn validate_limits(limits: &VersionResolutionLimits) -> Result<(), CoreFailure> 
     } else {
         Err(CoreFailure::from_diagnostics(diagnostics))
     }
-}
-
-struct ValuePath<'a> {
-    value: &'a str,
-    path: &'a str,
-}
-
-struct TextCheck<'a> {
-    value: &'a str,
-    path: &'a str,
-    max_bytes: u32,
-}
-
-struct BindingCheck<'a> {
-    actual: &'a str,
-    expected: &'a str,
-    path: &'a str,
-    code: &'a str,
-}
-
-struct CountBoundCheck<'a> {
-    count: usize,
-    named_limit: u32,
-    hard_limit: u32,
-    path: &'a str,
-    code: &'a str,
-}
-
-struct ProductCheck<'a> {
-    left_count: usize,
-    right_count: usize,
-    named_limit: u32,
-    code: &'a str,
-}
-
-struct FailureInput<'a> {
-    code: &'a str,
-    path: &'a str,
-    message: &'a str,
 }
 
 fn collect_limits(limits: &VersionResolutionLimits, diagnostics: &mut Vec<Diagnostic>) {
@@ -2490,14 +1957,7 @@ fn collect_reason_codes(reason_codes: &[String], max_text_bytes: u32, diagnostic
     let mut seen = BTreeSet::new();
     for (index, code) in reason_codes.iter().enumerate() {
         let path = format!("reason_codes[{index}]");
-        collect_stable_code(
-            TextCheck {
-                value: code,
-                path: &path,
-                max_bytes: max_text_bytes,
-            },
-            diagnostics,
-        );
+        collect_stable_code(code, &path, max_text_bytes, diagnostics);
         if !seen.insert(code.as_str()) {
             diagnostics.push(Diagnostic::new(
                 "duplicate-version-reason",
@@ -2507,142 +1967,125 @@ fn collect_reason_codes(reason_codes: &[String], max_text_bytes: u32, diagnostic
         }
     }
     debug_assert!(seen.len() <= reason_codes.len());
-    debug_assert!(reason_codes.is_empty() || !seen.is_empty());
+    debug_assert!(diagnostics.len() <= usize::MAX);
 }
 
-fn collect_text(check: TextCheck<'_>, diagnostics: &mut Vec<Diagnostic>) {
-    let is_too_long = usize::try_from(check.max_bytes).map_or(true, |maximum| check.value.len() > maximum);
-    if check.value.is_empty() || is_too_long || check.value.chars().any(char::is_control) {
+fn collect_text(value: &str, path: &str, max_bytes: u32, diagnostics: &mut Vec<Diagnostic>) {
+    let exceeds = usize::try_from(max_bytes).map_or(true, |maximum| value.len() > maximum);
+    if value.is_empty() || exceeds || value.chars().any(char::is_control) {
         diagnostics.push(Diagnostic::new(
             "invalid-version-text",
-            check.path,
+            path,
             "the text must be nonempty, bounded, and free of control characters",
         ));
     }
 }
 
-fn collect_attribute(check: ValuePath<'_>, diagnostics: &mut Vec<Diagnostic>) {
-    let is_within_text_bound = usize::try_from(HARD_MAX_TEXT_BYTES).is_ok_and(|maximum| check.value.len() <= maximum);
-    let is_valid = !check.value.is_empty()
-        && is_within_text_bound
-        && check.value.split('.').all(|segment| {
+fn collect_attribute(value: &str, path: &str, diagnostics: &mut Vec<Diagnostic>) {
+    let valid = !value.is_empty()
+        && value.len() <= HARD_MAX_TEXT_BYTES as usize
+        && value.split('.').all(|segment| {
             !segment.is_empty()
                 && segment.chars().all(|character| character.is_ascii_alphanumeric() || character == '_')
         });
-    if !is_valid {
+    if !valid {
         diagnostics.push(Diagnostic::new(
             "unsafe-version-attribute",
-            check.path,
+            path,
             "the attribute must contain bounded ASCII identifier segments",
         ));
     }
 }
 
-fn collect_safe_relative_path(check: TextCheck<'_>, diagnostics: &mut Vec<Diagnostic>) {
-    collect_text(
-        TextCheck {
-            value: check.value,
-            path: check.path,
-            max_bytes: check.max_bytes,
-        },
-        diagnostics,
-    );
-    let is_unsafe_path = check.value.starts_with('/')
-        || check.value.ends_with('/')
-        || check.value.contains("//")
-        || check.value.contains('\\')
-        || check.value.split('/').any(|component| component == "." || component == "..");
-    if is_unsafe_path {
+fn collect_safe_relative_path(value: &str, path: &str, max_bytes: u32, diagnostics: &mut Vec<Diagnostic>) {
+    collect_text(value, path, max_bytes, diagnostics);
+    let unsafe_path = value.starts_with('/')
+        || value.ends_with('/')
+        || value.contains("//")
+        || value.contains('\\')
+        || value.split('/').any(|component| component == "." || component == "..");
+    if unsafe_path {
         diagnostics.push(Diagnostic::new(
             "unsafe-version-index-path",
-            check.path,
+            path,
             "the index path must be a safe relative path",
         ));
     }
-    debug_assert!(check.value.is_empty() || !check.value.starts_with('/') || !diagnostics.is_empty());
-    debug_assert!(check.value.is_empty() || !check.value.contains("..") || !diagnostics.is_empty());
+    debug_assert!(value.is_empty() || !value.starts_with('/') || !diagnostics.is_empty());
+    debug_assert!(value.is_empty() || !value.contains("..") || !diagnostics.is_empty());
 }
 
-fn collect_stable_code(check: TextCheck<'_>, diagnostics: &mut Vec<Diagnostic>) {
-    collect_text(
-        TextCheck {
-            value: check.value,
-            path: check.path,
-            max_bytes: check.max_bytes,
-        },
-        diagnostics,
-    );
-    let is_stable = check
-        .value
+fn collect_stable_code(value: &str, path: &str, max_bytes: u32, diagnostics: &mut Vec<Diagnostic>) {
+    collect_text(value, path, max_bytes, diagnostics);
+    if !value
         .chars()
-        .all(|character| character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-');
-    if !is_stable {
+        .all(|character| character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-')
+    {
         diagnostics.push(Diagnostic::new(
             "invalid-version-reason-code",
-            check.path,
+            path,
             "the reason code must use lowercase ASCII letters, digits, and hyphens",
         ));
     }
-    debug_assert!(is_stable || !diagnostics.is_empty());
-    debug_assert!(
-        usize::try_from(check.max_bytes).is_ok_and(|maximum| check.value.len() <= maximum) || !diagnostics.is_empty()
-    );
 }
 
-fn collect_exact_revision(check: ValuePath<'_>, diagnostics: &mut Vec<Diagnostic>) {
-    if !is_lower_hex(check.value, GIT_REVISION_HEX_CHARS) {
+fn collect_exact_revision(value: &str, path: &str, diagnostics: &mut Vec<Diagnostic>) {
+    if !is_lower_hex(value, GIT_REVISION_HEX_CHARS) {
         diagnostics.push(Diagnostic::new(
             "floating-version-revision",
-            check.path,
+            path,
             "the Nixpkgs revision must be an exact lowercase Git identity",
         ));
     }
 }
 
-fn collect_nar_hash(check: ValuePath<'_>, diagnostics: &mut Vec<Diagnostic>) {
-    let payload = check.value.strip_prefix(NIX_SHA256_PREFIX);
-    let is_valid = payload.is_some_and(|digest| {
+fn collect_nar_hash(value: &str, path: &str, diagnostics: &mut Vec<Diagnostic>) {
+    let payload = value.strip_prefix(NIX_SHA256_PREFIX);
+    let valid = payload.is_some_and(|digest| {
         digest.len() == NIX_SHA256_BASE64_CHARS
             && digest
                 .chars()
                 .all(|character| character.is_ascii_alphanumeric() || matches!(character, '+' | '/' | '='))
     });
-    if !is_valid {
+    if !valid {
         diagnostics.push(Diagnostic::new(
             "invalid-nix-nar-hash",
-            check.path,
+            path,
             "the Nix source hash must be tagged SHA-256 SRI text",
         ));
     }
 }
 
-fn collect_equal(check: BindingCheck<'_>, diagnostics: &mut Vec<Diagnostic>) {
-    if check.actual != check.expected {
-        diagnostics.push(Diagnostic::new(check.code, check.path, "the value differs from the required binding"));
+fn collect_equal(actual: &str, expected: &str, path: &str, code: &str, diagnostics: &mut Vec<Diagnostic>) {
+    if actual != expected {
+        diagnostics.push(Diagnostic::new(code, path, "the value differs from the required binding"));
     }
 }
 
-fn collect_bounded_count(check: CountBoundCheck<'_>, diagnostics: &mut Vec<Diagnostic>) {
-    if exceeds_u32(check.count, check.named_limit) || exceeds_u32(check.count, check.hard_limit) {
-        diagnostics.push(Diagnostic::new(check.code, check.path, "the item count exceeds a named or hard limit"));
+fn collect_bounded_count(
+    count: usize,
+    named_limit: u32,
+    hard_limit: u32,
+    path: &str,
+    code: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if exceeds_u32(count, named_limit) || exceeds_u32(count, hard_limit) {
+        diagnostics.push(Diagnostic::new(code, path, "the item count exceeds a named or hard limit"));
     }
 }
 
-fn require_equal(check: BindingCheck<'_>) -> Result<(), CoreFailure> {
-    if check.actual == check.expected {
+fn require_equal(actual: &str, expected: &str, path: &str, code: &str) -> Result<(), CoreFailure> {
+    if actual == expected {
         Ok(())
     } else {
-        Err(failure(FailureInput {
-            code: check.code,
-            path: check.path,
-            message: "the value differs from the required binding",
-        }))
+        Err(failure(code, path, "the value differs from the required binding"))
     }
 }
 
-fn require_text(check: TextCheck<'_>) -> Result<(), CoreFailure> {
+fn require_text(value: &str, path: &str, max_bytes: u32) -> Result<(), CoreFailure> {
     let mut diagnostics = Vec::new();
-    collect_text(check, &mut diagnostics);
+    collect_text(value, path, max_bytes, &mut diagnostics);
     if diagnostics.is_empty() {
         Ok(())
     } else {
@@ -2650,9 +2093,9 @@ fn require_text(check: TextCheck<'_>) -> Result<(), CoreFailure> {
     }
 }
 
-fn require_attribute(check: ValuePath<'_>) -> Result<(), CoreFailure> {
+fn require_attribute(value: &str, path: &str) -> Result<(), CoreFailure> {
     let mut diagnostics = Vec::new();
-    collect_attribute(check, &mut diagnostics);
+    collect_attribute(value, path, &mut diagnostics);
     if diagnostics.is_empty() {
         Ok(())
     } else {
@@ -2660,44 +2103,31 @@ fn require_attribute(check: ValuePath<'_>) -> Result<(), CoreFailure> {
     }
 }
 
-fn require_selector(check: TextCheck<'_>) -> Result<(), CoreFailure> {
-    require_text(TextCheck {
-        value: check.value,
-        path: check.path,
-        max_bytes: check.max_bytes,
-    })?;
-    let is_invalid = check.value.starts_with('.')
-        || check.value.ends_with('.')
-        || check.value.contains("..")
-        || check.value.contains('/')
-        || check.value.contains('\\');
-    if is_invalid {
-        return Err(failure(FailureInput {
-            code: "unsafe-version-public-selector",
-            path: check.path,
-            message: "the public selector is not safe",
-        }));
+fn require_selector(value: &str, path: &str, max_bytes: u32) -> Result<(), CoreFailure> {
+    require_text(value, path, max_bytes)?;
+    let invalid = value.starts_with('.')
+        || value.ends_with('.')
+        || value.contains("..")
+        || value.contains('/')
+        || value.contains('\\');
+    if invalid {
+        Err(failure("unsafe-version-public-selector", path, "the public selector is not safe"))
+    } else {
+        Ok(())
     }
-    debug_assert!(!check.value.is_empty());
-    debug_assert!(!check.value.contains(".."));
-    Ok(())
 }
 
-fn require_blake3(check: ValuePath<'_>) -> Result<(), CoreFailure> {
-    if is_blake3(check.value) {
+fn require_blake3(value: &str, path: &str) -> Result<(), CoreFailure> {
+    if is_blake3(value) {
         Ok(())
     } else {
-        Err(failure(FailureInput {
-            code: "invalid-blake3-identity",
-            path: check.path,
-            message: "the identity must be lowercase BLAKE3 hexadecimal text",
-        }))
+        Err(failure("invalid-blake3-identity", path, "the identity must be lowercase BLAKE3 hexadecimal text"))
     }
 }
 
-fn require_exact_revision(check: ValuePath<'_>) -> Result<(), CoreFailure> {
+fn require_exact_revision(value: &str, path: &str) -> Result<(), CoreFailure> {
     let mut diagnostics = Vec::new();
-    collect_exact_revision(check, &mut diagnostics);
+    collect_exact_revision(value, path, &mut diagnostics);
     if diagnostics.is_empty() {
         Ok(())
     } else {
@@ -2705,9 +2135,9 @@ fn require_exact_revision(check: ValuePath<'_>) -> Result<(), CoreFailure> {
     }
 }
 
-fn require_nar_hash(check: ValuePath<'_>) -> Result<(), CoreFailure> {
+fn require_nar_hash(value: &str, path: &str) -> Result<(), CoreFailure> {
     let mut diagnostics = Vec::new();
-    collect_nar_hash(check, &mut diagnostics);
+    collect_nar_hash(value, path, &mut diagnostics);
     if diagnostics.is_empty() {
         Ok(())
     } else {
@@ -2715,38 +2145,31 @@ fn require_nar_hash(check: ValuePath<'_>) -> Result<(), CoreFailure> {
     }
 }
 
-fn require_bounded_count(check: CountBoundCheck<'_>) -> Result<(), CoreFailure> {
-    if exceeds_u32(check.count, check.named_limit) || exceeds_u32(check.count, check.hard_limit) {
-        Err(failure(FailureInput {
-            code: check.code,
-            path: check.path,
-            message: "the item count exceeds a named or hard limit",
-        }))
+fn require_bounded_count(
+    count: usize,
+    named_limit: u32,
+    hard_limit: u32,
+    path: &str,
+    code: &str,
+) -> Result<(), CoreFailure> {
+    if exceeds_u32(count, named_limit) || exceeds_u32(count, hard_limit) {
+        Err(failure(code, path, "the item count exceeds a named or hard limit"))
     } else {
         Ok(())
     }
 }
 
-fn reject_stale_identity(check: BindingCheck<'_>) -> Result<(), CoreFailure> {
-    if check.actual.is_empty() || check.actual == check.expected {
+fn reject_stale_identity(supplied: &str, expected: &str, path: &str, code: &str) -> Result<(), CoreFailure> {
+    if supplied.is_empty() || supplied == expected {
         Ok(())
     } else {
-        Err(failure(FailureInput {
-            code: check.code,
-            path: check.path,
-            message: "the supplied identity differs from canonical bytes",
-        }))
+        Err(failure(code, path, "the supplied identity differs from canonical bytes"))
     }
 }
 
 fn canonical_digest<T: Serialize>(domain: &[u8], value: &T, code: &str) -> Result<String, CoreFailure> {
-    let bytes = serde_json::to_vec(value).map_err(|_| {
-        failure(FailureInput {
-            code,
-            path: "identity",
-            message: "the canonical identity input did not serialize",
-        })
-    })?;
+    let bytes = serde_json::to_vec(value)
+        .map_err(|_| failure(code, "identity", "the canonical identity input did not serialize"))?;
     let mut hasher = blake3::Hasher::new();
     hasher.update(domain);
     hasher.update(&[DOMAIN_SEPARATOR]);
@@ -2754,23 +2177,13 @@ fn canonical_digest<T: Serialize>(domain: &[u8], value: &T, code: &str) -> Resul
     Ok(hasher.finalize().to_hex().as_str().into())
 }
 
-fn bounded_product(check: ProductCheck<'_>) -> Result<usize, CoreFailure> {
-    let product = check.left_count.checked_mul(check.right_count).ok_or_else(|| {
-        failure(FailureInput {
-            code: check.code,
-            path: "observations",
-            message: "the observation count overflowed",
-        })
-    })?;
-    require_bounded_count(CountBoundCheck {
-        count: product,
-        named_limit: check.named_limit,
-        hard_limit: HARD_MAX_OBSERVATIONS,
-        path: "observations",
-        code: check.code,
-    })?;
-    debug_assert!(product >= check.left_count || check.right_count == 0);
-    debug_assert!(product >= check.right_count || check.left_count == 0);
+fn bounded_product(left: usize, right: usize, named_limit: u32, code: &str) -> Result<usize, CoreFailure> {
+    let product = left
+        .checked_mul(right)
+        .ok_or_else(|| failure(code, "observations", "the observation count overflowed"))?;
+    require_bounded_count(product, named_limit, HARD_MAX_OBSERVATIONS, "observations", code)?;
+    debug_assert!(product >= left || right == 0);
+    debug_assert!(product >= right || left == 0);
     Ok(product)
 }
 
@@ -2786,8 +2199,8 @@ fn exceeds_u32(count: usize, limit: u32) -> bool {
     u32::try_from(count).map_or(true, |value| value > limit)
 }
 
-fn failure(input: FailureInput<'_>) -> CoreFailure {
-    CoreFailure::from_diagnostic(Diagnostic::new(input.code, input.path, input.message))
+fn failure(code: &str, path: &str, message: &str) -> CoreFailure {
+    CoreFailure::from_diagnostic(Diagnostic::new(code, path, message))
 }
 
 #[cfg(test)]

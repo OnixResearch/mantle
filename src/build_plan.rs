@@ -15,6 +15,8 @@ use crunch_build::action_result::discovery_runtime_report;
 use crunch_build::action_result::policy_refs_for_derivation;
 use crunch_build::action_result::trust_policy_for_action;
 use crunch_build::signing;
+use crunch_glue::ConversionCache;
+use crunch_glue::CrunchDerivation;
 use nix_compat::derivation::Derivation;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
@@ -28,12 +30,9 @@ use crate::errors::RunError;
 use crate::operator_diagnostics::DoctorProfile;
 use crate::operator_diagnostics::DoctorRequest;
 use crate::operator_diagnostics::collect_doctor_report;
-use crate::source_built_derivation_action_plan::EagerDerivationActionPlan;
-use crate::source_built_derivation_action_plan::EagerDerivationActionPlanInput;
-use crate::source_built_derivation_action_plan::EagerDerivationEntry;
-use crate::source_built_derivation_action_plan::plan_eager_derivation_actions;
 
 const PLAN_REPORT_SCHEMA: &str = "crunch-build-plan-v1";
+const MAX_LABELED_EVAL_ERROR_DEPTH: u32 = 64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
@@ -204,8 +203,7 @@ fn run_build_plan(config: &BuildPlanConfig<'_>) -> Result<BuildPlanReport, RunEr
 }
 
 async fn build_plan_report(config: &BuildPlanConfig<'_>) -> Result<BuildPlanReport, RunError> {
-    let evaluated = evaluate_roots(config.file, config.import_paths, config.store_dir).await?;
-    let roots = evaluated.roots;
+    let roots = evaluate_roots(config.file, config.import_paths, config.store_dir)?;
     let root_count = roots.len();
     let preflight_error = validate_plan_config(config);
     let doctor_preflight = collect_doctor_report(DoctorRequest {
@@ -271,94 +269,42 @@ fn state_dir_is_empty(state_dir: &Path) -> Result<bool, RunError> {
     Ok(entries.next().is_none())
 }
 
-struct EvaluatedDerivationGraph {
-    roots: Vec<PlannedRoot>,
-    entries: Vec<EagerDerivationEntry>,
+fn eval_error_is_build(err: &crunch_eval::Error) -> bool {
+    let mut current = err;
+    for _depth in 0..MAX_LABELED_EVAL_ERROR_DEPTH {
+        match current {
+            crunch_eval::Error::Eval(_) | crunch_eval::Error::Io(_) => return false,
+            crunch_eval::Error::Boundary(_) | crunch_eval::Error::Serde(_) => return true,
+            crunch_eval::Error::Labeled { source, .. } => current = source,
+        }
+    }
+    true
 }
 
-pub(crate) fn capture_eager_derivation_action_plan(
-    file: &Path,
-    import_paths: &[OsString],
-    store_dir: &str,
-    stage_id: &str,
-    sandbox_shell_digest_blake3: &str,
-) -> Result<EagerDerivationActionPlan, RunError> {
-    let runtime = tokio::runtime::Runtime::new()
-        .map_err(|error| RunError::Internal(format!("creating eager-plan runtime: {error}")))?;
-    runtime.block_on(capture_eager_derivation_action_plan_async(
-        file,
-        import_paths,
-        store_dir,
-        stage_id,
-        sandbox_shell_digest_blake3,
-    ))
-}
-
-async fn capture_eager_derivation_action_plan_async(
-    file: &Path,
-    import_paths: &[OsString],
-    store_dir: &str,
-    stage_id: &str,
-    sandbox_shell_digest_blake3: &str,
-) -> Result<EagerDerivationActionPlan, RunError> {
-    let evaluated = evaluate_roots(file, import_paths, store_dir).await?;
-    let plan = plan_eager_derivation_actions(EagerDerivationActionPlanInput {
-        stage_id: stage_id.to_string(),
-        store_dir: store_dir.to_string(),
-        sandbox_shell_digest_blake3: sandbox_shell_digest_blake3.to_string(),
-        entries: evaluated.entries,
-    })
-    .map_err(|error| RunError::Build(format!("planning eager derivation actions: {error}")))?;
-    assert!(!plan.actions.is_empty());
-    debug_assert_eq!(usize::try_from(plan.action_count).ok(), Some(plan.actions.len()));
-    Ok(plan)
-}
-
-async fn evaluate_roots(
-    file: &Path,
-    import_paths: &[OsString],
-    store_dir: &str,
-) -> Result<EvaluatedDerivationGraph, RunError> {
-    let evaluated = crunch_pipeline::evaluate_derivations_eager(crunch_pipeline::EagerDerivationEvaluationConfig {
-        file,
-        import_paths,
-        store_dir,
-        max_jobs: 1,
-    })
-    .await
-    .map_err(|error| RunError::Build(format!("eager derivation evaluation: {error}")))?;
-    let entries = evaluated
-        .entries
-        .into_iter()
-        .map(|(drv_path, _hdm, derivation, content_addressed, dynamic_plan_outputs, _provenance)| {
-            EagerDerivationEntry {
-                drv_path,
-                derivation,
-                content_addressed,
-                dynamic_plan_outputs,
-            }
-        })
-        .collect::<Vec<_>>();
-    let derivations = entries
-        .iter()
-        .map(|entry| (entry.drv_path.to_absolute_path_with_prefix(store_dir), entry.derivation.clone()))
-        .collect::<BTreeMap<_, _>>();
-    let mut roots = Vec::with_capacity(evaluated.roots.len());
-    for root in evaluated.roots {
-        let root_id = root.drv_path.to_absolute_path_with_prefix(store_dir);
-        let derivation = derivations
-            .get(&root_id)
-            .cloned()
-            .ok_or_else(|| RunError::Build(format!("eager derivation graph omitted root {root_id}")))?;
+fn evaluate_roots(file: &Path, import_paths: &[OsString], store_dir: &str) -> Result<Vec<PlannedRoot>, RunError> {
+    let mut session = crunch_eval::session::EvaluationSession::open_file(file, import_paths)
+        .map_err(|e| RunError::Eval(format!("{e}")))?;
+    let derivations = session.force_all_roots::<CrunchDerivation>().map_err(|e| {
+        if eval_error_is_build(&e) {
+            return RunError::Build(format!("{e}"));
+        }
+        RunError::Eval(format!("{e}"))
+    })?;
+    let derivation_count = derivations.len();
+    let mut cache = ConversionCache::new(store_dir);
+    let mut roots = Vec::with_capacity(derivation_count);
+    for (label, drv) in derivations {
+        let (drv_path, derivation) =
+            crunch_glue::convert(&drv, &mut cache).map_err(|e| RunError::Build(format!("{label}: {e}")))?;
         roots.push(PlannedRoot {
-            label: root.label,
-            drv_path: root.drv_path,
+            label,
+            drv_path,
             derivation,
         });
     }
-    assert!(!roots.is_empty());
-    debug_assert!(entries.len() >= roots.len());
-    Ok(EvaluatedDerivationGraph { roots, entries })
+    debug_assert_eq!(roots.len(), derivation_count);
+    debug_assert!(roots.capacity() >= roots.len());
+    Ok(roots)
 }
 
 fn validate_plan_config(config: &BuildPlanConfig<'_>) -> Option<String> {
@@ -487,54 +433,43 @@ fn plan_cache_or_build_action(request: CacheActionRequest<'_>) -> BuildPlanEntry
         root,
         cache_status,
     } = request;
-    let decision =
-        crunch_build_planning_core::select_build_action(crunch_build_planning_core::BuildActionObservationFacts {
-            all_local: cache_status.all_local,
-            any_remote: cache_status.any_remote,
-            any_build: cache_status.any_build,
-            source_bundle_present: source_preflight.is_some(),
-            doctor_preflight_ok: doctor_report.ok,
-        });
-    match decision.action {
-        crunch_build_planning_core::BuildActionClass::Cached => root.plan_entry(
+    if cache_status.all_local {
+        debug_assert!(!cache_status.any_build);
+        debug_assert!(!cache_status.any_remote);
+        return root.plan_entry(
             &plan_store.store_dir,
             PlanAction::Cached,
             cache_status.detail,
             remote_builder,
             source_preflight,
-        ),
-        crunch_build_planning_core::BuildActionClass::Substitute => root.plan_entry(
+        );
+    }
+    if cache_status.any_remote && !cache_status.any_build && source_preflight.is_none() {
+        return root.plan_entry(
             &plan_store.store_dir,
             PlanAction::Substitute,
             cache_status.detail,
             remote_builder,
             source_preflight,
-        ),
-        crunch_build_planning_core::BuildActionClass::Build => root.plan_entry(
+        );
+    }
+    if doctor_report.ok {
+        return root.plan_entry(
             &plan_store.store_dir,
             PlanAction::Build,
             cache_status.detail,
             remote_builder,
             source_preflight,
-        ),
-        crunch_build_planning_core::BuildActionClass::PreflightError => {
-            let detail = failed_doctor_detail(doctor_report);
-            root.remote_aware_preflight_entry(&plan_store.store_dir, Some(detail), remote_builder, source_preflight)
-        }
+        );
     }
-}
-
-fn failed_doctor_detail(report: &crate::operator_diagnostics::PreflightReport) -> String {
-    let failing_checks = report
+    let failing_checks = doctor_report
         .checks
         .iter()
         .filter(|check| check.status == crate::operator_diagnostics::PreflightStatus::Failed)
         .map(|check| check.id)
         .collect::<Vec<_>>();
     let detail = format!("local build blocked by preflight checks: {}", failing_checks.join(", "));
-    debug_assert!(!report.ok);
-    debug_assert!(!detail.is_empty());
-    detail
+    root.remote_aware_preflight_entry(&plan_store.store_dir, Some(detail), remote_builder, source_preflight)
 }
 
 struct PlannedRoot {
@@ -653,7 +588,7 @@ impl PlanStore {
             None
         };
         let planning_state_dir = ephemeral_state.as_ref().map_or(state_dir, tempfile::TempDir::path);
-        let parts = crunch_store::open_planning_store_parts(crunch_store::StoreConfig {
+        let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig {
             state_dir: planning_state_dir.to_path_buf(),
             output_dir: output_dir.to_path_buf(),
             remote_cache_urls: substituter_urls.to_vec(),
@@ -663,6 +598,7 @@ impl PlanStore {
         })
         .await
         .map_err(|error| RunError::Internal(format!("opening composed planning store: {error}")))?;
+        let parts = store.into_pipeline_store_parts();
         Ok(Self {
             store_dir: store_dir.to_string(),
             output_lookup: parts.output_lookup,
@@ -723,9 +659,7 @@ impl PlanStore {
             }
             let base = overlay.as_ref().and_then(|report| {
                 let selected_index = layered.layer.service_index();
-                report.bases.iter().find(|base| {
-                    u32::try_from(base.declaration_index).is_ok_and(|index| index.saturating_add(1) == selected_index)
-                })
+                report.bases.iter().find(|base| base.declaration_index.saturating_add(1) == selected_index)
             });
             evidence.push(crate::realization_routing::RouteStoreLayerEvidence {
                 store_path,
@@ -1018,22 +952,7 @@ fn resolve_output_path(request: ResolveOutputRequest<'_>) -> Result<Option<Store
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
-
     use super::*;
-
-    const TEST_SANDBOX_SHELL_DIGEST: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    const DEPENDENCY_CHAIN_ACTION_COUNT_MIN: u32 = 2;
-    const PRESERVED_NATIVE_REPORT_ROOT: &str = ".cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/action-trust-architecture-search-2026-08-23/preserved-native-reports";
-    const PRESERVED_NATIVE_REPORTS: &[(&str, &str)] = &[
-        ("full-source-native-provider", "bootstrap/seed-full-toolchain.ncl"),
-        ("make", "bootstrap/make-4.4.1-gcc10.ncl"),
-        ("linux-headers", "bootstrap/linux-headers-6.6-gcc10.ncl"),
-        ("busybox", "bootstrap/busybox-1.37.0-gcc10.ncl"),
-        ("cmake", "bootstrap/cmake-3.31.8-gcc10.ncl"),
-        ("python", "bootstrap/python-3.13.5-gcc10.ncl"),
-        ("perl", "bootstrap/perl-5.10.1-gcc10.ncl"),
-    ];
 
     fn report_with_rejection() -> crunch_build::ActionResultRuntimeReport {
         crunch_build::ActionResultRuntimeReport {
@@ -1060,134 +979,6 @@ mod tests {
             diagnostics: Vec::new(),
             non_claims: vec!["index-presence-is-not-output-trust".to_string()],
         }
-    }
-
-    #[test]
-    fn eager_capture_includes_transitive_dependency_actions() {
-        let repository = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let file = repository.join("examples/dependency-chain.ncl");
-        let import_paths = [repository.join("lib").into_os_string()];
-
-        let plan = capture_eager_derivation_action_plan(
-            &file,
-            &import_paths,
-            "/mantle/store",
-            "native-provider",
-            TEST_SANDBOX_SHELL_DIGEST,
-        )
-        .unwrap();
-
-        assert!(plan.action_count >= DEPENDENCY_CHAIN_ACTION_COUNT_MIN);
-        assert!(plan.actions.iter().any(|action| !action.producer_action_ids.is_empty()));
-        assert!(plan.actions.iter().any(|action| {
-            matches!(
-                action.executable,
-                crate::source_built_derivation_action_plan::DerivationExecutableAuthority::FixedSandboxShell { .. }
-            )
-        }));
-        assert!(plan.blockers.is_empty());
-    }
-
-    #[test]
-    fn full_source_native_plan_covers_preserved_worker_decisions() {
-        let repository = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let file = repository.join("bootstrap/seed-full-toolchain.ncl");
-        let import_paths = [
-            repository.as_os_str().to_owned(),
-            repository.join("lib").into_os_string(),
-            repository.join("bootstrap").into_os_string(),
-        ];
-
-        let plan = capture_eager_derivation_action_plan(
-            &file,
-            &import_paths,
-            "/mantle/store",
-            "full-source-native-provider",
-            TEST_SANDBOX_SHELL_DIGEST,
-        )
-        .unwrap();
-        let report: serde_json::Value = serde_json::from_str(include_str!(
-            "../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/provider-checkpoint-origin/native-provider.json"
-        ))
-        .unwrap();
-        let observed = report["scheduler_priority_decisions"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|decision| decision["selected_goal_key_blake3"].as_str().unwrap())
-            .collect::<BTreeSet<_>>();
-        let planned =
-            plan.actions.iter().map(|action| action.observed_goal_key_blake3.as_str()).collect::<BTreeSet<_>>();
-        let planned_root = plan
-            .actions
-            .iter()
-            .find(|action| action.outputs.iter().any(|output| output.identity.ends_with("-full-source-seed-toolchain")))
-            .unwrap();
-        let observed_root = report["outcomes"][0]["drv_key"].as_str().unwrap();
-
-        assert_eq!(planned.len(), observed.len());
-        assert_eq!(planned_root.action_id, observed_root);
-        assert_eq!(planned, observed);
-        assert_eq!(planned.len(), plan.actions.len());
-        assert_eq!(u32::try_from(observed.len()).unwrap(), plan.action_count);
-        assert!(plan.blockers.is_empty());
-    }
-
-    #[test]
-    #[ignore = "replays preserved full native build reports"]
-    fn full_native_composite_plan_reconciles_all_preserved_worker_events() {
-        let repository = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let import_paths = [
-            repository.as_os_str().to_owned(),
-            repository.join("lib").into_os_string(),
-            repository.join("bootstrap").into_os_string(),
-        ];
-        let mut plans = Vec::new();
-        let mut observed = Vec::new();
-        for (label, relative_ncl) in PRESERVED_NATIVE_REPORTS {
-            plans.push(
-                capture_eager_derivation_action_plan(
-                    &repository.join(relative_ncl),
-                    &import_paths,
-                    "/mantle/store",
-                    &format!("full-source-native-provider:{label}"),
-                    TEST_SANDBOX_SHELL_DIGEST,
-                )
-                .unwrap(),
-            );
-            let report: serde_json::Value = serde_json::from_slice(
-                &std::fs::read(repository.join(PRESERVED_NATIVE_REPORT_ROOT).join(format!("{label}.json"))).unwrap(),
-            )
-            .unwrap();
-            observed.extend(
-                report["scheduler_priority_decisions"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|decision| decision["selected_goal_key_blake3"].as_str().unwrap().to_string()),
-            );
-        }
-
-        let composite = crate::source_built_derivation_action_plan::compose_eager_derivation_action_plans(
-            "full-source-native-provider",
-            &plans,
-        )
-        .unwrap();
-        let reconciliation =
-            crate::source_built_derivation_action_plan::reconcile_eager_derivation_actions(&composite, &observed)
-                .unwrap();
-        assert!(reconciliation.is_complete(), "{reconciliation:#?}");
-        crate::source_built_derivation_action_plan::require_complete_eager_derivation_reconciliation(&reconciliation)
-            .unwrap();
-        let planned_event_count_max = composite
-            .actions
-            .iter()
-            .try_fold(0_u32, |total, action| total.checked_add(action.event_count_max))
-            .unwrap();
-        assert_eq!(reconciliation.matched_action_count, composite.action_count);
-        assert_eq!(reconciliation.observed_event_count, planned_event_count_max);
-        assert_eq!(reconciliation.matched_event_count, planned_event_count_max);
-        assert!(reconciliation.blockers.is_empty());
     }
 
     #[test]

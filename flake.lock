@@ -464,22 +464,6 @@
         "type": "github"
       }
     },
-    "flake-compat": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1767039857,
-        "narHash": "sha256-vNpUSpF5Nuw8xvDLj2KCwwksIbjua2LZCqhV1LNRDns=",
-        "owner": "NixOS",
-        "repo": "flake-compat",
-        "rev": "5edf11c44bc78a0d334f6334cdaf7d60d732daab",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "repo": "flake-compat",
-        "type": "github"
-      }
-    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -624,28 +608,6 @@
         "type": "github"
       }
     },
-    "gitignore": {
-      "inputs": {
-        "nixpkgs": [
-          "nickelCohort",
-          "pre-commit-hooks",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1709087332,
-        "narHash": "sha256-HG2cCnktfHsKV0s4XW83gU3F57gaTljL9KNSuG6bnQs=",
-        "owner": "hercules-ci",
-        "repo": "gitignore.nix",
-        "rev": "637db329424fd7e46cf4185293b9cc8c88c95394",
-        "type": "github"
-      },
-      "original": {
-        "owner": "hercules-ci",
-        "repo": "gitignore.nix",
-        "type": "github"
-      }
-    },
     "nickel-export": {
       "inputs": {
         "cairn": "cairn_2",
@@ -684,37 +646,6 @@
         "owner": "OnixResearch",
         "repo": "nickel-export",
         "rev": "257fafc1c746f1faf156207043a4c826bfb16d49",
-        "type": "github"
-      }
-    },
-    "nickelCohort": {
-      "inputs": {
-        "crane": [
-          "crane"
-        ],
-        "flake-utils": [
-          "flake-utils"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "pre-commit-hooks": "pre-commit-hooks",
-        "rust-overlay": [
-          "rust-overlay"
-        ]
-      },
-      "locked": {
-        "lastModified": 1781039631,
-        "narHash": "sha256-D+OI00Ouwm0v65igIYSCGPXKCl6/SZsOyz1wFM1VAF4=",
-        "owner": "nickel-lang",
-        "repo": "nickel",
-        "rev": "1320a983e6c3d1e2fb53dd2464b084b4903b1426",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nickel-lang",
-        "repo": "nickel",
-        "rev": "1320a983e6c3d1e2fb53dd2464b084b4903b1426",
         "type": "github"
       }
     },
@@ -921,29 +852,6 @@
         "type": "github"
       }
     },
-    "pre-commit-hooks": {
-      "inputs": {
-        "flake-compat": "flake-compat",
-        "gitignore": "gitignore",
-        "nixpkgs": [
-          "nickelCohort",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1767281941,
-        "narHash": "sha256-6MkqajPICgugsuZ92OMoQcgSHnD6sJHwk8AxvMcIgTE=",
-        "owner": "cachix",
-        "repo": "git-hooks.nix",
-        "rev": "f0927703b7b1c8d97511c4116eb9b4ec6645a0fa",
-        "type": "github"
-      },
-      "original": {
-        "owner": "cachix",
-        "repo": "git-hooks.nix",
-        "type": "github"
-      }
-    },
     "root": {
       "inputs": {
         "artifactAuthSource": "artifactAuthSource",
@@ -952,7 +860,6 @@
         "crane": "crane_5",
         "durablePublicationSource": "durablePublicationSource",
         "flake-utils": "flake-utils_5",
-        "nickelCohort": "nickelCohort",
         "nickelExportCore": "nickelExportCore",
         "nixpkgs": "nixpkgs_6",
         "octet": "octet",

@@ -8,9 +8,13 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
+use futures::StreamExt;
 use serde::Deserialize;
 use serde::Serialize;
 use snix_store::path_info::PathInfo;
+use snix_store::pathinfoservice::PathInfoService;
+use snix_store::pathinfoservice::RedbPathInfoService;
+use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 
 use crate::errors::RunError;
 
@@ -1553,6 +1557,7 @@ fn collect_pathinfo_records_for_outputs(
         .build()
         .map_err(|err| RunError::Internal(format!("creating PathInfo reader runtime: {err}")))?;
     runtime.block_on(collect_pathinfo_records_for_outputs_async(
+        db_path,
         state_dir.to_path_buf(),
         store_prefix.to_string(),
         outputs.to_vec(),
@@ -1560,21 +1565,25 @@ fn collect_pathinfo_records_for_outputs(
 }
 
 async fn collect_pathinfo_records_for_outputs_async(
+    db_path: PathBuf,
     state_dir: PathBuf,
     store_prefix: String,
     outputs: Vec<String>,
 ) -> Result<Vec<ReceiptRecord>, RunError> {
     debug_assert!(store_prefix.starts_with('/'));
     debug_assert!(outputs.len() <= MAX_RECEIPT_RECORDS);
-    let service = crunch_store::PathInfoAdministration::open(&state_dir, true)
-        .await
-        .map_err(|err| RunError::Internal(format!("opening PathInfo database: {err}")))?;
-    let pathinfos = service
-        .pathinfos()
-        .await
-        .map_err(|err| RunError::Internal(format!("listing PathInfo database: {err}")))?;
+    let service = RedbPathInfoService::new("receipt-bundle-pathinfo".to_string(), RedbPathInfoServiceConfig {
+        path: Some(db_path.clone()),
+        cache_size: None,
+        read_only: true,
+    })
+    .await
+    .map_err(|err| RunError::Internal(format!("opening PathInfo database {}: {err}", db_path.display())))?;
     let mut records = Vec::with_capacity(outputs.len().min(MAX_RECEIPT_RECORDS));
-    for path_info in pathinfos.into_iter().take(MAX_RECEIPT_RECORDS) {
+    let mut stream = service.list();
+    for _ in 0..MAX_RECEIPT_RECORDS {
+        let Some(result) = stream.next().await else { break };
+        let path_info = result.map_err(|err| RunError::Internal(format!("listing PathInfo database: {err}")))?;
         if !pathinfo_matches_outputs(&path_info, &store_prefix, &outputs) {
             continue;
         }
@@ -2235,10 +2244,6 @@ fn print_import(report: &ReceiptImportReport, json_output: bool) -> Result<(), R
 
 #[cfg(test)]
 mod tests {
-    use snix_store::pathinfoservice::PathInfoService;
-    use snix_store::pathinfoservice::RedbPathInfoService;
-    use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
-
     use super::*;
 
     fn complete_specs() -> Vec<ReceiptRecordSpec> {

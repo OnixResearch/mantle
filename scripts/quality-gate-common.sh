@@ -10,22 +10,11 @@ readonly -a FIRST_PARTY_PACKAGES=(
   mantle
   crunch-attestation
   crunch-build
-  crunch-build-planning-core
-  crunch-source-core
-  crunch-radiance-reference-core
-  crunch-resource-policy-core
-  crunch-resource-policy
   crunch-delta
   crunch-eval
   crunch-glue
   crunch-pipeline
   crunch-project
-  crunch-remote
-  crunch-remote-core
-  mantle-rust-plan
-  mantle-rust-plan-core
-  mantle-application
-  mantle-application-core
   crunch-shell
   crunch-store
 )

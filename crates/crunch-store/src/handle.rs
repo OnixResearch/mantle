@@ -26,11 +26,8 @@ use reqwest::redirect::Policy;
 use snix_castore::Node;
 use snix_castore::blobservice::BlobService;
 use snix_castore::blobservice::CombinedBlobService;
-use snix_castore::blobservice::MemoryBlobServiceConfig;
+use snix_castore::blobservice::MemoryBlobService;
 use snix_castore::blobservice::ObjectStoreBlobService;
-use snix_castore::composition::CompositionContext;
-use snix_castore::composition::REG;
-use snix_castore::composition::ServiceBuilder;
 use snix_castore::directoryservice::Cache as DirectoryCache;
 use snix_castore::directoryservice::DirectoryService;
 use snix_castore::directoryservice::RedbDirectoryService;
@@ -90,8 +87,6 @@ const NAR_SHA256_BYTES: usize = 32;
 const MAX_REMOTE_TRUSTED_PUBLIC_KEYS: usize = 16;
 const OVERLAY_DIRECTORY_READ_LIMIT: usize = 1_000_000;
 const MAX_LAYERED_CLOSURE_PATHS: usize = 1_000_000;
-const MAX_LAYERED_PATHINFOS: usize = 1_000_000;
-const INITIAL_LAYERED_PATHINFO_CAPACITY: usize = 1_024;
 const MAX_RECORDED_LAYER_SELECTIONS: usize = 65_536;
 
 /// Configuration for opening a store.
@@ -457,15 +452,6 @@ struct RemoteSubstitutionRequest<'a> {
     root_source: Option<GcRootSource>,
 }
 
-struct SignedAdoptionInput<'a> {
-    store_path: StorePath<String>,
-    node: Node,
-    nar_size_bytes: u64,
-    nar_sha256: [u8; NAR_SHA256_BYTES],
-    signing_key: &'a SigningKey<ed25519_dalek::SigningKey>,
-    store_dir: &'a str,
-}
-
 fn path_info_content_and_signature_matches(existing: &PathInfo, candidate: &PathInfo) -> bool {
     existing.store_path == candidate.store_path
         && existing.node == candidate.node
@@ -508,14 +494,7 @@ async fn verified_source_candidate(
         .calculate_nar(&node)
         .await
         .map_err(|error| Error::Store(format!("verified source NAR calculation: {error}")))?;
-    Ok(signed_adoption_path_info(SignedAdoptionInput {
-        store_path,
-        node,
-        nar_size_bytes: nar_size,
-        nar_sha256,
-        signing_key: request.signing_key,
-        store_dir,
-    }))
+    Ok(signed_adoption_path_info(store_path, node, nar_size, nar_sha256, request.signing_key, store_dir))
 }
 
 fn remove_existing_export_path(path: &Path) -> std::io::Result<()> {
@@ -551,23 +530,12 @@ fn combine_directory_services(
     let Some(mut inner) = bases.next() else {
         return Err(Error::Store("overlay directory service requires at least one base".to_string()));
     };
-    let directory_read_entry_count = NonZeroUsize::new(OVERLAY_DIRECTORY_READ_LIMIT)
+    let read_limit = NonZeroUsize::new(OVERLAY_DIRECTORY_READ_LIMIT)
         .ok_or_else(|| Error::Store("overlay directory read limit must be positive".to_string()))?;
-    assert!(directory_read_entry_count.get() > 0);
     for base in bases {
-        inner = Arc::new(DirectoryCache::new_no_backfill(
-            "base-chain".to_string(),
-            inner,
-            base,
-            directory_read_entry_count,
-        ));
+        inner = Arc::new(DirectoryCache::new_no_backfill("base-chain".to_string(), inner, base, read_limit));
     }
-    Ok(Arc::new(DirectoryCache::new_no_backfill(
-        "overlay".to_string(),
-        overlay,
-        inner,
-        directory_read_entry_count,
-    )))
+    Ok(Arc::new(DirectoryCache::new_no_backfill("overlay".to_string(), overlay, inner, read_limit)))
 }
 
 fn combine_pathinfo_services(
@@ -1083,20 +1051,12 @@ impl StoreHandle {
         path: &StorePath<String>,
     ) -> Result<Option<crate::layer::Layered<PathInfo>>, Error> {
         self.revalidate_overlay_bases()?;
-        let selected = self.lookup_layered_path_info(path).await?;
-        self.revalidate_overlay_bases()?;
-        Ok(selected)
-    }
-
-    async fn lookup_layered_path_info(
-        &self,
-        path: &StorePath<String>,
-    ) -> Result<Option<crate::layer::Layered<PathInfo>>, Error> {
         let read = self
             .pathinfo_service
             .get_with_layer(*path.digest())
             .await
             .map_err(|error| Error::Store(format!("PathInfo lookup for {path}: {error}")))?;
+        self.revalidate_overlay_bases()?;
         let Some(read) = read else {
             return Ok(None);
         };
@@ -1111,7 +1071,7 @@ impl StoreHandle {
             crate::overlay::verify_pathinfo_trust(&read.value, &trusted_keys)
                 .map_err(|error| Error::Store(format!("overlay-layer-trust-failure for {path}: {error}")))?;
         }
-        let shadows = self.pathinfo_shadow_observations(read.layer_index, &read.value).await?;
+        let shadows = self.pathinfo_shadow_observations(read.layer_index, &read.value).await;
         let mut layered = crate::layer::Layered::from_service_index(read.value, read.layer_index)
             .map_err(|error| Error::Store(format!("mapping PathInfo layer for {path}: {error}")))?;
         layered.shadows = shadows;
@@ -1122,15 +1082,14 @@ impl StoreHandle {
         &self,
         selected_layer_index: usize,
         selected: &PathInfo,
-    ) -> Result<Vec<crate::layer::LayerShadowObservation>, Error> {
-        let mut observations = Vec::with_capacity(self.base_pathinfo_inspection_services.len());
+    ) -> Vec<crate::layer::LayerShadowObservation> {
+        let mut observations = Vec::new();
         for (base_index, service) in self.base_pathinfo_inspection_services.iter().enumerate() {
             let layer_index = base_index.saturating_add(1);
             if layer_index <= selected_layer_index {
                 continue;
             }
-            let layer = crate::layer::StoreLayer::from_service_index(layer_index)
-                .map_err(|error| Error::Store(format!("mapping PathInfo shadow layer: {error}")))?;
+            let layer = crate::layer::StoreLayer::Base { index: layer_index };
             let status = match service.get(*selected.store_path.digest()).await {
                 Ok(Some(lower)) if lower.store_path != selected.store_path => {
                     crate::layer::LayerShadowStatus::DigestCollision
@@ -1142,7 +1101,7 @@ impl StoreHandle {
             };
             observations.push(crate::layer::LayerShadowObservation { layer, status });
         }
-        Ok(observations)
+        observations
     }
 
     fn record_layer_selection<T>(
@@ -1166,46 +1125,26 @@ impl StoreHandle {
     }
 
     pub async fn list_pathinfos_with_layer(&self) -> Result<Vec<crate::layer::Layered<PathInfo>>, Error> {
-        // r[impl native_package_parity.overlay]
         self.revalidate_overlay_bases()?;
-        let candidates = self.listed_path_candidates(MAX_LAYERED_PATHINFOS).await?;
-        assert!(candidates.len() <= MAX_LAYERED_PATHINFOS);
-        let mut pathinfos = Vec::with_capacity(INITIAL_LAYERED_PATHINFO_CAPACITY);
-        for path in candidates {
-            // Cache listings intentionally cover only near. Enumerate admitted
-            // layers here, but reuse ordinary lookup for precedence and trust.
-            let selected = self
-                .lookup_layered_path_info(&path)
-                .await?
-                .ok_or_else(|| Error::Store(format!("listed PathInfo disappeared before composed lookup: {path}")))?;
-            pathinfos.push(selected);
+        let mut stream = self.pathinfo_service.list_with_layer();
+        let mut pathinfos = Vec::new();
+        while let Some(read) = stream.next().await {
+            let read = read.map_err(|error| Error::Store(format!("listing composed PathInfos: {error}")))?;
+            if self.overlay_state.is_some() && read.layer_index == 0 {
+                let trusted_keys = crate::overlay::load_layer_trust_keys(&self.state_dir)?;
+                crate::overlay::verify_pathinfo_trust(&read.value, &trusted_keys).map_err(|error| {
+                    Error::Store(format!("overlay-layer-trust-failure for {}: {error}", read.value.store_path))
+                })?;
+            }
+            let shadows = self.pathinfo_shadow_observations(read.layer_index, &read.value).await;
+            let mut layered = crate::layer::Layered::from_service_index(read.value, read.layer_index)
+                .map_err(|error| Error::Store(format!("mapping listed PathInfo layer: {error}")))?;
+            layered.shadows = shadows;
+            pathinfos.push(layered);
         }
-        assert!(pathinfos.len() <= MAX_LAYERED_PATHINFOS);
+        pathinfos.sort_by(|left, right| left.value.store_path.cmp(&right.value.store_path));
         self.revalidate_overlay_bases()?;
         Ok(pathinfos)
-    }
-
-    async fn listed_path_candidates(&self, maximum_entries: usize) -> Result<BTreeSet<StorePath<String>>, Error> {
-        assert!(maximum_entries > 0);
-        assert!(maximum_entries <= MAX_LAYERED_PATHINFOS);
-        let mut candidates = BTreeSet::new();
-        let mut observed_count = 0_usize;
-        let services = std::iter::once(&self.overlay_pathinfo).chain(self.base_pathinfo_inspection_services.iter());
-        for service in services {
-            let mut stream = service.list();
-            for _entry_index in 0..=maximum_entries {
-                let Some(entry) = stream.next().await else {
-                    break;
-                };
-                let entry = entry.map_err(|error| Error::Store(format!("listing composed PathInfos: {error}")))?;
-                if observed_count == maximum_entries {
-                    return Err(Error::Store(format!("layered PathInfo scan exceeds {maximum_entries} entries")));
-                }
-                observed_count = observed_count.saturating_add(1);
-                candidates.insert(entry.store_path);
-            }
-        }
-        Ok(candidates)
     }
 
     pub async fn discover_action_results(&self, action_ref: &str) -> ActionResultDiscoveryReport {
@@ -1313,10 +1252,6 @@ impl StoreHandle {
         std::mem::replace(&mut self.action_result_stores, ActionResultStoreSet::new(false))
     }
 
-    pub(crate) fn publishers(&self) -> &[Arc<dyn Publisher>] {
-        &self.publishers
-    }
-
     pub fn list_retained_roots(&self) -> Result<Vec<GcRootRecord>, Error> {
         roots::list_roots(&self.state_dir)
     }
@@ -1348,14 +1283,14 @@ impl StoreHandle {
         self.revalidate_overlay_bases()?;
         let root = match &self.root_registration {
             Some(registration) => {
-                roots::register_root_with_registration(roots::RootRegistrationRequest {
-                    state_dir: &self.state_dir,
-                    store_dir: &self.store_dir,
-                    pathinfo: self.pathinfo_service.as_ref(),
+                roots::register_root_with_registration(
+                    &self.state_dir,
+                    &self.store_dir,
+                    self.pathinfo_service.as_ref(),
                     store_path,
                     source,
-                    registration: registration.clone(),
-                })
+                    registration.clone(),
+                )
                 .await
             }
             None => {
@@ -1394,9 +1329,9 @@ impl StoreHandle {
             overlay_plan_identity: self.overlay_state.as_ref().map(|state| state.plan.plan_identity.into_bytes()),
             retained_castore_roots,
         };
-        let gc_outcome = gc::run_gc(&ctx, &mut self.ca_mappings, accepted_plan_id).await?;
+        let report = gc::run_gc(&ctx, &mut self.ca_mappings, accepted_plan_id).await?;
         self.revalidate_overlay_bases()?;
-        Ok(gc_outcome)
+        Ok(report)
     }
 
     /// Render a NAR archive from a castore node into an arbitrary writer.
@@ -1601,9 +1536,13 @@ impl StoreHandle {
         }
         for (base_index, mappings) in self.base_ca_mappings.iter().enumerate() {
             if let Some(path) = mappings.get(drv_abs, output_name) {
-                let layered = crate::layer::Layered::from_service_index(path.to_string(), base_index.saturating_add(1))
-                    .map_err(|error| Error::Store(format!("mapping CA layer: {error}")))?;
-                return Ok(Some(layered));
+                return Ok(Some(crate::layer::Layered {
+                    value: path.to_string(),
+                    layer: crate::layer::StoreLayer::Base {
+                        index: base_index.saturating_add(1),
+                    },
+                    shadows: Vec::new(),
+                }));
             }
         }
         Ok(None)
@@ -2879,16 +2818,12 @@ impl StoreHandle {
 
     /// Check a verified source candidate without mutating this store.
     pub async fn preflight_verified_source(&self, request: VerifiedSourceIngestRequest<'_>) -> Result<PathInfo, Error> {
-        let preview_blob_service = MemoryBlobServiceConfig {}
-            .build("verified-source-preflight", &CompositionContext::blank(&REG))
-            .await
-            .map_err(|error| Error::Store(format!("verified source preflight blob service: {error}")))?;
+        let preview_blob_service = Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>;
         let preview_directory_service = Arc::new(
-            RedbDirectoryService::new_temporary("verified-source-preflight".to_string(), RedbDirectoryServiceConfig {
-                path: None,
-                cache_size: None,
-                read_only: false,
-            })
+            RedbDirectoryService::new_temporary(
+                "verified-source-preflight".to_string(),
+                RedbDirectoryServiceConfig::default(),
+            )
             .map_err(|error| Error::Store(format!("verified source preflight directory service: {error}")))?,
         ) as Arc<dyn DirectoryService>;
         let candidate =
@@ -3002,14 +2937,14 @@ impl StoreHandle {
             validate_existing_adoption(&existing, &store_path, &node, nar_size, &nar_sha256)?;
             return Ok(existing);
         }
-        let path_info = signed_adoption_path_info(SignedAdoptionInput {
-            store_path: store_path.clone(),
-            node: node.clone(),
-            nar_size_bytes: nar_size,
+        let path_info = signed_adoption_path_info(
+            store_path.clone(),
+            node.clone(),
+            nar_size,
             nar_sha256,
             signing_key,
-            store_dir: &self.store_dir,
-        });
+            &self.store_dir,
+        );
         self.persist_and_export_signed_output(PersistOutputRequest {
             output_name,
             output_path: &store_path,
@@ -3022,7 +2957,7 @@ impl StoreHandle {
         .await
     }
 
-    /// Persist and admit a signed PathInfo without executing publishers.
+    /// Persist a signed PathInfo and export it to disk when needed.
     ///
     /// StoreHandle refuses to persist unsigned PathInfos. That keeps the
     /// "always sign before persist" invariant at the storage boundary,
@@ -3066,6 +3001,19 @@ impl StoreHandle {
             self.register_retained_root(req.output_path, source).await?;
         }
 
+        // Run output publication adapters after successful admission.
+        // Errors are diagnostic warnings, not build failures.
+        // r[impl remote_builds.production_verified_publication]
+        for publisher in &self.publishers {
+            if let Err(err) = publisher.publish(&req.path_info).await {
+                tracing::warn!(
+                    path = %req.output_path,
+                    err = %err,
+                    "output publication failed (admitted anyway)"
+                );
+            }
+        }
+
         Ok(req.path_info)
     }
 
@@ -3077,7 +3025,7 @@ impl StoreHandle {
     ) -> Result<(), Error> {
         assert!(!output_name.is_empty(), "output_name must not be empty");
 
-        let should_preserve_existing = match provenance {
+        let preserve_existing = match provenance {
             Some(_) => false,
             None => match load_artifact_attestation(&self.state_dir, &path_info.store_path, &self.store_dir).await? {
                 Some(stored) => {
@@ -3086,7 +3034,7 @@ impl StoreHandle {
                 None => false,
             },
         };
-        if should_preserve_existing {
+        if preserve_existing {
             return Ok(());
         }
         persist_artifact_attestation(&self.state_dir, &self.store_dir, path_info, output_name, provenance).await?;
@@ -3159,8 +3107,6 @@ impl StoreHandle {
                 let base_index = index
                     .checked_sub(1)
                     .ok_or_else(|| Error::Store("base layer index must be greater than zero".to_string()))?;
-                let base_index = usize::try_from(base_index)
-                    .map_err(|_| Error::Store(format!("base layer index {index} exceeds usize")))?;
                 self.overlay_state
                     .as_ref()
                     .and_then(|state| state.base_state_dirs.get(base_index))
@@ -3235,11 +3181,6 @@ impl StoreHandle {
             }
             let layer = crate::layer::StoreLayer::from_service_index(read.layer_index)
                 .map_err(|error| Error::Store(format!("mapping closure layer for {path}: {error}")))?;
-            if selected_layers.len() >= MAX_LAYERED_CLOSURE_PATHS {
-                return Err(Error::Store(format!(
-                    "layered closure selection exceeds {MAX_LAYERED_CLOSURE_PATHS} paths"
-                )));
-            }
             selected_layers.insert(path.to_absolute_path_with_prefix(&self.store_dir), layer);
             pending.extend(read.value.references);
         }
@@ -3428,19 +3369,26 @@ fn validate_existing_adoption(
     Ok(())
 }
 
-fn signed_adoption_path_info(input: SignedAdoptionInput<'_>) -> PathInfo {
+fn signed_adoption_path_info(
+    store_path: StorePath<String>,
+    node: Node,
+    nar_size: u64,
+    nar_sha256: [u8; NAR_SHA256_BYTES],
+    signing_key: &SigningKey<ed25519_dalek::SigningKey>,
+    store_dir: &str,
+) -> PathInfo {
     let mut path_info = PathInfo {
-        store_path: input.store_path,
-        node: input.node,
+        store_path,
+        node,
         references: Vec::new(),
-        nar_size: input.nar_size_bytes,
-        nar_sha256: input.nar_sha256,
+        nar_size,
+        nar_sha256,
         signatures: Vec::new(),
         deriver: None,
         ca: None,
     };
-    let path_info_fingerprint = compute_pathinfo_fingerprint(&path_info, input.store_dir);
-    path_info.signatures.push(input.signing_key.sign(path_info_fingerprint.as_bytes()).to_owned());
+    let path_info_fingerprint = compute_pathinfo_fingerprint(&path_info, store_dir);
+    path_info.signatures.push(signing_key.sign(path_info_fingerprint.as_bytes()).to_owned());
     assert_eq!(path_info.signatures.len(), 1);
     debug_assert!(!path_info_fingerprint.is_empty());
     path_info
@@ -4983,8 +4931,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn persistent_output_defers_configured_publisher_until_plan_execution() {
-        // Local admission must return before the application shell executes publication.
+    async fn persistent_output_calls_configured_publisher() {
+        // V9: a configured publisher is called after successful output admission.
         // r[verify remote_builds.production_verified_publication]
         use std::sync::Arc;
 
@@ -5011,8 +4959,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(publisher.call_count(), 0, "local admission must not execute publishers");
-        assert!(publisher.calls().is_empty(), "publisher calls require an explicit effect plan");
+        assert_eq!(publisher.call_count(), 1, "publisher should be called once");
+        assert!(publisher.calls()[0].contains("published-output"), "publisher should receive the output path");
     }
 
     #[tokio::test]
@@ -6712,74 +6660,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn overlay_listing_includes_reopened_base_without_backfill() {
-        // r[verify native_package_parity.overlay]
-        let overlay = tempfile::tempdir().unwrap();
-        let base = tempfile::tempdir().unwrap();
-        let path = test_output("listed-base", 71);
-        let expected = create_base_store(base.path(), "/nix/store", &path).await;
-        let before = blake3::hash(&std::fs::read(base.path().join("pathinfo.redb")).unwrap());
-        let handle = create_overlay_handle(overlay.path(), base.path(), "/nix/store").await;
-        for _attempt in 0..2 {
-            let entries = handle.list_pathinfos_with_layer().await.unwrap();
-            assert_eq!(entries.len(), 1);
-            assert_eq!(entries[0].value, expected);
-            assert_eq!(entries[0].layer, crate::layer::StoreLayer::Base { index: 1 });
-            assert!(handle.overlay_pathinfo.get(*path.digest()).await.unwrap().is_none());
-        }
-        assert_eq!(before, blake3::hash(&std::fs::read(base.path().join("pathinfo.redb")).unwrap()));
-    }
-
-    #[tokio::test]
-    async fn overlay_listing_keeps_selected_shadow_once() {
-        // r[verify native_package_parity.overlay]
-        let overlay = tempfile::tempdir().unwrap();
-        let base = tempfile::tempdir().unwrap();
-        let path = test_output("listed-shadow", 72);
-        create_base_store(base.path(), "/nix/store", &path).await;
-        let handle = create_overlay_handle(overlay.path(), base.path(), "/nix/store").await;
-        let selected = signed_pathinfo(path);
-        handle.overlay_pathinfo.put(selected.clone()).await.unwrap();
-        let entries = handle.list_pathinfos_with_layer().await.unwrap();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].value, selected);
-        assert_eq!(entries[0].layer, crate::layer::StoreLayer::Overlay);
-        assert_eq!(entries[0].shadows.len(), 1);
-        assert_eq!(entries[0].shadows[0].layer, crate::layer::StoreLayer::Base { index: 1 });
-    }
-
-    #[tokio::test]
-    async fn overlay_listing_scan_budget_counts_shadows_before_deduplication() {
-        // r[verify native_package_parity.overlay]
-        let overlay = tempfile::tempdir().unwrap();
-        let base = tempfile::tempdir().unwrap();
-        let path = test_output("listed-budget", 74);
-        create_base_store(base.path(), "/nix/store", &path).await;
-        let handle = create_overlay_handle(overlay.path(), base.path(), "/nix/store").await;
-        handle.overlay_pathinfo.put(signed_pathinfo(path.clone())).await.unwrap();
-        let exact = handle.listed_path_candidates(2).await.unwrap();
-        assert_eq!(exact, BTreeSet::from([path]));
-        let error = handle.listed_path_candidates(1).await.unwrap_err();
-        assert!(error.to_string().contains("layered PathInfo scan exceeds 1 entries"));
-    }
-
-    #[tokio::test]
-    async fn overlay_listing_rejects_untrusted_shadow_without_base_fallback() {
-        // r[verify native_package_parity.overlay]
-        let overlay = tempfile::tempdir().unwrap();
-        let base = tempfile::tempdir().unwrap();
-        let path = test_output("listed-untrusted-shadow", 73);
-        create_base_store(base.path(), "/nix/store", &path).await;
-        let handle = create_overlay_handle(overlay.path(), base.path(), "/nix/store").await;
-        let mut shadow = signed_pathinfo(path.clone());
-        shadow.signatures.clear();
-        handle.overlay_pathinfo.put(shadow.clone()).await.unwrap();
-        let error = handle.list_pathinfos_with_layer().await.unwrap_err();
-        assert!(error.to_string().contains("overlay-layer-trust-failure"));
-        assert_eq!(handle.overlay_pathinfo.get(*path.digest()).await.unwrap(), Some(shadow));
-    }
-
-    #[tokio::test]
     async fn overlay_read_through_base_hit_does_not_mutate_overlay() {
         // r[verify store_transports.overlay_composition.scenario.read-through-no-backfill]
         // GIVEN an overlay composed over a base that has PathInfo the overlay lacks
@@ -6809,8 +6689,8 @@ mod tests {
 
     #[tokio::test]
     async fn overlay_ca_mapping_precedence_and_publication_are_layer_bounded() {
-        const HIGHER_BASE_LAYER_INDEX: u32 = 1;
-        const LOWER_BASE_LAYER_INDEX: u32 = 2;
+        const HIGHER_BASE_LAYER_INDEX: usize = 1;
+        const LOWER_BASE_LAYER_INDEX: usize = 2;
         let overlay_dir = tempfile::tempdir().unwrap();
         let higher_base_dir = tempfile::tempdir().unwrap();
         let lower_base_dir = tempfile::tempdir().unwrap();

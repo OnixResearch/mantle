@@ -28,14 +28,13 @@ use serde::Serialize;
 
 use crate::errors::RunError;
 use crate::source_built_fixed_point::ProofOutputRole;
-use crate::source_built_fixed_point::SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT;
 use crate::source_built_fixed_point::SourceBuiltFixedPointPlan;
 use crate::source_built_fixed_point_shell::ConstructedProviders;
 use crate::source_built_fixed_point_shell::STAGEX_TRANSITION_AUDIT_FILE;
 use crate::source_built_fixed_point_shell::STAGEX_TRANSITION_REPORT_FILE;
 
-pub(crate) const EXTENSION_FIELD: &str = "source_built_fixed_point";
-pub(crate) const EXTENSION_SCHEMA: &str = "mantle-source-built-fixed-point-receipt-extension-v1";
+const EXTENSION_FIELD: &str = "source_built_fixed_point";
+const EXTENSION_SCHEMA: &str = "mantle-source-built-fixed-point-receipt-extension-v1";
 const STAGE_EVIDENCE_FILE: &str = "source-built-stage-evidence.json";
 const FIXED_POINT_META_RELATIVE_PATH: &str = "cargo-free-fixed-point/meta.json";
 const FIXED_POINT_STAGE1_RECEIPT: &str = "cargo-free-fixed-point/stage1/receipt.json";
@@ -56,7 +55,6 @@ const PROOF_PROVIDER_KIND: &str = "full-source";
 const HERMETICITY_MODE: &str = "strict";
 const PHYSICAL_STORE_ISOLATION: &str = "clean-namespace-per-run";
 const PROOF_TARGET_IDENTITY: &str = "mantle-source-built-fixed-point";
-const SOURCE_AUTHORITY_CLOSURE_NAME: &str = "source-authority-closure";
 const MANTLE_OUTPUT_NAME: &str = "mantle";
 const STAGE1_RUN_ID: &str = "stage1";
 const STAGE2_RUN_ID: &str = "stage2";
@@ -76,20 +74,14 @@ const REBUILD_AUTHORITY_SCHEMA: &str = "mantle-rebuild-authority-plan-v1";
 const PROOF_WORKFLOW: &str = "mantle-deterministic-proof-receipt-v2";
 const STAGE_STATUS_COMPLETE: &str = "complete";
 const STAGE_STATUS_SUCCESS: &str = "success";
-const RECEIPT_BUNDLE_DIGEST_DOMAIN: &[u8] = b"mantle-source-built-fixed-point-proof-bundle-v2\0";
+const RECEIPT_BUNDLE_DIGEST_DOMAIN: &[u8] = b"mantle-source-built-fixed-point-proof-bundle-v1\0";
 const APPROVED_READ_DIGEST_DOMAIN: &[u8] = b"mantle-source-built-fixed-point-approved-reads-v1\0";
 const PROVIDER_IDENTITY_DIGEST_DOMAIN: &[u8] = b"mantle-source-built-fixed-point-provider-identity-v1\0";
 const BLAKE3_HEX_LENGTH: usize = 64;
 const HASH_BUFFER_BYTES: usize = 64 * 1_024;
 const PROOF_ENTRY_COUNT_MAX: usize = 2_000_000;
-const NON_DURABLE_PROOF_DIRECTORIES: &[&str] = &[
-    "cargo-free-fixed-point/execution",
-    "home",
-    "native-state",
-    "rust-provider-scratch",
-    "tmp",
-];
 const STAGE_EVIDENCE_COUNT: usize = 6;
+const REQUIRED_SOURCE_COUNT: usize = 6;
 const REQUIRED_RUN_COUNT: usize = 2;
 const REQUIRED_PERTURBATIONS: &[&str] = &[
     "HOME",
@@ -122,23 +114,11 @@ const NON_CLAIMS: &[&str] = &[
     "The stage1 Mantle binary is an explicit fixed-point predecessor, not ambient or published-target path authority.",
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub(crate) enum StageExecutionOrigin {
-    Executed,
-    RestoredCheckpoint,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct SourceBuiltStageEvidence {
     pub(crate) stage_id: String,
     pub(crate) output_role: ProofOutputRole,
     pub(crate) status: String,
-    pub(crate) execution_origin: StageExecutionOrigin,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) checkpoint_digest_blake3: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) original_execution_evidence_digest_blake3: Option<String>,
     pub(crate) orchestrator: String,
     pub(crate) executable_identity: String,
     pub(crate) transcript_path: String,
@@ -152,27 +132,21 @@ pub(crate) struct SourceBuiltStageEvidence {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct SourceBuiltReceiptExtension {
-    pub(crate) schema: String,
-    pub(crate) plan_digest_blake3: String,
-    pub(crate) source_authority_digest_blake3: String,
-    pub(crate) provider_kind: String,
-    pub(crate) native_provider_digest_blake3: String,
-    pub(crate) rust_provider_digest_blake3: String,
-    pub(crate) toolchain_closure_digest_blake3: String,
-    pub(crate) stage_evidence_path: String,
-    pub(crate) stage_evidence_digest_blake3: String,
-    pub(crate) final_proof_bundle_digest_blake3: String,
-    pub(crate) protected_execution_policy_digest_blake3: String,
-    pub(crate) effect_policy_digest_blake3: String,
-    pub(crate) normalization_policy_digest_blake3: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) provider_checkpoint_digest_blake3: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) action_trust_plan_digest_blake3: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) action_trust_reconciliation_digest_blake3: Option<String>,
-    pub(crate) non_claims: Vec<String>,
+struct SourceBuiltReceiptExtension {
+    schema: String,
+    plan_digest_blake3: String,
+    source_authority_digest_blake3: String,
+    provider_kind: String,
+    native_provider_digest_blake3: String,
+    rust_provider_digest_blake3: String,
+    toolchain_closure_digest_blake3: String,
+    stage_evidence_path: String,
+    stage_evidence_digest_blake3: String,
+    final_proof_bundle_digest_blake3: String,
+    protected_execution_policy_digest_blake3: String,
+    effect_policy_digest_blake3: String,
+    normalization_policy_digest_blake3: String,
+    non_claims: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -296,8 +270,6 @@ pub(crate) fn write_source_built_fixed_point_receipt(
         authority_plan,
         authority_plan_digest,
     )?;
-    let (action_trust_plan_digest_blake3, action_trust_reconciliation_digest_blake3) =
-        observed_action_trust_links(proof_root)?;
     let extension = SourceBuiltReceiptExtension {
         schema: EXTENSION_SCHEMA.to_string(),
         plan_digest_blake3: plan.plan_digest_blake3.clone(),
@@ -312,12 +284,6 @@ pub(crate) fn write_source_built_fixed_point_receipt(
         protected_execution_policy_digest_blake3: plan.policies.protected_execution_policy_digest_blake3.clone(),
         effect_policy_digest_blake3: plan.policies.effect_policy_digest_blake3.clone(),
         normalization_policy_digest_blake3: plan.policies.normalization_policy_digest_blake3.clone(),
-        provider_checkpoint_digest_blake3: providers
-            .provider_checkpoint
-            .as_ref()
-            .map(|checkpoint| checkpoint.admission.checkpoint_digest_blake3.clone()),
-        action_trust_plan_digest_blake3,
-        action_trust_reconciliation_digest_blake3,
         non_claims: NON_CLAIMS.iter().map(|value| (*value).to_string()).collect(),
     };
     let receipt_path = proof_root.join(crate::source_built_fixed_point_shell::FINAL_RECEIPT_FILE);
@@ -354,7 +320,6 @@ pub(crate) fn verify_source_built_fixed_point_receipt(proof_root: &Path, receipt
     if extension.schema != EXTENSION_SCHEMA || extension.provider_kind != PROOF_PROVIDER_KIND {
         return Err(receipt_error("source-built receipt extension identity mismatch".to_string()));
     }
-    validate_optional_action_trust_links(proof_root, &extension)?;
     let stage_evidence_path = proof_root.join(&extension.stage_evidence_path);
     let observed_stage_evidence_digest = hash_file(&stage_evidence_path)?;
     if observed_stage_evidence_digest != extension.stage_evidence_digest_blake3 {
@@ -375,46 +340,6 @@ pub(crate) fn verify_source_built_fixed_point_receipt(proof_root: &Path, receipt
     assert_eq!(canonical.runs.len(), REQUIRED_RUN_COUNT);
     debug_assert_eq!(stage_evidence.len(), STAGE_EVIDENCE_COUNT);
     Ok(())
-}
-
-fn observed_action_trust_links(proof_root: &Path) -> Result<(Option<String>, Option<String>), RunError> {
-    let plan_path = proof_root.join(crate::source_built_trust_report::ROOT_ACTION_TRUST_PLAN_FILE);
-    let reconciliation_path = proof_root.join(crate::source_built_trust_report::ROOT_ACTION_RECONCILIATION_FILE);
-    match (plan_path.is_file(), reconciliation_path.is_file()) {
-        (false, false) => Ok((None, None)),
-        (true, true) => Ok((Some(hash_file(&plan_path)?), Some(hash_file(&reconciliation_path)?))),
-        _ => Err(receipt_error(
-            "source-built proof root must contain both action-trust files or neither file".to_string(),
-        )),
-    }
-}
-
-fn validate_optional_action_trust_links(
-    proof_root: &Path,
-    extension: &SourceBuiltReceiptExtension,
-) -> Result<(), RunError> {
-    match (
-        extension.action_trust_plan_digest_blake3.as_deref(),
-        extension.action_trust_reconciliation_digest_blake3.as_deref(),
-    ) {
-        (None, None) => Ok(()),
-        (Some(expected_plan), Some(expected_reconciliation)) => {
-            validate_digest("action-trust plan", expected_plan)?;
-            validate_digest("action-trust reconciliation", expected_reconciliation)?;
-            let observed_plan =
-                hash_file(proof_root.join(crate::source_built_trust_report::ROOT_ACTION_TRUST_PLAN_FILE).as_path())?;
-            let observed_reconciliation = hash_file(
-                proof_root.join(crate::source_built_trust_report::ROOT_ACTION_RECONCILIATION_FILE).as_path(),
-            )?;
-            if observed_plan != expected_plan || observed_reconciliation != expected_reconciliation {
-                return Err(receipt_error("action-trust receipt binding digest mismatch".to_string()));
-            }
-            assert_eq!(observed_plan, expected_plan);
-            assert_eq!(observed_reconciliation, expected_reconciliation);
-            Ok(())
-        }
-        _ => Err(receipt_error("source-built receipt must bind both action-trust files or neither file".to_string())),
-    }
 }
 
 fn observe_fixed_point(proof_root: &Path) -> Result<FixedPointObservation, RunError> {
@@ -511,75 +436,6 @@ fn observe_fixed_point_stage(
     })
 }
 
-struct StageExecutionBinding {
-    origin: StageExecutionOrigin,
-    checkpoint_digest_blake3: Option<String>,
-    execution_evidence_digest_blake3: Option<String>,
-    producer_executable_digest_blake3: Option<String>,
-}
-
-impl StageExecutionBinding {
-    fn executable_identity(&self, executed_digest_blake3: &str) -> String {
-        let digest = self.producer_executable_digest_blake3.as_deref().unwrap_or(executed_digest_blake3);
-        format!("blake3:{digest}")
-    }
-}
-
-fn stage_execution_binding(
-    providers: &ConstructedProviders,
-    output_role: ProofOutputRole,
-) -> Result<StageExecutionBinding, RunError> {
-    let Some(checkpoint) = providers.provider_checkpoint.as_ref() else {
-        return Ok(executed_stage_binding());
-    };
-    if !is_provider_checkpoint_role(output_role) {
-        return Ok(executed_stage_binding());
-    }
-    let mut matches = checkpoint.manifest.stages.iter().filter(|stage| stage.output_role == output_role);
-    let record = matches
-        .next()
-        .ok_or_else(|| receipt_error(format!("provider checkpoint is missing stage role {output_role:?}")))?;
-    if matches.next().is_some() {
-        return Err(receipt_error(format!("provider checkpoint duplicates stage role {output_role:?}")));
-    }
-    Ok(StageExecutionBinding {
-        origin: StageExecutionOrigin::RestoredCheckpoint,
-        checkpoint_digest_blake3: Some(checkpoint.admission.checkpoint_digest_blake3.clone()),
-        execution_evidence_digest_blake3: Some(record.execution_evidence_digest_blake3.clone()),
-        producer_executable_digest_blake3: Some(record.producer_executable_digest_blake3.clone()),
-    })
-}
-
-fn executed_stage_binding() -> StageExecutionBinding {
-    StageExecutionBinding {
-        origin: StageExecutionOrigin::Executed,
-        checkpoint_digest_blake3: None,
-        execution_evidence_digest_blake3: None,
-        producer_executable_digest_blake3: None,
-    }
-}
-
-fn is_provider_checkpoint_role(role: ProofOutputRole) -> bool {
-    matches!(
-        role,
-        ProofOutputRole::StagexTransition
-            | ProofOutputRole::StagexProvider
-            | ProofOutputRole::FullSourceNativeProvider
-            | ProofOutputRole::FullSourceRustProvider
-    )
-}
-
-fn canonical_stage_id(role: ProofOutputRole) -> &'static str {
-    match role {
-        ProofOutputRole::StagexTransition => crate::source_built_fixed_point::STAGEX_TRANSITION_STAGE_ID,
-        ProofOutputRole::StagexProvider => crate::source_built_fixed_point::STAGEX_PROVIDER_STAGE_ID,
-        ProofOutputRole::FullSourceNativeProvider => crate::source_built_fixed_point::FULL_SOURCE_NATIVE_STAGE_ID,
-        ProofOutputRole::FullSourceRustProvider => crate::source_built_fixed_point::FULL_SOURCE_RUST_STAGE_ID,
-        ProofOutputRole::MantleStage1 => crate::source_built_fixed_point::MANTLE_STAGE1_STAGE_ID,
-        ProofOutputRole::MantleStage2 => crate::source_built_fixed_point::MANTLE_STAGE2_STAGE_ID,
-    }
-}
-
 fn stage_evidence(
     proof_root: &Path,
     plan: &SourceBuiltFixedPointPlan,
@@ -594,8 +450,6 @@ fn stage_evidence(
     let transition_root = &providers.stagex_transition_execution_dir;
     let transition_report = transition_root.join(STAGEX_TRANSITION_REPORT_FILE);
     let transition_audit = transition_root.join(STAGEX_TRANSITION_AUDIT_FILE);
-    let transition_identity =
-        hash_preserved_stagex_transition_tree(transition_root, plan.resource_bounds.disk_bytes_max)?;
     let stagex_receipt = providers.stagex_provider_report.receipt_path.clone();
     let stagex_validation = providers
         .stagex_provider_report
@@ -609,44 +463,28 @@ fn stage_evidence(
     if hash_file(&closure_path)? != toolchain_closure_digest_blake3 {
         return Err(receipt_error("toolchain closure digest changed during receipt construction".to_string()));
     }
-    let transition_binding = stage_execution_binding(providers, ProofOutputRole::StagexTransition)?;
-    let stagex_binding = stage_execution_binding(providers, ProofOutputRole::StagexProvider)?;
-    let native_binding = stage_execution_binding(providers, ProofOutputRole::FullSourceNativeProvider)?;
-    let rust_binding = stage_execution_binding(providers, ProofOutputRole::FullSourceRustProvider)?;
-    let stage1_binding = stage_execution_binding(providers, ProofOutputRole::MantleStage1)?;
-    let stage2_binding = stage_execution_binding(providers, ProofOutputRole::MantleStage2)?;
-    let transition_executable = transition_binding.executable_identity(&current_executable_digest);
-    let stagex_executable = stagex_binding.executable_identity(&current_executable_digest);
-    let native_executable = native_binding.executable_identity(&current_executable_digest);
-    let rust_executable = rust_binding.executable_identity(&rustc_digest);
     let evidence = vec![
         SourceBuiltStageEvidence {
-            stage_id: canonical_stage_id(ProofOutputRole::StagexTransition).to_string(),
+            stage_id: "stagex-transition".to_string(),
             output_role: ProofOutputRole::StagexTransition,
             status: STAGE_STATUS_COMPLETE.to_string(),
-            execution_origin: transition_binding.origin,
-            checkpoint_digest_blake3: transition_binding.checkpoint_digest_blake3,
-            original_execution_evidence_digest_blake3: transition_binding.execution_evidence_digest_blake3,
             orchestrator: "host-mantle".to_string(),
-            executable_identity: transition_executable,
+            executable_identity: format!("blake3:{current_executable_digest}"),
             transcript_path: relative_path(proof_root, &transition_report)?,
             transcript_digest_blake3: hash_file(&transition_report)?,
             audit_paths: vec![relative_path(proof_root, &transition_audit)?],
             audit_digests_blake3: vec![hash_file(&transition_audit)?],
             output_path: relative_path(proof_root, transition_root)?,
-            output_digest_blake3: transition_identity.digest_blake3,
+            output_digest_blake3: hash_tree(transition_root)?.1,
             authority_violations: Vec::new(),
             fallback_events: Vec::new(),
         },
         SourceBuiltStageEvidence {
-            stage_id: canonical_stage_id(ProofOutputRole::StagexProvider).to_string(),
+            stage_id: "stagex-provider".to_string(),
             output_role: ProofOutputRole::StagexProvider,
             status: STAGE_STATUS_COMPLETE.to_string(),
-            execution_origin: stagex_binding.origin,
-            checkpoint_digest_blake3: stagex_binding.checkpoint_digest_blake3,
-            original_execution_evidence_digest_blake3: stagex_binding.execution_evidence_digest_blake3,
             orchestrator: "host-mantle".to_string(),
-            executable_identity: stagex_executable,
+            executable_identity: format!("blake3:{current_executable_digest}"),
             transcript_path: relative_path(proof_root, &stagex_receipt)?,
             transcript_digest_blake3: hash_file(&stagex_receipt)?,
             audit_paths: vec![relative_path(proof_root, &stagex_validation)?],
@@ -657,14 +495,11 @@ fn stage_evidence(
             fallback_events: Vec::new(),
         },
         SourceBuiltStageEvidence {
-            stage_id: canonical_stage_id(ProofOutputRole::FullSourceNativeProvider).to_string(),
+            stage_id: "full-source-native-provider".to_string(),
             output_role: ProofOutputRole::FullSourceNativeProvider,
             status: STAGE_STATUS_COMPLETE.to_string(),
-            execution_origin: native_binding.origin,
-            checkpoint_digest_blake3: native_binding.checkpoint_digest_blake3,
-            original_execution_evidence_digest_blake3: native_binding.execution_evidence_digest_blake3,
             orchestrator: "host-mantle".to_string(),
-            executable_identity: native_executable,
+            executable_identity: format!("blake3:{current_executable_digest}"),
             transcript_path: relative_path(proof_root, &providers.native_provider.transcript_path)?,
             transcript_digest_blake3: providers.native_provider.transcript_digest_blake3.clone(),
             audit_paths: vec![relative_path(proof_root, &providers.native_admission_report_path)?],
@@ -675,14 +510,11 @@ fn stage_evidence(
             fallback_events: Vec::new(),
         },
         SourceBuiltStageEvidence {
-            stage_id: canonical_stage_id(ProofOutputRole::FullSourceRustProvider).to_string(),
+            stage_id: "full-source-rust-provider".to_string(),
             output_role: ProofOutputRole::FullSourceRustProvider,
             status: STAGE_STATUS_COMPLETE.to_string(),
-            execution_origin: rust_binding.origin,
-            checkpoint_digest_blake3: rust_binding.checkpoint_digest_blake3,
-            original_execution_evidence_digest_blake3: rust_binding.execution_evidence_digest_blake3,
             orchestrator: "host-mantle".to_string(),
-            executable_identity: rust_executable,
+            executable_identity: format!("blake3:{rustc_digest}"),
             transcript_path: RUST_PROVIDER_BUILD_RECEIPT.to_string(),
             transcript_digest_blake3: hash_file(&rust_build_receipt)?,
             audit_paths: vec![RUST_PROVIDER_BINDING_RECEIPT.to_string()],
@@ -693,12 +525,9 @@ fn stage_evidence(
             fallback_events: Vec::new(),
         },
         SourceBuiltStageEvidence {
-            stage_id: canonical_stage_id(ProofOutputRole::MantleStage1).to_string(),
+            stage_id: STAGE1_RUN_ID.to_string(),
             output_role: ProofOutputRole::MantleStage1,
             status: STAGE_STATUS_COMPLETE.to_string(),
-            execution_origin: stage1_binding.origin,
-            checkpoint_digest_blake3: stage1_binding.checkpoint_digest_blake3,
-            original_execution_evidence_digest_blake3: stage1_binding.execution_evidence_digest_blake3,
             orchestrator: "host-mantle".to_string(),
             executable_identity: format!("blake3:{rustc_digest}"),
             transcript_path: FIXED_POINT_STAGE1_RECEIPT.to_string(),
@@ -717,12 +546,9 @@ fn stage_evidence(
             fallback_events: Vec::new(),
         },
         SourceBuiltStageEvidence {
-            stage_id: canonical_stage_id(ProofOutputRole::MantleStage2).to_string(),
+            stage_id: STAGE2_RUN_ID.to_string(),
             output_role: ProofOutputRole::MantleStage2,
             status: STAGE_STATUS_COMPLETE.to_string(),
-            execution_origin: stage2_binding.origin,
-            checkpoint_digest_blake3: stage2_binding.checkpoint_digest_blake3,
-            original_execution_evidence_digest_blake3: stage2_binding.execution_evidence_digest_blake3,
             orchestrator: "stage1-mantle".to_string(),
             executable_identity: format!("blake3:{}", fixed_point.stage1.binary_digest_blake3),
             transcript_path: FIXED_POINT_STAGE2_RECEIPT.to_string(),
@@ -773,7 +599,6 @@ fn validate_stage_evidence(evidence: &[SourceBuiltStageEvidence]) -> Result<(), 
         {
             return Err(receipt_error(format!("stage evidence {} is incomplete", stage.stage_id)));
         }
-        validate_stage_execution_origin(stage)?;
         for digest in &stage.audit_digests_blake3 {
             validate_digest("stage audit", digest)?;
         }
@@ -783,53 +608,14 @@ fn validate_stage_evidence(evidence: &[SourceBuiltStageEvidence]) -> Result<(), 
     Ok(())
 }
 
-fn validate_stage_execution_origin(stage: &SourceBuiltStageEvidence) -> Result<(), RunError> {
-    match stage.execution_origin {
-        StageExecutionOrigin::Executed => {
-            if stage.checkpoint_digest_blake3.is_some() || stage.original_execution_evidence_digest_blake3.is_some() {
-                return Err(receipt_error(format!(
-                    "executed stage {} carries checkpoint-only evidence",
-                    stage.stage_id
-                )));
-            }
-        }
-        StageExecutionOrigin::RestoredCheckpoint => {
-            if !is_provider_checkpoint_role(stage.output_role) {
-                return Err(receipt_error(format!(
-                    "non-provider stage {} cannot be restored from the provider checkpoint",
-                    stage.stage_id
-                )));
-            }
-            let checkpoint = stage
-                .checkpoint_digest_blake3
-                .as_deref()
-                .ok_or_else(|| receipt_error(format!("restored stage {} has no checkpoint digest", stage.stage_id)))?;
-            let execution = stage
-                .original_execution_evidence_digest_blake3
-                .as_deref()
-                .ok_or_else(|| receipt_error(format!("restored stage {} has no execution evidence", stage.stage_id)))?;
-            validate_digest("restored checkpoint", checkpoint)?;
-            validate_digest("restored execution evidence", execution)?;
-        }
-    }
-    Ok(())
-}
-
 fn validate_stage_plan_alignment(
     plan: &SourceBuiltFixedPointPlan,
     evidence: &[SourceBuiltStageEvidence],
 ) -> Result<(), RunError> {
-    validate_stage_plan_entries(&plan.stages, evidence)
-}
-
-fn validate_stage_plan_entries(
-    planned_stages: &[crate::source_built_fixed_point::SourceBuiltFixedPointStagePlan],
-    evidence: &[SourceBuiltStageEvidence],
-) -> Result<(), RunError> {
-    if planned_stages.len() != evidence.len() {
+    if plan.stages.len() != evidence.len() {
         return Err(receipt_error("plan and stage evidence counts differ".to_string()));
     }
-    for (planned, observed) in planned_stages.iter().zip(evidence) {
+    for (planned, observed) in plan.stages.iter().zip(evidence) {
         if planned.stage_id != observed.stage_id || planned.output != observed.output_role {
             return Err(receipt_error(format!(
                 "stage evidence does not match plan: planned {} {:?}, observed {} {:?}",
@@ -837,7 +623,7 @@ fn validate_stage_plan_entries(
             )));
         }
     }
-    assert_eq!(planned_stages.len(), STAGE_EVIDENCE_COUNT);
+    assert_eq!(plan.stages.len(), STAGE_EVIDENCE_COUNT);
     debug_assert_eq!(evidence.len(), STAGE_EVIDENCE_COUNT);
     Ok(())
 }
@@ -857,7 +643,10 @@ fn rebuild_authority(
     ];
     let arguments_blake3 = rebuild_arguments_digest_blake3(arguments.clone())
         .map_err(|error| receipt_error(format!("digesting rebuild arguments: {error}")))?;
-    let source_inputs = rebuild_source_identities(&plan.source_inputs, &plan.receipt_contract.source_blake3)?;
+    let source_inputs = plan.source_inputs.iter().map(rebuild_source_identity).collect::<Vec<_>>();
+    if source_inputs.len() != REQUIRED_SOURCE_COUNT {
+        return Err(receipt_error("rebuild descriptor source input count is incomplete".to_string()));
+    }
     let target = RebuildContentIdentity {
         name: MANTLE_OUTPUT_NAME.to_string(),
         role: RebuildInputRole::PublishedTarget,
@@ -991,7 +780,7 @@ fn deterministic_receipt(
         hermeticity_mode: HERMETICITY_MODE.to_string(),
         workflow_version: PROOF_WORKFLOW.to_string(),
         selected_provider_kind: PROOF_PROVIDER_KIND.to_string(),
-        source_blake3: plan.receipt_contract.source_blake3.clone(),
+        source_blake3: plan.source_authority_digest_blake3.clone(),
         vendor_blake3: plan.receipt_contract.vendor_blake3.clone(),
         toolchain_provider_identity,
         toolchain_stage_roots: vec![
@@ -1091,56 +880,6 @@ fn rebuild_source_identity(input: &crate::source_built_fixed_point::SourceAuthor
     }
 }
 
-fn rebuild_source_identities(
-    plan_source_inputs: &[crate::source_built_fixed_point::SourceAuthorityInput],
-    source_authority_digest_blake3: &str,
-) -> Result<Vec<RebuildContentIdentity>, RunError> {
-    validate_rebuild_source_input_count(plan_source_inputs.len())?;
-    let source_authority_size_bytes = plan_source_inputs.iter().try_fold(0u64, |total, input| {
-        total
-            .checked_add(input.size_bytes)
-            .ok_or_else(|| receipt_error("rebuild descriptor source authority size exceeds u64".to_string()))
-    })?;
-    let source_identity_count = plan_source_inputs
-        .len()
-        .checked_add(1)
-        .ok_or_else(|| receipt_error("rebuild descriptor source identity count exceeds usize".to_string()))?;
-    let mut source_inputs = Vec::with_capacity(source_identity_count);
-    source_inputs.extend(plan_source_inputs.iter().map(rebuild_source_identity));
-    source_inputs.push(RebuildContentIdentity {
-        name: SOURCE_AUTHORITY_CLOSURE_NAME.to_string(),
-        role: RebuildInputRole::Source,
-        kind: RebuildContentKind::Directory,
-        digest_blake3: source_authority_digest_blake3.to_string(),
-        size_bytes: source_authority_size_bytes,
-    });
-    validate_rebuild_source_closure_binding(source_authority_digest_blake3, &source_inputs)?;
-    assert_eq!(source_inputs.len(), source_identity_count);
-    debug_assert!(source_inputs.len() > plan_source_inputs.len());
-    Ok(source_inputs)
-}
-
-fn validate_rebuild_source_input_count(source_input_count: usize) -> Result<(), RunError> {
-    let source_input_count = u32::try_from(source_input_count)
-        .map_err(|_| receipt_error("rebuild descriptor source input count exceeds u32".to_string()))?;
-    if source_input_count != SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT {
-        return Err(receipt_error(format!(
-            "rebuild descriptor source input count does not match the plan contract: expected {SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT}, got {source_input_count}"
-        )));
-    }
-    Ok(())
-}
-
-fn validate_rebuild_source_closure_binding(
-    receipt_source_blake3: &str,
-    source_inputs: &[RebuildContentIdentity],
-) -> Result<(), RunError> {
-    if !source_inputs.iter().any(|source| source.digest_blake3 == receipt_source_blake3) {
-        return Err(receipt_error("rebuild descriptor source closure does not bind receipt source".to_string()));
-    }
-    Ok(())
-}
-
 fn approved_read_identities(
     plan: &SourceBuiltFixedPointPlan,
     descriptor: &ContentBoundRebuildDescriptor,
@@ -1152,7 +891,6 @@ fn approved_read_identities(
         .map(|input| format!("source:{:?}:{}:{}", input.role, input.id, input.digest_blake3))
         .collect::<Vec<_>>();
     reads.extend([
-        format!("source-authority:{}", plan.receipt_contract.source_blake3),
         format!("recipe:{}", plan.plan_digest_blake3),
         format!("provider:{}", descriptor.provider.digest_blake3),
         format!("rust-provider:{rust_provider_digest_blake3}"),
@@ -1163,7 +901,7 @@ fn approved_read_identities(
     ]);
     reads.sort();
     reads.dedup();
-    assert!(reads.len() > plan.source_inputs.len());
+    assert!(reads.len() > REQUIRED_SOURCE_COUNT);
     debug_assert!(reads.windows(2).all(|pair| pair[0] < pair[1]));
     reads
 }
@@ -1231,30 +969,12 @@ fn write_extended_receipt(
 }
 
 fn proof_bundle_digest(proof_root: &Path) -> Result<ProofBundleObservation, RunError> {
-    proof_bundle_digest_with_limit(proof_root, PROOF_ENTRY_COUNT_MAX)
-}
-
-#[cfg(test)]
-pub(crate) fn proof_bundle_digest_for_test(proof_root: &Path) -> Result<String, RunError> {
-    let observation = proof_bundle_digest(proof_root)?;
-    assert!(!observation.digest_blake3.is_empty());
-    assert!(observation.entry_count > 0);
-    Ok(observation.digest_blake3)
-}
-
-fn proof_bundle_digest_with_limit(
-    proof_root: &Path,
-    entries_count_max: usize,
-) -> Result<ProofBundleObservation, RunError> {
-    if entries_count_max == 0 {
-        return Err(receipt_error("proof bundle entry limit must be positive".to_string()));
-    }
     let mut entries = Vec::new();
-    collect_bundle_files(proof_root, proof_root, entries_count_max, &mut entries)?;
+    collect_bundle_files(proof_root, proof_root, &mut entries)?;
     entries.sort_by(|left, right| left.0.cmp(&right.0));
-    if entries.is_empty() || entries.len() > entries_count_max {
+    if entries.is_empty() || entries.len() > PROOF_ENTRY_COUNT_MAX {
         return Err(receipt_error(format!(
-            "proof bundle entry count must be within 1..={entries_count_max}, got {}",
+            "proof bundle entry count must be within 1..={PROOF_ENTRY_COUNT_MAX}, got {}",
             entries.len()
         )));
     }
@@ -1268,7 +988,7 @@ fn proof_bundle_digest_with_limit(
             hasher.update(target.as_os_str().as_encoded_bytes());
         } else {
             hasher.update(b"file\0");
-            hasher.update(hash_file_allow_empty(path)?.as_bytes());
+            hasher.update(hash_file(path)?.as_bytes());
         }
         hasher.update(&[0]);
     }
@@ -1284,9 +1004,11 @@ fn proof_bundle_digest_with_limit(
 fn collect_bundle_files(
     proof_root: &Path,
     current: &Path,
-    entries_count_max: usize,
     entries: &mut Vec<(String, PathBuf, Option<PathBuf>)>,
 ) -> Result<(), RunError> {
+    if entries.len() > PROOF_ENTRY_COUNT_MAX {
+        return Err(receipt_error("proof bundle entry limit exceeded".to_string()));
+    }
     let mut children = fs::read_dir(current)
         .map_err(|error| receipt_error(format!("reading proof bundle directory {}: {error}", current.display())))?
         .collect::<Result<Vec<_>, _>>()
@@ -1302,16 +1024,12 @@ fn collect_bundle_files(
                 let target = fs::read_link(&path).map_err(|error| {
                     receipt_error(format!("reading proof bundle symlink {}: {error}", path.display()))
                 })?;
-                push_bundle_entry(entries, entries_count_max, (relative, path, Some(target)))?;
+                entries.push((relative, path, Some(target)));
             }
             continue;
         }
         if metadata.is_dir() {
-            let relative = relative_path(proof_root, &path)?;
-            if excluded_directory_from_bundle_digest(&relative) {
-                continue;
-            }
-            collect_bundle_files(proof_root, &path, entries_count_max, entries)?;
+            collect_bundle_files(proof_root, &path, entries)?;
             continue;
         }
         if !metadata.is_file() {
@@ -1321,29 +1039,11 @@ fn collect_bundle_files(
         if excluded_from_bundle_digest(&relative) {
             continue;
         }
-        push_bundle_entry(entries, entries_count_max, (relative, path, None))?;
+        entries.push((relative, path, None));
     }
-    assert!(entries.len() <= entries_count_max);
+    assert!(entries.len() <= PROOF_ENTRY_COUNT_MAX);
     debug_assert!(current.starts_with(proof_root));
     Ok(())
-}
-
-fn push_bundle_entry(
-    entries: &mut Vec<(String, PathBuf, Option<PathBuf>)>,
-    entries_count_max: usize,
-    entry: (String, PathBuf, Option<PathBuf>),
-) -> Result<(), RunError> {
-    if entries.len() >= entries_count_max {
-        return Err(receipt_error(format!("proof bundle entry count exceeds {entries_count_max}")));
-    }
-    entries.push(entry);
-    assert!(entries.len() <= entries_count_max);
-    debug_assert!(!entries.is_empty());
-    Ok(())
-}
-
-fn excluded_directory_from_bundle_digest(relative: &str) -> bool {
-    NON_DURABLE_PROOF_DIRECTORIES.contains(&relative)
 }
 
 fn excluded_from_bundle_digest(relative: &str) -> bool {
@@ -1353,28 +1053,6 @@ fn excluded_from_bundle_digest(relative: &str) -> bool {
             | crate::source_built_fixed_point_shell::FINAL_BUNDLE_DIGEST_FILE
             | "attempt-status.json"
     )
-}
-
-fn hash_preserved_stagex_transition_tree(
-    root: &Path,
-    total_file_bytes_max: u64,
-) -> Result<crate::preserved_evidence_tree::PreservedEvidenceTreeIdentity, RunError> {
-    let entries_count_max = u32::try_from(PROOF_ENTRY_COUNT_MAX)
-        .map_err(|_| receipt_error("proof entry limit does not fit u32".to_string()))?;
-    let release_limits = crunch_release_core::TreeCopyLimits::RELEASE_BUNDLE;
-    let limits = crate::preserved_evidence_tree::PreservedEvidenceTreeLimits {
-        entries_count_max,
-        depth_count_max: release_limits.depth_count_max,
-        path_bytes_max: release_limits.path_bytes_max,
-        symlink_target_bytes_max: release_limits.path_bytes_max,
-        total_file_bytes_max,
-    };
-    let identity = crate::preserved_evidence_tree::hash_preserved_evidence_tree(root, limits).map_err(|error| {
-        receipt_error(format!("hashing preserved StageX transition tree {}: {error}", root.display()))
-    })?;
-    assert!(identity.entry_count <= entries_count_max);
-    assert!(identity.total_file_bytes <= total_file_bytes_max);
-    Ok(identity)
 }
 
 fn hash_tree(root: &Path) -> Result<(u64, String), RunError> {
@@ -1500,257 +1178,6 @@ mod tests {
 
     const DIGEST_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const DIGEST_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-    const TOO_SMALL_BUNDLE_ENTRY_LIMIT: usize = 1;
-    #[cfg(unix)]
-    const NO_ACCESS_DIRECTORY_MODE: u32 = 0o000;
-    #[cfg(unix)]
-    const RESTORED_DIRECTORY_MODE: u32 = 0o700;
-
-    #[test]
-    fn optional_action_trust_links_require_both_exact_files() {
-        let temp = tempfile::tempdir().unwrap();
-        let plan_path = temp.path().join(crate::source_built_trust_report::ROOT_ACTION_TRUST_PLAN_FILE);
-        let reconciliation_path = temp.path().join(crate::source_built_trust_report::ROOT_ACTION_RECONCILIATION_FILE);
-        fs::write(&plan_path, "plan").unwrap();
-        fs::write(&reconciliation_path, "reconciliation").unwrap();
-        let plan_digest = hash_file(&plan_path).unwrap();
-        let reconciliation_digest = hash_file(&reconciliation_path).unwrap();
-        let mut extension = v48_extension();
-        let observed = observed_action_trust_links(temp.path()).unwrap();
-
-        validate_optional_action_trust_links(temp.path(), &extension).unwrap();
-        extension.action_trust_plan_digest_blake3 = Some(plan_digest.clone());
-        let partial = validate_optional_action_trust_links(temp.path(), &extension).unwrap_err();
-        extension.action_trust_reconciliation_digest_blake3 = Some(reconciliation_digest);
-        validate_optional_action_trust_links(temp.path(), &extension).unwrap();
-        extension.action_trust_plan_digest_blake3 = Some(DIGEST_A.to_string());
-        let drift = validate_optional_action_trust_links(temp.path(), &extension).unwrap_err();
-
-        assert_eq!(observed.0.as_deref(), Some(plan_digest.as_str()));
-        assert!(observed.1.is_some());
-        assert!(partial.to_string().contains("both action-trust files"));
-        assert!(drift.to_string().contains("binding digest mismatch"));
-        assert_ne!(plan_digest, DIGEST_A);
-    }
-
-    #[test]
-    fn rebuild_source_count_tracks_the_plan_contract_and_rejects_drift() {
-        let expected = usize::try_from(SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT).unwrap();
-        let missing = expected.checked_sub(1).unwrap();
-        let extra = expected.checked_add(1).unwrap();
-
-        validate_rebuild_source_input_count(expected).unwrap();
-        let missing_error = validate_rebuild_source_input_count(missing).unwrap_err();
-        let extra_error = validate_rebuild_source_input_count(extra).unwrap_err();
-
-        assert!(missing_error.to_string().contains(&format!("expected {expected}, got {missing}")));
-        assert!(extra_error.to_string().contains(&format!("expected {expected}, got {extra}")));
-        assert_ne!(missing, expected);
-        assert_ne!(extra, expected);
-    }
-
-    #[test]
-    fn rebuild_source_closure_binds_the_aggregate_authority_and_rejects_missing_root() {
-        let expected = usize::try_from(SOURCE_BUILT_FIXED_POINT_REQUIRED_SOURCE_ROLE_COUNT).unwrap();
-        let plan_source_inputs = (0..expected)
-            .map(|index| crate::source_built_fixed_point::SourceAuthorityInput {
-                id: format!("source-{index}"),
-                role: crate::source_built_fixed_point::SourceAuthorityRole::MantleSource,
-                kind: crate::source_built_fixed_point::SourceContentKind::Directory,
-                digest_blake3: DIGEST_A.to_string(),
-                size_bytes: 1,
-            })
-            .collect::<Vec<_>>();
-
-        let source_inputs = rebuild_source_identities(&plan_source_inputs, DIGEST_B).unwrap();
-        validate_rebuild_source_closure_binding(DIGEST_B, &source_inputs).unwrap();
-        let leaves_only = source_inputs
-            .iter()
-            .filter(|source| source.name != SOURCE_AUTHORITY_CLOSURE_NAME)
-            .cloned()
-            .collect::<Vec<_>>();
-        let missing_root = validate_rebuild_source_closure_binding(DIGEST_B, &leaves_only).unwrap_err();
-
-        assert_eq!(source_inputs.len(), expected.checked_add(1).unwrap());
-        assert!(
-            source_inputs
-                .iter()
-                .any(|source| { source.name == SOURCE_AUTHORITY_CLOSURE_NAME && source.digest_blake3 == DIGEST_B })
-        );
-        assert!(missing_root.to_string().contains("does not bind receipt source"));
-        assert_eq!(leaves_only.len(), expected);
-    }
-
-    #[test]
-    fn deterministic_receipt_accepts_aggregate_source_closure_and_rejects_leaf_only_descriptor() {
-        let plan: SourceBuiltFixedPointPlan = serde_json::from_str(include_str!(
-            "../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v47-source-closure-binding-repair-2026-08-23/source-built-fixed-point-plan.json"
-        ))
-        .unwrap();
-        let fixed_point = FixedPointObservation {
-            stage1: FixedPointStageObservation {
-                binary_path: PathBuf::from("stage1-mantle"),
-                binary_digest_blake3: DIGEST_A.to_string(),
-                receipt_digest_blake3: DIGEST_B.to_string(),
-                stderr_digest_blake3: DIGEST_A.to_string(),
-            },
-            stage2: FixedPointStageObservation {
-                binary_path: PathBuf::from("stage2-mantle"),
-                binary_digest_blake3: DIGEST_A.to_string(),
-                receipt_digest_blake3: DIGEST_B.to_string(),
-                stderr_digest_blake3: DIGEST_A.to_string(),
-            },
-            closure_policy_digest_blake3: plan.policies.closure_policy_digest_blake3.clone(),
-        };
-        let aggregate = test_rebuild_evidence(&plan, true);
-        let leaf_only = test_rebuild_evidence(&plan, false);
-
-        let accepted =
-            deterministic_receipt(&plan, &fixed_point, DIGEST_B, aggregate.0, aggregate.1, aggregate.2, aggregate.3)
-                .unwrap();
-        let rejected =
-            deterministic_receipt(&plan, &fixed_point, DIGEST_B, leaf_only.0, leaf_only.1, leaf_only.2, leaf_only.3)
-                .unwrap_err();
-
-        assert_eq!(accepted.verdict, DeterministicBuildProofVerdict::SelfRebuildMatch);
-        assert!(accepted.blocking_reasons.is_empty());
-        assert!(rejected.to_string().contains("source closure does not bind receipt source"));
-        assert_eq!(accepted.source_blake3, plan.receipt_contract.source_blake3);
-    }
-
-    fn v48_extension() -> SourceBuiltReceiptExtension {
-        let value: serde_json::Value = serde_json::from_str(include_str!(
-            "../.cairn/archive/2026-08-31-prove-source-built-mantle-fixed-point/evidence/v48-promoted-fixed-point-success-2026-08-23/deterministic-build-proof.json"
-        ))
-        .unwrap();
-        let extension: SourceBuiltReceiptExtension =
-            serde_json::from_value(value.get(EXTENSION_FIELD).cloned().unwrap()).unwrap();
-        assert_eq!(extension.schema, EXTENSION_SCHEMA);
-        assert!(extension.action_trust_plan_digest_blake3.is_none());
-        extension
-    }
-
-    fn test_rebuild_evidence(
-        plan: &SourceBuiltFixedPointPlan,
-        include_aggregate_source: bool,
-    ) -> (ContentBoundRebuildDescriptor, String, RebuildAuthorityPlan, String) {
-        let arguments = vec![
-            "workflow:source-built-fixed-point".to_string(),
-            format!("plan-blake3:{}", plan.plan_digest_blake3),
-            format!("source-authority-blake3:{}", plan.source_authority_digest_blake3),
-            format!("closure-policy-blake3:{}", plan.policies.closure_policy_digest_blake3),
-        ];
-        let arguments_blake3 = rebuild_arguments_digest_blake3(arguments.clone()).unwrap();
-        let mut source_inputs =
-            rebuild_source_identities(&plan.source_inputs, &plan.receipt_contract.source_blake3).unwrap();
-        if !include_aggregate_source {
-            source_inputs.retain(|source| source.name != SOURCE_AUTHORITY_CLOSURE_NAME);
-        }
-        let descriptor = ContentBoundRebuildDescriptor {
-            schema: REBUILD_DESCRIPTOR_SCHEMA.to_string(),
-            target_artifacts: vec![RebuildContentIdentity {
-                name: MANTLE_OUTPUT_NAME.to_string(),
-                role: RebuildInputRole::PublishedTarget,
-                kind: RebuildContentKind::RegularFile,
-                digest_blake3: DIGEST_A.to_string(),
-                size_bytes: 1,
-            }],
-            recipe: RebuildContentIdentity {
-                name: PLAN_FILE.to_string(),
-                role: RebuildInputRole::Recipe,
-                kind: RebuildContentKind::RegularFile,
-                digest_blake3: plan.plan_digest_blake3.clone(),
-                size_bytes: 1,
-            },
-            executable: test_rebuild_identity("source-built-rustc", RebuildInputRole::Executable),
-            tools: vec![test_rebuild_identity(
-                "stage1-mantle-orchestrator",
-                RebuildInputRole::Tool,
-            )],
-            ordered_arguments: arguments,
-            arguments_blake3,
-            source_inputs,
-            provider: test_rebuild_identity(
-                "source-built-native-and-rust-provider-closure",
-                RebuildInputRole::Provider,
-            ),
-            policies: RebuildPolicyIdentities {
-                sandbox_policy_blake3: plan.policies.protected_execution_policy_digest_blake3.clone(),
-                effect_policy_blake3: plan.policies.effect_policy_digest_blake3.clone(),
-                normalization_policy_blake3: plan.policies.normalization_policy_digest_blake3.clone(),
-            },
-            run_roots: vec![
-                RebuildRunRootIdentity {
-                    run_id: STAGE1_RUN_ID.to_string(),
-                    output_root_identity: STAGE1_OUTPUT_ROOT.to_string(),
-                    store_root_identity: STAGE1_STORE_ROOT.to_string(),
-                },
-                RebuildRunRootIdentity {
-                    run_id: STAGE2_RUN_ID.to_string(),
-                    output_root_identity: STAGE2_OUTPUT_ROOT.to_string(),
-                    store_root_identity: STAGE2_STORE_ROOT.to_string(),
-                },
-            ],
-        };
-        let descriptor_digest = content_bound_rebuild_descriptor_digest_blake3(descriptor.clone()).unwrap();
-        let (authority_plan, authority_plan_digest) = test_rebuild_authority(plan, &descriptor, &descriptor_digest);
-        (descriptor, descriptor_digest, authority_plan, authority_plan_digest)
-    }
-
-    fn test_rebuild_authority(
-        plan: &SourceBuiltFixedPointPlan,
-        descriptor: &ContentBoundRebuildDescriptor,
-        descriptor_digest: &str,
-    ) -> (RebuildAuthorityPlan, String) {
-        let approved_read_identities = approved_read_identities(plan, descriptor, DIGEST_B);
-        let approved_read_paths_blake3 = digest_string_set(APPROVED_READ_DIGEST_DOMAIN, &approved_read_identities);
-        let authority_plan = RebuildAuthorityPlan {
-            schema: REBUILD_AUTHORITY_SCHEMA.to_string(),
-            descriptor_blake3: descriptor_digest.to_string(),
-            approved_read_identities,
-            approved_read_paths_blake3,
-            fresh_write_root_identities: vec![STAGE1_OUTPUT_ROOT.to_string(), STAGE2_OUTPUT_ROOT.to_string()],
-            target_authority_excluded: true,
-            blockers: Vec::new(),
-        };
-        let authority_plan_digest = rebuild_authority_plan_digest_blake3(authority_plan.clone()).unwrap();
-        (authority_plan, authority_plan_digest)
-    }
-
-    fn test_rebuild_identity(name: &str, role: RebuildInputRole) -> RebuildContentIdentity {
-        RebuildContentIdentity {
-            name: name.to_string(),
-            role,
-            kind: RebuildContentKind::RegularFile,
-            digest_blake3: DIGEST_B.to_string(),
-            size_bytes: 1,
-        }
-    }
-
-    #[test]
-    fn stage_evidence_ids_match_the_plan_and_reject_stale_aliases() {
-        let planned = crate::source_built_fixed_point::expected_stage_plans();
-        let mut evidence = planned
-            .iter()
-            .map(|stage| {
-                let mut evidence = test_stage_evidence(stage.output);
-                evidence.stage_id = canonical_stage_id(stage.output).to_string();
-                evidence
-            })
-            .collect::<Vec<_>>();
-
-        validate_stage_plan_entries(&planned, &evidence).unwrap();
-        evidence[1].stage_id = "stagex-provider".to_string();
-        let stagex_error = validate_stage_plan_entries(&planned, &evidence).unwrap_err();
-        evidence[1].stage_id = canonical_stage_id(ProofOutputRole::StagexProvider).to_string();
-        evidence[4].stage_id = STAGE1_RUN_ID.to_string();
-        let stage1_error = validate_stage_plan_entries(&planned, &evidence).unwrap_err();
-
-        assert!(stagex_error.to_string().contains("planned stagex-provider-publication"));
-        assert!(stage1_error.to_string().contains("planned mantle-stage1"));
-        assert_ne!(canonical_stage_id(ProofOutputRole::StagexProvider), "stagex-provider");
-        assert_ne!(canonical_stage_id(ProofOutputRole::MantleStage1), STAGE1_RUN_ID);
-    }
 
     #[test]
     fn stage_evidence_rejects_fallbacks_and_duplicate_ids() {
@@ -1759,9 +1186,6 @@ mod tests {
                 stage_id: format!("stage-{index}"),
                 output_role: ProofOutputRole::StagexTransition,
                 status: STAGE_STATUS_COMPLETE.to_string(),
-                execution_origin: StageExecutionOrigin::Executed,
-                checkpoint_digest_blake3: None,
-                original_execution_evidence_digest_blake3: None,
                 orchestrator: "host-mantle".to_string(),
                 executable_identity: format!("blake3:{DIGEST_A}"),
                 transcript_path: format!("stage-{index}.json"),
@@ -1785,99 +1209,22 @@ mod tests {
         assert!(duplicate.to_string().contains("duplicate stage evidence id"));
     }
 
-    // r[verify bootstrap_inventory.source_built_mantle_checkpoint_reuse]
-    #[test]
-    fn restored_stage_origin_requires_provider_role_and_complete_checkpoint_link() {
-        let mut restored = test_stage_evidence(ProofOutputRole::StagexProvider);
-        restored.execution_origin = StageExecutionOrigin::RestoredCheckpoint;
-        restored.checkpoint_digest_blake3 = Some(DIGEST_A.to_string());
-        restored.original_execution_evidence_digest_blake3 = Some(DIGEST_B.to_string());
-        validate_stage_execution_origin(&restored).unwrap();
-
-        restored.checkpoint_digest_blake3 = None;
-        let missing = validate_stage_execution_origin(&restored).unwrap_err();
-        restored.checkpoint_digest_blake3 = Some(DIGEST_A.to_string());
-        restored.output_role = ProofOutputRole::MantleStage1;
-        let wrong_stage = validate_stage_execution_origin(&restored).unwrap_err();
-        restored.execution_origin = StageExecutionOrigin::Executed;
-        let false_execution = validate_stage_execution_origin(&restored).unwrap_err();
-
-        assert!(missing.to_string().contains("no checkpoint digest"));
-        assert!(wrong_stage.to_string().contains("non-provider stage"));
-        assert!(false_execution.to_string().contains("checkpoint-only evidence"));
-    }
-
-    fn test_stage_evidence(output_role: ProofOutputRole) -> SourceBuiltStageEvidence {
-        SourceBuiltStageEvidence {
-            stage_id: "checkpoint-stage".to_string(),
-            output_role,
-            status: STAGE_STATUS_COMPLETE.to_string(),
-            execution_origin: StageExecutionOrigin::Executed,
-            checkpoint_digest_blake3: None,
-            original_execution_evidence_digest_blake3: None,
-            orchestrator: "host-mantle".to_string(),
-            executable_identity: format!("blake3:{DIGEST_A}"),
-            transcript_path: "transcript.json".to_string(),
-            transcript_digest_blake3: DIGEST_A.to_string(),
-            audit_paths: vec!["audit.json".to_string()],
-            audit_digests_blake3: vec![DIGEST_B.to_string()],
-            output_path: "output".to_string(),
-            output_digest_blake3: DIGEST_B.to_string(),
-            authority_violations: Vec::new(),
-            fallback_events: Vec::new(),
-        }
-    }
-
-    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
     #[test]
     fn bundle_digest_excludes_only_self_referential_receipt_files() {
         let temp = tempfile::tempdir().unwrap();
         fs::write(temp.path().join("evidence.txt"), "evidence").unwrap();
-        fs::write(temp.path().join("second-evidence.txt"), "second").unwrap();
-        fs::write(temp.path().join("empty-evidence.txt"), "").unwrap();
-        fs::create_dir(temp.path().join("rust-provider-scratch")).unwrap();
-        fs::write(temp.path().join("rust-provider-scratch/ignored.txt"), "ignored").unwrap();
         fs::write(temp.path().join(crate::source_built_fixed_point_shell::FINAL_RECEIPT_FILE), "one").unwrap();
         fs::write(temp.path().join(crate::source_built_fixed_point_shell::FINAL_BUNDLE_DIGEST_FILE), "two").unwrap();
         fs::write(temp.path().join("attempt-status.json"), "running").unwrap();
         let first = proof_bundle_digest(temp.path()).unwrap();
         fs::write(temp.path().join(crate::source_built_fixed_point_shell::FINAL_RECEIPT_FILE), "changed").unwrap();
         fs::write(temp.path().join("attempt-status.json"), "complete").unwrap();
-        fs::write(temp.path().join("rust-provider-scratch/ignored.txt"), "changed ignored scratch").unwrap();
         let second = proof_bundle_digest(temp.path()).unwrap();
         fs::write(temp.path().join("evidence.txt"), "changed evidence").unwrap();
         let changed = proof_bundle_digest(temp.path()).unwrap();
-        let limit_error = proof_bundle_digest_with_limit(temp.path(), TOO_SMALL_BUNDLE_ENTRY_LIMIT).unwrap_err();
-        let limit_message = format!("entry count exceeds {TOO_SMALL_BUNDLE_ENTRY_LIMIT}");
 
         assert_eq!(first.digest_blake3, second.digest_blake3);
         assert_ne!(second.digest_blake3, changed.digest_blake3);
-        assert!(limit_error.to_string().contains(&limit_message));
-    }
-
-    // r[verify bootstrap_inventory.source_built_mantle_fixed_point]
-    #[test]
-    #[cfg(unix)]
-    fn bundle_digest_skips_declared_unreadable_scratch_but_rejects_unknown_unreadable_content() {
-        use std::os::unix::fs::PermissionsExt as _;
-
-        let temp = tempfile::tempdir().unwrap();
-        fs::write(temp.path().join("evidence.txt"), "evidence").unwrap();
-        let declared_scratch = temp.path().join("tmp");
-        let unknown_content = temp.path().join("unknown-content");
-        fs::create_dir(&declared_scratch).unwrap();
-        fs::create_dir(&unknown_content).unwrap();
-        fs::set_permissions(&declared_scratch, fs::Permissions::from_mode(NO_ACCESS_DIRECTORY_MODE)).unwrap();
-
-        let accepted = proof_bundle_digest(temp.path()).unwrap();
-        fs::set_permissions(&unknown_content, fs::Permissions::from_mode(NO_ACCESS_DIRECTORY_MODE)).unwrap();
-        let rejected = proof_bundle_digest(temp.path()).unwrap_err();
-        fs::set_permissions(&declared_scratch, fs::Permissions::from_mode(RESTORED_DIRECTORY_MODE)).unwrap();
-        fs::set_permissions(&unknown_content, fs::Permissions::from_mode(RESTORED_DIRECTORY_MODE)).unwrap();
-
-        assert_eq!(accepted.entry_count, TOO_SMALL_BUNDLE_ENTRY_LIMIT);
-        assert_eq!(accepted.digest_blake3.len(), BLAKE3_HEX_LENGTH);
-        assert!(rejected.to_string().contains("unknown-content"));
     }
 
     #[test]
@@ -1891,45 +1238,5 @@ mod tests {
         assert_ne!(first, swapped);
         assert_ne!(first, substituted);
         assert_eq!(first.len(), BLAKE3_HEX_LENGTH);
-    }
-
-    #[test]
-    #[ignore = "requires a preserved source-built proof bundle"]
-    fn preserved_proof_bundle_fixture_fits_receipt_entry_policy() {
-        const PROOF_ROOT_ENV: &str = "MANTLE_TEST_PRESERVED_PROOF_ROOT";
-
-        let root = PathBuf::from(std::env::var_os(PROOF_ROOT_ENV).expect("preserved proof root must be set"));
-        let observation = proof_bundle_digest(&root).unwrap();
-        println!("preserved-proof-bundle: entries={} blake3={}", observation.entry_count, observation.digest_blake3);
-
-        let release_entry_limit = usize::try_from(crunch_release_core::RELEASE_TREE_COPY_MAX_ENTRIES_COUNT).unwrap();
-        assert!(root.is_dir());
-        assert!(root.join("rust-provider-scratch").is_dir());
-        assert!(observation.entry_count > release_entry_limit);
-        assert!(observation.entry_count <= PROOF_ENTRY_COUNT_MAX);
-        assert_eq!(observation.digest_blake3.len(), BLAKE3_HEX_LENGTH);
-    }
-
-    #[test]
-    #[ignore = "requires a preserved source-built StageX transition tree"]
-    fn preserved_stagex_transition_tree_fixture_hashes_under_receipt_policy() {
-        const TREE_PATH_ENV: &str = "MANTLE_TEST_PRESERVED_STAGEX_TREE";
-        const TOTAL_FILE_BYTES_MAX_ENV: &str = "MANTLE_TEST_PRESERVED_STAGEX_TREE_BYTES_MAX";
-
-        let root = PathBuf::from(std::env::var_os(TREE_PATH_ENV).expect("preserved StageX tree path must be set"));
-        let total_file_bytes_max = std::env::var(TOTAL_FILE_BYTES_MAX_ENV)
-            .expect("preserved StageX tree byte bound must be set")
-            .parse::<u64>()
-            .expect("preserved StageX tree byte bound must be a u64");
-        let identity = hash_preserved_stagex_transition_tree(&root, total_file_bytes_max).unwrap();
-        println!(
-            "preserved-stagex-tree: entries={} bytes={} blake3={}",
-            identity.entry_count, identity.total_file_bytes, identity.digest_blake3
-        );
-
-        assert!(root.is_dir());
-        assert!(identity.entry_count > crunch_release_core::RELEASE_TREE_COPY_MAX_ENTRIES_COUNT);
-        assert!(identity.total_file_bytes <= total_file_bytes_max);
-        assert_eq!(identity.digest_blake3.len(), BLAKE3_HEX_LENGTH);
     }
 }
