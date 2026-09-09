@@ -369,6 +369,8 @@ fn validate_links(
     entries: &[GcEntry],
     entries_by_id: &BTreeMap<&str, &GcEntry>,
 ) -> Result<(), GcPlanError> {
+    debug_assert!(entries_by_id.len() >= entries.len());
+    debug_assert!(roots.len() <= entries_by_id.len());
     for root in roots {
         if !entries_by_id.contains_key(root.as_str()) {
             return Err(GcPlanError::MissingRoot { path_id: root.clone() });
@@ -422,6 +424,7 @@ fn compute_retaining_roots(
     roots: &[String],
     entries_by_id: &BTreeMap<&str, &GcEntry>,
 ) -> Result<Vec<GcRetainingRoots>, GcPlanError> {
+    debug_assert!(!roots.is_empty() || entries_by_id.is_empty());
     let mut roots_by_path = BTreeMap::<String, BTreeSet<String>>::new();
     for root in roots {
         let mut visited = BTreeSet::new();
@@ -434,12 +437,14 @@ fn compute_retaining_roots(
                 continue;
             }
             roots_by_path.entry(path_id.clone()).or_default().insert(root.clone());
+            debug_assert!(roots_by_path.len() <= entries_by_id.len());
             let entry = entries_by_id.get(path_id.as_str()).ok_or_else(|| GcPlanError::MissingRoot {
                 path_id: path_id.clone(),
             })?;
             queue.extend(entry.references.iter().cloned());
         }
     }
+    debug_assert!(roots_by_path.len() <= entries_by_id.len());
     Ok(roots_by_path
         .into_iter()
         .map(|(path_id, root_ids)| GcRetainingRoots {

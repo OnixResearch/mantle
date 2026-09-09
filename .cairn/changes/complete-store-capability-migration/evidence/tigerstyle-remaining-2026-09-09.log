@@ -1,0 +1,1438 @@
+warning: /home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/Cargo.toml: file `/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-attestation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-attestation-core)
+    Checking crunch-nar v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-nar)
+    Checking crunch-action-result-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-action-result-core)
+    Checking crunch-repair-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-repair-core)
+    Checking snix-store v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/vendor/snix-store)
+    Checking snix-build v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/vendor/snix-build)
+    Checking crunch-overlay-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-overlay-core)
+    Checking crunch-gc-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-gc-core)
+    Checking crunch-composition-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-composition-core)
+    Checking crunch-rust-cache-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-rust-cache-core)
+    Checking miette v7.6.0
+    Checking crunch-eval v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-eval)
+    Checking crunch-evaluation-stream-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-evaluation-stream-core)
+    Checking crunch-wasm-component-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-wasm-component-core)
+    Checking crunch-shell-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-shell-core)
+    Checking crunch-delta-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-delta-core)
+    Checking crunch-release-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-release-core)
+    Checking crunch-kernelscript-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-kernelscript-core)
+    Checking crunch-spacewasm-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-spacewasm-core)
+    Checking crunch-eval-budget-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-eval-budget-core)
+warning: unexpected `cfg` condition name: `kani`
+ --> crates/crunch-composition-core/src/lib.rs:2:17
+  |
+2 | #![cfg_attr(not(kani), feature(register_tool))]
+  |                 ^^^^
+  |
+  = help: expected names are: `docsrs`, `feature`, and `test` and 31 more
+  = help: consider using a Cargo feature instead
+  = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+           [lints.rust]
+           unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+  = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(kani)");` to the top of the `build.rs`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+
+    Checking crunch-hardware-simulation-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-hardware-simulation-core)
+    Checking mantlepkgs-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/mantlepkgs-core)
+    Checking mantle-portable-client-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/mantle-portable-client-core)
+    Checking mantle-build-contract v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/mantle-build-contract)
+error: function `prepare_request` has 0 assertion(s) in 23 lines (need 2+)
+   --> crates/crunch-eval-budget-core/src/lib.rs:322:50
+    |
+322 |   ) -> Result<EvaluatorWorkerRequest, BudgetError> {
+    |  __________________________________________________^
+323 | |     if request.schema != REQUEST_SCHEMA {
+324 | |         return Err(BudgetError::InvalidRequestSchema);
+...   |
+343 | |     Ok(request)
+344 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+    = note: `-D tigerstyle::assertion-density` implied by `-D assertion-density`
+    = help: to override `-D assertion-density` add `#[allow(tigerstyle::assertion_density)]`
+
+error: function `validate_worker_response` has 0 assertion(s) in 41 lines (need 2+)
+   --> crates/crunch-eval-budget-core/src/lib.rs:361:30
+    |
+361 |   ) -> Result<(), BudgetError> {
+    |  ______________________________^
+362 | |     if response.schema != RESPONSE_SCHEMA {
+363 | |         return Err(BudgetError::InvalidReference("response-schema"));
+...   |
+400 | |     Ok(())
+401 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: `capacity` looks like a quantity but has no unit suffix
+   --> crates/crunch-eval-budget-core/src/lib.rs:419:9
+    |
+419 |     let capacity = FRAME_HEADER_BYTES.checked_add(payload.len()).ok_or(BudgetError::FrameLengthOverflow)?;
+    |         ^^^^^^^^
+    |
+    = help: Tiger Style (Unit Suffixes): put the unit in the name of numeric quantities Example: timeout_ms
+    = note: structured suggestion applicability: HasPlaceholders
+    = note: see Tiger Style guide: Unit Suffixes
+    = note: `-D tigerstyle::numeric-units` implied by `-D numeric-units`
+    = help: to override `-D numeric-units` add `#[allow(tigerstyle::numeric_units)]`
+help: rename with an explicit unit suffix like `_ms`, `_secs`, or `_bytes`
+    |
+419 |     let capacity_<unit> = FRAME_HEADER_BYTES.checked_add(payload.len()).ok_or(BudgetError::FrameLengthOverflow)?;
+    |                 +++++++
+
+error: function `truncate_diagnostics` has 0 assertion(s) in 23 lines (need 2+)
+   --> crates/crunch-eval-budget-core/src/lib.rs:450:47
+    |
+450 |   ) -> Result<(Vec<String>, bool), BudgetError> {
+    |  _______________________________________________^
+451 | |     let item_limit = usize::try_from(diagnostics_max).map_err(|_| BudgetError::IntegerOverflow("diagnostics"))?;
+452 | |     let byte_limit =
+453 | |         usize::try_from(diagnostic_bytes_max).map_err(|_| BudgetError::IntegerOverflow("diagnostic-bytes"))?;
+...   |
+471 | |     Ok((result, is_truncated))
+472 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: `item_limit` looks like a quantity but has no unit suffix
+   --> crates/crunch-eval-budget-core/src/lib.rs:451:9
+    |
+451 |     let item_limit = usize::try_from(diagnostics_max).map_err(|_| BudgetError::IntegerOverflow("diagnostics"))?;
+    |         ^^^^^^^^^^
+    |
+    = help: Tiger Style (Unit Suffixes): put the unit in the name of numeric quantities Example: timeout_ms
+    = note: structured suggestion applicability: HasPlaceholders
+    = note: see Tiger Style guide: Unit Suffixes
+help: rename with an explicit unit suffix like `_ms`, `_secs`, or `_bytes`
+    |
+451 |     let item_limit_<unit> = usize::try_from(diagnostics_max).map_err(|_| BudgetError::IntegerOverflow("diagnostics"))?;
+    |                   +++++++
+
+error: `byte_limit` looks like a quantity but has no unit suffix
+   --> crates/crunch-eval-budget-core/src/lib.rs:452:9
+    |
+452 |     let byte_limit =
+    |         ^^^^^^^^^^
+    |
+    = help: Tiger Style (Unit Suffixes): put the unit in the name of numeric quantities Example: timeout_ms
+    = note: structured suggestion applicability: HasPlaceholders
+    = note: see Tiger Style guide: Unit Suffixes
+help: rename with an explicit unit suffix like `_ms`, `_secs`, or `_bytes`
+    |
+452 |     let byte_limit_<unit> =
+    |                   +++++++
+
+error: function `classify_terminal` has 0 assertion(s) in 29 lines (need 2+)
+   --> crates/crunch-eval-budget-core/src/lib.rs:474:72
+    |
+474 |   pub fn classify_terminal(facts: &TerminalFacts) -> TerminalDisposition {
+    |  ________________________________________________________________________^
+475 | |     if facts.teardown.cancellation_requested {
+476 | |         return if facts.teardown.reaped {
+477 | |             TerminalDisposition::Cancelled
+...   |
+502 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: function `build_report` has 0 assertion(s) in 22 lines (need 2+)
+   --> crates/crunch-eval-budget-core/src/lib.rs:533:50
+    |
+533 |   ) -> Result<EvaluationBudgetReport, BudgetError> {
+    |  __________________________________________________^
+534 | |     if !is_ref(request_ref, REQUEST_REF_PREFIX) {
+535 | |         return Err(BudgetError::InvalidReference("request-ref"));
+...   |
+553 | |     })
+554 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: function `validate_policy_limits` has 0 assertion(s) in 31 lines (need 2+)
+   --> crates/crunch-eval-budget-core/src/lib.rs:556:87
+    |
+556 |   fn validate_policy_limits(policy: &EvaluationBudgetPolicy) -> Result<(), BudgetError> {
+    |  _______________________________________________________________________________________^
+557 | |     let u64_limits = [
+558 | |         (policy.source_bytes_max, ABSOLUTE_SOURCE_BYTES_MAX, "source-bytes"),
+559 | |         (policy.diagnostic_bytes_max, ABSOLUTE_DIAGNOSTIC_BYTES_MAX, "diagnostic-bytes"),
+...   |
+585 | |     Ok(())
+586 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: `u64_limits` looks like a quantity but has no unit suffix
+   --> crates/crunch-eval-budget-core/src/lib.rs:557:9
+    |
+557 |     let u64_limits = [
+    |         ^^^^^^^^^^
+    |
+    = help: Tiger Style (Unit Suffixes): put the unit in the name of numeric quantities Example: timeout_ms
+    = note: structured suggestion applicability: HasPlaceholders
+    = note: see Tiger Style guide: Unit Suffixes
+help: rename with an explicit unit suffix like `_ms`, `_secs`, or `_bytes`
+    |
+557 |     let u64_limits_<unit> = [
+    |                   +++++++
+
+error: `u32_limits` looks like a quantity but has no unit suffix
+   --> crates/crunch-eval-budget-core/src/lib.rs:571:9
+    |
+571 |     let u32_limits = [
+    |         ^^^^^^^^^^
+    |
+    = help: Tiger Style (Unit Suffixes): put the unit in the name of numeric quantities Example: timeout_ms
+    = note: structured suggestion applicability: HasPlaceholders
+    = note: see Tiger Style guide: Unit Suffixes
+help: rename with an explicit unit suffix like `_ms`, `_secs`, or `_bytes`
+    |
+571 |     let u32_limits_<unit> = [
+    |                   +++++++
+
+error: condition has 3 boolean operators
+   --> crates/crunch-eval-budget-core/src/lib.rs:632:12
+    |
+632 |         if !path.starts_with('/') || path.contains("/../") || path.ends_with("/..") || path.contains('\0') {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Condition Decomposition): break multi-part conditions into named predicates or nested guards Example: if is_leader { if has_quorum { ... } }
+    = note: see Tiger Style guide: Condition Decomposition
+    = note: `-D tigerstyle::compound-condition` implied by `-D compound-condition`
+    = help: to override `-D compound-condition` add `#[allow(tigerstyle::compound_condition)]`
+
+error: function `hash_policy` has 0 assertion(s) in 29 lines (need 2+)
+   --> crates/crunch-eval-budget-core/src/lib.rs:670:80
+    |
+670 |   fn hash_policy(policy: &EvaluationBudgetPolicy) -> Result<String, BudgetError> {
+    |  ________________________________________________________________________________^
+671 | |     let mut hasher = blake3::Hasher::new();
+672 | |     hash_bytes(&mut hasher, POLICY_DOMAIN)?;
+673 | |     hash_string(&mut hasher, &policy.policy_id)?;
+...   |
+697 | |     Ok(format!("{POLICY_REF_PREFIX}{}", hasher.finalize().to_hex()))
+698 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: function `hash_request` has 0 assertion(s) in 25 lines (need 2+)
+   --> crates/crunch-eval-budget-core/src/lib.rs:700:82
+    |
+700 |   fn hash_request(request: &EvaluatorWorkerRequest) -> Result<String, BudgetError> {
+    |  __________________________________________________________________________________^
+701 | |     let mut hasher = blake3::Hasher::new();
+702 | |     hash_bytes(&mut hasher, REQUEST_DOMAIN)?;
+703 | |     hash_string(&mut hasher, &request.policy_ref)?;
+...   |
+723 | |     Ok(format!("{REQUEST_REF_PREFIX}{}", hasher.finalize().to_hex()))
+724 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+    Checking crunch-shell v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-shell)
+warning: `crunch-composition-core` (lib) generated 1 warning
+error: function `admit_command` has 0 assertion(s) in 52 lines (need 2+)
+   --> crates/mantle-portable-client-core/src/lib.rs:167:49
+    |
+167 |   ) -> Result<CommandAdmission, AdmissionBlocker> {
+    |  _________________________________________________^
+168 | |     let Some(profile) = find_command_profile(root) else {
+169 | |         return Err(blocker("portable-command-unclassified", root, "command has no reviewed platform profile"));
+170 | |     };
+...   |
+218 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+    = note: `-D tigerstyle::assertion-density` implied by `-D assertion-density`
+    = help: to override `-D assertion-density` add `#[allow(tigerstyle::assertion_density)]`
+
+error: function `plan_portable_build` has 0 assertion(s) in 54 lines (need 2+)
+   --> crates/mantle-portable-client-core/src/lib.rs:264:106
+    |
+264 |   pub fn plan_portable_build(facts: PortableBuildFacts<'_>) -> Result<PortableBuildPlan, AdmissionBlocker> {
+    |  __________________________________________________________________________________________________________^
+265 | |     validate_label("client", facts.client_platform)?;
+266 | |     validate_label("target", facts.target_platform)?;
+267 | |     if !facts.store_prefix.starts_with('/') || facts.store_prefix.len() > STORE_PREFIX_BYTES_MAX {
+...   |
+316 | |     })
+317 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: function `validate_observation` has 0 assertion(s) in 50 lines (need 2+)
+  --> crates/mantle-build-contract/src/admission.rs:46:32
+   |
+46 |   ) -> Result<(), ContractError> {
+   |  ________________________________^
+47 | |     // r[impl mantle.build_interchange.observation]
+48 | |     // r[impl mantle.build_interchange.products]
+49 | |     validate_request(request)?;
+...  |
+96 | |     Ok(())
+97 | | }
+   | |_^
+   |
+   = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+   = note: see Tiger Style guide: Assertion Density
+   = note: `-D tigerstyle::assertion-density` implied by `-D assertion-density`
+   = help: to override `-D assertion-density` add `#[allow(tigerstyle::assertion_density)]`
+
+error: function `observation_identity` has 0 assertion(s) in 36 lines (need 2+)
+   --> crates/mantle-build-contract/src/identity.rs:77:73
+    |
+ 77 |   pub fn observation_identity(observation: &BuildObservation) -> Identity {
+    |  _________________________________________________________________________^
+ 78 | |     let mut frame = Frame::new(OBSERVATION_DOMAIN);
+ 79 | |     frame.text("schema", &observation.schema);
+ 80 | |     frame.text("request", observation.request_identity.as_str());
+...   |
+111 | |     frame.finish()
+112 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: condition has 3 boolean operators
+  --> crates/mantle-build-contract/src/model.rs:79:12
+   |
+79 |           if !value.is_empty()
+   |  ____________^
+80 | |             && value.len() <= MAXIMUM_LABEL_BYTES
+81 | |             && value.bytes().all(|byte| {
+82 | |                 byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b':' | b'-')
+83 | |             })
+84 | |             && value.as_bytes().first().is_some_and(u8::is_ascii_lowercase)
+   | |___________________________________________________________________________^
+   |
+   = help: Tiger Style (Condition Decomposition): break multi-part conditions into named predicates or nested guards Example: if is_leader { if has_quorum { ... } }
+   = note: see Tiger Style guide: Condition Decomposition
+   = note: `-D tigerstyle::compound-condition` implied by `-D compound-condition`
+   = help: to override `-D compound-condition` add `#[allow(tigerstyle::compound_condition)]`
+
+    Checking crunch-attestation v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-attestation)
+    Checking crunch-project-core v0.1.0 (/home/brittonr/git/OnixResearch/mantle/.pi/worktrees/store-capability-migration/crates/crunch-project-core)
+error: 2 consecutive `bool` parameters are easy to swap by accident
+   --> crates/mantle-portable-client-core/src/lib.rs:220:1
+    |
+220 | / fn admission(
+221 | |     root: &str,
+222 | |     local_executor_allowed: bool,
+223 | |     remote_route_required: bool,
+...   |
+233 | | }
+    | |_^
+    |
+    = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+    = note: see Tiger Style guide: Explicit Interfaces
+    = note: `-D tigerstyle::ambiguous-params` implied by `-D ambiguous-params`
+    = help: to override `-D ambiguous-params` add `#[allow(tigerstyle::ambiguous_params)]`
+
+error: 3 consecutive `&str` parameters are easy to swap by accident
+   --> crates/mantle-portable-client-core/src/lib.rs:235:1
+    |
+235 | / fn blocker(code: &'static str, root: &str, detail: &'static str) -> AdmissionBlocker {
+236 | |     AdmissionBlocker {
+237 | |         code,
+238 | |         command_root: root.to_string(),
+...   |
+241 | | }
+    | |_^
+    |
+    = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+    = note: see Tiger Style guide: Explicit Interfaces
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+   --> crates/mantle-portable-client-core/src/lib.rs:319:1
+    |
+319 | / fn validate_label(field: &'static str, value: &str) -> Result<(), AdmissionBlocker> {
+320 | |     if value.is_empty() || value.len() > PLATFORM_LABEL_BYTES_MAX {
+321 | |         return Err(blocker("portable-platform-label-invalid", "build", match field {
+322 | |             "client" => "the client platform label is invalid",
+...   |
+326 | |     Ok(())
+327 | | }
+    | |_^
+    |
+    = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+    = note: see Tiger Style guide: Explicit Interfaces
+
+error: could not compile `mantle-portable-client-core` (lib) due to 5 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: unprotected unsigned addition may overflow
+  --> crates/mantle-build-contract/src/model.rs:37:27
+   |
+37 |         if value.len() == BLAKE3_PREFIX.len() + BLAKE3_HEX_LENGTH
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Overflow Protection): use checked or saturating arithmetic when overflow would change behavior Example: let total = a.checked_add(b)?;
+   = note: structured suggestion applicability: MaybeIncorrect
+   = note: see Tiger Style guide: Overflow Protection
+   = note: `-D tigerstyle::raw-arithmetic-overflow` implied by `-D raw-arithmetic-overflow`
+   = help: to override `-D raw-arithmetic-overflow` add `#[allow(tigerstyle::raw_arithmetic_overflow)]`
+help: replace with saturating addition
+   |
+37 -         if value.len() == BLAKE3_PREFIX.len() + BLAKE3_HEX_LENGTH
+37 +         if value.len() == (BLAKE3_PREFIX.len()).saturating_add(BLAKE3_HEX_LENGTH)
+   |
+
+error: boolean binding `shape_is_valid` should have a predicate prefix
+   --> crates/crunch-eval-budget-core/src/lib.rs:404:9
+    |
+404 |     let shape_is_valid = match response.status {
+    |         ^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+    = note: structured suggestion applicability: MaybeIncorrect
+    = note: see Tiger Style guide: Positive Predicates
+    = note: `-D tigerstyle::bool-naming` implied by `-D bool-naming`
+    = help: to override `-D bool-naming` add `#[allow(tigerstyle::bool_naming)]`
+help: rename binding to `is_shape_is_valid`
+    |
+404 |     let is_shape_is_valid = match response.status {
+    |         +++
+
+error: `usize` in public API — use `u32` or `u64` for cross-platform consistency
+   --> crates/crunch-eval-budget-core/src/lib.rs:426:1
+    |
+426 | / pub fn decode_frame_header(header: &[u8], bytes_max: u64) -> Result<usize, BudgetError> {
+427 | |     if header.len() != FRAME_HEADER_BYTES {
+428 | |         return Err(BudgetError::FrameHeaderIncomplete);
+...   |
+436 | |     usize::try_from(declared).map_err(|_| BudgetError::FrameLengthOverflow)
+437 | | }
+    | |_^
+    |
+    = help: Tiger Style (Cross-Platform APIs): use fixed-width integers at API boundaries instead of `usize` or `isize` Example: pub fn get(index: u32) -> Option<&Item>
+    = note: see Tiger Style guide: Explicit Types
+    = note: `-D tigerstyle::usize-in-public-api` implied by `-D usize-in-public-api`
+    = help: to override `-D usize-in-public-api` add `#[allow(tigerstyle::usize_in_public_api)]`
+
+error: `usize` in public API — use `u32` or `u64` for cross-platform consistency
+   --> crates/crunch-eval-budget-core/src/lib.rs:439:1
+    |
+439 | / pub fn reject_trailing_data(trailing_byte_count: usize) -> Result<(), BudgetError> {
+440 | |     if trailing_byte_count > 0 {
+441 | |         return Err(BudgetError::TrailingData);
+...   |
+444 | | }
+    | |_^
+    |
+    = help: Tiger Style (Cross-Platform APIs): use fixed-width integers at API boundaries instead of `usize` or `isize` Example: pub fn get(index: u32) -> Option<&Item>
+    = note: see Tiger Style guide: Explicit Types
+
+error: function has 7 parameters (limit: 5) — consider an options struct
+   --> crates/crunch-eval-budget-core/src/lib.rs:504:1
+    |
+504 | / pub fn metric_fact(
+505 | |     name: &str,
+506 | |     unit: &str,
+507 | |     role: &str,
+...   |
+522 | | }
+    | |_^
+    |
+    = help: Tiger Style (Simple Interfaces): group many parameters into a named options struct instead of a long positional signature Example: fn connect(opts: ConnectOptions) -> ...
+    = note: see Tiger Style guide: Explicit Interfaces
+    = note: `-D tigerstyle::too-many-parameters` implied by `-D too-many-parameters`
+    = help: to override `-D too-many-parameters` add `#[allow(tigerstyle::too_many_parameters)]`
+
+error: 3 consecutive `&str` parameters are easy to swap by accident
+   --> crates/crunch-eval-budget-core/src/lib.rs:504:1
+    |
+504 | / pub fn metric_fact(
+505 | |     name: &str,
+506 | |     unit: &str,
+507 | |     role: &str,
+...   |
+522 | | }
+    | |_^
+    |
+    = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+    = note: see Tiger Style guide: Explicit Interfaces
+    = note: `-D tigerstyle::ambiguous-params` implied by `-D ambiguous-params`
+    = help: to override `-D ambiguous-params` add `#[allow(tigerstyle::ambiguous_params)]`
+
+error: function has 8 parameters (limit: 5) — consider an options struct
+   --> crates/crunch-eval-budget-core/src/lib.rs:524:1
+    |
+524 | / pub fn build_report(
+525 | |     request_ref: &str,
+526 | |     policy_ref: &str,
+527 | |     mode: EvaluationMode,
+...   |
+553 | |     })
+554 | | }
+    | |_^
+    |
+    = help: Tiger Style (Simple Interfaces): group many parameters into a named options struct instead of a long positional signature Example: fn connect(opts: ConnectOptions) -> ...
+    = note: see Tiger Style guide: Explicit Interfaces
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+   --> crates/crunch-eval-budget-core/src/lib.rs:524:1
+    |
+524 | / pub fn build_report(
+525 | |     request_ref: &str,
+526 | |     policy_ref: &str,
+527 | |     mode: EvaluationMode,
+...   |
+553 | |     })
+554 | | }
+    | |_^
+    |
+    = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+    = note: see Tiger Style guide: Explicit Interfaces
+
+error: 2 consecutive `u64` parameters are easy to swap by accident
+   --> crates/crunch-eval-budget-core/src/lib.rs:588:1
+    |
+588 | / fn validate_limit(value: u64, absolute_max: u64, name: &'static str) -> Result<(), BudgetError> {
+589 | |     if value == 0 {
+590 | |         return Err(BudgetError::InvalidLimit(name));
+...   |
+595 | |     Ok(())
+596 | | }
+    | |_^
+    |
+    = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+    = note: see Tiger Style guide: Explicit Interfaces
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+   --> crates/crunch-eval-budget-core/src/lib.rs:761:1
+    |
+761 | / fn is_ref(value: &str, prefix: &str) -> bool {
+762 | |     value.strip_prefix(prefix).is_some_and(|digest| {
+763 | |         digest.len() == BLAKE3_HEX_CHARS
+764 | |             && digest.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+765 | |     })
+766 | | }
+    | |_^
+    |
+    = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+    = note: see Tiger Style guide: Explicit Interfaces
+
+error: could not compile `mantle-build-contract` (lib) due to 4 previous errors
+error: could not compile `crunch-eval-budget-core` (lib) due to 23 previous errors
+error: function `seal_group_recheck` is 91 lines (limit: 70)
+    --> crates/mantlepkgs-core/src/versions.rs:1744:47
+     |
+1744 |   ) -> Result<VersionGroupRecheck, CoreFailure> {
+     |  _______________________________________________^
+1745 | |     require_equal(&recheck.schema, VERSION_RECHECK_SCHEMA, "recheck.schema", "unsupported-version-recheck-schema")?;
+1746 | |     require_equal(
+1747 | |         &recheck.group_identity_blake3,
+...    |
+1833 | |     Ok(sealed)
+1834 | | }
+     | |_^
+     |
+     = help: Tiger Style (Function Length): split long functions into named helpers at invariant or phase boundaries
+     = note: see Tiger Style guide: Function Length
+     = note: `-D tigerstyle::function-length` implied by `-D function-length`
+     = help: to override `-D function-length` add `#[allow(tigerstyle::function_length)]`
+
+error: function `validate_plan_header` has 0 assertion(s) in 29 lines (need 2+)
+   --> crates/crunch-release-core/src/chapter_transport.rs:213:111
+    |
+213 |   fn validate_plan_header(entries: &[ChapterTransportEntryInput], digest: &str) -> Vec<ChapterTransportBlocker> {
+    |  _______________________________________________________________________________________________________________^
+214 | |     let mut blockers = Vec::new();
+215 | |     if !is_blake3_hex(digest) {
+216 | |         blockers.push(blocker(
+...   |
+240 | |     blockers
+241 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+    = note: `-D tigerstyle::assertion-density` implied by `-D assertion-density`
+    = help: to override `-D assertion-density` add `#[allow(tigerstyle::assertion_density)]`
+
+error: function `validate_input_shapes` has 0 assertion(s) in 32 lines (need 2+)
+   --> crates/crunch-release-core/src/chapter_transport.rs:243:98
+    |
+243 |   fn validate_input_shapes(entries: &[ChapterTransportEntryInput]) -> Vec<ChapterTransportBlocker> {
+    |  __________________________________________________________________________________________________^
+244 | |     let mut blockers = Vec::new();
+245 | |     let mut manifest_count = 0_u32;
+246 | |     for entry in entries {
+...   |
+273 | |     blockers
+274 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: function `validate_entry_shape` has 0 assertion(s) in 35 lines (need 2+)
+   --> crates/crunch-release-core/src/chapter_transport.rs:276:106
+    |
+276 |   fn validate_entry_shape(entry: &ChapterTransportEntryInput, blockers: &mut Vec<ChapterTransportBlocker>) {
+    |  __________________________________________________________________________________________________________^
+277 | |     if entry.mode & !CHAPTER_TRANSPORT_PERMISSION_MODE_MASK != 0 {
+278 | |         blockers.push(blocker(
+279 | |             ChapterTransportBlockerKind::InvalidEntryMode,
+...   |
+310 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: function `group_for_path` has 0 assertion(s) in 28 lines (need 2+)
+   --> crates/crunch-release-core/src/chapter_transport.rs:395:43
+    |
+395 |   fn group_for_path(path: &str) -> GroupKey {
+    |  ___________________________________________^
+396 | |     if path == CHAPTER_TRANSPORT_MANIFEST_PATH {
+397 | |         return GroupKey {
+398 | |             role: ChapterTransportRole::Control,
+...   |
+422 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: function `chapter_totals` has 0 assertion(s) in 48 lines (need 2+)
+   --> crates/crunch-release-core/src/chapter_transport.rs:475:112
+    |
+475 |   fn chapter_totals(chapters: &[ChapterTransportChapter]) -> Result<ChapterTotals, Vec<ChapterTransportBlocker>> {
+    |  ________________________________________________________________________________________________________________^
+476 | |     let chapter_count = u32::try_from(chapters.len()).map_err(|_| {
+477 | |         vec![blocker(
+478 | |             ChapterTransportBlockerKind::ChapterCountOverflow,
+...   |
+521 | |     })
+522 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: function `flatten_index_members` has 0 assertion(s) in 24 lines (need 2+)
+   --> crates/crunch-release-core/src/chapter_transport.rs:563:69
+    |
+563 |   ) -> Result<Vec<ChapterTransportEntryInput>, ChapterTransportError> {
+    |  _____________________________________________________________________^
+564 | |     let member_capacity = usize::try_from(index.member_count)
+565 | |         .map_err(|_| transport_error("chapter transport index member count overflowed usize"))?;
+566 | |     let mut inputs = Vec::with_capacity(member_capacity);
+...   |
+585 | |     Ok(inputs)
+586 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: `member_capacity` looks like a quantity but has no unit suffix
+   --> crates/crunch-release-core/src/chapter_transport.rs:564:9
+    |
+564 |     let member_capacity = usize::try_from(index.member_count)
+    |         ^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Unit Suffixes): put the unit in the name of numeric quantities Example: timeout_ms
+    = note: structured suggestion applicability: HasPlaceholders
+    = note: see Tiger Style guide: Unit Suffixes
+    = note: `-D tigerstyle::numeric-units` implied by `-D numeric-units`
+    = help: to override `-D numeric-units` add `#[allow(tigerstyle::numeric_units)]`
+help: rename with an explicit unit suffix like `_ms`, `_secs`, or `_bytes`
+    |
+564 |     let member_capacity_<unit> = usize::try_from(index.member_count)
+    |                        +++++++
+
+error: function `validate_chapter_transport_receipt` has 0 assertion(s) in 26 lines (need 2+)
+   --> crates/crunch-release-core/src/chapter_transport.rs:644:115
+    |
+644 |   pub fn validate_chapter_transport_receipt(receipt: &ChapterTransportReceipt) -> Result<(), ChapterTransportError> {
+    |  ___________________________________________________________________________________________________________________^
+645 | |     if receipt.schema != CHAPTER_TRANSPORT_RECEIPT_SCHEMA || receipt.format != CHAPTER_TRANSPORT_FORMAT {
+646 | |         return Err(transport_error("unsupported chapter transport receipt schema or format"));
+...   |
+668 | |     Ok(())
+669 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: function `bounded_tree_limits` has 0 assertion(s) in 30 lines (need 2+)
+   --> crates/crunch-release-core/src/tree_copy.rs:124:115
+    |
+124 |   pub fn bounded_tree_limits(limits: TreeCopyLimits) -> Result<bounded_tree_core::TreeLimits, Vec<TreeCopyBlocker>> {
+    |  ___________________________________________________________________________________________________________________^
+125 | |     let mut blockers = Vec::new();
+126 | |     if limits.entries_count_max == 0 {
+127 | |         blockers.push(blocker(TreeCopyBlockerKind::InvalidEntryLimit, None, "tree copy entry limit must be positive"));
+...   |
+152 | |     })
+153 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: function `plan_tree_copy` has 0 assertion(s) in 22 lines (need 2+)
+   --> crates/crunch-release-core/src/tree_copy.rs:212:49
+    |
+212 |   ) -> Result<TreeCopyPlan, Vec<TreeCopyBlocker>> {
+    |  _________________________________________________^
+213 | |     let shared_limits = bounded_tree_limits(limits)?;
+214 | |     let mut blockers = Vec::with_capacity(observations.len());
+215 | |     let mut shared_observations = Vec::with_capacity(observations.len());
+...   |
+232 | |     bounded_tree_plan(&plan)
+233 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: `shared_limits` looks like a quantity but has no unit suffix
+   --> crates/crunch-release-core/src/tree_copy.rs:213:9
+    |
+213 |     let shared_limits = bounded_tree_limits(limits)?;
+    |         ^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Unit Suffixes): put the unit in the name of numeric quantities Example: timeout_ms
+    = note: structured suggestion applicability: HasPlaceholders
+    = note: see Tiger Style guide: Unit Suffixes
+help: rename with an explicit unit suffix like `_ms`, `_secs`, or `_bytes`
+    |
+213 |     let shared_limits_<unit> = bounded_tree_limits(limits)?;
+    |                      +++++++
+
+error: function `path_components` has 0 assertion(s) in 23 lines (need 2+)
+   --> crates/crunch-release-core/src/tree_copy.rs:263:73
+    |
+263 |   fn path_components(path: &str) -> Result<Vec<Vec<u8>>, TreeCopyBlocker> {
+    |  _________________________________________________________________________^
+264 | |     if path.is_empty() {
+265 | |         return Err(path_blocker(TreeCopyBlockerKind::EmptyPath, path, "tree copy path must not be empty"));
+...   |
+284 | |     Ok(path.split('/').map(|component| component.as_bytes().to_vec()).collect())
+285 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: function `validate_legacy_target` has 0 assertion(s) in 24 lines (need 2+)
+   --> crates/crunch-release-core/src/tree_copy.rs:307:93
+    |
+307 |   fn validate_legacy_target(relative_path: &str, target: &str) -> Result<(), TreeCopyBlocker> {
+    |  _____________________________________________________________________________________________^
+308 | |     if target.is_empty() || target.starts_with('/') {
+309 | |         return Err(path_blocker(
+310 | |             TreeCopyBlockerKind::AbsoluteSymlinkTarget,
+...   |
+329 | |     Ok(())
+330 | | }
+    | |_^
+    |
+    = help: Tiger Style (Assertion Density): add enough assertions to make local invariants visible near the logic they defend
+    = note: see Tiger Style guide: Assertion Density
+
+error: collection grows in loop without a prior reservation or explicit local bound
+   --> crates/mantlepkgs-core/src/versions.rs:679:13
+    |
+679 |             blocked.push(receipt.receipt_identity_blake3.clone());
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Bounded Resource Growth): reserve collection capacity or add an explicit local length bound before growing it in a loop Example: let mut items = Vec::with_capacity(limit);
+    = note: see Tiger Style guide: Bounded Resource Growth
+    = note: `-D tigerstyle::unbounded-collection-growth` implied by `-D unbounded-collection-growth`
+    = help: to override `-D unbounded-collection-growth` add `#[allow(tigerstyle::unbounded_collection_growth)]`
+
+error: `as usize` from `u32` is platform-dependent
+    --> crates/mantlepkgs-core/src/versions.rs:1093:46
+     |
+1093 |     debug_assert!(cohort.attributes.len() <= HARD_MAX_ATTRIBUTES as usize || !diagnostics.is_empty());
+     |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: Tiger Style (Explicit Types): use explicit-width types at boundaries instead of `usize` or `isize` conversions Example: let len: u32 = value.try_into()?;
+     = note: structured suggestion applicability: MaybeIncorrect
+     = note: see Tiger Style guide: Explicit Types
+     = note: `-D tigerstyle::platform-dependent-cast` implied by `-D platform-dependent-cast`
+     = help: to override `-D platform-dependent-cast` add `#[allow(tigerstyle::platform_dependent_cast)]`
+help: replace with `usize::try_from(...)`
+     |
+1093 -     debug_assert!(cohort.attributes.len() <= HARD_MAX_ATTRIBUTES as usize || !diagnostics.is_empty());
+1093 +     debug_assert!(cohort.attributes.len() <= usize::try_from(HARD_MAX_ATTRIBUTES)? || !diagnostics.is_empty());
+     |
+
+error: `as usize` from `u32` is platform-dependent
+    --> crates/mantlepkgs-core/src/versions.rs:1145:53
+     |
+1145 |     debug_assert!(observation.reason_codes.len() <= HARD_MAX_DIAGNOSTICS as usize || !diagnostics.is_empty());
+     |                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: Tiger Style (Explicit Types): use explicit-width types at boundaries instead of `usize` or `isize` conversions Example: let len: u32 = value.try_into()?;
+     = note: structured suggestion applicability: MaybeIncorrect
+     = note: see Tiger Style guide: Explicit Types
+help: replace with `usize::try_from(...)`
+     |
+1145 -     debug_assert!(observation.reason_codes.len() <= HARD_MAX_DIAGNOSTICS as usize || !diagnostics.is_empty());
+1145 +     debug_assert!(observation.reason_codes.len() <= usize::try_from(HARD_MAX_DIAGNOSTICS)? || !diagnostics.is_empty());
+     |
+
+error: collection grows in loop without a prior reservation or explicit local bound
+    --> crates/mantlepkgs-core/src/versions.rs:1197:13
+     |
+1197 |             entries.insert(key, entry);
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: Tiger Style (Bounded Resource Growth): reserve collection capacity or add an explicit local length bound before growing it in a loop Example: let mut items = Vec::with_capacity(limit);
+     = note: see Tiger Style guide: Bounded Resource Growth
+
+error: `.expect()` in production code will panic on failure
+    --> crates/mantlepkgs-core/src/versions.rs:1183:23
+     |
+1183 |         let version = observation.reported_version.as_ref().expect("validated success has a version");
+     |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: Tiger Style (Error Handling): propagate or handle absence explicitly instead of panicking with `unwrap` or `expect` Example: let value = maybe?;
+     = note: see Tiger Style guide: Error Handling
+     = note: `-D tigerstyle::no-unwrap` implied by `-D no-unwrap`
+     = help: to override `-D no-unwrap` add `#[allow(tigerstyle::no_unwrap)]`
+
+error: boolean binding `replace` should have a predicate prefix
+    --> crates/mantlepkgs-core/src/versions.rs:1195:13
+     |
+1195 |         let replace = entries.get(&key).is_none_or(|current| entry.published_order > current.published_order);
+     |             ^^^^^^^
+     |
+     = help: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+     = note: structured suggestion applicability: MaybeIncorrect
+     = note: see Tiger Style guide: Positive Predicates
+     = note: `-D tigerstyle::bool-naming` implied by `-D bool-naming`
+     = help: to override `-D bool-naming` add `#[allow(tigerstyle::bool_naming)]`
+help: rename binding to `is_replace`
+     |
+1195 |         let is_replace = entries.get(&key).is_none_or(|current| entry.published_order > current.published_order);
+     |             +++
+
+error: `as usize` from `u32` is platform-dependent
+    --> crates/mantlepkgs-core/src/versions.rs:1202:22
+     |
+1202 |     debug_assert_eq!(counts.iter().copied().sum::<u32>() as usize, observations.len());
+     |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: Tiger Style (Explicit Types): use explicit-width types at boundaries instead of `usize` or `isize` conversions Example: let len: u32 = value.try_into()?;
+     = note: structured suggestion applicability: MaybeIncorrect
+     = note: see Tiger Style guide: Explicit Types
+help: replace with `usize::try_from(...)`
+     |
+1202 -     debug_assert_eq!(counts.iter().copied().sum::<u32>() as usize, observations.len());
+1202 +     debug_assert_eq!(usize::try_from(counts.iter().copied().sum::<u32>())?, observations.len());
+     |
+
+error: unprotected unsigned addition may overflow
+    --> crates/mantlepkgs-core/src/versions.rs:1511:35
+     |
+1511 |     debug_assert_eq!(names.len(), receipt.aliases.len() + 1);
+     |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: Tiger Style (Overflow Protection): use checked or saturating arithmetic when overflow would change behavior Example: let total = a.checked_add(b)?;
+     = note: structured suggestion applicability: MaybeIncorrect
+     = note: see Tiger Style guide: Overflow Protection
+     = note: `-D tigerstyle::raw-arithmetic-overflow` implied by `-D raw-arithmetic-overflow`
+     = help: to override `-D raw-arithmetic-overflow` add `#[allow(tigerstyle::raw_arithmetic_overflow)]`
+help: replace with saturating addition
+     |
+1511 -     debug_assert_eq!(names.len(), receipt.aliases.len() + 1);
+1511 +     debug_assert_eq!(names.len(), (receipt.aliases.len()).saturating_add(1));
+     |
+
+error: `as usize` from `u32` is platform-dependent
+    --> crates/mantlepkgs-core/src/versions.rs:1535:45
+     |
+1535 |         debug_assert!(reason_codes.len() <= HARD_MAX_DIAGNOSTICS as usize);
+     |                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: Tiger Style (Explicit Types): use explicit-width types at boundaries instead of `usize` or `isize` conversions Example: let len: u32 = value.try_into()?;
+     = note: structured suggestion applicability: MaybeIncorrect
+     = note: see Tiger Style guide: Explicit Types
+help: replace with `usize::try_from(...)`
+     |
+1535 -         debug_assert!(reason_codes.len() <= HARD_MAX_DIAGNOSTICS as usize);
+1535 +         debug_assert!(reason_codes.len() <= usize::try_from(HARD_MAX_DIAGNOSTICS)?);
+     |
+
+error: unprotected unsigned addition may overflow
+    --> crates/mantlepkgs-core/src/versions.rs:1737:41
+     |
+1737 |     debug_assert_eq!(receipt_ids.len(), usize::try_from(selector_count).unwrap_or(usize::MAX) + blocked.len());
+     |                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: Tiger Style (Overflow Protection): use checked or saturating arithmetic when overflow would change behavior Example: let total = a.checked_add(b)?;
+     = note: structured suggestion applicability: MaybeIncorrect
+     = note: see Tiger Style guide: Overflow Protection
+help: replace with saturating addition
+     |
+1737 -     debug_assert_eq!(receipt_ids.len(), usize::try_from(selector_count).unwrap_or(usize::MAX) + blocked.len());
+1737 +     debug_assert_eq!(receipt_ids.len(), (usize::try_from(selector_count).unwrap_or(usize::MAX)).saturating_add(blocked.len()));
+     |
+
+error: extreme sentinel fallback masks absence or failure
+    --> crates/mantlepkgs-core/src/versions.rs:1737:41
+     |
+1737 |     debug_assert_eq!(receipt_ids.len(), usize::try_from(selector_count).unwrap_or(usize::MAX) + blocked.len());
+     |                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: Tiger Style (safety): branch explicitly, propagate the missing/error state, or emit tagged fallback text instead of <int>::MAX/<int>::MIN. Example: match u64::try_from(command_index) { Ok(i) => format!("recent_{i}"), Err(_) => "recent_missing_index".to_string() }
+     = note: see Tiger Style guide: make invalid state explicit
+     = note: `-D tigerstyle::sentinel-fallback` implied by `-D sentinel-fallback`
+     = help: to override `-D sentinel-fallback` add `#[allow(tigerstyle::sentinel_fallback)]`
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:1971:1
+     |
+1971 | / fn collect_text(value: &str, path: &str, max_bytes: u32, diagnostics: &mut Vec<Diagnostic>) {
+1972 | |     let exceeds = usize::try_from(max_bytes).map_or(true, |maximum| value.len() > maximum);
+1973 | |     if value.is_empty() || exceeds || value.chars().any(char::is_control) {
+1974 | |         diagnostics.push(Diagnostic::new(
+...    |
+1980 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+     = note: `-D tigerstyle::ambiguous-params` implied by `-D ambiguous-params`
+     = help: to override `-D ambiguous-params` add `#[allow(tigerstyle::ambiguous_params)]`
+
+error: boolean binding `exceeds` should have a predicate prefix
+    --> crates/mantlepkgs-core/src/versions.rs:1972:9
+     |
+1972 |     let exceeds = usize::try_from(max_bytes).map_or(true, |maximum| value.len() > maximum);
+     |         ^^^^^^^
+     |
+     = help: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+     = note: structured suggestion applicability: MaybeIncorrect
+     = note: see Tiger Style guide: Positive Predicates
+help: rename binding to `is_exceeds`
+     |
+1972 |     let is_exceeds = usize::try_from(max_bytes).map_or(true, |maximum| value.len() > maximum);
+     |         +++
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:1982:1
+     |
+1982 | / fn collect_attribute(value: &str, path: &str, diagnostics: &mut Vec<Diagnostic>) {
+1983 | |     let valid = !value.is_empty()
+1984 | |         && value.len() <= HARD_MAX_TEXT_BYTES as usize
+1985 | |         && value.split('.').all(|segment| {
+...    |
+1996 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: boolean binding `valid` should have a predicate prefix
+    --> crates/mantlepkgs-core/src/versions.rs:1983:9
+     |
+1983 |     let valid = !value.is_empty()
+     |         ^^^^^
+     |
+     = help: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+     = note: structured suggestion applicability: MaybeIncorrect
+     = note: see Tiger Style guide: Positive Predicates
+help: rename binding to `is_valid`
+     |
+1983 |     let is_valid = !value.is_empty()
+     |         +++
+
+error: `as usize` from `u32` is platform-dependent
+    --> crates/mantlepkgs-core/src/versions.rs:1984:27
+     |
+1984 |         && value.len() <= HARD_MAX_TEXT_BYTES as usize
+     |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: Tiger Style (Explicit Types): use explicit-width types at boundaries instead of `usize` or `isize` conversions Example: let len: u32 = value.try_into()?;
+     = note: structured suggestion applicability: MaybeIncorrect
+     = note: see Tiger Style guide: Explicit Types
+help: replace with `usize::try_from(...)`
+     |
+1984 -         && value.len() <= HARD_MAX_TEXT_BYTES as usize
+1984 +         && value.len() <= usize::try_from(HARD_MAX_TEXT_BYTES)?
+     |
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:1998:1
+     |
+1998 | / fn collect_safe_relative_path(value: &str, path: &str, max_bytes: u32, diagnostics: &mut Vec<Diagnostic>) {
+1999 | |     collect_text(value, path, max_bytes, diagnostics);
+2000 | |     let unsafe_path = value.starts_with('/')
+2001 | |         || value.ends_with('/')
+...    |
+2013 | |     debug_assert!(value.is_empty() || !value.contains("..") || !diagnostics.is_empty());
+2014 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: boolean binding `unsafe_path` should have a predicate prefix
+    --> crates/mantlepkgs-core/src/versions.rs:2000:9
+     |
+2000 |     let unsafe_path = value.starts_with('/')
+     |         ^^^^^^^^^^^
+     |
+     = help: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+     = note: structured suggestion applicability: MaybeIncorrect
+     = note: see Tiger Style guide: Positive Predicates
+help: rename binding to `is_unsafe_path`
+     |
+2000 |     let is_unsafe_path = value.starts_with('/')
+     |         +++
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2016:1
+     |
+2016 | / fn collect_stable_code(value: &str, path: &str, max_bytes: u32, diagnostics: &mut Vec<Diagnostic>) {
+2017 | |     collect_text(value, path, max_bytes, diagnostics);
+2018 | |     if !value
+2019 | |         .chars()
+...    |
+2028 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2030:1
+     |
+2030 | / fn collect_exact_revision(value: &str, path: &str, diagnostics: &mut Vec<Diagnostic>) {
+2031 | |     if !is_lower_hex(value, GIT_REVISION_HEX_CHARS) {
+2032 | |         diagnostics.push(Diagnostic::new(
+2033 | |             "floating-version-revision",
+...    |
+2038 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2040:1
+     |
+2040 | / fn collect_nar_hash(value: &str, path: &str, diagnostics: &mut Vec<Diagnostic>) {
+2041 | |     let payload = value.strip_prefix(NIX_SHA256_PREFIX);
+2042 | |     let valid = payload.is_some_and(|digest| {
+2043 | |         digest.len() == NIX_SHA256_BASE64_CHARS
+...    |
+2055 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: boolean binding `valid` should have a predicate prefix
+    --> crates/mantlepkgs-core/src/versions.rs:2042:9
+     |
+2042 |     let valid = payload.is_some_and(|digest| {
+     |         ^^^^^
+     |
+     = help: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+     = note: structured suggestion applicability: MaybeIncorrect
+     = note: see Tiger Style guide: Positive Predicates
+help: rename binding to `is_valid`
+     |
+2042 |     let is_valid = payload.is_some_and(|digest| {
+     |         +++
+
+error: 4 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2057:1
+     |
+2057 | / fn collect_equal(actual: &str, expected: &str, path: &str, code: &str, diagnostics: &mut Vec<Diagnostic>) {
+2058 | |     if actual != expected {
+2059 | |         diagnostics.push(Diagnostic::new(code, path, "the value differs from the required binding"));
+2060 | |     }
+2061 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: function has 6 parameters (limit: 5) — consider an options struct
+    --> crates/mantlepkgs-core/src/versions.rs:2063:1
+     |
+2063 | / fn collect_bounded_count(
+2064 | |     count: usize,
+2065 | |     named_limit: u32,
+2066 | |     hard_limit: u32,
+...    |
+2074 | | }
+     | |_^
+     |
+     = help: Tiger Style (Simple Interfaces): group many parameters into a named options struct instead of a long positional signature Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+     = note: `-D tigerstyle::too-many-parameters` implied by `-D too-many-parameters`
+     = help: to override `-D too-many-parameters` add `#[allow(tigerstyle::too_many_parameters)]`
+
+error: 2 consecutive `u32` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2063:1
+     |
+2063 | / fn collect_bounded_count(
+2064 | |     count: usize,
+2065 | |     named_limit: u32,
+2066 | |     hard_limit: u32,
+...    |
+2074 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: 4 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2076:1
+     |
+2076 | / fn require_equal(actual: &str, expected: &str, path: &str, code: &str) -> Result<(), CoreFailure> {
+2077 | |     if actual == expected {
+2078 | |         Ok(())
+2079 | |     } else {
+...    |
+2082 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2084:1
+     |
+2084 | / fn require_text(value: &str, path: &str, max_bytes: u32) -> Result<(), CoreFailure> {
+2085 | |     let mut diagnostics = Vec::new();
+2086 | |     collect_text(value, path, max_bytes, &mut diagnostics);
+2087 | |     if diagnostics.is_empty() {
+...    |
+2092 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2094:1
+     |
+2094 | / fn require_attribute(value: &str, path: &str) -> Result<(), CoreFailure> {
+2095 | |     let mut diagnostics = Vec::new();
+2096 | |     collect_attribute(value, path, &mut diagnostics);
+2097 | |     if diagnostics.is_empty() {
+...    |
+2102 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2104:1
+     |
+2104 | / fn require_selector(value: &str, path: &str, max_bytes: u32) -> Result<(), CoreFailure> {
+2105 | |     require_text(value, path, max_bytes)?;
+2106 | |     let invalid = value.starts_with('.')
+2107 | |         || value.ends_with('.')
+...    |
+2116 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: boolean binding `invalid` should have a predicate prefix
+    --> crates/mantlepkgs-core/src/versions.rs:2106:9
+     |
+2106 |     let invalid = value.starts_with('.')
+     |         ^^^^^^^
+     |
+     = help: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+     = note: structured suggestion applicability: MaybeIncorrect
+     = note: see Tiger Style guide: Positive Predicates
+help: rename binding to `is_invalid`
+     |
+2106 |     let is_invalid = value.starts_with('.')
+     |         +++
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2118:1
+     |
+2118 | / fn require_blake3(value: &str, path: &str) -> Result<(), CoreFailure> {
+2119 | |     if is_blake3(value) {
+2120 | |         Ok(())
+2121 | |     } else {
+...    |
+2124 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2126:1
+     |
+2126 | / fn require_exact_revision(value: &str, path: &str) -> Result<(), CoreFailure> {
+2127 | |     let mut diagnostics = Vec::new();
+2128 | |     collect_exact_revision(value, path, &mut diagnostics);
+2129 | |     if diagnostics.is_empty() {
+...    |
+2134 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2136:1
+     |
+2136 | / fn require_nar_hash(value: &str, path: &str) -> Result<(), CoreFailure> {
+2137 | |     let mut diagnostics = Vec::new();
+2138 | |     collect_nar_hash(value, path, &mut diagnostics);
+2139 | |     if diagnostics.is_empty() {
+...    |
+2144 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: 2 consecutive `u32` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2146:1
+     |
+2146 | / fn require_bounded_count(
+2147 | |     count: usize,
+2148 | |     named_limit: u32,
+2149 | |     hard_limit: u32,
+...    |
+2158 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: 4 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2160:1
+     |
+2160 | / fn reject_stale_identity(supplied: &str, expected: &str, path: &str, code: &str) -> Result<(), CoreFailure> {
+2161 | |     if supplied.is_empty() || supplied == expected {
+2162 | |         Ok(())
+2163 | |     } else {
+...    |
+2166 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: 2 consecutive `usize` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2178:1
+     |
+2178 | / fn bounded_product(left: usize, right: usize, named_limit: u32, code: &str) -> Result<usize, CoreFailure> {
+2179 | |     let product = left
+2180 | |         .checked_mul(right)
+2181 | |         .ok_or_else(|| failure(code, "observations", "the observation count overflowed"))?;
+...    |
+2185 | |     Ok(product)
+2186 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: 3 consecutive `&str` parameters are easy to swap by accident
+    --> crates/mantlepkgs-core/src/versions.rs:2200:1
+     |
+2200 | / fn failure(code: &str, path: &str, message: &str) -> CoreFailure {
+2201 | |     CoreFailure::from_diagnostic(Diagnostic::new(code, path, message))
+2202 | | }
+     | |_^
+     |
+     = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+     = note: see Tiger Style guide: Explicit Interfaces
+
+error: could not compile `mantlepkgs-core` (lib) due to 38 previous errors
+error: unprotected unsigned multiplication may overflow
+  --> crates/crunch-release-core/src/chapter_transport.rs:27:52
+   |
+27 | pub const CHAPTER_TRANSPORT_MAX_INDEX_BYTES: u64 = 32 * 1_024 * 1_024;
+   |                                                    ^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Overflow Protection): use checked or saturating arithmetic when overflow would change behavior Example: let total = a.checked_add(b)?;
+   = note: structured suggestion applicability: MaybeIncorrect
+   = note: see Tiger Style guide: Overflow Protection
+   = note: `-D tigerstyle::raw-arithmetic-overflow` implied by `-D raw-arithmetic-overflow`
+   = help: to override `-D raw-arithmetic-overflow` add `#[allow(tigerstyle::raw_arithmetic_overflow)]`
+help: replace with saturating multiplication
+   |
+27 - pub const CHAPTER_TRANSPORT_MAX_INDEX_BYTES: u64 = 32 * 1_024 * 1_024;
+27 + pub const CHAPTER_TRANSPORT_MAX_INDEX_BYTES: u64 = (32 * 1_024).saturating_mul(1_024);
+   |
+
+error: implicit default on external type — construct with explicit values
+  --> crates/crunch-release-core/src/chapter_transport.rs:87:5
+   |
+87 | /     #[serde(default, skip_serializing_if = "Option::is_none")]
+88 | |     pub symlink_target: Option<String>,
+   | |______________________________________^
+   |
+   = help: Tiger Style (Explicit Defaults): construct foreign-crate values explicitly instead of relying on `Default` Example: let client = reqwest::ClientBuilder::new();
+   = note: see Tiger Style guide: Explicit Defaults
+   = note: `-D tigerstyle::explicit-defaults` implied by `-D explicit-defaults`
+   = help: to override `-D explicit-defaults` add `#[allow(tigerstyle::explicit_defaults)]`
+
+error: extreme sentinel fallback masks absence or failure
+   --> crates/crunch-release-core/src/chapter_transport.rs:208:43
+    |
+208 |     debug_assert_eq!(index.chapter_count, u32::try_from(index.chapters.len()).unwrap_or(u32::MAX));
+    |                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (safety): branch explicitly, propagate the missing/error state, or emit tagged fallback text instead of <int>::MAX/<int>::MIN. Example: match u64::try_from(command_index) { Ok(i) => format!("recent_{i}"), Err(_) => "recent_missing_index".to_string() }
+    = note: see Tiger Style guide: make invalid state explicit
+    = note: `-D tigerstyle::sentinel-fallback` implied by `-D sentinel-fallback`
+    = help: to override `-D sentinel-fallback` add `#[allow(tigerstyle::sentinel_fallback)]`
+
+error: collection grows in loop without a prior reservation or explicit local bound
+   --> crates/crunch-release-core/src/chapter_transport.rs:248:13
+    |
+248 | /             blockers.push(blocker(
+249 | |                 ChapterTransportBlockerKind::ReservedIndexCollision,
+250 | |                 Some(entry.relative_path.clone()),
+251 | |                 "release tree contains the reserved chapter transport index path",
+252 | |             ));
+    | |______________^
+    |
+    = help: Tiger Style (Bounded Resource Growth): reserve collection capacity or add an explicit local length bound before growing it in a loop Example: let mut items = Vec::with_capacity(limit);
+    = note: see Tiger Style guide: Bounded Resource Growth
+    = note: `-D tigerstyle::unbounded-collection-growth` implied by `-D unbounded-collection-growth`
+    = help: to override `-D unbounded-collection-growth` add `#[allow(tigerstyle::unbounded_collection_growth)]`
+
+error: boolean binding `shape_is_valid` should have a predicate prefix
+   --> crates/crunch-release-core/src/chapter_transport.rs:297:9
+    |
+297 |     let shape_is_valid = match entry.kind {
+    |         ^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+    = note: structured suggestion applicability: MaybeIncorrect
+    = note: see Tiger Style guide: Positive Predicates
+    = note: `-D tigerstyle::bool-naming` implied by `-D bool-naming`
+    = help: to override `-D bool-naming` add `#[allow(tigerstyle::bool_naming)]`
+help: rename binding to `is_shape_is_valid`
+    |
+297 |     let is_shape_is_valid = match entry.kind {
+    |         +++
+
+error: boolean binding `valid` should have a predicate prefix
+  --> crates/crunch-release-core/src/content_bound_nominal.rs:42:13
+   |
+42 |         let valid = !value.is_empty()
+   |             ^^^^^
+   |
+   = help: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+   = note: structured suggestion applicability: MaybeIncorrect
+   = note: see Tiger Style guide: Positive Predicates
+help: rename binding to `is_valid`
+   |
+42 |         let is_valid = !value.is_empty()
+   |             +++
+
+error: boolean binding `valid` should have a predicate prefix
+  --> crates/crunch-release-core/src/content_bound_nominal.rs:67:13
+   |
+67 |         let valid = !value.is_empty()
+   |             ^^^^^
+   |
+   = help: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+   = note: structured suggestion applicability: MaybeIncorrect
+   = note: see Tiger Style guide: Positive Predicates
+help: rename binding to `is_valid`
+   |
+67 |         let is_valid = !value.is_empty()
+   |             +++
+
+error: boolean binding `valid` should have a predicate prefix
+  --> crates/crunch-release-core/src/content_bound_nominal.rs:90:13
+   |
+90 |         let valid = !value.is_empty()
+   |             ^^^^^
+   |
+   = help: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+   = note: structured suggestion applicability: MaybeIncorrect
+   = note: see Tiger Style guide: Positive Predicates
+help: rename binding to `is_valid`
+   |
+90 |         let is_valid = !value.is_empty()
+   |             +++
+
+error: boolean binding `valid` should have a predicate prefix
+   --> crates/crunch-release-core/src/content_bound_nominal.rs:111:13
+    |
+111 |         let valid = safe_relative_path(&value)
+    |             ^^^^^
+    |
+    = help: Tiger Style (Positive Predicates): name booleans as predicates so call sites read like questions Example: let is_ready = status == Ready;
+    = note: structured suggestion applicability: MaybeIncorrect
+    = note: see Tiger Style guide: Positive Predicates
+help: rename binding to `is_valid`
+    |
+111 |         let is_valid = safe_relative_path(&value)
+    |             +++
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+   --> crates/crunch-release-core/src/tree_copy.rs:307:1
+    |
+307 | / fn validate_legacy_target(relative_path: &str, target: &str) -> Result<(), TreeCopyBlocker> {
+308 | |     if target.is_empty() || target.starts_with('/') {
+309 | |         return Err(path_blocker(
+310 | |             TreeCopyBlockerKind::AbsoluteSymlinkTarget,
+...   |
+329 | |     Ok(())
+330 | | }
+    | |_^
+    |
+    = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+    = note: see Tiger Style guide: Explicit Interfaces
+    = note: `-D tigerstyle::ambiguous-params` implied by `-D ambiguous-params`
+    = help: to override `-D ambiguous-params` add `#[allow(tigerstyle::ambiguous_params)]`
+
+error: 2 consecutive `&str` parameters are easy to swap by accident
+   --> crates/crunch-release-core/src/tree_copy.rs:485:1
+    |
+485 | / fn path_blocker(kind: TreeCopyBlockerKind, path: &str, message: &str) -> TreeCopyBlocker {
+486 | |     blocker(kind, Some(path.to_string()), message)
+487 | | }
+    | |_^
+    |
+    = help: Tiger Style (Explicit Interfaces): replace same-type parameter clusters with named fields or an options struct Example: fn connect(opts: ConnectOptions) -> ...
+    = note: see Tiger Style guide: Explicit Interfaces
+
+error: could not compile `crunch-release-core` (lib) due to 24 previous errors

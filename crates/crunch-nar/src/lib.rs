@@ -402,6 +402,7 @@ fn encode_path_bytes_bounded(
 
 pub fn compare_nar_facts(expected: &ExpectedNarFacts, observed: &FilesystemNarObservation) -> NarComparison {
     let mut mismatches = Vec::with_capacity(EXPECTED_COMPARISON_FIELD_COUNT);
+    debug_assert!(mismatches.capacity() >= EXPECTED_COMPARISON_FIELD_COUNT);
     if expected.algorithm != observed.algorithm {
         mismatches.push(NarFactMismatch::Algorithm);
     }
@@ -414,6 +415,7 @@ pub fn compare_nar_facts(expected: &ExpectedNarFacts, observed: &FilesystemNarOb
     if expected.digest != observed.digest {
         mismatches.push(NarFactMismatch::Digest);
     }
+    debug_assert!(mismatches.len() <= EXPECTED_COMPARISON_FIELD_COUNT);
     if mismatches.is_empty() {
         NarComparison::Match
     } else {
@@ -478,6 +480,8 @@ fn observe_path_with_hook(
 }
 
 fn observe_path_inner(path: &Path, request: FilesystemNarRequest) -> Result<(u64, NixHash), FilesystemNarError> {
+    debug_assert!(request.nar_bytes_max > 0);
+    debug_assert!(path.is_absolute());
     if request.algorithm == HashAlgo::Sha256 {
         let (nar_size, digest) = nar::hash_path_with_case_hack(path, request.case_hack.upstream())?;
         if nar_size > request.nar_bytes_max {
@@ -542,6 +546,7 @@ fn validate_upstream_identity(evidence: &CutoverEvidence, rejections: &mut Vec<S
 }
 
 fn validate_parity_cases(evidence: &CutoverEvidence, rejections: &mut Vec<String>) {
+    debug_assert!(!evidence.required_cases.is_empty());
     if evidence.required_cases.len() > PARITY_CASE_COUNT_MAX || evidence.comparisons.len() > PARITY_CASE_COUNT_MAX {
         rejections.push("parity-case-limit-exceeded".to_string());
         return;

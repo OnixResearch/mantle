@@ -107,3 +107,24 @@ Conclusion: the flake check leg fails only on pre-existing main debt, not
 on branch changes. The change stays active (archive requires a clean
 `nix flake check -L`); fixing those seven checks is independent main-level
 work.
+
+## Update 2026-09-09 (6) — main-level gate debt triage (option a)
+
+Fixed in this branch:
+- clippy check: removed absurd `diagnostics.len() <= usize::MAX` debug_asserts
+  in mantlepkgs-core (clippy check now passes).
+- tigerstyle: fixed all findings in crunch-gc-core, crunch-overlay-core,
+  crunch-composition-core, crunch-nar (assertion density, quantity naming,
+  bounded collection growth, confusable params, serde implicit defaults via
+  named default fns). composition-core now compiles clean under the check.
+- durable-file-publication-adoption and fmt checks now pass.
+
+Exact remaining blocker: the `tigerstyle` consumer check still reports 99
+pre-existing findings across crunch-eval-budget-core, crunch-release-core,
+mantle-build-contract, mantlepkgs-core, and mantle-portable-client-core
+(full log: tigerstyle-remaining-2026-09-09.log). This debt predates the
+branch (the check aborts per crate, so these were never surfaced on main).
+Clearing it is a standalone workspace hardening effort, not part of the
+store capability migration. The change therefore remains active:
+its own implementation and verification are complete, but the archive
+gate `nix flake check -L` cannot pass while that main-level debt exists.

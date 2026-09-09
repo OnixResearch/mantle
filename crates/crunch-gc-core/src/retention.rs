@@ -330,7 +330,7 @@ pub fn aggregate_usage(
     objects.sort_by(|left, right| left.object_id.cmp(&right.object_id));
     validate_objects(&mut objects, &decisions_by_path)?;
 
-    let mut report = UsageReport {
+    let mut usage_totals = UsageReport {
         observed_bytes: 0,
         retained_bytes: 0,
         reclaimable_bytes: 0,
@@ -341,11 +341,11 @@ pub fn aggregate_usage(
         roots: Vec::new(),
     };
     for object in &objects {
-        accumulate_usage_object(&mut report, &mut root_usage, &decisions_by_path, object)?;
+        accumulate_usage_object(&mut usage_totals, &mut root_usage, &decisions_by_path, object)?;
     }
-    report.roots = root_usage.into_values().collect();
-    debug_assert_eq!(report.roots.len(), decisions.len());
-    Ok(report)
+    usage_totals.roots = root_usage.into_values().collect();
+    debug_assert_eq!(usage_totals.roots.len(), decisions.len());
+    Ok(usage_totals)
 }
 
 fn validate_policy(policy: &RetentionPolicy) -> Result<(), RetentionError> {
@@ -371,6 +371,8 @@ fn validate_policy(policy: &RetentionPolicy) -> Result<(), RetentionError> {
             return Err(RetentionError::InvalidOwnerRule { class });
         }
     }
+    debug_assert!(policy.max_roots >= 1 && policy.max_decisions >= 1);
+    debug_assert!(policy.max_lease_seconds > 0);
     Ok(())
 }
 
@@ -378,6 +380,7 @@ fn normalize_roots(
     policy: &RetentionPolicy,
     mut roots: Vec<RetentionRoot>,
 ) -> Result<Vec<RetentionRoot>, RetentionError> {
+    debug_assert!(!policy.policy_id.is_empty());
     for root in &roots {
         validate_path_id(&root.path_id)?;
         if root.owner_scope.is_empty() {
@@ -386,11 +389,11 @@ fn normalize_roots(
             });
         }
         let owner_kind = root.owner_scope.split_once(':').map_or(root.owner_scope.as_str(), |(kind, _)| kind);
-        let owner_is_eligible = policy
+        let is_owner_eligible = policy
             .eligible_owner_scopes
             .get(&root.class)
             .is_some_and(|scopes| scopes.iter().any(|scope| scope == owner_kind));
-        if !owner_is_eligible {
+        if !is_owner_eligible {
             return Err(RetentionError::IneligibleOwner {
                 path_id: root.path_id.clone(),
                 class: root.class,
@@ -412,6 +415,7 @@ fn normalize_roots(
             });
         }
     }
+    debug_assert!(roots.windows(2).all(|pair| pair[0].path_id < pair[1].path_id));
     Ok(roots)
 }
 
@@ -445,6 +449,9 @@ fn generation_ranks(roots: &[RetentionRoot]) -> Result<BTreeMap<String, usize>, 
         let mut current_rank = 0_usize;
         let mut previous_generation = None;
         for (generation, path_id) in entries {
+            if ranks.len() >= roots.len() {
+                return Err(RetentionError::IdentityEncodingOverflow);
+            }
             if previous_generation.is_some_and(|previous| previous != *generation) {
                 current_rank = current_rank.checked_add(1).ok_or(RetentionError::IdentityEncodingOverflow)?;
             }
@@ -452,6 +459,7 @@ fn generation_ranks(roots: &[RetentionRoot]) -> Result<BTreeMap<String, usize>, 
             previous_generation = Some(*generation);
         }
     }
+    debug_assert!(ranks.len() <= roots.len());
     Ok(ranks)
 }
 
@@ -461,6 +469,8 @@ fn decide_root(
     root: &RetentionRoot,
     generation_ranks: &BTreeMap<String, usize>,
 ) -> Result<RetentionDecision, RetentionError> {
+    debug_assert!(!root.path_id.is_empty());
+    debug_assert!(current_unix_s >= 0);
     let (mut disposition, mut reason) = match root.class {
         RootClass::ExplicitPin => (RetentionDisposition::Keep, RetentionReason::ExplicitPin),
         RootClass::ProjectOutputGeneration => generation_decision(
@@ -487,6 +497,8 @@ fn decide_root(
         disposition = RetentionDisposition::Remove;
         reason = RetentionReason::ExplicitRemoval;
     }
+    debug_assert!(!reason.as_str().is_empty());
+    debug_assert!(disposition != RetentionDisposition::Remove || root.removal_requested);
     Ok(RetentionDecision {
         path_id: root.path_id.clone(),
         class: root.class,
@@ -520,6 +532,7 @@ fn lease_decision(
     current_unix_s: i64,
     root: &RetentionRoot,
 ) -> Result<(RetentionDisposition, RetentionReason), RetentionError> {
+    debug_assert!(policy.max_lease_seconds > 0);
     let Some(lease) = &root.lease else {
         return Err(RetentionError::MissingLease {
             path_id: root.path_id.clone(),
@@ -532,7 +545,8 @@ fn lease_decision(
             last_observed_unix_s: lease.last_observed_unix_s,
         });
     }
-    let lease_duration_is_unsafe = lease
+    debug_assert!(current_unix_s >= lease.last_observed_unix_s);
+    let is_lease_too_long = lease
         .expires_unix_s
         .checked_sub(lease.last_observed_unix_s)
         .and_then(|duration| u64::try_from(duration).ok())
@@ -540,7 +554,7 @@ fn lease_decision(
     let is_unsafe = lease.lease_id.is_empty()
         || lease.expires_unix_s < root.created_unix_s
         || lease.renewal_count > policy.max_lease_renewals
-        || lease_duration_is_unsafe;
+        || is_lease_too_long;
     if is_unsafe {
         return Ok((RetentionDisposition::Quarantine, RetentionReason::ShellLeaseUnsafe));
     }
@@ -556,6 +570,8 @@ fn retention_plan_id(
     roots: &[RetentionRoot],
     decisions: &[RetentionDecision],
 ) -> Result<RetentionPlanId, RetentionError> {
+    debug_assert!(!policy.policy_id.is_empty());
+    debug_assert!(decisions.len() <= roots.len());
     let mut hasher = blake3::Hasher::new();
     hasher.update(RETENTION_PLAN_DOMAIN);
     hash_string(&mut hasher, &policy.policy_id)?;
@@ -594,6 +610,7 @@ fn retention_plan_id(
 }
 
 fn hash_root(hasher: &mut blake3::Hasher, root: &RetentionRoot) -> Result<(), RetentionError> {
+    debug_assert!(!root.path_id.is_empty() && !root.policy_id.is_empty());
     hash_string(hasher, &root.path_id)?;
     hash_string(hasher, root.class.as_str())?;
     hash_string(hasher, &root.owner_scope)?;
@@ -691,6 +708,7 @@ fn validate_objects(
     objects: &mut [UsageObjectObservation],
     decisions: &BTreeMap<&str, &RetentionDecision>,
 ) -> Result<(), UsageError> {
+    debug_assert!(decisions.values().all(|decision| !decision.path_id.is_empty()));
     for pair in objects.windows(2) {
         if pair[0].object_id == pair[1].object_id {
             return Err(UsageError::DuplicateObject {
@@ -698,7 +716,7 @@ fn validate_objects(
             });
         }
     }
-    for object in objects {
+    for object in objects.iter_mut() {
         if object.object_id.is_empty() {
             return Err(UsageError::InvalidObjectId);
         }
@@ -725,6 +743,7 @@ fn validate_objects(
             }
         }
     }
+    debug_assert!(objects.iter().all(|object| !object.object_id.is_empty()));
     Ok(())
 }
 
@@ -734,6 +753,7 @@ fn accumulate_usage_object(
     decisions: &BTreeMap<&str, &RetentionDecision>,
     object: &UsageObjectObservation,
 ) -> Result<(), UsageError> {
+    debug_assert!(!object.object_id.is_empty());
     let Some(bytes) = object.bytes else {
         report.unknown_object_count = report.unknown_object_count.checked_add(1).ok_or(UsageError::ByteOverflow)?;
         for root_id in &object.retaining_root_ids {
@@ -745,25 +765,26 @@ fn accumulate_usage_object(
         }
         return Ok(());
     };
-    report.observed_bytes = checked_add(report.observed_bytes, bytes)?;
+    report.observed_bytes = report.observed_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?;
     let class = usage_class(decisions, &object.retaining_root_ids)?;
+    debug_assert!(!object.retaining_root_ids.is_empty() || class == UsageClass::Reclaimable);
     match class {
-        UsageClass::Retained => report.retained_bytes = checked_add(report.retained_bytes, bytes)?,
-        UsageClass::Reclaimable => report.reclaimable_bytes = checked_add(report.reclaimable_bytes, bytes)?,
-        UsageClass::Quarantined => report.quarantined_bytes = checked_add(report.quarantined_bytes, bytes)?,
-        UsageClass::Unclassified => report.unclassified_bytes = checked_add(report.unclassified_bytes, bytes)?,
+        UsageClass::Retained => report.retained_bytes = report.retained_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?,
+        UsageClass::Reclaimable => report.reclaimable_bytes = report.reclaimable_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?,
+        UsageClass::Quarantined => report.quarantined_bytes = report.quarantined_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?,
+        UsageClass::Unclassified => report.unclassified_bytes = report.unclassified_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?,
     }
     if object.retaining_root_ids.len() > 1 {
-        report.shared_bytes = checked_add(report.shared_bytes, bytes)?;
+        report.shared_bytes = report.shared_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?;
     }
     for root_id in &object.retaining_root_ids {
         let usage = root_usage.get_mut(root_id.as_str()).ok_or_else(|| UsageError::UnknownRoot {
             object_id: object.object_id.clone(),
             root_id: root_id.clone(),
         })?;
-        usage.inclusive_bytes = checked_add(usage.inclusive_bytes, bytes)?;
+        usage.inclusive_bytes = usage.inclusive_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?;
         if object.retaining_root_ids.len() == 1 {
-            usage.unique_bytes = checked_add(usage.unique_bytes, bytes)?;
+            usage.unique_bytes = usage.unique_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?;
         }
     }
     Ok(())
@@ -789,6 +810,7 @@ fn usage_class(decisions: &BTreeMap<&str, &RetentionDecision>, root_ids: &[Strin
         })?;
         dispositions.insert(disposition_byte(decision.disposition));
     }
+    debug_assert!(!dispositions.is_empty());
     if dispositions.contains(&disposition_byte(RetentionDisposition::Keep)) {
         return Ok(UsageClass::Retained);
     }
@@ -799,10 +821,6 @@ fn usage_class(decisions: &BTreeMap<&str, &RetentionDecision>, root_ids: &[Strin
         return Ok(UsageClass::Unclassified);
     }
     Ok(UsageClass::Reclaimable)
-}
-
-fn checked_add(left: u64, right: u64) -> Result<u64, UsageError> {
-    left.checked_add(right).ok_or(UsageError::ByteOverflow)
 }
 
 #[cfg(test)]

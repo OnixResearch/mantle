@@ -992,7 +992,6 @@ fn collect_cohort_attributes(cohort: &VersionCohort, diagnostics: &mut Vec<Diagn
         }
     }
     debug_assert!(attributes.len() <= cohort.attributes.len());
-    debug_assert!(diagnostics.len() <= usize::MAX);
 }
 
 fn validate_observation(cohort: &VersionCohort, observation: &VersionObservation) -> Result<(), CoreFailure> {
@@ -1967,7 +1966,6 @@ fn collect_reason_codes(reason_codes: &[String], max_text_bytes: u32, diagnostic
         }
     }
     debug_assert!(seen.len() <= reason_codes.len());
-    debug_assert!(diagnostics.len() <= usize::MAX);
 }
 
 fn collect_text(value: &str, path: &str, max_bytes: u32, diagnostics: &mut Vec<Diagnostic>) {

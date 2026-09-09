@@ -220,6 +220,7 @@ pub fn plan_overlay(
 
 // r[impl store_lifecycle.overlay_base_generation]
 pub fn revalidate_overlay(expected: &OverlayPlan, observed: &OverlayPlan) -> Result<(), OverlayError> {
+    debug_assert!(!expected.policy_id.is_empty() && !expected.logical_prefix.is_empty());
     if expected.policy_id != observed.policy_id || expected.logical_prefix != observed.logical_prefix {
         return Err(OverlayError::CompositionDrift);
     }
@@ -239,6 +240,7 @@ pub fn revalidate_overlay(expected: &OverlayPlan, observed: &OverlayPlan) -> Res
     if expected.plan_identity != observed.plan_identity {
         return Err(OverlayError::CompositionDrift);
     }
+    debug_assert_eq!(expected.descriptors.len(), observed.descriptors.len());
     Ok(())
 }
 
@@ -249,13 +251,13 @@ fn validate_policy(policy: &OverlayPolicy) -> Result<(), OverlayError> {
     if policy.trust_policy_id.is_empty() {
         return Err(OverlayError::EmptyTrustPolicyId);
     }
-    let bounds_are_valid = policy.max_base_layers > 0
+    let has_valid_bounds = policy.max_base_layers > 0
         && policy.max_base_layers <= MAX_BASE_LAYERS
         && policy.max_generation_members > 0
         && policy.max_generation_members <= MAX_GENERATION_MEMBERS
         && policy.max_generation_bytes > 0
         && policy.max_generation_bytes <= MAX_GENERATION_BYTES;
-    if !bounds_are_valid {
+    if !has_valid_bounds {
         return Err(OverlayError::InvalidPolicyBound);
     }
     let schemas = policy.allowed_state_schemas.iter().map(String::as_str).collect::<BTreeSet<_>>();
@@ -265,11 +267,13 @@ fn validate_policy(policy: &OverlayPolicy) -> Result<(), OverlayError> {
     {
         return Err(OverlayError::InvalidAllowedStateSchemas);
     }
+    debug_assert!(policy.max_base_layers >= 1 && policy.max_generation_members >= 1);
+    debug_assert!(!policy.allowed_state_schemas.is_empty());
     Ok(())
 }
 
 fn validate_logical_prefix(logical_prefix: &str) -> Result<(), OverlayError> {
-    let valid = logical_prefix.starts_with('/')
+    let is_valid = logical_prefix.starts_with('/')
         && logical_prefix.len() > 1
         && logical_prefix.len() <= MAX_IDENTITY_BYTES
         && !logical_prefix.ends_with('/')
@@ -278,7 +282,7 @@ fn validate_logical_prefix(logical_prefix: &str) -> Result<(), OverlayError> {
             .split('/')
             .skip(1)
             .all(|segment| !segment.is_empty() && segment != "." && segment != "..");
-    if !valid {
+    if !is_valid {
         return Err(OverlayError::InvalidLogicalPrefix {
             logical_prefix: String::from(logical_prefix),
         });
@@ -306,6 +310,7 @@ fn validate_observation(
     observation: &BaseObservation,
     declaration_identities: &mut BTreeSet<String>,
 ) -> Result<(), OverlayError> {
+    debug_assert!(!logical_prefix.is_empty() && policy.max_generation_members >= 1);
     if observation.declaration_index != expected_index {
         return Err(OverlayError::InvalidDeclarationIndex {
             expected: expected_index,
@@ -386,6 +391,8 @@ fn validate_generation_members(policy: &OverlayPolicy, observation: &BaseObserva
             });
         }
     }
+    debug_assert_eq!(paths.len(), observation.members.len());
+    debug_assert!(observed_bytes <= policy.max_generation_bytes.min(MAX_GENERATION_BYTES));
     Ok(())
 }
 
@@ -402,11 +409,13 @@ fn valid_relative_path(value: &str) -> bool {
 
 fn descriptor_for_observation(mut observation: BaseObservation) -> Result<BaseDescriptor, OverlayError> {
     observation.members.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    debug_assert!(observation.members.windows(2).all(|pair| pair[0].relative_path <= pair[1].relative_path));
     let observed_bytes = observation.members.iter().try_fold(0_u64, |total, member| {
         total.checked_add(member.bytes).ok_or(OverlayError::GenerationBytesOverflow {
             declaration_index: observation.declaration_index,
         })
     })?;
+    debug_assert!(!observation.members.is_empty() || observed_bytes == 0);
     let generation_identity = generation_identity(&observation)?;
     let descriptor_identity = descriptor_identity(&observation, generation_identity)?;
     Ok(BaseDescriptor {
