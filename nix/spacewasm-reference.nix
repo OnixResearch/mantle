@@ -62,6 +62,12 @@ let
 
   vendor = pkgs.rustPlatform.importCargoLock {
     lockFile = "${packageRoot}/upstream-Cargo.lock";
+    # This nixpkgs revision defaults the crates-io registry download URL to
+    # the crates.io API endpoint, which returns HTTP 403 to fetchurl's curl
+    # User-Agent. The static CDN accepts it and serves the same content.
+    extraRegistries = {
+      "https://github.com/rust-lang/crates.io-index" = "https://static.crates.io/crates";
+    };
   };
 
   cargoConfig = pkgs.writeText "spacewasm-offline-cargo-config.toml" ''

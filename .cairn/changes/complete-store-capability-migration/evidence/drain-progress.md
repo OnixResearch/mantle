@@ -69,3 +69,18 @@ Gates: proposal PASS, design PASS, tasks PASS (after strict concurrency markers)
   attempted.
 - Pre-existing clippy debt recorded (not caused by this branch):
   src/remote_nominal.rs:55 unused `as_str` in bin target.
+
+## Update 2026-09-09 (4) — crates.io 403 fixed, V4 running
+
+Root cause: crates.io returns HTTP 403 for the nixpkgs fetchurl User-Agent
+("curl/<ver> Nixpkgs/<ver>"); the standard Nix User-Agent and the static CDN
+both serve fine. Verified by direct curl probes of the API endpoint and CDN.
+The blocking drvs (crate-cap-* tarballs under wasmtime/spacewasm vendoring)
+used nixpkgs `importCargoLock`, whose registry map in nixpkgs dfd9566 points
+at the crates.io API endpoint.
+
+Fix in flake.nix: fetchurl overlay rewrites crates.io API download URLs to
+https://static.crates.io/crates (identical bytes, same sha256). Also added
+extraRegistries to nix/spacewasm-reference.nix importCargoLock for the same
+effect at that call site. `nix develop` now realizes (DEVSHELL_OK).
+`nix flake check -L` started; archive waits on its result.

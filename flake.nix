@@ -71,9 +71,37 @@
     flake-utils.lib.eachDefaultSystem (
       system:
       let
+        # crates.io returns HTTP 403 for the nixpkgs fetchurl User-Agent
+        # ("curl/<ver> Nixpkgs/<ver>") on the crates.io API download endpoint.
+        # The standard Nix User-Agent is accepted, and curl honors the last
+        # -A flag, so append one to every fetchurl call.
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ (import rust-overlay) ];
+          overlays = [
+            (import rust-overlay)
+            (final: prev:
+              let
+                # crates.io returns HTTP 403 for the nixpkgs fetchurl
+                # User-Agent on the crates.io API download endpoint. The
+                # static CDN serves the identical bytes (same sha256) and
+                # accepts the default agent, so rewrite the URL.
+                cratesApi = "https://crates.io/api/v1/crates";
+                cratesCdn = "https://static.crates.io/crates";
+                rewriteUrl = url: prev.lib.replaceStrings [ cratesApi ] [ cratesCdn ] url;
+                rewriteArgs = args:
+                  if prev.lib.isString args then
+                    args
+                  else if prev.lib.isList (args.url or null) then
+                    args // { url = map rewriteUrl args.url; }
+                  else if (args.url or null) != null then
+                    args // { url = rewriteUrl args.url; }
+                  else
+                    args;
+              in
+              {
+                fetchurl = args: prev.fetchurl (rewriteArgs args);
+              })
+          ];
         };
         onixPkgs = import onix-nixpkgs { inherit system; };
         kernelscriptExperiment =
@@ -102,7 +130,16 @@
           targets = [ "wasm32-wasip2" ];
         };
 
-        craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+        # Use the static crates.io CDN instead of the crates.io API download
+        # endpoint: the API returns HTTP 403 to curl's default User-Agent,
+        # which breaks fetchurl's builder; the CDN does not.
+        craneLib =
+          ((crane.mkLib pkgs).appendCrateRegistries [
+            ((crane.mkLib pkgs).registryFromDownloadUrl {
+              dl = "https://static.crates.io/crates";
+              indexUrl = "https://github.com/rust-lang/crates.io-index";
+            })
+          ]).overrideToolchain rustToolchain;
         cargoManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         artifactAuthRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1";
         artifactAuthRepository = "ssh://git@github.com/OnixResearch/onix-artifact.git";
