@@ -58,9 +58,7 @@ use nix_compat::store_path::StorePath;
 use serde::Deserialize;
 use serde::Serialize;
 use snix_store::path_info::PathInfo;
-use snix_store::pathinfoservice::PathInfoService;
 use tokio::io::AsyncRead;
-use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWrite;
 use tokio::io::ReadBuf;
 use tokio::sync::Mutex;
@@ -229,7 +227,7 @@ fn command_attempt_id(command: &GatewayCommand) -> Option<&crunch_build::distrib
 }
 
 pub struct MantleNixGateway {
-    store: Arc<Mutex<crunch_store::StoreHandle>>,
+    store: Arc<Mutex<crunch_store::GatewayStore>>,
     authority: RemoteGatewayAuthority,
     policy: GatewayPolicy,
     trusted_store_keys: Vec<VerifyingKey>,
@@ -237,7 +235,7 @@ pub struct MantleNixGateway {
 
 impl MantleNixGateway {
     pub fn new(
-        store: crunch_store::StoreHandle,
+        store: crunch_store::GatewayStore,
         authority: RemoteGatewayAuthority,
         policy: GatewayPolicy,
         trusted_store_keys: Vec<VerifyingKey>,
@@ -270,17 +268,13 @@ impl MantleNixGateway {
 
     async fn query_path_info_inner(&self, path: &StorePath<String>) -> io::Result<Option<PathInfo>> {
         let store = self.store.lock().await;
-        let read = store.path_info_with_layer(path).await.map_err(store_io)?.map(|layered| layered.value);
+        let read = store.find(path).await.map_err(store_io)?;
         debug_assert!(read.as_ref().is_none_or(|value| value.store_path == *path));
         Ok(read)
     }
 
     async fn query_hash_inner(&self, digest: [u8; DIGEST_SIZE]) -> io::Result<Option<PathInfo>> {
-        let service = {
-            let store = self.store.lock().await;
-            store.pathinfo_service()
-        };
-        let found = service.get(digest).await.map_err(pathinfo_io)?;
+        let found = self.store.lock().await.find_by_digest(digest).await.map_err(store_io)?;
         if found.as_ref().is_some_and(|value| *value.store_path.digest() != digest) {
             return Err(io::Error::other("nix-gateway-pathinfo-digest-collision"));
         }
@@ -293,25 +287,20 @@ impl MantleNixGateway {
         let expected_nar_sha256 = *request.nar_hash;
         let nar_sha256_hex = data_encoding::HEXLOWER.encode(&expected_nar_sha256);
         let signature_count = u32::try_from(request.signatures.len()).unwrap_or(u32::MAX);
-        self.authorize(GatewayOperation::UploadStoreObject {
+        let operation = GatewayOperation::UploadStoreObject {
             logical_path: request.path.to_absolute_path(),
             nar_size_bytes: request.nar_size,
             nar_sha256_hex,
             signature_count,
-        })?;
-        let (blob_service, directory_service) = {
-            let store = self.store.lock().await;
-            (store.blob_service(), store.directory_service())
         };
-        let mut bounded_reader = reader.take(request.nar_size.saturating_add(1));
-        let (node, actual_nar_sha256, actual_nar_size) =
-            snix_store::nar::ingest_nar_and_hash(blob_service, directory_service, &mut bounded_reader, &request.ca)
-                .await
-                .map_err(nar_io)?;
-        if actual_nar_size != request.nar_size || actual_nar_sha256 != expected_nar_sha256 {
+        self.authorize(operation.clone())?;
+        let received =
+            self.store.lock().await.ingest_nar(reader, &request.ca, request.nar_size).await.map_err(nar_io)?;
+        let observed = received.observation();
+        if observed.nar_size_bytes != request.nar_size || observed.nar_sha256 != expected_nar_sha256 {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "nix-gateway-nar-identity-mismatch"));
         }
-        let path_info = path_info_from_import(&request, node.clone(), actual_nar_sha256);
+        let path_info = path_info_from_import(&request, observed.node.clone(), observed.nar_sha256);
         let verification = crunch_build::signing::verify_pathinfo_signatures_with_store_dir(
             &path_info,
             &self.trusted_store_keys,
@@ -320,23 +309,18 @@ impl MantleNixGateway {
         if !verification.is_trusted() {
             return Err(io::Error::new(io::ErrorKind::PermissionDenied, "nix-gateway-pathinfo-signature-untrusted"));
         }
-        let output_path = path_info.store_path.clone();
-        let output_name = output_path.name().to_string();
-        self.store
-            .lock()
+        self.persist_verified_import(operation, crunch_store::GatewayImportRequest { path_info, received })
             .await
-            .persist_and_export_signed_output(crunch_store::PersistOutputRequest {
-                output_name: &output_name,
-                output_path: &output_path,
-                path_info,
-                final_node: node,
-                provenance: None,
-                is_root: false,
-                root_source: None,
-            })
-            .await
-            .map_err(store_io)?;
-        Ok(())
+    }
+
+    async fn persist_verified_import(
+        &self,
+        operation: GatewayOperation,
+        request: crunch_store::GatewayImportRequest,
+    ) -> io::Result<()> {
+        let mut store = self.store.lock().await;
+        self.authorize(operation)?;
+        store.persist_import(request).await.map_err(store_io)
     }
 }
 
@@ -595,11 +579,7 @@ fn store_io(error: crunch_store::Error) -> io::Error {
     io::Error::other(format!("nix-gateway-store:{error}"))
 }
 
-fn pathinfo_io(error: snix_store::pathinfoservice::Error) -> io::Error {
-    io::Error::other(format!("nix-gateway-pathinfo:{error}"))
-}
-
-fn nar_io(error: snix_store::nar::NarIngestionError) -> io::Error {
+fn nar_io(error: crunch_store::Error) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, format!("nix-gateway-nar:{error}"))
 }
 
@@ -684,7 +664,7 @@ fn run_nix_gateway_stdio(
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|error| RunError::Internal(format!("creating nix gateway runtime: {error}")))?;
     let store = runtime
-        .block_on(crunch_store::StoreHandle::open(crunch_store::StoreConfig::new(
+        .block_on(crunch_store::GatewayStore::open(crunch_store::StoreConfig::new(
             state_dir.to_path_buf(),
             output_dir.to_path_buf(),
             store_prefix.to_string(),
@@ -769,6 +749,9 @@ fn print_gateway_json<T: Serialize>(value: &T) -> Result<(), RunError> {
 fn gateway_plan_error(error: GatewayRejection) -> RunError {
     RunError::Internal(format!("gateway plan {:?}: {}", error.code, error.message))
 }
+
+#[cfg(test)]
+mod import_tests;
 
 #[cfg(test)]
 mod tests {
@@ -923,7 +906,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let output = temp.path().join("outputs");
         std::fs::create_dir_all(&output).unwrap();
-        let store = crunch_store::StoreHandle::open(crunch_store::StoreConfig::new(
+        let store = crunch_store::GatewayStore::open(crunch_store::StoreConfig::new(
             temp.path().join("state"),
             output,
             "/nix/store".into(),

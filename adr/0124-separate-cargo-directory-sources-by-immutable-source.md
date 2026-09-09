@@ -1,4 +1,4 @@
-# ADR 0120: Separate Cargo directory sources by immutable source
+# ADR 0124: Separate Cargo directory sources by immutable source
 
 - Status: Accepted
 - Date: 2026-09-04

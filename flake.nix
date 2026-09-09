@@ -425,6 +425,21 @@
             pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
           ];
 
+        # Test scripts require an explicit Python interpreter in every check entrypoint.
+        nativeCheckInputs = [
+          pkgs.git
+          pkgs.python3
+        ];
+
+        # Keep fault injection in a separate debug executable, never the installed CLI.
+        prepareEvaluatorTestBinary = ''
+          fixture_target_dir="$TMPDIR/mantle-evaluator-fixture-target"
+          CARGO_TARGET_DIR="$fixture_target_dir" cargo build --locked --profile dev \
+            --bin mantle --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget}
+          export MANTLE_TEST_EVALUATOR_BINARY="$fixture_target_dir/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/debug/mantle"
+          test -x "$MANTLE_TEST_EVALUATOR_BINARY"
+        '';
+
         astGrepVersion = "0.42.1";
         astGrepUpstream = pkgs.ast-grep;
         astGrepToolchain =
@@ -829,6 +844,27 @@
           printf '%s\n' "$actualDigest" > "$out/binary.blake3"
         '';
 
+        # Independent consumers retain their own exact hash selections. Do not
+        # reuse the native workspace's dependency artifacts or digest traits.
+        buildContractHashCheck =
+          lane:
+          let
+            manifest = "fixtures/mantle-build-contract/hash-compat/${lane}/Cargo.toml";
+            lock = ./. + "/fixtures/mantle-build-contract/hash-compat/${lane}/Cargo.lock";
+          in
+          craneLib.cargoTest {
+            pname = "mantle-build-contract-hash-${lane}";
+            version = "1";
+            inherit src nativeBuildInputs;
+            cargoArtifacts = null;
+            cargoVendorDir = craneLib.vendorCargoDeps { cargoLock = lock; };
+            cargoExtraArgs = "--manifest-path ${manifest}";
+            cargoTestExtraArgs = "--all-targets";
+            postCheck = ''
+              cargo check --locked --manifest-path ${manifest} --lib --target wasm32-unknown-unknown
+            '';
+          };
+
         # Build just the cargo dependencies for caching
         cargoArtifacts = craneLib.buildDepsOnly {
           inherit src nativeBuildInputs buildInputs;
@@ -853,7 +889,10 @@
           MANTLE_WASM_COMPONENT_TOOLCHAIN = "${wasmComponentToolchain}";
           CRUNCH_NO_FUSE = "1";
           MANTLE_TEST_OFFLINE = "1";
-          nativeCheckInputs = [ pkgs.git ];
+          inherit nativeCheckInputs;
+          preCheck = prepareEvaluatorTestBinary;
+          # Report every failing target without weakening Cargo's failing exit status.
+          cargoTestExtraArgs = "--no-fail-fast";
         };
 
         rustcWrapper = craneLib.buildPackage {
@@ -2055,6 +2094,9 @@
             cargoExtraArgs = "-p mantle-build-contract --lib --target wasm32-unknown-unknown";
           };
 
+          mantle-build-contract-hash-minimum = buildContractHashCheck "minimum";
+          mantle-build-contract-hash-current = buildContractHashCheck "current";
+
           mantle-build-contract-nickel =
             pkgs.runCommand "mantle-build-contract-nickel"
               {
@@ -2087,12 +2129,9 @@
 
           # Run tests with nextest
           nextest = craneLib.cargoNextest {
-            inherit
-              src
-              cargoArtifacts
-              nativeBuildInputs
-              buildInputs
-              ;
+            inherit src cargoArtifacts buildInputs;
+            nativeBuildInputs = nativeBuildInputs ++ nativeCheckInputs;
+            preBuild = prepareEvaluatorTestBinary;
             partitions = 1;
             partitionType = "count";
             SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
@@ -2150,6 +2189,7 @@
               cargo-watch
               rust-analyzer
             ]
+            ++ nativeCheckInputs
             ++ [
               nickelCli
               astGrepToolchain

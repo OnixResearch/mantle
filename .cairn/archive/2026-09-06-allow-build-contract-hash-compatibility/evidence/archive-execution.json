@@ -1,0 +1,201 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: allow-build-contract-hash-compatibility",
+      "kind": "archive_change",
+      "path": "/home/brittonr/git/OnixResearch/mantle-worktrees/fix-build-contract-hash-compat-20260906/.cairn/archive/2026-09-06-allow-build-contract-hash-compatibility"
+    }
+  ],
+  "blocked": false,
+  "change": "allow-build-contract-hash-compatibility",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "0c9d8ce2dd523de14496e45af2117118ea53827153b9a0bd6cf11bb5e88835ad",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+    "receipt_hash": "b476b08a11456e26e76cb472af0963a1356f795be02cec5ae6de482246164bc1",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "b3634d19677bb0f1d034aafc81bd5e7cfc3938241c1c7466277aa019da6c1ded",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "5d7f4ba72f842b42740947225693981740e8452d923993a88275bba7011423c1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-06-allow-build-contract-hash-compatibility/design.md"
+        },
+        {
+          "content_hash": "d3e4d834a66e90a693842ee7dacbf1c877bc3f2553cb1f76b008fd4fbbd1e88e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-06-allow-build-contract-hash-compatibility/evidence/README.md"
+        },
+        {
+          "content_hash": "deb61a84d50aa7e9a83e1f6b81efa34ad630fc94937c23d15ee05b710bcc3e6e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-06-allow-build-contract-hash-compatibility/evidence/archive-review.json"
+        },
+        {
+          "content_hash": "4002ef0419c3cc685405a0976785d7f387848efdfcc63d32a2a0346b4c84426c",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-06-allow-build-contract-hash-compatibility/evidence/design-gate.json"
+        },
+        {
+          "content_hash": "4cb3eed4a6b5143d91986487d733c8b4f115648bca9d6de8474e07472dc12e88",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-06-allow-build-contract-hash-compatibility/evidence/sync-execution.json"
+        },
+        {
+          "content_hash": "bd8cff12fb5b2e5b20af26f8e1ca72f7dc044690d52ed7e3205ffb36281a89a9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-06-allow-build-contract-hash-compatibility/evidence/sync-plan.json"
+        },
+        {
+          "content_hash": "0cc86b02bd9c2b6ccbc829c71e430a8e1c58996097964848ed4be890aca2b4f4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-06-allow-build-contract-hash-compatibility/evidence/sync-review.json"
+        },
+        {
+          "content_hash": "14b06a51144d412729c895eff919aaf74b12757106ab9fbbb482df38625ffc5c",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-06-allow-build-contract-hash-compatibility/evidence/synced-validation.json"
+        },
+        {
+          "content_hash": "d4db4bb49b80d621925a088c5237f36fc622a7f496a11f4c5cf613bb2aee2fd0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-06-allow-build-contract-hash-compatibility/evidence/tasks-gate.json"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-06-allow-build-contract-hash-compatibility/metadata.json"
+        },
+        {
+          "content_hash": "81d6bf4c2977a85dfedb43eaf7aa40250602f04053ef9a3a3516b503ba64bb6f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-06-allow-build-contract-hash-compatibility/proposal.md"
+        },
+        {
+          "content_hash": "4c7d383efa624f61e375609c9f33aa595ff6e1efeb6b7797939c4edd60263137",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-06-allow-build-contract-hash-compatibility/specs/build-interchange/spec.md"
+        },
+        {
+          "content_hash": "91e21c82d001d94f474f47376987ebb2ef0561a4b302b37fc2e3b2e591793731",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-06-allow-build-contract-hash-compatibility/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/allow-build-contract-hash-compatibility"
+        }
+      ],
+      "manifest_hash": "c53ce1ff3c4ef0256dce7052bd9053ef154098556d1780c5cee22c123264a7f2"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "5d7f4ba72f842b42740947225693981740e8452d923993a88275bba7011423c1",
+          "exists": true,
+          "path": "./.cairn/changes/allow-build-contract-hash-compatibility/design.md"
+        },
+        {
+          "content_hash": "d3e4d834a66e90a693842ee7dacbf1c877bc3f2553cb1f76b008fd4fbbd1e88e",
+          "exists": true,
+          "path": "./.cairn/changes/allow-build-contract-hash-compatibility/evidence/README.md"
+        },
+        {
+          "content_hash": "deb61a84d50aa7e9a83e1f6b81efa34ad630fc94937c23d15ee05b710bcc3e6e",
+          "exists": true,
+          "path": "./.cairn/changes/allow-build-contract-hash-compatibility/evidence/archive-review.json"
+        },
+        {
+          "content_hash": "4002ef0419c3cc685405a0976785d7f387848efdfcc63d32a2a0346b4c84426c",
+          "exists": true,
+          "path": "./.cairn/changes/allow-build-contract-hash-compatibility/evidence/design-gate.json"
+        },
+        {
+          "content_hash": "4cb3eed4a6b5143d91986487d733c8b4f115648bca9d6de8474e07472dc12e88",
+          "exists": true,
+          "path": "./.cairn/changes/allow-build-contract-hash-compatibility/evidence/sync-execution.json"
+        },
+        {
+          "content_hash": "bd8cff12fb5b2e5b20af26f8e1ca72f7dc044690d52ed7e3205ffb36281a89a9",
+          "exists": true,
+          "path": "./.cairn/changes/allow-build-contract-hash-compatibility/evidence/sync-plan.json"
+        },
+        {
+          "content_hash": "0cc86b02bd9c2b6ccbc829c71e430a8e1c58996097964848ed4be890aca2b4f4",
+          "exists": true,
+          "path": "./.cairn/changes/allow-build-contract-hash-compatibility/evidence/sync-review.json"
+        },
+        {
+          "content_hash": "14b06a51144d412729c895eff919aaf74b12757106ab9fbbb482df38625ffc5c",
+          "exists": true,
+          "path": "./.cairn/changes/allow-build-contract-hash-compatibility/evidence/synced-validation.json"
+        },
+        {
+          "content_hash": "d4db4bb49b80d621925a088c5237f36fc622a7f496a11f4c5cf613bb2aee2fd0",
+          "exists": true,
+          "path": "./.cairn/changes/allow-build-contract-hash-compatibility/evidence/tasks-gate.json"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/allow-build-contract-hash-compatibility/metadata.json"
+        },
+        {
+          "content_hash": "81d6bf4c2977a85dfedb43eaf7aa40250602f04053ef9a3a3516b503ba64bb6f",
+          "exists": true,
+          "path": "./.cairn/changes/allow-build-contract-hash-compatibility/proposal.md"
+        },
+        {
+          "content_hash": "4c7d383efa624f61e375609c9f33aa595ff6e1efeb6b7797939c4edd60263137",
+          "exists": true,
+          "path": "./.cairn/changes/allow-build-contract-hash-compatibility/specs/build-interchange/spec.md"
+        },
+        {
+          "content_hash": "91e21c82d001d94f474f47376987ebb2ef0561a4b302b37fc2e3b2e591793731",
+          "exists": true,
+          "path": "./.cairn/changes/allow-build-contract-hash-compatibility/tasks.md"
+        }
+      ],
+      "manifest_hash": "e91ecda353fe537782481cb5efdae2760591fc486d126d12b27f6be5b26cc56e"
+    },
+    "kind": "archive",
+    "manifest_hash": "c771f6c8455171ef2b04b022b76088aead97e6cfc12021e193946ab6f9c5f8d6"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "1730ce9823ba73fb58e56b249fe5f9571ecbfbc161b5a90beeecb83c2087c06c",
+  "policy": "mantle-default",
+  "policy_hash": "acf9eb63eba35b8dfa98a4cdefca99088de442d8a20548ea3ab81a127b7b2746",
+  "profile_identity_hash": "46cc5f876af3d4febf98aee265348a47763f4d6f5c82fe9701af6a6906019127",
+  "reasons": [],
+  "receipt_hash": "0aa589bf00b8deed3b03af205cb59e52f08cd8b6eb04f459064b5369e9ea8f71",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

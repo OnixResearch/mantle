@@ -66,7 +66,6 @@ const REMOTE_TRANSFER_CHUNK_DIR: &str = "chunks";
 const ACKNOWLEDGED_CHUNK_MISSING_REASON: &str = "acknowledged-chunk-missing";
 const PRIVATE_DIRECTORY_MODE: u32 = 0o700;
 const PRIVATE_FILE_MODE: u32 = 0o600;
-const REMOTE_TICKET_INPUT_FD: i32 = 9;
 const REMOTE_TICKET_INPUT_FILENAME: &str = "remote-ticket.secret";
 
 #[test]
@@ -242,7 +241,11 @@ fn production_stdio_rejects_ticket_upload_quota_before_checkpoint_or_admission()
         .output()
         .expect("run quota-rejected production transfer");
     assert!(!rejected.status.success());
-    assert!(String::from_utf8_lossy(&rejected.stderr).contains("upload-byte-limit-exceeded"));
+    assert!(
+        String::from_utf8_lossy(&rejected.stderr).contains("upload-byte-limit-exceeded"),
+        "quota rejection stderr={}",
+        String::from_utf8_lossy(&rejected.stderr)
+    );
     assert!(transfer_checkpoints(&state_dir).is_empty());
     assert_eq!(fs::read_dir(&store_dir).unwrap().count(), 1);
     assert_eq!(fs::read(physical_store_path(&store_dir, INPUT_STORE_PATH)).unwrap(), patterned_bytes(INPUT_BYTES));
@@ -464,7 +467,7 @@ fn failed_remote_sandbox_captures_allowlisted_artifact_before_cleanup_without_ch
     assert!(status.status.success());
     let status_json: Value = serde_json::from_slice(&status.stdout).unwrap();
     let debug_status = &status_json["recent_failures"][0]["failure_debug"];
-    assert_eq!(debug_status["capture_outcome_code"], "captured");
+    assert_eq!(debug_status["capture_outcome_code"], "captured", "status={debug_status}; stderr={stderr}");
     assert_eq!(debug_status["worker_bundle_ref"], format!("remote-failure-debug:{worker_bundle_digest}"));
     assert!(failure_workspace_directories(&state_dir).is_empty());
     assert!(fs::read_dir(&store_dir).unwrap().next().is_none());
@@ -982,8 +985,6 @@ fn remote_failure_replay_command(state_dir: &Path, store_dir: &Path, bundle_dige
         bundle_digest,
         "--builder",
         BUILDER_ID,
-        "--ticket-fd",
-        &REMOTE_TICKET_INPUT_FD.to_string(),
         "--remote-build-time-secs",
         &MAX_BUILD_TIME_SECS.to_string(),
         "--remote-secret-manifest",
@@ -1010,8 +1011,6 @@ fn remote_build_command(state_dir: &Path, store_dir: &Path, build_file: &Path) -
         "--no-substitute",
         "--builder",
         BUILDER_ID,
-        "--ticket-fd",
-        &REMOTE_TICKET_INPUT_FD.to_string(),
         "--remote-build-time-secs",
         &MAX_BUILD_TIME_SECS.to_string(),
         "--remote-secret-manifest",
@@ -1086,14 +1085,69 @@ fn test_unix_time_now_s() -> u64 {
 
 fn configure_ticket_input_fd(command: &mut Command, state_dir: &Path) {
     let ticket_file = fs::File::open(state_dir.join(REMOTE_TICKET_INPUT_FILENAME)).expect("ticket input file");
+    let fd = inherit_fixture_file(command, ticket_file);
+    command.args(["--ticket-fd", &fd.to_string()]);
+}
+
+fn inherit_fixture_file(command: &mut Command, file: fs::File) -> i32 {
+    let fd = file.as_raw_fd();
+    // SAFETY: only async-signal-safe fcntl runs in the child. The closure owns
+    // this File until exec, and no fixed descriptor slot is closed or replaced.
     unsafe {
         command.pre_exec(move || {
-            if libc::dup2(ticket_file.as_raw_fd(), REMOTE_TICKET_INPUT_FD) < 0 {
+            let flags = libc::fcntl(file.as_raw_fd(), libc::F_GETFD);
+            if flags < 0 || libc::fcntl(file.as_raw_fd(), libc::F_SETFD, flags & !libc::FD_CLOEXEC) < 0 {
                 return Err(std::io::Error::last_os_error());
             }
             Ok(())
         });
     }
+    fd
+}
+
+#[test]
+fn fixture_descriptor_inheritance_preserves_each_file_and_parent_flags() {
+    let root = tempfile::tempdir().unwrap();
+    let first = root.path().join("first");
+    let second = root.path().join("second");
+    fs::write(&first, "ticket-fixture\n").unwrap();
+    fs::write(&second, "other-fixture\n").unwrap();
+    let shell = std::env::var_os("MANTLE_TEST_SCRIPT_SHELL").unwrap_or_else(|| "/bin/sh".into());
+    let mut command = Command::new(shell);
+    command.args(["-c", "IFS= read -r first < /proc/self/fd/$1 && IFS= read -r second < /proc/self/fd/$2 && [ \"$first\" = ticket-fixture ] && [ \"$second\" = other-fixture ]", "fixture"]);
+    let first_fd = inherit_fixture_file(&mut command, fs::File::open(first).unwrap());
+    let second_fd = inherit_fixture_file(&mut command, fs::File::open(second).unwrap());
+    assert_ne!(first_fd, second_fd);
+    command.args([first_fd.to_string(), second_fd.to_string()]);
+    assert!(command.output().unwrap().status.success());
+    assert_parent_cloexec(first_fd);
+    assert_parent_cloexec(second_fd);
+}
+
+#[test]
+fn fixture_descriptor_without_explicit_inheritance_is_unavailable_after_exec() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("ticket");
+    fs::write(&path, "ticket-fixture\n").unwrap();
+    let file = fs::File::open(path).unwrap();
+    let shell = std::env::var_os("MANTLE_TEST_SCRIPT_SHELL").unwrap_or_else(|| "/bin/sh".into());
+    let output = Command::new(shell)
+        .args([
+            "-c",
+            "IFS= read -r value < /proc/self/fd/$1",
+            "fixture",
+            &file.as_raw_fd().to_string(),
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert_parent_cloexec(file.as_raw_fd());
+}
+
+fn assert_parent_cloexec(fd: i32) {
+    let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+    assert!(flags >= 0, "the parent must still own a valid descriptor");
+    assert_ne!(flags & libc::FD_CLOEXEC, 0);
 }
 
 fn ticket_verifier() -> String {

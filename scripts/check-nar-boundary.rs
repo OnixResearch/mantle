@@ -85,11 +85,23 @@ fn validate_contract_files(files: &[SourceFile]) -> Vec<String> {
     require_fragment(files, "crates/crunch-store/src/pull.rs", "ingest_nar_and_hash", &mut findings);
     require_fragment(files, "crates/crunch-store/src/handle.rs", "write_nar", &mut findings);
     require_fragment(files, "crates/crunch-rust-cache/src/shared.rs", "ingest_nar_and_hash", &mut findings);
-    require_fragment(files, "crates/crunch-rust-cache/src/shared.rs", "write_nar", &mut findings);
+    validate_rust_cache_renderer(files, &mut findings);
     require_fragment(files, BOUNDARY_DOC, "fresh staging", &mut findings);
     require_fragment(files, BOUNDARY_DOC, "no-replace publication", &mut findings);
     require_fragment(files, BOUNDARY_DOC, "post-publication verification", &mut findings);
     findings
+}
+
+fn validate_rust_cache_renderer(files: &[SourceFile], findings: &mut Vec<String>) {
+    // Runtime consumers use the narrow capability; the store shell owns Snix.
+    require_fragment(
+        files,
+        "crates/crunch-rust-cache/src/shared.rs",
+        "store.render_nar(&render_node, writer)",
+        findings,
+    );
+    require_fragment(files, "crates/crunch-store/src/capability.rs", "impl RustCacheStore", findings);
+    require_fragment(files, "crates/crunch-store/src/capability.rs", "snix_store::nar::write_nar", findings);
 }
 
 fn require_fragment(files: &[SourceFile], path: &str, fragment: &str, findings: &mut Vec<String>) {
@@ -109,8 +121,7 @@ fn collect_sources(root: &Path) -> Result<Vec<SourceFile>, String> {
         if depth > DIRECTORY_DEPTH_MAX {
             return Err(format!("source scan exceeded directory depth {DIRECTORY_DEPTH_MAX}"));
         }
-        let entries = fs::read_dir(&directory)
-            .map_err(|error| format!("reading {}: {error}", directory.display()))?;
+        let entries = fs::read_dir(&directory).map_err(|error| format!("reading {}: {error}", directory.display()))?;
         for entry in entries {
             let entry = entry.map_err(|error| format!("reading entry in {}: {error}", directory.display()))?;
             let path = entry.path();
@@ -183,6 +194,30 @@ fn run_self_test() -> Result<(), String> {
     }
     if validate_sources(&negative_restore) != ["full-buffer-production-api:src/source_bundle.rs"] {
         return Err("restore negative fixture was not rejected".to_string());
+    }
+    let renderer = vec![
+        SourceFile {
+            path: "crates/crunch-rust-cache/src/shared.rs".into(),
+            text: "store.render_nar(&render_node, writer)".into(),
+        },
+        SourceFile {
+            path: "crates/crunch-store/src/capability.rs".into(),
+            text: "impl RustCacheStore { snix_store::nar::write_nar }".into(),
+        },
+    ];
+    let mut renderer_findings = Vec::new();
+    validate_rust_cache_renderer(&renderer, &mut renderer_findings);
+    if !renderer_findings.is_empty() {
+        return Err("narrow renderer positive fixture was rejected".into());
+    }
+    for index in 0..renderer.len() {
+        let mut broken = renderer.clone();
+        broken[index].text.clear();
+        let mut findings = Vec::new();
+        validate_rust_cache_renderer(&broken, &mut findings);
+        if findings.is_empty() {
+            return Err("missing renderer delegation was accepted".into());
+        }
     }
     if !validate_dependency_identity(UPSTREAM_COMMIT, UPSTREAM_CHECKSUM).is_empty() {
         return Err("positive dependency identity was rejected".to_string());

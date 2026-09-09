@@ -1,4 +1,4 @@
-# ADR 0119: Restore dev stages from remeasured content
+# ADR 0123: Restore dev stages from remeasured content
 
 ## Status
 

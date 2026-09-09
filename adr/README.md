@@ -125,5 +125,9 @@ compatibility surface, crate name, or historical decision.
 | [0116](0116-adapt-nix-remote-clients-without-transferring-authority.md) | Adapt Nix remote clients without transferring authority | Accepted |
 | [0117](0117-bound-radiance-as-an-optional-external-reference.md) | Bound Radiance as an optional external reference | Accepted |
 | [0118](0118-select-remote-resources-from-bounded-evidence.md) | Select remote resources from bounded evidence | Accepted |
-| [0119](0119-restore-dev-stages-from-remeasured-content.md) | Restore dev stages from remeasured content | Accepted |
-| [0120](0120-separate-cargo-directory-sources-by-immutable-source.md) | Separate Cargo directory sources by immutable source | Accepted |
+| [0119](0119-isolate-evaluator-fault-fixtures-from-release.md) | Isolate evaluator fault fixtures from the release CLI | Proposed |
+| [0120](0120-restore-native-package-contract-parity.md) | Restore native package contract parity | Proposed |
+| [0121](0121-migrate-legacy-archive-representations-without-resigning.md) | Migrate legacy archive representations without re-signing | Accepted |
+| [0122](0122-separate-contract-hash-range-from-store-traits.md) | Separate the contract hash range from store traits | Accepted |
+| [0123](0123-restore-dev-stages-from-remeasured-content.md) | Restore dev stages from remeasured content | Accepted |
+| [0124](0124-separate-cargo-directory-sources-by-immutable-source.md) | Separate Cargo directory sources by immutable source | Accepted |

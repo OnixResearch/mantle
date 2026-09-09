@@ -1081,9 +1081,16 @@ mod tests {
         fs::create_dir(&source).expect("special-file source should exist");
         let socket_path = source.join("control.sock");
         let _listener = std::os::unix::net::UnixListener::bind(&socket_path).expect("special-file socket should bind");
-        let error = import_frontend_artifact(&source, &temporary.path().join("state"))
-            .expect_err("special files must not enter the frontend CAS");
-        assert!(error.contains("unsupported frontend artifact file type"));
+        let state = temporary.path().join("state");
+        let error =
+            import_frontend_artifact(&source, &state).expect_err("special files must not enter the frontend CAS");
+        assert!(error.starts_with("bounded-tree observing frontend artifact failed with PlanRejected("), "{error}");
+        assert!(error.contains("kind: UnsupportedKind"), "{error}");
+        assert!(!state.exists(), "rejection must precede store mutation");
+
+        let root_error = import_frontend_artifact(&socket_path, &state).expect_err("a socket root must also fail");
+        assert!(root_error.starts_with("unsupported frontend artifact file type: "), "{root_error}");
+        assert!(!state.exists(), "root rejection must precede store mutation");
     }
 
     #[test]

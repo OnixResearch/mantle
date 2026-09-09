@@ -1,6 +1,6 @@
 {
   "schema": "mantle-operator-command-catalog-v1",
-  "identity_blake3": "c7767e46f9d96b23370a6fd0c16e9813340cc452f1ce239a78c354806d8f401d",
+  "identity_blake3": "ed688d648bef472a8093aba2cec663a8daa3318acbd3f07bd927bfb054d7ffa0",
   "entries": [
     {
       "descriptor": {
@@ -1831,6 +1831,268 @@
     },
     {
       "descriptor": {
+        "path": "bootstrap radiance-reference",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Prepare, run, or verify the optional offline Radiance reference proof",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "bootstrap radiance-reference",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "bootstrap radiance-reference prepare",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--bootstrap-compiler-checkout",
+          "--cohort-out",
+          "--emulator-checkout",
+          "--git",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--radiance-checkout",
+          "--source-bundle-out",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Authenticate three connected Git SHA-256 checkouts and publish one offline bundle",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "bootstrap radiance-reference prepare",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "project-files",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--bootstrap-compiler-checkout",
+          "--cohort-out",
+          "--emulator-checkout",
+          "--git",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--radiance-checkout",
+          "--source-bundle-out",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "bootstrap radiance-reference prove",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--cc",
+          "--cc-driver",
+          "--cohort",
+          "--crt-dir",
+          "--expected-cohort-blake3",
+          "--expected-source-bundle-blake3",
+          "--help",
+          "--json",
+          "--libgcc-dir",
+          "--linker",
+          "--log-level",
+          "--nix-compat",
+          "--output",
+          "--source-bundle",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Run both routes from one authenticated offline source bundle",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "bootstrap radiance-reference prove",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "project-files",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--cc",
+          "--cc-driver",
+          "--cohort",
+          "--crt-dir",
+          "--expected-cohort-blake3",
+          "--expected-source-bundle-blake3",
+          "--help",
+          "--json",
+          "--libgcc-dir",
+          "--linker",
+          "--log-level",
+          "--nix-compat",
+          "--output",
+          "--source-bundle",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "bootstrap radiance-reference verify",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--output",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Replay receipt, protected-audit, and publication checks without execution",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "bootstrap radiance-reference verify",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--output",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
         "path": "bootstrap rust-source-provider",
         "aliases": [],
         "flags": [
@@ -1939,7 +2201,7 @@
         ],
         "support_tier": "advanced",
         "mutation": "none",
-        "network": "none",
+        "network": "optional",
         "compatibility_state": "canonical",
         "flags": [
           "--base-store",
@@ -5176,7 +5438,7 @@
         ],
         "support_tier": "advanced",
         "mutation": "none",
-        "network": "optional",
+        "network": "none",
         "compatibility_state": "canonical",
         "flags": [
           "--base-store",
@@ -5235,8 +5497,8 @@
           "read-help"
         ],
         "support_tier": "advanced",
-        "mutation": "project-files",
-        "network": "optional",
+        "mutation": "none",
+        "network": "none",
         "compatibility_state": "canonical",
         "flags": [
           "--base-store",
@@ -5299,8 +5561,8 @@
           "read-help"
         ],
         "support_tier": "advanced",
-        "mutation": "project-files",
-        "network": "optional",
+        "mutation": "none",
+        "network": "none",
         "compatibility_state": "canonical",
         "flags": [
           "--base-store",
@@ -5364,7 +5626,7 @@
           "read-help"
         ],
         "support_tier": "advanced",
-        "mutation": "project-files",
+        "mutation": "none",
         "network": "none",
         "compatibility_state": "canonical",
         "flags": [
@@ -6540,6 +6802,7 @@
           "--requirement-evidence-input",
           "--requirement-evidence-root",
           "--source-acquisition-url",
+          "--source-review-attachment",
           "--stack-provenance-binary",
           "--stack-provenance-sidecar",
           "--stack-provenance-valence-receipt",
@@ -6595,6 +6858,7 @@
           "--requirement-evidence-input",
           "--requirement-evidence-root",
           "--source-acquisition-url",
+          "--source-review-attachment",
           "--stack-provenance-binary",
           "--stack-provenance-sidecar",
           "--stack-provenance-valence-receipt",
@@ -7472,10 +7736,19 @@
           "--require-reproducible",
           "--require-stagex-no-quorum",
           "--requirement-coverage",
+          "--review-author-key",
+          "--review-claim-root",
+          "--review-preset",
+          "--review-producer-id",
+          "--review-threshold",
+          "--reviewed-source",
+          "--revoked-reviewer",
+          "--source-review",
           "--stack-provenance",
           "--state-dir",
           "--store",
           "--store-prefix",
+          "--trusted-reviewer",
           "--verbose",
           "-h",
           "-v"
@@ -7513,10 +7786,19 @@
           "--require-reproducible",
           "--require-stagex-no-quorum",
           "--requirement-coverage",
+          "--review-author-key",
+          "--review-claim-root",
+          "--review-preset",
+          "--review-producer-id",
+          "--review-threshold",
+          "--reviewed-source",
+          "--revoked-reviewer",
+          "--source-review",
           "--stack-provenance",
           "--state-dir",
           "--store",
           "--store-prefix",
+          "--trusted-reviewer",
           "--verbose",
           "-h",
           "-v"
@@ -8005,6 +8287,421 @@
         "support_tier": "advanced",
         "mutation": "none",
         "network": "required",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "remote gateway",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Nix compatibility and bounded asynchronous Build API gateway",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "remote gateway",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "remote gateway api-dispatch-stdio-once",
+        "aliases": [],
+        "flags": [
+          "--authority",
+          "--base-store",
+          "--cursor-key-fd",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--secret-manifest",
+          "--secret-profile",
+          "--secret-provider",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Execute one admitted asynchronous API operation against durable coordinator state",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "remote gateway api-dispatch-stdio-once",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "store-state",
+        "network": "optional",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--authority",
+          "--base-store",
+          "--cursor-key-fd",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--secret-manifest",
+          "--secret-profile",
+          "--secret-provider",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "remote gateway api-stdio-once",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Read one bounded API request from stdin and print a typed no-effect plan",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "remote gateway api-stdio-once",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "remote gateway metadata",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Print supported versions, operations, bounds, and non-claims",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "remote gateway metadata",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "remote gateway nix-stdio-once",
+        "aliases": [],
+        "flags": [
+          "--authority",
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--policy",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--trusted-store-key",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Serve one Nix daemon-store session on stdin/stdout",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "remote gateway nix-stdio-once",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "store-state",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--authority",
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--policy",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--trusted-store-key",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "remote gateway plan",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Validate one saved API request and print a side-effect-free typed plan",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "remote gateway plan",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "remote gateway status",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Validate gateway endpoint policy and print redacted operator status",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "remote gateway status",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
         "compatibility_state": "canonical",
         "flags": [
           "--base-store",
@@ -8934,6 +9631,7 @@
           "--proof-disk-bytes-max",
           "--proof-elapsed-seconds-max",
           "--proof-exec-events-max",
+          "--proof-native-checkpoint-attempt",
           "--proof-sandbox-shell",
           "--proof-source-records-max",
           "--rust-source-provider",
@@ -9000,6 +9698,7 @@
           "--proof-disk-bytes-max",
           "--proof-elapsed-seconds-max",
           "--proof-exec-events-max",
+          "--proof-native-checkpoint-attempt",
           "--proof-sandbox-shell",
           "--proof-source-records-max",
           "--rust-source-provider",
@@ -10263,7 +10962,7 @@
         "canonical": "store composition",
         "compatibility_spellings": [],
         "owner": "mantle-cli",
-        "role": "experimental-command",
+        "role": "public-command",
         "supported_operations": [
           "invoke",
           "read-help"
@@ -10321,7 +11020,7 @@
         "canonical": "store composition plan",
         "compatibility_spellings": [],
         "owner": "mantle-cli",
-        "role": "experimental-command",
+        "role": "public-command",
         "supported_operations": [
           "invoke",
           "read-help"
@@ -10349,7 +11048,7 @@
           "success",
           "usage"
         ],
-        "machine_schema": "mantle-composition-plan-v1",
+        "machine_schema": "mantle-command-json-v1",
         "migration_reference": null,
         "removal_gate": null
       }
@@ -10381,13 +11080,13 @@
         "canonical": "store composition realize",
         "compatibility_spellings": [],
         "owner": "mantle-cli",
-        "role": "experimental-command",
+        "role": "public-command",
         "supported_operations": [
           "invoke",
           "read-help"
         ],
         "support_tier": "advanced",
-        "mutation": "store-state",
+        "mutation": "none",
         "network": "none",
         "compatibility_state": "canonical",
         "flags": [
@@ -10410,7 +11109,7 @@
           "success",
           "usage"
         ],
-        "machine_schema": "mantle-composition-receipt-v1",
+        "machine_schema": "mantle-command-json-v1",
         "migration_reference": null,
         "removal_gate": null
       }

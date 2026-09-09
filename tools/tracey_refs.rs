@@ -1,5 +1,17 @@
 // Mantle Tracey coverage bridge.
 //
+// Build interchange dependency compatibility lives in the contract Cargo
+// manifest and flake.nix. The independently locked fixtures under
+// fixtures/mantle-build-contract/hash-compat verify original identities.
+// Published Neural Stream linkage is recorded in
+// evidence/build-contract-hash-compatibility-2026-09-06.md.
+// r[impl mantle.build_interchange.hash_dependency]
+// r[impl mantle.build_interchange.hash_matrix]
+// r[impl mantle.build_interchange.linked_consumer]
+// r[verify mantle.build_interchange.hash_dependency]
+// r[verify mantle.build_interchange.hash_matrix]
+// r[verify mantle.build_interchange.linked_consumer]
+//
 // Native dynamic derivation admission bridge.
 //
 // r[impl dynamic_derivation_admission.staged_core]

@@ -178,6 +178,12 @@ castore content, preserves CA/path/node/reference identity, discards signatures
 bound to stale facts, and emits a replacement local signature. This does not
 recover historical signer authority or prove output correctness.
 
+For archives whose signed final-NAR facts are already correct, the separate
+[checked legacy archive migration](docs/legacy-archive-migration.md) preserves
+those signatures and payloads. It proves marker-CA and doubled-directory-count
+identities before producing a new archive. It does not rebuild Mantle, alter the
+original store, or weaken ordinary import checks.
+
 GC and final-NAR repair use separate pure decision cores. The cores receive
 bounded, normalized facts and return ordered plans with BLAKE3 identities.
 `crunch-store` still owns service reads, NAR rendering, signing, filesystem

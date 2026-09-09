@@ -38,7 +38,7 @@ The existing `rust-plan` command and JSON remain the compatibility surface. The 
 
 Golden fixtures cover Cargo-oracle facts, compatibility classes, native unit identity, and receipt-preimage identity. Existing unit and CLI suites remain the behavior baseline.
 
-Cargo Git dependency references can omit the resolved commit fragment. The input adapter normalizes only that comparison. Package identities retain the full resolved source. Explicit source routes select the matching vendor directory, even when two revisions share a package name and version. See [ADR 0120](../adr/0120-separate-cargo-directory-sources-by-immutable-source.md).
+Cargo Git dependency references can omit the resolved commit fragment. The input adapter normalizes only that comparison. Package identities retain the full resolved source. Explicit source routes select the matching vendor directory, even when two revisions share a package name and version. See [ADR 0124](../adr/0124-separate-cargo-directory-sources-by-immutable-source.md).
 
 The topology preflight runs before child-action runtime startup. A blocked plan retains its full planning receipt and records no unit executions. Child-action mode also exits with an error. The initial rustc identity check still requires valid authority and matching compiler bytes.
 
