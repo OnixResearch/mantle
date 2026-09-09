@@ -343,6 +343,7 @@
             || pkgs.lib.hasPrefix "${toString ./mantlepkgs}/" pathString
             || pkgs.lib.hasPrefix "${toString ./cairn-policy/evidence}/" pathString
             || pkgs.lib.hasPrefix "${toString ./cairn/archive}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./.cairn/archive}/" pathString
             || pathString == toString ./config
             || pkgs.lib.hasPrefix "${toString ./config}/" pathString
             || pkgs.lib.hasPrefix "${toString ./contracts}/" pathString
