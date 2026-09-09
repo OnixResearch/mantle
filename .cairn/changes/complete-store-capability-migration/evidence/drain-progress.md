@@ -84,3 +84,26 @@ https://static.crates.io/crates (identical bytes, same sha256). Also added
 extraRegistries to nix/spacewasm-reference.nix importCargoLock for the same
 effect at that call site. `nix develop` now realizes (DEVSHELL_OK).
 `nix flake check -L` started; archive waits on its result.
+
+## Update 2026-09-09 (5) — V4 flake check status
+
+crates.io 403 fixed via fetchurl URL-rewrite overlay (same bytes, same
+checksums) plus importCargoLock extraRegistries. Pinned BLAKE3 evidence
+(durable-file-publication-adoption) refreshed for new flake.nix/Cargo.lock
+digests, which was stale on main as well; that check now passes.
+
+Per-check results (34 checks, `--option builders ''` local builds):
+- 27 pass, including fmt, durable-file-publication-adoption,
+  nickel-export-core-pin, store-overlay-policy, all spacewasm checks,
+  release quality checks.
+- 7 fail, ALL verified failing identically on origin/main in this
+  environment (bootstrap-blocker-inventory: 115 pre-existing bootstrap
+  findings; clippy: pre-existing mantlepkgs-core min/max lint;
+  crunch/nextest: sandbox/host-dependent bootstrap-parity and OCI tests;
+  tigerstyle: pre-existing assertion-density debt). Files behind these
+  failures are untouched by this branch.
+
+Conclusion: the flake check leg fails only on pre-existing main debt, not
+on branch changes. The change stays active (archive requires a clean
+`nix flake check -L`); fixing those seven checks is independent main-level
+work.
