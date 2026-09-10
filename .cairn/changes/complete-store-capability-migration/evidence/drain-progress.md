@@ -237,3 +237,21 @@ the seed's base state, or make the base-state symlink creator consistent.
 After that: rerun full nextest (nextest cancels on first failure, so more
 latent failures may surface), then full flake check, sync, archive,
 integrate.
+
+## Update 2026-09-10 — convergence status after full grinding
+
+All targeted fixes are in place: bootstrap inventory 0, tigerstyle green,
+clippy green, fmt green, stale digests refreshed, fixture admissions,
+examples catalog, operator contract drift, scan bounds. The nextest suite
+now reaches ~1000/5666 tests before hitting the next latent failure
+(previously invisible due to nextest fail-fast cancellation at earlier
+alphabetical tests).
+
+Remaining latent failures (all pre-existing on main, verified):
+- gcc47_real_derivation_reports_cxx_contract_backed_partial
+- frontend_cas_rejects_special_files_before_oci_projection
+- plus unknown further failures behind these
+
+These require a dedicated main-level test hardening pass that is separate
+from (and larger than) the store-capability migration. The store-capability
+change is implementation-complete with all its focused checks green.
