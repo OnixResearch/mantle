@@ -234,7 +234,7 @@ fn required_members(bundle: &MaterializationBundle) -> Result<Vec<RequiredMember
         let digest_hex = digest_blake3.to_string();
         let conflicting = members
             .iter()
-            .any(|member| member.logical_path == *logical_path && member.digest_blake3 != digest_hex);
+            .any(|member| member.logical_path == logical_path.as_str() && member.digest_blake3 != digest_hex);
         if conflicting {
             return Err(ShellError::ConflictingMemberIdentity);
         }
