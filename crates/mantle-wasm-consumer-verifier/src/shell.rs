@@ -51,6 +51,8 @@ pub enum ShellError {
     RootNotDirectory,
     /// A member path is empty, escapes the root, or traverses parents.
     InvalidMemberPath,
+    /// One logical path is declared with conflicting member identities.
+    ConflictingMemberIdentity,
 }
 
 /// Capability root for consumer member resolution.
@@ -213,6 +215,11 @@ impl ConsumerRoot {
 ///
 /// Roles may share one logical path; the byte layer measures each unique
 /// path once and judges every declaring member against its own identity.
+/// Collect every declared store object as a required byte member.
+///
+/// Roles may share one logical path when they declare the same identity;
+/// a path declared with conflicting digests is member substitution and is
+/// rejected before any filesystem access.
 fn required_members(bundle: &MaterializationBundle) -> Result<Vec<RequiredMember>, ShellError> {
     let declared = declared_member_objects(bundle);
     let mut members = Vec::with_capacity(declared.len());
@@ -224,10 +231,17 @@ fn required_members(bundle: &MaterializationBundle) -> Result<Vec<RequiredMember
         } = object;
         relative_member_path(logical_path)?;
         debug_assert!(!(*role).is_empty());
+        let digest_hex = digest_blake3.to_string();
+        let conflicting = members
+            .iter()
+            .any(|member| member.logical_path == *logical_path && member.digest_blake3 != digest_hex);
+        if conflicting {
+            return Err(ShellError::ConflictingMemberIdentity);
+        }
         members.push(RequiredMember {
             role: String::from(*role),
             logical_path: logical_path.clone(),
-            digest_blake3: digest_blake3.to_string(),
+            digest_blake3: digest_hex,
             size_bytes: *size_bytes,
         });
     }

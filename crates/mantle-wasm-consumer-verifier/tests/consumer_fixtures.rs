@@ -280,6 +280,17 @@ fn negative_declared_oversize_member_rejects_as_drift() {
 }
 
 #[test]
+fn negative_conflicting_member_identity_is_rejected() {
+    let fixture = FixtureRoot::new("conflicting");
+    let bundle = valid_bundle(&fixture);
+    let mut request = request_from_bundle(&bundle);
+    request.source_closure = fixture.dangling_object("/members/wkg.lock", 55);
+    let bundle = rebuild(request);
+    let error = fixture.root().verify_bundle(bundle).expect_err("conflicting identity must fail the shell");
+    assert!(matches!(error, ShellError::ConflictingMemberIdentity));
+}
+
+#[test]
 fn report_leaks_no_member_paths_and_binds_fixed_non_claims() {
     let fixture = FixtureRoot::new("leak");
     let bundle = valid_bundle(&fixture);

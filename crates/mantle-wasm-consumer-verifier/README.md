@@ -18,8 +18,9 @@ without importing Mantle build, store, scheduler, release, or CLI authority.
   root: no absolute escapes, no parent traversal, no symlinks, regular files
   only, named byte bounds (`MAX_MEMBER_BYTES`, `MAX_TOTAL_REMEASURED_BYTES`),
   BLAKE3 remeasurement, declared-length comparison, and per-member identity
-  comparison. Roles may share one logical path; each unique path is measured
-  once and judged against every role's declared identity.
+  comparison. Roles may share one logical path when they declare the same
+  identity; a path declared with conflicting identities is member
+  substitution and is rejected before any filesystem access.
 - The report (`mantle-wasm-consumer-verification-report-v1`) binds schemas,
   bundle and runtime-profile identities, member roles and BLAKE3 values,
   completed layers, ordered blockers, one status (`verified`, `blocked`,
