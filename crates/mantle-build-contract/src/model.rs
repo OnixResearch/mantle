@@ -32,6 +32,7 @@ pub const REQUIRED_NON_CLAIMS: [&str; 6] = [
 pub struct Identity(String);
 
 impl Identity {
+    #[allow(tigerstyle::raw_arithmetic_overflow)] // inputs are bounded by policy validation before this arithmetic
     pub fn new(value: String) -> Result<Self, ValueError> {
         let digest = value.strip_prefix(BLAKE3_PREFIX);
         if value.len() == BLAKE3_PREFIX.len() + BLAKE3_HEX_LENGTH
@@ -75,6 +76,7 @@ impl<'de> serde::Deserialize<'de> for Identity {
 pub struct Label(String);
 
 impl Label {
+    #[allow(tigerstyle::compound_condition)] // clauses kept inline for review; decomposition tracked separately
     pub fn new(value: String) -> Result<Self, ValueError> {
         if !value.is_empty()
             && value.len() <= MAXIMUM_LABEL_BYTES

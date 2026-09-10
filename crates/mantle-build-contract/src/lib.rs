@@ -1,3 +1,6 @@
+#![cfg_attr(not(kani), feature(register_tool))]
+#![register_tool(tigerstyle)]
+
 //! Versioned build request and observation contract for Mantle consumers.
 //!
 //! The crate owns bounded wire values, deterministic BLAKE3 identities, and

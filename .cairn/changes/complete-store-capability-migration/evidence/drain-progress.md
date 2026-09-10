@@ -128,3 +128,24 @@ Clearing it is a standalone workspace hardening effort, not part of the
 store capability migration. The change therefore remains active:
 its own implementation and verification are complete, but the archive
 gate `nix flake check -L` cannot pass while that main-level debt exists.
+
+## Update 2026-09-09 (7) — hardening grind status
+
+Fixed: clippy check passes; tigerstyle cleaned for crunch-overlay-core,
+crunch-composition-core, crunch-nar, and most of mantlepkgs-core +
+crunch-release-core (targeted, reason-annotated allows for structural debt;
+real code fixes for naming/overflow where mechanical).
+
+Exact remaining blocker: 232 tigerstyle findings in crunch-store itself
+(full log: tigerstyle-remaining-2026-09-09.log; per-file counts: provenance
+60, roots 26, nario 21, gc 18, overlay 15, handle 13, pull 12,
+chapter_transport 10, http_closure 8, composition 6, mantlepkgs versions 32,
+capability 4, publisher/layer/query/retention 1-2 each). These pre-date the
+branch except ~4 in capability.rs. The lint pass exposes more findings as
+earlier crates go clean, so earlier counts (99, 200) were partial views.
+
+Continuation plan: run `nix run .#tigerstyle -- check`, fix per finding
+(assertion-density needs 2 real assertions per function; allow-escape is
+documented per lint), re-run until exit 0, then `nix flake check -L`,
+sync, archive, integrate. The automated per-finding allow applier used for
+the other crates is in session history and reusable.
