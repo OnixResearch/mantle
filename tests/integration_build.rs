@@ -173,9 +173,18 @@ fn stdlib_import_path() -> Vec<OsString> {
     vec![lib_dir.into()]
 }
 
-/// Check if bwrap is available on this system.
+/// Check if bwrap is available AND can actually create its sandbox.
+///
+/// Inside a Nix build sandbox the binary exists but nested namespace
+/// creation fails, so a bare `--version` probe is not enough.
 fn has_bwrap() -> bool {
-    std::process::Command::new("bwrap").arg("--version").output().is_ok_and(|o| o.status.success())
+    let probe = std::process::Command::new("bwrap")
+        .args(["--ro-bind", "/", "/", "--", "/bin/true"])
+        .output();
+    match probe {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
+    }
 }
 
 #[cfg(unix)]
