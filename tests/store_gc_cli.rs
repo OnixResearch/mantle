@@ -275,6 +275,11 @@ fn store_info_reports_base_layer_without_mutating_base() {
     let base_path = test_output("cli-base", BASE_PATH_DIGEST_BYTE);
     let runtime = tokio::runtime::Runtime::new().unwrap();
     runtime.block_on(seed_overlay_base(base_state.path(), base_output.path(), &base_path));
+    // Debug: list base state dir contents
+    for entry in std::fs::read_dir(base_state.path()).unwrap() {
+        let entry = entry.unwrap();
+        let meta = std::fs::symlink_metadata(entry.path());
+        }
     set_tree_read_only(base_state.path(), true);
     let base_database = base_state.path().join("pathinfo.redb");
     let base_before = blake3::hash(&std::fs::read(&base_database).unwrap());

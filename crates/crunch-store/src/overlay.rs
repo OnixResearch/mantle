@@ -47,8 +47,8 @@ const STORE_OVERLAY_POLICY_JSON: &str =
 const FILE_HASH_BUFFER_BYTES: usize = 65_536;
 const DIRECTORY_IDENTITY_DOMAIN: &[u8] = b"mantle.overlay.directory.v1";
 const STORE_IDENTITY_TEMP_FILE_NAME: &str = "store-identity.json.tmp";
-const OVERLAY_TRUSTED_PUBLIC_KEYS_FILE_NAME: &str = "overlay-trusted-public-keys";
-const LOCAL_SIGNING_KEY_FILE_NAME: &str = "signing-key";
+pub(crate) const OVERLAY_TRUSTED_PUBLIC_KEYS_FILE_NAME: &str = "overlay-trusted-public-keys";
+pub(crate) const LOCAL_SIGNING_KEY_FILE_NAME: &str = "signing-key";
 const MAX_LAYER_TRUST_KEYS: usize = 64;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

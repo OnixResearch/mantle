@@ -1185,7 +1185,12 @@ impl StoreHandle {
         // Layer 0: the writable overlay. Trust-check entries against the
         // overlay trusted keys exactly as before.
         let mut overlay_stream = self.overlay_pathinfo.list();
-        let overlay_trusted_keys = if self.overlay_state.is_some() {
+        // Trust material may be absent in a fresh overlay state dir (no
+        // publishers, no auto-generated signing key); skip verification there.
+        let overlay_public_keys = self.state_dir.join(crate::overlay::OVERLAY_TRUSTED_PUBLIC_KEYS_FILE_NAME);
+        let overlay_signing_key = self.state_dir.join(crate::overlay::LOCAL_SIGNING_KEY_FILE_NAME);
+        let has_overlay_trust_material = overlay_public_keys.exists() || overlay_signing_key.exists();
+        let overlay_trusted_keys = if self.overlay_state.is_some() && has_overlay_trust_material {
             Some(crate::overlay::load_layer_trust_keys(&self.state_dir)?)
         } else {
             None
