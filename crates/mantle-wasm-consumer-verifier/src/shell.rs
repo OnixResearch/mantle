@@ -232,10 +232,10 @@ fn required_members(bundle: &MaterializationBundle) -> Result<Vec<RequiredMember
         relative_member_path(logical_path)?;
         debug_assert!(!(*role).is_empty());
         let digest_hex = digest_blake3.to_string();
-        let conflicting = members.iter().any(|member: &RequiredMember| {
+        let has_conflicting_identity = members.iter().any(|member: &RequiredMember| {
             member.logical_path == logical_path.as_str() && member.digest_blake3 != digest_hex
         });
-        if conflicting {
+        if has_conflicting_identity {
             return Err(ShellError::ConflictingMemberIdentity);
         }
         members.push(RequiredMember {
