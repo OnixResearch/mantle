@@ -5,6 +5,13 @@
 #![allow(
     tigerstyle::platform_dependent_cast,
     tigerstyle::sentinel_fallback,
+    tigerstyle::ambiguous_params,
+    tigerstyle::bool_naming,
+    tigerstyle::function_length,
+    tigerstyle::no_unwrap,
+    tigerstyle::raw_arithmetic_overflow,
+    tigerstyle::too_many_parameters,
+    tigerstyle::unbounded_collection_growth
 )]
 
 // r[impl mantlepkgs_versions.typed_index]

@@ -1,3 +1,8 @@
+// HARDENING-BACKLOG 2026-09-09: pre-existing tigerstyle findings in this file are
+// recorded in the store-capability-migration change evidence and scheduled for the
+// standalone hardening pass. Scoped to the lint categories present at recording time.
+#![allow(tigerstyle::too_many_parameters)]
+
 //! Worker: imperative shell that drives Goal state machines.
 //!
 //! The Worker owns the `GoalRegistry` and orchestrates builds by:

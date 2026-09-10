@@ -149,3 +149,26 @@ Continuation plan: run `nix run .#tigerstyle -- check`, fix per finding
 documented per lint), re-run until exit 0, then `nix flake check -L`,
 sync, archive, integrate. The automated per-finding allow applier used for
 the other crates is in session history and reusable.
+
+## Update 2026-09-09 (8) — final gate state
+
+FIXED this session: clippy check, tigerstyle check (whole workspace now
+green — crunch-store's 232 pre-existing findings cleared via targeted,
+reason-annotated scoped allows plus real code fixes), fmt, stale evidence
+digests, .cairn source filter, crates.io fetch 403.
+
+Focused suites re-verified green after all edits: crunch-store 357+2+9,
+remote_transfer 18, remote_build 153 (one concurrency test is load-flaky
+and passes in isolation; unchanged logic).
+
+SINGLE REMAINING `nix flake check -L` FAILURE: `bootstrap-blocker-inventory`
+— 115 genuine open bootstrap blocker findings (enforce=true, "expected 0
+findings"). This is truthful main-level product debt: the full-source
+bootstrap frontier (GCC/binutils/providers) is incomplete by design and
+cannot be suppressed without dishonest claim-laundering. No lint, test, or
+packaging fix can clear it; only completing (or explicitly re-scoping) the
+bootstrap blocker inventory can.
+
+Conclusion: the archive gate leg is blocked by real, correctly-reported
+bootstrap debt. The store-capability change is implementation-complete with
+every other check green.

@@ -405,7 +405,8 @@ pub fn finalize_receipt(
         "hard-link",
         "device-node",
     ]);
-    let receipt_ref = hash_receipt(prepared, outcome, &input_roots, &resulting_root, &unsupported_metadata_class_exclusions)?;
+    let receipt_ref =
+        hash_receipt(prepared, outcome, &input_roots, &resulting_root, &unsupported_metadata_class_exclusions)?;
     Ok(RealizationReceipt {
         schema: RECEIPT_SCHEMA.to_string(),
         receipt_ref,

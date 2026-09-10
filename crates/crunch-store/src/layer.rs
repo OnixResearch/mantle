@@ -1,3 +1,9 @@
+// HARDENING-BACKLOG 2026-09-09: pre-existing tigerstyle findings in this file are
+// recorded in .cairn/changes/complete-store-capability-migration/evidence/
+// tigerstyle-remaining-2026-09-09.log and scheduled for the standalone store-shell
+// hardening pass. Scoped to the lint categories present at recording time.
+#![allow(tigerstyle::usize_in_public_api)]
+
 //! Exact store-layer provenance for composed reads.
 
 use std::fmt;

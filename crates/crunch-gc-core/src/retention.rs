@@ -769,10 +769,18 @@ fn accumulate_usage_object(
     let class = usage_class(decisions, &object.retaining_root_ids)?;
     debug_assert!(!object.retaining_root_ids.is_empty() || class == UsageClass::Reclaimable);
     match class {
-        UsageClass::Retained => report.retained_bytes = report.retained_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?,
-        UsageClass::Reclaimable => report.reclaimable_bytes = report.reclaimable_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?,
-        UsageClass::Quarantined => report.quarantined_bytes = report.quarantined_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?,
-        UsageClass::Unclassified => report.unclassified_bytes = report.unclassified_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?,
+        UsageClass::Retained => {
+            report.retained_bytes = report.retained_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?
+        }
+        UsageClass::Reclaimable => {
+            report.reclaimable_bytes = report.reclaimable_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?
+        }
+        UsageClass::Quarantined => {
+            report.quarantined_bytes = report.quarantined_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?
+        }
+        UsageClass::Unclassified => {
+            report.unclassified_bytes = report.unclassified_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?
+        }
     }
     if object.retaining_root_ids.len() > 1 {
         report.shared_bytes = report.shared_bytes.checked_add(bytes).ok_or(UsageError::ByteOverflow)?;

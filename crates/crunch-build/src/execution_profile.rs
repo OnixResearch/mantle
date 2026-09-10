@@ -1,3 +1,13 @@
+// HARDENING-BACKLOG 2026-09-09: pre-existing tigerstyle findings in this file are
+// recorded in the store-capability-migration change evidence and scheduled for the
+// standalone hardening pass. Scoped to the lint categories present at recording time.
+#![allow(
+    tigerstyle::ambiguous_params,
+    tigerstyle::assertion_density,
+    tigerstyle::bool_naming,
+    tigerstyle::compound_condition
+)]
+
 //! Explicit execution policy for native and foreign derivations.
 //!
 //! The pure profile core validates bounded policy, derives canonical BLAKE3

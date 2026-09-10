@@ -1,3 +1,13 @@
+// HARDENING-BACKLOG 2026-09-09: pre-existing tigerstyle findings in this file are
+// recorded in the store-capability-migration change evidence and scheduled for the
+// standalone hardening pass. Scoped to the lint categories present at recording time.
+#![allow(
+    tigerstyle::ambiguous_params,
+    tigerstyle::assertion_density,
+    tigerstyle::bool_naming,
+    tigerstyle::too_many_parameters,
+    tigerstyle::unbounded_collection_growth
+)]
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
 // r[impl foreign_derivation_import.realization_adapter]

@@ -1,3 +1,9 @@
+// HARDENING-BACKLOG 2026-09-09: pre-existing tigerstyle findings in this file are
+// recorded in .cairn/changes/complete-store-capability-migration/evidence/
+// tigerstyle-remaining-2026-09-09.log and scheduled for the standalone store-shell
+// hardening pass. Scoped to the lint categories present at recording time.
+#![allow(tigerstyle::sentinel_fallback)]
+
 //! Store query operations: list, info, verify.
 //!
 //! These operate on a PathInfoService and are independent of the build

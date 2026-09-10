@@ -39,7 +39,7 @@ impl ContentBoundRepositoryId {
     pub fn new(value: impl Into<String>) -> Result<Self, ContentBoundNominalError> {
         let value = value.into();
         let components = value.split('/');
-    #[allow(tigerstyle::bool_naming)] // legacy binding name kept for review continuity
+        #[allow(tigerstyle::bool_naming)] // legacy binding name kept for review continuity
         let valid = !value.is_empty()
             && value.len() <= MAX_REPOSITORY_ID_BYTES
             && value.trim() == value
@@ -65,7 +65,7 @@ pub struct ContentBoundRequirementId(String);
 impl ContentBoundRequirementId {
     pub fn new(value: impl Into<String>) -> Result<Self, ContentBoundNominalError> {
         let value = value.into();
-    #[allow(tigerstyle::bool_naming)] // legacy binding name kept for review continuity
+        #[allow(tigerstyle::bool_naming)] // legacy binding name kept for review continuity
         let valid = !value.is_empty()
             && value.len() <= MAX_REQUIREMENT_ID_BYTES
             && value.contains('.')
@@ -89,7 +89,7 @@ pub struct ContentBoundReleaseId(String);
 impl ContentBoundReleaseId {
     pub fn new(value: impl Into<String>) -> Result<Self, ContentBoundNominalError> {
         let value = value.into();
-    #[allow(tigerstyle::bool_naming)] // legacy binding name kept for review continuity
+        #[allow(tigerstyle::bool_naming)] // legacy binding name kept for review continuity
         let valid = !value.is_empty()
             && value.len() <= MAX_RELEASE_ID_BYTES
             && value.trim() == value
@@ -111,7 +111,7 @@ pub struct ContentBoundSpecificationPath(String);
 impl ContentBoundSpecificationPath {
     pub fn new(value: impl Into<String>) -> Result<Self, ContentBoundNominalError> {
         let value = value.into();
-    #[allow(tigerstyle::bool_naming)] // legacy binding name kept for review continuity
+        #[allow(tigerstyle::bool_naming)] // legacy binding name kept for review continuity
         let valid = safe_relative_path(&value)
             && value.len() <= MAX_RELATIVE_PATH_BYTES
             && value.starts_with("cairn/specs/")

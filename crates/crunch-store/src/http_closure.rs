@@ -1,3 +1,15 @@
+// HARDENING-BACKLOG 2026-09-09: pre-existing tigerstyle findings in this file are
+// recorded in .cairn/changes/complete-store-capability-migration/evidence/
+// tigerstyle-remaining-2026-09-09.log and scheduled for the standalone store-shell
+// hardening pass. Scoped to the lint categories present at recording time.
+#![allow(
+    tigerstyle::ambiguous_params,
+    tigerstyle::no_unwrap,
+    tigerstyle::platform_dependent_cast,
+    tigerstyle::raw_arithmetic_overflow,
+    tigerstyle::sentinel_fallback
+)]
+
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 

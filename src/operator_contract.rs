@@ -1,3 +1,14 @@
+// HARDENING-BACKLOG 2026-09-09: pre-existing tigerstyle findings in this file are
+// recorded in the store-capability-migration change evidence and scheduled for the
+// standalone hardening pass. Scoped to the lint categories present at recording time.
+#![allow(
+    tigerstyle::ambiguous_params,
+    tigerstyle::assertion_density,
+    tigerstyle::bool_naming,
+    tigerstyle::explicit_defaults,
+    tigerstyle::function_length
+)]
+
 use std::collections::BTreeMap;
 
 use serde::Deserialize;

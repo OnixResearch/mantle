@@ -65,6 +65,10 @@ pub fn ca_output_path_name_typed(request: &CaOutputNameRequest) -> String {
     tigerstyle::ambiguous_params,
     reason = "stable compatibility wrapper admits values into the typed CA output-name request"
 )]
+#[allow(
+    tigerstyle::no_panic,
+    reason = "infallible legacy wrapper; input validation happens in CaOutputNameRequest::new"
+)]
 pub fn ca_output_path_name(drv_name: &str, output_name: &str) -> String {
     let request = CaOutputNameRequest::new(drv_name, output_name)
         .unwrap_or_else(|error| panic!("invalid CA output-name request: {}", error.as_str()));
@@ -113,6 +117,10 @@ pub struct CaOutputPlan {
 ///
 /// Pure function: reads only from the derivation's environment and
 /// output keys. No I/O.
+#[allow(
+    tigerstyle::no_panic,
+    reason = "panics guard programmer errors on names already validated by the typed constructors"
+)]
 pub fn plan_ca_outputs(
     drv_name: &str,
     outputs: &std::collections::BTreeMap<String, nix_compat::derivation::Output>,

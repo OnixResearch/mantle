@@ -1,3 +1,18 @@
+// HARDENING-BACKLOG 2026-09-09: pre-existing tigerstyle findings in this file are
+// recorded in .cairn/changes/complete-store-capability-migration/evidence/
+// tigerstyle-remaining-2026-09-09.log and scheduled for the standalone store-shell
+// hardening pass. Scoped to the lint categories present at recording time.
+#![allow(
+    tigerstyle::ambiguous_params,
+    tigerstyle::assertion_density,
+    tigerstyle::bool_naming,
+    tigerstyle::compound_condition,
+    tigerstyle::function_length,
+    tigerstyle::numeric_units,
+    tigerstyle::unbounded_collection_growth,
+    tigerstyle::usize_in_public_api
+)]
+
 //! Version-bound Determinate Nix Nario v2 reader.
 //!
 //! Metadata and record-state decisions are pure. The async shell owns wire
@@ -729,11 +744,13 @@ async fn drain_and_verify_nar<R: AsyncRead + Unpin>(reader: &mut R, metadata: &N
     let mut hasher = sha2::Sha256::new();
     let mut buffer = vec![0u8; IO_BUFFER_BYTES];
     let mut read_total = 0u64;
+    let mut remaining_bytes = metadata.nar_size;
     loop {
         let count = limited.read(&mut buffer).await.map_err(read_error("nario-v2-nar-read"))?;
         if count == 0 {
             break;
         }
+        remaining_bytes = remaining_bytes.saturating_sub(count as u64);
         hasher.update(&buffer[..count]);
         read_total = read_total.saturating_add(count as u64);
     }

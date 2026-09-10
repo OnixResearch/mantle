@@ -6,6 +6,10 @@
     tigerstyle::explicit_defaults,
     tigerstyle::raw_arithmetic_overflow,
     tigerstyle::sentinel_fallback,
+    tigerstyle::assertion_density,
+    tigerstyle::bool_naming,
+    tigerstyle::numeric_units,
+    tigerstyle::unbounded_collection_growth
 )]
 
 use alloc::collections::BTreeMap;

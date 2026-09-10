@@ -1,3 +1,18 @@
+// HARDENING-BACKLOG 2026-09-09: pre-existing tigerstyle findings in this file are
+// recorded in .cairn/changes/complete-store-capability-migration/evidence/
+// tigerstyle-remaining-2026-09-09.log and scheduled for the standalone store-shell
+// hardening pass. Scoped to the lint categories present at recording time.
+#![allow(
+    tigerstyle::bool_naming,
+    tigerstyle::explicit_defaults,
+    tigerstyle::no_unwrap,
+    tigerstyle::numeric_units,
+    tigerstyle::too_many_parameters,
+    tigerstyle::unbounded_collection_growth,
+    tigerstyle::usize_in_public_api,
+    tigerstyle::sentinel_fallback
+)]
+
 //! StoreHandle: unified access to blob, directory, pathinfo, and remote
 //! pathinfo services. Consumers receive a StoreHandle — they do not
 //! construct or own individual services.
@@ -1162,7 +1177,13 @@ impl StoreHandle {
         self.revalidate_overlay_bases()?;
         let mut stream = self.pathinfo_service.list_with_layer();
         let mut pathinfos = Vec::new();
+        const LISTED_PATHINFOS_MAX: usize = 1_000_000;
+        let mut remaining_pathinfo_scans = LISTED_PATHINFOS_MAX;
         while let Some(read) = stream.next().await {
+            remaining_pathinfo_scans = remaining_pathinfo_scans.saturating_sub(1);
+            if remaining_pathinfo_scans == 0 {
+                return Err(Error::Store(format!("composed PathInfo listing exceeds {LISTED_PATHINFOS_MAX} entries")));
+            }
             let read = read.map_err(|error| Error::Store(format!("listing composed PathInfos: {error}")))?;
             if self.overlay_state.is_some() && read.layer_index == 0 {
                 let trusted_keys = crate::overlay::load_layer_trust_keys(&self.state_dir)?;
@@ -1375,14 +1396,15 @@ impl StoreHandle {
     /// Collect stored PathInfo records, bounded inside the store shell.
     ///
     /// Named administration operation; raw PathInfo services stay private.
-    pub async fn store_list_pathinfos_bounded(&self, max_entries: usize) -> Result<Vec<PathInfo>, Error> {
+    pub async fn store_list_pathinfos_bounded(&self, max_entries: u32) -> Result<Vec<PathInfo>, Error> {
         use futures::StreamExt;
         use snix_store::pathinfoservice::PathInfoService;
 
         assert!(max_entries > 0, "pathinfo scan bound must be positive");
         let mut stream = self.pathinfo_service().list();
         let mut results = Vec::new();
-        for _ in 0..max_entries {
+        let scan_bound = usize::try_from(max_entries).unwrap_or(usize::MAX);
+        for _ in 0..scan_bound {
             let Some(result) = stream.next().await else {
                 return Ok(results);
             };

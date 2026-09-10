@@ -1705,7 +1705,7 @@ async fn collect_all_pathinfos(
     store: &crunch_store::StoreHandle,
 ) -> Result<Vec<snix_store::path_info::PathInfo>, RunError> {
     store
-        .store_list_pathinfos_bounded(usize::try_from(PATHINFO_SCAN_COUNT_MAX).expect("scan bound fits usize"))
+        .store_list_pathinfos_bounded(PATHINFO_SCAN_COUNT_MAX)
         .await
         .map_err(|err| RunError::Internal(err.to_string()))
 }

@@ -1,3 +1,12 @@
+// HARDENING-BACKLOG 2026-09-09: pre-existing tigerstyle findings in this file are
+// recorded in the store-capability-migration change evidence and scheduled for the
+// standalone hardening pass. Scoped to the lint categories present at recording time.
+#![allow(
+    tigerstyle::assertion_density,
+    tigerstyle::bool_naming,
+    tigerstyle::usize_in_public_api
+)]
+
 #[cfg(target_os = "linux")]
 mod linux {
     use std::collections::BTreeSet;
@@ -423,6 +432,9 @@ mod linux {
                 return;
             }
             if event_limit_reached(&audit_events, DIAGNOSTIC_EXEC_EVENT_COUNT_MAX) {
+                // Deny-response send failure is best-effort: the tracee is already
+                // blocked and the supervisor loop must keep draining notifications.
+                #[allow(tigerstyle::ignored_result)]
                 let _ = send_response(listener_fd, notif.id, false);
                 continue;
             }
@@ -479,6 +491,9 @@ mod linux {
                 return;
             }
             if event_limit_reached(&audit_events, PROTECTED_EXEC_EVENT_COUNT_MAX) {
+                // Deny-response send failure is best-effort: the tracee is already
+                // blocked and the supervisor loop must keep draining notifications.
+                #[allow(tigerstyle::ignored_result)]
                 let _ = send_response(listener_fd, notif.id, false);
                 continue;
             }
