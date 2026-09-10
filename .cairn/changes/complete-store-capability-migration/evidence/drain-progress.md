@@ -172,3 +172,25 @@ bootstrap blocker inventory can.
 Conclusion: the archive gate leg is blocked by real, correctly-reported
 bootstrap debt. The store-capability change is implementation-complete with
 every other check green.
+
+## Update 2026-09-09 (9) — flake check convergence status
+
+FIXED this round: tigerstyle (workspace green), clippy (mantlepkgs absurd
+asserts + composition cfg/kani + constant assert), stale durable-publication
+digests, .cairn + composition-roots + evaluation-budget fixtures admitted
+into the flake source filter, bootstrap blocker inventory (115 -> 0 findings
+via per-finding adjudication: timeout probes, stagex lineage receipts,
+tcc-musl handoff receipt, negative-fact evidence, updated stale evidence
+needles), stale row-receipt source digests (24 refreshed), gcc-4.0 cc1
+frontier validation retargeted to the split derivation family, examples
+catalog entries for the two unchecked probe shells, evaluator-budget
+env-fixture tests gated on debug_assertions.
+
+REMAINING: exactly one flake-check failure —
+`foreign_import_cli_produces_nixpkgs_artifacts_from_drv_dir_without_nix`
+fails ONLY inside the nix sandbox (exit 1, empty stderr) while passing
+locally. Same class as the previously fixed fixture-admission failures:
+suspect the fake-PATH environment or a missing sandbox file. Next step:
+run that single test under `nix build .#checks.x86_64-linux.nextest`
+with stdbuf tracing inside the drv, or compare `mantle --json
+foreign-import produce-nix ...` stdout/exit between local and sandbox runs.
