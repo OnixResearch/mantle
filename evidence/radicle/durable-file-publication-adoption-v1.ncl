@@ -103,7 +103,7 @@ let receipt | AdoptionReceipt = {
     package = "durable-file-publication",
   },
   nix = {
-    flake_blake3 = "484cc240f39d3554d728136396d2c5d5268e87e19cf74ca7a159c6614b3e19ea",
+    flake_blake3 = "9f4b4c843d1057395ada1dc0fc0de30dad7227952c869b537e6865e355d4bd85",
     lock_blake3 = "08eb2ac5776fbe586afbf3e51c186823744798b0720c7739e46dd9f3b186441b",
     locked_url = source_url,
     original_url = source_url,
