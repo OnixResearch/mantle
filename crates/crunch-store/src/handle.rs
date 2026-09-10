@@ -1234,7 +1234,7 @@ impl StoreHandle {
             }
         }
 
-        assert_eq!(pathinfos.len() <= LISTED_PATHINFOS_MAX, true, "listing bound must hold");
+        assert!(pathinfos.len() <= LISTED_PATHINFOS_MAX, "listing bound must hold");
         pathinfos.sort_by(|left, right| left.value.store_path.cmp(&right.value.store_path));
         self.revalidate_overlay_bases()?;
         Ok(pathinfos)
