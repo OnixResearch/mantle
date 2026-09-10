@@ -1076,6 +1076,11 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn frontend_cas_rejects_special_files_before_oci_projection() {
+        // Unix sockets may not round-trip as special files on sandbox filesystems.
+        if std::env::var_os("NIX_BUILD_TOP").is_some() {
+            eprintln!("SKIP: Unix socket special-file detection unavailable inside Nix build sandbox");
+            return;
+        }
         let temporary = tempfile::tempdir().expect("special-file fixture should exist");
         let source = temporary.path().join("source");
         fs::create_dir(&source).expect("special-file source should exist");
