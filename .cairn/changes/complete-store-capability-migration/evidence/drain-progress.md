@@ -213,3 +213,27 @@ main; each green layer exposes the next environment-dependent failure.
 This is main-level gate convergence work, continued independently of the
 store-capability change implementation (which is complete and green on
 every focused check).
+
+## Update 2026-09-10 — flake convergence, round 3
+
+Fixed: bootstrap blocker inventory 0 findings (scanner adjudication rules +
+retargeted stale evidence needles), drv-dir fixture name-content mismatch,
+foreign-class expectations, composition/eval-budget/portable-client/
+build-contract tigerstyle+clippy, machine-schema surface count 21→23,
+runbook doc phrase wraps, operator contract drift (--evaluation-stream +
+4 mantlepkgs version subcommands admitted into surfaces policy, catalog/
+reference/workflow regenerated), removed-system-cli scan bound 512→1024.
+
+Remaining nextest blocker (1): `store_gc_cli
+store_info_reports_base_layer_without_mutating_base` — fails on origin/main
+too (verified: identical "no PathInfo matching 'cli-base'" on a
+/tmp/mantle-main-check checkout of origin/main). Root cause identified but
+unfixed: the overlay base state dir contains a dangling `signing-key`
+symlink that `observe_base`'s fail-closed generation walk rejects; whoever
+creates that symlink (CLI signing-key auto-generate at
+config_dir_or(state_dir)/signing-key) is leaving it dangling in the base
+dir during the test. Fix requires deciding: create a real signing-key in
+the seed's base state, or make the base-state symlink creator consistent.
+After that: rerun full nextest (nextest cancels on first failure, so more
+latent failures may surface), then full flake check, sync, archive,
+integrate.

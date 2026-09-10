@@ -1174,29 +1174,62 @@ impl StoreHandle {
     }
 
     pub async fn list_pathinfos_with_layer(&self) -> Result<Vec<crate::layer::Layered<PathInfo>>, Error> {
+        use futures::StreamExt;
+        use snix_store::pathinfoservice::PathInfoService;
+
         self.revalidate_overlay_bases()?;
-        let mut stream = self.pathinfo_service.list_with_layer();
-        let mut pathinfos = Vec::new();
         const LISTED_PATHINFOS_MAX: usize = 1_000_000;
-        let mut remaining_pathinfo_scans = LISTED_PATHINFOS_MAX;
-        while let Some(read) = stream.next().await {
-            remaining_pathinfo_scans = remaining_pathinfo_scans.saturating_sub(1);
-            if remaining_pathinfo_scans == 0 {
-                return Err(Error::Store(format!("composed PathInfo listing exceeds {LISTED_PATHINFOS_MAX} entries")));
-            }
-            let read = read.map_err(|error| Error::Store(format!("listing composed PathInfos: {error}")))?;
-            if self.overlay_state.is_some() && read.layer_index == 0 {
-                let trusted_keys = crate::overlay::load_layer_trust_keys(&self.state_dir)?;
-                crate::overlay::verify_pathinfo_trust(&read.value, &trusted_keys).map_err(|error| {
-                    Error::Store(format!("overlay-layer-trust-failure for {}: {error}", read.value.store_path))
+        let mut pathinfos = Vec::new();
+        let mut seen = std::collections::BTreeSet::new();
+
+        // Layer 0: the writable overlay. Trust-check entries against the
+        // overlay trusted keys exactly as before.
+        let mut overlay_stream = self.overlay_pathinfo.list();
+        let overlay_trusted_keys = if self.overlay_state.is_some() {
+            Some(crate::overlay::load_layer_trust_keys(&self.state_dir)?)
+        } else {
+            None
+        };
+        let mut remaining = LISTED_PATHINFOS_MAX;
+        while let Some(result) = overlay_stream.next().await {
+            assert!(remaining > 0, "composed PathInfo listing exceeds {LISTED_PATHINFOS_MAX} entries");
+            remaining -= 1;
+            let path_info = result.map_err(|err| Error::Store(format!("listing overlay PathInfos: {err}")))?;
+            if let Some(trusted_keys) = &overlay_trusted_keys {
+                crate::overlay::verify_pathinfo_trust(&path_info, trusted_keys).map_err(|error| {
+                    Error::Store(format!("overlay-layer-trust-failure for {}: {error}", path_info.store_path))
                 })?;
             }
-            let shadows = self.pathinfo_shadow_observations(read.layer_index, &read.value).await;
-            let mut layered = crate::layer::Layered::from_service_index(read.value, read.layer_index)
-                .map_err(|error| Error::Store(format!("mapping listed PathInfo layer: {error}")))?;
+            seen.insert(path_info.store_path.clone());
+            let shadows = self.pathinfo_shadow_observations(0, &path_info).await;
+            let mut layered = crate::layer::Layered::from_service_index(path_info, 0)
+                .map_err(|error| Error::Store(format!("mapping listed overlay PathInfo layer: {error}")))?;
             layered.shadows = shadows;
             pathinfos.push(layered);
         }
+
+        // Layers 1..: base stores in declaration order; entries already
+        // present in a nearer layer are shadowed and skipped.
+        for (base_index, base) in self.base_pathinfo_inspection_services.iter().enumerate() {
+            let service_index = base_index.checked_add(1).ok_or_else(|| Error::Store("base index overflow".into()))?;
+            assert!(remaining > 0, "composed PathInfo listing exceeds {LISTED_PATHINFOS_MAX} entries");
+            let mut base_stream = base.list();
+            while let Some(result) = base_stream.next().await {
+                assert!(remaining > 0, "composed PathInfo listing exceeds {LISTED_PATHINFOS_MAX} entries");
+                remaining -= 1;
+                let path_info = result.map_err(|err| Error::Store(format!("listing base PathInfos: {err}")))?;
+                if !seen.insert(path_info.store_path.clone()) {
+                    continue;
+                }
+                let shadows = self.pathinfo_shadow_observations(service_index, &path_info).await;
+                let mut layered = crate::layer::Layered::from_service_index(path_info, service_index)
+                    .map_err(|error| Error::Store(format!("mapping listed base PathInfo layer: {error}")))?;
+                layered.shadows = shadows;
+                pathinfos.push(layered);
+            }
+        }
+
+        assert_eq!(pathinfos.len() <= LISTED_PATHINFOS_MAX, true, "listing bound must hold");
         pathinfos.sort_by(|left, right| left.value.store_path.cmp(&right.value.store_path));
         self.revalidate_overlay_bases()?;
         Ok(pathinfos)
