@@ -1,6 +1,6 @@
 {
   "schema": "mantle-operator-command-catalog-v1",
-  "identity_blake3": "72acdf422788614d163966a8e464623276ee49535fb936c629e45f5554ec1277",
+  "identity_blake3": "f081c83e89ec3d841541716ea5cf322f80d323b0552b95879ec70fb90e28b707",
   "entries": [
     {
       "descriptor": {
@@ -1990,6 +1990,7 @@
           "--builder",
           "--builder-arg",
           "--builder-program",
+          "--evaluation-stream",
           "--fix",
           "--help",
           "--import-path",
@@ -2045,6 +2046,7 @@
           "--builder",
           "--builder-arg",
           "--builder-program",
+          "--evaluation-stream",
           "--fix",
           "--help",
           "--import-path",
@@ -5066,6 +5068,256 @@
           "--json",
           "--log-level",
           "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "mantlepkgs version",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Resolve historical package versions before ordinary Mantlepkgs production",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "mantlepkgs version",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "mantlepkgs version index",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--cohort",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--nix-program",
+          "--output-root",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Observe one exact revision cohort and publish a compact per-system index",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "mantlepkgs version index",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--cohort",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--nix-program",
+          "--output-root",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "mantlepkgs version recheck",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--nix-program",
+          "--output-root",
+          "--plan",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--template-manifest",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Recheck selected revisions and emit existing Mantlepkgs manifests",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "mantlepkgs version recheck",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--nix-program",
+          "--output-root",
+          "--plan",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--template-manifest",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "exit_classes": [
+          "policy-rejection",
+          "success",
+          "usage"
+        ],
+        "machine_schema": "mantle-command-json-v1",
+        "migration_reference": null,
+        "removal_gate": null
+      }
+    },
+    {
+      "descriptor": {
+        "path": "mantlepkgs version resolve",
+        "aliases": [],
+        "flags": [
+          "--base-store",
+          "--help",
+          "--index",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--output-root",
+          "--policy",
+          "--requests",
+          "--state-dir",
+          "--store",
+          "--store-prefix",
+          "--verbose",
+          "-h",
+          "-v"
+        ],
+        "help": "Replay a saved index and publish deterministic receipts and revision groups",
+        "supports_json": true
+      },
+      "policy": {
+        "kind": "command",
+        "canonical": "mantlepkgs version resolve",
+        "compatibility_spellings": [],
+        "owner": "mantle-cli",
+        "role": "public-command",
+        "supported_operations": [
+          "invoke",
+          "read-help"
+        ],
+        "support_tier": "advanced",
+        "mutation": "none",
+        "network": "none",
+        "compatibility_state": "canonical",
+        "flags": [
+          "--base-store",
+          "--help",
+          "--index",
+          "--json",
+          "--log-level",
+          "--nix-compat",
+          "--output-root",
+          "--policy",
+          "--requests",
           "--state-dir",
           "--store",
           "--store-prefix",

@@ -1,6 +1,6 @@
 # Mantle command reference
 
-Catalog BLAKE3: `72acdf422788614d163966a8e464623276ee49535fb936c629e45f5554ec1277`
+Catalog BLAKE3: `f081c83e89ec3d841541716ea5cf322f80d323b0552b95879ec70fb90e28b707`
 
 ## Daily commands
 
@@ -702,6 +702,42 @@ Realize one separate validation root through the ordinary foreign build boundary
 ### `mantle mantlepkgs verify`
 
 Verify one complete catalog generation and every bound artifact
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle mantlepkgs version`
+
+Resolve historical package versions before ordinary Mantlepkgs production
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle mantlepkgs version index`
+
+Observe one exact revision cohort and publish a compact per-system index
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle mantlepkgs version recheck`
+
+Recheck selected revisions and emit existing Mantlepkgs manifests
+
+- Mutation: `none`
+- Network: `none`
+- Exit classes: `policy-rejection, success, usage`
+- JSON schema: `mantle-command-json-v1`
+
+### `mantle mantlepkgs version resolve`
+
+Replay a saved index and publish deterministic receipts and revision groups
 
 - Mutation: `none`
 - Network: `none`
