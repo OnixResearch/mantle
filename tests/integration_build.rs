@@ -178,9 +178,7 @@ fn stdlib_import_path() -> Vec<OsString> {
 /// Inside a Nix build sandbox the binary exists but nested namespace
 /// creation fails, so a bare `--version` probe is not enough.
 fn has_bwrap() -> bool {
-    let probe = std::process::Command::new("bwrap")
-        .args(["--ro-bind", "/", "/", "--", "/bin/true"])
-        .output();
+    let probe = std::process::Command::new("bwrap").args(["--ro-bind", "/", "/", "--", "/bin/true"]).output();
     match probe {
         Ok(output) => output.status.success(),
         Err(_) => false,
