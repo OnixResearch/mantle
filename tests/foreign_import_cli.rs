@@ -924,7 +924,9 @@ fn foreign_import_cli_rejects_drv_dir_missing_reachable_input_without_partial_ar
         .get_output()
         .clone();
 
-    assert_rejected_class(output.stdout, "missing-nix-input-derivation");
+    // The drv-dir loader validates the foreign ATerm closure before the nix
+    // closure walk, so the missing reachable input surfaces with the foreign class.
+    assert_rejected_class(output.stdout, "missing-foreign-input-derivation");
     assert!(output.stderr.is_empty());
     assert!(!out_dir.join("nixpkgs.graph.json").exists());
     assert!(!out_dir.join("nixpkgs.index.json").exists());
