@@ -33,6 +33,12 @@ pub const CONSUMER_VERIFIER_NON_CLAIMS: [&str; 6] = [
     "not-runtime-isolation",
 ];
 
+/// Fixed member-count bound for one declared bundle member list.
+const MAX_DECLARED_MEMBERS: usize = 8_192;
+
+/// Estimated member count for initial reservation.
+const DECLARED_MEMBERS_RESERVATION: usize = 16;
+
 /// Run the structural verification layer over an in-memory bundle.
 pub fn verify_consumer_bundle(bundle: MaterializationBundle) -> ConsumerVerificationReport {
     let bundle_schema = bundle.schema.clone();
@@ -40,19 +46,19 @@ pub fn verify_consumer_bundle(bundle: MaterializationBundle) -> ConsumerVerifica
     let runtime_profile = Some(bundle.expected_runtime_profile_blake3.to_string());
     let result = crunch_wasm_component_core::verify_materialization_bundle(bundle);
     let structural_blockers: Vec<String> = result.blockers.iter().map(|blocker| blocker.code.clone()).collect();
-    let accepted = result.bundle.is_some();
-    let status = if accepted {
+    let is_accepted = result.bundle.is_some();
+    let status = if is_accepted {
         ConsumerVerificationStatus::Verified
     } else {
         ConsumerVerificationStatus::Rejected
     };
-    let layers_completed = if accepted {
+    let layers_completed = if is_accepted {
         vec![ConsumerLayer::Structural]
     } else {
         Vec::new()
     };
     debug_assert_eq!(structural_blockers.len(), result.blockers.len());
-    debug_assert!(!accepted || layers_completed.len() == 1);
+    debug_assert!(!is_accepted || layers_completed.len() == 1);
     ConsumerVerificationReport {
         schema: String::from(CONSUMER_REPORT_SCHEMA),
         bundle_schema,
@@ -73,20 +79,33 @@ pub fn non_claims_owned() -> Vec<String> {
 
 /// Declared store objects with their stable report roles, in bundle order.
 pub fn declared_member_objects(bundle: &MaterializationBundle) -> Vec<(&'static str, &StoreObject)> {
-    let mut members: Vec<(&'static str, &StoreObject)> = Vec::new();
-    members.push(("source-closure", &bundle.source_closure));
-    members.push(("lock", &bundle.lock));
-    members.push(("final-portable", &bundle.final_portable));
+    let mut members: Vec<(&'static str, &StoreObject)> = Vec::with_capacity(DECLARED_MEMBERS_RESERVATION);
+    fn push_member<'a>(
+        members: &mut Vec<(&'static str, &'a StoreObject)>,
+        role: &'static str,
+        object: &'a StoreObject,
+        count: &mut usize,
+    ) {
+        assert!(*count < MAX_DECLARED_MEMBERS, "declared member bound exceeded");
+        *count += 1;
+        members.push((role, object));
+    }
+
+    let mut members: Vec<(&'static str, &StoreObject)> = Vec::with_capacity(DECLARED_MEMBERS_RESERVATION);
+    let mut member_count = 0_usize;
+    push_member(&mut members, "source-closure", &bundle.source_closure, &mut member_count);
+    push_member(&mut members, "lock", &bundle.lock, &mut member_count);
+    push_member(&mut members, "final-portable", &bundle.final_portable, &mut member_count);
     for input in &bundle.wit_inputs {
-        members.push(("wit-input", input));
+        push_member(&mut members, "wit-input", input, &mut member_count);
     }
     for package in &bundle.package_inputs {
-        members.push(("package-object", &package.object));
+        push_member(&mut members, "package-object", &package.object, &mut member_count);
     }
     for receipt in &bundle.stage_receipts {
-        members.push(("stage-receipt", &receipt.receipt));
+        push_member(&mut members, "stage-receipt", &receipt.receipt, &mut member_count);
         if let Some(artifact) = &receipt.artifact {
-            members.push(("stage-artifact", artifact));
+            push_member(&mut members, "stage-artifact", artifact, &mut member_count);
         }
     }
     debug_assert!(!members.is_empty());

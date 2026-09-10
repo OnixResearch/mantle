@@ -95,23 +95,23 @@ impl ConsumerRoot {
     /// byte layer that cannot resolve required bytes reports `blocked`;
     /// drifted bytes report the drift blocker and `rejected`.
     pub fn verify_bundle(&self, bundle: MaterializationBundle) -> Result<ConsumerVerificationReport, ShellError> {
-        let mut report = verify_consumer_bundle(bundle.clone());
-        if report.status != ConsumerVerificationStatus::Verified {
-            return Ok(report);
+        let mut structural_outcome = verify_consumer_bundle(bundle.clone());
+        if structural_outcome.status != ConsumerVerificationStatus::Verified {
+            return Ok(structural_outcome);
         }
         let required = required_members(&bundle)?;
-        self.run_byte_layer(&required, &mut report);
-        Ok(report)
+        self.run_byte_layer(&required, &mut structural_outcome);
+        Ok(structural_outcome)
     }
 
-    fn run_byte_layer(&self, required: &[RequiredMember], report: &mut ConsumerVerificationReport) {
-        let mut members = Vec::new();
+    fn run_byte_layer(&self, required: &[RequiredMember], structural_outcome: &mut ConsumerVerificationReport) {
+        let mut members = Vec::with_capacity(required.len());
         let mut missing = 0_u32;
         let mut mismatched = 0_u32;
         let mut total_bytes = 0_u64;
         // Measure each unique logical path once, then judge every member
         // that declares it against its own expected identity.
-        let mut measured: Vec<(&str, Measurement)> = Vec::new();
+        let mut measured: Vec<(&str, Measurement)> = Vec::with_capacity(required.len());
         for member in required {
             if measured.iter().any(|(path, _)| *path == member.logical_path.as_str()) {
                 continue;
@@ -121,12 +121,11 @@ impl ConsumerRoot {
             measured.push((member.logical_path.as_str(), measurement));
         }
         for member in required {
-            let shared = measured
-                .iter()
-                .find(|(path, _)| *path == member.logical_path.as_str())
-                .map(|(_, measurement)| measurement)
-                .expect("every member path was measured once");
-            let status = match shared {
+            let shared_measurement = match measured.iter().find(|(path, _)| *path == member.logical_path.as_str()) {
+                Some((_, measurement)) => measurement,
+                None => &Measurement::Missing,
+            };
+            let status = match shared_measurement {
                 Measurement::Missing => ConsumerMemberStatus::Missing,
                 Measurement::LengthMismatch => ConsumerMemberStatus::Mismatched,
                 Measurement::Identity(identity) => {
@@ -147,6 +146,11 @@ impl ConsumerRoot {
                 status,
                 ConsumerMemberStatus::Matched | ConsumerMemberStatus::Missing | ConsumerMemberStatus::Mismatched
             ));
+            let doubled = match required.len().checked_mul(2) {
+                Some(bound) => bound,
+                None => required.len(),
+            };
+            assert!(members.len() < doubled, "member observation bound exceeded");
             members.push(ConsumerMemberObservation {
                 role: member.role.clone(),
                 digest_blake3: member.digest_blake3.clone(),
@@ -154,18 +158,18 @@ impl ConsumerRoot {
                 status: Some(status),
             });
         }
-        report.members = members;
-        report.layers_completed.push(ConsumerLayer::Bytes);
-        report.status = if total_bytes > MAX_TOTAL_REMEASURED_BYTES {
-            report.blockers.push(String::from(BLOCKER_TOTAL_BOUND));
+        structural_outcome.members = members;
+        structural_outcome.layers_completed.push(ConsumerLayer::Bytes);
+        structural_outcome.status = if total_bytes > MAX_TOTAL_REMEASURED_BYTES {
+            structural_outcome.blockers.push(String::from(BLOCKER_TOTAL_BOUND));
             ConsumerVerificationStatus::Rejected
         } else if missing > 0 {
             ConsumerVerificationStatus::Blocked
         } else if mismatched > 0 {
-            report.blockers.push(String::from(BLOCKER_MEMBER_DRIFT));
+            structural_outcome.blockers.push(String::from(BLOCKER_MEMBER_DRIFT));
             ConsumerVerificationStatus::Rejected
         } else {
-            debug_assert!(report.blockers.is_empty());
+            debug_assert!(structural_outcome.blockers.is_empty());
             debug_assert!(missing == 0 && mismatched == 0);
             ConsumerVerificationStatus::Verified
         };
@@ -193,8 +197,8 @@ impl ConsumerRoot {
             return Measurement::LengthMismatch;
         }
         let mut bytes = Vec::new();
-        let read_limit = size_bytes.saturating_add(MEMBER_READ_HEADROOM_BYTES);
-        let mut handle = file.by_ref().take(read_limit);
+        let read_limit_bytes = size_bytes.saturating_add(MEMBER_READ_HEADROOM_BYTES);
+        let mut handle = file.by_ref().take(read_limit_bytes);
         if handle.read_to_end(&mut bytes).is_err() {
             return Measurement::Missing;
         }
@@ -211,7 +215,7 @@ impl ConsumerRoot {
 /// path once and judges every declaring member against its own identity.
 fn required_members(bundle: &MaterializationBundle) -> Result<Vec<RequiredMember>, ShellError> {
     let declared = declared_member_objects(bundle);
-    let mut members = Vec::new();
+    let mut members = Vec::with_capacity(declared.len());
     for (role, object) in &declared {
         let StoreObject {
             logical_path,
