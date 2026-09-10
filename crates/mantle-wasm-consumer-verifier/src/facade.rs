@@ -79,7 +79,6 @@ pub fn non_claims_owned() -> Vec<String> {
 
 /// Declared store objects with their stable report roles, in bundle order.
 pub fn declared_member_objects(bundle: &MaterializationBundle) -> Vec<(&'static str, &StoreObject)> {
-    let mut members: Vec<(&'static str, &StoreObject)> = Vec::with_capacity(DECLARED_MEMBERS_RESERVATION);
     fn push_member<'a>(
         members: &mut Vec<(&'static str, &'a StoreObject)>,
         role: &'static str,
