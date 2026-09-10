@@ -54,6 +54,7 @@ const NARIO_FORMAT_VERSION: u32 = 2;
 const NARIO_STORE_PATH: &str = "fixtures/nario-v2/store-path.txt";
 const GUIX_SOURCE_PREFIX: &str = "/gnu/store";
 const NIXPKGS_HELLO_DRV: &str = "/nix/store/22222222222222222222222222222222-hello.drv";
+const NIXPKGS_UNRELATED_DRV_FILE: &str = "nixpkgs-unrelated.drv";
 const NIXPKGS_SOURCE_DRV: &str = "/nix/store/44444444444444444444444444444444-hello-source.drv";
 const GUIXPKGS_HELLO_DRV: &str = "/gnu/store/22222222222222222222222222222222-hello.drv";
 const GUIXPKGS_SOURCE_DRV: &str = "/gnu/store/44444444444444444444444444444444-hello-source.drv";
@@ -1575,7 +1576,7 @@ fn write_guix_drv_dir_fixture(drv_dir: &Path, include_source: bool) {
 fn write_drv_dir_fixture(drv_dir: &Path, include_source: bool) {
     fs::create_dir(drv_dir).expect("drv dir should be created");
     copy_drv_fixture(drv_dir, NIXPKGS_HELLO_DRV, NIXPKGS_ROOT_DRV_FILE);
-    copy_drv_fixture(drv_dir, NIXPKGS_UNRELATED_DRV, NIXPKGS_SOURCE_DRV_FILE);
+    copy_drv_fixture(drv_dir, NIXPKGS_UNRELATED_DRV, NIXPKGS_UNRELATED_DRV_FILE);
     if include_source {
         copy_drv_fixture(drv_dir, NIXPKGS_SOURCE_DRV, NIXPKGS_SOURCE_DRV_FILE);
     }

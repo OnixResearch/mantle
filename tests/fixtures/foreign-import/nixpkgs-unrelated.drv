@@ -1,0 +1,1 @@
+Derive([("out","/nix/store/3hhw2bwv8ifng3h0hlk6bz95r53131ki-unrelated","","")],[],[],"x86_64-linux","/bin/sh",["-c","true"],[("builder","/bin/sh"),("name","unrelated"),("out","/nix/store/3hhw2bwv8ifng3h0hlk6bz95r53131ki-unrelated"),("system","x86_64-linux")])
