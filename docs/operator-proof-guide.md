@@ -66,10 +66,11 @@ mantle build --offline-source-preflight --no-substitute ./package.ncl
 For proof-before-claim reporting, cite the source preflight `ready_class`,
 `source_state_blake3`, and `next_actions[]` plus build JSON
 `network_policy_reports[]`, `cargo_build_evidence[]`, and
-`cargo_build_evidence_diagnostics[]`. The source bundle evidence proves declared
-source/input availability and identity only, and source-bundle route execution is
-future work. If a report has next actions or diagnostics, describe the blocker
-and the next command instead of claiming success.
+`cargo_build_evidence_diagnostics[]`.
+The source bundle evidence proves declared source/input availability and identity only.
+The source-bundle route execution is future work.
+If a report has next actions or diagnostics, describe the blocker and the next
+command instead of claiming success.
 
 ## Self-build proof
 
