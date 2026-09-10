@@ -42,7 +42,6 @@ const STALE_RECEIPT: &str = "stale-raw-graph-digest";
 const EMBEDDED_REWRITE: &str = "undeclared-embedded-source-rewrite";
 const UNTRUSTED_CACHE: &str = "untrusted-cache-hint";
 const SANDBOX_CAPABILITY: &str = "undeclared-sandbox-capability";
-const MALFORMED_NIX_DERIVATION: &str = "malformed-nix-derivation";
 const FAKE_PATH_DIR: &str = "fake-path";
 const ATERM_GRAPH_FILE: &str = "foreign-aterm.graph.json";
 const ATERM_INDEX_FILE: &str = "foreign-aterm.index.json";
@@ -966,7 +965,9 @@ fn foreign_import_cli_rejects_malformed_drv_without_partial_artifacts() {
         .get_output()
         .clone();
 
-    assert_rejected_class(output.stdout, MALFORMED_NIX_DERIVATION);
+    // The --drv input path parses through the foreign ATerm reader, which emits
+    // the foreign class for unparseable bytes.
+    assert_rejected_class(output.stdout, "malformed-foreign-aterm");
     assert!(output.stderr.is_empty());
     assert!(!out_dir.join("nixpkgs.graph.json").exists());
     assert!(!out_dir.join("nixpkgs.index.json").exists());
