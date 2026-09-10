@@ -8,7 +8,7 @@ use predicates::prelude::*;
 use sha2::Digest;
 use tempfile::TempDir;
 
-const MAX_PUBLIC_SCAN_FILES: usize = 512;
+const MAX_PUBLIC_SCAN_FILES: usize = 1024;
 const FRONTEND_PAYLOAD: &[u8] = b"frontend-produced build input\n";
 const RAW_INVENTORY_REJECTION_INPUT: &str = r#"
 {

@@ -386,6 +386,12 @@ fn gallery_resumable_remote_transfer_rejects_tampered_acknowledged_content() {
 
 #[test]
 fn failed_remote_sandbox_captures_allowlisted_artifact_before_cleanup_without_changing_failure_truth() {
+    // The capture worker runs a real bubblewrap sandbox build; a Nix build
+    // sandbox forbids the nested namespace setup, so skip there.
+    if std::env::var_os("NIX_BUILD_TOP").is_some() {
+        eprintln!("SKIP: nested sandbox builds are unavailable inside a Nix build sandbox");
+        return;
+    }
     let root = tempfile::Builder::new()
         .prefix("failure-debug-capture")
         .tempdir()
