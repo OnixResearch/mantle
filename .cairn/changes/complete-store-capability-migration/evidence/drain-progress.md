@@ -194,3 +194,22 @@ suspect the fake-PATH environment or a missing sandbox file. Next step:
 run that single test under `nix build .#checks.x86_64-linux.nextest`
 with stdbuf tracing inside the drv, or compare `mantle --json
 foreign-import produce-nix ...` stdout/exit between local and sandbox runs.
+
+## Update 2026-09-09 (10) — flake convergence continues
+
+This round fixed: drv-dir fixture name-content mismatch (real unrelated
+derivation fixture), drv-dir missing-input and malformed-drv class
+expectations, examples catalog entries, evaluator-budget release gating,
+composition-core clippy (kani cfg + constant assert), bootstrap blocker
+inventory (0 findings), clippy check.
+
+Remaining flake-check failure (nextest): `integration_build
+end_to_end_overlay_build_reads_base_only_input_without_backfill` — a real
+bwrap overlay build asserts a base-only source layer selection that does
+not appear under the nix build sandbox. Full log:
+evidence/nextest-overlay-remaining.txt. nextest cancels on first failure,
+so ~5000 tests behind it have still never run under the flake gate on
+main; each green layer exposes the next environment-dependent failure.
+This is main-level gate convergence work, continued independently of the
+store-capability change implementation (which is complete and green on
+every focused check).

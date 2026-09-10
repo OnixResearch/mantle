@@ -1,0 +1,13 @@
+filtered out; finished in 0.14s
+mantle-nextest>     
+mantle-nextest>   stderr ---
+mantle-nextest> 
+mantle-nextest>     thread 'end_to_end_overlay_build_reads_base_only_input_without_backfill' (21913) panicked at tests/integration_build.rs:543:14:
+mantle-nextest>     base-only source layer selection
+mantle-nextest>     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+mantle-nextest> 
+mantle-nextest>   Cancelling due to test failure:
+mantle-nextest> ------------
+mantle-nextest>      Summary [  29.564s] 489/5666 tests run: 488 passed, 1 failed, 150 skipped
+mantle-nextest>         FAIL [   0.147s] ( 489/5666) mantle::integration_build end_to_end_overlay_build_reads_base_only_input_without_backfill
+mantle-nextest> warning: 5177/5666 tests were not run due to test fa
