@@ -332,6 +332,7 @@ fn discovered_root_limit_fails_with_its_stable_class() {
     assert_eq!(report["error_class"], "evaluation-budget-limit-exceeded:discovered-roots");
 }
 
+#[cfg_attr(not(debug_assertions), ignore)] // needs the debug-only evaluator worker fixture hook compiled into the binary
 #[test]
 fn process_fixtures_classify_crash_signal_protocol_overflow_and_memory() {
     let cases = [
@@ -364,6 +365,7 @@ fn process_fixtures_classify_crash_signal_protocol_overflow_and_memory() {
     }
 }
 
+#[cfg_attr(not(debug_assertions), ignore)] // needs the debug-only evaluator worker fixture hook compiled into the binary
 #[test]
 fn cpu_exhaustion_reaches_the_enforced_cpu_terminal_class() {
     let temporary = tempfile::tempdir().unwrap();
@@ -387,6 +389,7 @@ fn cpu_exhaustion_reaches_the_enforced_cpu_terminal_class() {
     assert_eq!(report["teardown"]["deadline_exceeded"], false);
 }
 
+#[cfg_attr(not(debug_assertions), ignore)] // needs the debug-only evaluator worker fixture hook compiled into the binary
 #[test]
 fn process_fixtures_bound_stderr_and_make_late_results_terminal() {
     let temporary = tempfile::tempdir().unwrap();
@@ -451,6 +454,7 @@ fn process_fixtures_bound_stderr_and_make_late_results_terminal() {
     }
 }
 
+#[cfg_attr(not(debug_assertions), ignore)] // needs the debug-only evaluator worker fixture hook compiled into the binary
 #[test]
 fn simulated_reap_failure_blocks_a_clean_terminal_claim() {
     let temporary = tempfile::tempdir().unwrap();
@@ -474,6 +478,7 @@ fn simulated_reap_failure_blocks_a_clean_terminal_claim() {
     assert_eq!(report["teardown"]["response_present"], true);
 }
 
+#[cfg_attr(not(debug_assertions), ignore)] // needs the debug-only evaluator worker fixture hook compiled into the binary
 #[test]
 fn cancellation_is_terminal_and_reaps_a_late_worker() {
     let temporary = tempfile::tempdir().unwrap();

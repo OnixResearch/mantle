@@ -197,6 +197,8 @@ These commands inspect local build evidence. They are not release or witness pro
 | File | What it shows | Validation |
 |---|---|---|
 | `examples/benchmark_eval_smoke.rs` | Cheap evaluation benchmark bundle. | `tests/benchmark_harness.rs` |
+| `examples/distributed_eval_assess.rs` | Distributed evaluation feasibility probe shell. | `cargo run -p mantle --example distributed_eval_assess` |
+| `examples/picolibc_compare.rs` | Picolibc StageX comparison report shell. | `picolibc_compare --self-test` |
 | `examples/benchmark_suite.rs` | Full checked-in benchmark workload matrix. | `tests/benchmark_harness.rs` |
 | `examples/benchmark_compare.rs` | Compares two benchmark bundles. | `tests/benchmark_harness.rs` |
 | `examples/benchmark_eval_backends.rs` | Evaluation backend benchmark. | `tests/benchmark_harness.rs` |
