@@ -356,6 +356,7 @@
             || pkgs.lib.hasPrefix "${toString ./examples/transcripts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./schemas/machine-contracts}/" pathString
             || pkgs.lib.hasPrefix "${toString ./tests/fixtures}/" pathString
+            || pkgs.lib.hasPrefix "${toString ./fixtures/composition-roots}/" pathString
             || pkgs.lib.hasPrefix "${toString ./fixtures/nario-v2}/" pathString
             || isContentBoundRequirementFixture pathString
             || pkgs.lib.hasPrefix "${toString ./packages/kernelscript-experiment}/" pathString
