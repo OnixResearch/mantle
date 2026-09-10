@@ -38,6 +38,7 @@ members = [
   "crates/crunch-spacewasm",
   "crates/crunch-wasm-component-core",
   "crates/crunch-wasm-component",
+  "crates/mantle-wasm-consumer-verifier",
   "vendor/nix-compat",
   "vendor/nix-compat-derive",
   "vendor/snix-build",
@@ -94,6 +95,7 @@ default_scope = [
   "-p", "crunch-store",
   "-p", "crunch-wasm-component-core",
   "-p", "crunch-wasm-component",
+  "-p", "mantle-wasm-consumer-verifier",
 ]
 cargo_check_args = ["--lib"]
 

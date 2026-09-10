@@ -4901,6 +4901,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mantle-wasm-consumer-verifier"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "crunch-wasm-component-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "mantlepkgs-core"
 version = "0.1.0"
 dependencies = [
