@@ -3,29 +3,98 @@
   "row_id": "binutils.tcc",
   "derivation": "bootstrap/binutils-tcc.ncl",
   "source_records": [
-    {"path":"bootstrap/binutils-tcc.ncl","blake3":"406d4aaecf2cc8c9b357463fb8f48f185acaa67e77c4136e5908cca851efd177"},
-    {"path":"bootstrap/bison-2.3-musl.ncl","blake3":"a086f71d144ee17961fe8462fee3b1d9184af885e45ee0200aa133c9fd54bd63"},
-    {"path":"bootstrap/diffutils-2.7-musl.ncl","blake3":"51279c523c0443488a89650985fce68305233907ee2b915540978cb3271f1254"},
-    {"path":"bootstrap/flex-2.6.4-musl.ncl","blake3":"b9e11c2ef244ef9fab988d13bda45d0f0bdeabea8913964bb58cb00c9ac9688b"},
-    {"path":"bootstrap/gawk-3.0.4-musl.ncl","blake3":"1d35ef5716aea8d04a916ec05d3b4345256d4c4313205fd360b119aebb54b637"},
-    {"path":"bootstrap/m4-1.4.7-musl.ncl","blake3":"39671a43fce58c3cae66c38810b1912b27a29f7a5c134c84acf03b678af22e74"},
-    {"path":"bootstrap/musl-1.1.24-native.ncl","blake3":"0f86c28c5a4f7290002200871edede784e79566b4f02c9ebb1f22b654c1e6c1c"},
-    {"path":"bootstrap/tcc-musl-native.ncl","blake3":"513db983943a9c1d2037694310a133b073abd2820ce26b50c68bc2516d81f959"},
-    {"path":"bootstrap/tcc-musl-v2.ncl","blake3":"c82e4b5c375d3f9ba767c916ad4dba18e995d239755ea492ae94a007d2f49190"}
+    {
+      "path": "bootstrap/binutils-tcc.ncl",
+      "blake3": "406d4aaecf2cc8c9b357463fb8f48f185acaa67e77c4136e5908cca851efd177"
+    },
+    {
+      "path": "bootstrap/bison-2.3-musl.ncl",
+      "blake3": "a086f71d144ee17961fe8462fee3b1d9184af885e45ee0200aa133c9fd54bd63"
+    },
+    {
+      "path": "bootstrap/diffutils-2.7-musl.ncl",
+      "blake3": "51279c523c0443488a89650985fce68305233907ee2b915540978cb3271f1254"
+    },
+    {
+      "path": "bootstrap/flex-2.6.4-musl.ncl",
+      "blake3": "b9e11c2ef244ef9fab988d13bda45d0f0bdeabea8913964bb58cb00c9ac9688b"
+    },
+    {
+      "path": "bootstrap/gawk-3.0.4-musl.ncl",
+      "blake3": "1d35ef5716aea8d04a916ec05d3b4345256d4c4313205fd360b119aebb54b637"
+    },
+    {
+      "path": "bootstrap/m4-1.4.7-musl.ncl",
+      "blake3": "39671a43fce58c3cae66c38810b1912b27a29f7a5c134c84acf03b678af22e74"
+    },
+    {
+      "path": "bootstrap/musl-1.1.24-native.ncl",
+      "blake3": "0f86c28c5a4f7290002200871edede784e79566b4f02c9ebb1f22b654c1e6c1c"
+    },
+    {
+      "path": "bootstrap/tcc-musl-native.ncl",
+      "blake3": "f90eef8c64b3331d2d8f5b11a3dbd06ed518e68fc7efb3b0e109d49171fcf414"
+    },
+    {
+      "path": "bootstrap/tcc-musl-v2.ncl",
+      "blake3": "c82e4b5c375d3f9ba767c916ad4dba18e995d239755ea492ae94a007d2f49190"
+    }
   ],
   "predecessors": [
-    {"role":"bison-2.3","logical_path":"/mantle/store/4ag6mwv2pmsa0b8wii2zwc4jws5iajbk-bison-2.3-musl","artifact_evidence_path":"bootstrap/evidence/early-native-predecessors/bison-2.3.json","artifact_attestation_blake3":"522e77181687c7e7ff81ca205ab6644d55769ef9f71dc9c98a4d7b024be9279b"},
-    {"role":"flex-2.6.4","logical_path":"/mantle/store/cl7lwfbvv8sc46rv2a09xkfw28hnpxz1-flex-2.6.4-musl","artifact_evidence_path":"bootstrap/evidence/early-native-predecessors/flex-2.6.4.json","artifact_attestation_blake3":"e785eea62f1fb55b881bf4ca966ee3d10ba03fcda4cd87bf53b93703328e4c37"},
-    {"role":"gawk-3.0.4","logical_path":"/mantle/store/h895mi8sfc9i6r8wll20vh12yxphh4lp-gawk-3.0.4-musl","artifact_evidence_path":"bootstrap/evidence/early-native-predecessors/gawk-3.0.4.json","artifact_attestation_blake3":"833d328797e4c5150a3bafe20d08a75bfd22ab128c6c3687c77f5aea1ef8e2e5"},
-    {"role":"m4-1.4.7","logical_path":"/mantle/store/sbhp9842v5hv1xsmkpyxkr497jvpl8sc-m4-1.4.7-musl","artifact_evidence_path":"bootstrap/evidence/early-native-predecessors/m4-1.4.7.json","artifact_attestation_blake3":"f24cccb641eeeba0bbff976fe022ed2ba2bbf28fa0a1cb605a5c193e7eb8a55c"},
-    {"role":"native-musl","logical_path":"/mantle/store/z3cm11qxm3fh2ybnlhy82y83mq4yvdf9-musl-1.1.24-native-candidate","artifact_evidence_path":"bootstrap/evidence/early-native-predecessors/native-musl.json","artifact_attestation_blake3":"250eb710c9a5bb82d5e03bacfc33c49a0e677f3807f252e2aaedb96f092ddbae"},
-    {"role":"tcc-v2","logical_path":"/mantle/store/hh7ys4m19lyx4cdjbyadzkq937pbz3k3-tcc-0.9.27-musl-v2","artifact_evidence_path":"bootstrap/evidence/early-native-predecessors/tcc-v2.json","artifact_attestation_blake3":"79d1cfb4565d8e387f895265f33a7156794501c284c2c889055bb6c620cea67a"}
+    {
+      "role": "bison-2.3",
+      "logical_path": "/mantle/store/4ag6mwv2pmsa0b8wii2zwc4jws5iajbk-bison-2.3-musl",
+      "artifact_evidence_path": "bootstrap/evidence/early-native-predecessors/bison-2.3.json",
+      "artifact_attestation_blake3": "522e77181687c7e7ff81ca205ab6644d55769ef9f71dc9c98a4d7b024be9279b"
+    },
+    {
+      "role": "flex-2.6.4",
+      "logical_path": "/mantle/store/cl7lwfbvv8sc46rv2a09xkfw28hnpxz1-flex-2.6.4-musl",
+      "artifact_evidence_path": "bootstrap/evidence/early-native-predecessors/flex-2.6.4.json",
+      "artifact_attestation_blake3": "e785eea62f1fb55b881bf4ca966ee3d10ba03fcda4cd87bf53b93703328e4c37"
+    },
+    {
+      "role": "gawk-3.0.4",
+      "logical_path": "/mantle/store/h895mi8sfc9i6r8wll20vh12yxphh4lp-gawk-3.0.4-musl",
+      "artifact_evidence_path": "bootstrap/evidence/early-native-predecessors/gawk-3.0.4.json",
+      "artifact_attestation_blake3": "833d328797e4c5150a3bafe20d08a75bfd22ab128c6c3687c77f5aea1ef8e2e5"
+    },
+    {
+      "role": "m4-1.4.7",
+      "logical_path": "/mantle/store/sbhp9842v5hv1xsmkpyxkr497jvpl8sc-m4-1.4.7-musl",
+      "artifact_evidence_path": "bootstrap/evidence/early-native-predecessors/m4-1.4.7.json",
+      "artifact_attestation_blake3": "f24cccb641eeeba0bbff976fe022ed2ba2bbf28fa0a1cb605a5c193e7eb8a55c"
+    },
+    {
+      "role": "native-musl",
+      "logical_path": "/mantle/store/z3cm11qxm3fh2ybnlhy82y83mq4yvdf9-musl-1.1.24-native-candidate",
+      "artifact_evidence_path": "bootstrap/evidence/early-native-predecessors/native-musl.json",
+      "artifact_attestation_blake3": "250eb710c9a5bb82d5e03bacfc33c49a0e677f3807f252e2aaedb96f092ddbae"
+    },
+    {
+      "role": "tcc-v2",
+      "logical_path": "/mantle/store/hh7ys4m19lyx4cdjbyadzkq937pbz3k3-tcc-0.9.27-musl-v2",
+      "artifact_evidence_path": "bootstrap/evidence/early-native-predecessors/tcc-v2.json",
+      "artifact_attestation_blake3": "79d1cfb4565d8e387f895265f33a7156794501c284c2c889055bb6c620cea67a"
+    }
   ],
   "generated_artifacts": [
-    {"id":"bfd-two-pass-headers","status":"regenerated"},
-    {"id":"binutils-parser-scanner-set","status":"regenerated"},
-    {"id":"gas-parser-set","status":"regenerated"},
-    {"id":"ld-parser-scanner-set","status":"regenerated"}
+    {
+      "id": "bfd-two-pass-headers",
+      "status": "regenerated"
+    },
+    {
+      "id": "binutils-parser-scanner-set",
+      "status": "regenerated"
+    },
+    {
+      "id": "gas-parser-set",
+      "status": "regenerated"
+    },
+    {
+      "id": "ld-parser-scanner-set",
+      "status": "regenerated"
+    }
   ],
   "acceptance_evidence_path": "bootstrap/evidence/early-native-binutils-acceptance-v1.json",
   "output": {
@@ -36,24 +105,67 @@
   },
   "behavior": {
     "positive": [
-      {"id":"archive-roundtrip","status":"passed"},
-      {"id":"assemble-object","status":"passed"},
-      {"id":"link-execute","status":"passed"},
-      {"id":"nm-symbols","status":"passed"},
-      {"id":"objcopy-copy","status":"passed"},
-      {"id":"object-format-readelf","status":"passed"},
-      {"id":"ranlib-index","status":"passed"},
-      {"id":"relocation-link","status":"passed"}
+      {
+        "id": "archive-roundtrip",
+        "status": "passed"
+      },
+      {
+        "id": "assemble-object",
+        "status": "passed"
+      },
+      {
+        "id": "link-execute",
+        "status": "passed"
+      },
+      {
+        "id": "nm-symbols",
+        "status": "passed"
+      },
+      {
+        "id": "objcopy-copy",
+        "status": "passed"
+      },
+      {
+        "id": "object-format-readelf",
+        "status": "passed"
+      },
+      {
+        "id": "ranlib-index",
+        "status": "passed"
+      },
+      {
+        "id": "relocation-link",
+        "status": "passed"
+      }
     ],
     "rejection": [
-      {"id":"malformed-archive-rejected","status":"passed"},
-      {"id":"malformed-assembly-rejected","status":"passed"},
-      {"id":"malformed-link-input-rejected","status":"passed"},
-      {"id":"malformed-object-rejected","status":"passed"},
-      {"id":"missing-archive-member-rejected","status":"passed"}
+      {
+        "id": "malformed-archive-rejected",
+        "status": "passed"
+      },
+      {
+        "id": "malformed-assembly-rejected",
+        "status": "passed"
+      },
+      {
+        "id": "malformed-link-input-rejected",
+        "status": "passed"
+      },
+      {
+        "id": "malformed-object-rejected",
+        "status": "passed"
+      },
+      {
+        "id": "missing-archive-member-rejected",
+        "status": "passed"
+      }
     ]
   },
-  "trust": {"trust_unsigned":false,"signing_key_selected":true,"substitutions_enabled":false},
+  "trust": {
+    "trust_unsigned": false,
+    "signing_key_selected": true,
+    "substitutions_enabled": false
+  },
   "fallback": {
     "host_tool_execution": false,
     "predecessor_delegation": false,

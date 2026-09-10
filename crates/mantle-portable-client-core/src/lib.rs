@@ -1,4 +1,4 @@
-#![cfg_attr(not(kani), feature(register_tool))]
+#![feature(register_tool)]
 #![register_tool(tigerstyle)]
 #![no_std]
 

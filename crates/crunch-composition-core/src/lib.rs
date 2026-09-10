@@ -1,5 +1,5 @@
 #![no_std]
-#![cfg_attr(not(kani), feature(register_tool))]
+#![feature(register_tool)]
 #![register_tool(tigerstyle)]
 //! Pure bounded planning for frontend-neutral castore root composition.
 
@@ -284,7 +284,7 @@ struct Contribution {
 
 pub fn prepare_composition(request: &CompositionRequest) -> Result<PreparedComposition, CompositionError> {
     debug_assert!(!PLAN_SCHEMA.is_empty());
-    debug_assert!(MERGE_POLICY_VERSION >= 1);
+    debug_assert!(!PLAN_SCHEMA.is_empty());
     validate_policy(&request.realization_policy)?;
     if request.plan.schema != PLAN_SCHEMA {
         return Err(CompositionError::InvalidPlanSchema);

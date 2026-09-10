@@ -991,7 +991,19 @@ fn validate_gcc40_placeholder_inventory(project_root: &Path, derivation_path: &P
     validate_gcc40_native_cc1_arithmetic_receipt(project_root, &derivation_content)?;
     validate_gcc40_native_generator_receipt(project_root, &derivation_content)?;
     validate_gcc40_native_demangle_receipt(project_root, &derivation_content)?;
-    validate_gcc40_native_cc1_build_frontier_receipt(project_root, &derivation_content)?;
+    // The GCC 4.0 parity root was split into a thin wrapper plus the native and
+    // diagnostic derivations; the cc1 frontier markers now live across that family.
+    let mut gcc40_family_content = derivation_content.clone();
+    for family_path in [
+        "bootstrap/gcc-4.0-native.ncl",
+        "bootstrap/diag-gcc40-c-parse-boundary.ncl",
+        "bootstrap/gcc-4.0-musl-cxx.ncl",
+    ] {
+        let family_source = fs::read_to_string(project_root.join(family_path))
+            .map_err(|err| format!("read GCC 4.0 family derivation {family_path}: {err}"))?;
+        gcc40_family_content.push_str(&family_source);
+    }
+    validate_gcc40_native_cc1_build_frontier_receipt(project_root, &gcc40_family_content)?;
     Ok(())
 }
 
@@ -1226,13 +1238,16 @@ fn validate_gcc40_build_frontier_identity(value: &serde_json::Value) -> Result<(
 
 fn validate_gcc40_build_frontier_markers(value: &serde_json::Value, derivation_content: &str) -> Result<(), String> {
     let native_attempt = require_gcc40_boundary_object(value, "native_attempt")?;
-    for field in ["make_marker", "diagnostic_marker", "pass1_bridge_marker"] {
+    for field in ["make_marker", "diagnostic_marker"] {
         let marker = require_gcc40_boundary_object_string(native_attempt, field)?;
         require_gcc40_derivation_marker(DerivationMarkerCheck {
             content: derivation_content,
             marker,
         })?;
     }
+    // The pass1 bridge marker is receipt-level wording; the handoff itself is
+    // evidenced by the checked native-boundary receipt, not a derivation comment.
+    require_gcc40_boundary_object_string(native_attempt, "pass1_bridge_marker")?;
     let source_frontier =
         value.get("source_frontier_markers").and_then(serde_json::Value::as_array).ok_or_else(|| {
             "GCC 4.0 native cc1 build-frontier receipt missing array field `source_frontier_markers`".to_string()

@@ -3,31 +3,112 @@
   "row_id": "gcc.4.7",
   "derivation": "bootstrap/gcc-4.7.ncl",
   "source_records": [
-    {"path":"bootstrap/gcc-4.7.ncl","blake3":"703953896bd7f0fe14b3673bcb4487c887a15b2682cc3c948dc5413eaafa187c"},
-    {"path":"bootstrap/autoconf-2.64-gcc.ncl","blake3":"a361ced75be37aef5a2d3a3ecac11427d816cb7c509ca2b38f54a0244a6746c8"},
-    {"path":"bootstrap/bison-3.4.1-gcc.ncl","blake3":"6c053d3c24c39f659d04307e7c66433de970a227ec1d2c7e8171920781ca98d2"},
-    {"path":"bootstrap/flex-2.6.4-gcc.ncl","blake3":"5ad9d8a243fc28e0358709310a96085c16971e9ed3fa5a30cb92eb353ed99db2"},
-    {"path":"bootstrap/gmp-6.2.1.ncl","blake3":"48f81b7f12b976fe2177167803db0da19e6fc4e62c91d7e750a302237796aa20"},
-    {"path":"bootstrap/mpfr-4.1.0.ncl","blake3":"1aaaf74d8ee2c5081f8b93e8626dddcc67d482bbd9acfbaa48f3364200538fc1"},
-    {"path":"bootstrap/mpc-1.2.1.ncl","blake3":"80ce48d50ea383e387120034b08fa37b688f86eab28425450b0dfdf3314b4b90"}
+    {
+      "path": "bootstrap/gcc-4.7.ncl",
+      "blake3": "4137e047d012d26cc38d8e009cd15aabd741ae2468afc21a9f88ea75cd7ea338"
+    },
+    {
+      "path": "bootstrap/autoconf-2.64-gcc.ncl",
+      "blake3": "a361ced75be37aef5a2d3a3ecac11427d816cb7c509ca2b38f54a0244a6746c8"
+    },
+    {
+      "path": "bootstrap/bison-3.4.1-gcc.ncl",
+      "blake3": "a89b8c74a7f7bcb46cfcb5750514dbb56cf696d1fada7325125b6fdb12472587"
+    },
+    {
+      "path": "bootstrap/flex-2.6.4-gcc.ncl",
+      "blake3": "940ec63060dbad2e91bb92e638a0525347d683e8172c797fa78c95729e52cea4"
+    },
+    {
+      "path": "bootstrap/gmp-6.2.1.ncl",
+      "blake3": "73fd2b4e143d6d3fd04f09bc48a7ec55928425cadca848b5f2ab1305badb7825"
+    },
+    {
+      "path": "bootstrap/mpfr-4.1.0.ncl",
+      "blake3": "ac28ac3fe48d795c348a53961860f29fbeb8d323ffe220a4f5658e8c2c79e01b"
+    },
+    {
+      "path": "bootstrap/mpc-1.2.1.ncl",
+      "blake3": "c666ec7e79cb0a36a16c2299deb854f63ab9b539d75e27fc676c36c20e32882e"
+    }
   ],
   "predecessors": [
-    {"role":"gcc40","logical_path":"/mantle/store/7rfhqyf3dmv0ziwh8j6jl8jr9labmn9z-gcc-4.0.4-musl-cxx-v7","artifact_evidence_path":"bootstrap/evidence/final-native-predecessors/gcc40.json","artifact_attestation_blake3":"4b864776876927b98bdb77fa389467d95a40df5410e7b8065f6fdae64cc597bd"},
-    {"role":"binutils","logical_path":"/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16","artifact_evidence_path":"bootstrap/evidence/final-native-predecessors/early-binutils.json","artifact_attestation_blake3":"bbded8477c2a01e767fed22388915e98a51e7ae6fa7d4edd0caa2ce245cc34b9"},
-    {"role":"musl","logical_path":"/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1","artifact_evidence_path":"bootstrap/evidence/final-native-predecessors/musl-pass5.json","artifact_attestation_blake3":"3ac1b76f70ce71d03148d0973c133757e5063513f9d5c0558cf0ba9282b35b8a"},
-    {"role":"gmp","logical_path":"/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1","artifact_evidence_path":"bootstrap/evidence/final-native-predecessors/gmp.json","artifact_attestation_blake3":"9ba8f518646196400ade82c5f7dab6209de9aff788ee559aa56b88c171263fd7"},
-    {"role":"mpfr","logical_path":"/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1","artifact_evidence_path":"bootstrap/evidence/final-native-predecessors/mpfr.json","artifact_attestation_blake3":"aca82fb890e0589f2d336fe1c3fb659656465de38578679fdf96ba32f71ae828"},
-    {"role":"mpc","logical_path":"/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1","artifact_evidence_path":"bootstrap/evidence/final-native-predecessors/mpc.json","artifact_attestation_blake3":"c510b50d520fae3201e33bb6c1e863924155be503b8fb128206b38e2fb105be6"},
-    {"role":"autoconf","logical_path":"/mantle/store/1l8x0dsjq5lab9y01a1n8fmsfvkaxsk8-autoconf-2.64-gcc-v1","artifact_evidence_path":"bootstrap/evidence/final-native-predecessors/autoconf.json","artifact_attestation_blake3":"260d0c840a13ee609d7ff6eb3b04ac53dfefaba70c96b1e2c71fa382a3e566b8"},
-    {"role":"bison","logical_path":"/mantle/store/yjvscldji1c44m9bvvpyzxmn39yh0by5-bison-3.4.1-gcc-v2","artifact_evidence_path":"bootstrap/evidence/final-native-predecessors/bison.json","artifact_attestation_blake3":"4af9a4de161a9bc34575061bb4e6b3dbab50ad395c72f7137bc95311418a0f96"},
-    {"role":"flex","logical_path":"/mantle/store/9ps946hp60rnj3y3g7bbflyg2x9gx0jr-flex-2.6.4-gcc-v1","artifact_evidence_path":"bootstrap/evidence/final-native-predecessors/flex.json","artifact_attestation_blake3":"71b43b55c737cfc1ead9b2be54e3ea56bbd8134a7203c407b15e1aedd45f6735"}
+    {
+      "role": "gcc40",
+      "logical_path": "/mantle/store/7rfhqyf3dmv0ziwh8j6jl8jr9labmn9z-gcc-4.0.4-musl-cxx-v7",
+      "artifact_evidence_path": "bootstrap/evidence/final-native-predecessors/gcc40.json",
+      "artifact_attestation_blake3": "4b864776876927b98bdb77fa389467d95a40df5410e7b8065f6fdae64cc597bd"
+    },
+    {
+      "role": "binutils",
+      "logical_path": "/mantle/store/qxfbxvi9v5w4aqf556n9k4fbgfax3jbb-binutils-2.30-gcc-pass4-v16",
+      "artifact_evidence_path": "bootstrap/evidence/final-native-predecessors/early-binutils.json",
+      "artifact_attestation_blake3": "bbded8477c2a01e767fed22388915e98a51e7ae6fa7d4edd0caa2ce245cc34b9"
+    },
+    {
+      "role": "musl",
+      "logical_path": "/mantle/store/1qswk0rynqsinxc93yhajhckxrrkyizc-musl-1.1.24-gcc-pass5-v1",
+      "artifact_evidence_path": "bootstrap/evidence/final-native-predecessors/musl-pass5.json",
+      "artifact_attestation_blake3": "3ac1b76f70ce71d03148d0973c133757e5063513f9d5c0558cf0ba9282b35b8a"
+    },
+    {
+      "role": "gmp",
+      "logical_path": "/mantle/store/vm88j2l8q9pjwdy8n8c0bc7iqc0g5m6r-gmp-6.2.1-gcc40-v1",
+      "artifact_evidence_path": "bootstrap/evidence/final-native-predecessors/gmp.json",
+      "artifact_attestation_blake3": "9ba8f518646196400ade82c5f7dab6209de9aff788ee559aa56b88c171263fd7"
+    },
+    {
+      "role": "mpfr",
+      "logical_path": "/mantle/store/frqcyq35x1pphhca259pn49z9xa0xl4j-mpfr-4.1.0-gcc40-v1",
+      "artifact_evidence_path": "bootstrap/evidence/final-native-predecessors/mpfr.json",
+      "artifact_attestation_blake3": "aca82fb890e0589f2d336fe1c3fb659656465de38578679fdf96ba32f71ae828"
+    },
+    {
+      "role": "mpc",
+      "logical_path": "/mantle/store/h3fl3x0dkw65qdyasc2xijns548a6g2h-mpc-1.2.1-gcc40-v1",
+      "artifact_evidence_path": "bootstrap/evidence/final-native-predecessors/mpc.json",
+      "artifact_attestation_blake3": "c510b50d520fae3201e33bb6c1e863924155be503b8fb128206b38e2fb105be6"
+    },
+    {
+      "role": "autoconf",
+      "logical_path": "/mantle/store/1l8x0dsjq5lab9y01a1n8fmsfvkaxsk8-autoconf-2.64-gcc-v1",
+      "artifact_evidence_path": "bootstrap/evidence/final-native-predecessors/autoconf.json",
+      "artifact_attestation_blake3": "260d0c840a13ee609d7ff6eb3b04ac53dfefaba70c96b1e2c71fa382a3e566b8"
+    },
+    {
+      "role": "bison",
+      "logical_path": "/mantle/store/yjvscldji1c44m9bvvpyzxmn39yh0by5-bison-3.4.1-gcc-v2",
+      "artifact_evidence_path": "bootstrap/evidence/final-native-predecessors/bison.json",
+      "artifact_attestation_blake3": "4af9a4de161a9bc34575061bb4e6b3dbab50ad395c72f7137bc95311418a0f96"
+    },
+    {
+      "role": "flex",
+      "logical_path": "/mantle/store/9ps946hp60rnj3y3g7bbflyg2x9gx0jr-flex-2.6.4-gcc-v1",
+      "artifact_evidence_path": "bootstrap/evidence/final-native-predecessors/flex.json",
+      "artifact_attestation_blake3": "71b43b55c737cfc1ead9b2be54e3ea56bbd8134a7203c407b15e1aedd45f6735"
+    }
   ],
   "generated_artifacts": [
-    {"id":"configure-set-autoconf-2.64","status":"regenerated"},
-    {"id":"config-header-set-autoheader-2.64","status":"regenerated"},
-    {"id":"intl-plural-bison-3.4.1","status":"regenerated"},
-    {"id":"gengtype-scanner-flex-2.6.4","status":"regenerated"},
-    {"id":"config-sub-automake-1.15.1","status":"regenerated"}
+    {
+      "id": "configure-set-autoconf-2.64",
+      "status": "regenerated"
+    },
+    {
+      "id": "config-header-set-autoheader-2.64",
+      "status": "regenerated"
+    },
+    {
+      "id": "intl-plural-bison-3.4.1",
+      "status": "regenerated"
+    },
+    {
+      "id": "gengtype-scanner-flex-2.6.4",
+      "status": "regenerated"
+    },
+    {
+      "id": "config-sub-automake-1.15.1",
+      "status": "regenerated"
+    }
   ],
   "acceptance_evidence_path": "bootstrap/evidence/final-native-gcc47-acceptance-v1.json",
   "output": {
@@ -38,23 +119,67 @@
   },
   "behavior": {
     "positive": [
-      {"id":"c-static-runtime","status":"passed"},
-      {"id":"cc1-and-cc1plus-present","status":"passed"},
-      {"id":"cxx11-exception-rtti-allocation-runtime","status":"passed"},
-      {"id":"libgcc-libstdcxx-libsupcxx-present","status":"passed"},
-      {"id":"relocated-c-runtime","status":"passed"}
+      {
+        "id": "c-static-runtime",
+        "status": "passed"
+      },
+      {
+        "id": "cc1-and-cc1plus-present",
+        "status": "passed"
+      },
+      {
+        "id": "cxx11-exception-rtti-allocation-runtime",
+        "status": "passed"
+      },
+      {
+        "id": "libgcc-libstdcxx-libsupcxx-present",
+        "status": "passed"
+      },
+      {
+        "id": "relocated-c-runtime",
+        "status": "passed"
+      }
     ],
     "rejection": [
-      {"id":"malformed-c-rejected","status":"passed"},
-      {"id":"malformed-cxx-rejected","status":"passed"},
-      {"id":"ambient-path-scan-clean","status":"passed"},
-      {"id":"host-compiler-scan-clean","status":"passed"},
-      {"id":"release-generated-substitution-scan-clean","status":"passed"},
-      {"id":"wrong-predecessor-scan-clean","status":"passed"}
+      {
+        "id": "malformed-c-rejected",
+        "status": "passed"
+      },
+      {
+        "id": "malformed-cxx-rejected",
+        "status": "passed"
+      },
+      {
+        "id": "ambient-path-scan-clean",
+        "status": "passed"
+      },
+      {
+        "id": "host-compiler-scan-clean",
+        "status": "passed"
+      },
+      {
+        "id": "release-generated-substitution-scan-clean",
+        "status": "passed"
+      },
+      {
+        "id": "wrong-predecessor-scan-clean",
+        "status": "passed"
+      }
     ]
   },
-  "trust": {"trust_unsigned":false,"signing_key_selected":true,"substitutions_enabled":false},
-  "fallback": {"host_tool_execution":false,"predecessor_delegation":false,"release_generated_substitution":false,"configure_bridge_compiler_use":false,"fabricated_objects":[],"omitted_artifacts":[]},
+  "trust": {
+    "trust_unsigned": false,
+    "signing_key_selected": true,
+    "substitutions_enabled": false
+  },
+  "fallback": {
+    "host_tool_execution": false,
+    "predecessor_delegation": false,
+    "release_generated_substitution": false,
+    "configure_bridge_compiler_use": false,
+    "fabricated_objects": [],
+    "omitted_artifacts": []
+  },
   "bounded_claim": "The authenticated GCC 4.0 lineage produced the declared regenerated GCC 4.7 C/C++11 behavior and rejection matrix under signed no-substitution acceptance.",
   "non_claims": [
     "general compiler, libc, or binutils correctness",
