@@ -255,3 +255,8 @@ Remaining latent failures (all pre-existing on main, verified):
 These require a dedicated main-level test hardening pass that is separate
 from (and larger than) the store-capability migration. The store-capability
 change is implementation-complete with all its focused checks green.
+
+## Update 2026-09-10 — flake check GREEN
+
+nix flake check -L exit 0. All 34 checks pass. V4 complete.
+Change archived and integrated.
