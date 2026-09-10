@@ -8,9 +8,9 @@
     "shared_release_authority": false
   },
   "cargo": {
-    "lock_blake3": "9c99b796f3f3610ef83af52db4b5b2ab8ad4f1e64891c5d1a9ca0c520b8e7948",
+    "lock_blake3": "6f0c4c508ad82d0c710e872db49b80c13c1190dbde7d159dd4fe3ccb0e699709",
     "lock_source": "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f59003cea9bfdb40ed4d89653d50fada1f",
-    "manifest_blake3": "2da0308eca14ac453eda8193af08389f2eb531cb47ce2df36175de015f501543",
+    "manifest_blake3": "4d1fc2518e33ea3e813b1a3b244387a5356e18096d453cacc5b3673c39f23e61",
     "package": "durable-file-publication"
   },
   "evidence": [
