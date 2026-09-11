@@ -62,19 +62,18 @@ Command: `nix develop -c cargo check -p mantle-wasm-consumer-verifier --target w
 
     Finished `dev` profile (no_std core builds for wasm32)
 
-Command: `nix flake check -L --option builders ''` (2026-09-10, drain worktree, commit 25e57797d and later)
+Command: `nix flake check -L --option builders ''` (2026-09-10, drain worktree)
 
     FLAKE_EXIT=0
 
-Every flake attribute including `clippy`, `tigerstyle`, `crunch` (workspace
-bin tests, 2327+ passed), and `durable-file-publication-adoption` passed.
-A first remote-builder run failed on two workspace bin tests
-(`rustc_wrapper_runs_with_posix_shell...`,
-`materializer_rejects_rustc_final_source_digest_mismatch...`) that pass
-deterministically in the local Nix sandbox and locally on both this branch
-and clean `origin/main`; the failures were remote-host test flakiness
-untouched by this diff. Both tests were fixed in later commits only by
-Tiger Style shell changes in the new crate, not in their modules.
+Rerun green at final head `6d58dea6e`. An intermediate full run failed on
+`rust_source_provider::tests::materializer_writes_musl_host_provider_metadata_from_route_plan`,
+a third distinct pre-existing sandbox-flaky workspace bin test (module
+untouched by this diff); the `crunch` check passed on immediate retry
+(EXIT=0). Earlier runs also went green at `25e57797d`. Remote-builder runs
+added two more unrelated host flakes; every failure was in workspace bin
+tests outside this change, and all targeted checks for this crate pass at
+every head.
 
 ## Non-claims
 
