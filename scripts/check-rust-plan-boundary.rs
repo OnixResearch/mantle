@@ -22,6 +22,8 @@ const CORE_SOURCES: &str = "crates/mantle-rust-plan-core/src";
 const APP_SOURCES: &str = "crates/mantle-rust-plan-app/src";
 const CORE_MANIFEST: &str = "crates/mantle-rust-plan-core/Cargo.toml";
 const APP_MANIFEST: &str = "crates/mantle-rust-plan-app/Cargo.toml";
+const CONTRACT_SOURCES: &str = "crates/mantle-application-contract/src";
+const CONTRACT_MANIFEST: &str = "crates/mantle-application-contract/Cargo.toml";
 const FILE_COUNT_MAX: u32 = 512;
 const DIRECTORY_DEPTH_MAX: u32 = 8;
 
@@ -48,6 +50,7 @@ const FORBIDDEN_TOKENS: &[&str] = &[
 /// Reviewed dependency cohort per manifest.
 const CORE_ALLOWED_DEPENDENCIES: &[&str] = &["blake3", "serde", "serde_json"];
 const APP_ALLOWED_DEPENDENCIES: &[&str] = &["mantle-rust-plan-core", "serde"];
+const CONTRACT_ALLOWED_DEPENDENCIES: &[&str] = &["mantle-rust-plan-core", "serde"];
 
 fn main() -> ExitCode {
     if env::args().any(|argument| argument == "--self-test") {
@@ -81,6 +84,11 @@ fn main() -> ExitCode {
         APP_MANIFEST,
         APP_ALLOWED_DEPENDENCIES,
     ));
+    findings.extend(validate_manifest_dependencies(
+        &root,
+        CONTRACT_MANIFEST,
+        CONTRACT_ALLOWED_DEPENDENCIES,
+    ));
     if findings.is_empty() {
         println!("rust-plan-boundary guard: PASS ({} files)", files.len());
         return ExitCode::SUCCESS;
@@ -93,7 +101,7 @@ fn main() -> ExitCode {
 
 fn collect_sources(root: &Path) -> Result<Vec<(String, String)>, String> {
     let mut files = Vec::new();
-    for relative in [CORE_SOURCES, APP_SOURCES] {
+    for relative in [CORE_SOURCES, APP_SOURCES, CONTRACT_SOURCES] {
         collect_directory(&root.join(relative), relative, 0, &mut files)?;
     }
     if files.is_empty() {

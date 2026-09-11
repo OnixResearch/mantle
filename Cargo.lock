@@ -4888,6 +4888,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mantle-application-contract"
+version = "0.1.0"
+dependencies = [
+ "mantle-rust-plan-core",
+ "serde",
+]
+
+[[package]]
 name = "mantle-build-contract"
 version = "0.1.0"
 dependencies = [
