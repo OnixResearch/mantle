@@ -94,6 +94,16 @@ pub struct RunRecordResult {
 /// bound violations.
 pub fn admit_run_record(request: &RunRecordRequest) -> RunRecordResult {
     let mut diagnostics = Vec::new();
+    check_status_facts(request, &mut diagnostics);
+    validate_captures(request, &mut diagnostics);
+    if !diagnostics.is_empty() {
+        return rejected(ordered(diagnostics));
+    }
+    build_run_record(request)
+}
+
+fn check_status_facts(request: &RunRecordRequest, diagnostics: &mut Vec<Diagnostic>) {
+    let blocker_count_before = diagnostics.len();
     if request.suite.is_empty() {
         diagnostics.push(error(ErrorDiagnostic {
             code: "run-record-empty-suite",
@@ -115,36 +125,36 @@ pub fn admit_run_record(request: &RunRecordRequest) -> RunRecordResult {
             message: "run record process status is outside the admitted set",
         }));
     }
-    let declares_signal = request.signal.is_some();
-    if declares_signal && request.process_status != "signal" {
-        diagnostics.push(error(ErrorDiagnostic {
-            code: "run-record-status-contradiction",
-            subject: "process-status",
-            message: "a signaled run must declare the signal status",
-        }));
+    let has_signal = request.signal.is_some();
+    if has_signal && request.process_status != "signal" {
+        diagnostics.push(status_contradiction(("process-status", "a signaled run must declare the signal status")));
     }
-    if request.process_status == "signal" && !declares_signal {
-        diagnostics.push(error(ErrorDiagnostic {
-            code: "run-record-status-contradiction",
-            subject: "process-status",
-            message: "the signal status requires a termination signal",
-        }));
+    if request.process_status == "signal" && !has_signal {
+        diagnostics.push(status_contradiction(("process-status", "the signal status requires a termination signal")));
     }
     if request.process_status == "passed" && request.exit_code.is_some_and(|code| code != 0) {
-        diagnostics.push(error(ErrorDiagnostic {
-            code: "run-record-status-contradiction",
-            subject: "exit-code",
-            message: "a passing run must not carry a nonzero exit code",
-        }));
+        diagnostics.push(status_contradiction(("exit-code", "a passing run must not carry a nonzero exit code")));
     }
-    validate_captures(request, &mut diagnostics);
-    if !diagnostics.is_empty() {
-        return rejected(ordered(diagnostics));
-    }
+    debug_assert!(diagnostics.len() >= blocker_count_before);
+    debug_assert!(diagnostics.iter().skip(blocker_count_before).all(|item| !item.code.is_empty()));
+}
+
+fn status_contradiction(spec: (&str, &str)) -> Diagnostic {
+    let (subject, message) = spec;
+    debug_assert!(!subject.is_empty() && !message.is_empty());
+    error(ErrorDiagnostic {
+        code: "run-record-status-contradiction",
+        subject,
+        message,
+    })
+}
+
+fn build_run_record(request: &RunRecordRequest) -> RunRecordResult {
     let mut captures = request.captures.clone();
     captures.sort_by(|left, right| left.role.cmp(&right.role));
     debug_assert!(captures.windows(2).all(|pair| pair[0].role != pair[1].role));
-    let identity = canonical_identity(RunRecordIdentityInput {
+    debug_assert!(!captures.is_empty());
+    let identity = match canonical_identity(RunRecordIdentityInput {
         schema: String::from(RUN_RECORD_SCHEMA),
         stable_identity_blake3: request.stable_identity_blake3.clone(),
         suite: request.suite.clone(),
@@ -152,8 +162,7 @@ pub fn admit_run_record(request: &RunRecordRequest) -> RunRecordResult {
         process_status: request.process_status.clone(),
         captures: captures.clone(),
         encoding_version: RUN_RECORD_ENCODING_VERSION,
-    });
-    let identity = match identity {
+    }) {
         Ok(identity) => identity,
         Err(_) => {
             return rejected(ordered(vec![error(ErrorDiagnostic {
@@ -190,25 +199,38 @@ fn validate_captures(request: &RunRecordRequest, diagnostics: &mut Vec<Diagnosti
         }));
         return;
     }
-    let mut roles: Vec<&str> = Vec::new();
+    let mut roles: Vec<&str> = Vec::with_capacity(request.captures.len());
+    let mut has_role_problem = false;
+    let mut has_duplicate_role = false;
+    let mut duplicate_subject = String::new();
     for capture in &request.captures {
         if capture.role.is_empty() || capture.role.len() > MAX_CAPTURE_ROLE_BYTES {
-            diagnostics.push(error(ErrorDiagnostic {
-                code: "run-record-capture-role",
-                subject: "captures",
-                message: "capture roles must be non-empty and within the named bound",
-            }));
+            has_role_problem = true;
             continue;
         }
         if roles.contains(&capture.role.as_str()) {
-            diagnostics.push(error(ErrorDiagnostic {
-                code: "run-record-duplicate-capture",
-                subject: capture.role.as_str(),
-                message: "duplicate capture roles are errors and are never deduplicated",
-            }));
+            has_duplicate_role = true;
+            if duplicate_subject.is_empty() {
+                duplicate_subject = capture.role.clone();
+            }
             continue;
         }
         roles.push(capture.role.as_str());
+    }
+    debug_assert!(roles.len() <= request.captures.len());
+    if has_role_problem {
+        diagnostics.push(error(ErrorDiagnostic {
+            code: "run-record-capture-role",
+            subject: "captures",
+            message: "capture roles must be non-empty and within the named bound",
+        }));
+    }
+    if has_duplicate_role {
+        diagnostics.push(error(ErrorDiagnostic {
+            code: "run-record-duplicate-capture",
+            subject: duplicate_subject.as_str(),
+            message: "duplicate capture roles are errors and are never deduplicated",
+        }));
     }
     debug_assert!(roles.len() <= request.captures.len());
 }
