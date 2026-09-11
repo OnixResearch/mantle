@@ -16,6 +16,7 @@ extern crate std;
 
 mod envelope;
 mod family;
+mod ports;
 mod realization;
 
 pub use envelope::ApplicationBlocker;
@@ -32,6 +33,15 @@ pub use envelope::classify_observations;
 pub use envelope::plan_effects;
 pub use family::CommandFamily;
 pub use family::MAX_COMMAND_ROOTS;
+pub use ports::FamilyPorts;
+pub use ports::MAX_PORT_NAME_LEN;
+pub use ports::MAX_PORTS_PER_FAMILY;
+pub use ports::family_ports;
+pub use ports::is_port_name;
+pub use ports::port_inventory;
+pub use ports::port_label;
+pub use ports::port_owners;
+pub use ports::validate_port_inventory;
 pub use realization::MAX_REALIZATION_ROOTS;
 pub use realization::RealizationBlocker;
 pub use realization::RealizeCommand;
