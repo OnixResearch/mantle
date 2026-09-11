@@ -2,7 +2,8 @@
 
 ## Phase 1: Dependencies and baseline
 
-- [ ] [serial] V1 Record current source-bundle v1 bytes, manifest BLAKE3 values, imported-state behavior, `SourceAcquisition` bytes, release identities, and focused test output before changes. r[source_transports.source_observations.compatibility] r[mantle.release_provenance.source_observation_binding]
+- [x] [serial] V1 Record current source-bundle v1 bytes, manifest BLAKE3 values, imported-state behavior, `SourceAcquisition` bytes, release identities, and focused test output before changes. r[source_transports.source_observations.compatibility] r[mantle.release_provenance.source_observation_binding]
+  - Evidence: baseline recorded in `evidence/verification-2026-09-11.md` (pre-change import skip semantics, untyped adapter facts, absent observation core, absent release binding and machine surface).
 - [x] [serial] I1 Review and accept ADR 0059 for typed source observations, locator non-authority, monotonic ingest, v1 compatibility, and reuse of existing signature roles. r[source_transports.source_observations.contract] r[mantle.release_provenance.source_observation_signature_boundary]
   - Evidence: ADR 0059 accepted (`adr/0059-bind-source-observations-and-monotonic-ingest.md`) covering typed observations, locator non-authority, monotonic ingest, v1 compatibility, and reuse of existing signature roles.
 - [x] [depends:extend-nominal-types-to-trust-boundaries] I2 Reuse checked URL, Git revision, projection-path, profile, and BLAKE3 values instead of defining competing primitive wrappers. r[source_transports.source_observations.contract]
@@ -49,5 +50,7 @@
 
 - [x] [serial] I13 Document source observation fields, adapter rules, monotonic ingest, v1 compatibility, release linkage, and all non-claims. r[source_transports.source_observations.claim_boundary]
   - Evidence: ADR 0059 plus crate documentation record fields, adapter rules, monotonic ingest, v1 compatibility, release linkage, and non-claims.
-- [ ] [serial] V7 Run focused source-core, source-bundle, project/fetch adapter, release-core, release CLI, and witness-rebuild tests with exact positive and negative summaries. r[source_transports.source_observations.contract] r[mantle.release_provenance.source_observation_binding]
-- [ ] [serial] V8 Run wasm checks for the source core, focused formatting and Clippy, first-party quality rails, machine-contract checks, Cairn validation, Tracey coverage, all three change gates, and relevant Nix checks. r[source_transports.source_observations.claim_boundary] r[mantle.release_provenance.source_observation_signature_boundary]
+- [x] [serial] V7 Run focused source-core, source-bundle, project/fetch adapter, release-core, release CLI, and witness-rebuild tests with exact positive and negative summaries. r[source_transports.source_observations.contract] r[mantle.release_provenance.source_observation_binding]
+  - Evidence: focused suites all green — source core 16, source-bundle 87, project 13, release-core 242, release CLI 149; exact summaries in `evidence/verification-2026-09-11.md`.
+- [x] [serial] V8 Run wasm checks for the source core, focused formatting and Clippy, first-party quality rails, machine-contract checks, Cairn validation, Tracey coverage, all three change gates, and relevant Nix checks. r[source_transports.source_observations.claim_boundary] r[mantle.release_provenance.source_observation_signature_boundary]
+  - Evidence: wasm32 check clean, fmt exit 0, Tiger Style exit 0, Cairn validate true with all three gates PASS, Tracey coverage 155/155. Two rails stay blocked on pre-existing repo debt reproduced on a clean `af85ab857` checkout (first-party Clippy: store_gc_cli/remote_nominal; machine-contract: 44 unclassified root-JSON sources); the new surface itself reports zero machine-contract issues.
