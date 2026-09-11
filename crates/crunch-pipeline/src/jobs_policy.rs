@@ -77,14 +77,12 @@ impl JobsObservation {
 
     /// Attach an explicit policy cap.
     pub fn with_policy_cap(mut self, policy_cap: u32) -> Self {
-        debug_assert!(policy_cap <= u32::MAX);
         self.policy_cap = policy_cap;
         self
     }
 
     /// Attach an explicit executor limit.
     pub fn with_executor_limit(mut self, executor_limit: u32) -> Self {
-        debug_assert!(executor_limit <= u32::MAX);
         self.executor_limit = Some(executor_limit);
         self
     }
