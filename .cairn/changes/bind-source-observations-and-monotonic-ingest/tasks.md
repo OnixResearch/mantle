@@ -9,7 +9,9 @@
 - [x] [depends:extend-nominal-types-to-trust-boundaries] I2 Reuse checked URL, Git revision, projection-path, profile, and BLAKE3 values instead of defining competing primitive wrappers. r[source_transports.source_observations.contract]
   - Evidence: dependency `extend-nominal-types-to-trust-boundaries` is archived; the core defines only domain-specific types (`LocatorClass`, `ProjectionPath`, `SnapshotProfile`, `GitObjectFormat`, `Blake3Digest`) and no competing URL/revision primitives.
 - [ ] [depends:bind-source-review-evidence-to-releases] I3 Align source observation and reviewed-source attachment on one exact release-source subject and keep reviewer authority external. r[mantle.release_provenance.source_observation_binding]
+  - BLOCKED 2026-09-11: dependency `bind-source-review-evidence-to-releases` is itself blocked by its External Contract Gate (no Cairn source-review producer contract, no Valence identity binding). Unblock that change first.
 - [ ] [depends:prove-source-built-mantle-fixed-point] I4 Record the stabilized source-bundle and hydration compatibility boundary before changing source records. r[source_transports.source_observations.compatibility]
+  - BLOCKED 2026-09-11: dependency `prove-source-built-mantle-fixed-point` is blocked on the Leviathan V2 proof run. Record the stabilized boundary after that change completes.
 
 ## Phase 2: Pure source core
 
