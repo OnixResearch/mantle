@@ -177,12 +177,16 @@ pub(crate) fn restore_stage_bundle(
 
 fn write_reference(bundle_dir: &Path, reference: &StageBundleReference) -> Result<(), RunError> {
     let path = bundle_dir.join(RESUME_BUNDLE_REFERENCE_FILE);
-    let text = serde_json::to_string(reference)
-        .map_err(|error| RunError::Internal(format!("serializing resume bundle reference: {error}")))?;
-    debug_assert!(!text.is_empty());
-    fs::write(&path, text)
-        .map_err(|error| RunError::Internal(format!("writing resume bundle reference {}: {error}", path.display())))?;
+    // A reference is immutable for its content address, so an existing one is
+    // reused instead of rewritten. Serialization stays in the shared writer so
+    // this module introduces no second root JSON producer.
+    if path.is_file() {
+        debug_assert!(!reference.stage_id.is_empty());
+        return Ok(());
+    }
+    crate::source_built_fixed_point_shell::write_json_create_new(&path, reference)?;
     debug_assert!(path.is_file());
+    debug_assert_eq!(reference.bundle_digest_blake3.len(), BLAKE3_DIGEST_HEX_LEN);
     Ok(())
 }
 

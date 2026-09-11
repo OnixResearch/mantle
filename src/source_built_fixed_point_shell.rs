@@ -2313,7 +2313,7 @@ fn write_attempt_status(
     Ok(())
 }
 
-fn write_json_create_new<T: Serialize>(path: &Path, value: &T) -> Result<(), RunError> {
+pub(crate) fn write_json_create_new<T: Serialize>(path: &Path, value: &T) -> Result<(), RunError> {
     let mut bytes = serde_json::to_vec_pretty(value)
         .map_err(|error| proof_error(format!("serializing {}: {error}", path.display())))?;
     bytes.push(b'\n');

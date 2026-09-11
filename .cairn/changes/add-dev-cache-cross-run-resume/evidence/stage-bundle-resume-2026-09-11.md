@@ -61,6 +61,24 @@ existing restore destination, missing payload directory at publish time, a
 bundle recorded under another plan (executed, not restored), and idempotent
 republication that reuses the stored bundle instead of rewriting it.
 
+## Machine-contract coverage interaction
+
+`scripts/check-machine-schema-contracts.rs` rejects any `src/**` file that
+contains a root JSON serialization token without an inventory family decision.
+The first draft of the bundle module serialized `bundle.json` itself and was
+reported as one more uncovered producer. The module now writes the reference
+through the shared `write_json_create_new` writer used by the stage markers and
+reuses an existing reference instead of rewriting it, so the change adds no new
+root JSON producer.
+
+```
+$ nix develop -c cargo -Zscript scripts/check-machine-schema-contracts.rs
+45 findings, none of them from this change (the pre-existing uncovered sources
+remain: src/source_built_fixed_point_shell.rs, src/operator_contract.rs, ...)
+$ nix develop -c cargo test -p mantle --bin mantle source_built_fixed_point_resume
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 2412 filtered out; finished in 0.01s
+```
+
 ## Non-claims
 
 - Only the StageX transition stage publishes a bundle today; later stages are
