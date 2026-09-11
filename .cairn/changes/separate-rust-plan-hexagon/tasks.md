@@ -2,7 +2,8 @@
 
 ## Phase 1: Core and contracts
 
-- [ ] [task:I1][serial] Create the strict `no_std + alloc` Rust-planning core and Rust-plan application contract. Define bounded structural facts, admitted values, plans, blockers, effects, observations, outcomes, and receipt preimages. r[rust_package_planning.hexagonal_core] r[rust_package_planning.application_owned_ports]
+- [x] [task:I1][serial] Create the strict `no_std + alloc` Rust-planning core and Rust-plan application contract. Define bounded structural facts, admitted values, plans, blockers, effects, observations, outcomes, and receipt preimages. r[rust_package_planning.hexagonal_core] r[rust_package_planning.application_owned_ports]
+  - Evidence: `crates/mantle-rust-plan-core` created as the strict no_std + alloc core with bounded structural facts, nominal admission, typed blockers, planned units and ordered effects, observation classification, receipt preimages, and domain-separated identities; 10 fixtures pass, strict Clippy and Tiger Style gates are green, and the wasm32 check is clean (`evidence/core-scaffold-2026-09-11.md`).
 - [ ] [task:I2][serial] Move package admission, feature resolution, dependency selection, host and target classification, unit topology, action planning, compatibility classification, identities, and receipt logic from `src/rust_plan.rs` into the core. r[rust_package_planning.hexagonal_core]
 - [ ] [task:I3][after:I2] Add application-owned ports for workspace facts, Cargo oracle capture, compiler inspection, unit execution, and Rust cache access. Keep filesystem, Cargo, rustc, process, environment, store, and rendering details in adapters. r[rust_package_planning.application_owned_ports]
 - [ ] [task:I4][after:I3] Replace `RunError`, process, Cargo JSON, host path, and raw store values in port signatures with typed application values and capability errors. Map them to CLI diagnostics only at presentation. r[rust_package_planning.application_owned_ports]
