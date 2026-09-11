@@ -17,6 +17,7 @@
 
 mod derivation_file;
 mod evaluation_stream;
+mod jobs_policy;
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -182,13 +183,27 @@ pub enum Error {
     Internal(String),
 }
 
+/// Resolve the effective job limit for one build request.
+///
+/// The host parallelism is observed here once and passed to the pure policy;
+/// the policy itself reads no ambient state.
 pub fn resolve_max_jobs(user: Option<u32>) -> u32 {
-    const MAX_JOBS_CAP: u32 = 16;
-    match user {
-        Some(j) => j.clamp(1, MAX_JOBS_CAP),
-        None => std::thread::available_parallelism().map(|n| (n.get() as u32).min(MAX_JOBS_CAP)).unwrap_or(1),
+    let observation = jobs_policy::JobsObservation::new(user, jobs_policy::observe_host_parallelism());
+    match jobs_policy::resolve_jobs_policy(&observation) {
+        Ok(jobs) => jobs,
+        Err(error) => {
+            debug_assert!(!error.reason_code().is_empty());
+            jobs_policy::MIN_JOBS
+        }
     }
 }
+
+pub use jobs_policy::DEFAULT_JOBS_CAP;
+pub use jobs_policy::JobsObservation;
+pub use jobs_policy::JobsPolicyError;
+pub use jobs_policy::MIN_JOBS;
+pub use jobs_policy::observe_host_parallelism;
+pub use jobs_policy::resolve_jobs_policy;
 
 pub fn parse_fod_mismatch_error(err: &str) -> Option<FodMismatch> {
     let rest = err.strip_prefix("FOD hash mismatch for ")?;
