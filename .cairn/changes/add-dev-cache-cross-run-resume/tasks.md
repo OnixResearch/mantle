@@ -1,6 +1,7 @@
 ## Phase 1: Resume core and shell
 
-- [ ] [depends:dev-cache-source-built-fixed-point] [serial] I1 Record the current marker, provider-adoption, persistent-store, and staging-directory behavior before implementation. r[source_built_fixed_point_improved_iteration.dev_cross_run_resume]
+- [x] [depends:dev-cache-source-built-fixed-point] [serial] I1 Record the current marker, provider-adoption, persistent-store, and staging-directory behavior before implementation. r[source_built_fixed_point_improved_iteration.dev_cross_run_resume]
+  - Evidence: baseline recorded in `evidence/resume-planner-2026-09-11.md` (stage markers in `<staging>/.stage-markers/`, receipt-bound provider cache keyed by source authority plus five policy digests, dev store snapshot and adopted marker, per-attempt staging directories, and the absent resume planner/bundle/reporting gap).
 - [x] [serial] I2 Add a pure bounded resume planner that revalidates source, plan, policy, stage, producer, and output identities. r[source_built_fixed_point_improved_iteration.dev_cross_run_resume]
   - Evidence: `src/source_built_fixed_point_resume.rs` implements the pure bounded resume planner with `StageBundleReference`, `plan_stage_resume`, `ResumePlan` (restored and executed stages reported separately), and `policy_cohort_digest`; source, plan, policy, stage, producer, and output identities are all revalidated. 7 fixtures pass (`evidence/resume-planner-2026-09-11.md`).
 - [ ] [serial] I3 Publish and restore content-addressed stage bundles that include the required transition execution tree and stage outputs. r[source_built_fixed_point_improved_iteration.dev_cross_run_resume]
