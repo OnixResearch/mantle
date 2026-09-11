@@ -112,3 +112,27 @@ composition needs reconciliation by its owner; the reviewer must not
 "fix" this by editing the profile digest alone. The stable/run split is
 verified producer-side (bundle `--check` exit 0), so the open work is this
 identity-composition disagreement.
+
+## Consumer handoff (T4.2, resolved 2026-09-10)
+
+The earlier failure was an incomplete profile update, not a producer defect:
+
+- `bundle_manifest_blake3` is the BLAKE3 of the manifest file bytes;
+  `bundle_identity_blake3` is the manifest's internal identity, and the
+  candidate also pins `spacewasm_runner_blake3`. I had overwritten the file
+  digest with an identity value and left the other two fields stale.
+- The candidate's bundle identity (`86142d42...`) differs from a worktree
+  build (`661243d3...`) because the consumer's pinned build environment
+  produces different toolchain member bytes; the profile must bind the
+  consumer-measured candidate values.
+
+Frozen consumer candidate:
+`63b646782b90fe1884a5fb869cfccaa56904d094` (branch
+`drain/spacewasm-stable-evidence-consumer`), mantle pin
+`57fa0f5c2f8fb1edeed6d6113b57d32357612e34`.
+
+Result: `nix build .#checks.x86_64-linux.spacewasm-mvp-differential
+--option builders ''` exits 0 with verdict `match` over 14 comparisons;
+profile identity `27b5b614...`, runner identity `732da9b7...`, bundle
+manifest digest `2de0a78c...`, bundle identity `86142d42...`. No consumer
+normalization was added.
