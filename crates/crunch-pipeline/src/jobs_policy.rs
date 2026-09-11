@@ -120,12 +120,11 @@ pub fn resolve_jobs_policy(observation: &JobsObservation) -> Result<u32, JobsPol
         (None, Some(observed_parallelism)) => observed_parallelism,
         (None, None) => MIN_JOBS,
     };
-    let capped = candidate.min(observation.policy_cap);
-    let limited = match observation.executor_limit {
-        Some(executor_limit) => capped.min(executor_limit),
-        None => capped,
-    };
-    let resolved = limited.max(MIN_JOBS);
+    let resolved = match observation.executor_limit {
+        Some(executor_limit) => candidate.min(observation.policy_cap).min(executor_limit),
+        None => candidate.min(observation.policy_cap),
+    }
+    .max(MIN_JOBS);
     debug_assert!(resolved >= MIN_JOBS);
     debug_assert!(resolved <= observation.policy_cap);
     debug_assert!(resolved <= candidate);
