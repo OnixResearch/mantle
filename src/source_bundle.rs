@@ -1590,15 +1590,26 @@ pub fn import_source_bundle(
     for record in &manifest.records {
         let summary = summary_for_record(record)?;
         let target = records_dir.join(format!("{}.json", record.content_blake3));
-        if target.exists() {
-            skipped_present_records_len = skipped_present_records_len
-                .checked_add(1)
-                .ok_or_else(|| RunError::Internal("present source record count overflow".to_string()))?;
-        } else {
-            write_record_atomically(&target, record)?;
-            written_records_len = written_records_len
-                .checked_add(1)
-                .ok_or_else(|| RunError::Internal("imported source record count overflow".to_string()))?;
+        // Monotonic ingest: identical records are write-free and a conflicting
+        // record under one identity is rejected before any mutation.
+        match crate::source_observation::plan_record_ingest(&target, record)? {
+            crate::source_observation::RecordIngestOutcome::ReuseIdentical => {
+                skipped_present_records_len = skipped_present_records_len
+                    .checked_add(1)
+                    .ok_or_else(|| RunError::Internal("present source record count overflow".to_string()))?;
+            }
+            crate::source_observation::RecordIngestOutcome::Add => {
+                write_record_atomically(&target, record)?;
+                written_records_len = written_records_len
+                    .checked_add(1)
+                    .ok_or_else(|| RunError::Internal("imported source record count overflow".to_string()))?;
+            }
+            crate::source_observation::RecordIngestOutcome::RejectIdentityConflict => {
+                return Err(RunError::Internal(format!(
+                    "source record identity conflict for {}: refusing to overwrite durable state",
+                    record.content_blake3
+                )));
+            }
         }
         summaries.push(summary);
     }

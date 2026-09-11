@@ -178,6 +178,7 @@ mod source_built_fixed_point_dev_cache;
 mod source_built_fixed_point_receipt;
 mod source_built_fixed_point_shell;
 mod source_bundle;
+mod source_observation;
 mod source_root_capability;
 mod source_root_provider;
 mod source_toolchain_closure;
@@ -1654,7 +1655,8 @@ pub enum ReleaseAction {
         #[arg(long, conflicts_with = "git_source_url")]
         source_acquisition_url: Option<String>,
 
-        /// Optional path to a versioned source-observation binding (JSON) recorded with the release source
+        /// Optional path to a versioned source-observation binding (JSON) recorded with the release
+        /// source
         #[arg(long)]
         source_observation: Option<PathBuf>,
 

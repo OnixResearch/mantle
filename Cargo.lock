@@ -4846,6 +4846,7 @@ dependencies = [
  "crunch-rust-cache-core",
  "crunch-rustc-wrapper",
  "crunch-shell",
+ "crunch-source-core",
  "crunch-store",
  "crunch-wasm-component",
  "crunch-wasm-component-core",

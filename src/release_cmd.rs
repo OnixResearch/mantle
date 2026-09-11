@@ -2,8 +2,6 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::path::PathBuf;
 
-use crunch_release_core::SourceObservationBinding;
-
 use crunch_release_core::AST_GREP_EXTERNAL_EVIDENCE_ROLE;
 use crunch_release_core::AST_GREP_STRUCTURAL_CLAIM_SCOPE;
 use crunch_release_core::AST_GREP_STRUCTURAL_EVIDENCE_SCHEMA;
@@ -15,6 +13,7 @@ use crunch_release_core::ReleaseVerificationFact;
 use crunch_release_core::ReleaseVerificationFacts;
 use crunch_release_core::ReleaseVerificationRequirement;
 use crunch_release_core::ReleaseVerificationRequirements;
+use crunch_release_core::SourceObservationBinding;
 use crunch_release_core::aggregate_release_verification;
 use crunch_release_core::deterministic_build_proof_has_genuine_rebuild_authority;
 use crunch_release_core::deterministic_build_proof_receipt_canonical_bytes;
@@ -450,16 +449,10 @@ fn read_source_observation_binding(
     };
     let resolved = resolve_input_path(current_dir, path);
     let text = std::fs::read_to_string(&resolved).map_err(|err| {
-        RunError::Internal(format!(
-            "reading source observation binding {}: {err}",
-            resolved.display()
-        ))
+        RunError::Internal(format!("reading source observation binding {}: {err}", resolved.display()))
     })?;
     let binding: SourceObservationBinding = serde_json::from_str(&text).map_err(|err| {
-        RunError::Internal(format!(
-            "parsing source observation binding {}: {err}",
-            resolved.display()
-        ))
+        RunError::Internal(format!("parsing source observation binding {}: {err}", resolved.display()))
     })?;
     debug_assert!(!binding.schema.is_empty());
     debug_assert!(!binding.observation_blake3.is_empty());
