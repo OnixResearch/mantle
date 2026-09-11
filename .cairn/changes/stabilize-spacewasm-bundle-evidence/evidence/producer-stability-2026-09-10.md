@@ -87,3 +87,28 @@ consumer admission, or release eligibility.
   tests prove the core constants and admitted statuses equal it.
 - Core suites: 8 focused + 8 run-record + 12 stable-report + 2 contract
   parity; strict Clippy exit 0; wasm32 check clean.
+
+## Consumer handoff attempt (T4.2, blocked)
+
+Consumer candidate: ChaosControl branch
+`drain/spacewasm-stable-evidence-consumer` (worktree `/tmp/cc-spacewasm`),
+mantle pin updated to `57fa0f5c2`, expected digest updated to the
+consumer-measured value.
+
+- Consumer check: `nix build .#checks.x86_64-linux.spacewasm-mvp-differential --option builders ''`
+- First result: `invalid evidence: bundle manifest digest mismatch:
+  expected=661243d3... actual=2de0a78c...` — the consumer recomputes the
+  manifest identity and measured `2de0a78c...` for the new bundle, while the
+  manifest's own `bundle_identity_blake3` field carries `661243d3...`.
+- After setting the profile to the measured value, the same check fails
+  with `Mantle bundle identity does not match the admitted profile`,
+  because a second consumer assertion requires the profile value to equal
+  the manifest's internal identity field.
+
+The two consumer assertions cannot both hold for this bundle: the
+consumer's recomputation and the producer's manifest identity field
+disagree. Either the consumer recomputation or the producer identity
+composition needs reconciliation by its owner; the reviewer must not
+"fix" this by editing the profile digest alone. The stable/run split is
+verified producer-side (bundle `--check` exit 0), so the open work is this
+identity-composition disagreement.
