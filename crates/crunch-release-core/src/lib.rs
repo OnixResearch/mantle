@@ -265,6 +265,7 @@ pub use manifest::ReleaseWorkflowIdentity;
 pub use manifest::RoleBoundedReleaseArtifact;
 pub use manifest::SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE;
 pub use manifest::SOURCE_ACQUISITION_KIND_GIT;
+pub use manifest::SOURCE_OBSERVATION_BINDING_MARKER;
 pub use manifest::SOURCE_OBSERVATION_ENCODING_VERSION;
 pub use manifest::SOURCE_OBSERVATION_SCHEMA;
 pub use manifest::STACK_PROVENANCE_CLAIM_SCOPE;
