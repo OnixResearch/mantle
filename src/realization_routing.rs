@@ -190,6 +190,13 @@ pub struct RoutePolicy {
 }
 
 impl RoutePolicy {
+    /// Rewrite the network policy for explicit planner inputs.
+    pub fn with_network(mut self, network: NetworkPolicy) -> Self {
+        debug_assert!(matches!(network, NetworkPolicy::Offline | NetworkPolicy::Online));
+        self.network = network;
+        self
+    }
+
     pub fn practical_online() -> Self {
         Self {
             network: NetworkPolicy::Online,
@@ -568,6 +575,72 @@ fn classify_candidate(candidate: &RouteCandidateFacts, policy: RoutePolicy) -> C
         };
     }
     CandidateDecision::Select
+}
+
+/// Typed drift between a planned route and freshly observed facts.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct RoutePlanDrift {
+    pub code: &'static str,
+    pub planned_route: RouteClass,
+    pub observed_route: RouteClass,
+    pub reason_code: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+/// Recheck a planned route against freshly observed facts.
+///
+/// Drift is reported, never silently re-planned: the caller decides whether to
+/// abandon the plan or replan explicitly. A stale plan must not execute
+/// effects that were authorized by facts which have since moved.
+pub fn recheck_route_plan_freshness(plan: &RoutePlanReport, current: RoutePlannerInput) -> Result<(), RoutePlanDrift> {
+    let observed = plan_realization_route(current);
+    if observed.selected_route != plan.selected_route {
+        return Err(RoutePlanDrift {
+            code: "route-selection-drift",
+            planned_route: plan.selected_route,
+            observed_route: observed.selected_route,
+            reason_code: observed.selected_reason_code.clone(),
+            detail: observed.selected_detail.clone(),
+        });
+    }
+    if observed.policy != plan.policy {
+        return Err(RoutePlanDrift {
+            code: "route-policy-drift",
+            planned_route: plan.selected_route,
+            observed_route: observed.selected_route,
+            reason_code: observed.selected_reason_code.clone(),
+            detail: None,
+        });
+    }
+    if !rejection_sets_match(&plan.rejected_routes, &observed.rejected_routes) {
+        let first_observed = observed.rejected_routes.first();
+        return Err(RoutePlanDrift {
+            code: "route-rejection-drift",
+            planned_route: plan.selected_route,
+            observed_route: observed.selected_route,
+            reason_code: first_observed
+                .map(|rejection| rejection.reason_code.clone())
+                .unwrap_or_else(|| observed.selected_reason_code.clone()),
+            detail: first_observed.and_then(|rejection| rejection.detail.clone()),
+        });
+    }
+    debug_assert_eq!(observed.selected_route, plan.selected_route);
+    debug_assert_eq!(observed.policy, plan.policy);
+    Ok(())
+}
+
+fn rejection_sets_match(planned: &[RouteRejection], observed: &[RouteRejection]) -> bool {
+    if planned.len() != observed.len() {
+        return false;
+    }
+    let mut planned_pairs: Vec<(RouteClass, &str)> =
+        planned.iter().map(|rejection| (rejection.route, rejection.reason_code.as_str())).collect();
+    let mut observed_pairs: Vec<(RouteClass, &str)> =
+        observed.iter().map(|rejection| (rejection.route, rejection.reason_code.as_str())).collect();
+    planned_pairs.sort_by_key(|pair| (pair.0.rank(), pair.1.to_string()));
+    observed_pairs.sort_by_key(|pair| (pair.0.rank(), pair.1.to_string()));
+    planned_pairs == observed_pairs
 }
 
 pub fn route_plan_for_existing_build_action(action: &str, detail: Option<&str>) -> RoutePlanReport {
@@ -1167,5 +1240,179 @@ mod tests {
         assert!(!report.non_claim.contains("build success"));
         assert!(!json.contains("token"));
         assert!(!json.contains("private"));
+    }
+
+    fn matrix_candidate(route: RouteClass) -> RouteCandidateFacts {
+        match route {
+            RouteClass::CachedLocal => RouteCandidateFacts::eligible(route, "cache-hit"),
+            RouteClass::TrustedSubstitute => {
+                RouteCandidateFacts::eligible(route, "trusted-cache-hit").requiring_network()
+            }
+            RouteClass::ArchiveImport => RouteCandidateFacts::eligible(route, "archive-imported"),
+            RouteClass::SourceBundle => RouteCandidateFacts::eligible(route, "source-bundle-ready"),
+            RouteClass::P2pRemoteBuilder => {
+                RouteCandidateFacts::eligible(route, "remote-builder-ready").requiring_network()
+            }
+            RouteClass::LocalBuild => RouteCandidateFacts::eligible(route, "local-build-ready"),
+            RouteClass::PreflightError => RouteCandidateFacts::rejected(route, "no-route-eligible"),
+        }
+    }
+
+    fn online_candidates() -> Vec<RouteCandidateFacts> {
+        vec![
+            matrix_candidate(RouteClass::CachedLocal),
+            matrix_candidate(RouteClass::TrustedSubstitute),
+            matrix_candidate(RouteClass::ArchiveImport),
+            matrix_candidate(RouteClass::SourceBundle),
+            matrix_candidate(RouteClass::P2pRemoteBuilder),
+            matrix_candidate(RouteClass::LocalBuild),
+        ]
+    }
+
+    #[test]
+    fn route_matrix_selects_the_ranked_eligible_route() {
+        let report =
+            plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), online_candidates()));
+        assert_eq!(report.selected_route, RouteClass::CachedLocal);
+        assert_eq!(report.rejected_routes.len(), 0);
+    }
+
+    #[test]
+    fn route_matrix_selects_each_class_when_higher_ranks_are_absent() {
+        let expected = [
+            (RouteClass::CachedLocal, "cache-hit"),
+            (RouteClass::TrustedSubstitute, "trusted-cache-hit"),
+            (RouteClass::ArchiveImport, "archive-imported"),
+            (RouteClass::SourceBundle, "source-bundle-ready"),
+            (RouteClass::P2pRemoteBuilder, "remote-builder-ready"),
+            (RouteClass::LocalBuild, "local-build-ready"),
+        ];
+        for (route, reason) in expected {
+            let report = plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), vec![
+                matrix_candidate(route),
+            ]));
+            assert_eq!(report.selected_route, route);
+            assert_eq!(report.selected_reason_code, reason);
+        }
+    }
+
+    #[test]
+    fn route_matrix_reports_simultaneous_blockers() {
+        let candidates = vec![
+            RouteCandidateFacts::rejected(RouteClass::CachedLocal, "cache-miss"),
+            RouteCandidateFacts::rejected(RouteClass::TrustedSubstitute, "untrusted-cache"),
+            RouteCandidateFacts::rejected(RouteClass::SourceBundle, "bundle-stale"),
+            matrix_candidate(RouteClass::LocalBuild),
+        ];
+        let report = plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), candidates));
+        assert_eq!(report.selected_route, RouteClass::LocalBuild);
+        let reasons: Vec<&str> =
+            report.rejected_routes.iter().map(|rejection| rejection.reason_code.as_str()).collect();
+        assert_eq!(reasons, vec!["cache-miss", "untrusted-cache", "bundle-stale"]);
+    }
+
+    #[test]
+    fn route_matrix_is_discovery_order_independent() {
+        let forward =
+            plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), online_candidates()));
+        let mut reversed_candidates = online_candidates();
+        reversed_candidates.reverse();
+        let reversed =
+            plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), reversed_candidates));
+        assert_eq!(forward.selected_route, reversed.selected_route);
+        assert_eq!(forward.selected_reason_code, reversed.selected_reason_code);
+        assert_eq!(forward.rejected_routes, reversed.rejected_routes);
+    }
+
+    #[test]
+    fn offline_policy_rejects_network_routes_explicitly() {
+        // An offline policy must walk past network routes and record why each
+        // was rejected instead of selecting one.
+        let policy = RoutePolicy::practical_online().with_network(NetworkPolicy::Offline);
+        let candidates = vec![
+            matrix_candidate(RouteClass::TrustedSubstitute),
+            matrix_candidate(RouteClass::P2pRemoteBuilder),
+        ];
+        let report = plan_realization_route(RoutePlannerInput::new(policy, candidates));
+        assert_eq!(report.selected_route, RouteClass::PreflightError);
+        assert_eq!(report.selected_reason_code, "no-route-eligible");
+        let network_rejections: Vec<&str> = report
+            .rejected_routes
+            .iter()
+            .filter(|rejection| rejection.reason_code == "offline-network-required")
+            .map(|rejection| rejection.route.as_str())
+            .collect();
+        assert_eq!(network_rejections, vec!["trusted-substitute", "p2p-remote-builder"]);
+    }
+
+    #[test]
+    fn missing_observations_never_select_a_route_silently() {
+        let candidates = vec![
+            RouteCandidateFacts::rejected(RouteClass::CachedLocal, "no-cache-observation"),
+            RouteCandidateFacts::rejected(RouteClass::LocalBuild, "no-build-observation"),
+        ];
+        let report = plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), candidates));
+        assert_eq!(report.selected_route, RouteClass::PreflightError);
+        assert_eq!(report.selected_reason_code, "no-route-eligible");
+    }
+
+    #[test]
+    fn freshness_accepts_unchanged_observations() {
+        let report =
+            plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), online_candidates()));
+        let outcome = recheck_route_plan_freshness(
+            &report,
+            RoutePlannerInput::new(RoutePolicy::practical_online(), online_candidates()),
+        );
+        assert_eq!(outcome, Ok(()));
+    }
+
+    #[test]
+    fn freshness_rejects_a_stale_plan() {
+        let report =
+            plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), online_candidates()));
+        let mut moved = online_candidates();
+        moved[0] = RouteCandidateFacts::rejected(RouteClass::CachedLocal, "cache-evicted");
+        let drift =
+            recheck_route_plan_freshness(&report, RoutePlannerInput::new(RoutePolicy::practical_online(), moved))
+                .expect_err("stale plan must be reported");
+        assert_eq!(drift.code, "route-selection-drift");
+        assert_eq!(drift.planned_route, RouteClass::CachedLocal);
+        assert_eq!(drift.observed_route, RouteClass::TrustedSubstitute);
+    }
+
+    #[test]
+    fn freshness_rejects_policy_drift_without_replanning() {
+        let report =
+            plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), online_candidates()));
+        let drifted_policy = RoutePolicy::practical_online().with_network(NetworkPolicy::Offline);
+        let drift = recheck_route_plan_freshness(&report, RoutePlannerInput::new(drifted_policy, online_candidates()))
+            .expect_err("policy drift must be reported");
+        assert_eq!(drift.code, "route-policy-drift");
+    }
+
+    #[test]
+    fn changed_facts_change_the_decision_without_substitution() {
+        let first =
+            plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), vec![matrix_candidate(
+                RouteClass::CachedLocal,
+            )]));
+        let second = plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), vec![
+            RouteCandidateFacts::rejected(RouteClass::CachedLocal, "cache-miss"),
+            matrix_candidate(RouteClass::LocalBuild),
+        ]));
+        assert_ne!(first.selected_route, second.selected_route);
+        assert!(second.rejected_routes.iter().any(|rejection| rejection.reason_code == "cache-miss"));
+    }
+
+    #[test]
+    fn planning_is_deterministic_and_effect_free() {
+        let first =
+            plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), online_candidates()));
+        let second =
+            plan_realization_route(RoutePlannerInput::new(RoutePolicy::practical_online(), online_candidates()));
+        assert_eq!(first, second);
+        assert_eq!(first.schema, ROUTE_REPORT_SCHEMA);
+        assert_eq!(first.non_claim, ROUTE_NON_CLAIM);
     }
 }
