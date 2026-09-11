@@ -91,3 +91,24 @@ classifying exactly). Focused Clippy exit 0; Tiger Style exit 0; wasm32
 check clean.
 
 Concrete std adapters and legacy-path removal remain under I4–I6.
+
+## Boundary guard (V3 progress, 2026-09-11)
+
+`scripts/check-rust-plan-boundary.rs` is the repository-owned guard for both
+pure crates:
+
+- Forbids filesystem, process, environment, clock, thread, network, async
+  runtime, CLI error, rendering, and cargo/rustc tokens in
+  `crates/mantle-rust-plan-core/src` and `crates/mantle-rust-plan-app/src`,
+  skipping comment lines.
+- Restricts manifest dependencies to the reviewed cohort (core: blake3,
+  serde, serde_json; app: mantle-rust-plan-core, serde) and rejects any
+  unreviewed dependency.
+- `--self-test` proves a positive fixture passes and that filesystem,
+  process, and rendering tokens plus unreviewed manifest dependencies fail.
+
+Commands: `cargo -Zscript scripts/check-rust-plan-boundary.rs --self-test`
+→ PASS; `cargo -Zscript scripts/check-rust-plan-boundary.rs` → PASS (9 files).
+
+API-shape, compile-fail, and full Cargo-oracle compatibility checks remain
+under V1–V3.
