@@ -1654,6 +1654,10 @@ pub enum ReleaseAction {
         #[arg(long, conflicts_with = "git_source_url")]
         source_acquisition_url: Option<String>,
 
+        /// Optional path to a versioned source-observation binding (JSON) recorded with the release source
+        #[arg(long)]
+        source_observation: Option<PathBuf>,
+
         /// Git remote URL witnesses can fetch to derive the release source archive
         #[arg(long, requires = "git_source_commit")]
         git_source_url: Option<String>,

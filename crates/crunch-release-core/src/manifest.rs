@@ -325,6 +325,29 @@ pub struct FunctionAddressReleaseVerification {
     pub diagnostics: Vec<String>,
 }
 
+/// Versioned source-observation schema bound into release evidence.
+pub const SOURCE_OBSERVATION_SCHEMA: &str = "mantle-source-observation-v1";
+
+/// Source-observation encoding version bound into release evidence.
+pub const SOURCE_OBSERVATION_ENCODING_VERSION: u32 = 1;
+
+/// Source-observation facts bound to one release source acquisition.
+///
+/// The binding repeats the measured subject so release evidence never trusts
+/// a producer status string: the payload digest must equal the exact release
+/// source bytes, and the observation digest must be a distinct observation
+/// identity rather than a re-labeled content digest.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceObservationBinding {
+    pub schema: String,
+    pub encoding_version: u32,
+    pub source_kind: String,
+    pub payload_blake3: String,
+    pub observation_blake3: String,
+    pub snapshot_profile_name: String,
+    pub snapshot_profile_version: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceAcquisition {
     pub kind: String,
@@ -340,6 +363,9 @@ pub struct SourceAcquisition {
     pub archive_profile: Option<String>,
     #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
     pub archive_version: Option<String>,
+    /// Optional versioned source-observation binding for this acquisition.
+    #[serde(default = "absent_optional", skip_serializing_if = "Option::is_none")]
+    pub source_observation: Option<SourceObservationBinding>,
 }
 
 impl SourceAcquisition {
@@ -353,7 +379,15 @@ impl SourceAcquisition {
             tag: None,
             archive_profile: None,
             archive_version: None,
+            source_observation: None,
         }
+    }
+
+    /// Attach a versioned source-observation binding.
+    pub fn with_source_observation(mut self, binding: SourceObservationBinding) -> Self {
+        debug_assert!(!binding.observation_blake3.is_empty());
+        self.source_observation = Some(binding);
+        self
     }
 
     pub fn git(
@@ -372,6 +406,7 @@ impl SourceAcquisition {
             tag,
             archive_profile: Some(RELEASE_SOURCE_ARCHIVE_PROFILE.to_string()),
             archive_version: Some(RELEASE_SOURCE_ARCHIVE_VERSION.to_string()),
+            source_observation: None,
         }
     }
 }
@@ -2048,6 +2083,7 @@ fn validate_source_acquisition(manifest: &ReleaseEvidenceManifest) -> Result<(),
         return Ok(());
     };
     validate_source_acquisition_digest(source_acquisition, manifest)?;
+    validate_source_observation_binding(source_acquisition)?;
     match source_acquisition.kind.as_str() {
         SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE => validate_external_source_acquisition(source_acquisition),
         SOURCE_ACQUISITION_KIND_GIT => validate_git_source_acquisition(source_acquisition),
@@ -2055,6 +2091,74 @@ fn validate_source_acquisition(manifest: &ReleaseEvidenceManifest) -> Result<(),
             "release evidence source_acquisition.kind must be {SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE} or {SOURCE_ACQUISITION_KIND_GIT}, got {other}"
         ))),
     }
+}
+
+/// Expected source kind for an observation binding of the given acquisition kind.
+fn expected_observation_kind(acquisition_kind: &str) -> Option<&'static str> {
+    match acquisition_kind {
+        SOURCE_ACQUISITION_KIND_GIT => Some("git"),
+        SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE => Some("fixed-url"),
+        _ => None,
+    }
+}
+
+fn validate_source_observation_binding(source_acquisition: &SourceAcquisition) -> Result<(), ReleaseEvidenceError> {
+    let Some(binding) = &source_acquisition.source_observation else {
+        return Ok(());
+    };
+    if binding.schema != SOURCE_OBSERVATION_SCHEMA {
+        return Err(validation_error(format!(
+            "release evidence source_acquisition.source_observation.schema must be {SOURCE_OBSERVATION_SCHEMA}"
+        )));
+    }
+    if binding.encoding_version != SOURCE_OBSERVATION_ENCODING_VERSION {
+        return Err(validation_error(format!(
+            "release evidence source_acquisition.source_observation.encoding_version must be {SOURCE_OBSERVATION_ENCODING_VERSION}"
+        )));
+    }
+    validate_blake3_hex(&binding.payload_blake3, "source_acquisition.source_observation.payload_blake3")?;
+    validate_blake3_hex(
+        &binding.observation_blake3,
+        "source_acquisition.source_observation.observation_blake3",
+    )?;
+    if binding.payload_blake3 != source_acquisition.digest_blake3 {
+        return Err(validation_error(
+            "release evidence source_observation.payload_blake3 must match the exact release source bytes".to_string(),
+        ));
+    }
+    if binding.observation_blake3 == binding.payload_blake3 {
+        return Err(validation_error(
+            "release evidence source_observation.observation_blake3 must be an observation identity, not a re-labeled content digest"
+                .to_string(),
+        ));
+    }
+    let expected_kind = expected_observation_kind(source_acquisition.kind.as_str());
+    if expected_kind != Some(binding.source_kind.as_str()) {
+        return Err(validation_error(format!(
+            "release evidence source_observation.source_kind must be the observation class for {}",
+            source_acquisition.kind
+        )));
+    }
+    if binding.snapshot_profile_name.trim().is_empty() || binding.snapshot_profile_version < 1 {
+        return Err(validation_error(
+            "release evidence source_observation snapshot profile name and version must be present".to_string(),
+        ));
+    }
+    if binding.snapshot_profile_name != RELEASE_SOURCE_ARCHIVE_PROFILE {
+        return Err(validation_error(
+            "release evidence source_observation snapshot profile must match the release source archive profile".to_string(),
+        ));
+    }
+    if let Ok(expected_version) = RELEASE_SOURCE_ARCHIVE_VERSION.parse::<u32>()
+        && binding.snapshot_profile_version != expected_version
+    {
+        return Err(validation_error(
+            "release evidence source_observation snapshot profile version must match the release source archive profile".to_string(),
+        ));
+    }
+    debug_assert!(!binding.schema.is_empty());
+    debug_assert_ne!(binding.observation_blake3, binding.payload_blake3);
+    Ok(())
 }
 
 fn validate_source_acquisition_digest(
@@ -3251,6 +3355,133 @@ mod tests {
 
         assert!(text.contains("source_acquisition"));
         assert!(text.contains(SOURCE_ACQUISITION_KIND_EXTERNAL_ARCHIVE));
+    }
+
+    fn sample_observation_binding(payload_blake3: &str) -> SourceObservationBinding {
+        SourceObservationBinding {
+            schema: SOURCE_OBSERVATION_SCHEMA.to_string(),
+            encoding_version: SOURCE_OBSERVATION_ENCODING_VERSION,
+            source_kind: "fixed-url".to_string(),
+            payload_blake3: payload_blake3.to_string(),
+            observation_blake3: sample_digest(7),
+            snapshot_profile_name: RELEASE_SOURCE_ARCHIVE_PROFILE.to_string(),
+            snapshot_profile_version: 1,
+        }
+    }
+
+    #[test]
+    fn validate_accepts_bound_source_observation() {
+        let mut manifest = sample_manifest();
+        let payload = manifest.source_archive.digest_blake3.clone();
+        manifest.source_acquisition = Some(
+            SourceAcquisition::external_archive("https://example.invalid/mantle-src.tar".to_string(), payload.clone())
+                .with_source_observation(sample_observation_binding(&payload)),
+        );
+
+        let bytes = canonical_release_evidence_manifest(manifest).unwrap();
+        let text = String::from_utf8(bytes).unwrap();
+
+        assert!(text.contains("source_observation"));
+        assert!(text.contains(SOURCE_OBSERVATION_SCHEMA));
+    }
+
+    #[test]
+    fn validate_rejects_stale_observation_payload_bytes() {
+        let mut manifest = sample_manifest();
+        let payload = manifest.source_archive.digest_blake3.clone();
+        manifest.source_acquisition = Some(
+            SourceAcquisition::external_archive("https://example.invalid/mantle-src.tar".to_string(), payload.clone())
+                .with_source_observation(sample_observation_binding(&sample_digest(9))),
+        );
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("must match the exact release source bytes"));
+    }
+
+    #[test]
+    fn validate_rejects_relabeled_content_digest_as_observation() {
+        let mut manifest = sample_manifest();
+        let payload = manifest.source_archive.digest_blake3.clone();
+        let mut binding = sample_observation_binding(&payload);
+        binding.observation_blake3 = payload.clone();
+        manifest.source_acquisition = Some(
+            SourceAcquisition::external_archive("https://example.invalid/mantle-src.tar".to_string(), payload)
+                .with_source_observation(binding),
+        );
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+
+        assert!(err.to_string().contains("not a re-labeled content digest"));
+    }
+
+    #[test]
+    fn validate_rejects_unsupported_observation_schema_and_version() {
+        let mut manifest = sample_manifest();
+        let payload = manifest.source_archive.digest_blake3.clone();
+        let mut binding = sample_observation_binding(&payload);
+        binding.schema = "mantle-source-observation-v2".to_string();
+        manifest.source_acquisition = Some(
+            SourceAcquisition::external_archive("https://example.invalid/mantle-src.tar".to_string(), payload.clone())
+                .with_source_observation(binding),
+        );
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("source_observation.schema must be"));
+
+        let mut manifest = sample_manifest();
+        let payload = manifest.source_archive.digest_blake3.clone();
+        let mut binding = sample_observation_binding(&payload);
+        binding.encoding_version = 2;
+        manifest.source_acquisition = Some(
+            SourceAcquisition::external_archive("https://example.invalid/mantle-src.tar".to_string(), payload)
+                .with_source_observation(binding),
+        );
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("encoding_version must be"));
+    }
+
+    #[test]
+    fn validate_rejects_observation_kind_and_profile_drift() {
+        let mut manifest = sample_manifest();
+        let payload = manifest.source_archive.digest_blake3.clone();
+        let mut binding = sample_observation_binding(&payload);
+        binding.source_kind = "git".to_string();
+        manifest.source_acquisition = Some(
+            SourceAcquisition::external_archive("https://example.invalid/mantle-src.tar".to_string(), payload.clone())
+                .with_source_observation(binding),
+        );
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("source_kind must be the observation class"));
+
+        let mut manifest = sample_manifest();
+        let payload = manifest.source_archive.digest_blake3.clone();
+        let mut binding = sample_observation_binding(&payload);
+        binding.snapshot_profile_name = "other-profile".to_string();
+        manifest.source_acquisition = Some(
+            SourceAcquisition::external_archive("https://example.invalid/mantle-src.tar".to_string(), payload)
+                .with_source_observation(binding),
+        );
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("snapshot profile must match"));
+    }
+
+    #[test]
+    fn validate_rejects_malformed_observation_digests() {
+        let mut manifest = sample_manifest();
+        let payload = manifest.source_archive.digest_blake3.clone();
+        let mut binding = sample_observation_binding(&payload);
+        binding.observation_blake3 = "not-hex".to_string();
+        manifest.source_acquisition = Some(
+            SourceAcquisition::external_archive("https://example.invalid/mantle-src.tar".to_string(), payload)
+                .with_source_observation(binding),
+        );
+
+        let err = canonical_release_evidence_manifest(manifest).unwrap_err();
+        assert!(err.to_string().contains("observation_blake3"));
     }
 
     #[test]

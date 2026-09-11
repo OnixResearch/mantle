@@ -51,6 +51,7 @@ use crunch_release_core::STACK_PROVENANCE_GRAPH_REPORT_SCHEMA;
 use crunch_release_core::STACK_PROVENANCE_OPAQUE_BOUNDARY;
 use crunch_release_core::STACK_PROVENANCE_SIDECAR_SCHEMA;
 pub(crate) use crunch_release_core::SourceAcquisition;
+pub(crate) use crunch_release_core::SourceObservationBinding;
 use crunch_release_core::StackProvenanceReleaseEvidence;
 use crunch_release_core::VALENCE_STACK_PROVENANCE_RECEIPT_ROLE;
 use crunch_release_core::build_content_bound_release_evidence;
@@ -147,6 +148,7 @@ pub(crate) struct ReleaseBundleCreateRequest {
     pub reproducibility_report_path: Option<PathBuf>,
     pub provider_fixed_point_proof_dir: Option<PathBuf>,
     pub source_acquisition_url: Option<String>,
+    pub source_observation: Option<SourceObservationBinding>,
     pub git_source: Option<GitSourceCreateRequest>,
     pub external_evidence: Vec<ExternalEvidenceCreateRequest>,
     pub kani_toolchain_evidence: Vec<KaniToolchainEvidenceCreateRequest>,
@@ -175,6 +177,7 @@ impl ReleaseBundleCreateRequest {
             reproducibility_report_path: None,
             provider_fixed_point_proof_dir: None,
             source_acquisition_url: None,
+            source_observation: None,
             git_source: None,
             external_evidence: vec![],
             kani_toolchain_evidence: vec![],
@@ -1101,23 +1104,38 @@ pub(crate) fn load_full_self_hosting_proof_identity(
     })
 }
 
+/// Attach the optional versioned source-observation binding.
+fn attach_source_observation(
+    acquisition: SourceAcquisition,
+    request: &ReleaseBundleCreateRequest,
+) -> SourceAcquisition {
+    match &request.source_observation {
+        Some(binding) => {
+            debug_assert!(!binding.observation_blake3.is_empty());
+            acquisition.with_source_observation(binding.clone())
+        }
+        None => acquisition,
+    }
+}
+
 fn build_source_acquisition(
     request: &ReleaseBundleCreateRequest,
     source_archive_digest_blake3: &str,
 ) -> Option<SourceAcquisition> {
     if let Some(git_source) = &request.git_source {
-        return Some(SourceAcquisition::git(
+        let acquisition = SourceAcquisition::git(
             git_source.remote_url.clone(),
             git_source.commit.clone(),
             git_source.reference.clone(),
             git_source.tag.clone(),
             source_archive_digest_blake3.to_string(),
-        ));
+        );
+        return Some(attach_source_observation(acquisition, request));
     }
-    request
-        .source_acquisition_url
-        .as_ref()
-        .map(|url| SourceAcquisition::external_archive(url.clone(), source_archive_digest_blake3.to_string()))
+    request.source_acquisition_url.as_ref().map(|url| {
+        let acquisition = SourceAcquisition::external_archive(url.clone(), source_archive_digest_blake3.to_string());
+        attach_source_observation(acquisition, request)
+    })
 }
 
 fn validate_create_request(request: &ReleaseBundleCreateRequest) -> Result<(), RunError> {

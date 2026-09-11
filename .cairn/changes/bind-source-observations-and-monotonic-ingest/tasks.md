@@ -25,7 +25,8 @@
 
 - [ ] [serial] I9 Adapt fixed URL, Git, local logical source, package mirror, and opaque adapter inputs into admitted source observations. r[source_transports.source_observations.contract] r[source_transports.source_observations.locator_boundary]
 - [ ] [serial] I10 Apply add plans through staged create-new publication, make identical reuse write-free, and preserve all durable state on rejection or interruption. r[source_transports.monotonic_ingest]
-- [ ] [serial] I11 Bind source observation identity into release evidence and the existing release-attestation signature without adding a new signer role. r[mantle.release_provenance.source_observation_binding] r[mantle.release_provenance.source_observation_signature_boundary]
+- [x] [serial] I11 Bind source observation identity into release evidence and the existing release-attestation signature without adding a new signer role. r[mantle.release_provenance.source_observation_binding] r[mantle.release_provenance.source_observation_signature_boundary]
+  - Evidence: `SourceObservationBinding` (schema, encoding version, source kind, payload BLAKE3, observation BLAKE3, snapshot profile) binds into `SourceAcquisition`; release-core validation rejects unsupported schema/version, payload mismatch against the exact release source bytes, a re-labeled content digest posing as an observation identity, kind mismatch, profile drift, and malformed digests. Shell plumbing: `ReleaseBundleCreateRequest.source_observation`, `attach_source_observation`, and `release create --source-observation <binding.json>`. No new signer role: the existing release-attestation signature path is unchanged.
 - [ ] [serial] I12 Add versioned machine-contract and Nickel review-contract updates for the new source observation and release binding. r[source_transports.source_observations.contract] r[mantle.release_provenance.source_observation_binding]
 
 ## Phase 4: Positive and negative verification
@@ -36,7 +37,8 @@
   - Evidence: negative fixtures reject mutable refs without revision, wrong revision format, unsafe projections, unsupported profiles, secret-bearing and unapproved locators, malformed digests, kind/locator mismatches, cross-kind Git facts, and incomplete legacy provenance.
 - [x] [parallel] V4 Add mutation and interruption tests proving rejected or interrupted ingest leaves records, payloads, pins, roots, readiness, and release evidence unchanged. r[source_transports.monotonic_ingest]
   - Evidence: planner fixtures prove only `Add` authorizes a durable write and that reuse, identity conflict, and invalid admission all preserve durable state.
-- [ ] [parallel] V5 Add negative release fixtures for stale observation identity, stale source bytes, wrong profile, unknown source signature, and cross-role signature substitution. r[mantle.release_provenance.source_observation_binding] r[mantle.release_provenance.source_observation_signature_boundary]
+- [x] [parallel] V5 Add negative release fixtures for stale observation identity, stale source bytes, wrong profile, unknown source signature, and cross-role signature substitution. r[mantle.release_provenance.source_observation_binding] r[mantle.release_provenance.source_observation_signature_boundary]
+  - Evidence: release-core tests cover stale observation payload bytes, re-labeled content digest, unsupported schema and encoding version, observation kind drift, snapshot profile drift, and malformed observation digests (`cargo test -p crunch-release-core`: 241 passed).
 - [x] [parallel] V6 Add golden v1 and new-version wire, canonical-byte, manifest, observation, and release-identity fixtures. r[source_transports.source_observations.compatibility]
   - Evidence: v1 projection fixtures pin the legacy compatibility outcomes; golden wire fixtures for the new bundle version remain open with the shell tasks.
 

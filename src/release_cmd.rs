@@ -2,6 +2,8 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::path::PathBuf;
 
+use crunch_release_core::SourceObservationBinding;
+
 use crunch_release_core::AST_GREP_EXTERNAL_EVIDENCE_ROLE;
 use crunch_release_core::AST_GREP_STRUCTURAL_CLAIM_SCOPE;
 use crunch_release_core::AST_GREP_STRUCTURAL_EVIDENCE_SCHEMA;
@@ -273,6 +275,7 @@ fn release_create_command(action: crate::ReleaseAction) -> Result<ReleaseCreateC
         provider_fixed_point_proof,
         reproducibility_report,
         source_acquisition_url,
+        source_observation,
         git_source_url,
         git_source_commit,
         git_source_ref,
@@ -305,6 +308,7 @@ fn release_create_command(action: crate::ReleaseAction) -> Result<ReleaseCreateC
         provider_fixed_point_proof,
         reproducibility_report,
         source_acquisition_url,
+        source_observation,
         git_source_url,
         git_source_commit,
         git_source_ref,
@@ -334,6 +338,7 @@ struct ReleaseCreateCommand {
     provider_fixed_point_proof: Option<PathBuf>,
     reproducibility_report: Option<PathBuf>,
     source_acquisition_url: Option<String>,
+    source_observation: Option<PathBuf>,
     git_source_url: Option<String>,
     git_source_commit: Option<String>,
     git_source_ref: Option<String>,
@@ -421,6 +426,7 @@ fn prepare_release_create(
             .provider_fixed_point_proof
             .map(|path| resolve_input_path(current_dir, path)),
         source_acquisition_url: command.source_acquisition_url,
+        source_observation: read_source_observation_binding(current_dir, command.source_observation)?,
         git_source,
         external_evidence,
         kani_toolchain_evidence,
@@ -432,6 +438,32 @@ fn prepare_release_create(
         request,
         _source_archive_file: source_archive_file,
     })
+}
+
+/// Read and parse the optional source-observation binding file.
+fn read_source_observation_binding(
+    current_dir: &Path,
+    path: Option<PathBuf>,
+) -> Result<Option<SourceObservationBinding>, RunError> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    let resolved = resolve_input_path(current_dir, path);
+    let text = std::fs::read_to_string(&resolved).map_err(|err| {
+        RunError::Internal(format!(
+            "reading source observation binding {}: {err}",
+            resolved.display()
+        ))
+    })?;
+    let binding: SourceObservationBinding = serde_json::from_str(&text).map_err(|err| {
+        RunError::Internal(format!(
+            "parsing source observation binding {}: {err}",
+            resolved.display()
+        ))
+    })?;
+    debug_assert!(!binding.schema.is_empty());
+    debug_assert!(!binding.observation_blake3.is_empty());
+    Ok(Some(binding))
 }
 
 fn emit_release_create_result(
