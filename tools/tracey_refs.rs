@@ -1106,3 +1106,16 @@
 // rail scans `tools/` and not the package root. Evidence: positive and
 // negative probe transcripts, the deterministic report, inventory, oracle
 // checkpoint, and ADR 0078 under the active change `explore-distributed-evaluation`.
+
+// Build-planning core extraction bridge (planning facts, observation, and blocker separation).
+
+// r[impl build_scheduling.explicit_parallelism_facts]
+// r[impl realization_routing.explicit_observation_boundary]
+// r[impl realization_routing.plan_execution_separation]
+// r[impl realization_routing.typed_planning_blockers]
+// r[verify build_scheduling.explicit_parallelism_facts]
+// r[verify realization_routing.explicit_observation_boundary]
+// r[verify realization_routing.plan_execution_separation]
+// r[verify realization_routing.typed_planning_blockers]
+// The pure cores own job-count policy, route policy, and typed blockers.
+// Shells own host parallelism, store, remote, and executor observation.
