@@ -63,3 +63,31 @@ feature activation over supplied facts:
 Fixtures: 14 pass, adding activated/inactive optional dependency behavior,
 unknown feature requests, target required-feature gating, and identity
 sensitivity to activation. Focused Clippy exit 0; wasm32 check clean.
+
+## Application ports and orchestration (I3, 2026-09-11)
+
+`crates/mantle-rust-plan-app` (strict `no_std + alloc`) owns the
+application contract:
+
+- Ports with Mantle-owned types only — `WorkspaceFactsSource`,
+  `CargoOracleCapture`, `CompilerInspection`, `RustCacheAccess`,
+  `UnitExecutor` — each returning `Result<_, AdapterError>` with a stable
+  capability code and bounded detail. No `RunError`, process, Cargo JSON, host
+  path, or store type appears in a signature.
+- `RustPlanApplication::run` orchestrates: load facts, capture optional
+  oracle material, inspect the compiler, plan in the core, consult the cache
+  per effect, execute misses, classify observations against the plan, and
+  build the receipt preimage. Planning blockers return
+  `ApplicationOutcome::Blocked` and perform no work; capability failures
+  propagate as typed adapter errors.
+- Cache accounting is explicit: `CacheDisposition` (all missed, partially
+  hit, all hit) plus per-unit `UnitDisposition`, with cache-served units
+  recorded as succeeded observations carrying a `cache-hit` diagnostic.
+
+Fixtures: 5 pass (successful run with receipt, partial cache hit without
+execution, blocked plan performing no work, typed adapter failures from
+workspace/cache/executor ports, and failed or substituted observations
+classifying exactly). Focused Clippy exit 0; Tiger Style exit 0; wasm32
+check clean.
+
+Concrete std adapters and legacy-path removal remain under I4–I6.

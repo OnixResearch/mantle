@@ -1,0 +1,9 @@
+[package]
+name = "mantle-rust-plan-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mantle-rust-plan-core = { path = "../mantle-rust-plan-core" }
+serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }

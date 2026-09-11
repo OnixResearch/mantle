@@ -4904,6 +4904,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mantle-rust-plan-app"
+version = "0.1.0"
+dependencies = [
+ "mantle-rust-plan-core",
+ "serde",
+]
+
+[[package]]
 name = "mantle-rust-plan-core"
 version = "0.1.0"
 dependencies = [
