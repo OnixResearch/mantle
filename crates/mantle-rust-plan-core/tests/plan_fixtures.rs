@@ -8,6 +8,7 @@ use mantle_rust_plan_core::EffectId;
 use mantle_rust_plan_core::FeatureFacts;
 use mantle_rust_plan_core::FeatureReference;
 use mantle_rust_plan_core::PackageFacts;
+use mantle_rust_plan_core::PackageFeatureRequest;
 use mantle_rust_plan_core::PackageSource;
 use mantle_rust_plan_core::PackageSourceKind;
 use mantle_rust_plan_core::PlanExecutionOutcome;
@@ -78,6 +79,7 @@ fn two_package_request() -> PlanRequest {
             ),
             package("core", vec![lib_target("core")], Vec::new()),
         ],
+        feature_requests: Vec::new(),
         profile: BuildProfile::Release,
         limits: UnitLimitFacts::default(),
     }
@@ -274,4 +276,96 @@ fn observations_classify_completion_failure_and_drift() {
         unknown_effect_count: 1,
         missing_effect_count: 0
     });
+}
+
+#[test]
+fn activated_optional_dependency_participates_in_planning() {
+    // An optional dependency is invisible until a feature activates it.
+    let mut request = two_package_request();
+    request.packages[0].dependencies.push(DependencyFacts {
+        key: String::from("extra"),
+        package: String::from("extra"),
+        version_requirement: String::from("^0.1"),
+        kind: DependencyKind::Normal,
+        optional: true,
+        target_predicate: None,
+        features: Vec::new(),
+        default_features: true,
+        renamed: false,
+    });
+    request.packages[0].features = vec![FeatureFacts {
+        name: String::from("with-extra"),
+        enables: vec![FeatureReference::Dependency(String::from("extra"))],
+    }];
+
+    let inactive = plan_rust_units(&request);
+    assert_eq!(inactive.outcome, PlanOutcome::Completed);
+
+    request.feature_requests = vec![PackageFeatureRequest {
+        package: String::from("app"),
+        features: vec![String::from("with-extra")],
+        include_default_features: false,
+    }];
+    let activated = blocked_plan(&request);
+    assert!(blocker_codes(&activated).contains(&"missing-dependency-package"));
+}
+
+#[test]
+fn unknown_feature_requests_are_blocked() {
+    let mut request = two_package_request();
+    request.feature_requests = vec![PackageFeatureRequest {
+        package: String::from("app"),
+        features: vec![String::from("does-not-exist")],
+        include_default_features: false,
+    }];
+    let plan = blocked_plan(&request);
+    assert!(blocker_codes(&plan).contains(&"unknown-feature-request"));
+}
+
+#[test]
+fn target_required_features_gate_units() {
+    let mut request = two_package_request();
+    request.packages[1].features = vec![FeatureFacts {
+        name: String::from("simd"),
+        enables: Vec::new(),
+    }];
+    request.packages[1].targets[0].required_features = vec![String::from("simd")];
+    let gated = blocked_plan(&request);
+    assert!(blocker_codes(&gated).contains(&"target-required-feature-missing"));
+
+    request.feature_requests = vec![PackageFeatureRequest {
+        package: String::from("core"),
+        features: vec![String::from("simd")],
+        include_default_features: false,
+    }];
+    let satisfied = plan_rust_units(&request);
+    assert_eq!(satisfied.outcome, PlanOutcome::Completed);
+    let core_unit = satisfied
+        .units
+        .iter()
+        .find(|unit| unit.package_key.starts_with("core@"))
+        .expect("core unit is planned");
+    assert!(core_unit.activated_features.iter().any(|feature| feature == "simd"));
+}
+
+#[test]
+fn feature_activation_changes_unit_identity_not_unit_set() {
+    let mut plain = two_package_request();
+    plain.packages[1].features = vec![FeatureFacts {
+        name: String::from("simd"),
+        enables: Vec::new(),
+    }];
+    let without = plan_rust_units(&plain);
+    let mut with = plain.clone();
+    with.feature_requests = vec![PackageFeatureRequest {
+        package: String::from("core"),
+        features: vec![String::from("simd")],
+        include_default_features: false,
+    }];
+    let with_simd = plan_rust_units(&with);
+    assert_eq!(without.units.len(), with_simd.units.len());
+    assert_ne!(without.plan_blake3, with_simd.plan_blake3);
+    let plain_core = without.units.iter().find(|unit| unit.package_key.starts_with("core@")).expect("unit");
+    let simd_core = with_simd.units.iter().find(|unit| unit.package_key.starts_with("core@")).expect("unit");
+    assert_ne!(plain_core.unit_blake3, simd_core.unit_blake3);
 }

@@ -17,12 +17,18 @@ extern crate alloc;
 extern crate std;
 
 mod digest;
+mod features;
 mod model;
 mod plan;
 mod receipt;
 
 pub use digest::Blake3Digest;
 pub use digest::domain_digest;
+pub use features::DEFAULT_FEATURE;
+pub use features::FeatureResolution;
+pub use features::MAX_FEATURE_PASSES;
+pub use features::PackageFeatureRequest;
+pub use features::resolve_package_features;
 pub use model::DependencyFacts;
 pub use model::DependencyKind;
 pub use model::FeatureFacts;

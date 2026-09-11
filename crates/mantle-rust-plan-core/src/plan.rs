@@ -62,6 +62,8 @@ pub struct PlanRequest {
     /// Package names whose non-dependency targets are planned.
     pub roots: Vec<String>,
     pub packages: Vec<PackageFacts>,
+    /// Explicit feature requests per package.
+    pub feature_requests: Vec<crate::features::PackageFeatureRequest>,
     pub profile: BuildProfile,
     pub limits: UnitLimitFacts,
 }
@@ -82,6 +84,8 @@ pub struct PlannedUnit {
     pub target_name: String,
     pub target_kind: TargetKind,
     pub profile: BuildProfile,
+    /// Activated package features in canonical order.
+    pub activated_features: Vec<String>,
     /// Dependency unit identities in canonical order.
     pub dependency_unit_ids: Vec<UnitId>,
     pub unit_blake3: Blake3Digest,
@@ -157,6 +161,7 @@ struct UnitIdentityInput<'a> {
     target_name: &'a str,
     target_kind: TargetKind,
     profile: BuildProfile,
+    activated_features: &'a [String],
     dependency_unit_ids: &'a [UnitId],
 }
 
@@ -238,36 +243,23 @@ fn build_units(
     by_name: &BTreeMap<&str, &PackageFacts>,
 ) -> Result<Vec<PlannedUnit>, Vec<PlanBlocker>> {
     let root_names: BTreeSet<&str> = request.roots.iter().map(String::as_str).collect();
-    let mut blockers = Vec::new();
-    let mut units: Vec<PlannedUnit> = Vec::with_capacity(request.packages.len());
+    let mut blockers: Vec<PlanBlocker> = Vec::with_capacity(request.packages.len());
+    let mut resolved: Vec<(&str, crate::features::FeatureResolution)> = Vec::with_capacity(request.packages.len());
     for package in &request.packages {
-        let is_root = root_names.contains(package.name.as_str());
-        for target in planable_targets(package, is_root) {
-            units.push(PlannedUnit {
-                unit_id: unit_id_of(package, &target.name, target.kind),
-                package_key: package.key(),
-                target_name: target.name.clone(),
-                target_kind: target.kind,
-                profile: request.profile,
-                dependency_unit_ids: Vec::new(),
-                unit_blake3: Blake3Digest::from_slice(b"pending"),
-            });
+        let request_for = feature_request_for(package, &request.feature_requests);
+        let outcome = crate::features::resolve_package_features(package, &request_for);
+        match outcome {
+            Ok(resolution) => resolved.push((package.name.as_str(), resolution)),
+            Err(mut found) => blockers.append(&mut found),
         }
     }
-    let mut missing: Vec<String> = Vec::with_capacity(request.packages.len());
-    for package in &request.packages {
-        for dependency in &package.dependencies {
-            if dependency.kind == DependencyKind::Dev && !root_names.contains(package.name.as_str()) {
-                continue;
-            }
-            if !by_name.contains_key(dependency.package.as_str()) && !missing.contains(&dependency.package) {
-                missing.push(dependency.package.clone());
-            }
-        }
+    let resolutions: BTreeMap<&str, crate::features::FeatureResolution> = resolved.into_iter().collect();
+    if !blockers.is_empty() {
+        blockers.sort();
+        return Err(blockers);
     }
-    blockers.extend(missing.into_iter().map(|name| {
-        PlanBlocker::new("missing-dependency-package", &name, "dependency package facts were not supplied")
-    }));
+    let mut units = collect_units(request, &root_names, &resolutions, &mut blockers);
+    blockers.extend(missing_dependency_blockers(request, by_name, &root_names, &resolutions));
     if count_exceeds(units.len(), request.limits.max_units) {
         blockers.push(PlanBlocker::new("unit-limit", "units", "planned units exceed the declared limit"));
     }
@@ -281,6 +273,103 @@ fn build_units(
     units.sort_by(|left, right| left.unit_id.cmp(&right.unit_id));
     debug_assert!(units.windows(2).all(|pair| pair[0].unit_id != pair[1].unit_id));
     Ok(units)
+}
+
+/// Collect one unit per planable target, skipping targets whose required
+/// features are not activated.
+fn collect_units(
+    request: &PlanRequest,
+    root_names: &BTreeSet<&str>,
+    resolutions: &BTreeMap<&str, crate::features::FeatureResolution>,
+    blockers: &mut Vec<PlanBlocker>,
+) -> Vec<PlannedUnit> {
+    let mut units: Vec<PlannedUnit> = Vec::with_capacity(request.packages.len());
+    for package in &request.packages {
+        let is_root = root_names.contains(package.name.as_str());
+        let activated_features = resolutions
+            .get(package.name.as_str())
+            .map(|resolution| resolution.activated_features.clone())
+            .unwrap_or_default();
+        for target in planable_targets(package, is_root) {
+            let missing_required_feature = target
+                .required_features
+                .iter()
+                .find(|required| !activated_features.iter().any(|feature| feature == *required));
+            if let Some(required) = missing_required_feature {
+                blockers.extend(core::iter::once(PlanBlocker::new(
+                    "target-required-feature-missing",
+                    &target.name,
+                    required,
+                )));
+                continue;
+            }
+            units.push(PlannedUnit {
+                unit_id: unit_id_of(package, &target.name, target.kind),
+                package_key: package.key(),
+                target_name: target.name.clone(),
+                target_kind: target.kind,
+                profile: request.profile,
+                activated_features: activated_features.clone(),
+                dependency_unit_ids: Vec::new(),
+                unit_blake3: Blake3Digest::from_slice(b"pending"),
+            });
+        }
+    }
+    debug_assert!(!units.is_empty() || request.packages.is_empty());
+    units
+}
+
+/// Blocker for every required dependency whose facts are absent.
+///
+/// Optional dependencies participate only once a feature activates them, and
+/// dev dependencies belong to root packages only.
+fn missing_dependency_blockers(
+    request: &PlanRequest,
+    by_name: &BTreeMap<&str, &PackageFacts>,
+    root_names: &BTreeSet<&str>,
+    resolutions: &BTreeMap<&str, crate::features::FeatureResolution>,
+) -> Vec<PlanBlocker> {
+    let mut missing: Vec<String> = Vec::with_capacity(request.packages.len());
+    for package in &request.packages {
+        let resolution = resolutions.get(package.name.as_str());
+        for dependency in &package.dependencies {
+            if dependency.kind == DependencyKind::Dev && !root_names.contains(package.name.as_str()) {
+                continue;
+            }
+            let is_inactive_optional = dependency.optional
+                && !resolution.is_some_and(|resolution| resolution.has_optional_dependency(&dependency.key));
+            if is_inactive_optional {
+                continue;
+            }
+            if !by_name.contains_key(dependency.package.as_str()) && !missing.contains(&dependency.package) {
+                missing.push(dependency.package.clone());
+            }
+        }
+    }
+    debug_assert!(missing.len() <= request.packages.len());
+    missing
+        .into_iter()
+        .map(|name| PlanBlocker::new("missing-dependency-package", &name, "dependency package facts were not supplied"))
+        .collect()
+}
+
+/// Feature request for one package: explicit when supplied, otherwise only
+/// the implicit default feature when the package declares one.
+fn feature_request_for(
+    package: &PackageFacts,
+    requests: &[crate::features::PackageFeatureRequest],
+) -> crate::features::PackageFeatureRequest {
+    if let Some(explicit) = requests.iter().find(|request| request.package == package.name) {
+        debug_assert_eq!(explicit.package, package.name);
+        return explicit.clone();
+    }
+    let has_default_feature = package.features.iter().any(|feature| feature.name == crate::features::DEFAULT_FEATURE);
+    debug_assert!(!has_default_feature || !package.features.is_empty());
+    crate::features::PackageFeatureRequest {
+        package: package.name.clone(),
+        features: Vec::new(),
+        include_default_features: has_default_feature,
+    }
 }
 
 fn planable_targets(package: &PackageFacts, is_root: bool) -> Vec<crate::model::TargetFacts> {
@@ -324,6 +413,7 @@ fn unit_identity(unit: &PlannedUnit) -> Result<Blake3Digest, DigestError> {
         target_name: &unit.target_name,
         target_kind: unit.target_kind,
         profile: unit.profile,
+        activated_features: &unit.activated_features,
         dependency_unit_ids: &unit.dependency_unit_ids,
     })
 }

@@ -40,3 +40,26 @@ process, environment, clock, Cargo, rustc, cache, or CLI dependency:
 
 I2–I6 (moving logic out of `src/rust_plan.rs`, application ports, adapter
 replacement, effect execution loop, legacy-path removal) and V1–V5.
+
+## Feature resolution slice (I2 progress, 2026-09-11)
+
+`crates/mantle-rust-plan-core/src/features.rs` now owns deterministic
+feature activation over supplied facts:
+
+- `PackageFeatureRequest` (package, requested features, default-feature
+  inclusion) and `FeatureResolution` (activated features, activated optional
+  dependencies, both canonical order).
+- Activation is a bounded forward fixed point (`MAX_FEATURE_PASSES`): seeds
+  are the requested names plus the implicit `default` feature, and enabling a
+  feature enables its declared feature references. Unknown requests, oversized
+  requests, package mismatch, and non-stabilizing closures yield typed
+  blockers.
+- The planner consumes resolutions: optional dependencies participate only
+  when a feature activates them, targets whose `required_features` are not
+  activated are blocked with `target-required-feature-missing`, and activated
+  features enter unit identity (so a feature change changes unit and plan
+  identities without changing the unit set).
+
+Fixtures: 14 pass, adding activated/inactive optional dependency behavior,
+unknown feature requests, target required-feature gating, and identity
+sensitivity to activation. Focused Clippy exit 0; wasm32 check clean.
