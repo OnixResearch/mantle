@@ -14,8 +14,8 @@ cranelift-proto = [
 
 [dependencies]
 blake3 = { version = "=1.8.2", default-features = false, features = ["pure"] }
-nickel-lang = "2.0.0"
-nickel-lang-core = { version = "0.16.1", default-features = false }
+nickel-lang = "2.2.0"
+nickel-lang-core = { version = "0.18.0", default-features = false }
 thiserror = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

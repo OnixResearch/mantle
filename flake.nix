@@ -47,6 +47,10 @@
     };
     octet.url = "github:OnixResearch/octet/86ee46b3b9257b145d2dbeb6ce9d9897607db99c";
     cairn.url = "github:OnixResearch/cairn/695124d459574ba7aeba6097310d237f393c243c";
+    # Pinned Nickel CLI cohort 1.17.0 (tag 1.17.0). Mantle validates sources
+    # and runs CLI checks with this exact evaluator, never a floating nixpkgs
+    # nickel.
+    nickelCohort.url = "github:tweag/nickel/1320a983e6c3d1e2fb53dd2464b084b4903b1426";
   };
 
   outputs =
@@ -66,6 +70,7 @@
       transactionalReconciliationSource,
       octet,
       cairn,
+      nickelCohort,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -78,8 +83,7 @@
         pkgs = import nixpkgs {
           inherit system;
           overlays = [
-            (import rust-overlay)
-            (
+            (import rust-overlay)            (
               final: prev:
               let
                 # crates.io returns HTTP 403 for the nixpkgs fetchurl
@@ -104,6 +108,11 @@
                 fetchurl = args: prev.fetchurl (rewriteArgs args);
               }
             )
+            (final: prev: {
+              # Exact Nickel CLI 1.17.0 cohort; never the floating nixpkgs
+              # nickel. All checks and dev shells inherit this override.
+              nickel = nickelCohort.packages.${system}.default;
+            })
           ];
         };
         onixPkgs = import onix-nixpkgs { inherit system; };
