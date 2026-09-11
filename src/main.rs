@@ -177,6 +177,7 @@ mod source_built_fixed_point;
 mod source_built_fixed_point_dev_cache;
 mod source_built_fixed_point_receipt;
 mod source_built_fixed_point_resume;
+mod source_built_fixed_point_resume_bundle;
 mod source_built_fixed_point_shell;
 mod source_bundle;
 mod source_observation;

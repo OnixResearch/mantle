@@ -41,6 +41,14 @@ use crate::source_built_fixed_point_dev_cache::dev_provider_cache_key;
 use crate::source_built_fixed_point_dev_cache::evaluate_fast_fail;
 use crate::source_built_fixed_point_dev_cache::evaluate_provider_cache_lookup;
 use crate::source_built_fixed_point_dev_cache::validate_stage_marker;
+use crate::source_built_fixed_point_resume::ResumeOutputReference;
+use crate::source_built_fixed_point_resume::ResumePlan;
+use crate::source_built_fixed_point_resume::plan_stage_resume;
+use crate::source_built_fixed_point_resume_bundle::BLAKE3_DIGEST_HEX_LEN;
+use crate::source_built_fixed_point_resume_bundle::RESUME_BUNDLES_SUBDIR;
+use crate::source_built_fixed_point_resume_bundle::publish_stage_bundle;
+use crate::source_built_fixed_point_resume_bundle::read_stage_bundles;
+use crate::source_built_fixed_point_resume_bundle::restore_stage_bundle;
 use crate::source_bundle::SourceBuiltFixedPointProfileRecords;
 use crate::source_bundle::SourceRecord;
 use crate::source_bundle::assemble_source_bundle;
@@ -829,6 +837,13 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
     if adopt {
         record_dev_cache_hit(prepared)?;
     }
+    let resume_plan = if options.dev_resume {
+        let plan = plan_dev_resume(prepared, options)?;
+        emit_resume_plan_notice(options, prepared, &plan);
+        Some(plan)
+    } else {
+        None
+    };
     let providers = if adopt {
         let adopted = adopt_cached_provider_subtrees(options, prepared, &prepared.plan)?;
         construct_full_source_providers(
@@ -840,9 +855,20 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
         )?
     } else {
         let stagex_transition_execution_dir = prepared.staging_dir.join(STAGEX_TRANSITION_EXECUTION_DIR);
+        let transition_replay_digest = transition_input_replay_digest(prepared)?;
+        if options.dev_resume && !stagex_transition_execution_dir.exists() {
+            let restored = resume_plan
+                .as_ref()
+                .and_then(|plan| plan.restored_stages.iter().find(|stage| stage.stage_id == "stagex-transition"))
+                .and_then(|stage| stage.restored_bundle_digest_blake3.clone());
+            if let Some(bundle_digest_blake3) = restored {
+                restore_dev_stage_bundle(options, prepared, &bundle_digest_blake3, &stagex_transition_execution_dir)?;
+                write_stage_marker(prepared, "stagex-transition", &transition_replay_digest)?;
+            }
+        }
         let transition_resume = options.dev_resume
             && stagex_transition_execution_dir.is_dir()
-            && transition_marker_is_trusted(prepared, &transition_input_replay_digest(prepared)?)?;
+            && transition_marker_is_trusted(prepared, &transition_replay_digest)?;
         if !transition_resume {
             let transition_result = run_in_isolated_exec_thread("StageX transition", || {
                 crate::stagex_transition::materialize_protected_transition(StagexTransitionRequest {
@@ -876,7 +902,22 @@ fn run_attempt(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAt
             let transition_report_digest = crate::protected_exec::blake3_file_hex(&transition_report_path)
                 .map_err(|error| proof_error(format!("hashing fresh StageX transition report: {error}")))?;
             if options.dev_provider_cache.is_some() || options.dev_resume {
-                write_stage_marker(prepared, "stagex-transition", &transition_report_digest)?;
+                // Resume trust re-derives the transition from its primary inputs, so the
+                // marker binds the replay identity rather than the report digest.
+                write_stage_marker(prepared, "stagex-transition", &transition_replay_digest)?;
+            }
+            if options.dev_resume {
+                let required_outputs = [ResumeOutputReference {
+                    role: String::from("transition-execution-tree"),
+                    digest_blake3: transition_report_digest.clone(),
+                }];
+                publish_dev_stage_bundle(
+                    options,
+                    prepared,
+                    "stagex-transition",
+                    &stagex_transition_execution_dir,
+                    &required_outputs,
+                )?;
             }
         }
 
@@ -1159,6 +1200,115 @@ fn seed_dev_store_snapshot(
 
 fn stage_markers_dir(staging_dir: &Path) -> PathBuf {
     staging_dir.join(STAGE_MARKERS_SUBDIR)
+}
+
+/// Persistent root for published cross-run stage bundles.
+fn resume_bundles_root(options: &SourceBuiltFixedPointOptions<'_>) -> std::path::PathBuf {
+    let root = options.output_dir.join(RESUME_BUNDLES_SUBDIR);
+    debug_assert!(root.starts_with(options.output_dir));
+    debug_assert!(!RESUME_BUNDLES_SUBDIR.is_empty());
+    root
+}
+
+/// Plan a dev resume from published bundles against the current plan.
+fn plan_dev_resume(
+    prepared: &PreparedAttempt,
+    options: &SourceBuiltFixedPointOptions<'_>,
+) -> Result<ResumePlan, RunError> {
+    let bundles_root = resume_bundles_root(options);
+    let bundles = read_stage_bundles(&bundles_root)?;
+    let stage_ids: Vec<String> = prepared.plan.stages.iter().map(|stage| stage.stage_id.clone()).collect();
+    let policies = DevCachePolicies::from_plan(&prepared.plan);
+    let plan = plan_stage_resume(
+        &prepared.plan.plan_digest_blake3,
+        &prepared.plan.source_authority_digest_blake3,
+        &stage_ids,
+        &prepared.plan.policies.expected_native_provider_digest_blake3,
+        &policies,
+        &bundles,
+    );
+    debug_assert!(plan.restored_stages.len() + plan.executed_stages.len() == stage_ids.len());
+    debug_assert!(!prepared.plan.source_authority_digest_blake3.is_empty());
+    Ok(plan)
+}
+
+/// Restore one validated stage bundle into a fresh staging destination.
+fn restore_dev_stage_bundle(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    bundle_digest_blake3: &str,
+    destination: &Path,
+) -> Result<(), RunError> {
+    let bundles_root = resume_bundles_root(options);
+    let bundles = read_stage_bundles(&bundles_root)?;
+    let reference = bundles
+        .iter()
+        .find(|reference| reference.bundle_digest_blake3 == bundle_digest_blake3)
+        .ok_or_else(|| {
+            proof_error(format!(
+                "planned resume bundle {bundle_digest_blake3} is no longer present under {}",
+                bundles_root.display()
+            ))
+        })?;
+    restore_stage_bundle(&bundles_root, reference, destination)?;
+    debug_assert!(destination.is_dir());
+    debug_assert!(!prepared.plan.plan_digest_blake3.is_empty());
+    Ok(())
+}
+
+/// Publish one completed stage as a content-addressed bundle.
+fn publish_dev_stage_bundle(
+    options: &SourceBuiltFixedPointOptions<'_>,
+    prepared: &PreparedAttempt,
+    stage_id: &str,
+    payload_dir: &Path,
+    required_outputs: &[ResumeOutputReference],
+) -> Result<(), RunError> {
+    let bundles_root = resume_bundles_root(options);
+    std::fs::create_dir_all(&bundles_root).map_err(|error| {
+        RunError::Internal(format!("creating resume bundles root {}: {error}", bundles_root.display()))
+    })?;
+    let policies = DevCachePolicies::from_plan(&prepared.plan);
+    let reference = publish_stage_bundle(
+        &bundles_root,
+        &prepared.plan.plan_digest_blake3,
+        stage_id,
+        &prepared.plan.source_authority_digest_blake3,
+        &prepared.plan.policies.expected_native_provider_digest_blake3,
+        &policies,
+        payload_dir,
+        required_outputs,
+    )?;
+    debug_assert_eq!(reference.bundle_digest_blake3.len(), BLAKE3_DIGEST_HEX_LEN);
+    debug_assert!(bundles_root.is_dir());
+    Ok(())
+}
+
+/// Report the restored and executed stage split for a dev resume.
+fn emit_resume_plan_notice(options: &SourceBuiltFixedPointOptions<'_>, prepared: &PreparedAttempt, plan: &ResumePlan) {
+    debug_assert!(!plan.schema.is_empty());
+    debug_assert!(plan.restored_stages.len() + plan.executed_stages.len() > 0);
+    let restored: Vec<&str> = plan.restored_stages.iter().map(|stage| stage.stage_id.as_str()).collect();
+    let executed: Vec<&str> = plan.executed_stages.iter().map(String::as_str).collect();
+    debug_assert!(restored.len() + executed.len() > 0);
+    if options.json {
+        let value = serde_json::json!({
+            "schema": plan.schema,
+            "plan_digest_blake3": plan.plan_digest_blake3,
+            "proof_id": prepared.plan.proof_id,
+            "restored_stages": restored,
+            "executed_stages": executed,
+            "blocker_count": plan.blockers.len(),
+        });
+        println!("{value}");
+        return;
+    }
+    eprintln!(
+        "dev resume: restored={} executed={} blockers={}",
+        restored.len(),
+        executed.len(),
+        plan.blockers.len()
+    );
 }
 
 fn write_stage_marker(prepared: &PreparedAttempt, stage_id: &str, digest_blake3: &str) -> Result<(), RunError> {
