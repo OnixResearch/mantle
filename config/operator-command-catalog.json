@@ -1,6 +1,6 @@
 {
   "schema": "mantle-operator-command-catalog-v1",
-  "identity_blake3": "f081c83e89ec3d841541716ea5cf322f80d323b0552b95879ec70fb90e28b707",
+  "identity_blake3": "949e7af9edf378da0ec2ca11e5d3a1f3e1f126ba0d4326e0934251674d85f3fe",
   "entries": [
     {
       "descriptor": {
@@ -6481,6 +6481,7 @@
           "--requirement-evidence-input",
           "--requirement-evidence-root",
           "--source-acquisition-url",
+          "--source-observation",
           "--stack-provenance-binary",
           "--stack-provenance-sidecar",
           "--stack-provenance-valence-receipt",
@@ -6536,6 +6537,7 @@
           "--requirement-evidence-input",
           "--requirement-evidence-root",
           "--source-acquisition-url",
+          "--source-observation",
           "--stack-provenance-binary",
           "--stack-provenance-sidecar",
           "--stack-provenance-valence-receipt",

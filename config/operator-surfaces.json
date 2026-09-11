@@ -4590,6 +4590,7 @@
         "--requirement-evidence-input",
         "--requirement-evidence-root",
         "--source-acquisition-url",
+        "--source-observation",
         "--stack-provenance-binary",
         "--stack-provenance-sidecar",
         "--stack-provenance-valence-receipt",

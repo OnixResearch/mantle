@@ -1,6 +1,6 @@
 # Mantle command reference
 
-Catalog BLAKE3: `f081c83e89ec3d841541716ea5cf322f80d323b0552b95879ec70fb90e28b707`
+Catalog BLAKE3: `949e7af9edf378da0ec2ca11e5d3a1f3e1f126ba0d4326e0934251674d85f3fe`
 
 ## Daily commands
 
