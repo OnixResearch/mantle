@@ -16,6 +16,9 @@ use crate::envelope::CapabilityError;
 /// Maximum admitted required proofs for one release command.
 pub const MAX_RELEASE_PROOFS: u32 = 64;
 
+/// Admitted blocker slots for one release command.
+const MAX_RELEASE_BLOCKERS: usize = 3;
+
 /// Release operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ReleaseOperation {
@@ -60,10 +63,10 @@ impl ReleaseOperation {
 
     /// Whether the operation consumes a bundle directory.
     pub fn requires_bundle(self) -> bool {
-        let requires = !matches!(self, Self::Create);
-        debug_assert!(requires || Self::all().contains(&self));
+        let is_bundle_required = !matches!(self, Self::Create);
+        debug_assert!(is_bundle_required || Self::all().contains(&self));
         debug_assert!(!self.as_str().is_empty());
-        requires
+        is_bundle_required
     }
 }
 
@@ -160,7 +163,7 @@ pub trait ReleasePort {
 
 /// Validate one release command before any port is called.
 pub fn validate_release_command(command: &ReleaseCommand) -> Vec<ReleaseBlocker> {
-    let mut blockers = Vec::new();
+    let mut blockers: Vec<ReleaseBlocker> = Vec::with_capacity(MAX_RELEASE_BLOCKERS);
     if command.root.is_empty() {
         blockers.push(ReleaseBlocker::Domain(ApplicationBlocker::new(
             "missing-command-root",
@@ -178,7 +181,7 @@ pub fn validate_release_command(command: &ReleaseCommand) -> Vec<ReleaseBlocker>
     }
     blockers.sort();
     blockers.dedup();
-    debug_assert!(blockers.len() <= 3);
+    debug_assert!(blockers.len() <= MAX_RELEASE_BLOCKERS);
     blockers
 }
 

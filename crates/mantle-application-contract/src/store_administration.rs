@@ -16,6 +16,9 @@ use crate::envelope::CapabilityError;
 /// Maximum admitted selectors for one store command.
 pub const MAX_STORE_SELECTORS: u32 = 1_024;
 
+/// Fixed blocker slots one store command may add beyond its selectors.
+const MAX_STORE_BLOCKERS: usize = 4;
+
 /// Store administration operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum StoreOperation {
@@ -50,10 +53,10 @@ impl StoreOperation {
 
     /// Whether the operation may run without explicit selectors.
     pub fn is_selector_optional(self) -> bool {
-        let optional = matches!(self, Self::Gc);
-        debug_assert!(optional || Self::all().contains(&self));
+        let is_selector_optional = matches!(self, Self::Gc);
+        debug_assert!(is_selector_optional || Self::all().contains(&self));
         debug_assert!(!self.as_str().is_empty());
-        optional
+        is_selector_optional
     }
 }
 
@@ -114,7 +117,9 @@ pub trait StoreAdministrationPort {
 
 /// Validate one store command before any port is called.
 pub fn validate_store_command(command: &StoreAdministrationCommand) -> Vec<StoreBlocker> {
-    let mut blockers = Vec::new();
+    let selector_count = command.selectors.len();
+    let blocker_slots = selector_count.saturating_add(MAX_STORE_BLOCKERS);
+    let mut blockers: Vec<StoreBlocker> = Vec::with_capacity(blocker_slots);
     if command.root.is_empty() {
         blockers.push(StoreBlocker::Domain(ApplicationBlocker::new(
             "missing-command-root",
@@ -125,8 +130,7 @@ pub fn validate_store_command(command: &StoreAdministrationCommand) -> Vec<Store
     if command.selectors.is_empty() && !command.operation.is_selector_optional() {
         blockers.push(StoreBlocker::MissingSelectors);
     }
-    let is_selector_count_admissible =
-        u32::try_from(command.selectors.len()).is_ok_and(|count| count <= MAX_STORE_SELECTORS);
+    let is_selector_count_admissible = u32::try_from(selector_count).is_ok_and(|count| count <= MAX_STORE_SELECTORS);
     if !is_selector_count_admissible {
         blockers.push(StoreBlocker::TooManySelectors);
     }
@@ -137,7 +141,7 @@ pub fn validate_store_command(command: &StoreAdministrationCommand) -> Vec<Store
     }
     blockers.sort();
     blockers.dedup();
-    debug_assert!(blockers.len() <= command.selectors.len() + 3);
+    debug_assert!(blockers.len() <= selector_count.saturating_add(MAX_STORE_BLOCKERS));
     blockers
 }
 

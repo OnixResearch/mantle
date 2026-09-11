@@ -14,13 +14,19 @@ use crate::family::CommandFamily;
 /// Maximum admitted ports for one command family.
 pub const MAX_PORTS_PER_FAMILY: u32 = 32;
 
+/// Admitted blocker slots for one whole inventory check.
+const MAX_PORT_BLOCKERS: usize = 64;
+
+/// Blockers one family may contribute during inventory validation.
+const MAX_FAMILY_BLOCKERS: usize = 4;
+
 /// The application ports owned by one command family.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FamilyPorts {
     /// Owning family.
     pub family: CommandFamily,
     /// Declared port names in canonical order.
-    pub ports: Vec<&'static str>,
+    pub entries: Vec<&'static str>,
 }
 
 /// Application ports for one command family.
@@ -28,7 +34,7 @@ pub struct FamilyPorts {
 /// The table is total over [`CommandFamily::all`]; the inventory validator
 /// rejects a family list that is not.
 pub fn family_ports(family: CommandFamily) -> FamilyPorts {
-    let ports = match family {
+    let entries = match family {
         CommandFamily::Realization => vec![
             "realization-plan",
             "unit-execution",
@@ -48,10 +54,10 @@ pub fn family_ports(family: CommandFamily) -> FamilyPorts {
         CommandFamily::Component => vec!["component-bundle", "component-verification"],
         CommandFamily::Diagnostics => vec!["diagnostic-report", "refactor-inventory"],
     };
-    let entry = FamilyPorts { family, ports };
-    let entry_is_bounded = u32::try_from(entry.ports.len()).is_ok_and(|count| count <= MAX_PORTS_PER_FAMILY);
-    debug_assert!(entry_is_bounded);
-    debug_assert!(!entry.ports.is_empty());
+    let entry = FamilyPorts { family, entries };
+    let is_entry_bounded = u32::try_from(entry.entries.len()).is_ok_and(|count| count <= MAX_PORTS_PER_FAMILY);
+    debug_assert!(is_entry_bounded);
+    debug_assert!(!entry.entries.is_empty());
     entry
 }
 
@@ -59,7 +65,7 @@ pub fn family_ports(family: CommandFamily) -> FamilyPorts {
 pub fn port_inventory() -> Vec<FamilyPorts> {
     let inventory = CommandFamily::all().into_iter().map(family_ports).collect::<Vec<_>>();
     debug_assert_eq!(inventory.len(), CommandFamily::all().len());
-    debug_assert!(inventory.iter().all(|entry| !entry.ports.is_empty()));
+    debug_assert!(inventory.iter().all(|entry| !entry.entries.is_empty()));
     inventory
 }
 
@@ -69,7 +75,7 @@ pub fn port_inventory() -> Vec<FamilyPorts> {
 /// malformed names, repeated names inside a family, and a name claimed by two
 /// families.
 pub fn validate_port_inventory(inventory: &[FamilyPorts]) -> Vec<ApplicationBlocker> {
-    let mut blockers = Vec::new();
+    let mut blockers: Vec<ApplicationBlocker> = Vec::with_capacity(MAX_PORT_BLOCKERS);
     for family in CommandFamily::all() {
         let matches = inventory.iter().filter(|entry| entry.family == family).count();
         if matches == 0 {
@@ -92,12 +98,13 @@ pub fn validate_port_inventory(inventory: &[FamilyPorts]) -> Vec<ApplicationBloc
     }
     blockers.sort();
     blockers.dedup();
-    debug_assert!(blockers.len() <= inventory.len() * 3 + CommandFamily::all().len());
+    let family_count = CommandFamily::all().len();
+    debug_assert!(blockers.len() <= inventory.len().saturating_mul(MAX_FAMILY_BLOCKERS).saturating_add(family_count));
     blockers
 }
 
 fn validate_family_ports(entry: &FamilyPorts, inventory: &[FamilyPorts], blockers: &mut Vec<ApplicationBlocker>) {
-    if entry.ports.is_empty() {
+    if entry.entries.is_empty() {
         blockers.push(ApplicationBlocker::new(
             "port-empty-family",
             "ports",
@@ -105,7 +112,7 @@ fn validate_family_ports(entry: &FamilyPorts, inventory: &[FamilyPorts], blocker
         ));
         return;
     }
-    let is_bounded = u32::try_from(entry.ports.len()).is_ok_and(|count| count <= MAX_PORTS_PER_FAMILY);
+    let is_bounded = u32::try_from(entry.entries.len()).is_ok_and(|count| count <= MAX_PORTS_PER_FAMILY);
     if !is_bounded {
         blockers.push(ApplicationBlocker::new(
             "port-family-bound",
@@ -113,24 +120,24 @@ fn validate_family_ports(entry: &FamilyPorts, inventory: &[FamilyPorts], blocker
             "declared ports exceed the admitted per-family bound",
         ));
     }
-    for port in &entry.ports {
+    for declared in &entry.entries {
         // An empty name has no usable subject, so the family stands in for it.
-        let subject = if port.is_empty() { "ports" } else { port };
-        if !is_port_name(port) {
+        let subject = if declared.is_empty() { "entries" } else { declared };
+        if !is_port_name(declared) {
             blockers.push(ApplicationBlocker::new(
                 "port-name-shape",
                 subject,
                 "a port name must be lowercase kebab-case ASCII",
             ));
         }
-        if entry.ports.iter().filter(|candidate| *candidate == port).count() > 1 {
+        if entry.entries.iter().filter(|candidate| *candidate == declared).count() > 1 {
             blockers.push(ApplicationBlocker::new(
                 "port-duplicate-name",
                 subject,
                 "a family may declare a port name once",
             ));
         }
-        let owners = inventory.iter().filter(|candidate| candidate.ports.contains(port)).count();
+        let owners = inventory.iter().filter(|candidate| candidate.entries.contains(declared)).count();
         if owners > 1 {
             blockers.push(ApplicationBlocker::new(
                 "port-shared-owner",
@@ -139,7 +146,8 @@ fn validate_family_ports(entry: &FamilyPorts, inventory: &[FamilyPorts], blocker
             ));
         }
     }
-    debug_assert!(blockers.len() <= inventory.len() * 3 + CommandFamily::all().len());
+    let family_count = CommandFamily::all().len();
+    debug_assert!(blockers.len() <= inventory.len().saturating_mul(MAX_FAMILY_BLOCKERS).saturating_add(family_count));
 }
 
 /// Maximum admitted length of one port name.
@@ -147,20 +155,22 @@ pub const MAX_PORT_NAME_LEN: usize = 64;
 
 /// Whether one port name uses the admitted kebab-case ASCII shape.
 pub fn is_port_name(name: &str) -> bool {
-    let bytes_admitted = name.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-');
-    let delimiters_admitted = !name.starts_with('-') && !name.ends_with('-') && !name.contains("--");
-    let admissible = !name.is_empty() && name.len() <= MAX_PORT_NAME_LEN && bytes_admitted && delimiters_admitted;
-    debug_assert!(!admissible || bytes_admitted);
-    debug_assert!(name.is_empty() || name.len() <= MAX_PORT_NAME_LEN || !admissible);
-    admissible
+    let is_byte_shape_admitted =
+        name.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-');
+    let is_separator_admitted = !name.starts_with('-') && !name.ends_with('-') && !name.contains("--");
+    let is_admissible =
+        !name.is_empty() && name.len() <= MAX_PORT_NAME_LEN && is_byte_shape_admitted && is_separator_admitted;
+    debug_assert!(!is_admissible || is_byte_shape_admitted);
+    debug_assert!(name.is_empty() || name.len() <= MAX_PORT_NAME_LEN || !is_admissible);
+    is_admissible
 }
 
 /// Names of the families that own a port, in canonical order.
-pub fn port_owners(inventory: &[FamilyPorts], port: &str) -> Vec<CommandFamily> {
-    debug_assert!(!port.is_empty());
+pub fn port_owners(inventory: &[FamilyPorts], entry_name: &str) -> Vec<CommandFamily> {
+    debug_assert!(!entry_name.is_empty());
     let mut owners = inventory
         .iter()
-        .filter(|entry| entry.ports.contains(&port))
+        .filter(|entry| entry.entries.contains(&entry_name))
         .map(|entry| entry.family)
         .collect::<Vec<_>>();
     owners.sort();
@@ -170,11 +180,11 @@ pub fn port_owners(inventory: &[FamilyPorts], port: &str) -> Vec<CommandFamily> 
 }
 
 /// Canonical text label for one port name, used by diagnostics.
-pub fn port_label(port: &str) -> String {
-    debug_assert!(!port.is_empty());
-    debug_assert!(is_port_name(port));
+pub fn port_label(entry_name: &str) -> String {
+    debug_assert!(!entry_name.is_empty());
+    debug_assert!(is_port_name(entry_name));
     let mut label = String::from("port:");
-    label.push_str(port);
-    debug_assert!(label.len() > port.len());
+    label.push_str(entry_name);
+    debug_assert!(label.len() > entry_name.len());
     label
 }

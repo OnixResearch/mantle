@@ -16,26 +16,26 @@ fn canonical_inventory_covers_every_family() {
     let inventory = port_inventory();
     assert_eq!(inventory.len(), CommandFamily::all().len());
     assert!(validate_port_inventory(&inventory).is_empty());
-    assert!(inventory.iter().all(|entry| !entry.ports.is_empty()));
+    assert!(inventory.iter().all(|entry| !entry.entries.is_empty()));
     assert!(
         inventory
             .iter()
-            .all(|entry| u32::try_from(entry.ports.len()).is_ok_and(|count| count <= MAX_PORTS_PER_FAMILY))
+            .all(|entry| u32::try_from(entry.entries.len()).is_ok_and(|count| count <= MAX_PORTS_PER_FAMILY))
     );
 }
 
 #[test]
-fn every_family_declares_distinct_port_names() {
+fn every_family_declares_distinct_entries() {
     let inventory = port_inventory();
     let mut seen: Vec<&str> = Vec::new();
     for entry in &inventory {
-        for port in &entry.ports {
-            assert!(!seen.contains(port), "port {port} is declared twice");
-            assert!(is_port_name(port), "port {port} is not kebab-case");
-            seen.push(port);
+        for declared in &entry.entries {
+            assert!(!seen.contains(declared), "port {declared} is declared twice");
+            assert!(is_port_name(declared), "port {declared} is not kebab-case");
+            seen.push(declared);
         }
     }
-    assert_eq!(seen.len(), port_inventory().iter().map(|entry| entry.ports.len()).sum::<usize>());
+    assert_eq!(seen.len(), port_inventory().iter().map(|entry| entry.entries.len()).sum::<usize>());
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn an_empty_family_port_set_is_rejected() {
     let mut inventory = port_inventory();
     inventory[0] = FamilyPorts {
         family: CommandFamily::Realization,
-        ports: Vec::new(),
+        entries: Vec::new(),
     };
     let blockers = validate_port_inventory(&inventory);
     assert!(blockers.iter().any(|blocker| blocker.code == "port-empty-family"));
@@ -72,7 +72,7 @@ fn a_malformed_port_name_is_rejected() {
     let mut inventory = port_inventory();
     inventory[1] = FamilyPorts {
         family: CommandFamily::StoreAdministration,
-        ports: vec!["Path-Info", "trailing-", "-leading", "double--dash", ""],
+        entries: vec!["Path-Info", "trailing-", "-leading", "double--dash", ""],
     };
     let blockers = validate_port_inventory(&inventory);
     let shape_blockers = blockers.iter().filter(|blocker| blocker.code == "port-name-shape").count();
@@ -85,7 +85,7 @@ fn a_malformed_port_name_is_rejected() {
 #[test]
 fn an_oversized_family_port_set_is_rejected() {
     let mut inventory = port_inventory();
-    let ports: Vec<&'static str> = (0..=MAX_PORTS_PER_FAMILY)
+    let overflow_entries: Vec<&'static str> = (0..=MAX_PORTS_PER_FAMILY)
         .map(|index| match index {
             0 => "port-0",
             1 => "port-1",
@@ -102,7 +102,7 @@ fn an_oversized_family_port_set_is_rejected() {
         .collect();
     inventory[2] = FamilyPorts {
         family: CommandFamily::SourceProvenance,
-        ports,
+        entries: overflow_entries,
     };
     let blockers = validate_port_inventory(&inventory);
     assert!(blockers.iter().any(|blocker| blocker.code == "port-family-bound"));
@@ -115,5 +115,5 @@ fn port_owners_and_labels_are_deterministic() {
     assert_eq!(owners, vec![CommandFamily::Realization]);
     assert!(port_owners(&inventory, "absent-port").is_empty());
     assert_eq!(port_label("unit-execution"), "port:unit-execution");
-    assert_eq!(family_ports(CommandFamily::Diagnostics).ports.len(), 2);
+    assert_eq!(family_ports(CommandFamily::Diagnostics).entries.len(), 2);
 }
