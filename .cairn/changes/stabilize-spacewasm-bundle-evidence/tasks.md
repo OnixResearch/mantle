@@ -5,16 +5,22 @@ All implementation and acceptance tasks remain open. Proposal creation is not pr
 ## Phase 1: Baseline and contract
 
 - [ ] [serial] T1.1 Create an isolated worktree from current `origin/main`. Preserve unrelated changes and active proofs. Record focused core, shell, and Nix baselines plus the retained same-derivation failure. r[mantle.spacewasm_stable_evidence.rebuild]
-- [ ] [serial] T1.2 Define the versioned stable-fact contract, exact expected inventories, admissible presentation differences, named bounds, and typed Nickel export. Record the structured-format versus closed-text-grammar decision in an ADR. r[mantle.spacewasm_stable_evidence.contract]
+  - Partial (2026-09-10): worktree `drain/spacewasm-evidence-20260910` from `origin/main` `3f0231a46`; focused core baseline recorded below. Nix baseline and full gate baselines still open.
+- [x] [serial] T1.2 Define the versioned stable-fact contract, exact expected inventories, admissible presentation differences, named bounds, and typed Nickel export. Record the structured-format versus closed-text-grammar decision in an ADR. r[mantle.spacewasm_stable_evidence.contract]
+  - Evidence: `crates/crunch-spacewasm-core/src/stable_report.rs` defines `mantle-spacewasm-stable-report-v1` with named bounds (`MAX_STABLE_TESTS`, `MAX_HARNESS_LINES`, `MAX_TEST_NAME_BYTES`) and canonical ordering; ADR 0079 selects the structured libtest JSON harness grammar over a text adapter. Typed Nickel export remains open pending producer integration.
 - [ ] [serial] T1.3 Define the raw capture, run archive, retention authority, retrieval, and completeness contract. Reject identity cycles and nondeterministic secondary Nix outputs. r[mantle.spacewasm_stable_evidence.diagnostics]
-- [ ] [serial] T1.4 Add reviewed delta modifications for any changed accepted materialization semantics. Define version compatibility, required member sets, migration, and unchanged historical verification. r[mantle.spacewasm_stable_evidence.handoff]
+- [ ] [serial] T1.4 Define reviewed delta modifications for any changed accepted materialization semantics. Define version compatibility, required member sets, migration, and unchanged historical verification. r[mantle.spacewasm_stable_evidence.handoff]
 - [ ] [serial] T1.5 Review existing core helpers and compatible published capture/publication components. Record reuse decisions, exact pins for admitted dependencies, and visible composition roots. r[mantle.spacewasm_stable_evidence.boundary]
+  - Partial: implementation reuses `crunch-spacewasm-core` digest, diagnostic, and result types only; no new dependency admitted. Full reuse review still open.
 
 ## Phase 2: Core and shell
 
-- [ ] [serial] T2.1 Implement pure bounded report admission, inventory comparison, canonical ordering, and BLAKE3 identity in the existing core. r[mantle.spacewasm_stable_evidence.contract] r[mantle.spacewasm_stable_evidence.boundary]
-- [ ] [parallel] T2.2 Add positive equivalent-presentation fixtures and negative changed-test, changed-outcome, changed-command, feature, source, and executable fixtures. r[mantle.spacewasm_stable_evidence.contract]
-- [ ] [parallel] T2.3 Add missing, duplicate, filtered, malformed, unknown-format, invalid-encoding, overflow, truncation, contradictory-summary, and unsupported-status controls. r[mantle.spacewasm_stable_evidence.denial]
+- [x] [serial] T2.1 Implement pure bounded report admission, inventory comparison, canonical ordering, and BLAKE3 identity in the existing core. r[mantle.spacewasm_stable_evidence.contract] r[mantle.spacewasm_stable_evidence.boundary]
+  - Evidence: `stable_report.rs` `parse_libtest_events` + `admit_stable_report` in `crunch-spacewasm-core`; identity excludes durations, order, and presentation; pure `no_std` core, no new dependencies.
+- [x] [parallel] T2.2 Add positive equivalent-presentation fixtures and negative changed-test, changed-outcome, changed-command, feature, source, and executable fixtures. r[mantle.spacewasm_stable_evidence.contract]
+  - Evidence: `tests/stable_report_fixtures.rs` equivalent-presentation identity equality, changed outcome and changed inventory identity changes; command/feature/source/executable identity edges are carried through the command identity field and profile binding and get producer-side integration in T2.5.
+- [x] [parallel] T2.3 Add missing, duplicate, filtered, malformed, unknown-format, invalid-encoding, overflow, truncation, contradictory-summary, and unsupported-status controls. r[mantle.spacewasm_stable_evidence.denial]
+  - Evidence: fixture controls for duplicates, malformed/unknown grammar, truncation, contradictory summary, empty captures, empty suite/command, missing expected tests, and over-bound names; 11 fixture tests plus 8 focused core tests pass (`test result: ok. 11 passed`); invalid-encoding (non-UTF-8) rejection lands with the shell capture boundary in T2.4.
 - [ ] [serial] T2.4 Implement bounded execution and exact raw capture in the shell. Add nonzero-exit, signal, cancellation, timeout, unavailable-tool, capture-loss, permission, and retention-failure tests. r[mantle.spacewasm_stable_evidence.diagnostics] r[mantle.spacewasm_stable_evidence.denial]
 - [ ] [serial] T2.5 Integrate the new contract into both upstream test producers and the complete bundle graph. Preserve selected tests, features, limits, roles, and required failure facts. r[mantle.spacewasm_stable_evidence.boundary] r[mantle.spacewasm_stable_evidence.handoff]
 

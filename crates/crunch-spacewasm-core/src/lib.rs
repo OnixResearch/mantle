@@ -20,6 +20,7 @@ mod model;
 mod profile;
 mod report;
 mod results;
+mod stable_report;
 mod support;
 
 pub use admission::SourceAdmission;
@@ -54,6 +55,16 @@ pub use report::validate_materialization_report;
 pub use results::CheckDecision;
 pub use results::CheckEvaluation;
 pub use results::evaluate_checks;
+pub use stable_report::HarnessLine;
+pub use stable_report::STABLE_REPORT_ENCODING_VERSION;
+pub use stable_report::STABLE_REPORT_SCHEMA;
+pub use stable_report::StableReport;
+pub use stable_report::StableReportRequest;
+pub use stable_report::StableReportResult;
+pub use stable_report::StableTestRecord;
+pub use stable_report::StableTestStatus;
+pub use stable_report::admit_stable_report;
+pub use stable_report::parse_libtest_events;
 pub use support::SupportComparison;
 pub use support::compare_support_matrix;
 
