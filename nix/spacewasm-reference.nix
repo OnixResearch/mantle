@@ -159,36 +159,59 @@ let
 
   upstreamUnitTests = mkCargoBuild {
     name = "spacewasm-${sourceRevision}-unit-tests";
-    command = ''cargo test --locked --offline --no-default-features --lib > "$TMPDIR/stdout.txt" 2> "$TMPDIR/stderr.txt"'';
+    extraNativeBuildInputs = [ pkgs.jq pkgs.b3sum ];
+    command =
+      ''RUSTC_BOOTSTRAP=1 cargo test --locked --offline --no-default-features --lib -- --format json -Z unstable-options > "$TMPDIR/stdout.txt" 2> "$TMPDIR/stderr.txt"'';
     install = ''
+      # Raw run evidence: retained for diagnosis, never part of the stable
+      # bundle identity (ADR 0079).
       cp "$TMPDIR/stdout.txt" "$out/stdout.txt"
       cp "$TMPDIR/stderr.txt" "$out/stderr.txt"
-      stdoutDigest="$(${pkgs.b3sum}/bin/b3sum --no-names "$out/stdout.txt")"
-      stderrDigest="$(${pkgs.b3sum}/bin/b3sum --no-names "$out/stderr.txt")"
+      # Stable report: canonical admitted facts + identity; deterministic
+      # across identical derivations.
+      stableIdentity="$(jq -c -n -f ${./spacewasm/stable-report.jq} \
+        --arg suite "upstream-unit-tests" \
+        --arg command "RUSTC_BOOTSTRAP=1 cargo test --locked --offline --no-default-features --lib -- --format json -Z unstable-options" \
+        --rawfile capture "$TMPDIR/stdout.txt" | ${pkgs.b3sum}/bin/b3sum --no-names)"
+      jq -c -n -f ${./spacewasm/stable-report.jq} \
+        --arg suite "upstream-unit-tests" \
+        --arg command "cargo test --locked --offline --no-default-features --lib -- --format json -Z unstable-options" \
+        --rawfile capture "$TMPDIR/stdout.txt" \
+        | jq --arg identity "$stableIdentity" '. + {stable_identity_blake3: $identity}' \
+        > "$out/stable-report.json"
+      test -s "$out/stable-report.json"
       ${pkgs.jq}/bin/jq --null-input --sort-keys \
-        --arg command "cargo test --locked --offline --no-default-features --lib" \
+        --arg command "cargo test --locked --offline --no-default-features --lib -- --format json -Z unstable-options" \
         --arg status "passed" \
-        --arg stdoutDigest "$stdoutDigest" \
-        --arg stderrDigest "$stderrDigest" \
-        '{command: $command, status: $status, stdout_blake3: $stdoutDigest, stderr_blake3: $stderrDigest}' > "$out/receipt.json"
+        --rawfile stableReport "$out/stable-report.json" \
+        '{command: $command, status: $status, stable_report: ($stableReport | fromjson)}' > "$out/receipt.json"
     '';
   };
 
   upstreamSpectestAddress = mkCargoBuild {
     name = "spacewasm-${sourceRevision}-spectest-address";
-    extraNativeBuildInputs = [ pkgs.wabt ];
-    command = ''cargo test --locked --offline --no-default-features --test core_integration address -- --exact > "$TMPDIR/stdout.txt" 2> "$TMPDIR/stderr.txt"'';
+    extraNativeBuildInputs = [ pkgs.wabt pkgs.jq pkgs.b3sum ];
+    command =
+      ''RUSTC_BOOTSTRAP=1 cargo test --locked --offline --no-default-features --test core_integration address -- --exact --format json -Z unstable-options > "$TMPDIR/stdout.txt" 2> "$TMPDIR/stderr.txt"'';
     install = ''
       cp "$TMPDIR/stdout.txt" "$out/stdout.txt"
       cp "$TMPDIR/stderr.txt" "$out/stderr.txt"
-      stdoutDigest="$(${pkgs.b3sum}/bin/b3sum --no-names "$out/stdout.txt")"
-      stderrDigest="$(${pkgs.b3sum}/bin/b3sum --no-names "$out/stderr.txt")"
+      stableIdentity="$(jq -c -n -f ${./spacewasm/stable-report.jq} \
+        --arg suite "upstream-spectest-address" \
+        --arg command "RUSTC_BOOTSTRAP=1 cargo test --locked --offline --no-default-features --test core_integration address -- --exact --format json -Z unstable-options" \
+        --rawfile capture "$TMPDIR/stdout.txt" | ${pkgs.b3sum}/bin/b3sum --no-names)"
+      jq -c -n -f ${./spacewasm/stable-report.jq} \
+        --arg suite "upstream-spectest-address" \
+        --arg command "RUSTC_BOOTSTRAP=1 cargo test --locked --offline --no-default-features --test core_integration address -- --exact --format json -Z unstable-options" \
+        --rawfile capture "$TMPDIR/stdout.txt" \
+        | jq --arg identity "$stableIdentity" '. + {stable_identity_blake3: $identity}' \
+        > "$out/stable-report.json"
+      test -s "$out/stable-report.json"
       ${pkgs.jq}/bin/jq --null-input --sort-keys \
-        --arg command "cargo test --locked --offline --no-default-features --test core_integration address -- --exact" \
+        --arg command "RUSTC_BOOTSTRAP=1 cargo test --locked --offline --no-default-features --test core_integration address -- --exact --format json -Z unstable-options" \
         --arg status "passed" \
-        --arg stdoutDigest "$stdoutDigest" \
-        --arg stderrDigest "$stderrDigest" \
-        '{command: $command, status: $status, stdout_blake3: $stdoutDigest, stderr_blake3: $stderrDigest}' > "$out/receipt.json"
+        --rawfile stableReport "$out/stable-report.json" \
+        '{command: $command, status: $status, stable_report: ($stableReport | fromjson)}' > "$out/receipt.json"
     '';
   };
 

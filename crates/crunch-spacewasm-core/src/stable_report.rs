@@ -38,6 +38,12 @@ pub const MAX_HARNESS_LINES: u32 = 8_192;
 /// Maximum admitted test-name bytes.
 pub const MAX_TEST_NAME_BYTES: usize = 1_024;
 
+/// Maximum admitted per-test captured stdout bytes.
+pub const MAX_TEST_STDOUT_BYTES: usize = 65_536;
+
+/// Maximum admitted suite wall-clock seconds.
+pub const MAX_SUITE_SECONDS: f64 = 86_400.0;
+
 /// Admitted test outcome classes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -59,6 +65,8 @@ pub struct StableTestRecord {
 pub enum HarnessLine {
     /// `{"type":"test","name":...,"event":"ok"|"failed"|"ignored"}`
     Test { name: String, event: String },
+    /// `{"type":"test","event":"started","name":...}` (carries no fact)
+    TestStarted { name: String },
     /// `{"type":"suite","event":"started"|"ok"|"failed"}`
     Suite { event: String },
 }
@@ -107,6 +115,20 @@ struct LibtestJsonLine {
     event: Option<String>,
     #[serde(default)]
     test_count: Option<u64>,
+    #[serde(default)]
+    passed: Option<u64>,
+    #[serde(default)]
+    failed: Option<u64>,
+    #[serde(default)]
+    ignored: Option<u64>,
+    #[serde(default)]
+    measured: Option<u64>,
+    #[serde(default)]
+    filtered_out: Option<u64>,
+    #[serde(default)]
+    exec_time: Option<f64>,
+    #[serde(default)]
+    stdout: Option<String>,
 }
 
 /// Parse the closed libtest JSON grammar from raw harness text.
@@ -155,15 +177,40 @@ fn unknown_line() -> Result<Vec<HarnessLine>, Vec<Diagnostic>> {
 }
 
 impl LibtestJsonLine {
+    /// Reject implausible summary counts before they enter the grammar.
+    fn counts_within_bound(&self) -> bool {
+        let total = self
+            .test_count
+            .unwrap_or(0)
+            .saturating_add(self.passed.unwrap_or(0))
+            .saturating_add(self.failed.unwrap_or(0))
+            .saturating_add(self.ignored.unwrap_or(0))
+            .saturating_add(self.measured.unwrap_or(0))
+            .saturating_add(self.filtered_out.unwrap_or(0));
+        let bound = u64::from(MAX_STABLE_TESTS).saturating_mul(2);
+        let duration_is_plausible = self
+            .exec_time
+            .is_none_or(|seconds| seconds.is_finite() && (0.0..=MAX_SUITE_SECONDS).contains(&seconds));
+        let stdout_is_bounded = self.stdout.as_ref().is_none_or(|captured| captured.len() <= MAX_TEST_STDOUT_BYTES);
+        debug_assert!(bound >= u64::from(MAX_STABLE_TESTS));
+        total <= bound && duration_is_plausible && stdout_is_bounded
+    }
+
     fn into_line(self) -> Option<HarnessLine> {
+        let counts_are_plausible = self.counts_within_bound();
         match (self.line_type.as_str(), self.name, self.event) {
             ("test", Some(name), Some(event)) if event == "ok" || event == "failed" || event == "ignored" => {
+                debug_assert!(!name.is_empty());
                 Some(HarnessLine::Test { name, event })
             }
+            ("test", Some(name), Some(event)) if event == "started" => {
+                debug_assert!(!name.is_empty());
+                Some(HarnessLine::TestStarted { name })
+            }
             ("suite", None, Some(event))
-                if (event == "started" || event == "ok" || event == "failed")
-                    && self.test_count.unwrap_or(0) <= u64::from(MAX_STABLE_TESTS) =>
+                if (event == "started" || event == "ok" || event == "failed") && counts_are_plausible =>
             {
+                debug_assert!(!event.is_empty());
                 Some(HarnessLine::Suite { event })
             }
             _ => None,
@@ -231,6 +278,7 @@ fn admit_tests(request: &StableReportRequest) -> StableReportResult {
                     suite_ok_seen = true;
                 }
             }
+            HarnessLine::TestStarted { .. } => {}
             HarnessLine::Test { name, event } => {
                 if count_exceeds(tests.len(), MAX_STABLE_TESTS) {
                     diagnostics.push(error(ErrorDiagnostic {

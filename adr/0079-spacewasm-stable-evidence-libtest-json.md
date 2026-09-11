@@ -12,9 +12,13 @@ elapsed times change those hashes across identical derivations, so the
 bundle is not reproducible (see the retained same-derivation rebuild
 failure in the change baseline).
 
-The pinned toolchain is a nightly Rust with `rust-src`
-(`rust-toolchain.toml`), so libtest's structured JSON harness format
-(`--format json -Z unstable-options`) is available to the producer.
+The pinned toolchain used by the SpaceWasm reference Nix lane is a stable
+Rust (`rust-bin.stable`), so libtest's JSON format needs the explicit
+`RUSTC_BOOTSTRAP=1` environment plus `-Z unstable-options`. This is a
+bounded, pinned exception: the flag is part of the recorded command
+identity, the env var is set only for the two test producers, and any
+toolchain change that alters the grammar requires a new encoding version
+and a reviewed contract migration.
 
 ## Decision
 

@@ -206,6 +206,38 @@ fn empty_suite_or_command_reject() {
 }
 
 #[test]
+fn rust_identity_matches_the_nix_lane_canonical_serialization() {
+    // nix/spacewasm/stable-report.jq produces exactly this byte sequence for
+    // the same facts (verified against `jq -c -n -f ... --arg suite s --arg
+    // command c` on capture-a). The identity must be byte-identical across
+    // the Rust core and the Nix lane.
+    let canonical = concat!(
+        r#"{"schema":"mantle-spacewasm-stable-report-v1","suite":"s","command":"c","tests":["#,
+        r#"{"name":"spacewasm::tests::alpha","status":"passed"},"#,
+        r#"{"name":"spacewasm::tests::bravo","status":"passed"},"#,
+        r#"{"name":"spacewasm::tests::charlie","status":"passed"}],"encoding_version":1}"#
+    );
+    let expected = crunch_spacewasm_core::Blake3Digest::from_slice(canonical.as_bytes());
+    let fixture = String::from(
+        r#"{"type":"suite","event":"started","test_count":3}
+{"type":"test","name":"spacewasm::tests::alpha","event":"ok"}
+{"type":"test","name":"spacewasm::tests::charlie","event":"ok"}
+{"type":"test","name":"spacewasm::tests::bravo","event":"ok"}
+{"type":"suite","event":"ok"}
+"#,
+    );
+    let lines = parse_libtest_events(&fixture).expect("parses");
+    let request = StableReportRequest {
+        suite: String::from("s"),
+        command: String::from("c"),
+        expected_tests: Vec::new(),
+        lines,
+    };
+    let report = admit_stable_report(&request).report.expect("admits");
+    assert_eq!(report.stable_identity_blake3, expected);
+}
+
+#[test]
 fn harness_line_enum_round_trips_through_the_grammar() {
     let lines = parse_libtest_events(&capture_original()).expect("parses");
     assert_eq!(lines.len(), 5);
