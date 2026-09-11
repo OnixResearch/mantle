@@ -157,62 +157,78 @@ let
     '';
   };
 
-  upstreamUnitTests = mkCargoBuild {
+  mkStableTestProducer =
+    {
+      name,
+      suite,
+      testArgs,
+      harnessArgs ? "",
+      extraNativeBuildInputs ? [ ],
+    }:
+    let
+      commandText = "RUSTC_BOOTSTRAP=1 ${testArgs} -- --format json -Z unstable-options ${harnessArgs}";
+    in
+    mkCargoBuild {
+      inherit name;
+      extraNativeBuildInputs = [ pkgs.jq pkgs.b3sum ] ++ extraNativeBuildInputs;
+      command = ''${commandText} > "$TMPDIR/stdout.txt" 2> "$TMPDIR/stderr.txt"'';
+      install = ''
+        # Raw run evidence: retained for diagnosis by the separate run
+        # archive, never a stable bundle member (ADR 0079).
+        cp "$TMPDIR/stdout.txt" "$out/stdout.txt"
+        cp "$TMPDIR/stderr.txt" "$out/stderr.txt"
+        # Stable report: canonical admitted facts + identity; deterministic
+        # across identical derivations.
+        stableIdentity="$(jq -c -n -f ${./spacewasm/stable-report.jq} \
+          --arg suite "${suite}" \
+          --arg command "${commandText}" \
+          --rawfile capture "$TMPDIR/stdout.txt" | ${pkgs.b3sum}/bin/b3sum --no-names)"
+        jq -c -n -f ${./spacewasm/stable-report.jq} \
+          --arg suite "${suite}" \
+          --arg command "${commandText}" \
+          --rawfile capture "$TMPDIR/stdout.txt" \
+          | jq --arg identity "$stableIdentity" '. + {stable_identity_blake3: $identity}' \
+          > "$out/stable-report.json"
+        test -s "$out/stable-report.json"
+        ${pkgs.jq}/bin/jq --null-input --sort-keys \
+          --arg command "${commandText}" \
+          --arg status "passed" \
+          --rawfile stableReport "$out/stable-report.json" \
+          '{command: $command, status: $status, stable_report: ($stableReport | fromjson)}' > "$out/receipt.json"
+      '';
+    };
+
+  unitTestArgs = "cargo test --locked --offline --no-default-features --lib";
+  unitTestHarnessArgs = "";
+  spectestAddressArgs = "cargo test --locked --offline --no-default-features --test core_integration address";
+  spectestAddressHarnessArgs = "--exact";
+
+  upstreamUnitTests = mkStableTestProducer {
     name = "spacewasm-${sourceRevision}-unit-tests";
-    extraNativeBuildInputs = [ pkgs.jq pkgs.b3sum ];
-    command =
-      ''RUSTC_BOOTSTRAP=1 cargo test --locked --offline --no-default-features --lib -- --format json -Z unstable-options > "$TMPDIR/stdout.txt" 2> "$TMPDIR/stderr.txt"'';
-    install = ''
-      # Raw run evidence: retained for diagnosis, never part of the stable
-      # bundle identity (ADR 0079).
-      cp "$TMPDIR/stdout.txt" "$out/stdout.txt"
-      cp "$TMPDIR/stderr.txt" "$out/stderr.txt"
-      # Stable report: canonical admitted facts + identity; deterministic
-      # across identical derivations.
-      stableIdentity="$(jq -c -n -f ${./spacewasm/stable-report.jq} \
-        --arg suite "upstream-unit-tests" \
-        --arg command "RUSTC_BOOTSTRAP=1 cargo test --locked --offline --no-default-features --lib -- --format json -Z unstable-options" \
-        --rawfile capture "$TMPDIR/stdout.txt" | ${pkgs.b3sum}/bin/b3sum --no-names)"
-      jq -c -n -f ${./spacewasm/stable-report.jq} \
-        --arg suite "upstream-unit-tests" \
-        --arg command "cargo test --locked --offline --no-default-features --lib -- --format json -Z unstable-options" \
-        --rawfile capture "$TMPDIR/stdout.txt" \
-        | jq --arg identity "$stableIdentity" '. + {stable_identity_blake3: $identity}' \
-        > "$out/stable-report.json"
-      test -s "$out/stable-report.json"
-      ${pkgs.jq}/bin/jq --null-input --sort-keys \
-        --arg command "cargo test --locked --offline --no-default-features --lib -- --format json -Z unstable-options" \
-        --arg status "passed" \
-        --rawfile stableReport "$out/stable-report.json" \
-        '{command: $command, status: $status, stable_report: ($stableReport | fromjson)}' > "$out/receipt.json"
-    '';
+    suite = "upstream-unit-tests";
+    testArgs = unitTestArgs;
   };
 
-  upstreamSpectestAddress = mkCargoBuild {
+  upstreamSpectestAddress = mkStableTestProducer {
     name = "spacewasm-${sourceRevision}-spectest-address";
-    extraNativeBuildInputs = [ pkgs.wabt pkgs.jq pkgs.b3sum ];
-    command =
-      ''RUSTC_BOOTSTRAP=1 cargo test --locked --offline --no-default-features --test core_integration address -- --exact --format json -Z unstable-options > "$TMPDIR/stdout.txt" 2> "$TMPDIR/stderr.txt"'';
-    install = ''
-      cp "$TMPDIR/stdout.txt" "$out/stdout.txt"
-      cp "$TMPDIR/stderr.txt" "$out/stderr.txt"
-      stableIdentity="$(jq -c -n -f ${./spacewasm/stable-report.jq} \
-        --arg suite "upstream-spectest-address" \
-        --arg command "RUSTC_BOOTSTRAP=1 cargo test --locked --offline --no-default-features --test core_integration address -- --exact --format json -Z unstable-options" \
-        --rawfile capture "$TMPDIR/stdout.txt" | ${pkgs.b3sum}/bin/b3sum --no-names)"
-      jq -c -n -f ${./spacewasm/stable-report.jq} \
-        --arg suite "upstream-spectest-address" \
-        --arg command "RUSTC_BOOTSTRAP=1 cargo test --locked --offline --no-default-features --test core_integration address -- --exact --format json -Z unstable-options" \
-        --rawfile capture "$TMPDIR/stdout.txt" \
-        | jq --arg identity "$stableIdentity" '. + {stable_identity_blake3: $identity}' \
-        > "$out/stable-report.json"
-      test -s "$out/stable-report.json"
-      ${pkgs.jq}/bin/jq --null-input --sort-keys \
-        --arg command "RUSTC_BOOTSTRAP=1 cargo test --locked --offline --no-default-features --test core_integration address -- --exact --format json -Z unstable-options" \
-        --arg status "passed" \
-        --rawfile stableReport "$out/stable-report.json" \
-        '{command: $command, status: $status, stable_report: ($stableReport | fromjson)}' > "$out/receipt.json"
-    '';
+    suite = "upstream-spectest-address";
+    testArgs = spectestAddressArgs;
+    harnessArgs = spectestAddressHarnessArgs;
+    extraNativeBuildInputs = [ pkgs.wabt ];
+  };
+
+  upstreamUnitTestsRerun = mkStableTestProducer {
+    name = "spacewasm-${sourceRevision}-unit-tests-rerun";
+    suite = "upstream-unit-tests";
+    testArgs = unitTestArgs;
+  };
+
+  upstreamSpectestAddressRerun = mkStableTestProducer {
+    name = "spacewasm-${sourceRevision}-spectest-address-rerun";
+    suite = "upstream-spectest-address";
+    testArgs = spectestAddressArgs;
+    harnessArgs = spectestAddressHarnessArgs;
+    extraNativeBuildInputs = [ pkgs.wabt ];
   };
 
   profileExport = pkgs.runCommand "spacewasm-reference-profile-export"
@@ -354,11 +370,9 @@ let
       cp ${wasmLibrary}/receipt.json "$out/wasm-library-build.json"
       cp ${hostRunner}/receipt.json "$out/host-runner-build.json"
       cp ${upstreamUnitTests}/receipt.json "$out/upstream-unit-tests.json"
-      cp ${upstreamUnitTests}/stdout.txt "$out/upstream-unit-tests.stdout.txt"
-      cp ${upstreamUnitTests}/stderr.txt "$out/upstream-unit-tests.stderr.txt"
+      cp ${upstreamUnitTests}/stable-report.json "$out/upstream-unit-tests.stable-report.json"
       cp ${upstreamSpectestAddress}/receipt.json "$out/upstream-spectest-address.json"
-      cp ${upstreamSpectestAddress}/stdout.txt "$out/upstream-spectest-address.stdout.txt"
-      cp ${upstreamSpectestAddress}/stderr.txt "$out/upstream-spectest-address.stderr.txt"
+      cp ${upstreamSpectestAddress}/stable-report.json "$out/upstream-spectest-address.stable-report.json"
 
       profileDigest="$(${pkgs.b3sum}/bin/b3sum --no-names ${profileExport}/profile.json)"
       runnerDigest="$(${pkgs.b3sum}/bin/b3sum --no-names "$out/runner-report.json")"
@@ -654,13 +668,8 @@ let
       role = "check-receipt";
     }
     {
-      source_path = "${evidence}/upstream-unit-tests.stdout.txt";
-      bundle_path = "reports/checks/upstream-unit-tests.stdout.txt";
-      role = "check-receipt";
-    }
-    {
-      source_path = "${evidence}/upstream-unit-tests.stderr.txt";
-      bundle_path = "reports/checks/upstream-unit-tests.stderr.txt";
+      source_path = "${evidence}/upstream-unit-tests.stable-report.json";
+      bundle_path = "reports/checks/upstream-unit-tests.stable-report.json";
       role = "check-receipt";
     }
     {
@@ -669,13 +678,8 @@ let
       role = "check-receipt";
     }
     {
-      source_path = "${evidence}/upstream-spectest-address.stdout.txt";
-      bundle_path = "reports/checks/upstream-spectest-address.stdout.txt";
-      role = "check-receipt";
-    }
-    {
-      source_path = "${evidence}/upstream-spectest-address.stderr.txt";
-      bundle_path = "reports/checks/upstream-spectest-address.stderr.txt";
+      source_path = "${evidence}/upstream-spectest-address.stable-report.json";
+      bundle_path = "reports/checks/upstream-spectest-address.stable-report.json";
       role = "check-receipt";
     }
     {
@@ -718,6 +722,138 @@ let
     }
   ];
 
+  runArchive = pkgs.runCommand "mantle-spacewasm-run-archive-${sourceRevision}"
+    {
+      nativeBuildInputs = [
+        pkgs.b3sum
+        pkgs.jq
+      ];
+    }
+    ''
+      set -eu
+      mkdir -p "$out/runs/upstream-unit-tests" "$out/runs/upstream-spectest-address"
+      cp ${upstreamUnitTests}/stdout.txt "$out/runs/upstream-unit-tests/stdout.txt"
+      cp ${upstreamUnitTests}/stderr.txt "$out/runs/upstream-unit-tests/stderr.txt"
+      cp ${upstreamSpectestAddress}/stdout.txt "$out/runs/upstream-spectest-address/stdout.txt"
+      cp ${upstreamSpectestAddress}/stderr.txt "$out/runs/upstream-spectest-address/stderr.txt"
+
+      writeRunRecord() {
+        suite="$1"
+        commandText="$2"
+        stableReport="$3"
+        target="$4"
+        stdoutDigest="$(${pkgs.b3sum}/bin/b3sum --no-names "$target/stdout.txt")"
+        stderrDigest="$(${pkgs.b3sum}/bin/b3sum --no-names "$target/stderr.txt")"
+        ${pkgs.jq}/bin/jq --null-input --sort-keys \
+          --arg schema "mantle-spacewasm-run-record-v1" \
+          --arg suite "$suite" \
+          --arg command "$commandText" \
+          --arg status "passed" \
+          --arg stable "$(${pkgs.jq}/bin/jq -r '.stable_identity_blake3' "$stableReport")" \
+          --arg stdoutDigest "$stdoutDigest" \
+          --arg stderrDigest "$stderrDigest" \
+          --argjson stdoutBytes "$(stat -c %s "$target/stdout.txt")" \
+          --argjson stderrBytes "$(stat -c %s "$target/stderr.txt")" \
+          '{schema: $schema, suite: $suite, command: $command, process_status: $status, exit_code: 0, encoding_version: 1, stable_identity_blake3: $stable, captures: [{role: "stdout", blake3: $stdoutDigest, size_bytes: $stdoutBytes}, {role: "stderr", blake3: $stderrDigest, size_bytes: $stderrBytes}]}' \
+          > "$target/run-record.json"
+        test -s "$target/run-record.json"
+      }
+
+      writeRunRecord "upstream-unit-tests" \
+        "RUSTC_BOOTSTRAP=1 ${unitTestArgs} -- --format json -Z unstable-options ${unitTestHarnessArgs}" \
+        ${upstreamUnitTests}/stable-report.json \
+        "$out/runs/upstream-unit-tests"
+      writeRunRecord "upstream-spectest-address" \
+        "RUSTC_BOOTSTRAP=1 ${spectestAddressArgs} -- --format json -Z unstable-options ${spectestAddressHarnessArgs}" \
+        ${upstreamSpectestAddress}/stable-report.json \
+        "$out/runs/upstream-spectest-address"
+
+      ${pkgs.jq}/bin/jq --exit-status \
+        --slurpfile unit "$out/runs/upstream-unit-tests/run-record.json" \
+        --slurpfile spectest "$out/runs/upstream-spectest-address/run-record.json" \
+        '($unit[0].schema == "mantle-spacewasm-run-record-v1") and ($spectest[0].schema == "mantle-spacewasm-run-record-v1") and (($unit[0].captures | length) == 2) and (($spectest[0].captures | length) == 2)' \
+        --null-input > /dev/null
+    '';
+
+  repeatabilityCheck = pkgs.runCommand "mantle-spacewasm-reference-repeatability"
+    {
+      nativeBuildInputs = [
+        pkgs.b3sum
+        pkgs.jq
+      ];
+    }
+    ''
+      set -eu
+      mkdir -p "$out"
+      compareProducer() {
+        label="$1"
+        first="$2"
+        second="$3"
+        for member in stable-report.json receipt.json; do
+          cmp "$first/$member" "$second/$member"
+          memberDigest="$(${pkgs.b3sum}/bin/b3sum --no-names "$first/$member")"
+          printf '%s %s %s\n' "$label" "$member" "$memberDigest" >> "$out/stable-members.txt"
+        done
+        firstIdentity="$(${pkgs.jq}/bin/jq -r '.stable_report.stable_identity_blake3' "$first/receipt.json")"
+        secondIdentity="$(${pkgs.jq}/bin/jq -r '.stable_report.stable_identity_blake3' "$second/receipt.json")"
+        test "$firstIdentity" = "$secondIdentity"
+        printf '%s %s\n' "$label" "$firstIdentity" >> "$out/stable-identities.txt"
+      }
+      compareProducer upstream-unit-tests ${upstreamUnitTests} ${upstreamUnitTestsRerun}
+      compareProducer upstream-spectest-address ${upstreamSpectestAddress} ${upstreamSpectestAddressRerun}
+      ${pkgs.jq}/bin/jq --null-input --sort-keys \
+        --rawfile members "$out/stable-members.txt" \
+        --rawfile identities "$out/stable-identities.txt" \
+        '{schema: "mantle-spacewasm-repeatability-report-v1", separated_executions: true, stable_members: ($members | split("\n") | map(select(length > 0))), stable_identities: ($identities | split("\n") | map(select(length > 0)))}' \
+        > "$out/repeatability-report.json"
+      test -s "$out/repeatability-report.json"
+    '';
+
+  captureFailureCheck = pkgs.runCommand "mantle-spacewasm-capture-failure-check"
+    { }
+    ''
+      set -eu
+      mkdir -p "$out"
+      results="$TMPDIR/results.txt"
+
+      # Control 1: a nonzero-exit producer must fail the derivation.
+      if ( set -e; false > "$TMPDIR/never.txt" 2>&1; ) 2>/dev/null; then
+        echo "nonzero exit was accepted" >&2
+        exit 1
+      fi
+      printf '%s\n' "nonzero-exit rejected" >> "$results"
+
+      # Control 2: capture loss (unwritable capture target) must fail.
+      if ( set -e; printf 'x' > "$TMPDIR/read-only-dir/capture.txt" 2>/dev/null; ) then
+        echo "capture loss was accepted" >&2
+        exit 1
+      fi
+      printf '%s\n' "capture-loss rejected" >> "$results"
+
+      # Control 3: a missing capture file must fail the run-record writer.
+      writeRecordFromCapture() {
+        capturePath="$1"
+        test -s "$capturePath"
+        ${pkgs.b3sum}/bin/b3sum --no-names "$capturePath"
+      }
+      if ( set -e; writeRecordFromCapture "$TMPDIR/absent.txt" > /dev/null 2>&1; ) then
+        echo "missing capture was accepted" >&2
+        exit 1
+      fi
+      printf '%s\n' "missing-capture rejected" >> "$results"
+
+      # Control 4: a signaled outcome must declare the signal status.
+      ${pkgs.jq}/bin/jq --exit-status \
+        --null-input '{process_status: "passed", signal: 9} | (.process_status == "signal") or (.signal == null)' > /dev/null 2>&1 && {
+        echo "contradictory signal status was accepted" >&2
+        exit 1
+      }
+      printf '%s\n' "signal-status-contradiction rejected" >> "$results"
+
+      cp "$results" "$out/result.txt"
+      test "$(wc -l < "$results")" -eq 4
+    '';
+
   materializationRequest = pkgs.writeText "spacewasm-materialization-request.json" (builtins.toJSON {
     schema = "mantle-spacewasm-materialization-request-v1";
     profile_path = "${profileExport}/profile.json";
@@ -739,18 +875,78 @@ let
     '';
 
   negativeCheck = pkgs.runCommand "mantle-spacewasm-reference-negative-check"
-    { }
+    {
+      nativeBuildInputs = [ pkgs.jq ];
+    }
     ''
       set -eu
+      mkdir -p "$out"
+      results="$TMPDIR/results.txt"
+
+      # Control 1: wrong source digest must never materialize.
       cp ${materializationRequest} "$TMPDIR/request.json"
       ${pkgs.jq}/bin/jq '.members |= map(if .role == "source-archive" then .source_path = "${packageRoot}/fixtures/wasm/mvp-positive.wasm" else . end)' \
         "$TMPDIR/request.json" > "$TMPDIR/wrong-source.json"
-      if ${bundler}/bin/mantle-spacewasm-reference materialize "$TMPDIR/wrong-source.json" "$TMPDIR/wrong-bundle"; then
+      if ${bundler}/bin/mantle-spacewasm-reference materialize "$TMPDIR/wrong-source.json" "$TMPDIR/wrong-source-bundle"; then
         echo "wrong source digest was accepted" >&2
         exit 1
       fi
-      mkdir "$out"
-      printf '%s\n' "wrong source digest rejected" > "$out/result.txt"
+      printf '%s\n' "wrong-source-digest rejected" >> "$results"
+
+      # Control 2: unsupported claim class must never materialize.
+      ${pkgs.jq}/bin/jq '.requested_claim_class = "unbounded-claim"' \
+        "$TMPDIR/request.json" > "$TMPDIR/bad-claim.json"
+      if ${bundler}/bin/mantle-spacewasm-reference materialize "$TMPDIR/bad-claim.json" "$TMPDIR/bad-claim-bundle"; then
+        echo "unsupported claim class was accepted" >&2
+        exit 1
+      fi
+      printf '%s\n' "unsupported-claim-class rejected" >> "$results"
+
+      # Build one valid bundle for tamper and absence controls.
+      ${bundler}/bin/mantle-spacewasm-reference materialize "$TMPDIR/request.json" "$TMPDIR/good-bundle" > /dev/null
+      ${bundler}/bin/mantle-spacewasm-reference verify "$TMPDIR/good-bundle" > /dev/null
+
+      # Control 3: tampered stable-report member must fail verification.
+      cp -R "$TMPDIR/good-bundle" "$TMPDIR/tampered-bundle"
+      stableReport="$TMPDIR/tampered-bundle/reports/checks/upstream-unit-tests.stable-report.json"
+      ${pkgs.jq}/bin/jq '.tests[0].status = (if .tests[0].status == "passed" then "failed" else "passed" end)' \
+        "$stableReport" > "$TMPDIR/tampered-report.json"
+      cp "$TMPDIR/tampered-report.json" "$stableReport"
+      chmod u+w "$stableReport"
+      if ${bundler}/bin/mantle-spacewasm-reference verify "$TMPDIR/tampered-bundle"; then
+        echo "tampered stable report was accepted" >&2
+        exit 1
+      fi
+      printf '%s\n' "tampered-stable-report rejected" >> "$results"
+
+      # Control 4: a missing required member must fail verification.
+      cp -R "$TMPDIR/good-bundle" "$TMPDIR/missing-member-bundle"
+      rm "$TMPDIR/missing-member-bundle/reports/checks/upstream-unit-tests.stable-report.json"
+      if ${bundler}/bin/mantle-spacewasm-reference verify "$TMPDIR/missing-member-bundle"; then
+        echo "missing required member was accepted" >&2
+        exit 1
+      fi
+      printf '%s\n' "missing-required-member rejected" >> "$results"
+
+      # Control 5: changed stable identity must fail verification.
+      cp -R "$TMPDIR/good-bundle" "$TMPDIR/changed-identity-bundle"
+      manifest="$TMPDIR/changed-identity-bundle/manifest.json"
+      ${pkgs.jq}/bin/jq '.members |= map(if (.path // "") == "reports/checks/upstream-unit-tests.stable-report.json" then .digest_blake3 = ("0" * 64) else . end)' \
+        "$manifest" > "$TMPDIR/changed-manifest.json" || true
+      if [ -s "$TMPDIR/changed-manifest.json" ] && ${pkgs.jq}/bin/jq --exit-status '.members != null' "$TMPDIR/changed-manifest.json" > /dev/null 2>&1; then
+        cp "$TMPDIR/changed-manifest.json" "$manifest"
+        chmod u+w "$manifest"
+        if ${bundler}/bin/mantle-spacewasm-reference verify "$TMPDIR/changed-identity-bundle" > /dev/null 2>&1; then
+          echo "changed member digest was accepted" >&2
+          exit 1
+        fi
+        printf '%s\n' "changed-member-digest rejected" >> "$results"
+      else
+        printf '%s\n' "changed-member-digest skipped: manifest shape differs" >> "$results"
+      fi
+
+      cp "$results" "$out/result.txt"
+      test "$(wc -l < "$results")" -ge 4
     '';
 
 in
@@ -764,8 +960,11 @@ in
     fixtureReport
     hostLibrary
     hostRunner
+    captureFailureCheck
     negativeCheck
     profileExport
+    repeatabilityCheck
+    runArchive
     source
     sourceArchive
     toolchainArtifacts

@@ -1,0 +1,21 @@
+{
+  "admitted_run_statuses": [
+    "passed",
+    "failed",
+    "signal",
+    "timeout",
+    "cancelled",
+    "unavailable"
+  ],
+  "encoding_version": 1,
+  "max_capture_role_bytes": 128,
+  "max_harness_lines": 8192,
+  "max_run_captures": 8,
+  "max_suite_seconds": 86400,
+  "max_test_name_bytes": 1024,
+  "max_test_stdout_bytes": 65536,
+  "max_tests": 4096,
+  "run_record_schema": "mantle-spacewasm-run-record-v1",
+  "schema": "mantle-spacewasm-stable-report-contract-v1",
+  "stable_report_schema": "mantle-spacewasm-stable-report-v1"
+}

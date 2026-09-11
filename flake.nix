@@ -1664,7 +1664,10 @@
           spacewasm-reference-upstream-unit-tests = spacewasmReference.upstreamUnitTests;
           spacewasm-reference-spectest-address = spacewasmReference.upstreamSpectestAddress;
           spacewasm-reference-fixtures = spacewasmReference.fixtureReport;
+          spacewasm-reference-capture-failures = spacewasmReference.captureFailureCheck;
           spacewasm-reference-negative = spacewasmReference.negativeCheck;
+          spacewasm-reference-repeatability = spacewasmReference.repeatabilityCheck;
+          spacewasm-reference-run-archive = spacewasmReference.runArchive;
           spacewasm-reference-bundle = spacewasmReference.bundle;
         };
 

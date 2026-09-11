@@ -60,3 +60,30 @@ T4.3 policy registry blocker.
 Proves stable member bytes for this repaired producer under the recorded
 derivation and command identities. Does not prove evaluator correctness,
 consumer admission, or release eligibility.
+
+## Stable/run split and full-bundle determinism (2026-09-10, final)
+
+- Bundle members now carry the stable reports (`stable-report.json`) and the
+  receipts; raw `stdout.txt`/`stderr.txt` members were removed. Raw captures
+  live only in the separate run archive (`spacewasm-reference-run-archive`)
+  with their run records.
+- Producer factory `mkStableTestProducer` derives the exact command identity
+  once and uses it for the harness invocation, the stable identity, and the
+  receipt, which removes the earlier command-identity drift.
+- `nix-store --realise <bundle.drv> --check --option builders ''` exits 0:
+  the complete stable bundle reproduces byte-for-byte on a fresh rebuild.
+  Bundle manifest identity
+  `661243d354f85c4a5f6ddcc0d15ed530b0df22bda754a546c65bd354da376f60`.
+- `spacewasm-reference-repeatability` compares independent rerun executions
+  in separate scratch roots and passes; during development it caught a real
+  `--exact` command-identity divergence between producer copies.
+- `spacewasm-reference-capture-failures` passes four controls: nonzero exit,
+  capture loss, missing capture, contradictory signal status.
+- `spacewasm-reference-negative` passes five controls: wrong source digest,
+  unsupported claim class, tampered stable-report member, missing required
+  member, changed member digest.
+- `packages/spacewasm-reference/stable-report-contract.ncl` is the typed
+  contract source; its deterministic JSON export is checked in and two Rust
+  tests prove the core constants and admitted statuses equal it.
+- Core suites: 8 focused + 8 run-record + 12 stable-report + 2 contract
+  parity; strict Clippy exit 0; wasm32 check clean.
