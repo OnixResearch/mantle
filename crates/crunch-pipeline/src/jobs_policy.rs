@@ -199,16 +199,16 @@ mod tests {
     }
 
     #[test]
-    fn overflowing_parallelism_is_representable_or_rejected() {
+    fn saturated_parallelism_clamps_instead_of_overflowing() {
         let saturated = JobsObservation::new(None, Some(u32::MAX));
         assert_eq!(resolve_jobs_policy(&saturated), Ok(DEFAULT_JOBS_CAP));
 
-        // Platform parallelism wider than u32 is rejected rather than truncated.
+        let saturated_executor = JobsObservation::new(Some(u32::MAX), None).with_executor_limit(u32::MAX);
+        assert_eq!(resolve_jobs_policy(&saturated_executor), Ok(DEFAULT_JOBS_CAP));
+
+        // Platform parallelism wider than u32 is converted fallibly, never truncated.
         let over_wide = usize::MAX;
-        let converted = u32::try_from(over_wide);
-        if converted.is_err() {
-            assert_eq!(u32::try_from(over_wide).err(), u32::try_from(over_wide).err());
-        }
+        assert_eq!(u32::try_from(over_wide).is_err(), usize::BITS > u32::BITS);
     }
 
     #[test]
