@@ -1,0 +1,9 @@
+{
+  "schema": "mantle-source-observation-v1",
+  "encoding_version": 1,
+  "source_kind": "fixed-url",
+  "payload_blake3": "1111111111111111111111111111111111111111111111111111111111111111",
+  "observation_blake3": "7777777777777777777777777777777777777777777777777777777777777777",
+  "snapshot_profile_name": "mantle-release-source",
+  "snapshot_profile_version": 1
+}

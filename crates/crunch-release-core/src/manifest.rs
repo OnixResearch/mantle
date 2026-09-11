@@ -331,6 +331,10 @@ pub const SOURCE_OBSERVATION_SCHEMA: &str = "mantle-source-observation-v1";
 /// Source-observation encoding version bound into release evidence.
 pub const SOURCE_OBSERVATION_ENCODING_VERSION: u32 = 1;
 
+/// Machine-contract marker for the source-observation binding surface.
+// machine-artifact-public: source.observation-binding
+pub const SOURCE_OBSERVATION_BINDING_MARKER: &str = "source.observation-binding";
+
 /// Source-observation facts bound to one release source acquisition.
 ///
 /// The binding repeats the measured subject so release evidence never trusts
@@ -2117,10 +2121,7 @@ fn validate_source_observation_binding(source_acquisition: &SourceAcquisition) -
         )));
     }
     validate_blake3_hex(&binding.payload_blake3, "source_acquisition.source_observation.payload_blake3")?;
-    validate_blake3_hex(
-        &binding.observation_blake3,
-        "source_acquisition.source_observation.observation_blake3",
-    )?;
+    validate_blake3_hex(&binding.observation_blake3, "source_acquisition.source_observation.observation_blake3")?;
     if binding.payload_blake3 != source_acquisition.digest_blake3 {
         return Err(validation_error(
             "release evidence source_observation.payload_blake3 must match the exact release source bytes".to_string(),
@@ -2146,7 +2147,8 @@ fn validate_source_observation_binding(source_acquisition: &SourceAcquisition) -
     }
     if binding.snapshot_profile_name != RELEASE_SOURCE_ARCHIVE_PROFILE {
         return Err(validation_error(
-            "release evidence source_observation snapshot profile must match the release source archive profile".to_string(),
+            "release evidence source_observation snapshot profile must match the release source archive profile"
+                .to_string(),
         ));
     }
     if let Ok(expected_version) = RELEASE_SOURCE_ARCHIVE_VERSION.parse::<u32>()

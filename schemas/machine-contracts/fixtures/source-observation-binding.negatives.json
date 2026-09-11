@@ -1,0 +1,47 @@
+{
+  "surface_id": "source.observation-binding",
+  "cases": [
+    {
+      "id": "unsupported-schema",
+      "issue_class": "version",
+      "expected_path": "/schema",
+      "artifact": {
+        "schema": "mantle-source-observation-v2",
+        "encoding_version": 1,
+        "source_kind": "fixed-url",
+        "payload_blake3": "1111111111111111111111111111111111111111111111111111111111111111",
+        "observation_blake3": "7777777777777777777777777777777777777777777777777777777777777777",
+        "snapshot_profile_name": "mantle-release-source",
+        "snapshot_profile_version": 1
+      }
+    },
+    {
+      "id": "unknown-source-kind",
+      "issue_class": "enum",
+      "expected_path": "/source_kind",
+      "artifact": {
+        "schema": "mantle-source-observation-v1",
+        "encoding_version": 1,
+        "source_kind": "cargo-registry",
+        "payload_blake3": "1111111111111111111111111111111111111111111111111111111111111111",
+        "observation_blake3": "7777777777777777777777777777777777777777777777777777777777777777",
+        "snapshot_profile_name": "mantle-release-source",
+        "snapshot_profile_version": 1
+      }
+    },
+    {
+      "id": "zero-profile-version",
+      "issue_class": "bounds",
+      "expected_path": "/snapshot_profile_version",
+      "artifact": {
+        "schema": "mantle-source-observation-v1",
+        "encoding_version": 1,
+        "source_kind": "git",
+        "payload_blake3": "1111111111111111111111111111111111111111111111111111111111111111",
+        "observation_blake3": "7777777777777777777777777777777777777777777777777777777777777777",
+        "snapshot_profile_name": "mantle-release-source",
+        "snapshot_profile_version": 0
+      }
+    }
+  ]
+}

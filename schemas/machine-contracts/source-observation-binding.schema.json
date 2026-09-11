@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mantle://schemas/source-observation/binding-v1",
+  "title": "Mantle source observation binding",
+  "description": "Versioned source-observation facts bound into release evidence. Wire shape only: cross-field rules such as payload-versus-observation distinctness and release source byte equality are enforced by crates/crunch-release-core validation.",
+  "x-mantle-rust-owner": "crates/crunch-release-core/src/manifest.rs::SourceObservationBinding",
+  "type": "object",
+  "required": [
+    "schema",
+    "encoding_version",
+    "source_kind",
+    "payload_blake3",
+    "observation_blake3",
+    "snapshot_profile_name",
+    "snapshot_profile_version"
+  ],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "mantle-source-observation-v1"
+    },
+    "encoding_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "source_kind": {
+      "type": "string",
+      "enum": [
+        "git",
+        "fixed-url",
+        "local-logical",
+        "package-mirror",
+        "opaque"
+      ]
+    },
+    "payload_blake3": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "observation_blake3": {
+      "type": "string",
+      "x-mantle-semantic": "blake3"
+    },
+    "snapshot_profile_name": {
+      "type": "string",
+      "maxLength": 64,
+      "x-mantle-bound-name": {
+        "maxLength": "MAX_PROFILE_BYTES"
+      },
+      "x-mantle-length-unit": "utf8-bytes",
+      "x-mantle-semantic": "safe-reference"
+    },
+    "snapshot_profile_version": {
+      "type": "integer",
+      "minimum": 1,
+      "x-mantle-bound-name": {
+        "minimum": "MIN_PROFILE_VERSION"
+      }
+    }
+  },
+  "additionalProperties": false
+}
