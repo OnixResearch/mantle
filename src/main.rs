@@ -3231,7 +3231,9 @@ fn has_conflicting_machine_output_modes(args: &Args) -> bool {
 
 fn init_tracing(args: &Args) {
     let is_log_requested = args.verbose || args.log_level.is_some() || ambient_env::is_rust_log_requested();
-    if args.json && !is_log_requested {
+    let format = mantle_application_contract::output_format(args.json);
+    let decision = mantle_application_contract::logging_decision(format, is_log_requested);
+    if !decision.is_initialized {
         return;
     }
 
@@ -3260,6 +3262,11 @@ struct RunContext {
 }
 
 impl RunContext {
+    /// Typed output format for the presentation boundary.
+    fn output_format(&self) -> mantle_application_contract::OutputFormat {
+        mantle_application_contract::output_format(self.json)
+    }
+
     fn output_mode(&self) -> BuildOutputMode {
         if self.json {
             BuildOutputMode::Json
@@ -4447,15 +4454,15 @@ fn execute_semantic_graph_query(
         SemanticGraphQueryKind::Graph => graph
             .graph_for_root(input.target)
             .map_err(|err| report_semantic_graph_query_error_value(ctx, err))
-            .and_then(|result| render_graph_result(ctx.json, &result)),
+            .and_then(|result| render_graph_result(ctx.output_format(), &result)),
         SemanticGraphQueryKind::Why => graph
             .why(input.target)
             .map_err(|err| report_semantic_graph_query_error_value(ctx, err))
-            .and_then(|result| render_why_result(ctx.json, &result)),
+            .and_then(|result| render_why_result(ctx.output_format(), &result)),
         SemanticGraphQueryKind::Dependents => graph
             .dependents(input.target)
             .map_err(|err| report_semantic_graph_query_error_value(ctx, err))
-            .and_then(|result| render_dependents_result(ctx.json, &result)),
+            .and_then(|result| render_dependents_result(ctx.output_format(), &result)),
     }
 }
 
@@ -4487,10 +4494,14 @@ fn report_semantic_graph_query_error(
     Err(RunError::Internal(err.to_string()))
 }
 
-fn render_graph_result(json: bool, result: &semantic_graph::GraphQueryResult<'_>) -> Result<String, RunError> {
+fn render_graph_result(
+    format: mantle_application_contract::OutputFormat,
+    result: &semantic_graph::GraphQueryResult<'_>,
+) -> Result<String, RunError> {
     debug_assert!(result.nodes.iter().all(|node| !node.id.is_empty()));
     debug_assert!(result.edges.iter().all(|edge| !edge.from.is_empty()));
-    if json {
+    let is_json = format.is_machine_readable();
+    if is_json {
         return serde_json::to_string_pretty(result).map_err(|err| RunError::Internal(err.to_string()));
     }
     let mut out = format!("semantic graph root: {}\n", result.root);
@@ -4511,8 +4522,12 @@ fn render_graph_result(json: bool, result: &semantic_graph::GraphQueryResult<'_>
     Ok(out)
 }
 
-fn render_why_result(json: bool, result: &semantic_graph::WhyResult<'_>) -> Result<String, RunError> {
-    if json {
+fn render_why_result(
+    format: mantle_application_contract::OutputFormat,
+    result: &semantic_graph::WhyResult<'_>,
+) -> Result<String, RunError> {
+    let is_json = format.is_machine_readable();
+    if is_json {
         return serde_json::to_string_pretty(result).map_err(|err| RunError::Internal(err.to_string()));
     }
     let mut out = format!("why {}\nnode: {} [{}]\n", result.target, result.node.id, result.node.kind);
@@ -4528,8 +4543,12 @@ fn render_why_result(json: bool, result: &semantic_graph::WhyResult<'_>) -> Resu
     Ok(out)
 }
 
-fn render_dependents_result(json: bool, result: &semantic_graph::DependentsResult<'_>) -> Result<String, RunError> {
-    if json {
+fn render_dependents_result(
+    format: mantle_application_contract::OutputFormat,
+    result: &semantic_graph::DependentsResult<'_>,
+) -> Result<String, RunError> {
+    let is_json = format.is_machine_readable();
+    if is_json {
         return serde_json::to_string_pretty(result).map_err(|err| RunError::Internal(err.to_string()));
     }
     let mut out = format!("dependents of {}:\n", result.target);
@@ -5606,11 +5625,15 @@ fn cmd_remote_failure_debug_replay(
         state_dir: &ctx.resolved_state_dir,
         store_prefix: &ctx.store_prefix,
     }))?;
-    emit_remote_failure_replay_result(&result, ctx.json)
+    emit_remote_failure_replay_result(&result, ctx.output_format())
 }
 
-fn emit_remote_failure_replay_result(result: &serde_json::Value, json: bool) -> Result<(), RunError> {
-    if json {
+fn emit_remote_failure_replay_result(
+    result: &serde_json::Value,
+    format: mantle_application_contract::OutputFormat,
+) -> Result<(), RunError> {
+    let is_json = format.is_machine_readable();
+    if is_json {
         let rendered = serde_json::to_string(result)
             .map_err(|error| RunError::Internal(format!("serializing remote failure replay report: {error}")))?;
         println!("{rendered}");
