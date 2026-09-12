@@ -3596,7 +3596,7 @@ fn public_command_flags(command: &ClapCommand) -> Vec<String> {
 fn run_operator_contract(mode: OperatorContractMode) -> Result<(), RunError> {
     let descriptors = clap_command_descriptors()?;
     if matches!(mode, OperatorContractMode::RawDescriptors) {
-        return print_operator_json(&descriptors, "operator command descriptors");
+        return presentation::reports::print_operator_json(&descriptors, "operator command descriptors");
     }
 
     let inventory: operator_contract::OperatorInventory =
@@ -3606,7 +3606,9 @@ fn run_operator_contract(mode: OperatorContractMode) -> Result<(), RunError> {
         .map_err(|error| RunError::Internal(format!("operator command contract: {error}")))?;
     match mode {
         OperatorContractMode::RawDescriptors => unreachable!("raw mode returned before catalog construction"),
-        OperatorContractMode::Catalog => print_operator_json(&catalog, "operator command catalog"),
+        OperatorContractMode::Catalog => {
+            presentation::reports::print_operator_json(&catalog, "operator command catalog")
+        }
         OperatorContractMode::Reference => {
             print!("{}", operator_contract::render_command_reference(&catalog));
             Ok(())
@@ -3619,14 +3621,6 @@ fn run_operator_contract(mode: OperatorContractMode) -> Result<(), RunError> {
         }
         OperatorContractMode::Check => check_operator_generated_files(&catalog),
     }
-}
-
-fn print_operator_json<T: serde::Serialize>(value: &T, label: &str) -> Result<(), RunError> {
-    assert!(!label.is_empty(), "operator JSON label must not be empty");
-    let rendered = serde_json::to_string_pretty(value)
-        .map_err(|error| RunError::Internal(format!("rendering {label}: {error}")))?;
-    println!("{rendered}");
-    Ok(())
 }
 
 fn check_operator_generated_files(catalog: &operator_contract::CommandCatalog) -> Result<(), RunError> {
@@ -5552,25 +5546,7 @@ fn cmd_remote_failure_debug_replay(
         state_dir: &ctx.resolved_state_dir,
         store_prefix: &ctx.store_prefix,
     }))?;
-    emit_remote_failure_replay_result(&result, ctx.output_format())
-}
-
-fn emit_remote_failure_replay_result(
-    result: &serde_json::Value,
-    format: mantle_application_contract::OutputFormat,
-) -> Result<(), RunError> {
-    let is_json = format.is_machine_readable();
-    if is_json {
-        let rendered = serde_json::to_string(result)
-            .map_err(|error| RunError::Internal(format!("serializing remote failure replay report: {error}")))?;
-        println!("{rendered}");
-    } else {
-        println!("source-bundle: {}", result["source_bundle_blake3"].as_str().unwrap_or("invalid"));
-        println!("replay-attempt: {}", result["replay_attempt_identity"].as_str().unwrap_or("invalid"));
-        println!("comparison: {}", result["comparison"]["class"].as_str().unwrap_or("invalid"));
-        println!("output-count: {}", result["admitted_output_count"].as_u64().unwrap_or(0));
-    }
-    Ok(())
+    presentation::reports::emit_remote_failure_replay_result(&result, ctx.output_format())
 }
 
 struct RemoteFailureReplayExecutionInput<'a> {
