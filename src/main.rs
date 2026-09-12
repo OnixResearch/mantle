@@ -5,6 +5,7 @@ mod artifact_cmd;
 // Evidence enums preserve the stable machine-contract shape; boxing or narrowing errors would alter
 // that boundary.
 #[allow(clippy::large_enum_variant, clippy::result_large_err)]
+mod ambient_env;
 mod ast_grep_evidence;
 mod attest_cmd;
 mod bootstrap;
@@ -284,8 +285,6 @@ const REMOTE_CLIENT_BUILD_REPORT_SCHEMA: &str = "mantle-remote-client-build-v1";
 const BUILD_JSON_REPORT_SCHEMA: &str = "crunch-build-report-v1";
 const REMOTE_BUILD_HERMETICITY_MODE: &str = "practical";
 const REMOTE_TEST_INTERRUPT_AFTER_INPUT_CHUNKS_ENV: &str = "MANTLE_TEST_REMOTE_INTERRUPT_AFTER_INPUT_CHUNKS";
-const W3C_TRACEPARENT_ENV: &str = "TRACEPARENT";
-const W3C_TRACESTATE_ENV: &str = "TRACESTATE";
 const REMOTE_TEST_INTERRUPT_AFTER_OUTPUT_CHUNKS_ENV: &str = "MANTLE_TEST_REMOTE_INTERRUPT_AFTER_OUTPUT_CHUNKS";
 const REMOTE_TRANSFER_INTERRUPTION_REASON_FRAGMENT: &str = "transfer-interrupted-after-checkpoint";
 const REMOTE_FAILURE_REPLAY_LEASE_SECS: u64 = 3_600;
@@ -3231,7 +3230,7 @@ fn has_conflicting_machine_output_modes(args: &Args) -> bool {
 }
 
 fn init_tracing(args: &Args) {
-    let is_log_requested = args.verbose || args.log_level.is_some() || std::env::var_os("RUST_LOG").is_some();
+    let is_log_requested = args.verbose || args.log_level.is_some() || ambient_env::is_rust_log_requested();
     if args.json && !is_log_requested {
         return;
     }
@@ -5270,8 +5269,9 @@ fn remote_build_selection(
         .as_ref()
         .map_or(remote_build::DEFAULT_REMOTE_CONCURRENCY, |profile| profile.max_concurrency);
     let resource_inventory = selected_profile.and_then(|profile| profile.resource_inventory);
-    let traceparent = std::env::var(W3C_TRACEPARENT_ENV).ok();
-    let tracestate = std::env::var(W3C_TRACESTATE_ENV).ok();
+    let headers = ambient_env::read_ambient_trace_headers();
+    let traceparent = headers.traceparent.clone();
+    let tracestate = headers.tracestate.clone();
     let (trace_context, trace_health) = remote_trace_context::accept_remote_trace_context(
         farm_config.trace_context.enabled,
         traceparent.as_deref(),
