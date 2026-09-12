@@ -7771,60 +7771,35 @@ fn prepare_rust_plan_local_cache(
     Ok(Some(selection))
 }
 
+/// Map the CLI shared-cache mode onto the application contract mode.
+fn shared_cache_mode(mode: RustSharedCacheMode) -> mantle_application_contract::SharedCacheMode {
+    match mode {
+        RustSharedCacheMode::Off => mantle_application_contract::SharedCacheMode::Off,
+        RustSharedCacheMode::Read => mantle_application_contract::SharedCacheMode::Read,
+        RustSharedCacheMode::ReadWrite => mantle_application_contract::SharedCacheMode::ReadWrite,
+    }
+}
+
+/// Validate the shared Rust cache input through the application policy.
 fn validate_rust_shared_cache_cli_input(
     input: &RustSharedCacheCliInput<'_>,
     local_mode: RustLocalCacheMode,
     execution_mode: RustPlanExecutionMode,
 ) -> Result<(), RunError> {
-    let enabled = !matches!(input.mode, RustSharedCacheMode::Off);
-    let execution_enabled = !matches!(execution_mode, RustPlanExecutionMode::PrintOnly);
-    if enabled && !execution_enabled {
-        return Err(RunError::Internal("--shared-rust-cache requires a Rust unit execution mode".to_string()));
-    }
-    if enabled && matches!(local_mode, RustLocalCacheMode::Off) {
-        return Err(RunError::Internal(
-            "--shared-rust-cache requires --local-rust-cache read or read-write".to_string(),
-        ));
-    }
-    if !enabled {
-        let has_shared_arguments = !input.sources.is_empty()
-            || input.publish_target.is_some()
-            || !input.trusted_keys.is_empty()
-            || !input.producer_policies.is_empty()
-            || input.signing_key.is_some()
-            || input.offline;
-        if has_shared_arguments {
-            return Err(RunError::Internal(
-                "shared Rust cache arguments require --shared-rust-cache read or read-write".to_string(),
-            ));
-        }
-        return Ok(());
-    }
-    if input.sources.is_empty() || input.trusted_keys.is_empty() || input.producer_policies.is_empty() {
-        return Err(RunError::Internal(
-            "shared Rust cache reads require a source, trusted key, and producer policy".to_string(),
-        ));
-    }
-    if matches!(input.mode, RustSharedCacheMode::ReadWrite) && !matches!(local_mode, RustLocalCacheMode::ReadWrite) {
-        return Err(RunError::Internal(
-            "shared Rust cache publication requires --local-rust-cache read-write".to_string(),
-        ));
-    }
-    if matches!(input.mode, RustSharedCacheMode::ReadWrite)
-        && (input.publish_target.is_none() || input.signing_key.is_none())
-    {
-        return Err(RunError::Internal("shared Rust cache publication requires a target and signing key".to_string()));
-    }
-    if matches!(input.mode, RustSharedCacheMode::Read)
-        && (input.publish_target.is_some() || input.signing_key.is_some())
-    {
-        return Err(RunError::Internal(
-            "shared Rust publication arguments require --shared-rust-cache read-write".to_string(),
-        ));
-    }
-    assert!(execution_enabled);
-    assert!(!matches!(local_mode, RustLocalCacheMode::Off));
-    Ok(())
+    let request = mantle_application_contract::RustSharedCacheRequest {
+        mode: shared_cache_mode(input.mode),
+        is_execution_enabled: !matches!(execution_mode, RustPlanExecutionMode::PrintOnly),
+        is_local_cache_enabled: !matches!(local_mode, RustLocalCacheMode::Off),
+        is_local_cache_read_write: matches!(local_mode, RustLocalCacheMode::ReadWrite),
+        has_sources: !input.sources.is_empty(),
+        has_trusted_keys: !input.trusted_keys.is_empty(),
+        has_producer_policies: !input.producer_policies.is_empty(),
+        has_publish_target: input.publish_target.is_some(),
+        has_signing_key: input.signing_key.is_some(),
+        is_offline: input.offline,
+    };
+    mantle_application_contract::validate_rust_shared_cache_input(&request)
+        .map_err(|blocker| RunError::Internal(blocker.as_message().to_string()))
 }
 
 fn prepare_rust_plan_shared_cache(
@@ -8595,29 +8570,26 @@ struct CargoFreeLegacyOptions<'a> {
     offline_source_state_dir: Option<&'a Path>,
 }
 
+/// Validate the cargo-free self-build option set through the application policy.
 fn validate_cargo_free_legacy_self_build_args(options: CargoFreeLegacyOptions<'_>) -> Result<(), RunError> {
-    let has_legacy_option = options.jobs.is_some()
-        || options.no_substitute
-        || options.no_verify
-        || options.signing_key.is_some()
-        || !options.trusted_public_keys.is_empty()
-        || options.trust_unsigned
-        || options.impure
-        || options.no_host_tools
-        || options.stage0_inventory.is_some()
-        || options.source_store_path.is_some()
-        || options.bootstrap_bwrap_path.is_some()
-        || options.bootstrap_busybox_path.is_some()
-        || options.offline_source_manifest_blake3.is_some()
-        || options.offline_source_state_dir.is_some();
-    if has_legacy_option {
-        return Err(RunError::Build(
-            "--cargo-free self-build cannot be combined with legacy stage0/store self-build options".to_string(),
-        ));
-    }
-    debug_assert!(options.jobs.is_none());
-    debug_assert!(!options.no_substitute);
-    Ok(())
+    let facts = mantle_application_contract::CargoFreeLegacyFacts {
+        has_jobs: options.jobs.is_some(),
+        is_no_substitute: options.no_substitute,
+        is_no_verify: options.no_verify,
+        has_signing_key: options.signing_key.is_some(),
+        has_trusted_public_keys: !options.trusted_public_keys.is_empty(),
+        is_trust_unsigned: options.trust_unsigned,
+        is_impure: options.impure,
+        is_no_host_tools: options.no_host_tools,
+        has_stage0_inventory: options.stage0_inventory.is_some(),
+        has_source_store_path: options.source_store_path.is_some(),
+        has_bootstrap_bwrap_path: options.bootstrap_bwrap_path.is_some(),
+        has_bootstrap_busybox_path: options.bootstrap_busybox_path.is_some(),
+        has_offline_source_manifest: options.offline_source_manifest_blake3.is_some(),
+        has_offline_source_state_dir: options.offline_source_state_dir.is_some(),
+    };
+    mantle_application_contract::validate_cargo_free_legacy_input(&facts)
+        .map_err(|blocker| RunError::Build(blocker.as_message().to_string()))
 }
 
 /// Validate the StageX stage-zero inventory pairing through the application policy.
