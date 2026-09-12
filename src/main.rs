@@ -3297,11 +3297,24 @@ fn run_for_platform(args: Args, platform: mantle_portable_client_core::PlatformF
 }
 
 fn mark_test_local_route_entry() -> Result<(), RunError> {
-    #[cfg(debug_assertions)]
-    if let Some(path) = std::env::var_os("MANTLE_TEST_LOCAL_ROUTE_SENTINEL") {
-        std::fs::write(path, b"local-route-entered\n")
-            .map_err(|error| RunError::Internal(format!("writing local-route test sentinel: {error}")))?;
+    let sentinel_path = std::env::var_os("MANTLE_TEST_LOCAL_ROUTE_SENTINEL");
+    let decision =
+        mantle_application_contract::test_sentinel_decision(&mantle_application_contract::TestSentinelFacts {
+            is_debug_build: cfg!(debug_assertions),
+            has_sentinel_path: sentinel_path.is_some(),
+        });
+    if !decision.is_active {
+        debug_assert!(!cfg!(debug_assertions) || sentinel_path.is_none());
+        return Ok(());
     }
+    let Some(path) = sentinel_path else {
+        let missing_path = RunError::Internal("local-route test sentinel path disappeared".to_string());
+        return Err(missing_path);
+    };
+    let mut marker = decision.marker_text.into_bytes();
+    marker.push(b'\n');
+    std::fs::write(path, marker)
+        .map_err(|error| RunError::Internal(format!("writing local-route test sentinel: {error}")))?;
     Ok(())
 }
 
@@ -3326,18 +3339,35 @@ fn enforce_portable_command_admission(
         .map_err(|blocker| RunError::Internal(format!("{}: {}", blocker.code, blocker.detail)))
 }
 
+/// Derive portable-admission facts from the parsed command through the policy.
 fn command_admission_facts(command: &Command) -> mantle_portable_client_core::AdmissionFacts {
-    let remote_route_selected = match command {
-        Command::Build { builder, plan, .. } => builder.is_some() || *plan,
-        _ => false,
+    let request = match command {
+        Command::Build { builder, plan, .. } => mantle_application_contract::RemoteAdmissionRequest {
+            is_build_command: true,
+            has_builder_selection: builder.is_some(),
+            is_plan_requested: *plan,
+            is_remote_command: false,
+            is_serve_action: false,
+        },
+        Command::Remote { action } => mantle_application_contract::RemoteAdmissionRequest {
+            is_build_command: false,
+            has_builder_selection: false,
+            is_plan_requested: false,
+            is_remote_command: true,
+            is_serve_action: matches!(action, RemoteAction::Serve { .. }),
+        },
+        _ => mantle_application_contract::RemoteAdmissionRequest {
+            is_build_command: false,
+            has_builder_selection: false,
+            is_plan_requested: false,
+            is_remote_command: false,
+            is_serve_action: false,
+        },
     };
-    let remote_operation_is_client = match command {
-        Command::Remote { action } => !matches!(action, RemoteAction::Serve { .. }),
-        _ => false,
-    };
+    let facts = mantle_application_contract::remote_admission_facts(&request);
     mantle_portable_client_core::AdmissionFacts {
-        remote_route_selected,
-        remote_operation_is_client,
+        remote_route_selected: facts.is_remote_route_selected,
+        remote_operation_is_client: facts.is_remote_operation_client,
     }
 }
 

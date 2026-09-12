@@ -14,6 +14,7 @@ extern crate alloc;
 #[cfg(test)]
 extern crate std;
 
+mod admission_facts;
 mod bootstrap_flow;
 mod component_flow;
 mod diagnostics;
@@ -31,6 +32,13 @@ mod source_provenance;
 mod store_administration;
 mod store_prefix;
 
+pub use admission_facts::RemoteAdmissionFacts;
+pub use admission_facts::RemoteAdmissionRequest;
+pub use admission_facts::TEST_SENTINEL_MARKER_TEXT;
+pub use admission_facts::TestSentinelDecision;
+pub use admission_facts::TestSentinelFacts;
+pub use admission_facts::remote_admission_facts;
+pub use admission_facts::test_sentinel_decision;
 pub use bootstrap_flow::BootstrapBlocker;
 pub use bootstrap_flow::BootstrapCommand;
 pub use bootstrap_flow::BootstrapOperation;
