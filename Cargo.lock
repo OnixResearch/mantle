@@ -4858,6 +4858,7 @@ dependencies = [
  "fs2",
  "futures",
  "libc",
+ "mantle-application-contract",
  "mantle-portable-client-core",
  "mantlepkgs-core",
  "nickel-export-core",

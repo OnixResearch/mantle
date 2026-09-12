@@ -8631,12 +8631,23 @@ fn validate_stage0_inventory_args(no_host_tools: bool, stage0_inventory: Option<
     Ok(())
 }
 
+/// Resolve the logical store prefix through the application policy.
 fn resolve_store_prefix(args: &Args) -> String {
-    if args.nix_compat {
-        "/nix/store".to_string()
-    } else {
-        args.store_prefix.clone()
+    let request = mantle_application_contract::StorePrefixRequest {
+        is_nix_compat: args.nix_compat,
+        declared_prefix: args.store_prefix.clone(),
+        default_prefix: String::from(mantle_application_contract::DEFAULT_STORE_PREFIX),
+    };
+    let decision = mantle_application_contract::resolve_store_prefix_policy(&request);
+    if let Some(issue) = decision.issue {
+        tracing::debug!(
+            ?issue,
+            resolved_prefix = %decision.resolved_prefix,
+            "store prefix carries a structural issue"
+        );
     }
+    debug_assert!(!decision.resolved_prefix.is_empty());
+    decision.resolved_prefix
 }
 
 fn current_dir_or_error() -> Result<PathBuf, RunError> {

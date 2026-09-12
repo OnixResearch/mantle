@@ -180,6 +180,7 @@ path = "examples/projects/shared-action-result-roundtrip/publish.rs"
 
 [dependencies]
 crunch-nar = { path = "crates/crunch-nar" }
+mantle-application-contract = { path = "crates/mantle-application-contract" }
 crunch-pipeline = { path = "crates/crunch-pipeline" }
 crunch-eval = { path = "crates/crunch-eval" }
 crunch-eval-budget-core = { path = "crates/crunch-eval-budget-core" }
