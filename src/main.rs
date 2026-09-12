@@ -17,6 +17,7 @@ mod build_correctness;
 mod build_failure;
 mod build_log;
 mod build_plan;
+mod child_exec;
 mod source_root_manifest;
 // Build-report variants intentionally carry complete stable JSON payloads rather than indirect
 // boxed fragments.
@@ -277,7 +278,6 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 const EXPECTED_RUN_OUTCOME_COUNT: usize = 1;
-const CHILD_NO_EXIT_CODE_STATUS: i32 = 1;
 const DEFAULT_SUBSTITUTER_COUNT: u32 = 1;
 const EMPTY_TRUSTED_PUBLIC_KEY_COUNT: usize = 0;
 const REMOTE_CLIENT_BUILD_REPORT_SCHEMA: &str = "mantle-remote-client-build-v1";
@@ -8859,20 +8859,13 @@ fn select_run_binary(out_path: &Path, bin: Option<&str>) -> Result<PathBuf, RunE
         .ok_or_else(|| RunError::Internal(format!("no executables in {}", bin_dir.display())))
 }
 
-fn child_exit_code(status: std::process::ExitStatus) -> i32 {
-    status.code().unwrap_or(CHILD_NO_EXIT_CODE_STATUS)
-}
-
 fn exec_run(out_path: &Path, bin: Option<&str>, args: &[String]) -> Result<(), RunError> {
     let exe_path = select_run_binary(out_path, bin)?;
     eprintln!("running: {}", exe_path.display());
 
-    let status = std::process::Command::new(&exe_path)
-        .args(args)
-        .status()
-        .map_err(|e| RunError::Internal(format!("exec {}: {e}", exe_path.display())))?;
+    let status = child_exec::run_child(&exe_path, args)?;
 
-    std::process::exit(child_exit_code(status));
+    std::process::exit(child_exec::child_exit_code(status));
 }
 
 fn explicit_run_file_target(target: &str) -> bool {
