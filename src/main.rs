@@ -4287,7 +4287,7 @@ fn run_refactor_command(ctx: &RunContext, action: RefactorAction) -> Result<(), 
         } => {
             let root = root.unwrap_or(current_dir_or_error()?);
             let plan = plan_refactor_session(&session, &root, &store_prefixes)?;
-            print_refactor_plan(ctx, &plan)?;
+            presentation::refactor::print_refactor_plan(&plan, ctx.output_format())?;
             Ok(())
         }
         RefactorAction::Check {
@@ -4297,7 +4297,7 @@ fn run_refactor_command(ctx: &RunContext, action: RefactorAction) -> Result<(), 
         } => {
             let root = root.unwrap_or(current_dir_or_error()?);
             let plan = plan_refactor_session(&session, &root, &store_prefixes)?;
-            print_refactor_plan(ctx, &plan)?;
+            presentation::refactor::print_refactor_plan(&plan, ctx.output_format())?;
             if plan.has_conflicts() {
                 return Err(RunError::Reported(1));
             }
@@ -4321,7 +4321,7 @@ fn run_refactor_command(ctx: &RunContext, action: RefactorAction) -> Result<(), 
                 structured_refactor::CRUNCH_TO_MANTLE_SESSION_ID => {
                     let plan = structured_refactor::apply_crunch_to_mantle(&root, &store_prefixes)
                         .map_err(|err| RunError::Internal(err.to_string()))?;
-                    print_refactor_plan(ctx, &plan)
+                    presentation::refactor::print_refactor_plan(&plan, ctx.output_format())
                 }
                 _ => Err(RunError::Internal(structured_refactor::RefactorError::UnknownSession(session).to_string())),
             }
@@ -4342,33 +4342,6 @@ fn plan_refactor_session(
             structured_refactor::RefactorError::UnknownSession(session.to_string()).to_string(),
         )),
     }
-}
-
-fn print_refactor_plan(ctx: &RunContext, plan: &structured_refactor::RefactorPlan) -> Result<(), RunError> {
-    debug_assert!(!plan.session_id.is_empty());
-    debug_assert!(!plan.root.is_empty());
-    if ctx.json {
-        let rendered = serde_json::to_string_pretty(plan).map_err(|err| RunError::Internal(err.to_string()))?;
-        println!("{rendered}");
-        return Ok(());
-    }
-    println!("refactor session: {}", plan.session_id);
-    println!("root: {}", plan.root);
-    println!("dry-run: {}", plan.dry_run);
-    if plan.operations.is_empty() {
-        println!("operations: none");
-    } else {
-        println!("operations:");
-        for operation in &plan.operations {
-            let suffix = if operation.apply_supported { "" } else { " (plan-only)" };
-            println!("  {}: {} -> {}{}", operation.kind, operation.from, operation.to, suffix);
-        }
-    }
-    for diagnostic in &plan.diagnostics {
-        println!("diagnostic {}: {}", diagnostic.code, diagnostic.message);
-        println!("  remediation: {}", diagnostic.remediation);
-    }
-    Ok(())
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -4511,25 +4484,8 @@ fn run_doctor_command(ctx: &RunContext, profile: DoctorProfile) -> Result<(), Ru
         store_dir: &ctx.store,
         state_dir: &ctx.resolved_state_dir,
     });
-    emit_doctor_report(ctx, &doctor_result)?;
+    presentation::diagnostics::emit_doctor_report(&doctor_result, ctx.output_format())?;
     doctor_report_result(doctor_result.ok)
-}
-
-fn emit_doctor_report(ctx: &RunContext, doctor_report: &operator_diagnostics::PreflightReport) -> Result<(), RunError> {
-    if ctx.json {
-        let rendered = doctor_report
-            .render_json()
-            .map_err(|error| RunError::Internal(format!("serializing doctor report: {error}")))?;
-        println!("{rendered}");
-    } else {
-        let rendered = doctor_report.render_human();
-        if doctor_report.ok {
-            println!("{rendered}");
-        } else {
-            eprintln!("{rendered}");
-        }
-    }
-    Ok(())
 }
 
 fn doctor_report_result(is_ok: bool) -> Result<(), RunError> {
