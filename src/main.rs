@@ -290,7 +290,6 @@ const REMOTE_FAILURE_REPLAY_LEASE_SECS: u64 = 3_600;
 const REMOTE_FAILURE_REPLAY_RANDOM_BYTES: usize = 16;
 const REMOTE_FAILURE_DEBUG_BUNDLE_REF_PREFIX: &str = "remote-failure-debug:";
 const REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS: usize = 64;
-const REMOTE_FAILURE_DEBUG_STATUS_CODE_BYTES_MAX: usize = 128;
 const SOURCE_BUILT_FIXED_POINT_ELAPSED_SECONDS_MAX_DEFAULT: u64 = 86_400;
 const SOURCE_BUILT_FIXED_POINT_DISK_BYTES_MAX_DEFAULT: u64 = 1_099_511_627_776;
 const SOURCE_BUILT_FIXED_POINT_PROTECTED_EXEC_EVENTS_MAX_DEFAULT: u32 = 262_144;
@@ -5983,10 +5982,9 @@ fn remote_failure_debug_report_field(query: RemoteFailureFieldQuery<'_>) -> Opti
         .find_map(|field| field.strip_prefix(query.prefix).map(str::to_string))
 }
 
+/// Whether one remote failure status code is an admissible bounded token.
 fn valid_remote_failure_status_code(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= REMOTE_FAILURE_DEBUG_STATUS_CODE_BYTES_MAX
-        && value.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    mantle_application_contract::is_remote_failure_status_code_admissible(value)
 }
 
 fn remote_protocol_failure_fact(reason: &str) -> remote_build::RemoteProductionTelemetryFact {
@@ -7704,16 +7702,19 @@ fn select_rust_plan_execution_mode(selection: RustPlanExecutionSelection) -> Rus
     }
 }
 
+/// Validate the local Rust cache and execution-mode pairing through the application policy.
 fn validate_rust_local_cache_mode(
     mode: RustLocalCacheMode,
     execution_mode: RustPlanExecutionMode,
 ) -> Result<(), RunError> {
-    let cache_enabled = !matches!(mode, RustLocalCacheMode::Off);
-    let execution_enabled = !matches!(execution_mode, RustPlanExecutionMode::PrintOnly);
-    if cache_enabled && !execution_enabled {
-        return Err(RunError::Internal("--local-rust-cache requires a Rust unit execution mode".to_string()));
-    }
-    Ok(())
+    let is_cache_enabled = !matches!(mode, RustLocalCacheMode::Off);
+    let is_execution_enabled = !matches!(execution_mode, RustPlanExecutionMode::PrintOnly);
+    let request = mantle_application_contract::RustLocalCacheRequest {
+        is_cache_enabled,
+        is_execution_enabled,
+    };
+    mantle_application_contract::validate_rust_local_cache_input(&request)
+        .map_err(|blocker| RunError::Internal(blocker.as_message().to_string()))
 }
 
 const SHARED_RUST_HTTP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
@@ -8619,16 +8620,14 @@ fn validate_cargo_free_legacy_self_build_args(options: CargoFreeLegacyOptions<'_
     Ok(())
 }
 
+/// Validate the StageX stage-zero inventory pairing through the application policy.
 fn validate_stage0_inventory_args(no_host_tools: bool, stage0_inventory: Option<&Path>) -> Result<(), RunError> {
-    if stage0_inventory.is_some() && !no_host_tools {
-        return Err(RunError::Build("--stage0-inventory requires --no-host-tools".to_string()));
-    }
-    if no_host_tools && stage0_inventory.is_none() {
-        return Err(RunError::Build(
-            "--no-host-tools requires --stage0-inventory <path> before any host bwrap lookup".to_string(),
-        ));
-    }
-    Ok(())
+    let request = mantle_application_contract::StageInventoryRequest {
+        is_no_host_tools: no_host_tools,
+        has_inventory_path: stage0_inventory.is_some(),
+    };
+    mantle_application_contract::validate_stage_inventory_input(&request)
+        .map_err(|blocker| RunError::Build(blocker.as_message().to_string()))
 }
 
 /// Resolve the logical store prefix through the application policy.
@@ -8839,20 +8838,9 @@ fn selected_run_output_path(request: SelectedRunOutputRequest<'_>) -> Result<Pat
     Ok(host_path)
 }
 
+/// Whether one executable name is admissible for a run request.
 fn valid_run_bin_name(name: &str) -> bool {
-    if name.is_empty() {
-        return false;
-    }
-    if name == "." || name == ".." {
-        return false;
-    }
-    if name.starts_with('/') {
-        return false;
-    }
-    if name.contains('/') || name.contains('\\') {
-        return false;
-    }
-    true
+    mantle_application_contract::is_run_bin_name_admissible(name)
 }
 
 #[cfg(unix)]
