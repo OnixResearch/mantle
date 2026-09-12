@@ -149,6 +149,7 @@ mod remote_service_secrets;
 #[allow(dead_code, clippy::large_enum_variant)]
 mod remote_build;
 mod remote_failure_debug;
+mod remote_failure_replay_identity;
 mod remote_farm_config;
 mod remote_telemetry_export;
 mod remote_trace_context;
@@ -288,7 +289,6 @@ const W3C_TRACESTATE_ENV: &str = "TRACESTATE";
 const REMOTE_TEST_INTERRUPT_AFTER_OUTPUT_CHUNKS_ENV: &str = "MANTLE_TEST_REMOTE_INTERRUPT_AFTER_OUTPUT_CHUNKS";
 const REMOTE_TRANSFER_INTERRUPTION_REASON_FRAGMENT: &str = "transfer-interrupted-after-checkpoint";
 const REMOTE_FAILURE_REPLAY_LEASE_SECS: u64 = 3_600;
-const REMOTE_FAILURE_REPLAY_RANDOM_BYTES: usize = 16;
 const REMOTE_FAILURE_DEBUG_BUNDLE_REF_PREFIX: &str = "remote-failure-debug:";
 const REMOTE_FAILURE_DEBUG_DIGEST_HEX_CHARS: usize = 64;
 const SOURCE_BUILT_FIXED_POINT_ELAPSED_SECONDS_MAX_DEFAULT: u64 = 86_400;
@@ -5568,7 +5568,7 @@ fn cmd_remote_failure_debug_replay(
         remote_failure_debug::load_remote_failure_replay_request(&bundle_dir).map_err(RunError::Internal)?;
     request.failure_replay = Some(remote_build::RemoteFailureReplayBinding {
         source_bundle_blake3: bundle.bundle_blake3.clone(),
-        execution_blake3: new_remote_failure_replay_execution_identity(&bundle.bundle_blake3)?,
+        execution_blake3: remote_failure_replay_identity::new_identity(&bundle.bundle_blake3)?,
     });
     let parsed_ticket =
         remote_build::read_remote_ticket_credential_from_owned_fd(input.ticket_fd).map_err(RunError::Internal)?;
@@ -5621,23 +5621,6 @@ fn emit_remote_failure_replay_result(result: &serde_json::Value, json: bool) -> 
         println!("output-count: {}", result["admitted_output_count"].as_u64().unwrap_or(0));
     }
     Ok(())
-}
-
-fn new_remote_failure_replay_execution_identity(
-    source_bundle: &crunch_build::distributed::RemoteFailureDebugDigest,
-) -> Result<crunch_build::distributed::RemoteFailureDebugDigest, RunError> {
-    use rand::RngCore as _;
-
-    let mut random = [0_u8; REMOTE_FAILURE_REPLAY_RANDOM_BYTES];
-    rand::rngs::OsRng
-        .try_fill_bytes(&mut random)
-        .map_err(|error| RunError::Internal(format!("remote failure replay randomness: {error}")))?;
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(b"mantle-remote-failure-replay-execution-v1\0");
-    hasher.update(source_bundle.as_str().as_bytes());
-    hasher.update(&random);
-    crunch_build::distributed::RemoteFailureDebugDigest::new(hasher.finalize().to_hex().to_string())
-        .map_err(|reason| RunError::Internal(reason.as_str().to_string()))
 }
 
 struct RemoteFailureReplayExecutionInput<'a> {
