@@ -69,8 +69,31 @@ const PRIVATE_FILE_MODE: u32 = 0o600;
 const REMOTE_TICKET_INPUT_FD: i32 = 9;
 const REMOTE_TICKET_INPUT_FILENAME: &str = "remote-ticket.secret";
 
+/// Serializes the transfer tests that spawn the binary with ticket descriptors.
+///
+/// These tests race on descriptor and pipe setup when libtest runs them in
+/// parallel, which surfaces as rotating failures in different tests of this
+/// file. Holding one process-wide lock keeps each test's descriptors private.
+fn serial_transfer_guard() -> std::sync::MutexGuard<'static, ()> {
+    static GUARD: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    let mutex = GUARD.get_or_init(|| std::sync::Mutex::new(()));
+    let guard = match mutex.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    debug_assert!(std::ptr::eq(mutex as *const _, GUARD.get().expect("guard initialized") as *const _));
+    debug_assert!(guard_is_held(&guard));
+    guard
+}
+
+/// Whether the caller holds the serialization guard for the transfer tests.
+const fn guard_is_held(_guard: &std::sync::MutexGuard<'static, ()>) -> bool {
+    true
+}
+
 #[test]
 fn production_stdio_resumes_missing_chunks_and_imports_output() {
+    let _guard = serial_transfer_guard();
     if !cfg!(debug_assertions) {
         eprintln!("SKIP: the deterministic transfer-interruption seam is disabled in release binaries");
         return;
@@ -181,6 +204,7 @@ fn production_stdio_resumes_missing_chunks_and_imports_output() {
 
 #[test]
 fn production_stdio_resumes_interrupted_multi_chunk_input_upload() {
+    let _guard = serial_transfer_guard();
     if !cfg!(debug_assertions) {
         eprintln!("SKIP: the deterministic transfer-interruption seam is disabled in release binaries");
         return;
@@ -226,6 +250,7 @@ fn production_stdio_resumes_interrupted_multi_chunk_input_upload() {
 
 #[test]
 fn production_stdio_rejects_ticket_upload_quota_before_checkpoint_or_admission() {
+    let _guard = serial_transfer_guard();
     let root = tempfile::tempdir().expect("production quota tempdir");
     let state_dir = root.path().join("state");
     let store_dir = root.path().join("store");
@@ -250,6 +275,7 @@ fn production_stdio_rejects_ticket_upload_quota_before_checkpoint_or_admission()
 
 #[test]
 fn production_stdio_delta_unavailable_falls_back_to_bounded_full_nar_and_admits() {
+    let _guard = serial_transfer_guard();
     let root = tempfile::tempdir().expect("production delta fallback tempdir");
     let fixture = setup_production_fixture(root.path(), OUTPUT_BYTES, MAX_UPLOAD_BYTES);
     let completed = remote_build_command(&fixture.state_dir, &fixture.store_dir, &fixture.build_file)
@@ -271,6 +297,7 @@ fn production_stdio_delta_unavailable_falls_back_to_bounded_full_nar_and_admits(
 
 #[test]
 fn production_stdio_streams_and_admits_8_mib_output() {
+    let _guard = serial_transfer_guard();
     let root = tempfile::tempdir().expect("production 8 MiB tempdir");
     let fixture = setup_production_fixture(root.path(), PRODUCTION_SCALE_OUTPUT_BYTES, MAX_UPLOAD_BYTES);
     let completed = remote_build_command(&fixture.state_dir, &fixture.store_dir, &fixture.build_file)
@@ -291,6 +318,7 @@ fn production_stdio_streams_and_admits_8_mib_output() {
 
 #[test]
 fn gallery_resumable_remote_transfer_resumes_verified_chunks_and_admits_once() {
+    let _guard = serial_transfer_guard();
     if !cfg!(debug_assertions) {
         eprintln!("SKIP: the deterministic transfer-interruption seam is disabled in release binaries");
         return;
@@ -349,6 +377,7 @@ fn gallery_resumable_remote_transfer_resumes_verified_chunks_and_admits_once() {
 
 #[test]
 fn gallery_resumable_remote_transfer_rejects_tampered_acknowledged_content() {
+    let _guard = serial_transfer_guard();
     if !cfg!(debug_assertions) {
         eprintln!("SKIP: the deterministic transfer-interruption seam is disabled in release binaries");
         return;
@@ -386,6 +415,7 @@ fn gallery_resumable_remote_transfer_rejects_tampered_acknowledged_content() {
 
 #[test]
 fn failed_remote_sandbox_captures_allowlisted_artifact_before_cleanup_without_changing_failure_truth() {
+    let _guard = serial_transfer_guard();
     // The capture worker runs a real bubblewrap sandbox build; a Nix build
     // sandbox forbids the nested namespace setup, so skip there.
     if std::env::var_os("NIX_BUILD_TOP").is_some() {
@@ -478,6 +508,7 @@ fn failed_remote_sandbox_captures_allowlisted_artifact_before_cleanup_without_ch
 
 #[test]
 fn oversized_remote_sandbox_artifact_is_rejected_without_rewriting_execution_failure() {
+    let _guard = serial_transfer_guard();
     let root = tempfile::Builder::new()
         .prefix("failure-debug-oversized")
         .tempdir()
@@ -518,6 +549,7 @@ fn oversized_remote_sandbox_artifact_is_rejected_without_rewriting_execution_fai
 
 #[test]
 fn failed_output_admission_replays_under_new_fence_without_rewriting_original_bundle() {
+    let _guard = serial_transfer_guard();
     let root = tempfile::Builder::new()
         .prefix("failure-debug-replay")
         .tempdir()
@@ -587,6 +619,7 @@ fn failed_output_admission_replays_under_new_fence_without_rewriting_original_bu
 
 #[test]
 fn production_stdio_exports_prometheus_and_propagates_bounded_trace_context() {
+    let _guard = serial_transfer_guard();
     let root = tempfile::Builder::new()
         .prefix("observability-positive")
         .tempdir()
@@ -620,6 +653,7 @@ fn production_stdio_exports_prometheus_and_propagates_bounded_trace_context() {
 
 #[test]
 fn production_stdio_drops_malformed_trace_and_survives_otlp_outage() {
+    let _guard = serial_transfer_guard();
     let root = tempfile::Builder::new()
         .prefix("observability-outage")
         .tempdir()
