@@ -103,3 +103,15 @@ for token in 'std::fs::' 'std::env::var' 'SystemTime::now' 'std::process::Comman
 This inventory classifies structure and reachable capability tokens. It does
 not prove behavior, correctness, or that every policy site is listed; it is
 the review basis for the I2–I7 refactor tasks.
+
+## Status update (2026-09-11, after I2 and the first I3 slices)
+
+The findings above are the inventory snapshot taken when I1 ran. Current state:
+
+| Finding | State |
+| --- | --- |
+| F1 admission policy | closed: `remote_admission_facts` owns the derivation; the root maps `Command` variants into a typed request |
+| F2 test and environment switches | sentinel closed: `test_sentinel_decision` owns the rule (debug build plus path, never a release build); logging decision and the value-sourcing read stay in the composition root and adapters |
+| F3 operations and presentation share a module | open: needs I4 |
+| F4 validators encode domain policy | closed: six decisions moved to `mantle-application-contract` (`store_prefix`, `root_validators`, plus the cache and legacy rules); `validate_portable_remote_inputs` already delegated to the portable client core; `validate_source_root_manifest_file` is host I/O around existing source-root policy, so it belongs to F5 |
+| F5 host capability in the root | open: filesystem, environment, clock, process, thread, and randomness sites remain |
