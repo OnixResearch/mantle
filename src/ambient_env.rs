@@ -13,6 +13,9 @@ pub(crate) const W3C_TRACEPARENT_ENV: &str = "TRACEPARENT";
 /// Variable that carries a W3C trace state header.
 pub(crate) const W3C_TRACESTATE_ENV: &str = "TRACESTATE";
 
+/// Variable that points at the local-route test sentinel path.
+pub(crate) const TEST_LOCAL_ROUTE_SENTINEL_ENV: &str = "MANTLE_TEST_LOCAL_ROUTE_SENTINEL";
+
 /// Ambient trace headers observed from the environment.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct AmbientTraceHeaders {
@@ -49,6 +52,13 @@ pub(crate) fn trace_headers_from(traceparent: Option<String>, tracestate: Option
 /// Read the ambient trace headers from the environment.
 pub(crate) fn read_ambient_trace_headers() -> AmbientTraceHeaders {
     trace_headers_from(std::env::var(W3C_TRACEPARENT_ENV).ok(), std::env::var(W3C_TRACESTATE_ENV).ok())
+}
+
+/// Read the local-route test sentinel path when the environment carries one.
+pub(crate) fn read_test_sentinel_path() -> Option<std::ffi::OsString> {
+    let path = std::env::var_os(TEST_LOCAL_ROUTE_SENTINEL_ENV);
+    debug_assert!(path.is_none() || path.as_deref().is_some());
+    path
 }
 
 /// Whether an observed `RUST_LOG` value requests tracing.
@@ -97,6 +107,7 @@ mod tests {
         assert!(is_trace_log_requested(Some(observed.as_os_str())));
         assert!(!is_trace_log_requested(None));
         assert_eq!(RUST_LOG_ENV, "RUST_LOG");
+        assert_eq!(TEST_LOCAL_ROUTE_SENTINEL_ENV, "MANTLE_TEST_LOCAL_ROUTE_SENTINEL");
         assert_eq!(W3C_TRACEPARENT_ENV, "TRACEPARENT");
         assert_eq!(W3C_TRACESTATE_ENV, "TRACESTATE");
     }

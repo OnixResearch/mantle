@@ -3297,7 +3297,7 @@ fn run_for_platform(args: Args, platform: mantle_portable_client_core::PlatformF
 }
 
 fn mark_test_local_route_entry() -> Result<(), RunError> {
-    let sentinel_path = std::env::var_os("MANTLE_TEST_LOCAL_ROUTE_SENTINEL");
+    let sentinel_path = ambient_env::read_test_sentinel_path();
     let decision =
         mantle_application_contract::test_sentinel_decision(&mantle_application_contract::TestSentinelFacts {
             is_debug_build: cfg!(debug_assertions),
