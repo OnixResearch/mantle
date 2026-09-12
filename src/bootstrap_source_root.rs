@@ -539,6 +539,11 @@ pub(crate) fn validate_stagex_lineage_manifest(
 }
 
 #[cfg(test)]
+pub(crate) fn sample_source_root_manifest_for_tests() -> SourceRootManifest {
+    tests::sample_manifest()
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -560,7 +565,7 @@ mod tests {
         }
     }
 
-    fn sample_manifest() -> SourceRootManifest {
+    pub(crate) fn sample_manifest() -> SourceRootManifest {
         SourceRootManifest {
             version: Some(SOURCE_ROOT_MANIFEST_VERSION),
             artifacts: vec![sample_artifact()],

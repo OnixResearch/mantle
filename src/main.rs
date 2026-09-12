@@ -17,6 +17,7 @@ mod build_correctness;
 mod build_failure;
 mod build_log;
 mod build_plan;
+mod source_root_manifest;
 // Build-report variants intentionally carry complete stable JSON payloads rather than indirect
 // boxed fragments.
 #[allow(clippy::large_enum_variant)]
@@ -6918,38 +6919,6 @@ fn source_fetch_override_plan_for_expr_if_requested(
     source_bundle::source_fetch_override_plan_for_file(tmp.path(), import_paths, state_dir, store_prefix).map(Some)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct SourceRootManifestCheck {
-    manifest: bootstrap_source_root::SourceRootManifest,
-    manifest_bytes: Vec<u8>,
-    manifest_digest: String,
-    expected_output_role_count: u32,
-}
-
-fn validate_source_root_manifest_file(manifest_path: &Path) -> Result<SourceRootManifestCheck, RunError> {
-    debug_assert!(!manifest_path.as_os_str().is_empty());
-    let manifest_bytes = fs::read(manifest_path).map_err(|err| {
-        RunError::Internal(format!("reading source-root manifest {}: {err}", manifest_path.display()))
-    })?;
-    if manifest_bytes.is_empty() {
-        return Err(RunError::Internal(format!("source-root manifest {} is empty", manifest_path.display())));
-    }
-    let manifest =
-        bootstrap_source_root::parse_source_root_manifest_bytes(&manifest_bytes).map_err(RunError::Internal)?;
-    let validation = bootstrap_source_root::validate_source_root_manifest(&manifest)
-        .map_err(|errors| RunError::Internal(bootstrap_source_root::format_diagnostics(&errors)))?;
-    let expected_output_role_count = u32::try_from(validation.expected_output_roles.len()).map_err(|_| {
-        RunError::Internal("source-root manifest expected output role count overflowed u32".to_string())
-    })?;
-    let manifest_digest = bootstrap_source_root::source_root_manifest_digest(&manifest_bytes);
-    Ok(SourceRootManifestCheck {
-        manifest,
-        manifest_bytes,
-        manifest_digest,
-        expected_output_role_count,
-    })
-}
-
 fn bootstrap_source_root_provider(
     output: &Path,
     manifest_path: &Path,
@@ -6964,7 +6933,7 @@ fn bootstrap_source_root_provider(
             store_dir.display()
         )));
     }
-    let checked = validate_source_root_manifest_file(manifest_path)?;
+    let checked = crate::source_root_manifest::read_source_root_manifest(manifest_path)?;
     let scratch = tempfile::Builder::new()
         .prefix("mantle-source-root-")
         .tempdir_in(store_dir)
