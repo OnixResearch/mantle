@@ -112,6 +112,7 @@ mod portable_receipt;
 // Preserves carrier types intentionally encode the full external evidence graph and optional
 // compatibility surfaces.
 mod content_bound_requirement_evidence;
+mod presentation;
 #[allow(dead_code, clippy::type_complexity)]
 mod preserves_release_carrier;
 mod project_build;
@@ -4454,15 +4455,15 @@ fn execute_semantic_graph_query(
         SemanticGraphQueryKind::Graph => graph
             .graph_for_root(input.target)
             .map_err(|err| report_semantic_graph_query_error_value(ctx, err))
-            .and_then(|result| render_graph_result(ctx.output_format(), &result)),
+            .and_then(|result| presentation::semantic_graph::render_graph_result(ctx.output_format(), &result)),
         SemanticGraphQueryKind::Why => graph
             .why(input.target)
             .map_err(|err| report_semantic_graph_query_error_value(ctx, err))
-            .and_then(|result| render_why_result(ctx.output_format(), &result)),
+            .and_then(|result| presentation::semantic_graph::render_why_result(ctx.output_format(), &result)),
         SemanticGraphQueryKind::Dependents => graph
             .dependents(input.target)
             .map_err(|err| report_semantic_graph_query_error_value(ctx, err))
-            .and_then(|result| render_dependents_result(ctx.output_format(), &result)),
+            .and_then(|result| presentation::semantic_graph::render_dependents_result(ctx.output_format(), &result)),
     }
 }
 
@@ -4492,80 +4493,6 @@ fn report_semantic_graph_query_error(
         return Err(RunError::Reported(1));
     }
     Err(RunError::Internal(err.to_string()))
-}
-
-fn render_graph_result(
-    format: mantle_application_contract::OutputFormat,
-    result: &semantic_graph::GraphQueryResult<'_>,
-) -> Result<String, RunError> {
-    debug_assert!(result.nodes.iter().all(|node| !node.id.is_empty()));
-    debug_assert!(result.edges.iter().all(|edge| !edge.from.is_empty()));
-    let is_json = format.is_machine_readable();
-    if is_json {
-        return serde_json::to_string_pretty(result).map_err(|err| RunError::Internal(err.to_string()));
-    }
-    let mut out = format!("semantic graph root: {}\n", result.root);
-    out.push_str("nodes:\n");
-    for node in &result.nodes {
-        out.push_str(&format!("  {} [{}]\n", node.id, node.kind));
-    }
-    out.push_str("edges:\n");
-    for edge in &result.edges {
-        out.push_str(&format!("  {} --{}--> {}\n", edge.from, edge.kind, edge.to));
-    }
-    if !result.aliases.is_empty() {
-        out.push_str("aliases:\n");
-        for alias in &result.aliases {
-            out.push_str(&format!("  {} -> {}\n", alias.alias, alias.target));
-        }
-    }
-    Ok(out)
-}
-
-fn render_why_result(
-    format: mantle_application_contract::OutputFormat,
-    result: &semantic_graph::WhyResult<'_>,
-) -> Result<String, RunError> {
-    let is_json = format.is_machine_readable();
-    if is_json {
-        return serde_json::to_string_pretty(result).map_err(|err| RunError::Internal(err.to_string()));
-    }
-    let mut out = format!("why {}\nnode: {} [{}]\n", result.target, result.node.id, result.node.kind);
-    if let Some(recipe) = result.producing_recipe {
-        out.push_str(&format!("produced by: {}\n", recipe.id));
-    }
-    append_node_list(&mut out, "sources", &result.sources);
-    append_node_list(&mut out, "providers", &result.providers);
-    append_node_list(&mut out, "sandboxes", &result.sandboxes);
-    append_node_list(&mut out, "proof receipts", &result.proof_receipts);
-    append_node_list(&mut out, "witness requests", &result.witness_requests);
-    append_node_list(&mut out, "release evidence", &result.release_evidence);
-    Ok(out)
-}
-
-fn render_dependents_result(
-    format: mantle_application_contract::OutputFormat,
-    result: &semantic_graph::DependentsResult<'_>,
-) -> Result<String, RunError> {
-    let is_json = format.is_machine_readable();
-    if is_json {
-        return serde_json::to_string_pretty(result).map_err(|err| RunError::Internal(err.to_string()));
-    }
-    let mut out = format!("dependents of {}:\n", result.target);
-    for dependent in &result.dependents {
-        out.push_str(&format!("  {} [{}]\n", dependent.id, dependent.kind));
-    }
-    Ok(out)
-}
-
-fn append_node_list(out: &mut String, label: &str, nodes: &[&semantic_graph::SemanticNode]) {
-    if nodes.is_empty() {
-        return;
-    }
-    out.push_str(&format!("{label}:\n"));
-    for node in nodes {
-        out.push_str(&format!("  {} [{}]\n", node.id, node.kind));
-    }
 }
 
 fn run_transcript_command(action: TranscriptAction) -> Result<(), RunError> {
