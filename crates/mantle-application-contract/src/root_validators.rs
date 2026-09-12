@@ -110,8 +110,10 @@ pub fn validate_stage_inventory_input(request: &StageInventoryRequest) -> Result
     if is_no_host_tools && !has_inventory_path {
         return Err(StageInventoryBlocker::MissingInventoryPath);
     }
-    debug_assert!(!has_inventory_path || is_no_host_tools || true);
-    debug_assert!(!is_no_host_tools || has_inventory_path || true);
+    // Reaching the ok path means the flag and the path were supplied together.
+    let is_pairing_violated = (has_inventory_path && !is_no_host_tools) || (is_no_host_tools && !has_inventory_path);
+    debug_assert!(!is_pairing_violated);
+    debug_assert_eq!(is_no_host_tools, has_inventory_path);
     Ok(())
 }
 
@@ -122,8 +124,10 @@ pub fn validate_rust_local_cache_input(request: &RustLocalCacheRequest) -> Resul
     if is_cache_enabled && !is_execution_enabled {
         return Err(RustLocalCacheBlocker::MissingExecutionMode);
     }
-    debug_assert!(is_execution_enabled || !is_cache_enabled || true);
-    debug_assert!(is_cache_enabled || !is_execution_enabled || true);
+    // Reaching the ok path means an enabled cache is paired with an execution mode.
+    let is_pairing_violated = is_cache_enabled && !is_execution_enabled;
+    debug_assert!(!is_pairing_violated);
+    debug_assert!(is_execution_enabled || !is_cache_enabled);
     Ok(())
 }
 
