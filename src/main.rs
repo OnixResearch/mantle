@@ -147,6 +147,7 @@ mod remote_credential_state;
 mod remote_credentials;
 mod remote_nominal;
 mod remote_service_secrets;
+mod run_binary_selection;
 // Remote build messages retain complete protocol payloads; boxing would change established internal
 // handoff shapes.
 #[allow(dead_code, clippy::large_enum_variant)]
@@ -298,8 +299,6 @@ const SOURCE_BUILT_FIXED_POINT_PROTECTED_EXEC_EVENTS_MAX_DEFAULT: u32 = 262_144;
 const SOURCE_BUILT_FIXED_POINT_SOURCE_RECORDS_MAX_DEFAULT: u32 = 65_536;
 const SOURCE_BUILT_FIXED_POINT_JOBS_DEFAULT: u32 = 4;
 #[cfg(unix)]
-const UNIX_EXECUTE_BITS: u32 = 0o111;
-
 use build_cmd::BuildOutputMode;
 use build_cmd::build_import_paths;
 use build_cmd::state_dir;
@@ -8556,75 +8555,8 @@ fn selected_run_output_path(request: SelectedRunOutputRequest<'_>) -> Result<Pat
     Ok(host_path)
 }
 
-/// Whether one executable name is admissible for a run request.
-fn valid_run_bin_name(name: &str) -> bool {
-    mantle_application_contract::is_run_bin_name_admissible(name)
-}
-
-#[cfg(unix)]
-fn metadata_has_execute_bit(metadata: &std::fs::Metadata) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    metadata.permissions().mode() & UNIX_EXECUTE_BITS != 0
-}
-
-#[cfg(not(unix))]
-fn metadata_has_execute_bit(_metadata: &std::fs::Metadata) -> bool {
-    true
-}
-
-fn executable_file_or_symlink(path: &Path) -> bool {
-    let Ok(symlink_metadata) = std::fs::symlink_metadata(path) else {
-        return false;
-    };
-    if symlink_metadata.is_dir() {
-        return false;
-    }
-    if !symlink_metadata.is_file() && !symlink_metadata.file_type().is_symlink() {
-        return false;
-    }
-    let Ok(target_metadata) = std::fs::metadata(path) else {
-        return false;
-    };
-    if !target_metadata.is_file() {
-        return false;
-    }
-    metadata_has_execute_bit(&target_metadata)
-}
-
-fn select_run_binary(out_path: &Path, bin: Option<&str>) -> Result<PathBuf, RunError> {
-    debug_assert!(!out_path.as_os_str().is_empty());
-    let bin_dir = out_path.join("bin");
-    if !bin_dir.is_dir() {
-        return Err(RunError::Internal(format!("no bin/ directory in {}", out_path.display())));
-    }
-
-    if let Some(name) = bin {
-        if !valid_run_bin_name(name) {
-            return Err(RunError::Internal(format!("invalid --bin value '{name}': expected a single bin/ entry name")));
-        }
-        let exe_path = bin_dir.join(name);
-        if !executable_file_or_symlink(&exe_path) {
-            return Err(RunError::Internal(format!("selected binary is not executable: {}", exe_path.display())));
-        }
-        return Ok(exe_path);
-    }
-
-    let mut candidates: Vec<PathBuf> = std::fs::read_dir(&bin_dir)
-        .map_err(|e| RunError::Internal(format!("reading {}: {e}", bin_dir.display())))?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| executable_file_or_symlink(path))
-        .collect();
-    candidates.sort_by_key(|path| path.file_name().map(|name| name.to_os_string()));
-
-    candidates
-        .first()
-        .cloned()
-        .ok_or_else(|| RunError::Internal(format!("no executables in {}", bin_dir.display())))
-}
-
 fn exec_run(out_path: &Path, bin: Option<&str>, args: &[String]) -> Result<(), RunError> {
-    let exe_path = select_run_binary(out_path, bin)?;
+    let exe_path = run_binary_selection::select_run_binary(out_path, bin)?;
     eprintln!("running: {}", exe_path.display());
 
     let status = child_exec::run_child(&exe_path, args)?;
@@ -11201,58 +11133,5 @@ let Plan = {
         assert!(matches!(name_to_build_target(Some("./tool")), project_build::BuildTarget::File(_)));
         assert!(matches!(name_to_build_target(Some("tool")), project_build::BuildTarget::Selector(_)));
         assert!(matches!(name_to_build_target(None), project_build::BuildTarget::ProjectDefault));
-    }
-
-    #[test]
-    fn run_bin_name_rejects_path_like_values() {
-        assert!(valid_run_bin_name("tool"));
-        assert!(!valid_run_bin_name(""));
-        assert!(!valid_run_bin_name("."));
-        assert!(!valid_run_bin_name(".."));
-        assert!(!valid_run_bin_name("/tool"));
-        assert!(!valid_run_bin_name("../tool"));
-        assert!(!valid_run_bin_name("dir/tool"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn run_binary_fallback_skips_invalid_entries() {
-        let temp = tempfile::tempdir().unwrap();
-        let bin = temp.path().join("bin");
-        std::fs::create_dir(&bin).unwrap();
-        write_file_with_mode(&bin.join("aaa"), "no execute", TEST_READ_MODE);
-        std::os::unix::fs::symlink(bin.join("missing"), bin.join("aab")).unwrap();
-        write_file_with_mode(&bin.join("bbb"), "#!/bin/sh\n", TEST_EXEC_MODE);
-
-        let selected = select_run_binary(temp.path(), None).unwrap();
-        assert_eq!(selected.file_name().unwrap(), "bbb");
-        assert!(selected.ends_with("bbb"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn run_binary_explicit_symlink_selects_executable_target() {
-        let temp = tempfile::tempdir().unwrap();
-        let bin = temp.path().join("bin");
-        std::fs::create_dir(&bin).unwrap();
-        write_file_with_mode(&bin.join("real"), "#!/bin/sh\n", TEST_EXEC_MODE);
-        std::os::unix::fs::symlink(bin.join("real"), bin.join("alias")).unwrap();
-
-        let selected = select_run_binary(temp.path(), Some("alias")).unwrap();
-        assert_eq!(selected.file_name().unwrap(), "alias");
-        assert!(selected.ends_with("alias"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn run_binary_explicit_rejects_non_executable_target() {
-        let temp = tempfile::tempdir().unwrap();
-        let bin = temp.path().join("bin");
-        std::fs::create_dir(&bin).unwrap();
-        write_file_with_mode(&bin.join("tool"), "no execute", TEST_READ_MODE);
-
-        let err = select_run_binary(temp.path(), Some("tool")).unwrap_err().to_string();
-        assert!(err.contains("not executable"));
-        assert!(err.contains("tool"));
     }
 }
