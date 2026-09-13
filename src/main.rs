@@ -8751,8 +8751,9 @@ fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), Ru
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
+
+    use super::*;
 
     #[test]
     fn failure_observability_records_bounded_rejections_when_log_shell_is_unavailable() {
