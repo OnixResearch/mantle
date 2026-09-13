@@ -125,6 +125,7 @@ mod proof_clock_seccomp;
 mod protected_exec;
 #[allow(dead_code)]
 mod protected_exec_seccomp;
+mod provider_output_publication;
 #[allow(dead_code)]
 mod realization_routing;
 mod rebuild_authority;
@@ -6753,28 +6754,7 @@ fn bootstrap_source_root_provider(
     }
     let store_name = source_root_provider_store_name(&materialized.output_digest)?;
     let final_output = store_dir.join(store_name);
-    if final_output.exists() {
-        if !final_output.is_dir() {
-            return Err(RunError::Build(format!(
-                "source-root provider output path exists but is not a directory: {}",
-                final_output.display()
-            )));
-        }
-        fs::remove_dir_all(&materialized.output_path).map_err(|err| {
-            RunError::Internal(format!(
-                "removing duplicate source-root output {}: {err}",
-                materialized.output_path.display()
-            ))
-        })?;
-    } else {
-        fs::rename(&materialized.output_path, &final_output).map_err(|err| {
-            RunError::Internal(format!(
-                "moving source-root provider {} to {}: {err}",
-                materialized.output_path.display(),
-                final_output.display()
-            ))
-        })?;
-    }
+    provider_output_publication::publish_provider_output(&materialized.output_path, &final_output)?;
 
     let logical_path = final_output.display().to_string();
     let seed_ncl =
