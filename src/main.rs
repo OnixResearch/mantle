@@ -156,6 +156,7 @@ mod remote_nominal;
 mod remote_service_secrets;
 mod run_binary_selection;
 mod rust_source_provider_scratch;
+mod source_root_provider_flow;
 // Remote build messages retain complete protocol payloads; boxing would change established internal
 // handoff shapes.
 #[allow(dead_code, clippy::large_enum_variant)]
@@ -6808,56 +6809,6 @@ fn source_fetch_override_plan_for_expr_if_requested(
     source_bundle::source_fetch_override_plan_for_file(root.path(), import_paths, state_dir, store_prefix).map(Some)
 }
 
-fn bootstrap_source_root_provider(
-    output: &Path,
-    manifest_path: &Path,
-    store_dir: &Path,
-    verbose: bool,
-) -> Result<(), RunError> {
-    debug_assert!(!output.as_os_str().is_empty());
-    debug_assert!(!manifest_path.as_os_str().is_empty());
-    if !store_dir.exists() {
-        return Err(RunError::Internal(format!(
-            "store directory {} does not exist.\nCreate it with: sudo mkdir -p {0} && sudo chown $USER {0}",
-            store_dir.display()
-        )));
-    }
-    let checked = crate::source_root_manifest::read_source_root_manifest(manifest_path)?;
-    let scratch = tempfile::Builder::new()
-        .prefix("mantle-source-root-")
-        .tempdir_in(store_dir)
-        .map_err(|err| RunError::Internal(format!("creating source-root scratch in {}: {err}", store_dir.display())))?;
-    let provisional_output = scratch.path().join("provider-output");
-    let materialized = source_root_provider::materialize_source_root_provider(
-        &checked.manifest,
-        &checked.manifest_bytes,
-        &provisional_output,
-        scratch.path(),
-        verbose,
-    )
-    .map_err(|err| RunError::Build(format!("source-root provider materialization failed: {err}")))?;
-    if materialized.manifest_digest != checked.manifest_digest {
-        return Err(RunError::Internal(
-            "source-root provider manifest digest drifted during materialization".to_string(),
-        ));
-    }
-    let store_name = source_root_provider_store_name(&materialized.output_digest)?;
-    let final_output = store_dir.join(store_name);
-    provider_output_publication::publish_provider_output(&materialized.output_path, &final_output)?;
-
-    let logical_path = final_output.display().to_string();
-    let seed_ncl =
-        bootstrap::generate_source_root_seed_ncl(&logical_path, &checked.manifest_digest, &materialized.output_digest);
-    generated_file_write::write_generated_text(output, &seed_ncl)?;
-    eprintln!("Materialized source-root provider {}", final_output.display());
-    eprintln!("  manifest_digest: {}", checked.manifest_digest);
-    eprintln!("  output_digest: {}", materialized.output_digest);
-    eprintln!("  expected_output_roles: {}", checked.expected_output_role_count);
-    eprintln!("  dependency_trace_urls: {}", materialized.dependency_trace.urls.len());
-    eprintln!("Wrote {}", output.display());
-    Ok(())
-}
-
 const SOURCE_ROOT_STORE_DIGEST_BYTES: usize = 20;
 #[cfg(test)]
 const NIX_BASE32_STORE_HASH_CHARS: usize = 32;
@@ -7258,7 +7209,12 @@ fn run_bootstrap_command(request: BootstrapCommandRequest<'_>) -> Result<(), Run
             let manifest_path = request
                 .source_root
                 .ok_or_else(|| RunError::Internal("source-root mode requires a manifest path".to_string()))?;
-            bootstrap_source_root_provider(request.output, manifest_path, &request.ctx.store, request.ctx.verbose)
+            source_root_provider_flow::materialize_source_root_provider(
+                request.output,
+                manifest_path,
+                &request.ctx.store,
+                request.ctx.verbose,
+            )
         }
         bootstrap_source_root::BootstrapProviderMode::StagexLineage => {
             let manifest_path = request
@@ -9420,7 +9376,9 @@ mod tests {
         let output = dir.path().join("seed.ncl");
         fs::write(&manifest_path, source_root_manifest_with_patch_json().to_string()).unwrap();
 
-        let err = bootstrap_source_root_provider(&output, &manifest_path, &store, false).unwrap_err().to_string();
+        let err = source_root_provider_flow::materialize_source_root_provider(&output, &manifest_path, &store, false)
+            .unwrap_err()
+            .to_string();
 
         assert!(err.contains("source-root provider materialization failed"));
         assert!(err.contains("patch"));

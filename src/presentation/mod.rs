@@ -9,3 +9,4 @@ pub(crate) mod remote_client;
 pub(crate) mod reports;
 pub(crate) mod runtime_fingerprint;
 pub(crate) mod semantic_graph;
+pub(crate) mod source_root_provider;
