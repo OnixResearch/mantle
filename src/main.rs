@@ -3300,7 +3300,19 @@ fn run_for_platform(args: Args, platform: mantle_portable_client_core::PlatformF
     }
     apply_state_dir_override(&args);
     let ctx = build_run_context(&args);
-    emit_runtime_fingerprint(&args, &ctx)?;
+    let physical_store_dir = ctx.store.display().to_string();
+    let state_dir = ctx.resolved_state_dir.display().to_string();
+    let fingerprint_request = presentation::runtime_fingerprint::RuntimeFingerprintRequest {
+        is_verbose: args.verbose,
+        log_level: args.log_level.as_deref(),
+        format: ctx.output_format(),
+        command_label: command_label(&args.command),
+        logical_store_prefix: &ctx.store_prefix,
+        physical_store_dir: &physical_store_dir,
+        state_dir: &state_dir,
+        modes: runtime_fingerprint_mode_fields(&args),
+    };
+    presentation::runtime_fingerprint::emit_runtime_fingerprint(&fingerprint_request)?;
     dispatch_command(&args, &ctx)
 }
 
@@ -3443,34 +3455,6 @@ fn build_run_context(args: &Args) -> RunContext {
         json: args.json,
         base_state_dirs: args.base_stores.clone(),
     }
-}
-
-fn emit_runtime_fingerprint(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
-    debug_assert_eq!(ctx.json, args.json);
-    debug_assert_eq!(ctx.verbose, args.verbose);
-    let Some(verbosity_source) = operator_diagnostics::runtime_fingerprint_verbosity_source(
-        operator_diagnostics::RuntimeFingerprintTriggerInput {
-            verbose: args.verbose,
-            log_level: args.log_level.as_deref(),
-            diagnostic_mode: false,
-        },
-    ) else {
-        return Ok(());
-    };
-    let fingerprint = operator_diagnostics::build_runtime_fingerprint(operator_diagnostics::RuntimeFingerprintInput {
-        mantle_version: env!("CARGO_PKG_VERSION").to_string(),
-        command: command_label(&args.command).to_string(),
-        logical_store_prefix: ctx.store_prefix.clone(),
-        physical_store_dir: ctx.store.display().to_string(),
-        state_dir: ctx.resolved_state_dir.display().to_string(),
-        json_mode: ctx.json,
-        verbosity_source,
-        modes: runtime_fingerprint_mode_fields(args),
-    });
-    let rendered = operator_diagnostics::render_runtime_fingerprint(&fingerprint)
-        .map_err(|err| RunError::Internal(format!("rendering runtime fingerprint: {err}")))?;
-    eprintln!("{rendered}");
-    Ok(())
 }
 
 fn command_label(command: &Command) -> &'static str {
