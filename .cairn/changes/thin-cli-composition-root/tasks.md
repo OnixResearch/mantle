@@ -42,6 +42,7 @@
 - [ ] [task:I6][after:I5] Make each application operation execute typed effect plans through explicit ports and classify typed observations before terminal reporting. r[application_architecture.effect_observation_boundary]
 
 - [ ] [task:I7][after:I6] Add a maintained deterministic Rust architecture checker for core purity, port ownership, adapter direction, explicit composition, error ownership, presentation separation, root responsibilities, and declared no-std targets. r[application_architecture.dependency_guard]
+  - Progress 2026-09-13 (architecture checker, first rule set): `scripts/check-cli-architecture.rs` guards three boundaries from source text with `--self-test` fixtures. Contract sources must stay free of host capability, async runtime, and `RunError`; presentation sources must not read `RunContext` or ambient environment, process, thread, network, or clock state, while `RunError` stays allowed there because presentation is the mapping boundary I5 names; and the root must not call `std::process::Command`, `std::fs::write`, or `std::fs::read` because adapters own those. Test-module text is excluded by cutting each file at its first `#[cfg(test)] mod tests` marker, an approximation recorded in the script header. Self-test: accepted fixtures pass and fixtures that use `std::fs` in the contract, `std::env` in presentation, or `std::process::Command` in the root each fail. Repository scan: `cli architecture: PASS`.
 
 ## Phase 2: Verification
 
