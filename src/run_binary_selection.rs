@@ -47,7 +47,11 @@ fn is_executable_file_or_symlink(path: &Path) -> bool {
 /// An explicit `bin` name must be a single admissible entry and must resolve to
 /// an executable; without one, the first executable entry in name order wins.
 pub(crate) fn select_run_binary(out_path: &Path, bin: Option<&str>) -> Result<PathBuf, RunError> {
-    debug_assert!(!out_path.as_os_str().is_empty());
+    // An empty output path is a caller defect, so it fails closed rather than
+    // resolving to a relative "bin" directory.
+    if out_path.as_os_str().is_empty() {
+        return Err(RunError::Internal("run output path must not be empty".to_string()));
+    }
     let bin_dir = out_path.join("bin");
     if !bin_dir.is_dir() {
         return Err(RunError::Internal(format!("no bin/ directory in {}", out_path.display())));
@@ -162,10 +166,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "assertion failed")]
-    fn an_empty_output_path_violates_the_selector_precondition() {
-        // An empty output path is a caller defect, so the selector asserts it
-        // rather than reporting it as user input.
-        let _ = select_run_binary(Path::new(""), None);
+    fn an_empty_output_path_is_rejected_without_resolving_a_relative_bin_directory() {
+        let err = select_run_binary(Path::new(""), None).expect_err("empty path is rejected").to_string();
+        assert!(err.contains("must not be empty"));
+        assert!(!err.contains("bin/ directory"));
     }
 }
