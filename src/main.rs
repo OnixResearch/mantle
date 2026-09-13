@@ -20,6 +20,7 @@ mod build_log;
 mod build_plan;
 mod child_exec;
 mod expression_scratch;
+mod generated_file_check;
 mod source_root_manifest;
 // Build-report variants intentionally carry complete stable JSON payloads rather than indirect
 // boxed fragments.
@@ -3618,21 +3619,16 @@ fn check_operator_generated_files(catalog: &operator_contract::CommandCatalog) -
     let expected_reference = operator_contract::render_command_reference(catalog);
     let expected_workflow = operator_contract::render_canonical_workflow(catalog)
         .map_err(|error| RunError::Internal(format!("operator workflow: {error}")))?;
-    check_generated_file("config/operator-command-catalog.json", &expected_catalog)?;
-    check_generated_file("docs/generated/operator-command-reference.md", &expected_reference)?;
-    check_generated_file("docs/generated/canonical-operator-workflow.md", &expected_workflow)?;
+    generated_file_check::check_generated_file(Path::new("config/operator-command-catalog.json"), &expected_catalog)?;
+    generated_file_check::check_generated_file(
+        Path::new("docs/generated/operator-command-reference.md"),
+        &expected_reference,
+    )?;
+    generated_file_check::check_generated_file(
+        Path::new("docs/generated/canonical-operator-workflow.md"),
+        &expected_workflow,
+    )?;
     println!("operator command contract: PASS (commands={})", catalog.entries.len());
-    Ok(())
-}
-
-fn check_generated_file(path: &str, expected: &str) -> Result<(), RunError> {
-    assert!(!path.is_empty(), "generated file path must not be empty");
-    assert!(!expected.is_empty(), "generated file content must not be empty");
-    let actual = fs::read_to_string(path)
-        .map_err(|error| RunError::Internal(format!("reading generated operator file {path}: {error}")))?;
-    if actual != expected {
-        return Err(RunError::Internal(format!("stale generated operator file: {path}")));
-    }
     Ok(())
 }
 
@@ -5291,10 +5287,7 @@ fn run_remote_build_command(request: RemoteBuildCommandRequest<'_>) -> Result<()
     let file = match request.source {
         RemoteBuildSource::File(file) => file,
         RemoteBuildSource::Expr(expr) => {
-            expression_file = tempfile::NamedTempFile::with_suffix(".ncl")
-                .map_err(|err| RunError::Internal(format!("creating temp file: {err}")))?;
-            std::fs::write(expression_file.path(), expr)
-                .map_err(|err| RunError::Internal(format!("writing temp file: {err}")))?;
+            expression_file = expression_scratch::InlineRoot::stage(expr)?;
             expression_file.path()
         }
     };
