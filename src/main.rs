@@ -115,6 +115,7 @@ mod portable_receipt;
 // Preserves carrier types intentionally encode the full external evidence graph and optional
 // compatibility surfaces.
 mod content_bound_requirement_evidence;
+mod host_environment;
 mod presentation;
 #[allow(dead_code, clippy::type_complexity)]
 mod preserves_release_carrier;
@@ -154,6 +155,7 @@ mod remote_credential_state;
 mod remote_credentials;
 mod remote_nominal;
 mod remote_service_secrets;
+mod remote_test_interruption;
 mod run_binary_selection;
 mod rust_plan_execution;
 mod rust_source_provider_scratch;
@@ -298,8 +300,6 @@ const EMPTY_TRUSTED_PUBLIC_KEY_COUNT: usize = 0;
 const REMOTE_CLIENT_BUILD_REPORT_SCHEMA: &str = "mantle-remote-client-build-v1";
 const BUILD_JSON_REPORT_SCHEMA: &str = "crunch-build-report-v1";
 const REMOTE_BUILD_HERMETICITY_MODE: &str = "practical";
-const REMOTE_TEST_INTERRUPT_AFTER_INPUT_CHUNKS_ENV: &str = "MANTLE_TEST_REMOTE_INTERRUPT_AFTER_INPUT_CHUNKS";
-const REMOTE_TEST_INTERRUPT_AFTER_OUTPUT_CHUNKS_ENV: &str = "MANTLE_TEST_REMOTE_INTERRUPT_AFTER_OUTPUT_CHUNKS";
 const REMOTE_TRANSFER_INTERRUPTION_REASON_FRAGMENT: &str = "transfer-interrupted-after-checkpoint";
 const REMOTE_FAILURE_REPLAY_LEASE_SECS: u64 = 3_600;
 const REMOTE_FAILURE_DEBUG_BUNDLE_REF_PREFIX: &str = "remote-failure-debug:";
@@ -3447,7 +3447,7 @@ fn command_root(command: &Command) -> &'static str {
 
 fn apply_state_dir_override(args: &Args) {
     if let Some(state_dir) = &args.state_dir {
-        unsafe { std::env::set_var("CRUNCH_STATE_DIR", state_dir) };
+        host_environment::export_state_dir(state_dir);
     }
 }
 
@@ -5300,8 +5300,7 @@ fn remote_stdio_builder_command(
                 .to_string(),
         ));
     }
-    let program =
-        std::env::current_exe().map_err(|err| RunError::Internal(format!("resolving current executable: {err}")))?;
+    let program = host_environment::current_executable()?;
     let worker_root = local_remote_worker_root(ctx, builder);
     let worker_state_dir = worker_root.join("state");
     let worker_store_dir = worker_root.join("store");
@@ -6356,32 +6355,16 @@ fn configure_remote_dispatch_diagnostics(
         remote_build::set_remote_diagnostic_trace_context(&mut plan.command, selection.trace_context.clone())
             .map_err(RunError::Internal)?;
     }
-    configure_remote_test_interruption(&mut plan.command, REMOTE_TEST_INTERRUPT_AFTER_INPUT_CHUNKS_ENV, true)?;
-    configure_remote_test_interruption(&mut plan.command, REMOTE_TEST_INTERRUPT_AFTER_OUTPUT_CHUNKS_ENV, false)
-}
-
-fn configure_remote_test_interruption(
-    command: &mut remote_build::RemoteStdioCommand,
-    environment_variable: &str,
-    is_input: bool,
-) -> Result<(), RunError> {
-    if !cfg!(debug_assertions) {
-        return Ok(());
-    }
-    let Some(value) = std::env::var_os(environment_variable) else {
-        return Ok(());
-    };
-    let chunk_count = value
-        .to_str()
-        .ok_or_else(|| RunError::Internal("remote test interruption count is not UTF-8".to_string()))?
-        .parse::<u32>()
-        .map_err(|err| RunError::Internal(format!("remote test interruption count is invalid: {err}")))?;
-    if is_input {
-        remote_build::set_remote_production_interrupt_after_input_chunks(command, chunk_count)
-    } else {
-        remote_build::set_remote_production_interrupt_after_output_chunks(command, chunk_count)
-    }
-    .map_err(RunError::Internal)
+    remote_test_interruption::configure_interruption(
+        &mut plan.command,
+        remote_test_interruption::AFTER_INPUT_CHUNKS_ENV,
+        true,
+    )?;
+    remote_test_interruption::configure_interruption(
+        &mut plan.command,
+        remote_test_interruption::AFTER_OUTPUT_CHUNKS_ENV,
+        false,
+    )
 }
 
 async fn execute_remote_dispatch(
