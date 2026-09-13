@@ -176,6 +176,7 @@ mod rustc_dev_guide;
 mod self_build;
 #[allow(dead_code)]
 mod semantic_graph;
+mod shared_rust_signing_key;
 mod shell_cmd;
 #[allow(dead_code)]
 mod source_built_fixed_point;
@@ -7536,11 +7537,7 @@ fn validate_rust_local_cache_mode(
 }
 
 const SHARED_RUST_HTTP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-const SHARED_RUST_SIGNING_KEY_MAX_BYTES: u64 = 4_096;
-const SHARED_RUST_SIGNING_KEY_FORBIDDEN_MODE_BITS: u32 = 0o077;
-const ED25519_SECRET_KEY_BYTES: usize = 32;
 const ED25519_PUBLIC_KEY_BYTES: usize = 32;
-const ED25519_KEYPAIR_BYTES: usize = ED25519_SECRET_KEY_BYTES + ED25519_PUBLIC_KEY_BYTES;
 const SHARED_RUST_PRODUCER_ID: &str = "mantle-rust-plan";
 
 struct RustSharedCacheCliInput<'a> {
@@ -7643,7 +7640,7 @@ fn prepare_rust_plan_shared_cache(
         trusted_keys,
     };
     crunch_rust_cache_core::shared::validate_trust_policy(&trust_policy).map_err(RunError::Internal)?;
-    let signing = input.signing_key.map(load_shared_rust_signing_key).transpose()?;
+    let signing = input.signing_key.map(shared_rust_signing_key::load_shared_rust_signing_key).transpose()?;
     let (signer_name, signing_key) = match signing {
         Some((name, key)) => (name, Some(Arc::new(key))),
         None => ("shared-rust-read-only".to_string(), None),
@@ -7713,75 +7710,6 @@ fn parse_shared_rust_trusted_keys(
     assert!(keys.len() <= values.len());
     assert!(keys.iter().all(|key| !key.signer_name.is_empty()));
     Ok(keys)
-}
-
-fn load_shared_rust_signing_key(path: &Path) -> Result<(String, ed25519_dalek::SigningKey), RunError> {
-    let metadata = std::fs::symlink_metadata(path)
-        .map_err(|error| RunError::Internal(format!("reading shared Rust signing key metadata: {error}")))?;
-    if !metadata.file_type().is_file()
-        || metadata.file_type().is_symlink()
-        || metadata.len() > SHARED_RUST_SIGNING_KEY_MAX_BYTES
-    {
-        return Err(RunError::Internal("shared Rust signing key must be a bounded regular file".to_string()));
-    }
-    let mode = {
-        use std::os::unix::fs::PermissionsExt;
-        metadata.permissions().mode()
-    };
-    if mode & SHARED_RUST_SIGNING_KEY_FORBIDDEN_MODE_BITS != 0 {
-        return Err(RunError::Internal("shared Rust signing key permissions are not private".to_string()));
-    }
-    let mut file = {
-        use std::os::unix::fs::OpenOptionsExt;
-        std::fs::OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NOFOLLOW)
-            .open(path)
-            .map_err(|error| RunError::Internal(format!("opening shared Rust signing key: {error}")))?
-    };
-    let opened_metadata = file
-        .metadata()
-        .map_err(|error| RunError::Internal(format!("checking shared Rust signing key: {error}")))?;
-    let same_file = {
-        use std::os::unix::fs::MetadataExt;
-        metadata.dev() == opened_metadata.dev()
-            && metadata.ino() == opened_metadata.ino()
-            && metadata.len() == opened_metadata.len()
-    };
-    if !same_file {
-        return Err(RunError::Internal("shared Rust signing key changed before reading".to_string()));
-    }
-    let capacity = usize::try_from(opened_metadata.len())
-        .map_err(|_| RunError::Internal("shared Rust signing key is too large".to_string()))?;
-    let mut bytes = zeroize::Zeroizing::new(Vec::with_capacity(capacity));
-    std::io::Read::read_to_end(&mut file, &mut bytes)
-        .map_err(|error| RunError::Internal(format!("reading shared Rust signing key: {error}")))?;
-    if bytes.len() != capacity {
-        return Err(RunError::Internal("shared Rust signing key size changed while reading".to_string()));
-    }
-    let text = std::str::from_utf8(&bytes)
-        .map_err(|_| RunError::Internal("shared Rust signing key is not UTF-8".to_string()))?
-        .trim();
-    let (name, encoded) = text
-        .split_once(':')
-        .ok_or_else(|| RunError::Internal("shared Rust signing key is malformed".to_string()))?;
-    let decoded = zeroize::Zeroizing::new(
-        data_encoding::BASE64
-            .decode(encoded.as_bytes())
-            .map_err(|_| RunError::Internal("shared Rust signing key is malformed".to_string()))?,
-    );
-    if decoded.len() != ED25519_KEYPAIR_BYTES {
-        return Err(RunError::Internal("shared Rust signing key has the wrong size".to_string()));
-    }
-    let mut secret = zeroize::Zeroizing::new([0_u8; ED25519_SECRET_KEY_BYTES]);
-    secret.copy_from_slice(&decoded[..ED25519_SECRET_KEY_BYTES]);
-    let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret);
-    if signing_key.verifying_key().as_bytes() != &decoded[ED25519_SECRET_KEY_BYTES..] {
-        return Err(RunError::Internal("shared Rust signing key public material does not match".to_string()));
-    }
-    assert!(!name.is_empty());
-    assert_eq!(decoded.len(), ED25519_KEYPAIR_BYTES);
-    Ok((name.to_string(), signing_key))
 }
 
 fn shared_rust_trust_policy_id(
@@ -9310,32 +9238,6 @@ mod tests {
         .unwrap_err()
         .to_string();
         assert!(error.contains("trusted key"));
-    }
-
-    #[test]
-    fn shared_rust_signing_key_loader_requires_private_matching_keypair() {
-        use std::os::unix::fs::PermissionsExt;
-
-        const TEST_SECRET_BYTE: u8 = 73;
-        const PRIVATE_KEY_MODE: u32 = 0o600;
-        const PUBLIC_KEY_MODE: u32 = 0o644;
-        let root = tempfile::tempdir().unwrap();
-        let path = root.path().join("shared-signing-key");
-        let signing = ed25519_dalek::SigningKey::from_bytes(&[TEST_SECRET_BYTE; ED25519_SECRET_KEY_BYTES]);
-        let mut combined = zeroize::Zeroizing::new([0_u8; ED25519_KEYPAIR_BYTES]);
-        combined[..ED25519_SECRET_KEY_BYTES].copy_from_slice(signing.as_bytes());
-        combined[ED25519_SECRET_KEY_BYTES..].copy_from_slice(signing.verifying_key().as_bytes());
-        let encoded = data_encoding::BASE64.encode(&*combined);
-        std::fs::write(&path, format!("shared-test:{encoded}\n")).unwrap();
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(PRIVATE_KEY_MODE)).unwrap();
-
-        let (name, loaded) = load_shared_rust_signing_key(&path).unwrap();
-
-        assert_eq!(name, "shared-test");
-        assert_eq!(loaded.verifying_key(), signing.verifying_key());
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(PUBLIC_KEY_MODE)).unwrap();
-        let error = load_shared_rust_signing_key(&path).unwrap_err().to_string();
-        assert!(error.contains("permissions are not private"));
     }
 
     #[test]
