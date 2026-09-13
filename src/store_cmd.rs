@@ -20,6 +20,12 @@ use crate::build_cmd::load_configured_trusted_public_keys;
 use crate::build_cmd::load_or_generate_signing_keypair;
 use crate::errors::RunError;
 
+/// Effect identity of the store verification read.
+const STORE_VERIFY_EFFECT: &str = "verify-paths";
+
+/// Diagnostic code reported when verification finds a mismatch.
+const STORE_VERIFY_MISMATCH_CODE: &str = "store-verify-mismatch";
+
 pub fn cmd_store(
     action: crate::StoreAction,
     output_dir: &Path,
@@ -836,10 +842,39 @@ async fn cmd_store_verify(
     let summary = print_store_verify_results(&hash_results, &signature_by_path, request.is_trust_unsigned)?;
 
     eprintln!("{} checked, {} mismatches", summary.checked, summary.mismatches);
-    if summary.mismatches > 0 {
-        return Err(RunError::Build(format!("{} path(s) failed verification", summary.mismatches)));
+    classify_store_verify(&summary)
+}
+
+/// Classify one finished verification: a mismatch is a failed observation.
+///
+/// The typed classification replaces the ad-hoc count check, so the failure
+/// decision and its diagnostic code come from the contract vocabulary.
+fn classify_store_verify(summary: &VerifySummary) -> Result<(), RunError> {
+    let plan =
+        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::StoreAdministration, &[
+            STORE_VERIFY_EFFECT,
+        ])
+        .ok_or_else(|| RunError::Internal("store verify effect plan exceeds its bound".to_string()))?;
+    let observation = mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId(String::from(STORE_VERIFY_EFFECT)),
+        status: if summary.mismatches == 0 {
+            mantle_application_contract::ObservationStatus::Succeeded
+        } else {
+            mantle_application_contract::ObservationStatus::Failed
+        },
+        diagnostics_code: if summary.mismatches == 0 {
+            None
+        } else {
+            Some(String::from(STORE_VERIFY_MISMATCH_CODE))
+        },
+    };
+    match mantle_application_contract::classify_observations(&plan, &[observation]) {
+        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
+        mantle_application_contract::ApplicationOutcome::Failed { .. } => {
+            Err(RunError::Build(format!("{} path(s) failed verification", summary.mismatches)))
+        }
+        other => Err(RunError::Internal(format!("store verify observations were inconsistent: {other:?}"))),
     }
-    Ok(())
 }
 
 struct VerifySummary {
@@ -1728,4 +1763,31 @@ async fn collect_matching_pathinfos(
         })
         .collect();
     Ok(results)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_clean_verification_classifies_as_completed() {
+        let summary = VerifySummary {
+            checked: 3,
+            mismatches: 0,
+        };
+        assert!(classify_store_verify(&summary).is_ok());
+        assert_eq!(STORE_VERIFY_EFFECT, "verify-paths");
+    }
+
+    #[test]
+    fn a_mismatched_verification_reports_the_existing_message() {
+        let summary = VerifySummary {
+            checked: 3,
+            mismatches: 2,
+        };
+        let error = classify_store_verify(&summary).expect_err("mismatches fail verification");
+        let rendered = format!("{error}");
+        assert!(rendered.contains("2 path(s) failed verification"));
+        assert_eq!(STORE_VERIFY_MISMATCH_CODE, "store-verify-mismatch");
+    }
 }
