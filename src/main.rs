@@ -151,6 +151,7 @@ mod remote_credentials;
 mod remote_nominal;
 mod remote_service_secrets;
 mod run_binary_selection;
+mod rust_source_provider_scratch;
 // Remote build messages retain complete protocol payloads; boxing would change established internal
 // handoff shapes.
 #[allow(dead_code, clippy::large_enum_variant)]
@@ -7003,45 +7004,6 @@ struct RustSourceProviderCommandRequest<'a> {
     smoke_evidence_dir: Option<&'a Path>,
 }
 
-#[derive(Debug)]
-enum RustSourceProviderScratch {
-    Ephemeral(tempfile::TempDir),
-    Persistent(PathBuf),
-}
-
-impl RustSourceProviderScratch {
-    fn path(&self) -> &Path {
-        match self {
-            Self::Ephemeral(scratch) => scratch.path(),
-            Self::Persistent(path) => path,
-        }
-    }
-
-    fn preserve(self) -> PathBuf {
-        match self {
-            Self::Ephemeral(scratch) => preserve_rust_source_provider_scratch(scratch),
-            Self::Persistent(path) => path,
-        }
-    }
-}
-
-fn prepare_rust_source_provider_scratch(requested_path: Option<&Path>) -> Result<RustSourceProviderScratch, RunError> {
-    if let Some(path) = requested_path {
-        fs::create_dir(path).map_err(|error| {
-            RunError::Internal(format!("creating persistent Rust provider scratch {}: {error}", path.display()))
-        })?;
-        let canonical = fs::canonicalize(path).map_err(|error| {
-            RunError::Internal(format!("canonicalizing persistent Rust provider scratch {}: {error}", path.display()))
-        })?;
-        return Ok(RustSourceProviderScratch::Persistent(canonical));
-    }
-    let scratch = tempfile::Builder::new()
-        .prefix("mantle-rust-source-provider-")
-        .tempdir()
-        .map_err(|error| RunError::Internal(format!("creating Rust provider scratch: {error}")))?;
-    Ok(RustSourceProviderScratch::Ephemeral(scratch))
-}
-
 fn cmd_bootstrap_rust_source_provider(request: RustSourceProviderCommandRequest<'_>) -> Result<(), RunError> {
     debug_assert!(!request.recipe.as_os_str().is_empty());
     debug_assert!(!request.output_dir.as_os_str().is_empty());
@@ -7053,14 +7015,14 @@ fn cmd_bootstrap_rust_source_provider(request: RustSourceProviderCommandRequest<
             request.smoke_evidence_dir,
         );
     }
-    let scratch = prepare_rust_source_provider_scratch(request.scratch_dir)?;
+    let scratch = rust_source_provider_scratch::prepare_rust_source_provider_scratch(request.scratch_dir)?;
     match materialize_requested_rust_source_provider(&request, scratch.path()) {
         Ok(materialized) => {
             eprintln!("Materialized Rust source provider {}", materialized.output_path.display());
             eprintln!("  recipe_digest_blake3: {}", materialized.recipe_digest_blake3);
             eprintln!("  metadata_path: {}", materialized.metadata_path.display());
             eprintln!("  metadata_digest_blake3: {}", materialized.metadata_digest_blake3);
-            if matches!(&scratch, RustSourceProviderScratch::Persistent(_)) {
+            if matches!(&scratch, rust_source_provider_scratch::RustSourceProviderScratch::Persistent(_)) {
                 eprintln!("  retained_scratch: {}", scratch.path().display());
             }
             if request.smoke {
@@ -7121,10 +7083,6 @@ fn materialize_requested_rust_source_provider(
         scratch_dir,
         request.verbose,
     )
-}
-
-fn preserve_rust_source_provider_scratch(scratch: tempfile::TempDir) -> PathBuf {
-    scratch.keep()
 }
 
 fn cmd_import_rust_source_provider(
@@ -9527,19 +9485,6 @@ mod tests {
             panic!("expected rust-source-provider bootstrap action");
         };
         assert_eq!(scratch_dir, Some(PathBuf::from("/tmp/mantle-rust-provider-work")));
-    }
-
-    #[test]
-    fn persistent_rust_source_provider_scratch_is_create_new() {
-        let dir = tempfile::tempdir().unwrap();
-        let scratch_path = dir.path().join("retained-work");
-
-        let scratch = prepare_rust_source_provider_scratch(Some(&scratch_path)).unwrap();
-        let duplicate_error = prepare_rust_source_provider_scratch(Some(&scratch_path)).unwrap_err();
-
-        assert!(matches!(&scratch, RustSourceProviderScratch::Persistent(_)));
-        assert_eq!(scratch.path(), fs::canonicalize(&scratch_path).unwrap());
-        assert!(duplicate_error.to_string().contains("creating persistent Rust provider scratch"));
     }
 
     #[test]
