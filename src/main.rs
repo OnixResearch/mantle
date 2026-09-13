@@ -21,6 +21,7 @@ mod build_plan;
 mod child_exec;
 mod expression_scratch;
 mod generated_file_check;
+mod generated_file_write;
 mod source_root_manifest;
 // Build-report variants intentionally carry complete stable JSON payloads rather than indirect
 // boxed fragments.
@@ -162,6 +163,7 @@ mod remote_failure_replay_identity;
 mod remote_farm_config;
 mod remote_telemetry_export;
 mod remote_trace_context;
+mod test_sentinel;
 // Transfer variants preserve complete resumable protocol records, including compatibility-only
 // states.
 #[allow(dead_code, clippy::large_enum_variant)]
@@ -278,7 +280,6 @@ mod witness_handoff;
 mod witness_rebuild;
 
 use std::ffi::OsString;
-use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -3336,10 +3337,7 @@ fn mark_test_local_route_entry() -> Result<(), RunError> {
         let missing_path = RunError::Internal("local-route test sentinel path disappeared".to_string());
         return Err(missing_path);
     };
-    let mut marker = decision.marker_text.into_bytes();
-    marker.push(b'\n');
-    std::fs::write(path, marker)
-        .map_err(|error| RunError::Internal(format!("writing local-route test sentinel: {error}")))?;
+    test_sentinel::publish_local_route_marker(Path::new(&path), &decision.marker_text)?;
     Ok(())
 }
 
@@ -6753,7 +6751,7 @@ fn bootstrap_source_root_provider(
     let logical_path = final_output.display().to_string();
     let seed_ncl =
         bootstrap::generate_source_root_seed_ncl(&logical_path, &checked.manifest_digest, &materialized.output_digest);
-    fs::write(output, seed_ncl).map_err(|err| RunError::Internal(format!("writing {}: {err}", output.display())))?;
+    generated_file_write::write_generated_text(output, &seed_ncl)?;
     eprintln!("Materialized source-root provider {}", final_output.display());
     eprintln!("  manifest_digest: {}", checked.manifest_digest);
     eprintln!("  output_digest: {}", materialized.output_digest);
@@ -8745,7 +8743,7 @@ fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), Ru
 
     let ncl = bootstrap::generate_seed_ncl(&entries);
 
-    std::fs::write(output, &ncl).map_err(|e| RunError::Internal(format!("writing {}: {e}", output.display())))?;
+    generated_file_write::write_generated_text(output, &ncl)?;
 
     eprintln!("Wrote {}", output.display());
     Ok(())
@@ -8754,6 +8752,7 @@ fn cmd_bootstrap(output: &std::path::Path, packages: &[String]) -> Result<(), Ru
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn failure_observability_records_bounded_rejections_when_log_shell_is_unavailable() {

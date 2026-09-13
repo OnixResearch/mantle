@@ -37,15 +37,6 @@ impl InlineRoot {
         debug_assert!(path.to_string_lossy().ends_with(INLINE_ROOT_SUFFIX));
         path
     }
-
-    /// Length of the staged bytes.
-    pub(crate) fn staged_bytes(&self) -> Result<u64, RunError> {
-        let staged = std::fs::metadata(self.path())
-            .map_err(|error| RunError::Internal(format!("staged inline root metadata: {error}")))?;
-        debug_assert!(staged.is_file());
-        debug_assert!(staged.len() > 0 || staged.len() == 0);
-        Ok(staged.len())
-    }
 }
 
 #[cfg(test)]
@@ -60,7 +51,7 @@ mod tests {
         assert!(path.is_absolute());
         assert!(path.to_string_lossy().ends_with(INLINE_ROOT_SUFFIX));
         assert_eq!(std::fs::read_to_string(&path).expect("read staged root"), expression);
-        assert_eq!(root.staged_bytes().expect("metadata"), u64::try_from(expression.len()).unwrap_or(0));
+        assert_eq!(std::fs::metadata(&path).expect("metadata").len(), u64::try_from(expression.len()).unwrap_or(0));
         drop(root);
         assert!(!path.exists(), "dropping the staged root removes its file");
     }
@@ -77,7 +68,7 @@ mod tests {
     #[test]
     fn an_empty_expression_stages_an_empty_root() {
         let root = InlineRoot::stage("").expect("stages");
-        assert_eq!(root.staged_bytes().expect("metadata"), 0);
+        assert_eq!(std::fs::metadata(root.path()).expect("metadata").len(), 0);
         assert_eq!(std::fs::read_to_string(root.path()).expect("read staged root"), "");
     }
 }
