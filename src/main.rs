@@ -19,6 +19,7 @@ mod build_failure;
 mod build_log;
 mod build_plan;
 mod child_exec;
+mod expression_scratch;
 mod source_root_manifest;
 // Build-report variants intentionally carry complete stable JSON payloads rather than indirect
 // boxed fragments.
@@ -6709,12 +6710,10 @@ fn run_offline_source_preflight_for_expr_if_requested(
     if !request.enabled {
         return Ok(None);
     }
-    let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
-        .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
-    std::fs::write(tmp.path(), request.expr).map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
+    let root = expression_scratch::InlineRoot::stage(request.expr)?;
     run_offline_source_preflight_if_requested(OfflineSourcePreflightRequest {
         enabled: true,
-        file: tmp.path(),
+        file: root.path(),
         import_entries: request.import_entries,
         state_dir: request.state_dir,
         store_prefix: request.store_prefix,
@@ -6732,10 +6731,8 @@ fn source_fetch_override_plan_for_expr_if_requested(
     if !enabled {
         return Ok(None);
     }
-    let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
-        .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
-    std::fs::write(tmp.path(), expr).map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
-    source_bundle::source_fetch_override_plan_for_file(tmp.path(), import_paths, state_dir, store_prefix).map(Some)
+    let root = expression_scratch::InlineRoot::stage(expr)?;
+    source_bundle::source_fetch_override_plan_for_file(root.path(), import_paths, state_dir, store_prefix).map(Some)
 }
 
 fn bootstrap_source_root_provider(
@@ -8397,11 +8394,9 @@ fn build_from_expr(request: InlineBuildRequest<'_>) -> Result<(), RunError> {
     mark_test_local_route_entry()?;
     debug_assert!(request.prepared.max_jobs > 0, "max_jobs must be positive");
     debug_assert!(request.prepared.ctx.store_prefix.starts_with('/'), "store prefix must be absolute");
-    let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
-        .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
-    std::fs::write(tmp.path(), request.expr).map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
+    let root = expression_scratch::InlineRoot::stage(request.expr)?;
     build_cmd::cmd_build_with_source_fetch_overrides(
-        tmp.path(),
+        root.path(),
         request.import_entries,
         &request.prepared.ctx.store,
         &request.prepared.ctx.resolved_state_dir,
@@ -8429,11 +8424,9 @@ struct InlineBuildPlanRequest<'a> {
 }
 
 fn build_plan_from_expr(request: InlineBuildPlanRequest<'_>) -> Result<(), RunError> {
-    let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
-        .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
-    std::fs::write(tmp.path(), request.expr).map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
+    let root = expression_scratch::InlineRoot::stage(request.expr)?;
     build_plan::cmd_build_plan(build_plan::BuildPlanConfig {
-        file: tmp.path(),
+        file: root.path(),
         import_paths: request.import_entries,
         output_dir: &request.prepared.ctx.store,
         state_dir: &request.prepared.ctx.resolved_state_dir,
@@ -8469,15 +8462,13 @@ struct RawInlineBuildRequest<'a> {
 fn build_from_expr_raw(request: RawInlineBuildRequest<'_>) -> Result<crunch_pipeline::PipelineResult, RunError> {
     debug_assert!(request.max_jobs > 0, "max_jobs must be positive");
     debug_assert!(request.store_prefix.starts_with('/'), "store prefix must be absolute");
-    let tmp = tempfile::NamedTempFile::with_suffix(".ncl")
-        .map_err(|e| RunError::Internal(format!("creating temp file: {e}")))?;
-    std::fs::write(tmp.path(), request.expr).map_err(|e| RunError::Internal(format!("writing temp file: {e}")))?;
+    let root = expression_scratch::InlineRoot::stage(request.expr)?;
     let keypair = build_cmd::load_or_generate_signing_keypair(request.signing_key_path, request.state_dir, true)?;
     let configured_trusted_keys =
         build_cmd::load_configured_trusted_public_keys(request.trusted_public_keys, request.state_dir)?;
     let trusted_keys = crunch_build::signing::build_trusted_keys(&keypair, configured_trusted_keys.as_deref());
     let config = crunch_pipeline::BuildConfig {
-        file: tmp.path().to_path_buf(),
+        file: root.path().to_path_buf(),
         import_paths: request.import_entries.to_vec(),
         output_dir: request.output_dir.to_path_buf(),
         state_dir: request.state_dir.to_path_buf(),
