@@ -118,12 +118,14 @@ mod content_bound_requirement_evidence;
 mod presentation;
 #[allow(dead_code, clippy::type_complexity)]
 mod preserves_release_carrier;
+#[allow(dead_code)]
+#[cfg(test)]
+mod process_env;
 mod project_build;
 mod project_cmd;
 mod project_resolve;
 mod project_retention_fact;
 mod proof_clock_seccomp;
-#[allow(dead_code)]
 mod protected_exec;
 #[allow(dead_code)]
 mod protected_exec_seccomp;

@@ -4387,7 +4387,7 @@ mod tests {
 
     #[test]
     fn resolve_bwrap_source_falls_back_to_controlled_host_path() {
-        let _lock = PATH_MUTEX.lock().unwrap();
+        let _lock = crate::process_env::lock_process_env();
         let fake_dir = tempfile::tempdir().unwrap();
         let fake_dir_path = make_fake_executable(fake_dir.path(), "bwrap");
         let fake_bwrap_path = fake_dir_path.join("bwrap");
@@ -4407,7 +4407,7 @@ mod tests {
 
     #[test]
     fn resolve_bwrap_source_errors_without_host_bwrap_on_controlled_path() {
-        let _lock = PATH_MUTEX.lock().unwrap();
+        let _lock = crate::process_env::lock_process_env();
         let empty_path = tempfile::tempdir().unwrap();
         let _path_guard = PathGuard::set(empty_path.path());
 
@@ -4428,7 +4428,7 @@ mod tests {
 
     #[test]
     fn resolve_bwrap_source_strict_rejects_host_fallback_once_bootstrap_root_exists() {
-        let _lock = PATH_MUTEX.lock().unwrap();
+        let _lock = crate::process_env::lock_process_env();
         let fake_dir = tempfile::tempdir().unwrap();
         let fake_dir_path = make_fake_executable(fake_dir.path(), "bwrap");
         let fake_bwrap_path = fake_dir_path.join("bwrap");
@@ -4516,8 +4516,7 @@ mod tests {
     // ── Deterministic PATH tests (tempdir-based) ──────────────
     //
     // Tests that call prepend_to_path() mutate the process-global PATH.
-    // They serialize on PATH_MUTEX and save/restore around assertions.
-    static PATH_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    // They serialize on the shared process-environment lock and save/restore around assertions.
 
     /// Create a fake executable in a temp dir. Returns the directory.
     fn make_fake_executable(dir: &Path, name: &str) -> PathBuf {
@@ -4555,7 +4554,7 @@ mod tests {
 
     #[test]
     fn find_executable_on_path_finds_binary_in_tempdir() {
-        let _lock = PATH_MUTEX.lock().unwrap();
+        let _lock = crate::process_env::lock_process_env();
         let orig = std::env::var_os("PATH");
 
         let dir = tempfile::tempdir().unwrap();
@@ -4580,7 +4579,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn find_executable_on_path_skips_non_executable_in_tempdir() {
-        let _lock = PATH_MUTEX.lock().unwrap();
+        let _lock = crate::process_env::lock_process_env();
         let orig = std::env::var_os("PATH");
 
         let dir = tempfile::tempdir().unwrap();
@@ -4605,7 +4604,7 @@ mod tests {
 
     #[test]
     fn prepend_to_path_adds_dir_first() {
-        let _lock = PATH_MUTEX.lock().unwrap();
+        let _lock = crate::process_env::lock_process_env();
         let orig = std::env::var_os("PATH");
         let dir = tempfile::tempdir().unwrap();
         make_fake_executable(dir.path(), "bwrap");
@@ -4629,7 +4628,7 @@ mod tests {
 
     #[test]
     fn prepend_to_path_handles_empty_path() {
-        let _lock = PATH_MUTEX.lock().unwrap();
+        let _lock = crate::process_env::lock_process_env();
         let orig = std::env::var_os("PATH");
         unsafe { std::env::set_var("PATH", "") };
 
@@ -4652,7 +4651,7 @@ mod tests {
 
     #[test]
     fn activate_bwrap_source_prepends_host_parent_dir() {
-        let _lock = PATH_MUTEX.lock().unwrap();
+        let _lock = crate::process_env::lock_process_env();
         let orig = std::env::var_os("PATH");
         unsafe { std::env::set_var("PATH", "") };
 
@@ -5428,7 +5427,7 @@ mod tests {
     /// test does not depend on host search semantics.
     #[test]
     fn verify_tools_on_disk_errors_on_empty_store() {
-        let _lock = PATH_MUTEX.lock().unwrap();
+        let _lock = crate::process_env::lock_process_env();
         let empty_path = tempfile::tempdir().unwrap();
         let _path_guard = PathGuard::set(empty_path.path());
 
@@ -5452,7 +5451,7 @@ mod tests {
     /// Uses a fake bwrap on PATH so the test is deterministic.
     #[test]
     fn verify_tools_on_disk_error_names_bwrap_ncl() {
-        let _lock = PATH_MUTEX.lock().unwrap();
+        let _lock = crate::process_env::lock_process_env();
 
         // Put a fake bwrap on PATH so resolve_bwrap_source returns
         // HostFallback instead of erroring with "not found".

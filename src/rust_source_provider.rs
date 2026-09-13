@@ -9069,6 +9069,7 @@ mod tests {
 
     #[test]
     fn materializer_writes_final_provider_output_from_validated_candidate() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10014,6 +10015,7 @@ mod tests {
 
     #[test]
     fn materializer_writes_musl_host_provider_metadata_from_route_plan() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10107,6 +10109,7 @@ mod tests {
 
     #[test]
     fn first_stage_cargo_all_static_patch_rejects_missing_makefile_line() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10156,6 +10159,7 @@ mod tests {
 
     #[test]
     fn materializer_invalid_explicit_source_root_child() {
+        let _guard = crate::process_env::lock_process_env();
         if std::env::var_os("MANTLE_TEST_INVALID_SOURCE_ROOT_CHILD").is_none() {
             return;
         }
@@ -10197,6 +10201,7 @@ mod tests {
 
     #[test]
     fn materializer_generates_xpy_adapters_when_rust_sources_lack_stage_scripts() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10297,6 +10302,7 @@ mod tests {
 
     #[test]
     fn materializer_rejects_rust_source_without_stage_script_or_xpy_without_output() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10318,6 +10324,7 @@ mod tests {
 
     #[test]
     fn materializer_rejects_existing_output_before_scratch_work() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10335,6 +10342,7 @@ mod tests {
 
     #[test]
     fn first_stage_provider_candidate_rejects_tampered_artifact() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10353,6 +10361,7 @@ mod tests {
 
     #[test]
     fn rustc_stage1_provider_candidate_rejects_tampered_artifact() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10371,6 +10380,7 @@ mod tests {
 
     #[test]
     fn chained_rustc_stage1_provider_candidate_rejects_tampered_artifact() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10392,6 +10402,7 @@ mod tests {
 
     #[test]
     fn final_chained_rustc_stage1_provider_candidate_rejects_tampered_artifact() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10413,6 +10424,7 @@ mod tests {
 
     #[test]
     fn rustc_final_provider_candidate_rejects_tampered_artifact() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10431,6 +10443,7 @@ mod tests {
 
     #[test]
     fn materializer_rejects_missing_route_plan_without_output() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10446,6 +10459,7 @@ mod tests {
 
     #[test]
     fn materializer_rejects_first_stage_source_digest_mismatch_without_output() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10464,6 +10478,7 @@ mod tests {
 
     #[test]
     fn materializer_rejects_rustc_stage1_source_digest_mismatch_without_output() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10485,6 +10500,7 @@ mod tests {
 
     #[test]
     fn materializer_rejects_chained_rustc_stage1_source_digest_mismatch_without_output() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10507,6 +10523,7 @@ mod tests {
 
     #[test]
     fn materializer_rejects_final_chained_rustc_stage1_source_digest_mismatch_without_output() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10531,6 +10548,7 @@ mod tests {
 
     #[test]
     fn materializer_rejects_rustc_final_source_digest_mismatch_without_output() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
@@ -10555,6 +10573,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn first_stage_script_fails_when_sources_removed_after_materialization() {
+        let _guard = crate::process_env::lock_process_env();
         let dir = tempfile::tempdir().unwrap();
         let recipe = dir.path().join("rust-source.ncl");
         let output = dir.path().join("out");
