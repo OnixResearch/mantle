@@ -4397,24 +4397,103 @@ fn report_incomplete_semantic_graph(
     Ok(())
 }
 
+/// Convert one observed entity count into the typed fact width.
+fn graph_query_fact_count(observed: usize) -> Result<u32, RunError> {
+    u32::try_from(observed).map_err(|_| RunError::Internal("semantic graph entity count exceeds u32".to_string()))
+}
+
+/// One observed fact set handed to the contract for classification.
+struct SemanticGraphObservedFacts {
+    kind: mantle_application_contract::GraphQueryKind,
+    facts: mantle_application_contract::GraphQueryFacts,
+}
+
+impl mantle_application_contract::GraphQueryPort for SemanticGraphObservedFacts {
+    fn query(
+        &mut self,
+        request: &mantle_application_contract::GraphQueryRequest,
+    ) -> Result<mantle_application_contract::GraphQueryFacts, mantle_application_contract::CapabilityError> {
+        if request.kind != self.kind {
+            return Err(mantle_application_contract::CapabilityError::new(
+                "graph-query-kind-mismatch",
+                "observed facts do not match the requested query kind",
+            ));
+        }
+        debug_assert!(request.kind == self.kind);
+        debug_assert!(!request.target.is_empty());
+        Ok(self.facts)
+    }
+}
+
+/// Classify one observed query through the contract before anything is reported.
+fn classify_observed_graph_query(
+    kind: mantle_application_contract::GraphQueryKind,
+    facts: mantle_application_contract::GraphQueryFacts,
+) -> Result<(), RunError> {
+    let request = mantle_application_contract::GraphQueryRequest {
+        kind,
+        target: String::from("observed"),
+    };
+    if let Some(blocker) = mantle_application_contract::validate_graph_query(&request).first() {
+        return Err(RunError::Internal(format!("{}: {}", blocker.code, blocker.message)));
+    }
+    let plan = mantle_application_contract::graph_query_effect_plan()
+        .map_err(|error| RunError::Internal(format!("{}: {}", error.code, error.detail)))?;
+    use mantle_application_contract::GraphQueryPort as _;
+    let mut port = SemanticGraphObservedFacts { kind, facts };
+    let observed = port
+        .query(&request)
+        .map_err(|error| RunError::Internal(format!("{}: {}", error.code, error.detail)))?;
+    match mantle_application_contract::classify_graph_query(&plan, &observed) {
+        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
+        other => {
+            Err(RunError::Internal(format!("semantic graph query observations were not all successful: {other:?}")))
+        }
+    }
+}
+
 fn execute_semantic_graph_query(
     ctx: &RunContext,
     graph: &semantic_graph::SemanticGraph,
     input: SemanticGraphCommandInput<'_>,
 ) -> Result<String, RunError> {
     match input.query {
-        SemanticGraphQueryKind::Graph => graph
-            .graph_for_root(input.target)
-            .map_err(|err| report_semantic_graph_query_error_value(ctx, err))
-            .and_then(|result| presentation::semantic_graph::render_graph_result(ctx.output_format(), &result)),
-        SemanticGraphQueryKind::Why => graph
-            .why(input.target)
-            .map_err(|err| report_semantic_graph_query_error_value(ctx, err))
-            .and_then(|result| presentation::semantic_graph::render_why_result(ctx.output_format(), &result)),
-        SemanticGraphQueryKind::Dependents => graph
-            .dependents(input.target)
-            .map_err(|err| report_semantic_graph_query_error_value(ctx, err))
-            .and_then(|result| presentation::semantic_graph::render_dependents_result(ctx.output_format(), &result)),
+        SemanticGraphQueryKind::Graph => {
+            let result = graph
+                .graph_for_root(input.target)
+                .map_err(|err| report_semantic_graph_query_error_value(ctx, err))?;
+            let facts = mantle_application_contract::GraphQueryFacts {
+                nodes: graph_query_fact_count(result.nodes.len())?,
+                edges: graph_query_fact_count(result.edges.len())?,
+                aliases: graph_query_fact_count(result.aliases.len())?,
+                dependents: 0,
+            };
+            classify_observed_graph_query(mantle_application_contract::GraphQueryKind::Graph, facts)?;
+            presentation::semantic_graph::render_graph_result(ctx.output_format(), &result)
+        }
+        SemanticGraphQueryKind::Why => {
+            let result = graph.why(input.target).map_err(|err| report_semantic_graph_query_error_value(ctx, err))?;
+            let facts = mantle_application_contract::GraphQueryFacts {
+                nodes: graph_query_fact_count(result.sources.len())?,
+                edges: graph_query_fact_count(result.providers.len())?,
+                aliases: graph_query_fact_count(result.proof_receipts.len())?,
+                dependents: graph_query_fact_count(result.release_evidence.len())?,
+            };
+            classify_observed_graph_query(mantle_application_contract::GraphQueryKind::Why, facts)?;
+            presentation::semantic_graph::render_why_result(ctx.output_format(), &result)
+        }
+        SemanticGraphQueryKind::Dependents => {
+            let result =
+                graph.dependents(input.target).map_err(|err| report_semantic_graph_query_error_value(ctx, err))?;
+            let facts = mantle_application_contract::GraphQueryFacts {
+                nodes: graph_query_fact_count(result.dependents.len())?,
+                edges: 0,
+                aliases: 0,
+                dependents: graph_query_fact_count(result.dependents.len())?,
+            };
+            classify_observed_graph_query(mantle_application_contract::GraphQueryKind::Dependents, facts)?;
+            presentation::semantic_graph::render_dependents_result(ctx.output_format(), &result)
+        }
     }
 }
 
