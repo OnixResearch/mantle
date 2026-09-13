@@ -119,6 +119,7 @@ mod preserves_release_carrier;
 mod project_build;
 mod project_cmd;
 mod project_resolve;
+mod project_retention_fact;
 mod proof_clock_seccomp;
 #[allow(dead_code)]
 mod protected_exec;
@@ -4959,7 +4960,6 @@ fn run_project_build_target(prepared: &PreparedBuildCommand<'_>) -> Result<(), R
     })
 }
 
-const MAX_PROJECT_RETENTION_FACT_BYTES: u64 = 16_777_216;
 const PROJECT_RETENTION_IDENTITY_DOMAIN: &[u8] = b"mantle.project.retention-identity.v1";
 const CURRENT_PROJECT_LOCK_FILE: &str = "mantle.lock";
 const LEGACY_PROJECT_LOCK_FILE: &str = "crunch.lock";
@@ -4971,7 +4971,7 @@ fn project_output_root_registration(
     let project_dir = project.root_file.parent().ok_or_else(|| {
         RunError::Internal(format!("project root file has no parent: {}", project.root_file.display()))
     })?;
-    let manifest_bytes = read_bounded_project_retention_fact(&project.root_file)?;
+    let manifest_bytes = project_retention_fact::read_bounded_project_retention_fact(&project.root_file)?;
     let current_lock = project_dir.join(CURRENT_PROJECT_LOCK_FILE);
     let legacy_lock = project_dir.join(LEGACY_PROJECT_LOCK_FILE);
     if current_lock.exists() && legacy_lock.exists() {
@@ -4981,9 +4981,9 @@ fn project_output_root_registration(
         )));
     }
     let lock_bytes = if current_lock.exists() {
-        Some(read_bounded_project_retention_fact(&current_lock)?)
+        Some(project_retention_fact::read_bounded_project_retention_fact(&current_lock)?)
     } else if legacy_lock.exists() {
-        Some(read_bounded_project_retention_fact(&legacy_lock)?)
+        Some(project_retention_fact::read_bounded_project_retention_fact(&legacy_lock)?)
     } else {
         None
     };
@@ -4999,23 +4999,6 @@ fn project_output_root_registration(
         lease: None,
         removal_requested: false,
     })
-}
-
-fn read_bounded_project_retention_fact(path: &Path) -> Result<Vec<u8>, RunError> {
-    let metadata = std::fs::metadata(path).map_err(|error| {
-        RunError::Internal(format!("reading project retention metadata {}: {error}", path.display()))
-    })?;
-    if !metadata.is_file() {
-        return Err(RunError::Internal(format!("project retention fact is not a file: {}", path.display())));
-    }
-    if metadata.len() > MAX_PROJECT_RETENTION_FACT_BYTES {
-        return Err(RunError::Internal(format!(
-            "project retention fact exceeds {MAX_PROJECT_RETENTION_FACT_BYTES} bytes: {}",
-            path.display()
-        )));
-    }
-    std::fs::read(path)
-        .map_err(|error| RunError::Internal(format!("reading project retention fact {}: {error}", path.display())))
 }
 
 fn project_retention_identity(manifest_bytes: &[u8]) -> String {
