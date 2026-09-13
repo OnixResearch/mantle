@@ -26,6 +26,21 @@ const PRESENTATION_SOURCES: &str = "src/presentation";
 /// Root sources whose authority must stay bounded.
 const ROOT_SOURCES: &str = "src/main.rs";
 
+/// Every core and application crate's sources.
+const CORE_SOURCES: &str = "crates";
+
+/// Contract crate root that must declare no-std.
+const CONTRACT_LIB: &str = "crates/mantle-application-contract/src/lib.rs";
+
+/// Contract manifest that must stay free of CLI and async-runtime dependencies.
+const CONTRACT_MANIFEST: &str = "crates/mantle-application-contract/Cargo.toml";
+
+/// Tokens that mean the CLI error type leaked into a core or application crate.
+const CORE_FORBIDDEN: &[&str] = &["RunError"];
+
+/// Dependency names the contract crate may not declare.
+const CONTRACT_FORBIDDEN_DEPENDENCIES: &[&str] = &["tokio", "clap", "mantle ="];
+
 /// Tokens that mean the contract reaches a host capability or a CLI error.
 const CONTRACT_FORBIDDEN: &[&str] = &[
     "std::fs",
@@ -93,6 +108,9 @@ fn scan_repository(root: &Path) -> Result<Vec<String>, String> {
     violations.extend(scan_directory(&root.join(CONTRACT_SOURCES), CONTRACT_FORBIDDEN, "contract")?);
     violations.extend(scan_directory(&root.join(PRESENTATION_SOURCES), PRESENTATION_FORBIDDEN, "presentation")?);
     violations.extend(scan_file(&root.join(ROOT_SOURCES), ROOT_FORBIDDEN, "root")?);
+    violations.extend(scan_core_sources(&root.join(CORE_SOURCES))?);
+    violations.extend(scan_no_std_declaration(&root.join(CONTRACT_LIB))?);
+    violations.extend(scan_contract_manifest(&root.join(CONTRACT_MANIFEST))?);
     debug_assert!(violations.is_empty() || violations.iter().all(|entry| entry.contains(':')));
     Ok(violations)
 }
@@ -138,6 +156,85 @@ fn scan_file(path: &Path, forbidden: &[&str], boundary: &str) -> Result<Vec<Stri
     Ok(violations)
 }
 
+/// Scan every core and application source for the CLI error type.
+fn scan_core_sources(directory: &Path) -> Result<Vec<String>, String> {
+    if !directory.is_dir() {
+        return Err(format!("scanned directory is missing: {}", directory.display()));
+    }
+    let mut violations = Vec::new();
+    for entry in fs::read_dir(directory).map_err(|error| format!("reading {}: {error}", directory.display()))? {
+        let path = entry.map_err(|error| format!("reading directory entry: {error}"))?.path();
+        if path.is_dir() {
+            violations.extend(scan_core_sources(&path)?);
+            continue;
+        }
+        if path.extension().and_then(|extension| extension.to_str()) != Some("rs") {
+            continue;
+        }
+        violations.extend(scan_file_skipping_comments(&path, CORE_FORBIDDEN, "core error ownership")?);
+    }
+    debug_assert!(violations.len() <= 10_000);
+    Ok(violations)
+}
+
+/// Scan one file, ignoring comment lines that merely document a boundary.
+fn scan_file_skipping_comments(path: &Path, forbidden: &[&str], boundary: &str) -> Result<Vec<String>, String> {
+    let text = fs::read_to_string(path).map_err(|error| format!("reading {}: {error}", path.display()))?;
+    let production = production_prefix(&text);
+    let mut violations = Vec::new();
+    for (index, line) in production.lines().enumerate() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("//") {
+            continue;
+        }
+        for token in forbidden {
+            if line.contains(token) {
+                violations.push(format!(
+                    "{boundary} boundary: {}:{}: forbidden token `{token}`",
+                    path.display(),
+                    index + 1
+                ));
+            }
+        }
+    }
+    debug_assert!(violations.is_empty() || !text.is_empty());
+    Ok(violations)
+}
+
+/// The contract crate root must declare no-std.
+fn scan_no_std_declaration(path: &Path) -> Result<Vec<String>, String> {
+    let text = fs::read_to_string(path).map_err(|error| format!("reading {}: {error}", path.display()))?;
+    let mut violations = Vec::new();
+    if !text.contains("#![no_std]") {
+        violations.push(format!("contract no-std boundary: {}: must declare `#![no_std]`", path.display()));
+    }
+    debug_assert!(!text.is_empty());
+    debug_assert!(violations.is_empty() || !text.contains("#![no_std]"));
+    Ok(violations)
+}
+
+/// The contract manifest must not pull the CLI or an async runtime.
+fn scan_contract_manifest(path: &Path) -> Result<Vec<String>, String> {
+    let text = fs::read_to_string(path).map_err(|error| format!("reading {}: {error}", path.display()))?;
+    let mut violations = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with('#') {
+            continue;
+        }
+        for dependency in CONTRACT_FORBIDDEN_DEPENDENCIES {
+            if trimmed.starts_with(dependency) {
+                violations.push(format!(
+                    "contract dependency boundary: {}: forbidden dependency `{dependency}`",
+                    path.display()
+                ));
+            }
+        }
+    }
+    debug_assert!(violations.is_empty() || text.contains("[dependencies]"));
+    Ok(violations)
+}
+
 /// Everything before the first test-module marker.
 fn production_prefix(text: &str) -> &str {
     let marker = text.find("#[cfg(test)]\nmod tests {");
@@ -158,29 +255,42 @@ fn self_test() -> Result<(), String> {
     let root_source = root.join(ROOT_SOURCES);
     fs::create_dir_all(&contract).map_err(|error| format!("creating fixture: {error}"))?;
     fs::create_dir_all(&presentation).map_err(|error| format!("creating fixture: {error}"))?;
-    fs::create_dir_all(root_source.parent().expect("root parent")).map_err(|error| format!("creating fixture root: {error}"))?;
+    fs::create_dir_all(root_source.parent().expect("root parent"))
+        .map_err(|error| format!("creating fixture root: {error}"))?;
 
-    fs::write(contract.join("clean.rs"), "pub fn plan() -> u32 { 1 }\n").map_err(|error| format!("fixture: {error}"))?;
-    fs::write(
-        presentation.join("clean.rs"),
-        "pub fn render(value: u32) -> String { value.to_string() }\n",
-    )
-    .map_err(|error| format!("fixture: {error}"))?;
+    fs::write(contract.join("clean.rs"), "pub fn plan() -> u32 { 1 }\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    fs::write(presentation.join("clean.rs"), "pub fn render(value: u32) -> String { value.to_string() }\n")
+        .map_err(|error| format!("fixture: {error}"))?;
     fs::write(root_source.as_path(), "fn main() {}\n").map_err(|error| format!("fixture: {error}"))?;
+    let core = root.join("crates/mantle-rust-plan-core/src");
+    fs::create_dir_all(&core).map_err(|error| format!("creating fixture: {error}"))?;
+    fs::write(core.join("lib.rs"), "pub fn plan() -> u32 { 1 }\n").map_err(|error| format!("fixture: {error}"))?;
+    fs::write(contract.join("lib.rs"), "#![no_std]\npub fn plan() {}\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    fs::write(root.join(CONTRACT_MANIFEST), "[dependencies]\nserde = \"1.0\"\n")
+        .map_err(|error| format!("fixture: {error}"))?;
     let baseline = scan_repository(&root)?;
     if !baseline.is_empty() {
         return Err(format!("accepted fixture must produce no violations, saw {baseline:?}"));
     }
 
-    fs::write(contract.join("dirty.rs"), "use std::fs;\npub fn read() {}\n").map_err(|error| format!("fixture: {error}"))?;
+    fs::write(contract.join("dirty.rs"), "use std::fs;\npub fn read() {}\n")
+        .map_err(|error| format!("fixture: {error}"))?;
     let contract_violations = scan_repository(&root)?;
-    if !contract_violations.iter().any(|entry| entry.contains("contract boundary") && entry.contains("std::fs")) {
+    if !contract_violations
+        .iter()
+        .any(|entry| entry.contains("contract boundary") && entry.contains("std::fs"))
+    {
         return Err(format!("contract fixture must report std::fs, saw {contract_violations:?}"));
     }
     fs::write(contract.join("dirty.rs"), "pub fn read() {}\n").map_err(|error| format!("fixture: {error}"))?;
 
-    fs::write(presentation.join("dirty.rs"), "pub fn render() -> String { std::env::var(\"X\").unwrap_or_default() }\n")
-        .map_err(|error| format!("fixture: {error}"))?;
+    fs::write(
+        presentation.join("dirty.rs"),
+        "pub fn render() -> String { std::env::var(\"X\").unwrap_or_default() }\n",
+    )
+    .map_err(|error| format!("fixture: {error}"))?;
     let presentation_violations = scan_repository(&root)?;
     if !presentation_violations
         .iter()
@@ -210,6 +320,50 @@ fn self_test() -> Result<(), String> {
     let excluded = scan_repository(&root)?;
     if !excluded.is_empty() {
         return Err(format!("test-module text must be excluded, saw {excluded:?}"));
+    }
+
+    // Core error ownership: a core that names the CLI error type is rejected.
+    let core = root.join("crates/mantle-rust-plan-core/src");
+    fs::create_dir_all(&core).map_err(|error| format!("creating fixture: {error}"))?;
+    fs::write(core.join("lib.rs"), "pub fn plan() -> u32 { 1 }\n").map_err(|error| format!("fixture: {error}"))?;
+    fs::write(contract.join("lib.rs"), "#![no_std]\npub fn plan() {}\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    fs::write(root.join(CONTRACT_MANIFEST), "[dependencies]\nserde = \"1.0\"\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    let clean_boundaries = scan_repository(&root)?;
+    if !clean_boundaries.is_empty() {
+        return Err(format!("accepted fixtures must produce no violations, saw {clean_boundaries:?}"));
+    }
+
+    fs::write(core.join("lib.rs"), "pub enum Error { Cli(RunError) }\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    let core_violations = scan_repository(&root)?;
+    if !core_violations
+        .iter()
+        .any(|entry| entry.contains("core error ownership") && entry.contains("RunError"))
+    {
+        return Err(format!("core fixture must report RunError, saw {core_violations:?}"));
+    }
+    fs::write(core.join("lib.rs"), "/// No RunError is reachable here.\npub fn plan() {}\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    let commented = scan_repository(&root)?;
+    if !commented.is_empty() {
+        return Err(format!("comment lines must be ignored, saw {commented:?}"));
+    }
+
+    fs::write(contract.join("lib.rs"), "pub fn plan() {}\n").map_err(|error| format!("fixture: {error}"))?;
+    let no_std_violations = scan_repository(&root)?;
+    if !no_std_violations.iter().any(|entry| entry.contains("contract no-std boundary")) {
+        return Err(format!("contract fixture must report the missing no-std declaration, saw {no_std_violations:?}"));
+    }
+    fs::write(contract.join("lib.rs"), "#![no_std]\npub fn plan() {}\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+
+    fs::write(root.join(CONTRACT_MANIFEST), "[dependencies]\ntokio = \"1\"\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    let dependency_violations = scan_repository(&root)?;
+    if !dependency_violations.iter().any(|entry| entry.contains("contract dependency boundary")) {
+        return Err(format!("contract manifest fixture must report tokio, saw {dependency_violations:?}"));
     }
 
     fs::remove_dir_all(&root).map_err(|error| format!("cleaning {}: {error}", root.display()))?;
