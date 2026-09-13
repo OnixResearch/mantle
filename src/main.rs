@@ -4343,6 +4343,21 @@ struct SemanticGraphCommandInput<'a> {
 }
 
 impl<'a> SemanticGraphCommandInput<'a> {
+    /// Map the parsed CLI DTO into the typed application command.
+    fn command_request(&self) -> mantle_application_contract::GraphQueryRequest {
+        let kind = match self.query {
+            SemanticGraphQueryKind::Graph => mantle_application_contract::GraphQueryKind::Graph,
+            SemanticGraphQueryKind::Why => mantle_application_contract::GraphQueryKind::Why,
+            SemanticGraphQueryKind::Dependents => mantle_application_contract::GraphQueryKind::Dependents,
+        };
+        debug_assert!(!self.target.is_empty());
+        debug_assert!(!kind.as_str().is_empty());
+        mantle_application_contract::GraphQueryRequest {
+            kind,
+            target: self.target.to_string(),
+        }
+    }
+
     fn new(query: SemanticGraphQueryKind, target: &'a str, graph_file: Option<&'a Path>) -> Self {
         Self {
             query,
@@ -4363,7 +4378,8 @@ fn run_semantic_graph_command(ctx: &RunContext, input: SemanticGraphCommandInput
         .map(Path::to_path_buf)
         .unwrap_or_else(|| ctx.resolved_state_dir.join("semantic-graph.json"));
     let graph = load_semantic_graph(ctx, &path)?;
-    let rendered = execute_semantic_graph_query(ctx, &graph, input)?;
+    let request = input.command_request();
+    let rendered = execute_semantic_graph_query(ctx, &graph, &request)?;
     println!("{rendered}");
     Ok(())
 }
@@ -4427,22 +4443,21 @@ impl mantle_application_contract::GraphQueryPort for SemanticGraphObservedFacts 
 
 /// Classify one observed query through the contract before anything is reported.
 fn classify_observed_graph_query(
-    kind: mantle_application_contract::GraphQueryKind,
+    request: &mantle_application_contract::GraphQueryRequest,
     facts: mantle_application_contract::GraphQueryFacts,
 ) -> Result<(), RunError> {
-    let request = mantle_application_contract::GraphQueryRequest {
-        kind,
-        target: String::from("observed"),
-    };
-    if let Some(blocker) = mantle_application_contract::validate_graph_query(&request).first() {
+    if let Some(blocker) = mantle_application_contract::validate_graph_query(request).first() {
         return Err(RunError::Internal(format!("{}: {}", blocker.code, blocker.message)));
     }
     let plan = mantle_application_contract::graph_query_effect_plan()
         .map_err(|error| RunError::Internal(format!("{}: {}", error.code, error.detail)))?;
     use mantle_application_contract::GraphQueryPort as _;
-    let mut port = SemanticGraphObservedFacts { kind, facts };
+    let mut port = SemanticGraphObservedFacts {
+        kind: request.kind,
+        facts,
+    };
     let observed = port
-        .query(&request)
+        .query(request)
         .map_err(|error| RunError::Internal(format!("{}: {}", error.code, error.detail)))?;
     match mantle_application_contract::classify_graph_query(&plan, &observed) {
         mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
@@ -4455,12 +4470,12 @@ fn classify_observed_graph_query(
 fn execute_semantic_graph_query(
     ctx: &RunContext,
     graph: &semantic_graph::SemanticGraph,
-    input: SemanticGraphCommandInput<'_>,
+    request: &mantle_application_contract::GraphQueryRequest,
 ) -> Result<String, RunError> {
-    match input.query {
-        SemanticGraphQueryKind::Graph => {
+    match request.kind {
+        mantle_application_contract::GraphQueryKind::Graph => {
             let result = graph
-                .graph_for_root(input.target)
+                .graph_for_root(&request.target)
                 .map_err(|err| report_semantic_graph_query_error_value(ctx, err))?;
             let facts = mantle_application_contract::GraphQueryFacts {
                 nodes: graph_query_fact_count(result.nodes.len())?,
@@ -4468,30 +4483,30 @@ fn execute_semantic_graph_query(
                 aliases: graph_query_fact_count(result.aliases.len())?,
                 dependents: 0,
             };
-            classify_observed_graph_query(mantle_application_contract::GraphQueryKind::Graph, facts)?;
+            classify_observed_graph_query(request, facts)?;
             presentation::semantic_graph::render_graph_result(ctx.output_format(), &result)
         }
-        SemanticGraphQueryKind::Why => {
-            let result = graph.why(input.target).map_err(|err| report_semantic_graph_query_error_value(ctx, err))?;
+        mantle_application_contract::GraphQueryKind::Why => {
+            let result = graph.why(&request.target).map_err(|err| report_semantic_graph_query_error_value(ctx, err))?;
             let facts = mantle_application_contract::GraphQueryFacts {
                 nodes: graph_query_fact_count(result.sources.len())?,
                 edges: graph_query_fact_count(result.providers.len())?,
                 aliases: graph_query_fact_count(result.proof_receipts.len())?,
                 dependents: graph_query_fact_count(result.release_evidence.len())?,
             };
-            classify_observed_graph_query(mantle_application_contract::GraphQueryKind::Why, facts)?;
+            classify_observed_graph_query(request, facts)?;
             presentation::semantic_graph::render_why_result(ctx.output_format(), &result)
         }
-        SemanticGraphQueryKind::Dependents => {
+        mantle_application_contract::GraphQueryKind::Dependents => {
             let result =
-                graph.dependents(input.target).map_err(|err| report_semantic_graph_query_error_value(ctx, err))?;
+                graph.dependents(&request.target).map_err(|err| report_semantic_graph_query_error_value(ctx, err))?;
             let facts = mantle_application_contract::GraphQueryFacts {
                 nodes: graph_query_fact_count(result.dependents.len())?,
                 edges: 0,
                 aliases: 0,
                 dependents: graph_query_fact_count(result.dependents.len())?,
             };
-            classify_observed_graph_query(mantle_application_contract::GraphQueryKind::Dependents, facts)?;
+            classify_observed_graph_query(request, facts)?;
             presentation::semantic_graph::render_dependents_result(ctx.output_format(), &result)
         }
     }
