@@ -5,5 +5,6 @@
 
 pub(crate) mod diagnostics;
 pub(crate) mod refactor;
+pub(crate) mod remote_client;
 pub(crate) mod reports;
 pub(crate) mod semantic_graph;

@@ -5337,7 +5337,7 @@ fn run_remote_build_command(request: RemoteBuildCommandRequest<'_>) -> Result<()
         &request.ctx.resolved_state_dir,
         &request.ctx.store_prefix,
     )?;
-    print_remote_client_build_report(
+    presentation::remote_client::print_remote_client_build_report(
         &build_outcome,
         file,
         &request.ctx.store,
@@ -6538,37 +6538,7 @@ fn production_trace_health(
     server_health.clone()
 }
 
-fn print_remote_client_build_report(
-    report: &remote_build::RemoteClientBuildReport,
-    file: &Path,
-    output_dir: &Path,
-    state_dir: &Path,
-    output_mode: BuildOutputMode,
-) -> Result<(), RunError> {
-    match output_mode {
-        BuildOutputMode::Json => {
-            let json_document = remote_client_build_json_report(report, file, output_dir, state_dir)?;
-            let rendered = serde_json::to_string_pretty(&json_document)
-                .map_err(|err| RunError::Internal(format!("serializing remote build report: {err}")))?;
-            println!("{rendered}");
-        }
-        BuildOutputMode::Human => {
-            for build in &report.imported {
-                for output in &build.imported.outputs {
-                    println!("{}", output.logical_path);
-                }
-            }
-        }
-        BuildOutputMode::EvaluationStream => {
-            return Err(RunError::Internal(
-                "--evaluation-stream cannot be used with remote build dispatch".to_string(),
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn remote_client_build_json_report(
+pub(crate) fn remote_client_build_json_report(
     report: &remote_build::RemoteClientBuildReport,
     file: &Path,
     output_dir: &Path,
