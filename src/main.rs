@@ -272,6 +272,7 @@ mod stagex_transition;
 mod store_cmd;
 mod structured_refactor;
 mod transcript_cmd;
+mod trusted_keys;
 // Vendor manifests preserve heterogeneous source identities and compatibility-only validation
 // branches.
 #[allow(dead_code, clippy::type_complexity)]
@@ -4886,7 +4887,7 @@ fn prepare_build_command<'a>(
         max_jobs: crunch_pipeline::resolve_max_jobs(input.jobs),
         substituter_urls,
         signing_key: input.signing_key,
-        parsed_trusted: parse_trusted_keys(input.trusted_public_keys)?,
+        parsed_trusted: trusted_keys::parse_trusted_public_keys(input.trusted_public_keys)?,
         trust_unsigned: input.trust_unsigned,
         hermeticity_mode: select_hermeticity_mode(input.hermeticity)?,
         remote_plan_facts,
@@ -7541,7 +7542,6 @@ fn validate_rust_local_cache_mode(
 }
 
 const SHARED_RUST_HTTP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-const ED25519_PUBLIC_KEY_BYTES: usize = 32;
 const SHARED_RUST_PRODUCER_ID: &str = "mantle-rust-plan";
 
 struct RustSharedCacheCliInput<'a> {
@@ -7632,11 +7632,11 @@ fn prepare_rust_plan_shared_cache(
     }
     let sources = input.sources.iter().map(|source| open_rust_result_source(source)).collect::<Result<Vec<_>, _>>()?;
     let publication_source = input.publish_target.map(open_rust_result_source).transpose()?;
-    let trusted_keys = parse_shared_rust_trusted_keys(input.trusted_keys)?;
+    let trusted_keys = trusted_keys::parse_shared_rust_result_keys(input.trusted_keys)?;
     let mut producer_policies = input.producer_policies.to_vec();
     producer_policies.sort();
     producer_policies.dedup();
-    let trust_policy_id = shared_rust_trust_policy_id(&producer_policies, &trusted_keys)?;
+    let trust_policy_id = trusted_keys::shared_rust_trust_policy_id(&producer_policies, &trusted_keys)?;
     let trust_policy = crunch_rust_cache_core::shared::RustResultTrustPolicy {
         schema: crunch_rust_cache_core::shared::SHARED_RUST_TRUST_POLICY_SCHEMA.to_string(),
         policy_id: trust_policy_id,
@@ -7688,45 +7688,6 @@ fn open_rust_result_source(source: &str) -> Result<Arc<dyn crunch_rust_cache::sh
     let directory = crunch_rust_cache::shared::DirectoryRustResultSource::open(PathBuf::from(source), false)
         .map_err(|error| RunError::Internal(format!("opening shared Rust directory source: {error}")))?;
     Ok(Arc::new(directory))
-}
-
-fn parse_shared_rust_trusted_keys(
-    values: &[String],
-) -> Result<Vec<crunch_rust_cache_core::shared::TrustedRustResultKey>, RunError> {
-    let mut keys = Vec::with_capacity(values.len());
-    for value in values {
-        let (name, encoded) = value
-            .split_once(':')
-            .ok_or_else(|| RunError::Internal("shared Rust trusted key is malformed".to_string()))?;
-        let bytes = data_encoding::BASE64
-            .decode(encoded.as_bytes())
-            .map_err(|_| RunError::Internal("shared Rust trusted key is malformed".to_string()))?;
-        if bytes.len() != ED25519_PUBLIC_KEY_BYTES {
-            return Err(RunError::Internal("shared Rust trusted key has the wrong size".to_string()));
-        }
-        keys.push(crunch_rust_cache_core::shared::TrustedRustResultKey {
-            signer_name: name.to_string(),
-            verifier_key_hex: data_encoding::HEXLOWER.encode(&bytes),
-        });
-    }
-    keys.sort();
-    keys.dedup();
-    assert!(keys.len() <= values.len());
-    assert!(keys.iter().all(|key| !key.signer_name.is_empty()));
-    Ok(keys)
-}
-
-fn shared_rust_trust_policy_id(
-    producer_policies: &[String],
-    keys: &[crunch_rust_cache_core::shared::TrustedRustResultKey],
-) -> Result<String, RunError> {
-    let canonical = serde_json::to_vec(&(producer_policies, keys))
-        .map_err(|error| RunError::Internal(format!("encoding shared Rust trust policy: {error}")))?;
-    let digest = blake3::hash(&canonical).to_hex();
-    let policy_id = format!("mantle-shared-rust-trust-{digest}");
-    assert!(!canonical.is_empty());
-    assert_eq!(digest.len(), crunch_rust_cache_core::BLAKE3_HEX_CHARS);
-    Ok(policy_id)
 }
 
 struct RustPlanExecutionRequest<'a> {
@@ -8264,7 +8225,7 @@ fn run_legacy_self_build(request: &SelfBuildCommandRequest<'_>) -> Result<(), Ru
     debug_assert!(request.ctx.store_prefix.starts_with('/'));
     validate_stage0_inventory_args(request.no_host_tools, request.stage0_inventory)?;
     let loaded_stage0_policy = request.stage0_inventory.map(load_stage0_inventory_policy).transpose()?;
-    let parsed_trusted = parse_trusted_keys(request.trusted_public_keys)?;
+    let parsed_trusted = trusted_keys::parse_trusted_public_keys(request.trusted_public_keys)?;
     let source_override_plan = request
         .offline_source_manifest_blake3
         .map(|manifest_blake3| {
@@ -8373,20 +8334,6 @@ fn resolve_store_prefix(args: &Args) -> String {
 
 fn current_dir_or_error() -> Result<PathBuf, RunError> {
     std::env::current_dir().map_err(|e| RunError::Internal(format!("current_dir: {e}")))
-}
-
-fn parse_trusted_keys(keys: &[String]) -> Result<Option<Vec<nix_compat::narinfo::VerifyingKey>>, RunError> {
-    if keys.is_empty() {
-        return Ok(None);
-    }
-    let mut parsed = Vec::with_capacity(keys.len());
-    for key_str in keys {
-        parsed.push(
-            nix_compat::narinfo::VerifyingKey::parse(key_str)
-                .map_err(|e| RunError::Internal(format!("invalid trusted public key '{key_str}': {e}")))?,
-        );
-    }
-    Ok(Some(parsed))
 }
 
 struct InlineBuildRequest<'a> {
