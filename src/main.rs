@@ -4170,6 +4170,7 @@ fn run_wasm_component_command(ctx: &RunContext, action: &WasmComponentAction) ->
 }
 
 fn run_filegen_command(ctx: &RunContext, action: FilegenCommandAction) -> Result<(), RunError> {
+    command_input::admit_filegen_action(&action)?;
     let root = current_dir_or_error()?;
     debug_assert!(root.is_absolute());
     debug_assert!(ctx.store_prefix.starts_with('/'));

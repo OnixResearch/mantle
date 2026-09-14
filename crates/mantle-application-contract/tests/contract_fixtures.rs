@@ -148,7 +148,7 @@ fn realization_commands_are_validated_before_any_port_call() {
     let valid = RealizeCommand {
         root: String::from("build"),
         roots: vec![String::from("mantle")],
-        profile: BuildProfile::Release,
+        profile: Some(BuildProfile::Release),
         requested_jobs: Some(4),
         dry_run: false,
     };
@@ -157,6 +157,10 @@ fn realization_commands_are_validated_before_any_port_call() {
     let mut missing_roots = valid.clone();
     missing_roots.roots = Vec::new();
     assert_eq!(validate_realize_command(&missing_roots), vec![RealizationBlocker::MissingRoots]);
+
+    let mut blank_root = valid.clone();
+    blank_root.roots = vec![String::from("   ")];
+    assert_eq!(validate_realize_command(&blank_root), vec![RealizationBlocker::EmptyRoot]);
 
     let mut missing_root = valid.clone();
     missing_root.root = String::new();
@@ -198,7 +202,7 @@ fn realization_port_reports_blocked_completed_and_capability_failures() {
     let command = RealizeCommand {
         root: String::from("build"),
         roots: vec![String::from("mantle")],
-        profile: BuildProfile::Dev,
+        profile: Some(BuildProfile::Dev),
         requested_jobs: None,
         dry_run: false,
     };

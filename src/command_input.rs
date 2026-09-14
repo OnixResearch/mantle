@@ -13,6 +13,7 @@ use mantle_application_contract::EvaluationCommand;
 use mantle_application_contract::EvaluationOperation;
 use mantle_application_contract::ProjectCommand;
 use mantle_application_contract::ProjectOperation;
+use mantle_application_contract::RealizeCommand;
 use mantle_application_contract::ReleaseCommand;
 use mantle_application_contract::ReleaseOperation;
 use mantle_application_contract::SourceProvenanceCommand;
@@ -22,10 +23,12 @@ use mantle_application_contract::StoreOperation;
 use mantle_application_contract::validate_component_flow;
 use mantle_application_contract::validate_evaluation;
 use mantle_application_contract::validate_project_lifecycle;
+use mantle_application_contract::validate_realize_command;
 use mantle_application_contract::validate_release_command;
 use mantle_application_contract::validate_source_provenance;
 use mantle_application_contract::validate_store_command;
 
+use crate::FilegenCommandAction;
 use crate::ReleaseAction;
 use crate::RunError;
 use crate::SemanticGraphQueryKind;
@@ -48,6 +51,8 @@ const EVALUATION_COMMAND_ROOT: &str = "eval";
 const SOURCE_COMMAND_ROOT: &str = "source";
 /// Command root the component DTO maps onto.
 const COMPONENT_COMMAND_ROOT: &str = "wasm-component";
+/// Command root the filegen DTO maps onto.
+const FILEGEN_COMMAND_ROOT: &str = "filegen";
 
 /// What one store DTO admits.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -964,5 +969,80 @@ mod component_tests {
         let error = admit_component_action(&action).expect_err("an empty subject must fail closed");
         assert!(error.to_string().contains("build"), "{error}");
         assert!(error.to_string().contains("MissingSubject"), "{error}");
+    }
+}
+
+/// Admit one filegen DTO and return its realization command.
+///
+/// Filegen is the realization root whose two actions pair a dry run with its
+/// execution: planning renders a no-mutate plan, and applying performs the plan
+/// after its drift checks. The manifest is the requested root, and the CLI
+/// declares no build profile on this path, which the command carries as `None`.
+pub(crate) fn admit_filegen_action(action: &FilegenCommandAction) -> Result<RealizeCommand, RunError> {
+    let command = match action {
+        FilegenCommandAction::Plan { manifest, .. } => realize_command(manifest, true),
+        FilegenCommandAction::Apply { manifest, .. } => realize_command(manifest, false),
+    };
+    debug_assert_eq!(command.root, FILEGEN_COMMAND_ROOT);
+    let blockers = validate_realize_command(&command);
+    let Some(blocker) = blockers.first() else {
+        return Ok(command);
+    };
+    debug_assert!(!blockers.is_empty());
+    Err(RunError::Internal(format!("filegen request rejected: {blocker:?}")))
+}
+
+/// Build one realization command for a filegen action.
+fn realize_command(manifest: &Path, dry_run: bool) -> RealizeCommand {
+    debug_assert!(!FILEGEN_COMMAND_ROOT.is_empty());
+    let command = RealizeCommand {
+        root: String::from(FILEGEN_COMMAND_ROOT),
+        roots: vec![manifest.display().to_string()],
+        profile: None,
+        requested_jobs: None,
+        dry_run,
+    };
+    command
+}
+
+#[cfg(test)]
+mod realization_tests {
+    use super::*;
+
+    fn filegen_action(parts: &[&'static str]) -> FilegenCommandAction {
+        let mut argv: Vec<&'static str> = vec!["mantle", "filegen"];
+        argv.extend_from_slice(parts);
+        super::test_support::parse_action_from(&argv, |command| match command {
+            crate::Command::Filegen { action } => Some(action),
+            _ => None,
+        })
+    }
+
+    #[test]
+    fn planning_is_a_dry_run_and_applying_is_not() {
+        let plan = admit_filegen_action(&filegen_action(&["plan"])).expect("planning must admit");
+        assert_eq!(plan.root, FILEGEN_COMMAND_ROOT);
+        assert!(plan.dry_run);
+        assert_eq!(plan.profile, None);
+        assert_eq!(plan.requested_jobs, None);
+        assert_eq!(plan.roots.len(), 1);
+        assert!(plan.roots[0].ends_with("mantle-project.ncl"), "{:?}", plan.roots);
+
+        let apply =
+            admit_filegen_action(&filegen_action(&["apply", "--plan", "/tmp/plan.json"])).expect("applying must admit");
+        assert!(!apply.dry_run);
+        assert_eq!(apply.roots, plan.roots);
+        assert_eq!(apply.profile, plan.profile);
+    }
+
+    #[test]
+    fn an_empty_manifest_fails_closed() {
+        let action = FilegenCommandAction::Plan {
+            manifest: std::path::PathBuf::new(),
+            plan_out: None,
+        };
+        let error = admit_filegen_action(&action).expect_err("an empty root must fail closed");
+        assert!(error.to_string().contains("EmptyRoot"), "{error}");
+        assert!(error.to_string().contains("filegen"), "{error}");
     }
 }

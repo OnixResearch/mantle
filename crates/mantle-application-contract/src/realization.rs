@@ -24,7 +24,12 @@ pub struct RealizeCommand {
     pub root: String,
     /// Requested root names in caller order.
     pub roots: Vec<String>,
-    pub profile: BuildProfile,
+    /// Build profile the operator declared, when one was declared.
+    ///
+    /// The CLI exposes no profile flag on the realization roots, so a command
+    /// that maps a real invocation carries `None`; the field stays because a
+    /// caller that does know its profile can declare it.
+    pub profile: Option<BuildProfile>,
     /// Operator-requested job limit, when supplied.
     pub requested_jobs: Option<u32>,
     /// Whether the operator requested a dry run.
@@ -38,6 +43,8 @@ pub enum RealizationBlocker {
     MissingRoots,
     /// The request exceeded the admitted root bound.
     TooManyRoots,
+    /// One requested root was blank after trimming.
+    EmptyRoot,
     /// Domain policy rejected the request for another reason.
     Domain(ApplicationBlocker),
 }
@@ -88,8 +95,13 @@ pub fn validate_realize_command(command: &RealizeCommand) -> Vec<RealizationBloc
     if !is_root_count_admissible {
         blockers.push(RealizationBlocker::TooManyRoots);
     }
+    for root in &command.roots {
+        if root.trim().is_empty() {
+            blockers.push(RealizationBlocker::EmptyRoot);
+        }
+    }
     blockers.sort();
     blockers.dedup();
-    debug_assert!(blockers.len() <= 3);
+    debug_assert!(blockers.len() <= command.roots.len().saturating_add(3));
     blockers
 }
