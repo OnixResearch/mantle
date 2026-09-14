@@ -111,6 +111,10 @@ fn scan_repository(root: &Path) -> Result<Vec<String>, String> {
     violations.extend(scan_core_sources(&root.join(CORE_SOURCES))?);
     violations.extend(scan_no_std_declaration(&root.join(CONTRACT_LIB))?);
     violations.extend(scan_contract_manifest(&root.join(CONTRACT_MANIFEST))?);
+    violations.extend(scan_command_root_classification(
+        &root.join(ROOT_SOURCES),
+        &root.join(CONTRACT_SOURCES).join("family.rs"),
+    )?);
     debug_assert!(violations.is_empty() || violations.iter().all(|entry| entry.contains(':')));
     Ok(violations)
 }
@@ -245,6 +249,81 @@ fn production_prefix(text: &str) -> &str {
 }
 
 /// Fixture-based self-test: accepted shapes pass, rejected shapes fail.
+/// Scan the CLI root labels against the contract's command-family taxonomy.
+///
+/// Every public root the CLI names must be classified by the contract's
+/// `of_root` table, so the taxonomy stays a description of the real CLI.
+fn scan_command_root_classification(roots_source: &Path, family_source: &Path) -> Result<Vec<String>, String> {
+    if !roots_source.is_file() || !family_source.is_file() {
+        // The rule applies when both the CLI root source and the taxonomy exist.
+        debug_assert!(!roots_source.as_os_str().is_empty());
+        return Ok(Vec::new());
+    }
+    let roots_text = fs::read_to_string(roots_source)
+        .map_err(|error| format!("reading {}: {error}", roots_source.display()))?;
+    let family_text = fs::read_to_string(family_source)
+        .map_err(|error| format!("reading {}: {error}", family_source.display()))?;
+    let cli_roots = command_root_labels(&roots_text);
+    let contract_roots = classified_roots(&family_text);
+    let mut violations = Vec::new();
+    for root in &cli_roots {
+        if !contract_roots.contains(root) {
+            violations.push(format!(
+                "{}: command root {root} is not classified by the application contract taxonomy",
+                roots_source.display()
+            ));
+        }
+    }
+    debug_assert!(violations.len() <= cli_roots.len());
+    debug_assert!(cli_roots.is_empty() || violations.len() <= cli_roots.len());
+    Ok(violations)
+}
+
+/// Collect every command root label the CLI's label functions name.
+fn command_root_labels(text: &str) -> Vec<String> {
+    let mut roots: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let is_label_line = line.trim_start().starts_with("Command::") && line.contains("=>");
+        if !is_label_line {
+            continue;
+        }
+        let Some(quoted) = line.split('"').nth(1) else {
+            continue;
+        };
+        // The CLI hides internal roots behind a `__` prefix; the taxonomy names
+        // the conceptual root without it.
+        let visible = quoted.split('.').next().unwrap_or(quoted);
+        let root = visible.strip_prefix("__").unwrap_or(visible);
+        if !root.is_empty() {
+            roots.push(root.to_string());
+        }
+    }
+    roots.sort();
+    roots.dedup();
+    debug_assert!(roots.iter().all(|root| !root.is_empty()));
+    roots
+}
+
+/// Collect every root string inside the contract's `of_root` table.
+fn classified_roots(text: &str) -> Vec<String> {
+    let Some(start) = text.find("pub fn of_root(") else {
+        return Vec::new();
+    };
+    let body = &text[start..];
+    let end = body.find("\n    }").map_or(body.len(), |offset| offset);
+    let table = &body[..end];
+    let mut roots: Vec<String> = table
+        .split('"')
+        .skip(1)
+        .step_by(2)
+        .map(|entry| entry.to_string())
+        .collect();
+    roots.sort();
+    roots.dedup();
+    debug_assert!(roots.iter().all(|root| !root.contains('"')));
+    roots
+}
+
 fn self_test() -> Result<(), String> {
     let root = env::temp_dir().join(format!("mantle-cli-arch-selftest-{}", std::process::id()));
     if root.exists() {
@@ -364,6 +443,37 @@ fn self_test() -> Result<(), String> {
     let dependency_violations = scan_repository(&root)?;
     if !dependency_violations.iter().any(|entry| entry.contains("contract dependency boundary")) {
         return Err(format!("contract manifest fixture must report tokio, saw {dependency_violations:?}"));
+    }
+
+    // Command-root classification: an unclassified CLI root is rejected and a
+    // classified one is accepted.
+    fs::write(root.join(CONTRACT_MANIFEST), "[dependencies]\nserde = \"1.0\"\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    fs::write(
+        contract.join("family.rs"),
+        "pub fn of_root(root: &str) -> Option<u8> {\n    match root {\n        \"build\" => Some(1),\n        \"doctor\" => Some(2),\n        _ => None,\n    }\n}\n",
+    )
+    .map_err(|error| format!("fixture: {error}"))?;
+    fs::write(
+        root_source.as_path(),
+        "fn command_label(command: &Command) -> &'static str {\n    match command {\n        Command::Build { .. } => \"unknown-root\",\n    }\n}\n",
+    )
+    .map_err(|error| format!("fixture: {error}"))?;
+    let root_violations = scan_repository(&root)?;
+    if !root_violations
+        .iter()
+        .any(|entry| entry.contains("unknown-root") && entry.contains("not classified"))
+    {
+        return Err(format!("unclassified root fixture must be reported, saw {root_violations:?}"));
+    }
+    fs::write(
+        root_source.as_path(),
+        "fn command_label(command: &Command) -> &'static str {\n    match command {\n        Command::Build { .. } => \"build\",\n        Command::Doctor { .. } => \"__doctor\",\n    }\n}\n",
+    )
+    .map_err(|error| format!("fixture: {error}"))?;
+    let classified = scan_repository(&root)?;
+    if !classified.is_empty() {
+        return Err(format!("classified root fixture must pass, saw {classified:?}"));
     }
 
     fs::remove_dir_all(&root).map_err(|error| format!("cleaning {}: {error}", root.display()))?;

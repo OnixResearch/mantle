@@ -54,7 +54,7 @@ const PUBLIC_ROOTS: &[&str] = &[
     "shell",
     "show",
     "source",
-    "stage",
+    "stage0-inventory",
     "store",
     "transcript",
     "upgrade",
