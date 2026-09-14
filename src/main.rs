@@ -4039,7 +4039,10 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
             budget_report,
             roots,
             all_roots,
-        } => run_eval(file, import_paths, budget_policy.as_deref(), budget_report.as_deref(), roots, *all_roots),
+        } => {
+            command_input::admit_evaluation(&command_input::evaluation_command(file, roots))?;
+            run_eval(file, import_paths, budget_policy.as_deref(), budget_report.as_deref(), roots, *all_roots)
+        }
         Command::EvaluatorWorker => evaluator_budget::worker_main(),
         Command::EvaluatorWorkerFixture { behavior } => evaluator_budget::worker_fixture_main(behavior),
         Command::Export { .. } => run_nickel_export_from_command(ctx, &args.command),

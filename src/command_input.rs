@@ -7,12 +7,15 @@
 
 use std::path::Path;
 
+use mantle_application_contract::EvaluationCommand;
+use mantle_application_contract::EvaluationOperation;
 use mantle_application_contract::ProjectCommand;
 use mantle_application_contract::ProjectOperation;
 use mantle_application_contract::ReleaseCommand;
 use mantle_application_contract::ReleaseOperation;
 use mantle_application_contract::StoreAdministrationCommand;
 use mantle_application_contract::StoreOperation;
+use mantle_application_contract::validate_evaluation;
 use mantle_application_contract::validate_project_lifecycle;
 use mantle_application_contract::validate_release_command;
 use mantle_application_contract::validate_store_command;
@@ -30,6 +33,8 @@ const RELEASE_COMMAND_ROOT: &str = "release";
 const PROJECT_COMMAND_ROOT: &str = "project";
 /// Manifest file the project-lifecycle commands work from.
 const PROJECT_MANIFEST_FILE: &str = crate::project_cmd::MANIFEST_FILE;
+/// Command root the evaluation DTO maps onto.
+const EVALUATION_COMMAND_ROOT: &str = "eval";
 
 /// What one store DTO admits.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -601,5 +606,74 @@ mod graph_tests {
         assert_eq!(with_file.graph_file, Some(path));
         let without_file = SemanticGraphCommandInput::new(crate::SemanticGraphQueryKind::Graph, "root", None);
         assert!(without_file.graph_file.is_none());
+    }
+}
+
+/// Build the typed evaluation command for the `eval` CLI DTO.
+///
+/// The CLI evaluates one file and selects which roots it reaches; the contract
+/// models that as one evaluate operation whose declared entries are the named
+/// roots. An empty root list means the whole value or every root, which the
+/// command carries as an empty declared-entry list.
+pub(crate) fn evaluation_command(source: &Path, selected_roots: &[String]) -> EvaluationCommand {
+    debug_assert!(!EVALUATION_COMMAND_ROOT.is_empty());
+    let command = EvaluationCommand {
+        root: String::from(EVALUATION_COMMAND_ROOT),
+        operation: EvaluationOperation::Evaluate,
+        subject: source.display().to_string(),
+        declared_entries: selected_roots.to_vec(),
+        source_path: source.display().to_string(),
+        worker_count: None,
+    };
+    command
+}
+
+/// Reject one evaluation command the contract refuses.
+pub(crate) fn admit_evaluation(command: &EvaluationCommand) -> Result<(), RunError> {
+    let blockers = validate_evaluation(command);
+    let Some(blocker) = blockers.first() else {
+        return Ok(());
+    };
+    debug_assert!(!blockers.is_empty());
+    Err(RunError::Internal(format!("eval {} request rejected: {blocker:?}", command.operation.as_str())))
+}
+
+#[cfg(test)]
+mod evaluation_tests {
+    use super::*;
+
+    #[test]
+    fn the_source_file_is_both_the_subject_and_the_source_path() {
+        let source = Path::new("/tmp/example.ncl");
+        let command = evaluation_command(source, &[]);
+        assert_eq!(command.root, EVALUATION_COMMAND_ROOT);
+        assert_eq!(command.operation, EvaluationOperation::Evaluate);
+        assert_eq!(command.subject, "/tmp/example.ncl");
+        assert_eq!(command.source_path, "/tmp/example.ncl");
+        assert!(command.declared_entries.is_empty());
+        assert_eq!(command.worker_count, None);
+    }
+
+    #[test]
+    fn selected_roots_become_the_declared_entries() {
+        let roots = vec![String::from("alpha"), String::from("beta")];
+        let command = evaluation_command(Path::new("/tmp/example.ncl"), &roots);
+        assert_eq!(command.declared_entries, roots);
+        assert!(admit_evaluation(&command).is_ok());
+    }
+
+    #[test]
+    fn a_whole_file_evaluation_admits_without_declared_entries() {
+        let command = evaluation_command(Path::new("/tmp/example.ncl"), &[]);
+        assert!(admit_evaluation(&command).is_ok());
+        assert!(!EvaluationOperation::Evaluate.requires_declared_entries());
+    }
+
+    #[test]
+    fn an_empty_source_fails_closed_with_both_blockers() {
+        let command = evaluation_command(Path::new(""), &[]);
+        let error = admit_evaluation(&command).expect_err("an empty source must fail closed");
+        assert!(error.to_string().contains("evaluate"), "{error}");
+        assert!(error.to_string().contains("MissingSubject"), "{error}");
     }
 }
