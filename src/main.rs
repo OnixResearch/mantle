@@ -321,6 +321,7 @@ use clap::Subcommand;
 use clap::ValueEnum;
 use errors::RunError;
 use foreign_import_cmd::ForeignImportAction;
+use mantle_application_contract::ProjectOperation;
 use mantlepkgs_cmd::MantlepkgsAction;
 use nix_free_demo_cmd::NixFreeDemoAction;
 use operator_diagnostics::DoctorProfile;
@@ -7238,8 +7239,12 @@ fn cmd_bootstrap_stagex_lineage(output: &Path, manifest_path: &Path, transition_
 fn run_project_command(ctx: &RunContext, command: &Command) -> Result<(), RunError> {
     let cwd = current_dir_or_error()?;
     match command {
-        Command::Init => project_cmd::cmd_init(&cwd),
+        Command::Init => {
+            command_input::admit_project_lifecycle_for(ProjectOperation::Init, &cwd, &[])?;
+            project_cmd::cmd_init(&cwd)
+        }
         Command::Check { probes, trust } => {
+            command_input::admit_project_lifecycle_for(ProjectOperation::Check, &cwd, &[])?;
             let output = if ctx.json {
                 project_cmd::ProjectCheckOutput::Json
             } else {
@@ -7247,10 +7252,22 @@ fn run_project_command(ctx: &RunContext, command: &Command) -> Result<(), RunErr
             };
             project_cmd::cmd_check(&cwd, output, *probes, *trust)
         }
-        Command::Show => project_cmd::cmd_show(&cwd),
-        Command::Refresh { no_network, names } => project_cmd::cmd_refresh(&cwd, names, *no_network),
-        Command::ListStale { no_network } => project_cmd::cmd_list_stale(&cwd, *no_network),
-        Command::Upgrade => project_cmd::cmd_upgrade(&cwd),
+        Command::Show => {
+            command_input::admit_project_lifecycle_for(ProjectOperation::Show, &cwd, &[])?;
+            project_cmd::cmd_show(&cwd)
+        }
+        Command::Refresh { no_network, names } => {
+            command_input::admit_project_lifecycle_for(ProjectOperation::Refresh, &cwd, names)?;
+            project_cmd::cmd_refresh(&cwd, names, *no_network)
+        }
+        Command::ListStale { no_network } => {
+            command_input::admit_project_lifecycle_for(ProjectOperation::ListStale, &cwd, &[])?;
+            project_cmd::cmd_list_stale(&cwd, *no_network)
+        }
+        Command::Upgrade => {
+            command_input::admit_project_lifecycle_for(ProjectOperation::Upgrade, &cwd, &[])?;
+            project_cmd::cmd_upgrade(&cwd)
+        }
         _ => Err(RunError::Internal("project helper requires a project command".to_string())),
     }
 }

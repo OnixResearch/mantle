@@ -43,7 +43,7 @@ use crate::errors::RunError;
 use crate::project_resolve::LiveResolver;
 
 /// Project file names.
-const MANIFEST_FILE: &str = "mantle-project.ncl";
+pub(crate) const MANIFEST_FILE: &str = "mantle-project.ncl";
 const LOCK_FILE: &str = "mantle.lock";
 const INPUTS_DIR: &str = ".mantle";
 const INPUTS_FILE: &str = ".mantle/inputs.ncl";

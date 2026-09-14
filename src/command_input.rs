@@ -5,10 +5,15 @@
 //! Presentation stays in `crate::presentation`; this module only decides what
 //! the operator asked for.
 
+use std::path::Path;
+
+use mantle_application_contract::ProjectCommand;
+use mantle_application_contract::ProjectOperation;
 use mantle_application_contract::ReleaseCommand;
 use mantle_application_contract::ReleaseOperation;
 use mantle_application_contract::StoreAdministrationCommand;
 use mantle_application_contract::StoreOperation;
+use mantle_application_contract::validate_project_lifecycle;
 use mantle_application_contract::validate_release_command;
 use mantle_application_contract::validate_store_command;
 
@@ -20,6 +25,10 @@ use crate::StoreAction;
 const STORE_COMMAND_ROOT: &str = "store";
 /// Command root the release DTO maps onto.
 const RELEASE_COMMAND_ROOT: &str = "release";
+/// Command root the project-lifecycle DTO maps onto.
+const PROJECT_COMMAND_ROOT: &str = "project";
+/// Manifest file the project-lifecycle commands work from.
+const PROJECT_MANIFEST_FILE: &str = crate::project_cmd::MANIFEST_FILE;
 
 /// What one store DTO admits.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -420,5 +429,115 @@ mod release_tests {
         ]);
         assert_eq!(admit_release_action(&global), ReleaseCommandAdmission::NotModeled);
         assert!(matches!(admit_release_action_or_block(&global), Ok(ReleaseCommandAdmission::NotModeled)));
+    }
+}
+
+/// Build the typed project-lifecycle command for one CLI operation.
+///
+/// The CLI carries no subject for `init`, `show`, or `upgrade`; the subject is
+/// the resolved project directory the shell hands in. `selected` carries the
+/// names a refresh was asked to resolve.
+pub(crate) fn project_lifecycle_command(
+    operation: ProjectOperation,
+    project_dir: &Path,
+    selected: &[String],
+) -> ProjectCommand {
+    debug_assert!(ProjectOperation::all().contains(&operation));
+    debug_assert!(!PROJECT_MANIFEST_FILE.is_empty());
+    let command = ProjectCommand {
+        root: String::from(PROJECT_COMMAND_ROOT),
+        operation,
+        subject: project_dir.display().to_string(),
+        declared_entries: selected.to_vec(),
+        manifest_path: project_dir.join(PROJECT_MANIFEST_FILE).display().to_string(),
+        has_lock_write: writes_project_lock(operation),
+    };
+    command
+}
+
+/// Whether one project operation rewrites the lockfile.
+fn writes_project_lock(operation: ProjectOperation) -> bool {
+    let writes_lock = matches!(operation, ProjectOperation::Refresh | ProjectOperation::Upgrade);
+    debug_assert!(!writes_lock || ProjectOperation::all().contains(&operation));
+    writes_lock
+}
+
+/// Reject one project-lifecycle command the contract refuses.
+pub(crate) fn admit_project_lifecycle(command: &ProjectCommand) -> Result<(), RunError> {
+    let blockers = validate_project_lifecycle(command);
+    let Some(blocker) = blockers.first() else {
+        return Ok(());
+    };
+    debug_assert!(!blockers.is_empty());
+    Err(RunError::Internal(format!("project {} request rejected: {blocker:?}", command.operation.as_str())))
+}
+
+/// Admit one project-lifecycle CLI operation in a single step.
+pub(crate) fn admit_project_lifecycle_for(
+    operation: ProjectOperation,
+    project_dir: &Path,
+    selected: &[String],
+) -> Result<(), RunError> {
+    admit_project_lifecycle(&project_lifecycle_command(operation, project_dir, selected))
+}
+
+#[cfg(test)]
+mod project_tests {
+    use super::*;
+
+    fn project_dir() -> std::path::PathBuf {
+        std::path::PathBuf::from("/tmp/example-project")
+    }
+
+    #[test]
+    fn every_operation_maps_to_the_manifest_of_its_directory() {
+        for operation in ProjectOperation::all() {
+            let command = project_lifecycle_command(operation, &project_dir(), &[]);
+            assert_eq!(command.operation, operation);
+            assert_eq!(command.root, PROJECT_COMMAND_ROOT);
+            assert_eq!(command.subject, "/tmp/example-project");
+            assert_eq!(command.manifest_path, "/tmp/example-project/mantle-project.ncl");
+            assert!(command.declared_entries.is_empty());
+            assert_eq!(command.has_lock_write, writes_project_lock(operation));
+        }
+        assert_eq!(ProjectOperation::all().len(), 6);
+    }
+
+    #[test]
+    fn the_operations_that_rewrite_the_lock_declare_it() {
+        assert!(writes_project_lock(ProjectOperation::Refresh));
+        assert!(writes_project_lock(ProjectOperation::Upgrade));
+        assert!(!writes_project_lock(ProjectOperation::Init));
+        assert!(!writes_project_lock(ProjectOperation::Check));
+        assert!(!writes_project_lock(ProjectOperation::Show));
+        assert!(!writes_project_lock(ProjectOperation::ListStale));
+    }
+
+    #[test]
+    fn a_resolved_directory_admits_every_operation() {
+        for operation in ProjectOperation::all() {
+            assert!(admit_project_lifecycle_for(operation, &project_dir(), &[]).is_ok(), "{operation:?} must admit");
+        }
+    }
+
+    #[test]
+    fn an_empty_subject_fails_closed_and_selected_names_are_carried() {
+        let empty = project_lifecycle_command(ProjectOperation::Refresh, Path::new(""), &[]);
+        let error = admit_project_lifecycle(&empty).expect_err("an empty subject must fail closed");
+        assert!(error.to_string().contains("refresh"), "{error}");
+        assert!(error.to_string().contains("MissingSubject"), "{error}");
+
+        let selected = vec![String::from("left-pad"), String::from("serde")];
+        let refresh = project_lifecycle_command(ProjectOperation::Refresh, &project_dir(), &selected);
+        assert_eq!(refresh.declared_entries, selected);
+        assert!(admit_project_lifecycle(&refresh).is_ok());
+    }
+
+    #[test]
+    fn a_lock_rewrite_without_the_lock_declared_fails_closed() {
+        let mut command = project_lifecycle_command(ProjectOperation::Upgrade, &project_dir(), &[]);
+        command.has_lock_write = false;
+        let error = admit_project_lifecycle(&command).expect_err("a lock rewrite must declare its write");
+        assert!(error.to_string().contains("LockWriteRequired"), "{error}");
     }
 }
