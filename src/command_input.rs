@@ -19,6 +19,7 @@ use mantle_application_contract::validate_store_command;
 
 use crate::ReleaseAction;
 use crate::RunError;
+use crate::SemanticGraphQueryKind;
 use crate::StoreAction;
 
 /// Command root the store DTO maps onto.
@@ -539,5 +540,66 @@ mod project_tests {
         command.has_lock_write = false;
         let error = admit_project_lifecycle(&command).expect_err("a lock rewrite must declare its write");
         assert!(error.to_string().contains("LockWriteRequired"), "{error}");
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SemanticGraphCommandInput<'a> {
+    pub(crate) query: SemanticGraphQueryKind,
+    pub(crate) target: &'a str,
+    pub(crate) graph_file: Option<&'a Path>,
+}
+
+impl<'a> SemanticGraphCommandInput<'a> {
+    /// Map the parsed CLI DTO into the typed application command.
+    pub(crate) fn command_request(&self) -> mantle_application_contract::GraphQueryRequest {
+        let kind = match self.query {
+            SemanticGraphQueryKind::Graph => mantle_application_contract::GraphQueryKind::Graph,
+            SemanticGraphQueryKind::Why => mantle_application_contract::GraphQueryKind::Why,
+            SemanticGraphQueryKind::Dependents => mantle_application_contract::GraphQueryKind::Dependents,
+        };
+        debug_assert!(!self.target.is_empty());
+        debug_assert!(!kind.as_str().is_empty());
+        mantle_application_contract::GraphQueryRequest {
+            kind,
+            target: self.target.to_string(),
+        }
+    }
+
+    pub(crate) fn new(query: SemanticGraphQueryKind, target: &'a str, graph_file: Option<&'a Path>) -> Self {
+        Self {
+            query,
+            target,
+            graph_file,
+        }
+    }
+}
+
+/// Map a parsed semantic-graph DTO into its typed request.
+#[cfg(test)]
+mod graph_tests {
+    use super::*;
+
+    #[test]
+    fn each_graph_query_kind_maps_to_its_contract_kind() {
+        for (query, expected) in [
+            (crate::SemanticGraphQueryKind::Graph, "graph"),
+            (crate::SemanticGraphQueryKind::Why, "why"),
+            (crate::SemanticGraphQueryKind::Dependents, "dependents"),
+        ] {
+            let input = SemanticGraphCommandInput::new(query, "target-name", None);
+            let request = input.command_request();
+            assert_eq!(request.target, "target-name");
+            assert_eq!(request.kind.as_str(), expected);
+        }
+    }
+
+    #[test]
+    fn the_graph_file_stays_optional_and_is_kept_verbatim() {
+        let path = Path::new("/tmp/semantic-graph.json");
+        let with_file = SemanticGraphCommandInput::new(crate::SemanticGraphQueryKind::Graph, "root", Some(path));
+        assert_eq!(with_file.graph_file, Some(path));
+        let without_file = SemanticGraphCommandInput::new(crate::SemanticGraphQueryKind::Graph, "root", None);
+        assert!(without_file.graph_file.is_none());
     }
 }

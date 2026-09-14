@@ -3995,15 +3995,19 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::OperatorContract { mode } => run_operator_contract(*mode),
         Command::Graph { root, graph_file } => run_semantic_graph_command(
             ctx,
-            SemanticGraphCommandInput::new(SemanticGraphQueryKind::Graph, root, graph_file.as_deref()),
+            command_input::SemanticGraphCommandInput::new(SemanticGraphQueryKind::Graph, root, graph_file.as_deref()),
         ),
         Command::Why { target, graph_file } => run_semantic_graph_command(
             ctx,
-            SemanticGraphCommandInput::new(SemanticGraphQueryKind::Why, target, graph_file.as_deref()),
+            command_input::SemanticGraphCommandInput::new(SemanticGraphQueryKind::Why, target, graph_file.as_deref()),
         ),
         Command::Dependents { target, graph_file } => run_semantic_graph_command(
             ctx,
-            SemanticGraphCommandInput::new(SemanticGraphQueryKind::Dependents, target, graph_file.as_deref()),
+            command_input::SemanticGraphCommandInput::new(
+                SemanticGraphQueryKind::Dependents,
+                target,
+                graph_file.as_deref(),
+            ),
         ),
         Command::Refactor { action } => run_refactor_command(ctx, action.clone()),
         Command::Transcript { action } => run_transcript_command(action.clone()),
@@ -4340,39 +4344,10 @@ enum SemanticGraphQueryKind {
     Dependents,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct SemanticGraphCommandInput<'a> {
-    query: SemanticGraphQueryKind,
-    target: &'a str,
-    graph_file: Option<&'a Path>,
-}
-
-impl<'a> SemanticGraphCommandInput<'a> {
-    /// Map the parsed CLI DTO into the typed application command.
-    fn command_request(&self) -> mantle_application_contract::GraphQueryRequest {
-        let kind = match self.query {
-            SemanticGraphQueryKind::Graph => mantle_application_contract::GraphQueryKind::Graph,
-            SemanticGraphQueryKind::Why => mantle_application_contract::GraphQueryKind::Why,
-            SemanticGraphQueryKind::Dependents => mantle_application_contract::GraphQueryKind::Dependents,
-        };
-        debug_assert!(!self.target.is_empty());
-        debug_assert!(!kind.as_str().is_empty());
-        mantle_application_contract::GraphQueryRequest {
-            kind,
-            target: self.target.to_string(),
-        }
-    }
-
-    fn new(query: SemanticGraphQueryKind, target: &'a str, graph_file: Option<&'a Path>) -> Self {
-        Self {
-            query,
-            target,
-            graph_file,
-        }
-    }
-}
-
-fn run_semantic_graph_command(ctx: &RunContext, input: SemanticGraphCommandInput<'_>) -> Result<(), RunError> {
+fn run_semantic_graph_command(
+    ctx: &RunContext,
+    input: command_input::SemanticGraphCommandInput<'_>,
+) -> Result<(), RunError> {
     if input.target.is_empty() {
         return Err(RunError::Internal("semantic graph target must not be empty".to_string()));
     }
