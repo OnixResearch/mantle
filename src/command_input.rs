@@ -53,6 +53,12 @@ const SOURCE_COMMAND_ROOT: &str = "source";
 const COMPONENT_COMMAND_ROOT: &str = "wasm-component";
 /// Command root the filegen DTO maps onto.
 const FILEGEN_COMMAND_ROOT: &str = "filegen";
+/// Command root the run DTO maps onto.
+const RUN_COMMAND_ROOT: &str = "run";
+/// Command root the shell DTO maps onto.
+const SHELL_COMMAND_ROOT: &str = "shell";
+/// Command root the develop DTO maps onto.
+const DEVELOP_COMMAND_ROOT: &str = "develop";
 
 /// What one store DTO admits.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1044,5 +1050,121 @@ mod realization_tests {
         let error = admit_filegen_action(&action).expect_err("an empty root must fail closed");
         assert!(error.to_string().contains("EmptyRoot"), "{error}");
         assert!(error.to_string().contains("filegen"), "{error}");
+    }
+}
+
+/// What one named-root realization DTO admits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum NamedRealizationAdmission {
+    /// The DTO named a root, so the command maps onto the contract.
+    Modeled(RealizeCommand),
+    /// The DTO named no root, which the contract's root list cannot express.
+    NotAdministered,
+}
+
+/// Admit `run` when it names the root it runs.
+pub(crate) fn admit_run_realization(
+    name: Option<&str>,
+    jobs: Option<u32>,
+) -> Result<NamedRealizationAdmission, RunError> {
+    admit_named_realization(RUN_COMMAND_ROOT, name, jobs)
+}
+
+/// Admit `shell` when it names the root it opens.
+pub(crate) fn admit_shell_realization(
+    name: Option<&str>,
+    jobs: Option<u32>,
+) -> Result<NamedRealizationAdmission, RunError> {
+    admit_named_realization(SHELL_COMMAND_ROOT, name, jobs)
+}
+
+/// Admit `develop` when it names the root it opens.
+pub(crate) fn admit_develop_realization(
+    name: Option<&str>,
+    jobs: Option<u32>,
+) -> Result<NamedRealizationAdmission, RunError> {
+    admit_named_realization(DEVELOP_COMMAND_ROOT, name, jobs)
+}
+
+/// Admit one named-root realization.
+///
+/// The contract's realization command carries requested root names, so a
+/// command that names a root maps onto it with that name and the operator's job
+/// limit. A command that names no root selects the default root, which the root
+/// list cannot express, so it is not administered here rather than given a name
+/// the operator never wrote.
+fn admit_named_realization(
+    root: &str,
+    name: Option<&str>,
+    jobs: Option<u32>,
+) -> Result<NamedRealizationAdmission, RunError> {
+    debug_assert!(!root.is_empty());
+    let Some(name) = name else {
+        debug_assert!(name.is_none());
+        return Ok(NamedRealizationAdmission::NotAdministered);
+    };
+    let command = RealizeCommand {
+        root: String::from(root),
+        roots: vec![String::from(name)],
+        profile: None,
+        requested_jobs: jobs,
+        dry_run: false,
+    };
+    let blockers = validate_realize_command(&command);
+    let Some(blocker) = blockers.first() else {
+        return Ok(NamedRealizationAdmission::Modeled(command));
+    };
+    debug_assert!(!blockers.is_empty());
+    Err(RunError::Internal(format!("{root} request rejected: {blocker:?}")))
+}
+
+#[cfg(test)]
+mod named_realization_tests {
+    use super::*;
+
+    #[test]
+    fn a_named_run_maps_its_root_and_jobs() {
+        let admission = admit_run_realization(Some("mantle"), Some(4)).expect("a named run must admit");
+        let NamedRealizationAdmission::Modeled(command) = admission else {
+            panic!("a named run must be modeled");
+        };
+        assert_eq!(command.root, RUN_COMMAND_ROOT);
+        assert_eq!(command.roots, vec![String::from("mantle")]);
+        assert_eq!(command.requested_jobs, Some(4));
+        assert!(!command.dry_run);
+        assert_eq!(command.profile, None);
+    }
+
+    #[test]
+    fn shell_and_develop_carry_their_own_roots() {
+        for (admission, expected_root) in [
+            (admit_shell_realization(Some("dev-shell"), None), SHELL_COMMAND_ROOT),
+            (admit_develop_realization(Some("dev-shell"), Some(2)), DEVELOP_COMMAND_ROOT),
+        ] {
+            let NamedRealizationAdmission::Modeled(command) = admission.expect("named roots must admit") else {
+                panic!("a named root must be modeled");
+            };
+            assert_eq!(command.root, expected_root);
+            assert_eq!(command.roots, vec![String::from("dev-shell")]);
+        }
+    }
+
+    #[test]
+    fn a_command_without_a_name_is_not_administered() {
+        assert_eq!(
+            admit_run_realization(None, None).expect("absence must admit"),
+            NamedRealizationAdmission::NotAdministered
+        );
+        assert_eq!(
+            admit_shell_realization(None, Some(8)).expect("absence must admit"),
+            NamedRealizationAdmission::NotAdministered
+        );
+    }
+
+    #[test]
+    fn a_blank_root_name_fails_closed() {
+        let error = admit_run_realization(Some("   "), None).expect_err("a blank name must fail closed");
+        assert!(error.to_string().contains("EmptyRoot"), "{error}");
+        assert!(error.to_string().contains(RUN_COMMAND_ROOT), "{error}");
     }
 }

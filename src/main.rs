@@ -4091,9 +4091,18 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
         Command::SelfBuild { .. } => run_self_build_from_command(ctx, &args.command),
         Command::RustCache { action } => run_rust_cache_command(ctx, action),
         Command::RustPlan { .. } => run_rust_plan_command(ctx, &args.command),
-        Command::Shell { .. } => run_shell_from_command(ctx, &args.command),
-        Command::Develop { .. } => run_develop_from_command(ctx, &args.command),
-        Command::Run { .. } => run_run_from_command(ctx, &args.command),
+        Command::Shell { name, jobs, .. } => {
+            command_input::admit_shell_realization(name.as_deref(), *jobs)?;
+            run_shell_from_command(ctx, &args.command)
+        }
+        Command::Develop { name, jobs, .. } => {
+            command_input::admit_develop_realization(name.as_deref(), *jobs)?;
+            run_develop_from_command(ctx, &args.command)
+        }
+        Command::Run { name, jobs, .. } => {
+            command_input::admit_run_realization(name.as_deref(), *jobs)?;
+            run_run_from_command(ctx, &args.command)
+        }
     }
 }
 
