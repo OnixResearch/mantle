@@ -4152,6 +4152,7 @@ fn run_remote_command(ctx: &RunContext, action: RemoteAction) -> Result<(), RunE
 }
 
 fn run_wasm_component_command(ctx: &RunContext, action: &WasmComponentAction) -> Result<(), RunError> {
+    command_input::admit_component_action(action)?;
     match action {
         WasmComponentAction::Build {
             request,

@@ -7,6 +7,8 @@
 
 use std::path::Path;
 
+use mantle_application_contract::ComponentCommand;
+use mantle_application_contract::ComponentOperation;
 use mantle_application_contract::EvaluationCommand;
 use mantle_application_contract::EvaluationOperation;
 use mantle_application_contract::ProjectCommand;
@@ -17,6 +19,7 @@ use mantle_application_contract::SourceProvenanceCommand;
 use mantle_application_contract::SourceProvenanceOperation;
 use mantle_application_contract::StoreAdministrationCommand;
 use mantle_application_contract::StoreOperation;
+use mantle_application_contract::validate_component_flow;
 use mantle_application_contract::validate_evaluation;
 use mantle_application_contract::validate_project_lifecycle;
 use mantle_application_contract::validate_release_command;
@@ -29,6 +32,7 @@ use crate::SemanticGraphQueryKind;
 use crate::SourceAction;
 use crate::SourceBundleAction;
 use crate::StoreAction;
+use crate::WasmComponentAction;
 
 /// Command root the store DTO maps onto.
 const STORE_COMMAND_ROOT: &str = "store";
@@ -42,6 +46,8 @@ const PROJECT_MANIFEST_FILE: &str = crate::project_cmd::MANIFEST_FILE;
 const EVALUATION_COMMAND_ROOT: &str = "eval";
 /// Command root the source DTO maps onto.
 const SOURCE_COMMAND_ROOT: &str = "source";
+/// Command root the component DTO maps onto.
+const COMPONENT_COMMAND_ROOT: &str = "wasm-component";
 
 /// What one store DTO admits.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -850,6 +856,113 @@ mod source_tests {
         })
         .expect_err("an empty destination must fail closed");
         assert!(error.to_string().contains("export"), "{error}");
+        assert!(error.to_string().contains("MissingSubject"), "{error}");
+    }
+}
+
+/// Admit one component DTO and return its typed command.
+///
+/// The CLI names its component through a typed Nickel request, so that request
+/// path is the subject and the component path this command carries; the output
+/// directory is where the build publishes artifacts and its execution report,
+/// which is the evidence directory. The import paths are the declared entries
+/// the build consumes. A future `bundle` or `verify` subcommand must appear in
+/// this match, because the operation set it maps onto is exhaustive.
+pub(crate) fn admit_component_action(action: &WasmComponentAction) -> Result<ComponentCommand, RunError> {
+    let command = match action {
+        WasmComponentAction::Build {
+            request,
+            out,
+            import_paths,
+            ..
+        } => ComponentCommand {
+            root: String::from(COMPONENT_COMMAND_ROOT),
+            operation: ComponentOperation::Build,
+            subject: request.display().to_string(),
+            declared_entries: import_paths.iter().map(|path| path.display().to_string()).collect(),
+            component_path: request.display().to_string(),
+            evidence_dir: out.display().to_string(),
+        },
+    };
+    debug_assert_eq!(command.root, COMPONENT_COMMAND_ROOT);
+    let blockers = validate_component_flow(&command);
+    let Some(blocker) = blockers.first() else {
+        return Ok(command);
+    };
+    debug_assert!(!blockers.is_empty());
+    Err(RunError::Internal(format!(
+        "wasm-component {} request rejected: {blocker:?}",
+        command.operation.as_str()
+    )))
+}
+
+#[cfg(test)]
+mod component_tests {
+    use super::*;
+
+    fn build_action() -> WasmComponentAction {
+        super::test_support::parse_action_from(
+            &[
+                "mantle",
+                "wasm-component",
+                "build",
+                "/tmp/component-request.ncl",
+                "--out",
+                "/tmp/component-out",
+                "--import-path",
+                "/tmp/imports",
+            ],
+            |command| match command {
+                crate::Command::WasmComponent { action } => Some(action),
+                _ => None,
+            },
+        )
+    }
+
+    #[test]
+    fn a_build_maps_its_request_output_and_imports() {
+        let action = build_action();
+        let command = admit_component_action(&action).expect("a build must admit");
+        assert_eq!(command.operation, ComponentOperation::Build);
+        assert_eq!(command.root, COMPONENT_COMMAND_ROOT);
+        assert_eq!(command.subject, "/tmp/component-request.ncl");
+        assert_eq!(command.component_path, "/tmp/component-request.ncl");
+        assert_eq!(command.evidence_dir, "/tmp/component-out");
+        assert_eq!(command.declared_entries, vec![String::from("/tmp/imports")]);
+        assert!(!ComponentOperation::Build.requires_declared_entries());
+    }
+
+    #[test]
+    fn a_build_without_imports_still_admits() {
+        let action = super::test_support::parse_action_from(
+            &[
+                "mantle",
+                "wasm-component",
+                "build",
+                "/tmp/component-request.ncl",
+                "--out",
+                "/tmp/component-out",
+            ],
+            |command| match command {
+                crate::Command::WasmComponent { action } => Some(action),
+                _ => None,
+            },
+        );
+        let command = admit_component_action(&action).expect("a build must admit");
+        assert!(command.declared_entries.is_empty());
+        assert!(!command.evidence_dir.is_empty());
+    }
+
+    #[test]
+    fn an_empty_request_path_fails_closed() {
+        let action = WasmComponentAction::Build {
+            request: std::path::PathBuf::new(),
+            out: std::path::PathBuf::from("/tmp/component-out"),
+            import_paths: Vec::new(),
+            scratch_parent: None,
+        };
+        let error = admit_component_action(&action).expect_err("an empty subject must fail closed");
+        assert!(error.to_string().contains("build"), "{error}");
         assert!(error.to_string().contains("MissingSubject"), "{error}");
     }
 }
