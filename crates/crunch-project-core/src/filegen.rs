@@ -9,6 +9,8 @@ use alloc::vec::Vec;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::error::Error;
+
 pub const FILEGEN_PLAN_SCHEMA: &str = "mantle-project-filegen-plan-v1";
 pub const FILEGEN_NON_CLAIM: &str = "file generation evidence proves only declared content/materialization planning; it does not prove deployability, services, frontend correctness, or build success";
 
@@ -198,6 +200,7 @@ fn normalized_current_files(
     for fact in facts {
         match normalize_target(&fact.target) {
             Ok(target) => {
+                debug_assert!(!target.is_empty());
                 if map.insert(target.clone(), fact.state.clone()).is_some() {
                     blockers.push(blocker(
                         "duplicate-current-file-fact",
@@ -206,9 +209,13 @@ fn normalized_current_files(
                     ));
                 }
             }
-            Err(message) => blockers.push(blocker("unsafe-current-file-target", &fact.target, message)),
+            Err(error) => {
+                blockers.push(blocker("unsafe-current-file-target", &fact.target, error.message().to_string()))
+            }
         }
     }
+    // Duplicate facts collapse into one entry, so the map never exceeds the input.
+    debug_assert!(map.len() <= facts.len());
     map
 }
 
@@ -230,8 +237,8 @@ fn plan_declaration(
     }
     let target = match normalize_target(&declaration.target) {
         Ok(target) => target,
-        Err(message) => {
-            blockers.push(blocker("target-escape", &declaration.target, message));
+        Err(error) => {
+            blockers.push(blocker("target-escape", &declaration.target, error.message().to_string()));
             return;
         }
     };
@@ -243,15 +250,15 @@ fn plan_declaration(
         ));
         return;
     }
-    if let Err(message) = validate_contract(declaration) {
-        blockers.push(blocker("contract-invalid-content", &target, message));
+    if let Err(error) = validate_contract(declaration) {
+        blockers.push(blocker("contract-invalid-content", &target, error.message().to_string()));
         return;
     }
     let content = declaration_content(&declaration.content);
     let desired_digest = match desired_digest(declaration) {
         Ok(digest) => digest,
-        Err(message) => {
-            blockers.push(blocker("invalid-export-receipt-digest", &target, message));
+        Err(error) => {
+            blockers.push(blocker("invalid-export-receipt-digest", &target, error.message().to_string()));
             return;
         }
     };
@@ -297,15 +304,17 @@ fn append_stale_operations(
     }
 }
 
-fn normalize_target(target: &str) -> Result<String, String> {
+fn normalize_target(target: &str) -> Result<String, Error> {
     if target.is_empty() {
-        return Err("generated file target must not be empty".to_string());
+        return Err(Error::Validation("generated file target must not be empty".to_string()));
     }
     if target.len() > MAX_FILEGEN_TARGET_BYTES {
-        return Err(format!("generated file target exceeds {MAX_FILEGEN_TARGET_BYTES} bytes"));
+        return Err(Error::Validation(format!("generated file target exceeds {MAX_FILEGEN_TARGET_BYTES} bytes")));
     }
     if target.starts_with('/') {
-        return Err(format!("generated file target `{target}` must be relative to the project root"));
+        return Err(Error::Validation(format!(
+            "generated file target `{target}` must be relative to the project root"
+        )));
     }
     debug_assert!(!target.is_empty());
     debug_assert!(target.len() <= MAX_FILEGEN_TARGET_BYTES);
@@ -314,52 +323,61 @@ fn normalize_target(target: &str) -> Result<String, String> {
     for component in target.split('/') {
         match component {
             "" | "." => {}
-            ".." => return Err(format!("generated file target `{target}` escapes the project root")),
+            ".." => {
+                return Err(Error::Validation(format!("generated file target `{target}` escapes the project root")));
+            }
             other => normalized.push(other),
         }
     }
     if normalized.is_empty() {
-        return Err(format!("generated file target `{target}` does not name a file"));
+        return Err(Error::Validation(format!("generated file target `{target}` does not name a file")));
     }
     Ok(normalized.join("/"))
 }
 
-fn validate_contract(declaration: &GeneratedFileDeclaration) -> Result<(), String> {
+fn validate_contract(declaration: &GeneratedFileDeclaration) -> Result<(), Error> {
     let Some(contract) = &declaration.contract else {
         return Ok(());
     };
     if contract.identity.is_empty() {
-        return Err("generated file contract identity must not be empty".to_string());
+        return Err(Error::Validation("generated file contract identity must not be empty".to_string()));
     }
     if contract.required_json_fields.len() as u64 > u64::from(MAX_CONTRACT_FIELDS) {
-        return Err(format!(
+        return Err(Error::Validation(format!(
             "generated file contract has too many required JSON fields: {} > {MAX_CONTRACT_FIELDS}",
             contract.required_json_fields.len()
-        ));
+        )));
     }
     if declaration.materialization == GeneratedFileMaterialization::Symlink {
-        return Err("typed generated-file contracts apply only to copy materialization".to_string());
+        return Err(Error::Validation("typed generated-file contracts apply only to copy materialization".to_string()));
     }
     debug_assert!(!contract.identity.is_empty());
     debug_assert!(contract.required_json_fields.len() as u64 <= u64::from(MAX_CONTRACT_FIELDS));
     let content = declaration_content(&declaration.content);
-    let value: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|err| format!("generated content is not valid JSON for contract `{}`: {err}", contract.identity))?;
+    let value: serde_json::Value = serde_json::from_str(&content).map_err(|err| {
+        Error::Validation(format!("generated content is not valid JSON for contract `{}`: {err}", contract.identity))
+    })?;
     let Some(object) = value.as_object() else {
-        return Err(format!("generated content for contract `{}` must be a JSON object", contract.identity));
+        return Err(Error::Validation(format!(
+            "generated content for contract `{}` must be a JSON object",
+            contract.identity
+        )));
     };
     for field in &contract.required_json_fields {
         if field.is_empty() {
-            return Err("generated file contract required field must not be empty".to_string());
+            return Err(Error::Validation("generated file contract required field must not be empty".to_string()));
         }
         if !object.contains_key(field) {
-            return Err(format!("generated content for contract `{}` is missing field `{field}`", contract.identity));
+            return Err(Error::Validation(format!(
+                "generated content for contract `{}` is missing field `{field}`",
+                contract.identity
+            )));
         }
     }
     Ok(())
 }
 
-fn desired_digest(declaration: &GeneratedFileDeclaration) -> Result<String, String> {
+fn desired_digest(declaration: &GeneratedFileDeclaration) -> Result<String, Error> {
     if let GeneratedFileContent::NickelExport {
         receipt_digest_blake3, ..
     } = &declaration.content
@@ -404,12 +422,12 @@ fn classify_action(
     }
 }
 
-fn validate_blake3_hex(value: &str) -> Result<(), String> {
+fn validate_blake3_hex(value: &str) -> Result<(), Error> {
     if value.len() != BLAKE3_HEX_BYTES {
-        return Err(format!("BLAKE3 digest must be {BLAKE3_HEX_BYTES} lowercase hex bytes"));
+        return Err(Error::Validation(format!("BLAKE3 digest must be {BLAKE3_HEX_BYTES} lowercase hex bytes")));
     }
     if !value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
-        return Err("BLAKE3 digest must be lowercase hexadecimal".to_string());
+        return Err(Error::Validation("BLAKE3 digest must be lowercase hexadecimal".to_string()));
     }
     Ok(())
 }
