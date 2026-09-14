@@ -34,6 +34,7 @@ pub fn cmd_store(
     base_state_dirs: &[PathBuf],
     is_json_output: bool,
 ) -> Result<(), RunError> {
+    crate::command_input::admit_store_action_or_block(&action)?;
     let rt = tokio::runtime::Runtime::new().map_err(|e| RunError::Internal(format!("tokio runtime: {e}")))?;
     rt.block_on(async {
         cmd_store_async(action, StoreCommandContext {

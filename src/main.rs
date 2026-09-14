@@ -114,6 +114,7 @@ mod pin_import;
 mod portable_receipt;
 // Preserves carrier types intentionally encode the full external evidence graph and optional
 // compatibility surfaces.
+mod command_input;
 mod content_bound_requirement_evidence;
 mod host_environment;
 mod presentation;
