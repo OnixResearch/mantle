@@ -8,6 +8,8 @@ use alloc::vec::Vec;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::error::ReleaseEvidenceError;
+
 pub const PROOF_AUDIT_POLICY_VERSION: &str = "mantle-proof-audit-policy-v1";
 pub const STRICT_PROOF_POLICY_BASIS: &str = "mantle-proof-audit-policy-v1:strict-default";
 pub const DEFAULT_DIAGNOSTIC_NARROWER_CLAIM: &str = "diagnostic-evidence-only";
@@ -145,9 +147,9 @@ pub fn evaluate_proof_audit_gate(input: ProofAuditGateInput) -> ProofAuditGateRe
     }
     let event_set_digest_blake3 = match event_set_digest(&events) {
         Ok(digest_blake3) => digest_blake3,
-        Err(diagnostic) => {
+        Err(error) => {
             classification.blocked_events.push(EVENT_SERIALIZATION_BLOCKER.to_string());
-            classification.diagnostics.push(diagnostic);
+            classification.diagnostics.push(error.to_string());
             blake3::hash(EVENT_SERIALIZATION_FAILURE_DOMAIN).to_hex().to_string()
         }
     };
@@ -322,9 +324,9 @@ fn classify_report_verdict(
     ProofAuditGateVerdict::Admitted
 }
 
-fn event_set_digest(events: &[String]) -> Result<String, String> {
-    let bytes =
-        serde_json::to_vec(events).map_err(|error| format!("serializing proof audit event classes: {error}"))?;
+fn event_set_digest(events: &[String]) -> Result<String, ReleaseEvidenceError> {
+    let bytes = serde_json::to_vec(events)
+        .map_err(|error| ReleaseEvidenceError::Parse(format!("serializing proof audit event classes: {error}")))?;
     Ok(blake3::hash(&bytes).to_hex().to_string())
 }
 
