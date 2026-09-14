@@ -57,3 +57,41 @@ with subject, declared entries, and source path.
 
 This note measures fit. It does not claim the CLI or the contract is wrong, that
 any family should change behaviour, or that I4 is complete.
+
+## Follow-up: what today's CLI can and cannot populate
+
+Measured after mapping filegen and the named shell roots.
+
+**Remote execution.** `remote-secret-worker` maps cleanly: it names its manifest,
+profile, and provider, and the profile is exactly the credential the contract's
+`SecretProfile` operation requires. The four visible actions do not map, and the
+reason is structural rather than cosmetic: the contract's `Build` and `Fetch`
+operations require declared entries, while `remote serve` carries its already
+present input refs as an optional repeatable flag and `ticket`, `status`, and
+`debug` name no build inputs at all. Those actions therefore stay outside the
+contract rather than declaring entries the operator never wrote.
+
+**Diagnostics.** Neither CLI root fits the operation set:
+
+| Root | CLI shape | Contract requirement |
+| --- | --- | --- |
+| `doctor` | `doctor --profile <build\|self-build>` | operations are `Trace`, `Lint`, `Refactor`, `Bench`; a workflow profile is not one |
+| `refactor` | `refactor {list, plan, check, apply}` over a session id, project root, and repeatable store prefixes | `Lint` and `Refactor` require declared entries, which the contract reads as rule names; a session id is a subject, not a rule |
+
+Measured field detail: `RefactorAction::Plan`, `Check`, and `Apply` carry
+`session`, `root`, and `store_prefixes`, and `List` carries nothing. A mapping
+would have to either treat the session as a rule name or reject a refactor that
+declares no store prefix, and both would change what the command means.
+
+## Decision
+
+- Map `remote-secret-worker` to `SecretProfile`; leave the four visible remote
+  actions unadministered.
+- Leave both diagnostics roots unadministered until the family contract is
+  revised to describe the CLI's surface (a profile for the doctor, a session for
+  the refactor) or the CLI grows trace, lint, and bench roots.
+
+## Non-claims
+
+Leaving a root unadministered is not a claim that the root is wrong; it is a
+claim that the contract cannot check it yet.

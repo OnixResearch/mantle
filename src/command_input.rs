@@ -16,6 +16,8 @@ use mantle_application_contract::ProjectOperation;
 use mantle_application_contract::RealizeCommand;
 use mantle_application_contract::ReleaseCommand;
 use mantle_application_contract::ReleaseOperation;
+use mantle_application_contract::RemoteExecutionCommand;
+use mantle_application_contract::RemoteExecutionOperation;
 use mantle_application_contract::SourceProvenanceCommand;
 use mantle_application_contract::SourceProvenanceOperation;
 use mantle_application_contract::StoreAdministrationCommand;
@@ -25,11 +27,13 @@ use mantle_application_contract::validate_evaluation;
 use mantle_application_contract::validate_project_lifecycle;
 use mantle_application_contract::validate_realize_command;
 use mantle_application_contract::validate_release_command;
+use mantle_application_contract::validate_remote_execution;
 use mantle_application_contract::validate_source_provenance;
 use mantle_application_contract::validate_store_command;
 
 use crate::FilegenCommandAction;
 use crate::ReleaseAction;
+use crate::RemoteAction;
 use crate::RunError;
 use crate::SemanticGraphQueryKind;
 use crate::SourceAction;
@@ -59,6 +63,8 @@ const RUN_COMMAND_ROOT: &str = "run";
 const SHELL_COMMAND_ROOT: &str = "shell";
 /// Command root the develop DTO maps onto.
 const DEVELOP_COMMAND_ROOT: &str = "develop";
+/// Command root the remote secret worker maps onto.
+const REMOTE_SECRET_WORKER_COMMAND_ROOT: &str = "remote-secret-worker";
 
 /// What one store DTO admits.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1166,5 +1172,108 @@ mod named_realization_tests {
         let error = admit_run_realization(Some("   "), None).expect_err("a blank name must fail closed");
         assert!(error.to_string().contains("EmptyRoot"), "{error}");
         assert!(error.to_string().contains(RUN_COMMAND_ROOT), "{error}");
+    }
+}
+
+/// What one remote DTO admits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RemoteCommandAdmission {
+    /// The DTO maps onto a remote-execution operation the contract administers.
+    Modeled(RemoteExecutionCommand),
+    /// The contract does not administer this action.
+    NotAdministered,
+}
+
+/// Map one remote action onto its admission.
+///
+/// The contract's build and fetch operations require declared entries, and the
+/// visible remote actions carry none: serving names the input refs it already
+/// holds as an optional repeatable flag, and ticket, status, and debug name no
+/// build inputs at all. Rather than declare entries the operator never wrote,
+/// these actions stay outside the contract.
+pub(crate) fn admit_remote_action(action: &RemoteAction) -> RemoteCommandAdmission {
+    match action {
+        RemoteAction::Ticket { .. }
+        | RemoteAction::Status { .. }
+        | RemoteAction::Debug { .. }
+        | RemoteAction::Serve { .. } => RemoteCommandAdmission::NotAdministered,
+    }
+}
+
+/// Admit the remote secret worker and return its typed command.
+///
+/// The worker names the manifest it resolves, the SecretSpec profile to use, and
+/// the provider to use; the profile is the credential the contract's secret
+/// profile operation requires.
+pub(crate) fn admit_remote_secret_worker(manifest: &Path, profile: &str) -> Result<RemoteExecutionCommand, RunError> {
+    let command = RemoteExecutionCommand {
+        root: String::from(REMOTE_SECRET_WORKER_COMMAND_ROOT),
+        operation: RemoteExecutionOperation::SecretProfile,
+        subject: manifest.display().to_string(),
+        declared_entries: Vec::new(),
+        builder_uri: String::new(),
+        secret_profile: Some(String::from(profile)),
+        has_ticket: false,
+    };
+    debug_assert_eq!(command.root, REMOTE_SECRET_WORKER_COMMAND_ROOT);
+    let blockers = validate_remote_execution(&command);
+    let Some(blocker) = blockers.first() else {
+        return Ok(command);
+    };
+    debug_assert!(!blockers.is_empty());
+    Err(RunError::Internal(format!("remote-secret-worker request rejected: {blocker:?}")))
+}
+
+#[cfg(test)]
+mod remote_tests {
+    use std::path::PathBuf;
+
+    use super::*;
+
+    #[test]
+    fn the_secret_worker_maps_its_manifest_and_profile() {
+        let command =
+            admit_remote_secret_worker(Path::new("/tmp/secretspec.toml"), "production").expect("the worker must admit");
+        assert_eq!(command.operation, RemoteExecutionOperation::SecretProfile);
+        assert_eq!(command.root, REMOTE_SECRET_WORKER_COMMAND_ROOT);
+        assert_eq!(command.subject, "/tmp/secretspec.toml");
+        assert_eq!(command.secret_profile, Some(String::from("production")));
+        assert!(command.declared_entries.is_empty());
+        assert!(!command.has_ticket);
+    }
+
+    #[test]
+    fn an_empty_manifest_or_profile_fails_closed() {
+        let error = admit_remote_secret_worker(Path::new(""), "production").expect_err("an empty subject must fail");
+        assert!(error.to_string().contains("MissingSubject"), "{error}");
+
+        let no_profile = RemoteExecutionCommand {
+            root: String::from(REMOTE_SECRET_WORKER_COMMAND_ROOT),
+            operation: RemoteExecutionOperation::SecretProfile,
+            subject: String::from("/tmp/secretspec.toml"),
+            declared_entries: Vec::new(),
+            builder_uri: String::new(),
+            secret_profile: None,
+            has_ticket: false,
+        };
+        let blockers = validate_remote_execution(&no_profile);
+        assert!(blockers.iter().any(|blocker| format!("{blocker:?}").contains("CredentialRequired")));
+        assert!(RemoteExecutionOperation::Build.requires_declared_entries());
+    }
+
+    #[test]
+    fn the_visible_remote_actions_stay_outside_the_contract() {
+        let serve = RemoteAction::Serve {
+            endpoint_id: String::from("local-builder"),
+            binding: crate::RemoteServeBinding::Metadata,
+            signing_key_id: String::from("builder-key"),
+            executor: crate::RemoteServeExecutor::Fixture,
+            present_input_refs: Vec::new(),
+            execution_state_dir: None,
+            secret_manifest: PathBuf::from("secretspec.toml"),
+            secret_profile: String::from("production"),
+            secret_provider: String::from("systemd"),
+        };
+        assert_eq!(admit_remote_action(&serve), RemoteCommandAdmission::NotAdministered);
     }
 }

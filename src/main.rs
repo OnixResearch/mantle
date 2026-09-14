@@ -3309,6 +3309,7 @@ fn run_for_platform(args: Args, platform: mantle_portable_client_core::PlatformF
         provider,
     } = &args.command
     {
+        command_input::admit_remote_secret_worker(manifest, profile)?;
         return remote_service_secrets::run_remote_secret_worker(manifest, profile, provider);
     }
     apply_state_dir_override(&args);
@@ -4070,7 +4071,10 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
             ctx.json,
             unix_time_now_s()?,
         ),
-        Command::Remote { action } => run_remote_command(ctx, action.clone()),
+        Command::Remote { action } => {
+            command_input::admit_remote_action(action);
+            run_remote_command(ctx, action.clone())
+        }
         Command::RemoteSecretWorker {
             manifest,
             profile,
