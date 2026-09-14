@@ -17,6 +17,9 @@ use crate::envelope::CapabilityError;
 /// Maximum admitted realization roots.
 pub const MAX_REALIZATION_ROOTS: u32 = 256;
 
+/// Distinct blockers one realization command can report besides its roots.
+const MAX_REALIZATION_BLOCKERS: usize = 4;
+
 /// One typed realization command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RealizeCommand {
@@ -80,7 +83,9 @@ pub trait RealizePort {
 
 /// Validate one realization command before any port is called.
 pub fn validate_realize_command(command: &RealizeCommand) -> Vec<RealizationBlocker> {
-    let mut blockers = Vec::new();
+    let root_count = command.roots.len();
+    let blocker_slots = root_count.saturating_add(MAX_REALIZATION_BLOCKERS);
+    let mut blockers: Vec<RealizationBlocker> = Vec::with_capacity(blocker_slots);
     if command.root.is_empty() {
         blockers.push(RealizationBlocker::Domain(ApplicationBlocker::new(
             "missing-command-root",
@@ -91,7 +96,7 @@ pub fn validate_realize_command(command: &RealizeCommand) -> Vec<RealizationBloc
     if command.roots.is_empty() {
         blockers.push(RealizationBlocker::MissingRoots);
     }
-    let is_root_count_admissible = u32::try_from(command.roots.len()).is_ok_and(|count| count <= MAX_REALIZATION_ROOTS);
+    let is_root_count_admissible = u32::try_from(root_count).is_ok_and(|count| count <= MAX_REALIZATION_ROOTS);
     if !is_root_count_admissible {
         blockers.push(RealizationBlocker::TooManyRoots);
     }
@@ -102,6 +107,8 @@ pub fn validate_realize_command(command: &RealizeCommand) -> Vec<RealizationBloc
     }
     blockers.sort();
     blockers.dedup();
-    debug_assert!(blockers.len() <= command.roots.len().saturating_add(3));
+    debug_assert!(blockers.len() <= blocker_slots);
+    let empty_roots = command.roots.iter().filter(|root| root.trim().is_empty()).count();
+    debug_assert!(empty_roots <= root_count);
     blockers
 }
