@@ -35,12 +35,6 @@ mod store_administration;
 mod store_prefix;
 
 pub use admission_facts::RemoteAdmissionFacts;
-
-// Re-export the core types the contract names in its public commands, so a
-// consumer can name a field type without adding a core dependency of its own.
-pub use mantle_rust_plan_core::Blake3Digest;
-pub use mantle_rust_plan_core::BuildProfile;
-pub use mantle_rust_plan_core::PlanReceiptPreimage;
 pub use admission_facts::RemoteAdmissionRequest;
 pub use admission_facts::TEST_SENTINEL_MARKER_TEXT;
 pub use admission_facts::TestSentinelDecision;
@@ -102,6 +96,11 @@ pub use graph_query::MAX_GRAPH_QUERY_ENTITIES;
 pub use graph_query::classify_graph_query;
 pub use graph_query::graph_query_effect_plan;
 pub use graph_query::validate_graph_query;
+// Re-export the core types the contract names in its public commands, so a
+// consumer can name a field type without adding a core dependency of its own.
+pub use mantle_rust_plan_core::Blake3Digest;
+pub use mantle_rust_plan_core::BuildProfile;
+pub use mantle_rust_plan_core::PlanReceiptPreimage;
 pub use output_format::LoggingDecision;
 pub use output_format::OutputFormat;
 pub use output_format::logging_decision;
