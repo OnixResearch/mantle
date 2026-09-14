@@ -88,7 +88,7 @@ pub fn successful_smoke_result(input: SuccessfulSmokeResultInput<'_>) -> Result<
 
 pub fn bounded_log_ref(value: &str) -> Result<BoundedLogRef, Vec<String>> {
     let byte_count = u32::try_from(value.len()).map_err(|_| vec![String::from("log-byte-count-overflow")])?;
-    let log_ref = digest_ref(LOG_REF_PREFIX, LOG_DOMAIN, &value).map_err(|error| vec![error])?;
+    let log_ref = digest_ref(LOG_REF_PREFIX, LOG_DOMAIN, &value).map_err(|error| vec![String::from(error.code())])?;
     debug_assert!(log_ref.starts_with(LOG_REF_PREFIX));
     debug_assert_eq!(u32::try_from(value.len()).ok(), Some(byte_count));
     Ok(BoundedLogRef {
@@ -268,8 +268,8 @@ fn validate_non_claims(non_claims: &[String], diagnostics: &mut Vec<String>) {
     }
 }
 
-fn push_result(diagnostics: &mut Vec<String>, result: Result<(), String>) {
+fn push_result<E: core::fmt::Display>(diagnostics: &mut Vec<String>, result: Result<(), E>) {
     if let Err(error) = result {
-        diagnostics.push(error);
+        diagnostics.push(alloc::format!("{error}"));
     }
 }

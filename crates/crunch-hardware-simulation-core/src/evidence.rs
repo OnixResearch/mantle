@@ -114,7 +114,8 @@ pub fn build_evidence_bundle(input: EvidenceBundleInput<'_>) -> Result<HardwareE
         full_shared_hit: &full_shared_hit,
         non_claims: &non_claims,
     };
-    let evidence_ref = digest_ref(EVIDENCE_REF_PREFIX, EVIDENCE_DOMAIN, &hashable).map_err(|error| vec![error])?;
+    let evidence_ref = digest_ref(EVIDENCE_REF_PREFIX, EVIDENCE_DOMAIN, &hashable)
+        .map_err(|error| vec![String::from(error.code())])?;
     debug_assert!(evidence_ref.starts_with(EVIDENCE_REF_PREFIX));
     debug_assert!(!non_claims.is_empty());
     Ok(HardwareEvidenceBundle {

@@ -9,6 +9,8 @@
 //! in the std-facing shell. This crate is not part of Mantle scheduler/store
 //! semantics and does not interpret HDL source text.
 
+pub mod error;
+
 extern crate alloc;
 
 #[cfg(test)]
@@ -30,3 +32,4 @@ pub use smoke::*;
 
 #[cfg(test)]
 mod tests;
+pub use error::DigestError;

@@ -82,7 +82,8 @@ pub fn cohort_ref(cohort: &ToolCohort) -> Result<String, String> {
         members: &normalized.members,
         closure_paths_blake3: &normalized.closure_paths_blake3,
     };
-    let reference = digest_ref(COHORT_REF_PREFIX, COHORT_DOMAIN, &hashable)?;
+    let reference =
+        digest_ref(COHORT_REF_PREFIX, COHORT_DOMAIN, &hashable).map_err(|error| String::from(error.code()))?;
     debug_assert!(reference.starts_with(COHORT_REF_PREFIX));
     debug_assert!(!normalized.members.is_empty());
     Ok(reference)
@@ -110,7 +111,8 @@ pub fn validate_profile(profile: HardwareProfile) -> Result<ProfileValidation, V
     }
     let selected_source_refs = source_refs(&normalized, &selected_source_ids);
     let cohort_ref = cohort_ref(&normalized.tool_cohort).map_err(|error| vec![error])?;
-    let profile_ref = digest_ref(PROFILE_REF_PREFIX, PROFILE_DOMAIN, &normalized).map_err(|error| vec![error])?;
+    let profile_ref = digest_ref(PROFILE_REF_PREFIX, PROFILE_DOMAIN, &normalized)
+        .map_err(|error| vec![String::from(error.code())])?;
     debug_assert!(!selected_source_ids.is_empty());
     debug_assert_eq!(selected_source_ids.len(), selected_source_refs.len());
     Ok(ProfileValidation {
@@ -624,9 +626,9 @@ fn source_refs(profile: &HardwareProfile, selected_ids: &[String]) -> Vec<String
         .collect()
 }
 
-fn push_result(diagnostics: &mut Vec<String>, result: Result<(), String>) {
+fn push_result<E: core::fmt::Display>(diagnostics: &mut Vec<String>, result: Result<(), E>) {
     if let Err(error) = result {
-        diagnostics.push(error);
+        diagnostics.push(alloc::format!("{error}"));
     }
 }
 

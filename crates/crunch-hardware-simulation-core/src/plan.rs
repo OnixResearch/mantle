@@ -99,7 +99,7 @@ pub fn build_hardware_plan(request: HardwarePlanRequest) -> Result<HardwarePlan,
         return Err(diagnostics);
     }
     let canonical_bytes = serde_json::to_vec(&plan).map_err(|error| vec![format!("plan-json:{error}")])?;
-    let plan_blake3 = domain_digest(PLAN_DOMAIN, &plan).map_err(|error| vec![error])?;
+    let plan_blake3 = domain_digest(PLAN_DOMAIN, &plan).map_err(|error| vec![String::from(error.code())])?;
     debug_assert!(!canonical_bytes.is_empty());
     debug_assert_eq!(action_graph.len(), plan.units.len().saturating_add(1));
     Ok(HardwarePlan {
@@ -404,7 +404,7 @@ fn build_smoke_units(
         let action_ref = action_ref(ActionStage::Smoke, &unit_id, &direct, &dependencies)?;
         let simulator_ref =
             digest_ref(crate::digest::SIMULATOR_REF_PREFIX, b"mantle.hardware.simulator.v1", &link_action)
-                .map_err(|error| vec![error])?;
+                .map_err(|error| vec![String::from(error.code())])?;
         let smoke_result = crate::smoke::successful_smoke_result(crate::smoke::SuccessfulSmokeResultInput {
             case,
             simulator_ref: simulator_ref.clone(),
@@ -748,7 +748,7 @@ fn action_ref(
     dependency_action_refs: &[String],
 ) -> Result<String, Vec<String>> {
     let hashable = (stage, unit_id, direct_input_refs, dependency_action_refs);
-    digest_ref(ACTION_REF_PREFIX, ACTION_DOMAIN, &hashable).map_err(|error| vec![error])
+    digest_ref(ACTION_REF_PREFIX, ACTION_DOMAIN, &hashable).map_err(|error| vec![String::from(error.code())])
 }
 
 fn canonical_refs(values: Vec<String>) -> Vec<String> {
@@ -856,8 +856,8 @@ fn sanitize_name(value: &str) -> String {
     value.replace(['.', '_'], "-")
 }
 
-fn push_result(diagnostics: &mut Vec<String>, result: Result<(), String>) {
+fn push_result<E: core::fmt::Display>(diagnostics: &mut Vec<String>, result: Result<(), E>) {
     if let Err(error) = result {
-        diagnostics.push(error);
+        diagnostics.push(alloc::format!("{error}"));
     }
 }
