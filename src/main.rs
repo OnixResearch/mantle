@@ -8668,17 +8668,8 @@ mod tests {
     const TEST_REMOTE_STATUS_CONCURRENCY_TEXT: &str = "2";
     const TEST_REMOTE_TICKET_FD: i32 = 9;
     const TEST_REMOTE_TICKET_FD_TEXT: &str = "9";
-    const CLI_PARSE_TEST_STACK_BYTES: usize = 8_388_608;
-    const _: () = assert!(CLI_PARSE_TEST_STACK_BYTES > 0);
-
     fn parse_args_with_cli_test_stack(args: Vec<&'static str>) -> Result<Args, String> {
-        debug_assert!(!args.is_empty());
-        std::thread::Builder::new()
-            .stack_size(CLI_PARSE_TEST_STACK_BYTES)
-            .spawn(move || Args::try_parse_from(args).map_err(|error| error.to_string()))
-            .map_err(|error| format!("starting CLI parser test thread: {error}"))?
-            .join()
-            .map_err(|_| "CLI parser test thread panicked".to_string())?
+        crate::command_input::test_support::parse_args_on_cli_test_stack(args)
     }
 
     fn args_with_store_prefix(store_prefix: &str, nix_compat: bool) -> Args {
