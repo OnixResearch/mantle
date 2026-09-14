@@ -13,16 +13,21 @@ use mantle_application_contract::ProjectCommand;
 use mantle_application_contract::ProjectOperation;
 use mantle_application_contract::ReleaseCommand;
 use mantle_application_contract::ReleaseOperation;
+use mantle_application_contract::SourceProvenanceCommand;
+use mantle_application_contract::SourceProvenanceOperation;
 use mantle_application_contract::StoreAdministrationCommand;
 use mantle_application_contract::StoreOperation;
 use mantle_application_contract::validate_evaluation;
 use mantle_application_contract::validate_project_lifecycle;
 use mantle_application_contract::validate_release_command;
+use mantle_application_contract::validate_source_provenance;
 use mantle_application_contract::validate_store_command;
 
 use crate::ReleaseAction;
 use crate::RunError;
 use crate::SemanticGraphQueryKind;
+use crate::SourceAction;
+use crate::SourceBundleAction;
 use crate::StoreAction;
 
 /// Command root the store DTO maps onto.
@@ -35,6 +40,8 @@ const PROJECT_COMMAND_ROOT: &str = "project";
 const PROJECT_MANIFEST_FILE: &str = crate::project_cmd::MANIFEST_FILE;
 /// Command root the evaluation DTO maps onto.
 const EVALUATION_COMMAND_ROOT: &str = "eval";
+/// Command root the source DTO maps onto.
+const SOURCE_COMMAND_ROOT: &str = "source";
 
 /// What one store DTO admits.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,6 +134,19 @@ pub(crate) mod test_support {
     /// Stack size for a CLI parse in tests.
     pub(crate) const CLI_PARSE_TEST_STACK_BYTES: usize = 8_388_608;
     const _: () = assert!(CLI_PARSE_TEST_STACK_BYTES > 0);
+
+    /// Parse one argument vector and extract a value through `extract`.
+    pub(crate) fn parse_action_from<T>(
+        args: &[&'static str],
+        extract: impl FnOnce(crate::Command) -> Option<T> + Send + 'static,
+    ) -> T
+    where
+        T: Send + 'static,
+    {
+        let owned: Vec<&'static str> = args.to_vec();
+        let parsed = parse_args_on_cli_test_stack(owned).expect("fixture command line must parse");
+        extract(parsed.command).expect("fixture command line must produce the expected command")
+    }
 
     /// Parse one argument vector on a thread with room for the CLI enum.
     pub(crate) fn parse_args_on_cli_test_stack(args: Vec<&'static str>) -> Result<Args, String> {
@@ -674,6 +694,162 @@ mod evaluation_tests {
         let command = evaluation_command(Path::new(""), &[]);
         let error = admit_evaluation(&command).expect_err("an empty source must fail closed");
         assert!(error.to_string().contains("evaluate"), "{error}");
+        assert!(error.to_string().contains("MissingSubject"), "{error}");
+    }
+}
+
+/// What one source DTO admits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SourceCommandAdmission {
+    /// The DTO maps onto a source-provenance operation the contract administers.
+    Modeled(SourceProvenanceCommand),
+    /// The contract does not administer this bundle action.
+    NotAdministered,
+}
+
+/// Map one source DTO onto its admission.
+///
+/// Export is the one bundle action the contract models directly: it names a
+/// destination and the source selectors it exports. The self-build hydration is
+/// deliberately not administered: the contract's hydrate operation requires
+/// declared entries, and the CLI's hydration names only the bundle it consumes,
+/// so admitting it would mean naming an input the operator never declared. The
+/// remaining actions — plan, bootstrap profile, refresh, list, import, verify,
+/// preflight, and hydration — have no operation the contract can check here.
+pub(crate) fn admit_source_action(action: &SourceAction) -> SourceCommandAdmission {
+    match action {
+        SourceAction::Bundle { action } => match action {
+            SourceBundleAction::Export { sources, to, .. } => SourceCommandAdmission::Modeled(source_command(
+                SourceProvenanceOperation::Export,
+                &to.display().to_string(),
+                sources.clone(),
+                None,
+            )),
+            SourceBundleAction::Plan { .. }
+            | SourceBundleAction::BootstrapProfile { .. }
+            | SourceBundleAction::RefreshMantleSource { .. }
+            | SourceBundleAction::List { .. }
+            | SourceBundleAction::Import { .. }
+            | SourceBundleAction::HydrateSelfBuild { .. }
+            | SourceBundleAction::Verify { .. }
+            | SourceBundleAction::Preflight { .. } => SourceCommandAdmission::NotAdministered,
+        },
+    }
+}
+
+/// Reject one source command the contract refuses before any effect runs.
+pub(crate) fn admit_source_action_or_block(action: &SourceAction) -> Result<SourceCommandAdmission, RunError> {
+    let admission = admit_source_action(action);
+    let SourceCommandAdmission::Modeled(command) = &admission else {
+        return Ok(admission);
+    };
+    let blockers = validate_source_provenance(command);
+    let Some(blocker) = blockers.first() else {
+        return Ok(admission);
+    };
+    debug_assert!(!blockers.is_empty());
+    Err(RunError::Internal(format!("source {} request rejected: {blocker:?}", command.operation.as_str())))
+}
+
+/// Build one typed source-provenance command.
+fn source_command(
+    operation: SourceProvenanceOperation,
+    subject: &str,
+    declared_entries: Vec<String>,
+    expected_digest: Option<mantle_application_contract::Blake3Digest>,
+) -> SourceProvenanceCommand {
+    debug_assert!(!SOURCE_COMMAND_ROOT.is_empty());
+    debug_assert!(!operation.as_str().is_empty());
+    let command = SourceProvenanceCommand {
+        root: String::from(SOURCE_COMMAND_ROOT),
+        operation,
+        subject: String::from(subject),
+        declared_entries,
+        expected_digest,
+    };
+    command
+}
+
+#[cfg(test)]
+mod source_tests {
+    use std::path::PathBuf;
+
+    use super::*;
+
+    fn export_action() -> SourceAction {
+        super::test_support::parse_action_from(
+            &["mantle", "source", "bundle", "export", "--to", "/tmp/out-bundle"],
+            |command| match command {
+                crate::Command::Source { action } => Some(action),
+                _ => None,
+            },
+        )
+    }
+
+    #[test]
+    fn an_export_maps_to_its_destination_and_selectors() {
+        let action = export_action();
+        let SourceCommandAdmission::Modeled(command) = admit_source_action(&action) else {
+            panic!("export must be modeled");
+        };
+        assert_eq!(command.operation, SourceProvenanceOperation::Export);
+        assert_eq!(command.root, SOURCE_COMMAND_ROOT);
+        assert_eq!(command.subject, "/tmp/out-bundle");
+        assert_eq!(command.expected_digest, None);
+        assert!(admit_source_action_or_block(&action).is_ok());
+    }
+
+    #[test]
+    fn a_self_build_hydration_is_not_administered() {
+        let action = super::test_support::parse_action_from(
+            &[
+                "mantle",
+                "source",
+                "bundle",
+                "hydrate-self-build",
+                "--from",
+                "/tmp/bundle",
+                "--expected-manifest-blake3",
+                "0000000000000000000000000000000000000000000000000000000000000000",
+                "--checkout",
+                "/tmp/checkout",
+            ],
+            |command| match command {
+                crate::Command::Source { action } => Some(action),
+                _ => None,
+            },
+        );
+        assert_eq!(admit_source_action(&action), SourceCommandAdmission::NotAdministered);
+        assert!(SourceProvenanceOperation::Hydrate.requires_declared_entries());
+    }
+
+    #[test]
+    fn a_bundle_plan_is_not_administered() {
+        let action =
+            super::test_support::parse_action_from(&["mantle", "source", "bundle", "plan"], |command| match command {
+                crate::Command::Source { action } => Some(action),
+                _ => None,
+            });
+        assert_eq!(admit_source_action(&action), SourceCommandAdmission::NotAdministered);
+        assert!(matches!(admit_source_action_or_block(&action), Ok(SourceCommandAdmission::NotAdministered)));
+        let _ = PathBuf::new();
+    }
+
+    #[test]
+    fn an_empty_subject_fails_closed() {
+        let command = source_command(SourceProvenanceOperation::Export, "", Vec::new(), None);
+        assert!(command.subject.is_empty());
+        let error = admit_source_action_or_block(&SourceAction::Bundle {
+            action: SourceBundleAction::Export {
+                sources: Vec::new(),
+                build_roots: Vec::new(),
+                import_paths: Vec::new(),
+                to: PathBuf::new(),
+                fetch_missing: false,
+            },
+        })
+        .expect_err("an empty destination must fail closed");
+        assert!(error.to_string().contains("export"), "{error}");
         assert!(error.to_string().contains("MissingSubject"), "{error}");
     }
 }

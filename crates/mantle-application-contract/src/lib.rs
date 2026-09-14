@@ -35,6 +35,12 @@ mod store_administration;
 mod store_prefix;
 
 pub use admission_facts::RemoteAdmissionFacts;
+
+// Re-export the core types the contract names in its public commands, so a
+// consumer can name a field type without adding a core dependency of its own.
+pub use mantle_rust_plan_core::Blake3Digest;
+pub use mantle_rust_plan_core::BuildProfile;
+pub use mantle_rust_plan_core::PlanReceiptPreimage;
 pub use admission_facts::RemoteAdmissionRequest;
 pub use admission_facts::TEST_SENTINEL_MARKER_TEXT;
 pub use admission_facts::TestSentinelDecision;

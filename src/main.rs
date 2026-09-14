@@ -4060,6 +4060,7 @@ fn dispatch_command(args: &Args, ctx: &RunContext) -> Result<(), RunError> {
             ctx.json,
         ),
         Command::Source { action } => {
+            command_input::admit_source_action_or_block(action)?;
             source_bundle::cmd_source(action.clone(), &ctx.resolved_state_dir, &ctx.store_prefix, ctx.json)
         }
         Command::Receipt { action } => portable_receipt::cmd_receipt(
