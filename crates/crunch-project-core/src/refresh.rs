@@ -20,6 +20,7 @@ use crate::PatchSource;
 use crate::ProjectManifest;
 use crate::TrustSubject;
 use crate::VerifiedTrustFact;
+use crate::error::Error;
 use crate::evaluate_trust_policy;
 use crate::fetch_policy_compatibility_problems;
 use crate::lock_entry_without_fetch;
@@ -215,9 +216,9 @@ pub fn apply_outcomes(request: ApplyOutcomesRequest) -> ApplyResult {
                         new_lock.patches.insert(patch_name, trusted_patch);
                         is_patch_changed = true;
                     }
-                    Err(reason) => patch_failures.push(RefreshFailure {
+                    Err(error) => patch_failures.push(RefreshFailure {
                         name: patch_name,
-                        reason,
+                        reason: error.message().to_string(),
                     }),
                 }
             }
@@ -352,9 +353,9 @@ fn refresh_generation_material(
         Some(ResolvedInputState::Resolved(resolved)) => {
             match trusted_resolved_input(input, resolved.clone(), trust_facts) {
                 Ok(trusted) => unchanged_or_updated(input, lock, trusted),
-                Err(reason) => RefreshOutcome::Failed {
+                Err(error) => RefreshOutcome::Failed {
                     name: input.name.clone(),
-                    reason,
+                    reason: error.message().to_string(),
                 },
             }
         }
@@ -382,9 +383,9 @@ fn refresh_without_generation_fetch(
             };
             match trusted_resolved_input(input, resolved, trust_facts) {
                 Ok(trusted) => unchanged_or_updated(input, lock, trusted),
-                Err(reason) => RefreshOutcome::Failed {
+                Err(error) => RefreshOutcome::Failed {
                     name: input.name.clone(),
-                    reason,
+                    reason: error.message().to_string(),
                 },
             }
         }
@@ -426,12 +427,13 @@ fn trusted_resolved_input(
     input: &ManifestInput,
     mut resolved: ResolvedInput,
     trust_facts: &[VerifiedTrustFact],
-) -> Result<ResolvedInput, String> {
+) -> Result<ResolvedInput, Error> {
     assert_eq!(resolved.name, input.name, "resolved input name must match manifest input");
     if let Some(policy) = &input.trust {
         let subject = TrustSubject::input(input.name.clone());
         let trust =
-            evaluate_trust_policy(subject, policy, &resolved.entry.hash.algo, &resolved.entry.hash.value, trust_facts)?;
+            evaluate_trust_policy(subject, policy, &resolved.entry.hash.algo, &resolved.entry.hash.value, trust_facts)
+                .map_err(Error::Validation)?;
         resolved.entry.trust = Some(trust);
         return Ok(resolved);
     }
@@ -443,11 +445,12 @@ fn trusted_locked_patch(
     def: &PatchDef,
     mut patch: LockedPatch,
     trust_facts: &[VerifiedTrustFact],
-) -> Result<LockedPatch, String> {
+) -> Result<LockedPatch, Error> {
     assert!(!def.name.is_empty(), "patch name must not be empty");
     if let Some(policy) = &def.trust {
         let subject = TrustSubject::patch(def.name.clone());
-        let trust = evaluate_trust_policy(subject, policy, &patch.hash.algo, &patch.hash.value, trust_facts)?;
+        let trust = evaluate_trust_policy(subject, policy, &patch.hash.algo, &patch.hash.value, trust_facts)
+            .map_err(Error::Validation)?;
         patch.trust = Some(trust);
         return Ok(patch);
     }
