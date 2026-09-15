@@ -4868,7 +4868,54 @@ fn cmd_export_source_bundle(
         fetch_missing,
     )?;
     write_source_bundle(to, &manifest)?;
+    classify_source_bundle_export(to, &manifest)?;
     print_plan_report(&plan_report(&manifest)?, context.is_json_output)
+}
+
+/// Effect kind the export reports for its written bundle.
+const SOURCE_BUNDLE_READBACK_EFFECT: &str = "read-files";
+/// Diagnostic code for a bundle that does not read back.
+const SOURCE_BUNDLE_READBACK_CODE: &str = "source-bundle-readback-mismatch";
+
+/// Classify the export's read-back before reporting the export.
+///
+/// The write returning success is not the fact that matters to an operator: the
+/// fact is whether the bundle can be read back as the manifest that was
+/// written. The typed observation carries that fact, and the contract decides
+/// whether the export may report completion.
+fn classify_source_bundle_export(to: &Path, written: &SourceBundleManifest) -> Result<(), RunError> {
+    assert!(!to.as_os_str().is_empty());
+    let plan =
+        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::SourceProvenance, &[
+            SOURCE_BUNDLE_READBACK_EFFECT,
+        ])
+        .ok_or_else(|| RunError::Internal("source bundle readback effect plan exceeds its bound".to_string()))?;
+    let readback = read_source_bundle(to);
+    let is_matching = match &readback {
+        Ok(manifest) => manifest == written,
+        Err(_) => false,
+    };
+    let observation = mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId(String::from(SOURCE_BUNDLE_READBACK_EFFECT)),
+        status: if is_matching {
+            mantle_application_contract::ObservationStatus::Succeeded
+        } else {
+            mantle_application_contract::ObservationStatus::Failed
+        },
+        diagnostics_code: if is_matching {
+            None
+        } else {
+            Some(String::from(SOURCE_BUNDLE_READBACK_CODE))
+        },
+    };
+    match mantle_application_contract::classify_observations(&plan, &[observation]) {
+        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
+        mantle_application_contract::ApplicationOutcome::Failed { .. } => Err(RunError::Internal(format!(
+            "source bundle {} did not read back as the manifest that was written",
+            to.display()
+        ))),
+        other => Err(RunError::Internal(format!("source bundle readback observations were inconsistent: {other:?}"))),
+    }
 }
 
 fn cmd_list_source_bundle(from: &Path, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
@@ -7563,5 +7610,53 @@ mod tests {
 
         let err = validate_source_record(&record, ManifestPayloadValidation::VerifyPayloads).unwrap_err();
         assert!(err.to_string().contains("below symlink"));
+    }
+}
+
+#[cfg(test)]
+mod readback_classification_tests {
+
+    use super::*;
+
+    /// Plan a one-record manifest over a temporary payload.
+    fn manifest_for(temp: &tempfile::TempDir, identity: &str) -> SourceBundleManifest {
+        let payload = temp.path().join(format!("payload-{identity}.txt"));
+        fs::write(&payload, b"payload").unwrap();
+        let spec = SourceSpec {
+            kind: SourceRecordKind::LocalPath,
+            identity: identity.to_string(),
+            path: payload,
+            adapter: None,
+        };
+        plan_source_bundle(&[spec], "/mantle/store").unwrap()
+    }
+
+    #[test]
+    fn a_bundle_that_reads_back_as_written_is_completed() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("bundle.json");
+        let manifest = manifest_for(&temp, "alpha");
+        write_source_bundle(&path, &manifest).unwrap();
+        assert!(classify_source_bundle_export(&path, &manifest).is_ok());
+    }
+
+    #[test]
+    fn a_missing_bundle_is_rejected_before_reporting() {
+        let temp = tempfile::tempdir().unwrap();
+        let manifest = manifest_for(&temp, "alpha");
+        let missing = temp.path().join("absent.json");
+        let error = classify_source_bundle_export(&missing, &manifest).expect_err("a missing bundle must fail");
+        assert!(error.to_string().contains("did not read back"), "{error}");
+    }
+
+    #[test]
+    fn a_bundle_that_reads_back_as_a_different_manifest_is_rejected() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("bundle.json");
+        let written = manifest_for(&temp, "alpha");
+        let other = manifest_for(&temp, "beta");
+        write_source_bundle(&path, &written).unwrap();
+        assert!(classify_source_bundle_export(&path, &other).is_err());
+        assert!(classify_source_bundle_export(&path, &written).is_ok());
     }
 }
