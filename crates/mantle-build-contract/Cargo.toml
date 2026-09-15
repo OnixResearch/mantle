@@ -7,7 +7,9 @@ publish = false
 description = "Versioned no-std build request and observation contract for Mantle consumers"
 
 [dependencies]
-blake3 = { version = "=1.8.2", default-features = false, features = ["pure"] }
+# Caret range so downstream consumers can unify with blake3 >= 1.8.5; the
+# workspace Cargo.lock still pins 1.8.2 for the owner's own builds.
+blake3 = { version = "1.8.2", default-features = false, features = ["pure"] }
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
 
 [dev-dependencies]
