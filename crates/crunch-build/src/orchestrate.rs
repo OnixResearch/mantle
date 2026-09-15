@@ -1381,7 +1381,8 @@ where BServ: BuildService + 'static
             output_names: derivation.outputs.keys().cloned().collect(),
             policy: trust_policy_for_action(&policy_refs, &self.trusted_keys),
         };
-        let plan = plan_strong_reuse(request, collection.candidates).map_err(Error::Store)?;
+        let plan = plan_strong_reuse(request, collection.candidates)
+            .map_err(|error| Error::Store(error.code().to_string()))?;
         let selected_source = plan
             .selected_result_ref
             .as_ref()

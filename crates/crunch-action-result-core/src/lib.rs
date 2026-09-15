@@ -5,6 +5,8 @@
 //! This crate has no filesystem, network, clock, environment, CAS, or executor
 //! access. Shells supply verified facts; the core canonicalizes immutable
 //! records and decides whether strong reuse is admissible.
+pub mod error;
+pub use error::ActionResultError;
 
 pub mod artifact_auth;
 
@@ -207,7 +209,7 @@ pub struct StrongReusePlan {
     pub non_claims: Vec<String>,
 }
 
-pub fn canonical_action_result(input: ActionResultRecordInput) -> Result<ActionResultRecord, String> {
+pub fn canonical_action_result(input: ActionResultRecordInput) -> Result<ActionResultRecord, ActionResultError> {
     let normalized = normalize_record_input(input);
     assert!(is_strictly_sorted(&normalized.outputs), "normalized outputs must be sorted and unique");
     assert!(is_strictly_sorted(&normalized.non_claims), "normalized non-claims must be sorted and unique");
@@ -232,19 +234,19 @@ pub fn canonical_action_result(input: ActionResultRecordInput) -> Result<ActionR
     Ok(record)
 }
 
-pub fn validate_action_result(record: &ActionResultRecord) -> Result<(), String> {
+pub fn validate_action_result(record: &ActionResultRecord) -> Result<(), ActionResultError> {
     if record.schema != ACTION_RESULT_SCHEMA {
-        return Err("action-result-schema-unsupported".to_string());
+        return Err(ActionResultError::new("action-result-schema-unsupported".to_string()));
     }
     let input = record_input(record);
     validate_record_input(&input)?;
     let expected_ref = digest_ref(ACTION_RESULT_REF_PREFIX, RECORD_DOMAIN, &input)?;
     if record.result_ref != expected_ref {
-        return Err("action-result-ref-mismatch".to_string());
+        return Err(ActionResultError::new("action-result-ref-mismatch".to_string()));
     }
     let bytes = canonical_record_bytes(record)?;
     if bytes.len() > MAX_ACTION_RESULT_RECORD_BYTES {
-        return Err("action-result-record-too-large".to_string());
+        return Err(ActionResultError::new("action-result-record-too-large".to_string()));
     }
     Ok(())
 }
@@ -252,7 +254,7 @@ pub fn validate_action_result(record: &ActionResultRecord) -> Result<(), String>
 pub fn canonical_action_result_index(
     action_ref: String,
     result_refs: Vec<String>,
-) -> Result<ActionResultIndex, String> {
+) -> Result<ActionResultIndex, ActionResultError> {
     validate_typed_ref(TypedRefValidation {
         field: "action-ref",
         value: &action_ref,
@@ -278,9 +280,9 @@ pub fn canonical_action_result_index(
     Ok(index)
 }
 
-pub fn validate_action_result_index(index: &ActionResultIndex) -> Result<(), String> {
+pub fn validate_action_result_index(index: &ActionResultIndex) -> Result<(), ActionResultError> {
     if index.schema != ACTION_RESULT_INDEX_SCHEMA {
-        return Err("action-result-index-schema-unsupported".to_string());
+        return Err(ActionResultError::new("action-result-index-schema-unsupported".to_string()));
     }
     assert_eq!(index.schema, ACTION_RESULT_INDEX_SCHEMA, "validated index schema must match");
     validate_typed_ref(TypedRefValidation {
@@ -290,7 +292,7 @@ pub fn validate_action_result_index(index: &ActionResultIndex) -> Result<(), Str
     })?;
     validate_index_result_refs(&index.result_refs)?;
     if index.result_refs != sorted_unique_strings(index.result_refs.clone()) {
-        return Err("action-result-index-not-canonical".to_string());
+        return Err(ActionResultError::new("action-result-index-not-canonical".to_string()));
     }
     assert!(is_strictly_sorted(&index.result_refs), "validated result refs must be sorted and unique");
     let hashable = IndexHashable {
@@ -300,42 +302,44 @@ pub fn validate_action_result_index(index: &ActionResultIndex) -> Result<(), Str
     };
     let expected_ref = digest_ref(ACTION_RESULT_INDEX_REF_PREFIX, INDEX_DOMAIN, &hashable)?;
     if index.index_ref != expected_ref {
-        return Err("action-result-index-ref-mismatch".to_string());
+        return Err(ActionResultError::new("action-result-index-ref-mismatch".to_string()));
     }
     let bytes = canonical_index_bytes(index)?;
     if bytes.len() > MAX_ACTION_RESULT_INDEX_BYTES {
-        return Err("action-result-index-too-large".to_string());
+        return Err(ActionResultError::new("action-result-index-too-large".to_string()));
     }
     Ok(())
 }
 
-pub fn canonical_record_bytes(record: &ActionResultRecord) -> Result<Vec<u8>, String> {
-    serde_json::to_vec(record).map_err(|error| format!("action-result-record-json:{error}"))
+pub fn canonical_record_bytes(record: &ActionResultRecord) -> Result<Vec<u8>, ActionResultError> {
+    serde_json::to_vec(record).map_err(|error| ActionResultError::new(format!("action-result-record-json:{error}")))
 }
 
-pub fn canonical_signed_record_bytes(record: &SignedActionResultRecord) -> Result<Vec<u8>, String> {
+pub fn canonical_signed_record_bytes(record: &SignedActionResultRecord) -> Result<Vec<u8>, ActionResultError> {
     let normalized = SignedActionResultRecord {
         record: record.record.clone(),
         record_signatures: sorted_unique_structs(record.record_signatures.clone()),
     };
-    serde_json::to_vec(&normalized).map_err(|error| format!("action-result-signed-record-json:{error}"))
+    serde_json::to_vec(&normalized)
+        .map_err(|error| ActionResultError::new(format!("action-result-signed-record-json:{error}")))
 }
 
-pub fn canonical_index_bytes(index: &ActionResultIndex) -> Result<Vec<u8>, String> {
-    serde_json::to_vec(index).map_err(|error| format!("action-result-index-json:{error}"))
+pub fn canonical_index_bytes(index: &ActionResultIndex) -> Result<Vec<u8>, ActionResultError> {
+    serde_json::to_vec(index).map_err(|error| ActionResultError::new(format!("action-result-index-json:{error}")))
 }
 
-pub fn policy_digest_blake3(policy: &ActionResultTrustPolicy) -> Result<String, String> {
+pub fn policy_digest_blake3(policy: &ActionResultTrustPolicy) -> Result<String, ActionResultError> {
     validate_policy(policy)?;
     let normalized = normalize_policy(policy.clone());
-    let bytes = serde_json::to_vec(&normalized).map_err(|error| format!("action-result-policy-json:{error}"))?;
+    let bytes = serde_json::to_vec(&normalized)
+        .map_err(|error| ActionResultError::new(format!("action-result-policy-json:{error}")))?;
     Ok(domain_digest(POLICY_DOMAIN, &bytes))
 }
 
 pub fn plan_strong_reuse(
     request: StrongReuseRequest,
     candidates: Vec<DiscoveredActionResultCandidate>,
-) -> Result<StrongReusePlan, String> {
+) -> Result<StrongReusePlan, ActionResultError> {
     validate_request(&request, candidates.len())?;
     let mut unique = BTreeMap::new();
     for candidate in candidates {
@@ -354,12 +358,12 @@ pub fn plan_strong_reuse(
     finish_plan(decisions, admitted_by_output)
 }
 
-fn admitted_output_digest(decision: &CandidateDecision) -> Result<Option<String>, String> {
+fn admitted_output_digest(decision: &CandidateDecision) -> Result<Option<String>, ActionResultError> {
     if !decision.admitted {
         return Ok(None);
     }
     let Some(digest) = decision.output_set_digest_blake3.clone() else {
-        return Err("action-result-admitted-candidate-digest-missing".to_string());
+        return Err(ActionResultError::new("action-result-admitted-candidate-digest-missing".to_string()));
     };
     Ok(Some(digest))
 }
@@ -367,10 +371,10 @@ fn admitted_output_digest(decision: &CandidateDecision) -> Result<Option<String>
 fn finish_plan(
     mut decisions: Vec<CandidateDecision>,
     admitted_by_output: BTreeMap<String, Vec<String>>,
-) -> Result<StrongReusePlan, String> {
+) -> Result<StrongReusePlan, ActionResultError> {
     decisions.sort_by(|left, right| left.result_ref.cmp(&right.result_ref).then(left.source_id.cmp(&right.source_id)));
     if decisions.len() > MAX_ACTION_RESULT_DIAGNOSTICS {
-        return Err("action-result-diagnostic-limit-exceeded".to_string());
+        return Err(ActionResultError::new("action-result-diagnostic-limit-exceeded".to_string()));
     }
     assert!(decisions.len() <= MAX_ACTION_RESULT_DIAGNOSTICS, "validated decision count must remain bounded");
     assert!(
@@ -493,7 +497,7 @@ fn validate_candidate_admission_facts(facts: &CandidateAdmissionFacts, diagnosti
     }
 }
 
-fn output_set_digest(record: &ActionResultRecord) -> Result<String, String> {
+fn output_set_digest(record: &ActionResultRecord) -> Result<String, ActionResultError> {
     let outputs = record
         .outputs
         .iter()
@@ -502,18 +506,19 @@ fn output_set_digest(record: &ActionResultRecord) -> Result<String, String> {
             object_ref: &output.object_ref,
         })
         .collect::<Vec<_>>();
-    let bytes = serde_json::to_vec(&outputs).map_err(|error| format!("action-result-output-set-json:{error}"))?;
+    let bytes = serde_json::to_vec(&outputs)
+        .map_err(|error| ActionResultError::new(format!("action-result-output-set-json:{error}")))?;
     Ok(domain_digest(OUTPUT_SET_DOMAIN, &bytes))
 }
 
-fn validate_record_input(input: &ActionResultRecordInput) -> Result<(), String> {
+fn validate_record_input(input: &ActionResultRecordInput) -> Result<(), ActionResultError> {
     validate_typed_ref(TypedRefValidation {
         field: "action-ref",
         value: &input.action_ref,
         prefix: ACTION_REF_PREFIX,
     })?;
     if input.outputs.is_empty() || input.outputs.len() > MAX_ACTION_RESULT_OUTPUTS {
-        return Err("action-result-output-count-invalid".to_string());
+        return Err(ActionResultError::new("action-result-output-count-invalid".to_string()));
     }
     assert!(!input.outputs.is_empty(), "validated action result must declare an output");
     assert!(
@@ -521,7 +526,7 @@ fn validate_record_input(input: &ActionResultRecordInput) -> Result<(), String> 
         "validated action result outputs must remain bounded"
     );
     if input.outputs != sorted_unique_structs(input.outputs.clone()) {
-        return Err("action-result-outputs-not-canonical".to_string());
+        return Err(ActionResultError::new("action-result-outputs-not-canonical".to_string()));
     }
     for output in &input.outputs {
         validate_output(output)?;
@@ -570,7 +575,7 @@ fn validate_record_input(input: &ActionResultRecordInput) -> Result<(), String> 
     validate_non_claims(&input.non_claims)
 }
 
-fn validate_output(output: &ActionResultOutput) -> Result<(), String> {
+fn validate_output(output: &ActionResultOutput) -> Result<(), ActionResultError> {
     validate_identifier(IdentifierValidation {
         field: "output-name",
         value: &output.name,
@@ -586,72 +591,72 @@ fn validate_output(output: &ActionResultOutput) -> Result<(), String> {
         prefix: PATH_INFO_REF_PREFIX,
     })?;
     if !output.store_path.starts_with('/') || output.store_path.len() > MAX_ACTION_RESULT_PATH_BYTES {
-        return Err("action-result-store-path-invalid".to_string());
+        return Err(ActionResultError::new("action-result-store-path-invalid".to_string()));
     }
     if output.store_path.split('/').any(|segment| segment == "..") {
-        return Err("action-result-store-path-traversal".to_string());
+        return Err(ActionResultError::new("action-result-store-path-traversal".to_string()));
     }
     assert!(output.store_path.starts_with('/'), "validated store path must remain absolute");
     assert!(output.store_path.len() <= MAX_ACTION_RESULT_PATH_BYTES, "validated store path must remain bounded");
     Ok(())
 }
 
-fn validate_non_claims(non_claims: &[String]) -> Result<(), String> {
+fn validate_non_claims(non_claims: &[String]) -> Result<(), ActionResultError> {
     if non_claims.is_empty() || non_claims.len() > MAX_ACTION_RESULT_NON_CLAIMS {
-        return Err("action-result-non-claim-count-invalid".to_string());
+        return Err(ActionResultError::new("action-result-non-claim-count-invalid".to_string()));
     }
     if non_claims != sorted_unique_strings(non_claims.to_vec()) {
-        return Err("action-result-non-claims-not-canonical".to_string());
+        return Err(ActionResultError::new("action-result-non-claims-not-canonical".to_string()));
     }
     for required in required_non_claims() {
         if !non_claims.contains(&required) {
-            return Err(format!("action-result-required-non-claim-missing:{required}"));
+            return Err(ActionResultError::new(format!("action-result-required-non-claim-missing:{required}")));
         }
     }
     Ok(())
 }
 
-fn validate_policy(policy: &ActionResultTrustPolicy) -> Result<(), String> {
+fn validate_policy(policy: &ActionResultTrustPolicy) -> Result<(), ActionResultError> {
     if policy.schema != ACTION_RESULT_POLICY_SCHEMA {
-        return Err("action-result-policy-schema-unsupported".to_string());
+        return Err(ActionResultError::new("action-result-policy-schema-unsupported".to_string()));
     }
     validate_identifier(IdentifierValidation {
         field: "policy-id",
         value: &policy.policy_id,
     })?;
     if policy.allowed_source_classes.is_empty() {
-        return Err("action-result-policy-source-classes-empty".to_string());
+        return Err(ActionResultError::new("action-result-policy-source-classes-empty".to_string()));
     }
     if policy.require_record_signature && policy.trusted_record_signers.is_empty() {
-        return Err("action-result-policy-trusted-signers-empty".to_string());
+        return Err(ActionResultError::new("action-result-policy-trusted-signers-empty".to_string()));
     }
     if policy.require_path_info_signature && policy.trusted_record_signers.is_empty() {
-        return Err("action-result-policy-pathinfo-trust-empty".to_string());
+        return Err(ActionResultError::new("action-result-policy-pathinfo-trust-empty".to_string()));
     }
     Ok(())
 }
 
-fn validate_request(request: &StrongReuseRequest, candidate_count: usize) -> Result<(), String> {
+fn validate_request(request: &StrongReuseRequest, candidate_count: usize) -> Result<(), ActionResultError> {
     validate_typed_ref(TypedRefValidation {
         field: "action-ref",
         value: &request.action_ref,
         prefix: ACTION_REF_PREFIX,
     })?;
     if request.output_names.is_empty() || request.output_names.len() > MAX_ACTION_RESULT_OUTPUTS {
-        return Err("action-result-request-output-count-invalid".to_string());
+        return Err(ActionResultError::new("action-result-request-output-count-invalid".to_string()));
     }
     if candidate_count > MAX_ACTION_RESULT_CANDIDATES {
-        return Err("action-result-candidate-count-exceeded".to_string());
+        return Err(ActionResultError::new("action-result-candidate-count-exceeded".to_string()));
     }
     validate_policy(&request.policy)
 }
 
-fn validate_index_result_refs(refs: &[String]) -> Result<(), String> {
+fn validate_index_result_refs(refs: &[String]) -> Result<(), ActionResultError> {
     if refs.len() > MAX_ACTION_RESULT_CANDIDATES {
-        return Err("result-ref-count-invalid".to_string());
+        return Err(ActionResultError::new("result-ref-count-invalid".to_string()));
     }
     if refs != sorted_unique_strings(refs.to_vec()) {
-        return Err("result-ref-list-not-canonical".to_string());
+        return Err(ActionResultError::new("result-ref-list-not-canonical".to_string()));
     }
     for value in refs {
         validate_typed_ref(TypedRefValidation {
@@ -663,12 +668,17 @@ fn validate_index_result_refs(refs: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_bounded_refs(field: &str, refs: &[String], prefix: &str, count_max: usize) -> Result<(), String> {
+fn validate_bounded_refs(
+    field: &str,
+    refs: &[String],
+    prefix: &str,
+    count_max: usize,
+) -> Result<(), ActionResultError> {
     if refs.is_empty() || refs.len() > count_max {
-        return Err(format!("{field}-count-invalid"));
+        return Err(ActionResultError::new(format!("{field}-count-invalid")));
     }
     if refs != sorted_unique_strings(refs.to_vec()) {
-        return Err(format!("{field}-list-not-canonical"));
+        return Err(ActionResultError::new(format!("{field}-list-not-canonical")));
     }
     for value in refs {
         validate_typed_ref(TypedRefValidation { field, value, prefix })?;
@@ -682,15 +692,15 @@ struct TypedRefValidation<'a> {
     prefix: &'a str,
 }
 
-fn validate_typed_ref(input: TypedRefValidation<'_>) -> Result<(), String> {
+fn validate_typed_ref(input: TypedRefValidation<'_>) -> Result<(), ActionResultError> {
     let Some(digest) = input.value.strip_prefix(input.prefix) else {
-        return Err(format!("{}-prefix-invalid", input.field));
+        return Err(ActionResultError::new(format!("{}-prefix-invalid", input.field)));
     };
     if digest.len() != BLAKE3_HEX_CHARS {
-        return Err(format!("{}-digest-length-invalid", input.field));
+        return Err(ActionResultError::new(format!("{}-digest-length-invalid", input.field)));
     }
     if !digest.chars().all(|character| character.is_ascii_digit() || ('a'..='f').contains(&character)) {
-        return Err(format!("{}-digest-encoding-invalid", input.field));
+        return Err(ActionResultError::new(format!("{}-digest-encoding-invalid", input.field)));
     }
     Ok(())
 }
@@ -700,12 +710,12 @@ struct IdentifierValidation<'a> {
     value: &'a str,
 }
 
-fn validate_identifier(input: IdentifierValidation<'_>) -> Result<(), String> {
+fn validate_identifier(input: IdentifierValidation<'_>) -> Result<(), ActionResultError> {
     if input.value.is_empty() || input.value.len() > MAX_ACTION_RESULT_ID_BYTES {
-        return Err(format!("{}-invalid", input.field));
+        return Err(ActionResultError::new(format!("{}-invalid", input.field)));
     }
     if input.value.chars().any(char::is_control) {
-        return Err(format!("{}-control-character", input.field));
+        return Err(ActionResultError::new(format!("{}-control-character", input.field)));
     }
     Ok(())
 }
@@ -752,8 +762,9 @@ fn required_non_claims() -> Vec<String> {
     ]
 }
 
-fn digest_ref<T: Serialize>(prefix: &str, domain: &[u8], value: &T) -> Result<String, String> {
-    let bytes = serde_json::to_vec(value).map_err(|error| format!("action-result-canonical-json:{error}"))?;
+fn digest_ref<T: Serialize>(prefix: &str, domain: &[u8], value: &T) -> Result<String, ActionResultError> {
+    let bytes = serde_json::to_vec(value)
+        .map_err(|error| ActionResultError::new(format!("action-result-canonical-json:{error}")))?;
     Ok(format!("{prefix}{}", domain_digest(domain, &bytes)))
 }
 
@@ -777,9 +788,9 @@ fn is_strictly_sorted<T: Ord>(values: &[T]) -> bool {
     values.iter().zip(values.iter().skip(1)).all(|(left, right)| left < right)
 }
 
-fn push_error(diagnostics: &mut Vec<String>, result: Result<(), String>) {
+fn push_error<E: std::fmt::Display>(diagnostics: &mut Vec<String>, result: Result<(), E>) {
     if let Err(error) = result {
-        diagnostics.push(error);
+        diagnostics.push(format!("{error}"));
     }
 }
 
@@ -991,10 +1002,12 @@ mod tests {
             .map(|index| typed_ref(ACTION_RESULT_REF_PREFIX, &format!("result-{index}")))
             .collect::<Vec<_>>();
 
-        assert_eq!(canonical_action_result(malformed).unwrap_err(), "action-receipt-ref-prefix-invalid");
-        assert_eq!(canonical_action_result(partial).unwrap_err(), "action-result-output-count-invalid");
+        assert_eq!(canonical_action_result(malformed).unwrap_err().code(), "action-receipt-ref-prefix-invalid");
+        assert_eq!(canonical_action_result(partial).unwrap_err().code(), "action-result-output-count-invalid");
         assert_eq!(
-            canonical_action_result_index(typed_ref(ACTION_REF_PREFIX, "action"), oversized_refs).unwrap_err(),
+            canonical_action_result_index(typed_ref(ACTION_REF_PREFIX, "action"), oversized_refs)
+                .unwrap_err()
+                .code(),
             "result-ref-count-invalid"
         );
     }
@@ -1035,8 +1048,8 @@ mod tests {
         let mut missing = admitted;
         missing.output_set_digest_blake3 = None;
         assert_eq!(
-            admitted_output_digest(&missing),
-            Err("action-result-admitted-candidate-digest-missing".to_string())
+            admitted_output_digest(&missing).unwrap_err().code(),
+            "action-result-admitted-candidate-digest-missing"
         );
 
         missing.admitted = false;

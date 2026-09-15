@@ -109,7 +109,7 @@ pub struct MantleArtifactAuthReport {
 pub fn map_mantle_artifact_auth_statement(
     input: &MantleArtifactAuthStatementInput<'_>,
 ) -> Result<ArtifactStatement, Vec<String>> {
-    validate_action_result(input.record).map_err(|error| vec![error])?;
+    validate_action_result(input.record).map_err(|error| vec![String::from(error.code())])?;
     if input.profile_id.is_empty() {
         return Err(vec!["profile-id-empty".to_string()]);
     }
@@ -200,7 +200,7 @@ fn map_observation(observation: &MantleArtifactAuthObservation<'_>) -> Result<Ma
 }
 
 fn validate_mapping_inputs(observation: &MantleArtifactAuthObservation<'_>) -> Result<(), Vec<String>> {
-    validate_action_result(observation.record).map_err(|error| vec![error])?;
+    validate_action_result(observation.record).map_err(|error| vec![String::from(error.code())])?;
     if observation.legacy.result_ref != observation.record.result_ref {
         return Err(vec!["legacy-result-ref-mismatch".to_string()]);
     }

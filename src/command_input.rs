@@ -363,8 +363,6 @@ fn path_text(path: Option<&std::path::Path>) -> String {
 
 #[cfg(test)]
 mod release_tests {
-    use clap::Parser;
-
     use super::*;
 
     /// Parse one real `release` command line into its CLI DTO.

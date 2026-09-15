@@ -123,9 +123,10 @@ fn project_sidecars(signed: SignedActionResultRecord, local: LocalSidecars) -> R
     if signed.record.result_ref != expected_result_ref || local.marker_result_ref != expected_result_ref {
         return Err("local result marker does not match the signed record".to_string());
     }
-    let index = canonical_action_result_index(expected_action_ref, vec![expected_result_ref])?;
-    let index_bytes = canonical_index_bytes(&index)?;
-    let record_bytes = canonical_signed_record_bytes(&signed)?;
+    let index = canonical_action_result_index(expected_action_ref, vec![expected_result_ref])
+        .map_err(|error| error.code().to_string())?;
+    let index_bytes = canonical_index_bytes(&index).map_err(|error| error.code().to_string())?;
+    let record_bytes = canonical_signed_record_bytes(&signed).map_err(|error| error.code().to_string())?;
     assert!(!index_bytes.is_empty());
     assert!(!record_bytes.is_empty());
     Ok(ProjectedSidecars {

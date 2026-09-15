@@ -275,7 +275,8 @@ impl LocalActionResultStore {
 
     fn lookup_sync(&self, action_ref: &str) -> Result<ActionResultLookup, String> {
         let result_refs = self.read_index_markers(action_ref)?;
-        let index = canonical_action_result_index(action_ref.to_string(), result_refs)?;
+        let index = canonical_action_result_index(action_ref.to_string(), result_refs)
+            .map_err(|error| error.code().to_string())?;
         let mut records = Vec::with_capacity(index.result_refs.len());
         for result_ref in &index.result_refs {
             records.push(self.read_record(result_ref)?);
@@ -291,7 +292,7 @@ impl LocalActionResultStore {
 
     fn publish_sync(&self, signed: &SignedActionResultRecord) -> Result<ActionResultPublicationReport, String> {
         validate_signed_record(signed)?;
-        let record_bytes = canonical_signed_record_bytes(signed)?;
+        let record_bytes = canonical_signed_record_bytes(signed).map_err(|error| error.code().to_string())?;
         let record_path = self.record_path(&signed.record.result_ref)?;
         let record_status = publish_bytes_no_clobber(&record_path, &record_bytes)?;
         let marker_path = self.marker_path(&signed.record.action_ref, &signed.record.result_ref)?;
@@ -550,7 +551,11 @@ impl HttpActionResultStore {
             .await
             .map_err(|error| format!("action-result-http-index-request:{url}:{error}"))?;
         if response.status() == StatusCode::NOT_FOUND {
-            return Ok((canonical_action_result_index(action_ref.to_string(), Vec::new())?, None));
+            return Ok((
+                canonical_action_result_index(action_ref.to_string(), Vec::new())
+                    .map_err(|error| error.code().to_string())?,
+                None,
+            ));
         }
         if !response.status().is_success() {
             return Err(format!("action-result-http-index-status:{url}:{}", response.status()));
@@ -559,7 +564,7 @@ impl HttpActionResultStore {
         let bytes = read_bounded_response(response, crunch_action_result_core::MAX_ACTION_RESULT_INDEX_BYTES).await?;
         let index: ActionResultIndex = serde_json::from_slice(&bytes)
             .map_err(|error| format!("action-result-http-index-json-invalid:{url}:{error}"))?;
-        validate_action_result_index(&index)?;
+        validate_action_result_index(&index).map_err(|error| error.code().to_string())?;
         if index.action_ref != action_ref {
             return Err("action-result-http-index-action-mismatch".to_string());
         }
@@ -588,7 +593,7 @@ impl HttpActionResultStore {
     }
 
     async fn publish_record(&self, signed: &SignedActionResultRecord) -> Result<ActionResultPublicationStatus, String> {
-        let bytes = canonical_signed_record_bytes(signed)?;
+        let bytes = canonical_signed_record_bytes(signed).map_err(|error| error.code().to_string())?;
         let url = self.record_url(&signed.record.result_ref)?;
         let response = self
             .client
@@ -605,7 +610,7 @@ impl HttpActionResultStore {
             return Err(format!("action-result-http-record-publish-status:{url}:{}", response.status()));
         }
         let existing = self.fetch_record(&signed.record.result_ref).await?;
-        let existing_bytes = canonical_signed_record_bytes(&existing)?;
+        let existing_bytes = canonical_signed_record_bytes(&existing).map_err(|error| error.code().to_string())?;
         if existing_bytes != bytes {
             return Err("action-result-http-record-no-clobber-conflict".to_string());
         }
@@ -623,8 +628,9 @@ impl HttpActionResultStore {
             }
             let mut result_refs = index.result_refs;
             result_refs.push(signed.record.result_ref.clone());
-            let next = canonical_action_result_index(signed.record.action_ref.clone(), result_refs)?;
-            let bytes = canonical_index_bytes(&next)?;
+            let next = canonical_action_result_index(signed.record.action_ref.clone(), result_refs)
+                .map_err(|error| error.code().to_string())?;
+            let bytes = canonical_index_bytes(&next).map_err(|error| error.code().to_string())?;
             let url = self.index_url(&signed.record.action_ref)?;
             let mut request = self.client.put(url.clone()).body(bytes);
             request = match etag {
@@ -858,7 +864,7 @@ async fn discover_sources(
 }
 
 fn validate_signed_record(signed: &SignedActionResultRecord) -> Result<(), String> {
-    validate_action_result(&signed.record)?;
+    validate_action_result(&signed.record).map_err(|error| error.code().to_string())?;
     assert!(!signed.record.action_ref.is_empty());
     assert!(!signed.record.result_ref.is_empty());
     if signed.record_signatures.is_empty() {
@@ -876,7 +882,7 @@ fn validate_signed_record(signed: &SignedActionResultRecord) -> Result<(), Strin
     for signature in &signed.record_signatures {
         validate_detached_signature_shape(signature)?;
     }
-    let bytes = canonical_signed_record_bytes(signed)?;
+    let bytes = canonical_signed_record_bytes(signed).map_err(|error| error.code().to_string())?;
     if bytes.len() > crunch_action_result_core::MAX_ACTION_RESULT_RECORD_BYTES {
         return Err("action-result-signed-record-too-large".to_string());
     }

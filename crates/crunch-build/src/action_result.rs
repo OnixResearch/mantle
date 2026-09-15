@@ -176,7 +176,7 @@ pub fn signed_record_for_outputs(
         hermeticity_mode,
         producer_identity.clone(),
     )?;
-    let record = canonical_action_result(input)?;
+    let record = canonical_action_result(input).map_err(|error| error.code().to_string())?;
     let signature = keypair.signing_key.sign(record.result_ref.as_bytes()).to_owned();
     let signed_record = SignedActionResultRecord {
         record,

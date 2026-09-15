@@ -713,7 +713,7 @@ impl PlanStore {
             },
             candidates,
         )
-        .map_err(RunError::Build)?;
+        .map_err(|error| RunError::Build(error.code().to_string()))?;
         let selected_source = plan.selected_result_ref.as_ref().and_then(|result_ref| sources.get(result_ref).cloned());
         let disposition = action_result_plan_disposition(&plan);
         Ok(discovery_runtime_report(
