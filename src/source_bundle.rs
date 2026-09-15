@@ -4926,7 +4926,52 @@ fn cmd_list_source_bundle(from: &Path, context: &SourceBundleCliContext<'_>) -> 
 fn cmd_import_source_bundle(from: &Path, pin: bool, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
     let manifest = read_source_bundle(from)?;
     let operation_output = import_source_bundle(&manifest, context.state_dir, pin)?;
+    classify_source_bundle_import(&operation_output)?;
     print_import_report(&operation_output, context.is_json_output)
+}
+
+/// Effect kind the import reports for the state it writes.
+const SOURCE_BUNDLE_IMPORT_EFFECT: &str = "write-files";
+/// Diagnostic code for an import that did not account for every record.
+const SOURCE_BUNDLE_IMPORT_CODE: &str = "source-bundle-import-incomplete";
+
+/// Classify the import report before reporting it.
+///
+/// The fact that matters is accounting: every record the bundle declares is
+/// either written now or was already present. A record that is neither means the
+/// import under-delivered, and the classification fails closed instead of
+/// reporting a successful import of an incomplete state.
+fn classify_source_bundle_import(report: &SourceBundleImportReport) -> Result<(), RunError> {
+    let plan =
+        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::SourceProvenance, &[
+            SOURCE_BUNDLE_IMPORT_EFFECT,
+        ])
+        .ok_or_else(|| RunError::Internal("source bundle import effect plan exceeds its bound".to_string()))?;
+    let declared_records = u32::try_from(report.records.len())
+        .map_err(|_| RunError::Internal("source bundle declares more records than u32".to_string()))?;
+    let accounted_records = report.imported_count.saturating_add(report.skipped_present_count);
+    let is_accounted = accounted_records == declared_records;
+    debug_assert!(accounted_records <= declared_records || !is_accounted);
+    let observation = mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId(String::from(SOURCE_BUNDLE_IMPORT_EFFECT)),
+        status: if is_accounted {
+            mantle_application_contract::ObservationStatus::Succeeded
+        } else {
+            mantle_application_contract::ObservationStatus::Failed
+        },
+        diagnostics_code: if is_accounted {
+            None
+        } else {
+            Some(String::from(SOURCE_BUNDLE_IMPORT_CODE))
+        },
+    };
+    match mantle_application_contract::classify_observations(&plan, &[observation]) {
+        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
+        mantle_application_contract::ApplicationOutcome::Failed { .. } => Err(RunError::Internal(format!(
+            "source bundle import accounted for {accounted_records} of {declared_records} declared records"
+        ))),
+        other => Err(RunError::Internal(format!("source bundle import observations were inconsistent: {other:?}"))),
+    }
 }
 
 fn cmd_hydrate_self_build_source_bundle(
@@ -7658,5 +7703,51 @@ mod readback_classification_tests {
         write_source_bundle(&path, &written).unwrap();
         assert!(classify_source_bundle_export(&path, &other).is_err());
         assert!(classify_source_bundle_export(&path, &written).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod import_accounting_tests {
+    use super::*;
+
+    /// Build one import report with the given counts and declared records.
+    fn report(imported_count: u32, skipped_present_count: u32, declared: usize) -> SourceBundleImportReport {
+        let records = (0..declared)
+            .map(|index| SourceRecordSummary {
+                kind: SourceRecordKind::LocalPath,
+                identity: format!("record-{index}"),
+                payload_bytes: 0,
+                content_blake3: "0".repeat(64),
+                file_count: 0,
+            })
+            .collect();
+        SourceBundleImportReport {
+            imported_count,
+            skipped_present_count,
+            pinned: false,
+            manifest_blake3: "0".repeat(64),
+            records,
+            non_claim: SOURCE_BUNDLE_NON_CLAIM,
+        }
+    }
+
+    #[test]
+    fn an_import_that_accounts_for_every_record_is_completed() {
+        assert!(classify_source_bundle_import(&report(2, 1, 3)).is_ok());
+        assert!(classify_source_bundle_import(&report(3, 0, 3)).is_ok());
+        assert!(classify_source_bundle_import(&report(0, 3, 3)).is_ok());
+        assert!(classify_source_bundle_import(&report(0, 0, 0)).is_ok());
+    }
+
+    #[test]
+    fn an_import_that_leaves_a_record_unaccounted_is_rejected() {
+        let error = classify_source_bundle_import(&report(1, 1, 3)).expect_err("2 of 3 must fail closed");
+        assert!(error.to_string().contains("accounted for 2 of 3"), "{error}");
+    }
+
+    #[test]
+    fn an_import_that_counts_more_records_than_declared_is_rejected() {
+        assert!(classify_source_bundle_import(&report(2, 2, 3)).is_err());
+        assert!(classify_source_bundle_import(&report(1, 0, 0)).is_err());
     }
 }
