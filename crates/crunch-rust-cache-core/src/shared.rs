@@ -16,6 +16,7 @@ use crate::BLAKE3_HEX_CHARS;
 use crate::MAX_RECORD_BYTES;
 use crate::MAX_STRING_BYTES;
 use crate::RustUnitResult;
+use crate::error::RustCacheError;
 use crate::validate_rust_result;
 
 pub const SHARED_RUST_ENVELOPE_SCHEMA: &str = "mantle-shared-rust-unit-result-envelope-v1";
@@ -137,8 +138,8 @@ pub fn sign_rust_result_envelope(
     producer: RustResultProducerIdentity,
     signer_name: String,
     signing_key: &ed25519_dalek::SigningKey,
-) -> Result<SignedRustResultEnvelope, String> {
-    validate_rust_result(&result)?;
+) -> Result<SignedRustResultEnvelope, RustCacheError> {
+    validate_rust_result(&result).map_err(RustCacheError::new)?;
     validate_object_identity(&object)?;
     validate_identifier(&producer.producer_id, ValidationCode("shared-rust-producer-id-invalid"))?;
     validate_identifier(&producer.producer_policy_id, ValidationCode("shared-rust-producer-policy-id-invalid"))?;
@@ -173,14 +174,14 @@ pub fn sign_rust_result_envelope(
     Ok(signed)
 }
 
-pub fn validate_rust_result_envelope(envelope: &RustResultEnvelope) -> Result<(), String> {
+pub fn validate_rust_result_envelope(envelope: &RustResultEnvelope) -> Result<(), RustCacheError> {
     if envelope.schema != SHARED_RUST_ENVELOPE_SCHEMA {
-        return Err("shared-rust-envelope-schema-unsupported".to_string());
+        return Err(RustCacheError::new("shared-rust-envelope-schema-unsupported".to_string()));
     }
     if envelope.claim_class != SHARED_RUST_CLAIM_CLASS {
-        return Err("shared-rust-claim-class-unsupported".to_string());
+        return Err(RustCacheError::new("shared-rust-claim-class-unsupported".to_string()));
     }
-    validate_rust_result(&envelope.result)?;
+    validate_rust_result(&envelope.result).map_err(RustCacheError::new)?;
     validate_object_identity(&envelope.object)?;
     validate_identifier(&envelope.producer.producer_id, ValidationCode("shared-rust-producer-id-invalid"))?;
     validate_identifier(
@@ -195,18 +196,19 @@ pub fn validate_rust_result_envelope(envelope: &RustResultEnvelope) -> Result<()
             verifier_key_blake3: &envelope.verifier_key_blake3,
         })?;
     if envelope.envelope_ref != expected_ref {
-        return Err("shared-rust-envelope-ref-mismatch".to_string());
+        return Err(RustCacheError::new("shared-rust-envelope-ref-mismatch".to_string()));
     }
-    let bytes = serde_json::to_vec(envelope).map_err(|error| format!("shared-rust-envelope-json:{error}"))?;
+    let bytes = serde_json::to_vec(envelope)
+        .map_err(|error| RustCacheError::new(format!("shared-rust-envelope-json:{error}")))?;
     if bytes.len() > MAX_SHARED_ENVELOPE_BYTES {
-        return Err("shared-rust-envelope-too-large".to_string());
+        return Err(RustCacheError::new("shared-rust-envelope-too-large".to_string()));
     }
     assert!(envelope.envelope_ref.starts_with(SHARED_RUST_ENVELOPE_REF_PREFIX));
     assert!(bytes.len() <= MAX_SHARED_ENVELOPE_BYTES);
     Ok(())
 }
 
-pub fn validate_signed_rust_result_envelope(signed: &SignedRustResultEnvelope) -> Result<(), String> {
+pub fn validate_signed_rust_result_envelope(signed: &SignedRustResultEnvelope) -> Result<(), RustCacheError> {
     validate_rust_result_envelope(&signed.envelope)?;
     let verifier_bytes =
         decode_exact_hex(&signed.verifier_key_hex, ED25519_PUBLIC_KEY_BYTES, "shared-rust-verifier-key-invalid")?;
@@ -214,11 +216,12 @@ pub fn validate_signed_rust_result_envelope(signed: &SignedRustResultEnvelope) -
         decode_exact_hex(&signed.signature_hex, ED25519_SIGNATURE_BYTES, "shared-rust-signature-invalid")?;
     let actual_verifier_digest = domain_digest(VERIFIER_DOMAIN, &verifier_bytes);
     if signed.envelope.verifier_key_blake3 != actual_verifier_digest {
-        return Err("shared-rust-verifier-key-digest-mismatch".to_string());
+        return Err(RustCacheError::new("shared-rust-verifier-key-digest-mismatch".to_string()));
     }
-    let bytes = serde_json::to_vec(signed).map_err(|error| format!("shared-rust-signed-envelope-json:{error}"))?;
+    let bytes = serde_json::to_vec(signed)
+        .map_err(|error| RustCacheError::new(format!("shared-rust-signed-envelope-json:{error}")))?;
     if bytes.len() > MAX_SHARED_ENVELOPE_BYTES {
-        return Err("shared-rust-signed-envelope-too-large".to_string());
+        return Err(RustCacheError::new("shared-rust-signed-envelope-too-large".to_string()));
     }
     assert_eq!(verifier_bytes.len(), ED25519_PUBLIC_KEY_BYTES);
     assert_eq!(signature_bytes.len(), ED25519_SIGNATURE_BYTES);
@@ -230,12 +233,12 @@ pub fn evaluate_rust_result_authority(
     policy: &RustResultTrustPolicy,
     expected: ExpectedRustResultRefs<'_>,
 ) -> RustResultAuthorityDecision {
-    let mut reasons = BTreeSet::new();
+    let mut reasons: BTreeSet<String> = BTreeSet::new();
     if let Err(reason) = validate_trust_policy(policy) {
-        reasons.insert(reason);
+        reasons.insert(String::from(reason.code()));
     }
     if let Err(reason) = validate_signed_rust_result_envelope(signed) {
-        reasons.insert(reason);
+        reasons.insert(String::from(reason.code()));
     }
     if signed.envelope.result.input.action_ref != expected.action_ref {
         reasons.insert("shared-rust-action-ref-mismatch".to_string());
@@ -256,7 +259,7 @@ pub fn evaluate_rust_result_authority(
     if reasons.is_empty()
         && let Err(reason) = verify_signature(signed)
     {
-        reasons.insert(reason);
+        reasons.insert(String::from(reason.code()));
     }
     let is_admitted = reasons.is_empty();
     let reason_codes = reasons.into_iter().collect::<Vec<_>>();
@@ -277,24 +280,24 @@ pub fn evaluate_rust_result_authority(
     }
 }
 
-pub fn validate_trust_policy(policy: &RustResultTrustPolicy) -> Result<(), String> {
+pub fn validate_trust_policy(policy: &RustResultTrustPolicy) -> Result<(), RustCacheError> {
     if policy.schema != SHARED_RUST_TRUST_POLICY_SCHEMA {
-        return Err("shared-rust-trust-policy-schema-unsupported".to_string());
+        return Err(RustCacheError::new("shared-rust-trust-policy-schema-unsupported".to_string()));
     }
     validate_identifier(&policy.policy_id, ValidationCode("shared-rust-trust-policy-id-invalid"))?;
     if policy.accepted_producer_policy_ids.is_empty()
         || policy.accepted_producer_policy_ids.len() > MAX_ACCEPTED_PRODUCER_POLICIES
     {
-        return Err("shared-rust-producer-policy-count-invalid".to_string());
+        return Err(RustCacheError::new("shared-rust-producer-policy-count-invalid".to_string()));
     }
     if policy.trusted_keys.is_empty() || policy.trusted_keys.len() > MAX_TRUSTED_RUST_RESULT_KEYS {
-        return Err("shared-rust-trusted-key-count-invalid".to_string());
+        return Err(RustCacheError::new("shared-rust-trusted-key-count-invalid".to_string()));
     }
     if policy.accepted_producer_policy_ids != sorted_unique(policy.accepted_producer_policy_ids.clone()) {
-        return Err("shared-rust-producer-policies-not-canonical".to_string());
+        return Err(RustCacheError::new("shared-rust-producer-policies-not-canonical".to_string()));
     }
     if policy.trusted_keys != sorted_unique(policy.trusted_keys.clone()) {
-        return Err("shared-rust-trusted-keys-not-canonical".to_string());
+        return Err(RustCacheError::new("shared-rust-trusted-keys-not-canonical".to_string()));
     }
     for producer_policy in &policy.accepted_producer_policy_ids {
         validate_identifier(producer_policy, ValidationCode("shared-rust-producer-policy-id-invalid"))?;
@@ -308,7 +311,7 @@ pub fn validate_trust_policy(policy: &RustResultTrustPolicy) -> Result<(), Strin
     Ok(())
 }
 
-pub fn verifier_key_digest(verifier_key_hex: &str) -> Result<String, String> {
+pub fn verifier_key_digest(verifier_key_hex: &str) -> Result<String, RustCacheError> {
     let bytes = decode_exact_hex(verifier_key_hex, ED25519_PUBLIC_KEY_BYTES, "shared-rust-verifier-key-invalid")?;
     let digest = domain_digest(VERIFIER_DOMAIN, &bytes);
     assert_eq!(digest.len(), BLAKE3_HEX_CHARS);
@@ -321,7 +324,7 @@ fn envelope_reference(
     object: &RustResultObjectIdentity,
     producer: &RustResultProducerIdentity,
     signer: EnvelopeSignerFacts<'_>,
-) -> Result<String, String> {
+) -> Result<String, RustCacheError> {
     let hashable = EnvelopeHashable {
         schema: SHARED_RUST_ENVELOPE_SCHEMA,
         claim_class: SHARED_RUST_CLAIM_CLASS,
@@ -331,9 +334,10 @@ fn envelope_reference(
         signer_name: signer.signer_name,
         verifier_key_blake3: signer.verifier_key_blake3,
     };
-    let bytes = serde_json::to_vec(&hashable).map_err(|error| format!("shared-rust-envelope-json:{error}"))?;
+    let bytes = serde_json::to_vec(&hashable)
+        .map_err(|error| RustCacheError::new(format!("shared-rust-envelope-json:{error}")))?;
     if bytes.len() > MAX_SHARED_ENVELOPE_BYTES {
-        return Err("shared-rust-envelope-too-large".to_string());
+        return Err(RustCacheError::new("shared-rust-envelope-too-large".to_string()));
     }
     let digest = domain_digest(ENVELOPE_DOMAIN, &bytes);
     assert_eq!(digest.len(), BLAKE3_HEX_CHARS);
@@ -341,22 +345,22 @@ fn envelope_reference(
     Ok(format!("{SHARED_RUST_ENVELOPE_REF_PREFIX}{digest}"))
 }
 
-fn validate_object_identity(object: &RustResultObjectIdentity) -> Result<(), String> {
+fn validate_object_identity(object: &RustResultObjectIdentity) -> Result<(), RustCacheError> {
     validate_typed_ref(&object.object_ref, TypedRefRule {
         prefix: SHARED_RUST_OBJECT_REF_PREFIX,
         code: ValidationCode("shared-rust-object-ref-invalid"),
     })?;
     if object.size_bytes == 0 || object.size_bytes > crate::MAX_TREE_BYTES {
-        return Err("shared-rust-object-size-invalid".to_string());
+        return Err(RustCacheError::new("shared-rust-object-size-invalid".to_string()));
     }
     assert!(object.object_ref.starts_with(SHARED_RUST_OBJECT_REF_PREFIX));
     assert!(object.size_bytes <= crate::MAX_TREE_BYTES);
     Ok(())
 }
 
-fn validate_typed_ref(value: &str, rule: TypedRefRule<'_>) -> Result<(), String> {
+fn validate_typed_ref(value: &str, rule: TypedRefRule<'_>) -> Result<(), RustCacheError> {
     let Some(digest) = value.strip_prefix(rule.prefix) else {
-        return Err(rule.code.0.to_string());
+        return Err(RustCacheError::new(rule.code.0.to_string()));
     };
     validate_blake3(digest, rule.code)?;
     assert_eq!(value.len(), rule.prefix.len().saturating_add(BLAKE3_HEX_CHARS));
@@ -364,36 +368,39 @@ fn validate_typed_ref(value: &str, rule: TypedRefRule<'_>) -> Result<(), String>
     Ok(())
 }
 
-fn verify_signature(signed: &SignedRustResultEnvelope) -> Result<(), String> {
+fn verify_signature(signed: &SignedRustResultEnvelope) -> Result<(), RustCacheError> {
     let verifier_bytes =
         decode_exact_hex(&signed.verifier_key_hex, ED25519_PUBLIC_KEY_BYTES, "shared-rust-verifier-key-invalid")?;
     let signature_bytes =
         decode_exact_hex(&signed.signature_hex, ED25519_SIGNATURE_BYTES, "shared-rust-signature-invalid")?;
     let verifier_array: [u8; ED25519_PUBLIC_KEY_BYTES] =
-        verifier_bytes.try_into().map_err(|_| "shared-rust-verifier-key-invalid".to_string())?;
+        verifier_bytes.try_into().map_err(|_| RustCacheError::new("shared-rust-verifier-key-invalid"))?;
     let signature_array: [u8; ED25519_SIGNATURE_BYTES] =
-        signature_bytes.try_into().map_err(|_| "shared-rust-signature-invalid".to_string())?;
+        signature_bytes.try_into().map_err(|_| RustCacheError::new("shared-rust-signature-invalid"))?;
     let verifier = ed25519_dalek::VerifyingKey::from_bytes(&verifier_array)
-        .map_err(|_| "shared-rust-verifier-key-invalid".to_string())?;
+        .map_err(|_| RustCacheError::new("shared-rust-verifier-key-invalid"))?;
     let signature = ed25519_dalek::Signature::from_bytes(&signature_array);
     let message = signature_message(&signed.envelope)?;
-    verifier.verify(&message, &signature).map_err(|_| "shared-rust-signature-invalid".to_string())?;
+    verifier
+        .verify(&message, &signature)
+        .map_err(|_| RustCacheError::new("shared-rust-signature-invalid"))?;
     assert_eq!(message[0..SIGNATURE_DOMAIN.len()], *SIGNATURE_DOMAIN);
     assert!(!message.is_empty());
     Ok(())
 }
 
-fn signature_message(envelope: &RustResultEnvelope) -> Result<Vec<u8>, String> {
-    let canonical = serde_json::to_vec(envelope).map_err(|error| format!("shared-rust-envelope-json:{error}"))?;
+fn signature_message(envelope: &RustResultEnvelope) -> Result<Vec<u8>, RustCacheError> {
+    let canonical = serde_json::to_vec(envelope)
+        .map_err(|error| RustCacheError::new(format!("shared-rust-envelope-json:{error}")))?;
     if canonical.len() > MAX_SHARED_ENVELOPE_BYTES {
-        return Err("shared-rust-envelope-too-large".to_string());
+        return Err(RustCacheError::new("shared-rust-envelope-too-large".to_string()));
     }
     let mut message = Vec::with_capacity(
         SIGNATURE_DOMAIN
             .len()
             .checked_add(1)
             .and_then(|value| value.checked_add(canonical.len()))
-            .ok_or_else(|| "shared-rust-signature-message-overflow".to_string())?,
+            .ok_or_else(|| RustCacheError::new("shared-rust-signature-message-overflow"))?,
     );
     message.extend_from_slice(SIGNATURE_DOMAIN);
     message.push(DOMAIN_SEPARATOR);
@@ -403,37 +410,37 @@ fn signature_message(envelope: &RustResultEnvelope) -> Result<Vec<u8>, String> {
     Ok(message)
 }
 
-fn decode_exact_hex(value: &str, expected_bytes: usize, code: &str) -> Result<Vec<u8>, String> {
-    let expected_chars = expected_bytes.checked_mul(2).ok_or_else(|| code.to_string())?;
+fn decode_exact_hex(value: &str, expected_bytes: usize, code: &str) -> Result<Vec<u8>, RustCacheError> {
+    let expected_chars = expected_bytes.checked_mul(2).ok_or_else(|| RustCacheError::new(code))?;
     if value.len() != expected_chars {
-        return Err(code.to_string());
+        return Err(RustCacheError::new(code.to_string()));
     }
-    let decoded = HEXLOWER.decode(value.as_bytes()).map_err(|_| code.to_string())?;
+    let decoded = HEXLOWER.decode(value.as_bytes()).map_err(|_| RustCacheError::new(code))?;
     if decoded.len() != expected_bytes || HEXLOWER.encode(&decoded) != value {
-        return Err(code.to_string());
+        return Err(RustCacheError::new(code.to_string()));
     }
     assert_eq!(decoded.len(), expected_bytes);
     assert_eq!(value.len(), expected_chars);
     Ok(decoded)
 }
 
-fn validate_identifier(value: &str, code: ValidationCode<'_>) -> Result<(), String> {
+fn validate_identifier(value: &str, code: ValidationCode<'_>) -> Result<(), RustCacheError> {
     if value.is_empty() || value.len() > MAX_STRING_BYTES {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     if value.bytes().any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace()) {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     assert!(!value.is_empty());
     assert!(value.len() <= MAX_STRING_BYTES);
     Ok(())
 }
 
-fn validate_blake3(value: &str, code: ValidationCode<'_>) -> Result<(), String> {
+fn validate_blake3(value: &str, code: ValidationCode<'_>) -> Result<(), RustCacheError> {
     if value.len() != BLAKE3_HEX_CHARS
         || !value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
     {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     assert_eq!(value.len(), BLAKE3_HEX_CHARS);
     assert!(value.bytes().all(|byte| !byte.is_ascii_uppercase()));

@@ -909,7 +909,7 @@ impl RustCache {
             request.signer_name,
             request.signing_key,
         )
-        .map_err(Error::Core)?;
+        .map_err(|error| Error::Core(String::from(error.code())))?;
         let envelope_bytes =
             serde_json::to_vec(&signed).map_err(|error| Error::Json(format!("shared-envelope-encode:{error}")))?;
         let candidate = candidate_for_envelope(&signed)?;
@@ -1451,7 +1451,7 @@ fn decode_candidate_envelope(
     }
     let signed = serde_json::from_slice::<SignedRustResultEnvelope>(bytes)
         .map_err(|_| "shared-envelope-malformed".to_string())?;
-    validate_signed_rust_result_envelope(&signed)?;
+    validate_signed_rust_result_envelope(&signed).map_err(|error| String::from(error.code()))?;
     if signed.envelope.envelope_ref != claim.envelope_ref {
         return Err("shared-envelope-claim-mismatch".to_string());
     }

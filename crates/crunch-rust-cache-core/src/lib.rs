@@ -4,10 +4,11 @@
 //!
 //! This crate does not read files, inspect the environment, spawn processes,
 //! or access castore. Shell code supplies normalized and verified facts.
-
+pub mod error;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+pub use error::RustCacheError;
 use serde::Deserialize;
 use serde::Serialize;
 

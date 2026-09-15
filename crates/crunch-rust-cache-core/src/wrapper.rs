@@ -840,7 +840,7 @@ fn validate_shared_trust_policy(policy: &WrapperDaemonPolicy) -> Result<(), Stri
         return Err("rustc-wrapper-shared-trust-policy-inconsistent".to_string());
     }
     if let Some(trust_policy) = &policy.shared_trust_policy {
-        crate::shared::validate_trust_policy(trust_policy)?;
+        crate::shared::validate_trust_policy(trust_policy).map_err(|error| String::from(error.code()))?;
     }
     assert_eq!(policy.shared_reads_enabled, policy.shared_trust_policy.is_some());
     Ok(())
