@@ -4859,6 +4859,7 @@ dependencies = [
  "futures",
  "libc",
  "mantle-application-contract",
+ "mantle-build-contract",
  "mantle-portable-client-core",
  "mantlepkgs-core",
  "nickel-export-core",
