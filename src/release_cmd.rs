@@ -796,7 +796,53 @@ fn release_verify_request(action: crate::ReleaseAction, current_dir: &Path) -> R
 
 fn cmd_release_verify(request: ReleaseVerifyRequest, is_json_output: bool) -> Result<(), RunError> {
     let evaluation = evaluate_release_verification(request)?;
-    emit_release_verification(&evaluation, is_json_output)
+    let outcome = classify_release_decision(evaluation.decision.valid)?;
+    let is_valid = outcome == mantle_application_contract::ApplicationOutcome::Completed;
+    emit_release_verification(&evaluation, is_valid, is_json_output)?;
+    match outcome {
+        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
+        mantle_application_contract::ApplicationOutcome::Failed { .. } => {
+            Err(RunError::Reported(RELEASE_VERIFICATION_REJECTED_EXIT_CODE))
+        }
+        other => Err(RunError::Internal(format!("release verification observations were inconsistent: {other:?}"))),
+    }
+}
+
+/// Effect kind the verification reports for reading the bundle.
+const RELEASE_VERIFY_EFFECT: &str = "read-files";
+/// Diagnostic code for a verification decision that is not valid.
+const RELEASE_VERIFY_INVALID_CODE: &str = "release-verify-decision-invalid";
+
+/// Classify the verification decision before reporting it.
+///
+/// The decision is the contract's to make: one planned read effect carries
+/// whether the verification holds, and the classification decides completion.
+/// The exit code and the report stream stay what they were.
+fn classify_release_decision(is_valid: bool) -> Result<mantle_application_contract::ApplicationOutcome, RunError> {
+    let plan = mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::Release, &[
+        RELEASE_VERIFY_EFFECT,
+    ])
+    .ok_or_else(|| RunError::Internal("release verification effect plan exceeds its bound".to_string()))?;
+    let observation = mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId(String::from(RELEASE_VERIFY_EFFECT)),
+        status: if is_valid {
+            mantle_application_contract::ObservationStatus::Succeeded
+        } else {
+            mantle_application_contract::ObservationStatus::Failed
+        },
+        diagnostics_code: if is_valid {
+            None
+        } else {
+            Some(String::from(RELEASE_VERIFY_INVALID_CODE))
+        },
+    };
+    let outcome = mantle_application_contract::classify_observations(&plan, &[observation]);
+    debug_assert!(matches!(
+        outcome,
+        mantle_application_contract::ApplicationOutcome::Completed
+            | mantle_application_contract::ApplicationOutcome::Failed { .. }
+    ));
+    Ok(outcome)
 }
 
 // r[impl mantle.release_provenance.verification_decision.complete]
@@ -1415,8 +1461,11 @@ fn load_canonical_deterministic_isolation_evidence(
 
 // r[impl mantle.operator_diagnostics.release_verification.render_boundary]
 // r[impl mantle.operator_diagnostics.release_verification.json_contract]
-fn emit_release_verification(evaluation: &ReleaseVerifyEvaluation, is_json_output: bool) -> Result<(), RunError> {
-    let is_valid = evaluation.decision.valid;
+fn emit_release_verification(
+    evaluation: &ReleaseVerifyEvaluation,
+    is_valid: bool,
+    is_json_output: bool,
+) -> Result<(), RunError> {
     if is_json_output {
         let rendered = render_release_verify_json(evaluation)?;
         println!("{rendered}");
@@ -1428,11 +1477,7 @@ fn emit_release_verification(evaluation: &ReleaseVerifyEvaluation, is_json_outpu
             eprint!("{rendered}");
         }
     }
-    if is_valid {
-        Ok(())
-    } else {
-        Err(RunError::Reported(RELEASE_VERIFICATION_REJECTED_EXIT_CODE))
-    }
+    Ok(())
 }
 
 fn render_release_verify_json(evaluation: &ReleaseVerifyEvaluation) -> Result<String, RunError> {
@@ -3054,5 +3099,34 @@ mod tests {
             "witness agreement without lineage proof must fail: {:?}",
             result.failure_reasons
         );
+    }
+}
+
+#[cfg(test)]
+mod release_decision_classification_tests {
+    use super::*;
+
+    #[test]
+    fn a_valid_decision_is_completed() {
+        let outcome = classify_release_decision(true).expect("a valid decision must classify");
+        assert_eq!(outcome, mantle_application_contract::ApplicationOutcome::Completed);
+    }
+
+    #[test]
+    fn an_invalid_decision_is_failed() {
+        let outcome = classify_release_decision(false).expect("an invalid decision must classify");
+        assert_eq!(outcome, mantle_application_contract::ApplicationOutcome::Failed { failed_effect_count: 1 });
+    }
+
+    #[test]
+    fn the_classification_never_rejects_for_an_admitted_plan() {
+        for is_valid in [true, false] {
+            let outcome = classify_release_decision(is_valid).expect("both decisions must classify");
+            assert!(matches!(
+                outcome,
+                mantle_application_contract::ApplicationOutcome::Completed
+                    | mantle_application_contract::ApplicationOutcome::Failed { .. }
+            ));
+        }
     }
 }
