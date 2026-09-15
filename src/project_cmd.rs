@@ -345,11 +345,45 @@ pub fn cmd_refresh(dir: &Path, selected: &[String], no_network: bool) -> Result<
         .len()
         .checked_add(result.failures.len())
         .ok_or_else(|| RunError::Internal("refresh failure count overflowed usize".to_string()))?;
-    if failure_count > 0 {
-        return Err(RunError::Internal(format!("refresh failed for {failure_count} item(s)")));
-    }
+    classify_project_refresh(failure_count)
+}
 
-    Ok(())
+/// Effect kind the refresh reports for the resolution it performs.
+const PROJECT_REFRESH_EFFECT: &str = "use-network";
+/// Diagnostic code for a refresh that left items unresolved.
+const PROJECT_REFRESH_INCOMPLETE_CODE: &str = "project-refresh-incomplete";
+
+/// Classify the refresh before reporting it.
+///
+/// Every requested input must resolve, by a fresh lock entry or by an unchanged
+/// one. A failure count above zero means the refresh left work behind, and the
+/// contract decides whether the command may report success.
+fn classify_project_refresh(failure_count: usize) -> Result<(), RunError> {
+    let plan = mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::Project, &[
+        PROJECT_REFRESH_EFFECT,
+    ])
+    .ok_or_else(|| RunError::Internal("project refresh effect plan exceeds its bound".to_string()))?;
+    let is_resolved = failure_count == 0;
+    let observation = mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId(String::from(PROJECT_REFRESH_EFFECT)),
+        status: if is_resolved {
+            mantle_application_contract::ObservationStatus::Succeeded
+        } else {
+            mantle_application_contract::ObservationStatus::Failed
+        },
+        diagnostics_code: if is_resolved {
+            None
+        } else {
+            Some(String::from(PROJECT_REFRESH_INCOMPLETE_CODE))
+        },
+    };
+    match mantle_application_contract::classify_observations(&plan, &[observation]) {
+        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
+        mantle_application_contract::ApplicationOutcome::Failed { .. } => {
+            Err(RunError::Internal(format!("refresh failed for {failure_count} item(s)")))
+        }
+        other => Err(RunError::Internal(format!("project refresh observations were inconsistent: {other:?}"))),
+    }
 }
 
 /// `crunch list-stale` — show which inputs would change.
@@ -726,5 +760,21 @@ fn collect_outcome_failures(outcomes: &[RefreshOutcome]) -> Vec<RefreshFailure> 
 fn print_patch_failures(failures: &[RefreshFailure]) {
     for failure in failures {
         eprintln!("failed: patch {}: {}", failure.name, failure.reason);
+    }
+}
+
+#[cfg(test)]
+mod refresh_classification_tests {
+    use super::*;
+
+    #[test]
+    fn a_refresh_without_failures_is_completed() {
+        assert!(classify_project_refresh(0).is_ok());
+    }
+
+    #[test]
+    fn a_refresh_with_failures_is_rejected_with_the_same_message() {
+        let error = classify_project_refresh(3).expect_err("three failures must fail closed");
+        assert!(error.to_string().contains("refresh failed for 3 item(s)"), "{error}");
     }
 }
