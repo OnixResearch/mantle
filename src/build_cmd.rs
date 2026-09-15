@@ -410,10 +410,10 @@ pub fn report_build_result(
     if is_log_dir_ready {
         diagnostic_persistence_failures.extend(write_failure_logs(config, result, &logs_dir));
     }
-    emit_interchange(config, result)?;
     if output_mode.is_json() {
         print_json_report(config, result, &logs_dir, &diagnostic_persistence_failures)?;
     }
+    emit_interchange(config, result)?;
     if output_mode.is_evaluation_stream() {
         print_diagnostic_persistence_failures(&diagnostic_persistence_failures);
         return Ok(());
@@ -549,10 +549,12 @@ fn print_json_report(
 /// Emit the owner interchange records when a directory was configured.
 /// Emission establishes no execution authority, custody, or promotion.
 fn emit_interchange(config: &BuildConfig, result: &PipelineResult) -> Result<(), RunError> {
-    if config.interchange_dir.is_none() {
+    let Some(directory) = crate::build_interchange::configured_directory(config)
+        .map_err(|error| RunError::Internal(format!("build interchange: {error}")))?
+    else {
         return Ok(());
-    }
-    crate::build_interchange::emit_from_report(config, result)
+    };
+    crate::build_interchange::emit_from_report(config, result, &directory)
         .map(|_paths| ())
         .map_err(|error| RunError::Internal(format!("build interchange: {error}")))
 }

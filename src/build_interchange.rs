@@ -122,6 +122,16 @@ fn artifact_identity(domain: &str, bytes: [u8; 32]) -> Identity {
     identity(domain, &[hash.to_hex().as_str()])
 }
 
+/// Plain BLAKE3 identity of complete bytes, without a domain frame.
+///
+/// A consumer that hashes the same bytes derives exactly this value, so this is
+/// the only form used for products a consumer can measure itself.
+fn byte_identity(bytes: [u8; 32]) -> Identity {
+    let hash = blake3::Hash::from_bytes(bytes);
+    Identity::new(format!("b3:{}", hash.to_hex()))
+        .unwrap_or_else(|_error| unreachable!("a blake3 digest is a canonical identity"))
+}
+
 fn strict_labels(names: &[String]) -> Result<Vec<Label>, Error> {
     let mut labels = names
         .iter()
@@ -185,7 +195,7 @@ pub fn observation(facts: &Facts<'_>, request: &BuildRequest) -> Result<BuildObs
         .map(|product| {
             Ok(ProductObservation {
                 name: Label::new(product.name.clone())?,
-                artifact_identity: artifact_identity(ARTIFACT_DOMAIN, product.bytes),
+                artifact_identity: byte_identity(product.bytes),
                 store_identity: store.clone(),
             })
         })
@@ -263,6 +273,22 @@ fn write_new(path: &Path, bytes: &[u8]) -> Result<(), Error> {
     Ok(())
 }
 
+/// Explicit interchange directory: the build configuration first, then
+/// `MANTLE_INTERCHANGE_DIR`. Both are operator-supplied. The environment
+/// trigger is an interim interface until the clap flag is threaded through the
+/// prepared build command.
+pub fn configured_directory(
+    config: &crunch_pipeline::BuildConfig,
+) -> Result<Option<PathBuf>, Error> {
+    if let Some(directory) = config.interchange_dir.clone() {
+        return Ok(Some(directory));
+    }
+    match std::env::var_os("MANTLE_INTERCHANGE_DIR") {
+        Some(value) if !value.is_empty() => Ok(Some(PathBuf::from(value))),
+        _ => Ok(None),
+    }
+}
+
 /// The local host platform. A cross-system build must not use this emitter yet.
 fn host_platform() -> &'static str {
     if cfg!(all(target_arch = "x86_64", target_os = "linux")) {
@@ -286,15 +312,22 @@ fn hash_file(path: &Path) -> Result<[u8; 32], Error> {
 pub fn emit_from_report(
     config: &crunch_pipeline::BuildConfig,
     result: &crunch_pipeline::PipelineResult,
+    directory: &Path,
 ) -> Result<(PathBuf, PathBuf), Error> {
-    let directory = config
-        .interchange_dir
-        .as_deref()
-        .ok_or(Error::Facts("no interchange directory"))?;
     let outcomes = result.outcomes.as_slice();
-    let [outcome] = outcomes else {
+    let root_keys = result.root_labels.keys().collect::<Vec<_>>();
+    let roots = outcomes
+        .iter()
+        .filter(|outcome| {
+            root_keys.is_empty()
+                || root_keys.iter().any(|key| {
+                    **key == crunch_pipeline::drv_key_for(&config.store_dir, &outcome.drv_path)
+                })
+        })
+        .collect::<Vec<_>>();
+    let [outcome] = roots.as_slice() else {
         return Err(Error::Facts(
-            "interchange emission supports exactly one build outcome",
+            "interchange emission supports exactly one requested build root",
         ));
     };
     let derivation_key = crunch_pipeline::drv_key_for(&config.store_dir, &outcome.drv_path);
