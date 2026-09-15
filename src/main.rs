@@ -13,6 +13,7 @@ mod bootstrap_parity;
 mod bootstrap_source_root;
 mod bootstrap_validate;
 mod build_cmd;
+mod build_interchange;
 #[allow(dead_code)]
 mod build_correctness;
 mod build_failure;
