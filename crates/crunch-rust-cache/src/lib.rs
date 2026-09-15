@@ -306,8 +306,9 @@ impl RustCache {
     }
 
     pub async fn publish(&self, request: PublishRequest<'_>) -> Result<RustUnitResult, Error> {
-        validate_rust_action(request.action).map_err(Error::Core)?;
-        crunch_rust_cache_core::validate_local_cache_policy(request.policy).map_err(Error::Core)?;
+        validate_rust_action(request.action).map_err(|error| Error::Core(String::from(error.code())))?;
+        crunch_rust_cache_core::validate_local_cache_policy(request.policy)
+            .map_err(|error| Error::Core(String::from(error.code())))?;
         if !request.policy.writes_enabled {
             return Err(Error::State("local-cache-write-disabled".to_string()));
         }
@@ -330,7 +331,7 @@ impl RustCache {
             artifacts: manifest,
             producer_receipt_ref: request.producer_receipt_ref.to_string(),
         })
-        .map_err(Error::Core)?;
+        .map_err(|error| Error::Core(String::from(error.code())))?;
         let is_complete =
             crunch_store::recursive_castore_completeness(&*self.blob_service, &*self.directory_service, &node)
                 .await
@@ -367,8 +368,9 @@ impl RustCache {
         output_dir: &Path,
         policy: &LocalCachePolicy,
     ) -> Result<RustCacheReport, Error> {
-        validate_rust_action(action).map_err(Error::Core)?;
-        crunch_rust_cache_core::validate_local_cache_policy(policy).map_err(Error::Core)?;
+        validate_rust_action(action).map_err(|error| Error::Core(String::from(error.code())))?;
+        crunch_rust_cache_core::validate_local_cache_policy(policy)
+            .map_err(|error| Error::Core(String::from(error.code())))?;
         if !policy.reads_enabled {
             return Ok(RustCacheReport::disabled());
         }
@@ -382,7 +384,8 @@ impl RustCache {
         };
         let candidates = self.load_candidate_facts(&index, policy).await?;
         let candidate_count = bounded_count(candidates.len())?;
-        let plan = plan_local_reuse(&action.action_ref, policy, candidates).map_err(Error::Core)?;
+        let plan = plan_local_reuse(&action.action_ref, policy, candidates)
+            .map_err(|error| Error::Core(String::from(error.code())))?;
         if let Some(conflict) = plan.conflict_class {
             return Ok(RustCacheReport {
                 disposition: CACHE_DISPOSITION_CONFLICT.to_string(),
@@ -493,14 +496,15 @@ impl RustCache {
     }
 
     fn publish_record_and_index(&self, result: &RustUnitResult) -> Result<(), Error> {
-        validate_rust_result(result).map_err(Error::Core)?;
+        validate_rust_result(result).map_err(|error| Error::Core(String::from(error.code())))?;
         let _lock = CacheMutationLock::acquire(&self.cache_dir.join(MUTATION_LOCK_FILE))?;
         let result_path = self.result_path(&result.result_ref)?;
         write_immutable_json(&result_path, result)?;
         let current = self.read_index(&result.input.action_ref)?;
         let mut result_refs = current.map_or_else(Vec::new, |index| index.result_refs);
         result_refs.push(result.result_ref.clone());
-        let index = canonical_result_index(result.input.action_ref.clone(), result_refs).map_err(Error::Core)?;
+        let index = canonical_result_index(result.input.action_ref.clone(), result_refs)
+            .map_err(|error| Error::Core(String::from(error.code())))?;
         write_atomic_json(&self.index_path(&result.input.action_ref)?, &index)?;
         let mut retention = self.retention()?;
         retention.retained_results.insert(result.result_ref.clone(), result.input.root_node.clone());
@@ -518,7 +522,7 @@ impl RustCache {
         };
         let index = serde_json::from_slice::<RustResultIndex>(&bytes)
             .map_err(|error| Error::Json(format!("index-decode:{error}")))?;
-        validate_result_index(&index).map_err(Error::Core)?;
+        validate_result_index(&index).map_err(|error| Error::Core(String::from(error.code())))?;
         if index.action_ref != action_ref {
             return Err(Error::State("index-action-ref-mismatch".to_string()));
         }
@@ -532,7 +536,7 @@ impl RustCache {
         let bytes = read_bounded_required(&path)?;
         let result = serde_json::from_slice::<RustUnitResult>(&bytes)
             .map_err(|error| Error::Json(format!("result-decode:{error}")))?;
-        validate_rust_result(&result).map_err(Error::Core)?;
+        validate_rust_result(&result).map_err(|error| Error::Core(String::from(error.code())))?;
         if result.result_ref != result_ref {
             return Err(Error::State("result-reference-path-mismatch".to_string()));
         }
@@ -1004,7 +1008,7 @@ fn collect_stale_index_updates(
         let bytes = read_bounded_required(&path)?;
         let index = serde_json::from_slice::<RustResultIndex>(&bytes)
             .map_err(|error| Error::Json(format!("index-decode:{error}")))?;
-        validate_result_index(&index).map_err(Error::Core)?;
+        validate_result_index(&index).map_err(|error| Error::Core(String::from(error.code())))?;
         let expected_path = typed_ref_path(
             indexes_dir,
             &index.action_ref,
@@ -1027,7 +1031,10 @@ fn collect_stale_index_updates(
         let replacement = if retained_refs.is_empty() {
             None
         } else {
-            Some(canonical_result_index(index.action_ref, retained_refs).map_err(Error::Core)?)
+            Some(
+                canonical_result_index(index.action_ref, retained_refs)
+                    .map_err(|error| Error::Core(String::from(error.code())))?,
+            )
         };
         updates.push((path, replacement));
     }

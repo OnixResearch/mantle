@@ -11,6 +11,7 @@ use serde::Serialize;
 
 use crate::BLAKE3_HEX_CHARS;
 use crate::RustUnitAction;
+use crate::error::RustCacheError;
 use crate::validate_rust_action;
 
 pub const WRAPPER_MANIFEST_SCHEMA: &str = "mantle-rustc-wrapper-manifest-v1";
@@ -339,7 +340,9 @@ pub enum WrapperDecision {
     Reject(WrapperBypassClass),
 }
 
-pub fn seal_wrapper_manifest(input: WrapperInvocationManifestInput) -> Result<WrapperInvocationManifest, String> {
+pub fn seal_wrapper_manifest(
+    input: WrapperInvocationManifestInput,
+) -> Result<WrapperInvocationManifest, RustCacheError> {
     let input = normalize_manifest_input(input);
     validate_manifest_input(&input)?;
     let manifest_ref = digest_ref(WRAPPER_MANIFEST_REF_PREFIX, MANIFEST_DOMAIN, &input)?;
@@ -354,14 +357,14 @@ pub fn seal_wrapper_manifest(input: WrapperInvocationManifestInput) -> Result<Wr
     Ok(manifest)
 }
 
-pub fn validate_wrapper_manifest(manifest: &WrapperInvocationManifest) -> Result<(), String> {
+pub fn validate_wrapper_manifest(manifest: &WrapperInvocationManifest) -> Result<(), RustCacheError> {
     if manifest.schema != WRAPPER_MANIFEST_SCHEMA {
-        return Err("rustc-wrapper-manifest-schema-unsupported".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-manifest-schema-unsupported".to_string()));
     }
     validate_manifest_input(&manifest.input)?;
     let expected_ref = digest_ref(WRAPPER_MANIFEST_REF_PREFIX, MANIFEST_DOMAIN, &manifest.input)?;
     if manifest.manifest_ref != expected_ref {
-        return Err("rustc-wrapper-manifest-ref-mismatch".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-manifest-ref-mismatch".to_string()));
     }
     ensure_record_bound(manifest, MAX_WRAPPER_REQUEST_BYTES, "rustc-wrapper-manifest-too-large")?;
     assert!(manifest.manifest_ref.starts_with(WRAPPER_MANIFEST_REF_PREFIX));
@@ -369,7 +372,7 @@ pub fn validate_wrapper_manifest(manifest: &WrapperInvocationManifest) -> Result
     Ok(())
 }
 
-pub fn seal_wrapper_request(input: WrapperRequestInput) -> Result<WrapperRequest, String> {
+pub fn seal_wrapper_request(input: WrapperRequestInput) -> Result<WrapperRequest, RustCacheError> {
     validate_request_input(&input)?;
     let request_ref = digest_ref(WRAPPER_REQUEST_REF_PREFIX, REQUEST_DOMAIN, &input)?;
     let request = WrapperRequest {
@@ -383,14 +386,14 @@ pub fn seal_wrapper_request(input: WrapperRequestInput) -> Result<WrapperRequest
     Ok(request)
 }
 
-pub fn validate_wrapper_request(request: &WrapperRequest) -> Result<(), String> {
+pub fn validate_wrapper_request(request: &WrapperRequest) -> Result<(), RustCacheError> {
     if request.schema != WRAPPER_REQUEST_SCHEMA {
-        return Err("rustc-wrapper-request-schema-unsupported".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-request-schema-unsupported".to_string()));
     }
     validate_request_input(&request.input)?;
     let expected_ref = digest_ref(WRAPPER_REQUEST_REF_PREFIX, REQUEST_DOMAIN, &request.input)?;
     if request.request_ref != expected_ref {
-        return Err("rustc-wrapper-request-ref-mismatch".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-request-ref-mismatch".to_string()));
     }
     ensure_record_bound(request, MAX_WRAPPER_REQUEST_BYTES, "rustc-wrapper-request-too-large")?;
     assert!(request.request_ref.starts_with(WRAPPER_REQUEST_REF_PREFIX));
@@ -398,9 +401,9 @@ pub fn validate_wrapper_request(request: &WrapperRequest) -> Result<(), String> 
     Ok(())
 }
 
-pub fn validate_wrapper_response(response: &WrapperResponse, max_response_bytes: u64) -> Result<(), String> {
+pub fn validate_wrapper_response(response: &WrapperResponse, max_response_bytes: u64) -> Result<(), RustCacheError> {
     if response.schema != WRAPPER_RESPONSE_SCHEMA {
-        return Err("rustc-wrapper-response-schema-unsupported".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-response-schema-unsupported".to_string()));
     }
     validate_typed_ref(&response.request_ref, TypedRefRule {
         prefix: WRAPPER_REQUEST_REF_PREFIX,
@@ -408,19 +411,19 @@ pub fn validate_wrapper_response(response: &WrapperResponse, max_response_bytes:
     })?;
     validate_reason_codes(&response.reason_codes)?;
     let stdout_bytes = u64::try_from(response.stdout.len())
-        .map_err(|_| "rustc-wrapper-response-stdout-unrepresentable".to_string())?;
+        .map_err(|_| RustCacheError::new("rustc-wrapper-response-stdout-unrepresentable"))?;
     let stderr_bytes = u64::try_from(response.stderr.len())
-        .map_err(|_| "rustc-wrapper-response-stderr-unrepresentable".to_string())?;
+        .map_err(|_| RustCacheError::new("rustc-wrapper-response-stderr-unrepresentable"))?;
     if stdout_bytes > MAX_WRAPPER_STREAM_BYTES || stderr_bytes > MAX_WRAPPER_STREAM_BYTES {
-        return Err("rustc-wrapper-response-stream-limit-exceeded".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-response-stream-limit-exceeded".to_string()));
     }
     let is_bypass = response.disposition == WrapperDisposition::Bypass;
     let is_rejected = response.disposition == WrapperDisposition::Rejected;
     if response.bypass_class.is_some() != (is_bypass || is_rejected) {
-        return Err("rustc-wrapper-response-bypass-class-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-response-bypass-class-invalid".to_string()));
     }
     if response.artifact_commit_complete && response.receipt_ref.is_none() {
-        return Err("rustc-wrapper-response-receipt-missing".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-response-receipt-missing".to_string()));
     }
     if let Some(receipt_ref) = &response.receipt_ref {
         validate_typed_ref(receipt_ref, TypedRefRule {
@@ -434,7 +437,7 @@ pub fn validate_wrapper_response(response: &WrapperResponse, max_response_bytes:
     Ok(())
 }
 
-pub fn seal_wrapper_receipt(input: WrapperReceiptInput) -> Result<WrapperReceipt, String> {
+pub fn seal_wrapper_receipt(input: WrapperReceiptInput) -> Result<WrapperReceipt, RustCacheError> {
     validate_receipt_input(&input)?;
     let receipt_ref = digest_ref(WRAPPER_RECEIPT_REF_PREFIX, RECEIPT_DOMAIN, &input)?;
     let receipt = WrapperReceipt {
@@ -448,14 +451,14 @@ pub fn seal_wrapper_receipt(input: WrapperReceiptInput) -> Result<WrapperReceipt
     Ok(receipt)
 }
 
-pub fn validate_wrapper_receipt(receipt: &WrapperReceipt) -> Result<(), String> {
+pub fn validate_wrapper_receipt(receipt: &WrapperReceipt) -> Result<(), RustCacheError> {
     if receipt.schema != WRAPPER_RECEIPT_SCHEMA {
-        return Err("rustc-wrapper-receipt-schema-unsupported".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-receipt-schema-unsupported".to_string()));
     }
     validate_receipt_input(&receipt.input)?;
     let expected_ref = digest_ref(WRAPPER_RECEIPT_REF_PREFIX, RECEIPT_DOMAIN, &receipt.input)?;
     if receipt.receipt_ref != expected_ref {
-        return Err("rustc-wrapper-receipt-ref-mismatch".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-receipt-ref-mismatch".to_string()));
     }
     ensure_record_bound(receipt, MAX_WRAPPER_RESPONSE_BYTES, "rustc-wrapper-receipt-too-large")?;
     assert!(receipt.receipt_ref.starts_with(WRAPPER_RECEIPT_REF_PREFIX));
@@ -463,9 +466,9 @@ pub fn validate_wrapper_receipt(receipt: &WrapperReceipt) -> Result<(), String> 
     Ok(())
 }
 
-pub fn validate_wrapper_policy(policy: &WrapperDaemonPolicy) -> Result<(), String> {
+pub fn validate_wrapper_policy(policy: &WrapperDaemonPolicy) -> Result<(), RustCacheError> {
     if policy.schema != WRAPPER_POLICY_SCHEMA {
-        return Err("rustc-wrapper-policy-schema-unsupported".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-policy-schema-unsupported".to_string()));
     }
     validate_identifier(&policy.policy_id, ValidationCode("rustc-wrapper-policy-id-invalid"))?;
     validate_absolute_path(&policy.socket_path, ValidationCode("rustc-wrapper-policy-socket-invalid"))?;
@@ -486,29 +489,29 @@ pub fn validate_wrapper_policy(policy: &WrapperDaemonPolicy) -> Result<(), Strin
     validate_shared_trust_policy(policy)?;
     validate_publication(&policy.publication, policy.shared_writes_enabled)?;
     if policy.max_request_bytes == 0 || policy.max_request_bytes > MAX_WRAPPER_REQUEST_BYTES {
-        return Err("rustc-wrapper-policy-request-limit-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-policy-request-limit-invalid".to_string()));
     }
     if policy.max_response_bytes == 0 || policy.max_response_bytes > MAX_WRAPPER_RESPONSE_BYTES {
-        return Err("rustc-wrapper-policy-response-limit-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-policy-response-limit-invalid".to_string()));
     }
     if policy.max_concurrency < MIN_WRAPPER_CONCURRENCY || policy.max_concurrency > MAX_WRAPPER_CONCURRENCY {
-        return Err("rustc-wrapper-policy-concurrency-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-policy-concurrency-invalid".to_string()));
     }
     validate_cache_mode_consistency(policy)?;
     if !policy.redact_environment_values {
-        return Err("rustc-wrapper-policy-redaction-required".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-policy-redaction-required".to_string()));
     }
     assert!(policy.max_request_bytes <= MAX_WRAPPER_REQUEST_BYTES);
     assert!(policy.max_concurrency <= MAX_WRAPPER_CONCURRENCY);
     Ok(())
 }
 
-pub fn arguments_identity_blake3(arguments: &[String]) -> Result<String, String> {
+pub fn arguments_identity_blake3(arguments: &[String]) -> Result<String, RustCacheError> {
     validate_argument_list(arguments)?;
     canonical_digest(ARGUMENTS_DOMAIN, arguments)
 }
 
-pub fn environment_identity_blake3(environment: &BTreeMap<String, String>) -> Result<String, String> {
+pub fn environment_identity_blake3(environment: &BTreeMap<String, String>) -> Result<String, RustCacheError> {
     validate_environment(environment)?;
     canonical_digest(ENVIRONMENT_DOMAIN, environment)
 }
@@ -613,7 +616,7 @@ fn normalize_manifest_input(mut input: WrapperInvocationManifestInput) -> Wrappe
     input
 }
 
-fn validate_manifest_input(input: &WrapperInvocationManifestInput) -> Result<(), String> {
+fn validate_manifest_input(input: &WrapperInvocationManifestInput) -> Result<(), RustCacheError> {
     validate_identifier(&input.policy_id, ValidationCode("rustc-wrapper-manifest-policy-invalid"))?;
     validate_rust_action(&input.action)?;
     validate_absolute_path(&input.real_compiler_path, ValidationCode("rustc-wrapper-manifest-compiler-invalid"))?;
@@ -635,7 +638,7 @@ fn validate_manifest_input(input: &WrapperInvocationManifestInput) -> Result<(),
     Ok(())
 }
 
-fn validate_request_input(input: &WrapperRequestInput) -> Result<(), String> {
+fn validate_request_input(input: &WrapperRequestInput) -> Result<(), RustCacheError> {
     validate_absolute_path(&input.real_compiler_path, ValidationCode("rustc-wrapper-request-compiler-invalid"))?;
     validate_absolute_path(
         &input.working_directory,
@@ -653,19 +656,19 @@ fn validate_request_input(input: &WrapperRequestInput) -> Result<(), String> {
             })?;
         }
         (None, None) => {}
-        _ => return Err("rustc-wrapper-request-manifest-pair-invalid".to_string()),
+        _ => return Err(RustCacheError::new("rustc-wrapper-request-manifest-pair-invalid".to_string())),
     }
     assert!(input.arguments.len() <= MAX_WRAPPER_ARGUMENTS);
     assert!(input.admitted_environment.len() <= MAX_WRAPPER_ENVIRONMENT);
     Ok(())
 }
 
-fn validate_declared_inputs(inputs: &[DeclaredInput], roots: &[String]) -> Result<(), String> {
+fn validate_declared_inputs(inputs: &[DeclaredInput], roots: &[String]) -> Result<(), RustCacheError> {
     if inputs.is_empty() || inputs.len() > MAX_WRAPPER_INPUTS {
-        return Err("rustc-wrapper-manifest-input-count-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-manifest-input-count-invalid".to_string()));
     }
     if inputs != sorted_unique(inputs.to_vec()) {
-        return Err("rustc-wrapper-manifest-inputs-not-canonical".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-manifest-inputs-not-canonical".to_string()));
     }
     let mut roles = BTreeSet::new();
     for input in inputs {
@@ -673,15 +676,15 @@ fn validate_declared_inputs(inputs: &[DeclaredInput], roots: &[String]) -> Resul
         validate_absolute_path(&input.path, ValidationCode("rustc-wrapper-manifest-input-path-invalid"))?;
         validate_blake3(&input.digest_blake3, ValidationCode("rustc-wrapper-manifest-input-digest-invalid"))?;
         if !path_is_within_any_root(&input.path, roots) {
-            return Err("rustc-wrapper-manifest-input-out-of-root".to_string());
+            return Err(RustCacheError::new("rustc-wrapper-manifest-input-out-of-root".to_string()));
         }
         if !roles.insert(input.role.as_str()) {
-            return Err("rustc-wrapper-manifest-input-role-duplicate".to_string());
+            return Err(RustCacheError::new("rustc-wrapper-manifest-input-role-duplicate".to_string()));
         }
     }
     for required in ["compiler", "source", "sysroot"] {
         if !roles.contains(required) {
-            return Err("rustc-wrapper-manifest-required-input-missing".to_string());
+            return Err(RustCacheError::new("rustc-wrapper-manifest-required-input-missing".to_string()));
         }
     }
     assert!(inputs.len() <= MAX_WRAPPER_INPUTS);
@@ -689,23 +692,23 @@ fn validate_declared_inputs(inputs: &[DeclaredInput], roots: &[String]) -> Resul
     Ok(())
 }
 
-fn validate_manifest_action_bindings(input: &WrapperInvocationManifestInput) -> Result<(), String> {
+fn validate_manifest_action_bindings(input: &WrapperInvocationManifestInput) -> Result<(), RustCacheError> {
     let compiler = declared_input_for_role(&input.declared_inputs, "compiler")?;
     let source = declared_input_for_role(&input.declared_inputs, "source")?;
     let sysroot = declared_input_for_role(&input.declared_inputs, "sysroot")?;
     if compiler.path != input.real_compiler_path || compiler.digest_blake3 != input.action.input.compiler_digest_blake3
     {
-        return Err("rustc-wrapper-manifest-compiler-binding-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-manifest-compiler-binding-invalid".to_string()));
     }
     if source.digest_blake3 != input.action.input.source_digest_blake3 {
-        return Err("rustc-wrapper-manifest-source-binding-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-manifest-source-binding-invalid".to_string()));
     }
     if sysroot.digest_blake3 != input.action.input.toolchain_closure_digest_blake3 {
-        return Err("rustc-wrapper-manifest-sysroot-binding-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-manifest-sysroot-binding-invalid".to_string()));
     }
     let action_environment_blake3 = environment_identity_blake3(&input.action.input.admitted_environment)?;
     if action_environment_blake3 != input.environment_blake3 {
-        return Err("rustc-wrapper-manifest-environment-binding-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-manifest-environment-binding-invalid".to_string()));
     }
     assert_eq!(compiler.path, input.real_compiler_path);
     assert_eq!(source.digest_blake3, input.action.input.source_digest_blake3);
@@ -713,18 +716,18 @@ fn validate_manifest_action_bindings(input: &WrapperInvocationManifestInput) -> 
     Ok(())
 }
 
-fn declared_input_for_role<'a>(inputs: &'a [DeclaredInput], role: &str) -> Result<&'a DeclaredInput, String> {
+fn declared_input_for_role<'a>(inputs: &'a [DeclaredInput], role: &str) -> Result<&'a DeclaredInput, RustCacheError> {
     inputs
         .iter()
         .find(|input| input.role == role)
-        .ok_or_else(|| "rustc-wrapper-manifest-required-input-missing".to_string())
+        .ok_or_else(|| RustCacheError::new("rustc-wrapper-manifest-required-input-missing"))
 }
 
-fn validate_output_contracts(outputs: &[WrapperOutputContract], roots: &[String]) -> Result<(), String> {
+fn validate_output_contracts(outputs: &[WrapperOutputContract], roots: &[String]) -> Result<(), RustCacheError> {
     validate_output_contract_shape(outputs)?;
     for output in outputs {
         if !path_is_within_any_root(&output.destination_path, roots) {
-            return Err("rustc-wrapper-output-destination-out-of-root".to_string());
+            return Err(RustCacheError::new("rustc-wrapper-output-destination-out-of-root".to_string()));
         }
     }
     assert!(!outputs.is_empty());
@@ -732,12 +735,12 @@ fn validate_output_contracts(outputs: &[WrapperOutputContract], roots: &[String]
     Ok(())
 }
 
-fn validate_output_contract_shape(outputs: &[WrapperOutputContract]) -> Result<(), String> {
+fn validate_output_contract_shape(outputs: &[WrapperOutputContract]) -> Result<(), RustCacheError> {
     if outputs.is_empty() || outputs.len() > MAX_WRAPPER_OUTPUTS {
-        return Err("rustc-wrapper-output-count-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-output-count-invalid".to_string()));
     }
     if outputs != sorted_unique(outputs.to_vec()) {
-        return Err("rustc-wrapper-outputs-not-canonical".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-outputs-not-canonical".to_string()));
     }
     let mut destinations = BTreeSet::new();
     let mut staged_paths = BTreeSet::new();
@@ -745,13 +748,13 @@ fn validate_output_contract_shape(outputs: &[WrapperOutputContract]) -> Result<(
         validate_relative_path(&output.staged_relative_path)?;
         validate_absolute_path(&output.destination_path, ValidationCode("rustc-wrapper-output-destination-invalid"))?;
         if output.max_bytes == 0 || output.max_bytes > MAX_WRAPPER_ARTIFACT_BYTES {
-            return Err("rustc-wrapper-output-byte-limit-invalid".to_string());
+            return Err(RustCacheError::new("rustc-wrapper-output-byte-limit-invalid".to_string()));
         }
         if !destinations.insert(output.destination_path.as_str()) {
-            return Err("rustc-wrapper-output-destination-duplicate".to_string());
+            return Err(RustCacheError::new("rustc-wrapper-output-destination-duplicate".to_string()));
         }
         if !staged_paths.insert(output.staged_relative_path.as_str()) {
-            return Err("rustc-wrapper-output-staging-duplicate".to_string());
+            return Err(RustCacheError::new("rustc-wrapper-output-staging-duplicate".to_string()));
         }
     }
     assert_eq!(destinations.len(), outputs.len());
@@ -759,39 +762,39 @@ fn validate_output_contract_shape(outputs: &[WrapperOutputContract]) -> Result<(
     Ok(())
 }
 
-fn validate_effects(effects: &WrapperEffectPolicy) -> Result<(), String> {
+fn validate_effects(effects: &WrapperEffectPolicy) -> Result<(), RustCacheError> {
     if effects.filesystem != FilesystemEffect::DeclaredRoots || effects.network != NetworkEffect::Deny {
-        return Err("rustc-wrapper-effect-policy-unsupported".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-effect-policy-unsupported".to_string()));
     }
     if effects.clock != AmbientEffect::Allow || effects.randomness != AmbientEffect::Allow {
-        return Err("rustc-wrapper-effect-policy-unsupported".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-effect-policy-unsupported".to_string()));
     }
     assert_eq!(effects.filesystem, FilesystemEffect::DeclaredRoots);
     assert_eq!(effects.network, NetworkEffect::Deny);
     Ok(())
 }
 
-fn validate_limits(limits: &WrapperResourceLimits) -> Result<(), String> {
+fn validate_limits(limits: &WrapperResourceLimits) -> Result<(), RustCacheError> {
     if limits.elapsed_millis == 0 || limits.elapsed_millis > MAX_WRAPPER_ELAPSED_MILLIS {
-        return Err("rustc-wrapper-elapsed-limit-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-elapsed-limit-invalid".to_string()));
     }
     if limits.stdout_bytes == 0 || limits.stdout_bytes > MAX_WRAPPER_STREAM_BYTES {
-        return Err("rustc-wrapper-stdout-limit-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-stdout-limit-invalid".to_string()));
     }
     if limits.stderr_bytes == 0 || limits.stderr_bytes > MAX_WRAPPER_STREAM_BYTES {
-        return Err("rustc-wrapper-stderr-limit-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-stderr-limit-invalid".to_string()));
     }
     if limits.artifact_bytes == 0 || limits.artifact_bytes > MAX_WRAPPER_ARTIFACT_BYTES {
-        return Err("rustc-wrapper-artifact-limit-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-artifact-limit-invalid".to_string()));
     }
     assert!(limits.elapsed_millis <= MAX_WRAPPER_ELAPSED_MILLIS);
     assert!(limits.artifact_bytes <= MAX_WRAPPER_ARTIFACT_BYTES);
     Ok(())
 }
 
-fn validate_result_sources(sources: &[WrapperResultSourcePolicy]) -> Result<(), String> {
+fn validate_result_sources(sources: &[WrapperResultSourcePolicy]) -> Result<(), RustCacheError> {
     if sources.len() > MAX_WRAPPER_RESULT_SOURCES || sources != sorted_unique(sources.to_vec()) {
-        return Err("rustc-wrapper-result-sources-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-result-sources-invalid".to_string()));
     }
     let mut source_ids = BTreeSet::new();
     let mut priorities = BTreeSet::new();
@@ -805,12 +808,12 @@ fn validate_result_sources(sources: &[WrapperResultSourcePolicy]) -> Result<(), 
             WrapperResultSourceKind::Http => {
                 let is_http = source.endpoint.starts_with("http://") || source.endpoint.starts_with("https://");
                 if !is_http || source.endpoint.contains('@') || source.endpoint.contains('#') {
-                    return Err("rustc-wrapper-result-source-endpoint-invalid".to_string());
+                    return Err(RustCacheError::new("rustc-wrapper-result-source-endpoint-invalid".to_string()));
                 }
             }
         }
         if !source_ids.insert(source.source_id.as_str()) || !priorities.insert(source.priority) {
-            return Err("rustc-wrapper-result-source-duplicate".to_string());
+            return Err(RustCacheError::new("rustc-wrapper-result-source-duplicate".to_string()));
         }
     }
     assert!(sources.len() <= MAX_WRAPPER_RESULT_SOURCES);
@@ -818,14 +821,14 @@ fn validate_result_sources(sources: &[WrapperResultSourcePolicy]) -> Result<(), 
     Ok(())
 }
 
-fn validate_result_source_mode(policy: &WrapperDaemonPolicy) -> Result<(), String> {
+fn validate_result_source_mode(policy: &WrapperDaemonPolicy) -> Result<(), RustCacheError> {
     if policy.shared_reads_enabled == policy.result_sources.is_empty() {
-        return Err("rustc-wrapper-result-source-mode-inconsistent".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-result-source-mode-inconsistent".to_string()));
     }
     if let Some(source_id) = &policy.publication.source_id {
         let is_known = policy.result_sources.iter().any(|source| &source.source_id == source_id);
         if !is_known {
-            return Err("rustc-wrapper-publication-source-unknown".to_string());
+            return Err(RustCacheError::new("rustc-wrapper-publication-source-unknown".to_string()));
         }
     }
     assert_eq!(policy.shared_reads_enabled, !policy.result_sources.is_empty());
@@ -835,25 +838,28 @@ fn validate_result_source_mode(policy: &WrapperDaemonPolicy) -> Result<(), Strin
     Ok(())
 }
 
-fn validate_shared_trust_policy(policy: &WrapperDaemonPolicy) -> Result<(), String> {
+fn validate_shared_trust_policy(policy: &WrapperDaemonPolicy) -> Result<(), RustCacheError> {
     if policy.shared_reads_enabled != policy.shared_trust_policy.is_some() {
-        return Err("rustc-wrapper-shared-trust-policy-inconsistent".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-shared-trust-policy-inconsistent".to_string()));
     }
     if let Some(trust_policy) = &policy.shared_trust_policy {
-        crate::shared::validate_trust_policy(trust_policy).map_err(|error| String::from(error.code()))?;
+        crate::shared::validate_trust_policy(trust_policy)?;
     }
     assert_eq!(policy.shared_reads_enabled, policy.shared_trust_policy.is_some());
     Ok(())
 }
 
-fn validate_publication(publication: &WrapperPublicationPolicy, shared_writes_enabled: bool) -> Result<(), String> {
+fn validate_publication(
+    publication: &WrapperPublicationPolicy,
+    shared_writes_enabled: bool,
+) -> Result<(), RustCacheError> {
     if publication.enabled != shared_writes_enabled {
-        return Err("rustc-wrapper-publication-mode-inconsistent".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-publication-mode-inconsistent".to_string()));
     }
     let is_complete =
         publication.source_id.is_some() && publication.signer_name.is_some() && publication.signing_key_path.is_some();
     if publication.enabled != is_complete {
-        return Err("rustc-wrapper-publication-fields-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-publication-fields-invalid".to_string()));
     }
     if let Some(source_id) = &publication.source_id {
         validate_identifier(source_id, ValidationCode("rustc-wrapper-publication-source-invalid"))?;
@@ -869,7 +875,7 @@ fn validate_publication(publication: &WrapperPublicationPolicy, shared_writes_en
     Ok(())
 }
 
-fn validate_cache_mode_consistency(policy: &WrapperDaemonPolicy) -> Result<(), String> {
+fn validate_cache_mode_consistency(policy: &WrapperDaemonPolicy) -> Result<(), RustCacheError> {
     let expected = match policy.cache_mode {
         WrapperCacheMode::Off => (false, false, false, false),
         WrapperCacheMode::LocalRead => (true, false, false, false),
@@ -884,7 +890,7 @@ fn validate_cache_mode_consistency(policy: &WrapperDaemonPolicy) -> Result<(), S
         policy.shared_writes_enabled,
     );
     if actual != expected {
-        return Err("rustc-wrapper-policy-cache-mode-inconsistent".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-policy-cache-mode-inconsistent".to_string()));
     }
     assert_eq!(actual, expected);
     if policy.shared_writes_enabled {
@@ -893,9 +899,9 @@ fn validate_cache_mode_consistency(policy: &WrapperDaemonPolicy) -> Result<(), S
     Ok(())
 }
 
-fn validate_argument_list(arguments: &[String]) -> Result<(), String> {
+fn validate_argument_list(arguments: &[String]) -> Result<(), RustCacheError> {
     if arguments.is_empty() || arguments.len() > MAX_WRAPPER_ARGUMENTS {
-        return Err("rustc-wrapper-argument-count-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-argument-count-invalid".to_string()));
     }
     for argument in arguments {
         validate_string(argument, ValidationCode("rustc-wrapper-argument-invalid"))?;
@@ -905,9 +911,9 @@ fn validate_argument_list(arguments: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_environment(environment: &BTreeMap<String, String>) -> Result<(), String> {
+fn validate_environment(environment: &BTreeMap<String, String>) -> Result<(), RustCacheError> {
     if environment.len() > MAX_WRAPPER_ENVIRONMENT {
-        return Err("rustc-wrapper-environment-count-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-environment-count-invalid".to_string()));
     }
     for (name, value) in environment {
         validate_identifier(name, ValidationCode("rustc-wrapper-environment-name-invalid"))?;
@@ -918,7 +924,7 @@ fn validate_environment(environment: &BTreeMap<String, String>) -> Result<(), St
     Ok(())
 }
 
-fn validate_receipt_input(input: &WrapperReceiptInput) -> Result<(), String> {
+fn validate_receipt_input(input: &WrapperReceiptInput) -> Result<(), RustCacheError> {
     validate_typed_ref(&input.request_ref, TypedRefRule {
         prefix: WRAPPER_REQUEST_REF_PREFIX,
         code: ValidationCode("rustc-wrapper-receipt-request-invalid"),
@@ -944,7 +950,7 @@ fn validate_receipt_input(input: &WrapperReceiptInput) -> Result<(), String> {
         })?;
     }
     if input.artifact_digests_blake3.len() > MAX_WRAPPER_OUTPUTS {
-        return Err("rustc-wrapper-receipt-artifact-count-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-receipt-artifact-count-invalid".to_string()));
     }
     for digest in &input.artifact_digests_blake3 {
         validate_blake3(digest, ValidationCode("rustc-wrapper-receipt-artifact-digest-invalid"))?;
@@ -952,14 +958,14 @@ fn validate_receipt_input(input: &WrapperReceiptInput) -> Result<(), String> {
     let is_bypass = input.disposition == WrapperDisposition::Bypass;
     let is_rejected = input.disposition == WrapperDisposition::Rejected;
     if input.bypass_class.is_some() != (is_bypass || is_rejected) {
-        return Err("rustc-wrapper-receipt-bypass-class-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-receipt-bypass-class-invalid".to_string()));
     }
     let is_cache_hit = matches!(input.disposition, WrapperDisposition::LocalHit | WrapperDisposition::SharedHit);
     if is_cache_hit && input.result_ref.is_none() {
-        return Err("rustc-wrapper-receipt-result-missing".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-receipt-result-missing".to_string()));
     }
     if input.compiler_status != 0 && input.artifact_commit_complete {
-        return Err("rustc-wrapper-receipt-failed-artifact-commit".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-receipt-failed-artifact-commit".to_string()));
     }
     assert!(input.artifact_digests_blake3.len() <= MAX_WRAPPER_OUTPUTS);
     assert!(!input.policy_id.is_empty());
@@ -980,9 +986,9 @@ fn manifest_static_matches_request(manifest: &WrapperInvocationManifest, request
     is_match
 }
 
-fn validate_absolute_roots(roots: &[String], code: &str) -> Result<(), String> {
+fn validate_absolute_roots(roots: &[String], code: &str) -> Result<(), RustCacheError> {
     if roots.is_empty() || roots.len() > MAX_WRAPPER_ROOTS || roots != sorted_unique(roots.to_vec()) {
-        return Err(code.to_string());
+        return Err(RustCacheError::new(code.to_string()));
     }
     for root in roots {
         validate_absolute_path(root, ValidationCode(code))?;
@@ -992,18 +998,18 @@ fn validate_absolute_roots(roots: &[String], code: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_sorted_uids(uids: &[u32]) -> Result<(), String> {
+fn validate_sorted_uids(uids: &[u32]) -> Result<(), RustCacheError> {
     if uids.is_empty() || uids.len() > MAX_WRAPPER_PEERS || uids != sorted_unique(uids.to_vec()) {
-        return Err("rustc-wrapper-policy-peer-uids-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-policy-peer-uids-invalid".to_string()));
     }
     assert!(!uids.is_empty());
     assert!(uids.len() <= MAX_WRAPPER_PEERS);
     Ok(())
 }
 
-fn validate_sorted_strings(values: &[String], limit: usize, code: &str) -> Result<(), String> {
+fn validate_sorted_strings(values: &[String], limit: usize, code: &str) -> Result<(), RustCacheError> {
     if values.len() > limit || values != sorted_unique(values.to_vec()) {
-        return Err(code.to_string());
+        return Err(RustCacheError::new(code.to_string()));
     }
     for value in values {
         validate_identifier(value, ValidationCode(code))?;
@@ -1013,9 +1019,9 @@ fn validate_sorted_strings(values: &[String], limit: usize, code: &str) -> Resul
     Ok(())
 }
 
-fn validate_reason_codes(reasons: &[String]) -> Result<(), String> {
+fn validate_reason_codes(reasons: &[String]) -> Result<(), RustCacheError> {
     if reasons.len() > MAX_WRAPPER_REASON_CODES || reasons != sorted_unique(reasons.to_vec()) {
-        return Err("rustc-wrapper-reason-codes-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-reason-codes-invalid".to_string()));
     }
     for reason in reasons {
         validate_identifier(reason, ValidationCode("rustc-wrapper-reason-code-invalid"))?;
@@ -1025,42 +1031,42 @@ fn validate_reason_codes(reasons: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_absolute_path(path: &str, code: ValidationCode<'_>) -> Result<(), String> {
+fn validate_absolute_path(path: &str, code: ValidationCode<'_>) -> Result<(), RustCacheError> {
     if path.is_empty() {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     if path.len() > MAX_WRAPPER_PATH_BYTES {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     if !path.starts_with('/') {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     if path.contains('\0') {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     if path.split('/').skip(1).any(|component| component.is_empty() || matches!(component, "." | "..")) {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     assert!(path.starts_with('/'));
     assert!(path.len() <= MAX_WRAPPER_PATH_BYTES);
     Ok(())
 }
 
-fn validate_relative_path(path: &str) -> Result<(), String> {
+fn validate_relative_path(path: &str) -> Result<(), RustCacheError> {
     if path.is_empty() {
-        return Err("rustc-wrapper-output-staging-path-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-output-staging-path-invalid".to_string()));
     }
     if path.len() > MAX_WRAPPER_PATH_BYTES {
-        return Err("rustc-wrapper-output-staging-path-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-output-staging-path-invalid".to_string()));
     }
     if path.starts_with('/') {
-        return Err("rustc-wrapper-output-staging-path-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-output-staging-path-invalid".to_string()));
     }
     if path.contains('\0') {
-        return Err("rustc-wrapper-output-staging-path-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-output-staging-path-invalid".to_string()));
     }
     if path.split('/').any(|component| component.is_empty() || matches!(component, "." | "..")) {
-        return Err("rustc-wrapper-output-staging-path-invalid".to_string());
+        return Err(RustCacheError::new("rustc-wrapper-output-staging-path-invalid".to_string()));
     }
     assert!(!path.starts_with('/'));
     assert!(path.len() <= MAX_WRAPPER_PATH_BYTES);
@@ -1076,45 +1082,45 @@ fn path_is_within_any_root(path: &str, roots: &[String]) -> bool {
     is_within
 }
 
-fn validate_identifier(value: &str, code: ValidationCode<'_>) -> Result<(), String> {
+fn validate_identifier(value: &str, code: ValidationCode<'_>) -> Result<(), RustCacheError> {
     validate_string(value, code)?;
     if value.bytes().any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace()) {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     assert!(!value.is_empty());
     assert!(value.len() <= MAX_WRAPPER_STRING_BYTES);
     Ok(())
 }
 
-fn validate_string(value: &str, code: ValidationCode<'_>) -> Result<(), String> {
+fn validate_string(value: &str, code: ValidationCode<'_>) -> Result<(), RustCacheError> {
     if value.is_empty() {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     if value.len() > MAX_WRAPPER_STRING_BYTES {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     if value.contains('\0') {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     assert!(!value.is_empty());
     assert!(value.len() <= MAX_WRAPPER_STRING_BYTES);
     Ok(())
 }
 
-fn validate_blake3(value: &str, code: ValidationCode<'_>) -> Result<(), String> {
+fn validate_blake3(value: &str, code: ValidationCode<'_>) -> Result<(), RustCacheError> {
     let is_valid = value.len() == BLAKE3_HEX_CHARS
         && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
     if !is_valid {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     assert_eq!(value.len(), BLAKE3_HEX_CHARS);
     assert!(value.bytes().all(|byte| !byte.is_ascii_uppercase()));
     Ok(())
 }
 
-fn validate_typed_ref(value: &str, rule: TypedRefRule<'_>) -> Result<(), String> {
+fn validate_typed_ref(value: &str, rule: TypedRefRule<'_>) -> Result<(), RustCacheError> {
     let Some(digest) = value.strip_prefix(rule.prefix) else {
-        return Err(rule.code.0.to_string());
+        return Err(RustCacheError::new(rule.code.0.to_string()));
     };
     validate_blake3(digest, rule.code)?;
     assert!(value.starts_with(rule.prefix));
@@ -1122,18 +1128,19 @@ fn validate_typed_ref(value: &str, rule: TypedRefRule<'_>) -> Result<(), String>
     Ok(())
 }
 
-fn ensure_record_bound(value: &impl Serialize, limit_bytes: u64, code: &str) -> Result<(), String> {
-    let bytes = serde_json::to_vec(value).map_err(|error| format!("rustc-wrapper-json:{error}"))?;
-    let size_bytes = u64::try_from(bytes.len()).map_err(|_| code.to_string())?;
+fn ensure_record_bound(value: &impl Serialize, limit_bytes: u64, code: &str) -> Result<(), RustCacheError> {
+    let bytes =
+        serde_json::to_vec(value).map_err(|error| RustCacheError::new(format!("rustc-wrapper-json:{error}")))?;
+    let size_bytes = u64::try_from(bytes.len()).map_err(|_| RustCacheError::new(code))?;
     if size_bytes > limit_bytes {
-        return Err(code.to_string());
+        return Err(RustCacheError::new(code.to_string()));
     }
     assert!(!bytes.is_empty());
     assert!(size_bytes <= limit_bytes);
     Ok(())
 }
 
-fn digest_ref(prefix: &str, domain: &[u8], value: &impl Serialize) -> Result<String, String> {
+fn digest_ref(prefix: &str, domain: &[u8], value: &impl Serialize) -> Result<String, RustCacheError> {
     let digest = canonical_digest(domain, value)?;
     let reference = format!("{prefix}{digest}");
     assert!(reference.starts_with(prefix));
@@ -1141,8 +1148,9 @@ fn digest_ref(prefix: &str, domain: &[u8], value: &impl Serialize) -> Result<Str
     Ok(reference)
 }
 
-fn canonical_digest(domain: &[u8], value: &(impl Serialize + ?Sized)) -> Result<String, String> {
-    let bytes = serde_json::to_vec(value).map_err(|error| format!("rustc-wrapper-canonical-json:{error}"))?;
+fn canonical_digest(domain: &[u8], value: &(impl Serialize + ?Sized)) -> Result<String, RustCacheError> {
+    let bytes = serde_json::to_vec(value)
+        .map_err(|error| RustCacheError::new(format!("rustc-wrapper-canonical-json:{error}")))?;
     let mut hasher = blake3::Hasher::new();
     hasher.update(domain);
     hasher.update(&[DOMAIN_SEPARATOR]);
@@ -1265,12 +1273,12 @@ mod tests {
         let error = seal_wrapper_manifest(input).unwrap_err();
 
         assert!(matches!(
-            error.as_str(),
+            error.code(),
             "rustc-wrapper-output-destination-out-of-root"
                 | "rustc-wrapper-effect-policy-unsupported"
                 | "rustc-wrapper-elapsed-limit-invalid"
         ));
-        assert!(!error.is_empty());
+        assert!(!error.code().is_empty());
     }
 
     #[test]
@@ -1282,10 +1290,10 @@ mod tests {
         let error = seal_wrapper_manifest(input).unwrap_err();
 
         assert!(matches!(
-            error.as_str(),
+            error.code(),
             "rustc-wrapper-manifest-required-input-missing" | "rustc-wrapper-outputs-not-canonical"
         ));
-        assert!(!error.is_empty());
+        assert!(!error.code().is_empty());
     }
 
     #[test]
@@ -1294,7 +1302,7 @@ mod tests {
         compiler_mismatch.real_compiler_path = "/toolchain/bin/other-rustc".to_string();
         assert_eq!(
             seal_wrapper_manifest(compiler_mismatch),
-            Err("rustc-wrapper-manifest-compiler-binding-invalid".to_string())
+            Err(RustCacheError::new("rustc-wrapper-manifest-compiler-binding-invalid"))
         );
 
         let mut source_mismatch = manifest().input;
@@ -1306,14 +1314,14 @@ mod tests {
             .digest_blake3 = DIGEST_B.to_string();
         assert_eq!(
             seal_wrapper_manifest(source_mismatch),
-            Err("rustc-wrapper-manifest-source-binding-invalid".to_string())
+            Err(RustCacheError::new("rustc-wrapper-manifest-source-binding-invalid"))
         );
 
         let mut environment_mismatch = manifest().input;
         environment_mismatch.environment_blake3 = environment_identity_blake3(&BTreeMap::new()).unwrap();
         assert_eq!(
             seal_wrapper_manifest(environment_mismatch),
-            Err("rustc-wrapper-manifest-environment-binding-invalid".to_string())
+            Err(RustCacheError::new("rustc-wrapper-manifest-environment-binding-invalid"))
         );
 
         let mut duplicate_role = manifest().input;
@@ -1325,7 +1333,7 @@ mod tests {
         });
         assert_eq!(
             seal_wrapper_manifest(duplicate_role),
-            Err("rustc-wrapper-manifest-input-role-duplicate".to_string())
+            Err(RustCacheError::new("rustc-wrapper-manifest-input-role-duplicate"))
         );
     }
 
@@ -1348,7 +1356,7 @@ mod tests {
 
         assert_eq!(
             validate_wrapper_response(&response, MAX_WRAPPER_RESPONSE_BYTES),
-            Err("rustc-wrapper-response-bypass-class-invalid".to_string())
+            Err(RustCacheError::new("rustc-wrapper-response-bypass-class-invalid"))
         );
         let receipt_input = WrapperReceiptInput {
             request_ref: request.request_ref,
@@ -1364,7 +1372,10 @@ mod tests {
             artifact_commit_complete: true,
             reason_codes: vec!["compiled".to_string()],
         };
-        assert_eq!(seal_wrapper_receipt(receipt_input), Err("rustc-wrapper-receipt-result-missing".to_string()));
+        assert_eq!(
+            seal_wrapper_receipt(receipt_input),
+            Err(RustCacheError::new("rustc-wrapper-receipt-result-missing"))
+        );
     }
 
     fn cases_len() -> usize {

@@ -33,3 +33,4 @@ pub use smoke::*;
 #[cfg(test)]
 mod tests;
 pub use error::DigestError;
+pub use error::HardwareSimulationError;

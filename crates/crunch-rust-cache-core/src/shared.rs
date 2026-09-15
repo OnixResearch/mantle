@@ -139,7 +139,7 @@ pub fn sign_rust_result_envelope(
     signer_name: String,
     signing_key: &ed25519_dalek::SigningKey,
 ) -> Result<SignedRustResultEnvelope, RustCacheError> {
-    validate_rust_result(&result).map_err(RustCacheError::new)?;
+    validate_rust_result(&result)?;
     validate_object_identity(&object)?;
     validate_identifier(&producer.producer_id, ValidationCode("shared-rust-producer-id-invalid"))?;
     validate_identifier(&producer.producer_policy_id, ValidationCode("shared-rust-producer-policy-id-invalid"))?;
@@ -181,7 +181,7 @@ pub fn validate_rust_result_envelope(envelope: &RustResultEnvelope) -> Result<()
     if envelope.claim_class != SHARED_RUST_CLAIM_CLASS {
         return Err(RustCacheError::new("shared-rust-claim-class-unsupported".to_string()));
     }
-    validate_rust_result(&envelope.result).map_err(RustCacheError::new)?;
+    validate_rust_result(&envelope.result)?;
     validate_object_identity(&envelope.object)?;
     validate_identifier(&envelope.producer.producer_id, ValidationCode("shared-rust-producer-id-invalid"))?;
     validate_identifier(

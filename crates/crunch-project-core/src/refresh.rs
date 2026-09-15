@@ -432,8 +432,7 @@ fn trusted_resolved_input(
     if let Some(policy) = &input.trust {
         let subject = TrustSubject::input(input.name.clone());
         let trust =
-            evaluate_trust_policy(subject, policy, &resolved.entry.hash.algo, &resolved.entry.hash.value, trust_facts)
-                .map_err(Error::Validation)?;
+            evaluate_trust_policy(subject, policy, &resolved.entry.hash.algo, &resolved.entry.hash.value, trust_facts)?;
         resolved.entry.trust = Some(trust);
         return Ok(resolved);
     }
@@ -449,8 +448,7 @@ fn trusted_locked_patch(
     assert!(!def.name.is_empty(), "patch name must not be empty");
     if let Some(policy) = &def.trust {
         let subject = TrustSubject::patch(def.name.clone());
-        let trust = evaluate_trust_policy(subject, policy, &patch.hash.algo, &patch.hash.value, trust_facts)
-            .map_err(Error::Validation)?;
+        let trust = evaluate_trust_policy(subject, policy, &patch.hash.algo, &patch.hash.value, trust_facts)?;
         patch.trust = Some(trust);
         return Ok(patch);
     }

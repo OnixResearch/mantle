@@ -8,6 +8,7 @@ use serde::Serialize;
 
 use crate::digest::EVIDENCE_REF_PREFIX;
 use crate::digest::digest_ref;
+use crate::error::HardwareSimulationError;
 use crate::model::ActionNode;
 use crate::model::ActionStage;
 use crate::model::EVIDENCE_BUNDLE_SCHEMA;
@@ -49,11 +50,14 @@ pub struct EvidenceBundleInput<'a> {
     pub full_shared_hit: RunEvidence,
 }
 
-pub fn invalidated_actions(action_graph: &[ActionNode], changed_refs: &[String]) -> Result<Vec<String>, String> {
-    let action_count =
-        u32::try_from(action_graph.len()).map_err(|_| String::from("invalidation-action-count-invalid"))?;
+pub fn invalidated_actions(
+    action_graph: &[ActionNode],
+    changed_refs: &[String],
+) -> Result<Vec<String>, HardwareSimulationError> {
+    let action_count = u32::try_from(action_graph.len())
+        .map_err(|_| HardwareSimulationError::new("invalidation-action-count-invalid"))?;
     if action_count == 0 || action_count > HARD_MAX_ACTIONS {
-        return Err(String::from("invalidation-action-count-invalid"));
+        return Err(HardwareSimulationError::new("invalidation-action-count-invalid"));
     }
     let changed = changed_refs.iter().map(String::as_str).collect::<BTreeSet<_>>();
     let mut invalidated = action_graph
@@ -74,7 +78,7 @@ pub fn invalidated_actions(action_graph: &[ActionNode], changed_refs: &[String])
         }
     }
     if invalidated.len() > action_graph.len() {
-        return Err(String::from("invalidation-result-count-invalid"));
+        return Err(HardwareSimulationError::new(String::from("invalidation-result-count-invalid")));
     }
     debug_assert!(invalidated.len() <= action_graph.len());
     debug_assert!(invalidation_step_count_max >= action_count);
@@ -90,7 +94,8 @@ pub fn build_evidence_bundle(input: EvidenceBundleInput<'_>) -> Result<HardwareE
         unrelated_source_change,
         full_shared_hit,
     } = input;
-    let expected_selected = invalidated_actions(action_graph, selected_changed_refs).map_err(|error| vec![error])?;
+    let expected_selected =
+        invalidated_actions(action_graph, selected_changed_refs).map_err(|error| vec![String::from(error.code())])?;
     let mut diagnostics = Vec::with_capacity(EVIDENCE_VALIDATION_DIAGNOSTIC_CAPACITY);
     validate_run(&fresh, RunClass::Fresh, &mut diagnostics);
     validate_run(&selected_source_change, RunClass::SelectedSourceChange, &mut diagnostics);

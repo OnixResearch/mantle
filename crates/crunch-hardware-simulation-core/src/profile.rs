@@ -19,6 +19,7 @@ use crate::digest::validate_identifier;
 use crate::digest::validate_relative_path;
 use crate::digest::validate_store_path;
 use crate::digest::validate_typed_ref;
+use crate::error::DigestError;
 use crate::model::HARDWARE_PROFILE_SCHEMA;
 use crate::model::HardwareBounds;
 use crate::model::HardwareProfile;
@@ -73,7 +74,7 @@ struct CohortHashable<'a> {
     closure_paths_blake3: &'a str,
 }
 
-pub fn cohort_ref(cohort: &ToolCohort) -> Result<String, String> {
+pub fn cohort_ref(cohort: &ToolCohort) -> Result<String, DigestError> {
     let normalized = normalize_cohort(cohort.clone());
     let hashable = CohortHashable {
         schema: &normalized.schema,
@@ -82,8 +83,7 @@ pub fn cohort_ref(cohort: &ToolCohort) -> Result<String, String> {
         members: &normalized.members,
         closure_paths_blake3: &normalized.closure_paths_blake3,
     };
-    let reference =
-        digest_ref(COHORT_REF_PREFIX, COHORT_DOMAIN, &hashable).map_err(|error| String::from(error.code()))?;
+    let reference = digest_ref(COHORT_REF_PREFIX, COHORT_DOMAIN, &hashable)?;
     debug_assert!(reference.starts_with(COHORT_REF_PREFIX));
     debug_assert!(!normalized.members.is_empty());
     Ok(reference)
@@ -110,7 +110,7 @@ pub fn validate_profile(profile: HardwareProfile) -> Result<ProfileValidation, V
         return Err(diagnostics);
     }
     let selected_source_refs = source_refs(&normalized, &selected_source_ids);
-    let cohort_ref = cohort_ref(&normalized.tool_cohort).map_err(|error| vec![error])?;
+    let cohort_ref = cohort_ref(&normalized.tool_cohort).map_err(|error| vec![String::from(error.code())])?;
     let profile_ref = digest_ref(PROFILE_REF_PREFIX, PROFILE_DOMAIN, &normalized)
         .map_err(|error| vec![String::from(error.code())])?;
     debug_assert!(!selected_source_ids.is_empty());

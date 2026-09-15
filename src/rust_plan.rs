@@ -18249,7 +18249,8 @@ pub(crate) fn rust_unit_local_cache_selection(
     policy: LocalCachePolicy,
     rustc: &Path,
 ) -> Result<RustUnitLocalCacheSelection, RunError> {
-    crunch_rust_cache_core::validate_local_cache_policy(&policy).map_err(RunError::Internal)?;
+    crunch_rust_cache_core::validate_local_cache_policy(&policy)
+        .map_err(|error| RunError::Internal(String::from(error.code())))?;
     let compiler = resolve_tool_path(rustc)
         .ok_or_else(|| RunError::Internal(format!("resolving Rust compiler for local cache: {}", rustc.display())))?;
     let compiler_digest_blake3 = digest_artifact_path(&compiler)?.blake3;

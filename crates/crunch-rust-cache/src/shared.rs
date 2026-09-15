@@ -894,7 +894,8 @@ impl RustCache {
         request: SharedPublishRequest<'_>,
     ) -> Result<SharedPublishReport, Error> {
         validate_shared_cache_policy(request.policy)?;
-        crunch_rust_cache_core::validate_rust_result(request.result).map_err(Error::Core)?;
+        crunch_rust_cache_core::validate_rust_result(request.result)
+            .map_err(|error| Error::Core(String::from(error.code())))?;
         if !request.policy.publishes_enabled {
             return Err(Error::State("shared-cache-publication-disabled".to_string()));
         }
@@ -1223,7 +1224,7 @@ impl RustCache {
             })
             .collect::<Vec<_>>();
         let plan = plan_local_reuse(&admitted[0].signed.envelope.result.input.action_ref, local_policy, facts)
-            .map_err(Error::Core)?;
+            .map_err(|error| Error::Core(String::from(error.code())))?;
         for candidate in &admitted {
             self.publish_record_and_index(&candidate.signed.envelope.result)?;
         }
@@ -1360,8 +1361,9 @@ fn validate_shared_inputs(
     shared_policy: &SharedRustCachePolicy,
     sources: &[Arc<dyn RustResultSource>],
 ) -> Result<(), Error> {
-    crunch_rust_cache_core::validate_rust_action(action).map_err(Error::Core)?;
-    crunch_rust_cache_core::validate_local_cache_policy(local_policy).map_err(Error::Core)?;
+    crunch_rust_cache_core::validate_rust_action(action).map_err(|error| Error::Core(String::from(error.code())))?;
+    crunch_rust_cache_core::validate_local_cache_policy(local_policy)
+        .map_err(|error| Error::Core(String::from(error.code())))?;
     validate_shared_cache_policy(shared_policy)?;
     let max_sources = usize::try_from(shared_policy.max_sources)
         .map_err(|_| Error::Bound("shared-source-limit-unrepresentable".to_string()))?;

@@ -160,8 +160,17 @@ fn scan_file(path: &Path, forbidden: &[&str], boundary: &str) -> Result<Vec<Stri
     Ok(violations)
 }
 
-/// Scan every core and application source for the CLI error type.
+/// Scan every core and application source for the CLI error type and for
+/// untyped error returns.
+///
+/// A core is a crate whose directory name ends in `-core`; its functions must
+/// return a typed error, because the shell maps that error at the boundary.
 fn scan_core_sources(directory: &Path) -> Result<Vec<String>, String> {
+    scan_core_sources_in(directory, false)
+}
+
+/// Scan one directory tree, tracking whether it belongs to a core crate.
+fn scan_core_sources_in(directory: &Path, is_core: bool) -> Result<Vec<String>, String> {
     if !directory.is_dir() {
         return Err(format!("scanned directory is missing: {}", directory.display()));
     }
@@ -169,15 +178,46 @@ fn scan_core_sources(directory: &Path) -> Result<Vec<String>, String> {
     for entry in fs::read_dir(directory).map_err(|error| format!("reading {}: {error}", directory.display()))? {
         let path = entry.map_err(|error| format!("reading directory entry: {error}"))?.path();
         if path.is_dir() {
-            violations.extend(scan_core_sources(&path)?);
+            let name = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+            violations.extend(scan_core_sources_in(&path, is_core || name.ends_with("-core"))?);
             continue;
         }
         if path.extension().and_then(|extension| extension.to_str()) != Some("rs") {
             continue;
         }
+        let is_test_target = path
+            .components()
+            .any(|component| component.as_os_str() == "tests");
+        if is_test_target {
+            continue;
+        }
         violations.extend(scan_file_skipping_comments(&path, CORE_FORBIDDEN, "core error ownership")?);
+        if is_core {
+            violations.extend(scan_untyped_error_returns(&path)?);
+        }
     }
     debug_assert!(violations.len() <= 10_000);
+    Ok(violations)
+}
+
+/// Scan one core file for a function that returns an untyped error.
+fn scan_untyped_error_returns(path: &Path) -> Result<Vec<String>, String> {
+    let text = fs::read_to_string(path).map_err(|error| format!("reading {}: {error}", path.display()))?;
+    let production = production_prefix(&text);
+    let mut violations = Vec::new();
+    let mut offset: usize = 0;
+    for line in production.lines() {
+        let is_untyped = line.contains("-> Result<") && line.trim_end().ends_with(", String> {");
+        if is_untyped {
+            violations.push(format!(
+                "{}:{}: core error ownership: a core function returns an untyped String error; return a typed error instead",
+                path.display(),
+                offset + 1
+            ));
+        }
+        offset += 1;
+    }
+    debug_assert!(violations.len() <= offset.saturating_add(1));
     Ok(violations)
 }
 
@@ -474,6 +514,24 @@ fn self_test() -> Result<(), String> {
     let classified = scan_repository(&root)?;
     if !classified.is_empty() {
         return Err(format!("classified root fixture must pass, saw {classified:?}"));
+    }
+
+    // Untyped core error returns: a core function returning a bare String error
+    // is rejected, and a typed one is accepted.
+    fs::write(core.join("lib.rs"), "pub fn plan()\n    -> Result<(), String> {\n    Ok(())\n}\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    let untyped_core = scan_repository(&root)?;
+    if !untyped_core.iter().any(|entry| entry.contains("returns an untyped String error")) {
+        return Err(format!("untyped core return fixture must be reported, saw {untyped_core:?}"));
+    }
+    fs::write(
+        core.join("lib.rs"),
+        "pub enum CoreError { Rejected }\npub fn plan() -> Result<(), CoreError> { Ok(()) }\n",
+    )
+    .map_err(|error| format!("fixture: {error}"))?;
+    let typed_core = scan_repository(&root)?;
+    if !typed_core.is_empty() {
+        return Err(format!("typed core return fixture must pass, saw {typed_core:?}"));
     }
 
     fs::remove_dir_all(&root).map_err(|error| format!("cleaning {}: {error}", root.display()))?;

@@ -231,7 +231,7 @@ pub struct LocalReusePlan {
     pub decisions: Vec<LocalCandidateDecision>,
 }
 
-pub fn canonical_rust_action(input: RustUnitActionInput) -> Result<RustUnitAction, String> {
+pub fn canonical_rust_action(input: RustUnitActionInput) -> Result<RustUnitAction, RustCacheError> {
     let input = normalize_action_input(input);
     validate_action_input(&input)?;
     let action_ref = digest_ref(RUST_ACTION_REF_PREFIX, ACTION_DOMAIN, &input)?;
@@ -246,14 +246,14 @@ pub fn canonical_rust_action(input: RustUnitActionInput) -> Result<RustUnitActio
     Ok(action)
 }
 
-pub fn validate_rust_action(action: &RustUnitAction) -> Result<(), String> {
+pub fn validate_rust_action(action: &RustUnitAction) -> Result<(), RustCacheError> {
     if action.schema != RUST_ACTION_SCHEMA {
-        return Err("rust-action-schema-unsupported".to_string());
+        return Err(RustCacheError::new("rust-action-schema-unsupported".to_string()));
     }
     validate_action_input(&action.input)?;
     let expected = digest_ref(RUST_ACTION_REF_PREFIX, ACTION_DOMAIN, &action.input)?;
     if action.action_ref != expected {
-        return Err("rust-action-ref-mismatch".to_string());
+        return Err(RustCacheError::new("rust-action-ref-mismatch".to_string()));
     }
     ensure_record_bound(action, "rust-action-record-too-large")?;
     assert_eq!(action.action_ref.len(), RUST_ACTION_REF_PREFIX.len().saturating_add(BLAKE3_HEX_CHARS));
@@ -261,7 +261,7 @@ pub fn validate_rust_action(action: &RustUnitAction) -> Result<(), String> {
     Ok(())
 }
 
-pub fn canonical_rust_result(input: RustUnitResultInput) -> Result<RustUnitResult, String> {
+pub fn canonical_rust_result(input: RustUnitResultInput) -> Result<RustUnitResult, RustCacheError> {
     let input = normalize_result_input(input);
     validate_result_input(&input)?;
     let result_ref = digest_ref(RUST_RESULT_REF_PREFIX, RESULT_DOMAIN, &input)?;
@@ -276,14 +276,14 @@ pub fn canonical_rust_result(input: RustUnitResultInput) -> Result<RustUnitResul
     Ok(result)
 }
 
-pub fn validate_rust_result(result: &RustUnitResult) -> Result<(), String> {
+pub fn validate_rust_result(result: &RustUnitResult) -> Result<(), RustCacheError> {
     if result.schema != RUST_RESULT_SCHEMA {
-        return Err("rust-result-schema-unsupported".to_string());
+        return Err(RustCacheError::new("rust-result-schema-unsupported".to_string()));
     }
     validate_result_input(&result.input)?;
     let expected = digest_ref(RUST_RESULT_REF_PREFIX, RESULT_DOMAIN, &result.input)?;
     if result.result_ref != expected {
-        return Err("rust-result-ref-mismatch".to_string());
+        return Err(RustCacheError::new("rust-result-ref-mismatch".to_string()));
     }
     ensure_record_bound(result, "rust-result-record-too-large")?;
     assert_eq!(result.result_ref.len(), RUST_RESULT_REF_PREFIX.len().saturating_add(BLAKE3_HEX_CHARS));
@@ -291,7 +291,7 @@ pub fn validate_rust_result(result: &RustUnitResult) -> Result<(), String> {
     Ok(())
 }
 
-pub fn canonical_result_index(action_ref: String, result_refs: Vec<String>) -> Result<RustResultIndex, String> {
+pub fn canonical_result_index(action_ref: String, result_refs: Vec<String>) -> Result<RustResultIndex, RustCacheError> {
     validate_typed_ref(&action_ref, TypedRefRule {
         prefix: RUST_ACTION_REF_PREFIX,
         code: ValidationCode("rust-index-action-ref-invalid"),
@@ -316,9 +316,9 @@ pub fn canonical_result_index(action_ref: String, result_refs: Vec<String>) -> R
     Ok(index)
 }
 
-pub fn validate_result_index(index: &RustResultIndex) -> Result<(), String> {
+pub fn validate_result_index(index: &RustResultIndex) -> Result<(), RustCacheError> {
     if index.schema != RUST_RESULT_INDEX_SCHEMA {
-        return Err("rust-result-index-schema-unsupported".to_string());
+        return Err(RustCacheError::new("rust-result-index-schema-unsupported".to_string()));
     }
     validate_typed_ref(&index.action_ref, TypedRefRule {
         prefix: RUST_ACTION_REF_PREFIX,
@@ -326,7 +326,7 @@ pub fn validate_result_index(index: &RustResultIndex) -> Result<(), String> {
     })?;
     validate_result_refs(&index.result_refs)?;
     if index.result_refs != sorted_unique(index.result_refs.clone()) {
-        return Err("rust-result-index-not-canonical".to_string());
+        return Err(RustCacheError::new("rust-result-index-not-canonical".to_string()));
     }
     let hashable = RustIndexHashable {
         schema: RUST_RESULT_INDEX_SCHEMA,
@@ -335,7 +335,7 @@ pub fn validate_result_index(index: &RustResultIndex) -> Result<(), String> {
     };
     let expected = digest_ref(RUST_RESULT_INDEX_REF_PREFIX, INDEX_DOMAIN, &hashable)?;
     if index.index_ref != expected {
-        return Err("rust-result-index-ref-mismatch".to_string());
+        return Err(RustCacheError::new("rust-result-index-ref-mismatch".to_string()));
     }
     ensure_record_bound(index, "rust-result-index-too-large")?;
     assert_eq!(index.schema, RUST_RESULT_INDEX_SCHEMA);
@@ -343,31 +343,32 @@ pub fn validate_result_index(index: &RustResultIndex) -> Result<(), String> {
     Ok(())
 }
 
-pub fn local_cache_policy_digest(policy: &LocalCachePolicy) -> Result<String, String> {
+pub fn local_cache_policy_digest(policy: &LocalCachePolicy) -> Result<String, RustCacheError> {
     validate_local_cache_policy(policy)?;
-    let bytes = serde_json::to_vec(policy).map_err(|error| format!("rust-cache-policy-json:{error}"))?;
+    let bytes =
+        serde_json::to_vec(policy).map_err(|error| RustCacheError::new(format!("rust-cache-policy-json:{error}")))?;
     let digest = domain_digest(POLICY_DOMAIN, &bytes);
     assert_eq!(digest.len(), BLAKE3_HEX_CHARS);
     assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
     Ok(digest)
 }
 
-pub fn validate_local_cache_policy(policy: &LocalCachePolicy) -> Result<(), String> {
+pub fn validate_local_cache_policy(policy: &LocalCachePolicy) -> Result<(), RustCacheError> {
     if policy.schema != LOCAL_CACHE_POLICY_SCHEMA {
-        return Err("rust-cache-policy-schema-unsupported".to_string());
+        return Err(RustCacheError::new("rust-cache-policy-schema-unsupported".to_string()));
     }
     validate_identifier(&policy.policy_id, ValidationCode("rust-cache-policy-id-invalid"))?;
     if policy.max_candidates == 0 || policy.max_candidates > MAX_RESULT_CANDIDATES as u32 {
-        return Err("rust-cache-policy-candidate-limit-invalid".to_string());
+        return Err(RustCacheError::new("rust-cache-policy-candidate-limit-invalid".to_string()));
     }
     if policy.max_tree_entries == 0 || policy.max_tree_entries > MAX_TREE_ENTRIES {
-        return Err("rust-cache-policy-tree-entry-limit-invalid".to_string());
+        return Err(RustCacheError::new("rust-cache-policy-tree-entry-limit-invalid".to_string()));
     }
     if policy.max_tree_depth == 0 || policy.max_tree_depth > MAX_TREE_DEPTH {
-        return Err("rust-cache-policy-tree-depth-limit-invalid".to_string());
+        return Err(RustCacheError::new("rust-cache-policy-tree-depth-limit-invalid".to_string()));
     }
     if policy.max_tree_bytes == 0 || policy.max_tree_bytes > MAX_TREE_BYTES {
-        return Err("rust-cache-policy-tree-byte-limit-invalid".to_string());
+        return Err(RustCacheError::new("rust-cache-policy-tree-byte-limit-invalid".to_string()));
     }
     assert!(policy.max_candidates <= MAX_RESULT_CANDIDATES as u32);
     assert!(policy.max_tree_bytes <= MAX_TREE_BYTES);
@@ -378,16 +379,16 @@ pub fn plan_local_reuse(
     action_ref: &str,
     policy: &LocalCachePolicy,
     candidates: Vec<LocalCandidateFacts>,
-) -> Result<LocalReusePlan, String> {
+) -> Result<LocalReusePlan, RustCacheError> {
     validate_typed_ref(action_ref, TypedRefRule {
         prefix: RUST_ACTION_REF_PREFIX,
         code: ValidationCode("rust-local-action-ref-invalid"),
     })?;
     validate_local_cache_policy(policy)?;
-    let max_candidates =
-        usize::try_from(policy.max_candidates).map_err(|_| "rust-local-candidate-limit-invalid".to_string())?;
+    let max_candidates = usize::try_from(policy.max_candidates)
+        .map_err(|_| RustCacheError::new("rust-local-candidate-limit-invalid"))?;
     if candidates.len() > max_candidates {
-        return Err("rust-local-candidate-limit-exceeded".to_string());
+        return Err(RustCacheError::new("rust-local-candidate-limit-exceeded".to_string()));
     }
     let unique = unique_candidates(candidates);
     let mut decisions = Vec::with_capacity(unique.len());
@@ -418,7 +419,7 @@ fn normalize_result_input(mut input: RustUnitResultInput) -> RustUnitResultInput
     input
 }
 
-fn validate_action_input(input: &RustUnitActionInput) -> Result<(), String> {
+fn validate_action_input(input: &RustUnitActionInput) -> Result<(), RustCacheError> {
     for (value, code) in [
         (&input.unit_id, "rust-action-unit-id-invalid"),
         (&input.package_id, "rust-action-package-id-invalid"),
@@ -439,7 +440,7 @@ fn validate_action_input(input: &RustUnitActionInput) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_action_digests(input: &RustUnitActionInput) -> Result<(), String> {
+fn validate_action_digests(input: &RustUnitActionInput) -> Result<(), RustCacheError> {
     for (value, code) in [
         (&input.source_digest_blake3, "rust-action-source-digest-invalid"),
         (&input.compiler_digest_blake3, "rust-action-compiler-digest-invalid"),
@@ -455,10 +456,10 @@ fn validate_action_digests(input: &RustUnitActionInput) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_action_collections(input: &RustUnitActionInput) -> Result<(), String> {
+fn validate_action_collections(input: &RustUnitActionInput) -> Result<(), RustCacheError> {
     validate_sorted_strings(&input.features, MAX_FEATURES, "rust-action-features-invalid")?;
     if input.semantic_arguments.len() > MAX_ARGUMENTS {
-        return Err("rust-action-argument-limit-exceeded".to_string());
+        return Err(RustCacheError::new("rust-action-argument-limit-exceeded".to_string()));
     }
     for argument in &input.semantic_arguments {
         validate_semantic_argument(argument)?;
@@ -473,22 +474,22 @@ fn validate_action_collections(input: &RustUnitActionInput) -> Result<(), String
     Ok(())
 }
 
-fn validate_semantic_argument(argument: &RustSemanticArgument) -> Result<(), String> {
+fn validate_semantic_argument(argument: &RustSemanticArgument) -> Result<(), RustCacheError> {
     validate_string(&argument.value, ValidationCode("rust-action-argument-invalid"))?;
     if argument.contains_absolute_path && !argument.absolute_paths_classified {
-        return Err("rust-action-unclassified-absolute-path".to_string());
+        return Err(RustCacheError::new("rust-action-unclassified-absolute-path".to_string()));
     }
     if !argument.contains_absolute_path && argument.absolute_paths_classified {
-        return Err("rust-action-spurious-path-classification".to_string());
+        return Err(RustCacheError::new("rust-action-spurious-path-classification".to_string()));
     }
     assert!(!argument.value.is_empty());
     assert_eq!(argument.contains_absolute_path, argument.absolute_paths_classified);
     Ok(())
 }
 
-fn validate_environment(environment: &BTreeMap<String, String>) -> Result<(), String> {
+fn validate_environment(environment: &BTreeMap<String, String>) -> Result<(), RustCacheError> {
     if environment.len() > MAX_ENVIRONMENT_ENTRIES {
-        return Err("rust-action-environment-limit-exceeded".to_string());
+        return Err(RustCacheError::new("rust-action-environment-limit-exceeded".to_string()));
     }
     for (name, value) in environment {
         validate_identifier(name, ValidationCode("rust-action-environment-name-invalid"))?;
@@ -499,9 +500,9 @@ fn validate_environment(environment: &BTreeMap<String, String>) -> Result<(), St
     Ok(())
 }
 
-fn validate_artifact_identities(artifacts: &[RustArtifactIdentity], code: &str) -> Result<(), String> {
+fn validate_artifact_identities(artifacts: &[RustArtifactIdentity], code: &str) -> Result<(), RustCacheError> {
     if artifacts.len() > MAX_ARTIFACT_IDENTITIES || artifacts != sorted_unique(artifacts.to_vec()) {
-        return Err(code.to_string());
+        return Err(RustCacheError::new(code.to_string()));
     }
     for artifact in artifacts {
         validate_identifier(&artifact.role, ValidationCode(code))?;
@@ -513,9 +514,9 @@ fn validate_artifact_identities(artifacts: &[RustArtifactIdentity], code: &str) 
     Ok(())
 }
 
-fn validate_build_facts(facts: &[RustBuildFact], limit: usize, code: &str) -> Result<(), String> {
+fn validate_build_facts(facts: &[RustBuildFact], limit: usize, code: &str) -> Result<(), RustCacheError> {
     if facts.len() > limit || facts != sorted_unique(facts.to_vec()) {
-        return Err(code.to_string());
+        return Err(RustCacheError::new(code.to_string()));
     }
     for fact in facts {
         validate_identifier(&fact.name, ValidationCode(code))?;
@@ -526,27 +527,27 @@ fn validate_build_facts(facts: &[RustBuildFact], limit: usize, code: &str) -> Re
     Ok(())
 }
 
-fn validate_result_input(input: &RustUnitResultInput) -> Result<(), String> {
+fn validate_result_input(input: &RustUnitResultInput) -> Result<(), RustCacheError> {
     validate_typed_ref(&input.action_ref, TypedRefRule {
         prefix: RUST_ACTION_REF_PREFIX,
         code: ValidationCode("rust-result-action-ref-invalid"),
     })?;
     validate_castore_node(&input.root_node)?;
     if input.artifacts.is_empty() || input.artifacts.len() > MAX_RESULT_ARTIFACTS {
-        return Err("rust-result-artifact-count-invalid".to_string());
+        return Err(RustCacheError::new("rust-result-artifact-count-invalid".to_string()));
     }
     if input.artifacts != sorted_unique(input.artifacts.clone()) {
-        return Err("rust-result-artifacts-not-canonical".to_string());
+        return Err(RustCacheError::new("rust-result-artifacts-not-canonical".to_string()));
     }
     let mut total_bytes = 0_u64;
     for artifact in &input.artifacts {
         validate_result_artifact(artifact)?;
         total_bytes = total_bytes
             .checked_add(artifact.size_bytes)
-            .ok_or_else(|| "rust-result-artifact-bytes-overflow".to_string())?;
+            .ok_or_else(|| RustCacheError::new("rust-result-artifact-bytes-overflow"))?;
     }
     if total_bytes > MAX_TREE_BYTES {
-        return Err("rust-result-artifact-bytes-limit-exceeded".to_string());
+        return Err(RustCacheError::new("rust-result-artifact-bytes-limit-exceeded".to_string()));
     }
     validate_result_receipt_ref(&input.producer_receipt_ref)?;
     assert!(!input.artifacts.is_empty());
@@ -554,7 +555,7 @@ fn validate_result_input(input: &RustUnitResultInput) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_result_receipt_ref(receipt_ref: &str) -> Result<(), String> {
+fn validate_result_receipt_ref(receipt_ref: &str) -> Result<(), RustCacheError> {
     let prefix = if receipt_ref.starts_with(wrapper::WRAPPER_RECEIPT_REF_PREFIX) {
         wrapper::WRAPPER_RECEIPT_REF_PREFIX
     } else {
@@ -569,28 +570,28 @@ fn validate_result_receipt_ref(receipt_ref: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_castore_node(node: &CastoreNodeIdentity) -> Result<(), String> {
+fn validate_castore_node(node: &CastoreNodeIdentity) -> Result<(), RustCacheError> {
     validate_blake3(&node.digest_blake3, ValidationCode("rust-result-root-digest-invalid"))?;
     if node.size_bytes > MAX_TREE_BYTES {
-        return Err("rust-result-root-size-limit-exceeded".to_string());
+        return Err(RustCacheError::new("rust-result-root-size-limit-exceeded".to_string()));
     }
     assert_eq!(node.digest_blake3.len(), BLAKE3_HEX_CHARS);
     assert!(node.size_bytes <= MAX_TREE_BYTES);
     Ok(())
 }
 
-fn validate_result_artifact(artifact: &RustResultArtifact) -> Result<(), String> {
+fn validate_result_artifact(artifact: &RustResultArtifact) -> Result<(), RustCacheError> {
     validate_relative_path(&artifact.relative_path)?;
     validate_blake3(&artifact.digest_blake3, ValidationCode("rust-result-artifact-digest-invalid"))?;
     if artifact.size_bytes > MAX_TREE_BYTES {
-        return Err("rust-result-artifact-size-limit-exceeded".to_string());
+        return Err(RustCacheError::new("rust-result-artifact-size-limit-exceeded".to_string()));
     }
     match artifact.kind {
         RustArtifactKind::File if !matches!(artifact.mode, FILE_MODE_REGULAR | FILE_MODE_EXECUTABLE) => {
-            return Err("rust-result-artifact-mode-invalid".to_string());
+            return Err(RustCacheError::new("rust-result-artifact-mode-invalid".to_string()));
         }
         RustArtifactKind::Symlink if artifact.mode != 0 => {
-            return Err("rust-result-symlink-mode-invalid".to_string());
+            return Err(RustCacheError::new("rust-result-symlink-mode-invalid".to_string()));
         }
         _ => {}
     }
@@ -599,30 +600,30 @@ fn validate_result_artifact(artifact: &RustResultArtifact) -> Result<(), String>
     Ok(())
 }
 
-fn validate_relative_path(path: &str) -> Result<(), String> {
+fn validate_relative_path(path: &str) -> Result<(), RustCacheError> {
     if path.is_empty() {
-        return Err("rust-result-artifact-path-invalid".to_string());
+        return Err(RustCacheError::new("rust-result-artifact-path-invalid".to_string()));
     }
     if path.len() > MAX_RELATIVE_PATH_BYTES {
-        return Err("rust-result-artifact-path-invalid".to_string());
+        return Err(RustCacheError::new("rust-result-artifact-path-invalid".to_string()));
     }
     if path.starts_with('/') {
-        return Err("rust-result-artifact-path-invalid".to_string());
+        return Err(RustCacheError::new("rust-result-artifact-path-invalid".to_string()));
     }
     if path.contains('\\') {
-        return Err("rust-result-artifact-path-invalid".to_string());
+        return Err(RustCacheError::new("rust-result-artifact-path-invalid".to_string()));
     }
     if path.split('/').any(|component| component.is_empty() || matches!(component, "." | "..")) {
-        return Err("rust-result-artifact-path-invalid".to_string());
+        return Err(RustCacheError::new("rust-result-artifact-path-invalid".to_string()));
     }
     assert!(!path.starts_with('/'));
     assert!(!path.contains(".."));
     Ok(())
 }
 
-fn validate_result_refs(result_refs: &[String]) -> Result<(), String> {
+fn validate_result_refs(result_refs: &[String]) -> Result<(), RustCacheError> {
     if result_refs.is_empty() || result_refs.len() > MAX_RESULT_CANDIDATES {
-        return Err("rust-result-index-count-invalid".to_string());
+        return Err(RustCacheError::new("rust-result-index-count-invalid".to_string()));
     }
     for result_ref in result_refs {
         validate_typed_ref(result_ref, TypedRefRule {
@@ -682,7 +683,7 @@ fn evaluate_local_candidate(
 fn finish_local_reuse_plan(
     mut decisions: Vec<LocalCandidateDecision>,
     admitted: BTreeMap<String, Vec<String>>,
-) -> Result<LocalReusePlan, String> {
+) -> Result<LocalReusePlan, RustCacheError> {
     decisions.sort_by(|left, right| left.result_ref.cmp(&right.result_ref));
     let is_conflict = admitted.len() > 1;
     let selected_result_ref = if is_conflict {
@@ -699,18 +700,18 @@ fn finish_local_reuse_plan(
     })
 }
 
-fn artifact_set_digest(result: &RustUnitResult) -> Result<String, String> {
-    let bytes =
-        serde_json::to_vec(&result.input.artifacts).map_err(|error| format!("rust-artifact-set-json:{error}"))?;
+fn artifact_set_digest(result: &RustUnitResult) -> Result<String, RustCacheError> {
+    let bytes = serde_json::to_vec(&result.input.artifacts)
+        .map_err(|error| RustCacheError::new(format!("rust-artifact-set-json:{error}")))?;
     let digest = domain_digest(ARTIFACT_SET_DOMAIN, &bytes);
     assert_eq!(digest.len(), BLAKE3_HEX_CHARS);
     assert!(!result.input.artifacts.is_empty());
     Ok(digest)
 }
 
-fn validate_sorted_strings(values: &[String], limit: usize, code: &str) -> Result<(), String> {
+fn validate_sorted_strings(values: &[String], limit: usize, code: &str) -> Result<(), RustCacheError> {
     if values.len() > limit || values != sorted_unique(values.to_vec()) {
-        return Err(code.to_string());
+        return Err(RustCacheError::new(code.to_string()));
     }
     for value in values {
         validate_string(value, ValidationCode(code))?;
@@ -720,39 +721,39 @@ fn validate_sorted_strings(values: &[String], limit: usize, code: &str) -> Resul
     Ok(())
 }
 
-fn validate_identifier(value: &str, code: ValidationCode<'_>) -> Result<(), String> {
+fn validate_identifier(value: &str, code: ValidationCode<'_>) -> Result<(), RustCacheError> {
     validate_string(value, code)?;
     if value.bytes().any(|byte| byte.is_ascii_control()) {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     assert!(!value.is_empty());
     assert!(value.len() <= MAX_STRING_BYTES);
     Ok(())
 }
 
-fn validate_string(value: &str, code: ValidationCode<'_>) -> Result<(), String> {
+fn validate_string(value: &str, code: ValidationCode<'_>) -> Result<(), RustCacheError> {
     if value.is_empty() || value.len() > MAX_STRING_BYTES {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     assert!(!value.is_empty());
     assert!(value.len() <= MAX_STRING_BYTES);
     Ok(())
 }
 
-fn validate_blake3(value: &str, code: ValidationCode<'_>) -> Result<(), String> {
+fn validate_blake3(value: &str, code: ValidationCode<'_>) -> Result<(), RustCacheError> {
     let is_valid = value.len() == BLAKE3_HEX_CHARS
         && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
     if !is_valid {
-        return Err(code.0.to_string());
+        return Err(RustCacheError::new(code.0.to_string()));
     }
     assert_eq!(value.len(), BLAKE3_HEX_CHARS);
     assert!(value.bytes().all(|byte| !byte.is_ascii_uppercase()));
     Ok(())
 }
 
-fn validate_typed_ref(value: &str, rule: TypedRefRule<'_>) -> Result<(), String> {
+fn validate_typed_ref(value: &str, rule: TypedRefRule<'_>) -> Result<(), RustCacheError> {
     let Some(digest) = value.strip_prefix(rule.prefix) else {
-        return Err(rule.code.0.to_string());
+        return Err(RustCacheError::new(rule.code.0.to_string()));
     };
     validate_blake3(digest, rule.code)?;
     assert!(value.starts_with(rule.prefix));
@@ -760,18 +761,19 @@ fn validate_typed_ref(value: &str, rule: TypedRefRule<'_>) -> Result<(), String>
     Ok(())
 }
 
-fn ensure_record_bound(value: &impl Serialize, code: &str) -> Result<(), String> {
-    let bytes = serde_json::to_vec(value).map_err(|error| format!("rust-cache-json:{error}"))?;
+fn ensure_record_bound(value: &impl Serialize, code: &str) -> Result<(), RustCacheError> {
+    let bytes = serde_json::to_vec(value).map_err(|error| RustCacheError::new(format!("rust-cache-json:{error}")))?;
     if bytes.len() > MAX_RECORD_BYTES {
-        return Err(code.to_string());
+        return Err(RustCacheError::new(code.to_string()));
     }
     assert!(!bytes.is_empty());
     assert!(bytes.len() <= MAX_RECORD_BYTES);
     Ok(())
 }
 
-fn digest_ref(prefix: &str, domain: &[u8], value: &impl Serialize) -> Result<String, String> {
-    let bytes = serde_json::to_vec(value).map_err(|error| format!("rust-cache-canonical-json:{error}"))?;
+fn digest_ref(prefix: &str, domain: &[u8], value: &impl Serialize) -> Result<String, RustCacheError> {
+    let bytes =
+        serde_json::to_vec(value).map_err(|error| RustCacheError::new(format!("rust-cache-canonical-json:{error}")))?;
     let digest = domain_digest(domain, &bytes);
     let reference = format!("{prefix}{digest}");
     assert!(reference.starts_with(prefix));
@@ -798,9 +800,9 @@ fn sorted_unique<T: Ord>(values: Vec<T>) -> Vec<T> {
     values
 }
 
-fn push_error(errors: &mut Vec<String>, result: Result<(), String>) {
+fn push_error<E: std::fmt::Display>(errors: &mut Vec<String>, result: Result<(), E>) {
     if let Err(error) = result {
-        errors.push(error);
+        errors.push(format!("{error}"));
     }
     assert!(errors.len() <= MAX_RESULT_CANDIDATES);
     assert!(errors.iter().all(|error| !error.is_empty()));
@@ -960,8 +962,8 @@ mod tests {
         let mut bad_digest = action_input();
         bad_digest.compiler_digest_blake3 = "AA".repeat(BLAKE3_HEX_CHARS / HEX_PAIR_BYTES);
 
-        assert_eq!(canonical_rust_action(absolute).unwrap_err(), "rust-action-unclassified-absolute-path");
-        assert_eq!(canonical_rust_action(bad_digest).unwrap_err(), "rust-action-compiler-digest-invalid");
+        assert_eq!(canonical_rust_action(absolute).unwrap_err().code(), "rust-action-unclassified-absolute-path");
+        assert_eq!(canonical_rust_action(bad_digest).unwrap_err().code(), "rust-action-compiler-digest-invalid");
     }
 
     #[test]
@@ -983,8 +985,8 @@ mod tests {
         let mut result = canonical_rust_result(result_input(&action.action_ref, DIGEST_A)).unwrap();
         result.result_ref = format!("{RUST_RESULT_REF_PREFIX}{DIGEST_B}");
 
-        assert_eq!(canonical_rust_result(escape).unwrap_err(), "rust-result-artifact-path-invalid");
-        assert_eq!(validate_rust_result(&result).unwrap_err(), "rust-result-ref-mismatch");
+        assert_eq!(canonical_rust_result(escape).unwrap_err().code(), "rust-result-artifact-path-invalid");
+        assert_eq!(validate_rust_result(&result).unwrap_err().code(), "rust-result-ref-mismatch");
     }
 
     #[test]
@@ -1075,7 +1077,13 @@ mod tests {
             ..LocalCachePolicy::default()
         };
 
-        assert_eq!(validate_local_cache_policy(&policy).unwrap_err(), "rust-cache-policy-candidate-limit-invalid");
-        assert_eq!(validate_local_cache_policy(&oversized).unwrap_err(), "rust-cache-policy-tree-byte-limit-invalid");
+        assert_eq!(
+            validate_local_cache_policy(&policy).unwrap_err().code(),
+            "rust-cache-policy-candidate-limit-invalid"
+        );
+        assert_eq!(
+            validate_local_cache_policy(&oversized).unwrap_err().code(),
+            "rust-cache-policy-tree-byte-limit-invalid"
+        );
     }
 }

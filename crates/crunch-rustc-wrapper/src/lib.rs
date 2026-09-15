@@ -214,7 +214,7 @@ pub fn publish_manifest_to_registry(input_path: &Path, registry_dir: &Path) -> R
     assert!(!input_path.as_os_str().is_empty());
     assert!(!registry_dir.as_os_str().is_empty());
     let input = load_json_file::<WrapperInvocationManifestInput>(input_path, MAX_MANIFEST_BYTES, "manifest-input")?;
-    let manifest = seal_wrapper_manifest(input).map_err(Error::Core)?;
+    let manifest = seal_wrapper_manifest(input).map_err(|error| Error::Core(String::from(error.code())))?;
     create_private_directory(registry_dir)?;
     let destination = registry_dir.join(format!("{}{RECEIPT_SUFFIX}", manifest.input.arguments_blake3));
     if destination.exists() {
@@ -256,7 +256,7 @@ pub fn run_wrapper_from_environment() -> Result<i32, Error> {
         return run_direct_compiler(&compiler, &arguments);
     };
     let policy = load_json_file::<WrapperDaemonPolicy>(&policy_path, MAX_POLICY_BYTES, "wrapper-policy")?;
-    validate_wrapper_policy(&policy).map_err(Error::Policy)?;
+    validate_wrapper_policy(&policy).map_err(|error| Error::Policy(String::from(error.code())))?;
     let arguments = os_strings_to_strings(&arguments)?;
     if crunch_rust_cache_core::wrapper::classify_argument_bypass(&arguments).is_some() {
         return run_direct_compiler_strings(&compiler, &arguments);
@@ -297,7 +297,7 @@ pub fn run_daemon(options: DaemonOptions) -> Result<(), Error> {
 
 fn open_daemon_context(options: &DaemonOptions) -> Result<DaemonContext, Error> {
     let policy = load_json_file::<WrapperDaemonPolicy>(&options.policy_path, MAX_POLICY_BYTES, "daemon-policy")?;
-    validate_wrapper_policy(&policy).map_err(Error::Policy)?;
+    validate_wrapper_policy(&policy).map_err(|error| Error::Policy(String::from(error.code())))?;
     assert!(!policy.policy_id.is_empty());
     assert!(policy.max_concurrency > 0);
     create_private_directory(&options.state_dir)?;
@@ -435,9 +435,10 @@ fn handle_connection(stream: &mut UnixStream, context: &DaemonContext) -> Result
     }
     assert!(context.policy.allowed_peer_uids.binary_search(&peer_uid).is_ok());
     let request = read_frame::<WrapperRequest>(stream, context.policy.max_request_bytes)?;
-    validate_wrapper_request(&request).map_err(Error::Core)?;
+    validate_wrapper_request(&request).map_err(|error| Error::Core(String::from(error.code())))?;
     let response = handle_request(context, &request)?;
-    validate_wrapper_response(&response, context.policy.max_response_bytes).map_err(Error::Core)?;
+    validate_wrapper_response(&response, context.policy.max_response_bytes)
+        .map_err(|error| Error::Core(String::from(error.code())))?;
     write_frame(stream, &response, context.policy.max_response_bytes)?;
     stream.flush().map_err(|source| Error::Io {
         context: "flush-daemon-response".to_string(),
@@ -804,7 +805,7 @@ fn persist_preliminary_receipt(
         artifact_commit_complete: false,
         reason_codes: vec!["compiler-finished".to_string()],
     })
-    .map_err(Error::Core)?;
+    .map_err(|error| Error::Core(String::from(error.code())))?;
     assert_eq!(output.status, 0);
     assert!(!verified.digests.is_empty());
     persist_receipt(&context.receipt_dir, receipt)
@@ -921,7 +922,7 @@ fn completed_response(
         artifact_commit_complete: true,
         reason_codes: vec![input.reason.to_string()],
     })
-    .map_err(Error::Core)?;
+    .map_err(|error| Error::Core(String::from(error.code())))?;
     let receipt = persist_receipt(&context.receipt_dir, receipt)?;
     response_from_facts(request, ResponseFacts {
         disposition: input.disposition,
@@ -980,7 +981,7 @@ fn changed_input_after_execution_response(
             artifact_commit_complete: false,
             reason_codes: vec!["input-changed-after-execution".to_string()],
         })
-        .map_err(Error::Core)?,
+        .map_err(|error| Error::Core(String::from(error.code())))?,
     )?;
     response_from_facts(request, ResponseFacts {
         disposition,
@@ -1033,7 +1034,7 @@ fn runtime_failure_response(
             artifact_commit_complete: false,
             reason_codes: vec![input.reason.to_string()],
         })
-        .map_err(Error::Core)?,
+        .map_err(|error| Error::Core(String::from(error.code())))?,
     )?;
     response_from_facts(request, ResponseFacts {
         disposition,
@@ -1076,7 +1077,7 @@ fn failed_compile_response(
             artifact_commit_complete: false,
             reason_codes: vec![reason.to_string()],
         })
-        .map_err(Error::Core)?,
+        .map_err(|error| Error::Core(String::from(error.code())))?,
     )?;
     response_from_facts(request, ResponseFacts {
         disposition: WrapperDisposition::Compiled,
@@ -1121,7 +1122,7 @@ fn decision_response(
             artifact_commit_complete: false,
             reason_codes: vec![format!("{reason}-{class:?}").to_ascii_lowercase()],
         })
-        .map_err(Error::Core)?,
+        .map_err(|error| Error::Core(String::from(error.code())))?,
     )?;
     response_from_facts(request, ResponseFacts {
         disposition,
@@ -1149,7 +1150,7 @@ fn response_from_facts(request: &WrapperRequest, facts: ResponseFacts) -> Result
         receipt_ref: facts.receipt_ref,
     };
     validate_wrapper_response(&response, crunch_rust_cache_core::wrapper::MAX_WRAPPER_RESPONSE_BYTES)
-        .map_err(Error::Core)?;
+        .map_err(|error| Error::Core(String::from(error.code())))?;
     assert_eq!(response.request_ref, request.request_ref);
     Ok(response)
 }
@@ -1327,7 +1328,7 @@ fn verify_manifest_runtime(
 ) -> Result<Option<WrapperBypassClass>, Error> {
     assert!(!request.request_ref.is_empty());
     assert!(!context.policy.policy_id.is_empty());
-    validate_wrapper_manifest(manifest).map_err(Error::Core)?;
+    validate_wrapper_manifest(manifest).map_err(|error| Error::Core(String::from(error.code())))?;
     if manifest.input.policy_id != context.policy.policy_id {
         return Ok(Some(WrapperBypassClass::PolicyRejected));
     }
@@ -1676,7 +1677,7 @@ fn build_client_request(
         working_directory,
         output_contracts,
     })
-    .map_err(Error::Core)
+    .map_err(|error| Error::Core(String::from(error.code())))
 }
 
 fn resolve_manifest_path(arguments: &[String]) -> Result<Option<PathBuf>, Error> {
@@ -1687,7 +1688,7 @@ fn resolve_manifest_path(arguments: &[String]) -> Result<Option<PathBuf>, Error>
     let Some(directory) = std::env::var_os(WRAPPER_MANIFEST_DIR_ENV) else {
         return Ok(None);
     };
-    let digest = arguments_identity_blake3(arguments).map_err(Error::Core)?;
+    let digest = arguments_identity_blake3(arguments).map_err(|error| Error::Core(String::from(error.code())))?;
     let path = PathBuf::from(directory).join(format!("{digest}{RECEIPT_SUFFIX}"));
     assert!(path.file_name().is_some());
     Ok(Some(path))
@@ -1732,7 +1733,8 @@ fn request_daemon(policy: &WrapperDaemonPolicy, request: &WrapperRequest) -> Res
         source,
     })?;
     let response = read_frame::<WrapperResponse>(&mut stream, policy.max_response_bytes)?;
-    validate_wrapper_response(&response, policy.max_response_bytes).map_err(Error::Core)?;
+    validate_wrapper_response(&response, policy.max_response_bytes)
+        .map_err(|error| Error::Core(String::from(error.code())))?;
     if response.request_ref != request.request_ref {
         return Err(Error::Protocol("rustc-wrapper-response-request-mismatch".to_string()));
     }

@@ -8,6 +8,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 
+use crate::error::Error;
 use crate::manifest::HashAlgo;
 
 pub const TRUST_POLICY_SCHEMA: &str = "mantle-project-input-trust-v1";
@@ -213,29 +214,29 @@ pub fn evaluate_trust_policy(
     hash_algo: &HashAlgo,
     hash_value: &str,
     facts: &[VerifiedTrustFact],
-) -> Result<LockedTrust, String> {
+) -> Result<LockedTrust, Error> {
     assert!(!subject.name.is_empty(), "trust subject name must not be empty");
     assert!(!hash_value.is_empty(), "trust hash value must not be empty");
     let policy_problems = policy.validate(&subject.label());
     if let Some(problem) = policy_problems.first() {
-        return Err(problem.clone());
+        return Err(Error::Validation(problem.clone()));
     }
     let accepted = accepted_facts(&subject, policy, hash_algo, hash_value, facts);
     let signers = unique_sorted(accepted.iter().map(|fact| fact.signer.clone()).collect());
     let missing_required = missing_required_signers(&policy.required_signers, &signers);
     if let Some(signer) = missing_required.first() {
-        return Err(format!("{} missing required trust signer '{signer}'", subject.label()));
+        return Err(Error::Validation(format!("{} missing required trust signer '{signer}'", subject.label())));
     }
     if signers.len() as u64 <= policy.quorum.saturating_sub(MIN_TRUST_QUORUM) as u64 {
-        return Err(format!(
+        return Err(Error::Validation(format!(
             "{} trust quorum not satisfied: {} accepted signer(s), require {}",
             subject.label(),
             signers.len(),
             policy.quorum
-        ));
+        )));
     }
     if accepted.is_empty() {
-        return Err(format!("{} has no accepted trust evidence", subject.label()));
+        return Err(Error::Validation(format!("{} has no accepted trust evidence", subject.label())));
     }
     Ok(LockedTrust {
         schema: TRUST_POLICY_SCHEMA.to_string(),
@@ -516,8 +517,8 @@ mod tests {
         )])
         .expect_err("wrong signer must not satisfy policy");
 
-        assert!(err.contains("missing required trust signer"));
-        assert!(!err.contains("build reproducibility"));
+        assert!(err.message().contains("missing required trust signer"));
+        assert!(!err.message().contains("build reproducibility"));
     }
 
     #[test]
