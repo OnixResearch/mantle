@@ -291,6 +291,7 @@ pub(crate) async fn realize_foreign_plan(
         root_registration: None,
         source_fetch_overrides,
         remote_enabled: false,
+        interchange_dir: None,
     };
     let build_result =
         crunch_pipeline::build_registered_derivations(&build_config, store, &mut registry, RegisteredBuildRequest {

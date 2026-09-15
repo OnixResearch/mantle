@@ -220,6 +220,7 @@ pub fn cmd_build_with_source_fetch_overrides(
         root_registration,
         source_fetch_overrides,
         remote_enabled: false,
+        interchange_dir: None,
         base_state_dirs,
     };
 
@@ -402,12 +403,14 @@ pub fn report_build_result(
         if output_mode.is_json() {
             print_json_report(config, result, &logs_dir, &diagnostic_persistence_failures)?;
         }
+        emit_interchange(config, result)?;
         return Ok(());
     }
 
     if is_log_dir_ready {
         diagnostic_persistence_failures.extend(write_failure_logs(config, result, &logs_dir));
     }
+    emit_interchange(config, result)?;
     if output_mode.is_json() {
         print_json_report(config, result, &logs_dir, &diagnostic_persistence_failures)?;
     }
@@ -543,8 +546,18 @@ fn print_json_report(
     Ok(())
 }
 
-fn print_hermeticity_summary(result: &PipelineResult) {
-    for line in format_hermeticity_summary(result.hermeticity_mode, &result.hermeticity_audit_events) {
+/// Emit the owner interchange records when a directory was configured.
+/// Emission establishes no execution authority, custody, or promotion.
+fn emit_interchange(config: &BuildConfig, result: &PipelineResult) -> Result<(), RunError> {
+    if config.interchange_dir.is_none() {
+        return Ok(());
+    }
+    crate::build_interchange::emit_from_report(config, result)
+        .map(|_paths| ())
+        .map_err(|error| RunError::Internal(format!("build interchange: {error}")))
+}
+
+fn print_hermeticity_summary(result: &PipelineResult) {    for line in format_hermeticity_summary(result.hermeticity_mode, &result.hermeticity_audit_events) {
         eprintln!("{line}");
     }
 }

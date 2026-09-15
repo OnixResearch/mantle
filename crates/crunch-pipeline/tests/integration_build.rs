@@ -69,6 +69,7 @@ fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConf
         root_registration: None,
         source_fetch_overrides: Vec::new(),
         remote_enabled: false,
+        interchange_dir: None,
     }
 }
 

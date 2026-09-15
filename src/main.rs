@@ -8244,6 +8244,7 @@ fn build_from_expr_raw(request: RawInlineBuildRequest<'_>) -> Result<crunch_pipe
         root_registration: request.root_registration,
         source_fetch_overrides: Vec::new(),
         remote_enabled: false,
+        interchange_dir: None,
     };
     build_cmd::run_build(&config)
 }
@@ -8470,6 +8471,7 @@ fn build_file_raw(request: FileRawBuildRequest<'_>) -> Result<crunch_pipeline::P
         root_registration: None,
         source_fetch_overrides: Vec::new(),
         remote_enabled: false,
+        interchange_dir: None,
     };
     build_cmd::run_build(&config)
 }

@@ -2670,6 +2670,7 @@ fn self_build_pipeline_config(
         root_registration: None,
         source_fetch_overrides: pipeline.source_fetch_overrides.to_vec(),
         remote_enabled: false,
+        interchange_dir: None,
     }
 }
 

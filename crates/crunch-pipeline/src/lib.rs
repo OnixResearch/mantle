@@ -108,6 +108,8 @@ pub struct BuildConfig {
     /// When true, wrap the sandbox service in RemoteFirstBuildService
     /// to exercise the remote-build dispatch path through the scheduler.
     pub remote_enabled: bool,
+    /// Optional directory for owner-emitted interchange records.
+    pub interchange_dir: Option<PathBuf>,
 }
 
 #[derive(Debug)]

@@ -264,6 +264,94 @@ fn write_new(path: &Path, bytes: &[u8]) -> Result<(), Error> {
     Ok(())
 }
 
+/// The local host platform. A cross-system build must not use this emitter yet.
+fn host_platform() -> &'static str {
+    if cfg!(all(target_arch = "x86_64", target_os = "linux")) {
+        "x86_64-linux"
+    } else {
+        "unsupported-local-platform"
+    }
+}
+
+fn hash_file(path: &Path) -> Result<[u8; 32], Error> {
+    let bytes = std::fs::read(path)?;
+    Ok(*blake3::hash(&bytes).as_bytes())
+}
+
+/// Gather explicit facts from one completed build and write both records.
+///
+/// Exactly one build outcome is supported. The platform is the local host
+/// platform, so a cross-system build must wait for derivation-system support.
+/// Log digests are not bound in this first revision. A cache hit names the
+/// derivation entry that supplied it. Emission establishes no authority.
+pub fn emit_from_report(
+    config: &crunch_pipeline::BuildConfig,
+    result: &crunch_pipeline::PipelineResult,
+) -> Result<(PathBuf, PathBuf), Error> {
+    let directory = config
+        .interchange_dir
+        .as_deref()
+        .ok_or(Error::Facts("no interchange directory"))?;
+    let outcomes = result.outcomes.as_slice();
+    let [outcome] = outcomes else {
+        return Err(Error::Facts(
+            "interchange emission supports exactly one build outcome",
+        ));
+    };
+    let derivation_key = crunch_pipeline::drv_key_for(&config.store_dir, &outcome.drv_path);
+    let output_dir = config
+        .output_dir
+        .to_str()
+        .ok_or(Error::Facts("output directory is not UTF-8"))?;
+    let mut products = Vec::with_capacity(outcome.outputs.len());
+    for (name, path_info) in &outcome.outputs {
+        let exported = path_info.store_path.to_absolute_path_with_prefix(output_dir);
+        let bytes = hash_file(Path::new(&exported))?;
+        let attestation_path = crunch_store::artifact_attestation_file_path(
+            &config.state_dir,
+            &config.store_dir,
+            &path_info.store_path,
+        );
+        let attestation = hash_file(&attestation_path)?;
+        products.push(Product {
+            name: name.clone(),
+            store_leaf: path_info.store_path.name().to_string(),
+            bytes,
+            attestation,
+        });
+    }
+    let hermeticity = config.hermeticity_mode.to_string();
+    let outcome_kind = if result.failed.is_empty() {
+        BuildOutcome::Success
+    } else {
+        BuildOutcome::Failed
+    };
+    let (cache_kind, cache_source) = if outcome.cached {
+        (CacheKind::Local, Some(derivation_key.as_str()))
+    } else {
+        (CacheKind::None, None)
+    };
+    let facts = Facts {
+        platform: host_platform(),
+        engine_revision: env!("CARGO_PKG_VERSION"),
+        store_dir: &config.store_dir,
+        hermeticity_mode: hermeticity.as_str(),
+        substitution_allowed: !config.substituter_urls.is_empty(),
+        jobs: u64::from(config.max_jobs),
+        derivation_key: derivation_key.as_str(),
+        attempt: 1,
+        outcome: outcome_kind,
+        cache_kind,
+        cache_source_leaf: cache_source,
+        products,
+        logs: Vec::new(),
+    };
+    debug_assert!(!facts.products.is_empty() || outcome_kind != BuildOutcome::Success);
+    let request_record = request(&facts)?;
+    let observation_record = observation(&facts, &request_record)?;
+    write(directory, &request_record, &observation_record)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
