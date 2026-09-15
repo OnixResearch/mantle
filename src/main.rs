@@ -7595,7 +7595,8 @@ fn prepare_rust_plan_shared_cache(
         accepted_producer_policy_ids: producer_policies.clone(),
         trusted_keys,
     };
-    crunch_rust_cache_core::shared::validate_trust_policy(&trust_policy).map_err(RunError::Internal)?;
+    crunch_rust_cache_core::shared::validate_trust_policy(&trust_policy)
+        .map_err(|error| RunError::Internal(String::from(error.code())))?;
     let signing = input.signing_key.map(shared_rust_signing_key::load_shared_rust_signing_key).transpose()?;
     let (signer_name, signing_key) = match signing {
         Some((name, key)) => (name, Some(Arc::new(key))),
