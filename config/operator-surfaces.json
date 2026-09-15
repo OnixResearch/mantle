@@ -1829,6 +1829,7 @@
         "--help",
         "--import-path",
         "--impure",
+        "--interchange-dir",
         "--jobs",
         "--json",
         "--log-level",
