@@ -21,7 +21,6 @@ use mantle_build_contract::{
     ValueError, observation_identity, request_identity, validate_observation, validate_request,
 };
 
-const ARTIFACT_DOMAIN: &str = "mantle.build-artifact.identity.v1";
 const ATTEMPT_DOMAIN: &str = "mantle.build-attempt.identity.v1";
 const CACHE_SOURCE_DOMAIN: &str = "mantle.build-cache-source.identity.v1";
 const CANDIDATE_DOMAIN: &str = "mantle.build-candidate.identity.v1";
@@ -312,6 +311,7 @@ fn hash_file(path: &Path) -> Result<[u8; 32], Error> {
 pub fn emit_from_report(
     config: &crunch_pipeline::BuildConfig,
     result: &crunch_pipeline::PipelineResult,
+    logs_dir: &Path,
     directory: &Path,
 ) -> Result<(PathBuf, PathBuf), Error> {
     let outcomes = result.outcomes.as_slice();
@@ -362,6 +362,12 @@ pub fn emit_from_report(
     } else {
         (CacheKind::None, None)
     };
+    let log_path = crate::build_log::log_file_path(logs_dir, &outcome.drv_path);
+    let logs = if log_path.is_file() {
+        vec![hash_file(&log_path)?]
+    } else {
+        Vec::new()
+    };
     let facts = Facts {
         platform: host_platform(),
         engine_revision: env!("CARGO_PKG_VERSION"),
@@ -375,7 +381,7 @@ pub fn emit_from_report(
         cache_kind,
         cache_source_leaf: cache_source,
         products,
-        logs: Vec::new(),
+        logs,
     };
     debug_assert!(!facts.products.is_empty() || outcome_kind != BuildOutcome::Success);
     let request_record = request(&facts)?;
