@@ -39,7 +39,6 @@ const WORKER_DOMAIN: &str = "mantle.build-worker.identity.v1";
 /// One observed product with the bytes and attestation the owner measured.
 pub struct Product {
     pub name: String,
-    pub store_leaf: String,
     pub bytes: [u8; 32],
     pub attestation: [u8; 32],
 }
@@ -315,7 +314,6 @@ pub fn emit_from_report(
         let attestation = hash_file(&attestation_path)?;
         products.push(Product {
             name: name.clone(),
-            store_leaf: path_info.store_path.name().to_string(),
             bytes,
             attestation,
         });
@@ -372,13 +370,11 @@ mod tests {
             products: vec![
                 Product {
                     name: "tensor".to_owned(),
-                    store_leaf: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-neural-scalar-materialization-tensor".to_owned(),
                     bytes: [7; 32],
                     attestation: [8; 32],
                 },
                 Product {
                     name: "transcript".to_owned(),
-                    store_leaf: "cccccccccccccccccccccccccccccccc-neural-scalar-materialization-transcript".to_owned(),
                     bytes: [9; 32],
                     attestation: [10; 32],
                 },
