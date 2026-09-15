@@ -73,7 +73,7 @@ pub fn request_identity(request: &BuildRequest) -> Identity {
     frame.finish()
 }
 
-#[allow(tigerstyle::assertion_density)] // pre-existing validation logic; dedicated assertions tracked for the hardening pass
+#[cfg_attr(feature = "tigerstyle", allow(tigerstyle::assertion_density))] // pre-existing validation logic; dedicated assertions tracked for the hardening pass
 #[must_use]
 pub fn observation_identity(observation: &BuildObservation) -> Identity {
     let mut frame = Frame::new(OBSERVATION_DOMAIN);

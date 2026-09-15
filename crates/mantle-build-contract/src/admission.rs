@@ -39,7 +39,7 @@ pub fn validate_request(request: &BuildRequest) -> Result<(), ContractError> {
     Ok(())
 }
 
-#[allow(tigerstyle::assertion_density)] // pre-existing validation logic; dedicated assertions tracked for the hardening pass
+#[cfg_attr(feature = "tigerstyle", allow(tigerstyle::assertion_density))] // pre-existing validation logic; dedicated assertions tracked for the hardening pass
 pub fn validate_observation(
     request: &BuildRequest,
     expected_builder: &Identity,
