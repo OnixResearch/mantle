@@ -16,6 +16,7 @@ mod build_cmd;
 #[allow(dead_code)]
 mod build_correctness;
 mod build_failure;
+mod build_interchange;
 mod build_log;
 mod build_plan;
 mod child_exec;
@@ -448,6 +449,10 @@ enum Command {
         /// Require imported source state for selected roots before planning or building
         #[arg(long)]
         offline_source_preflight: bool,
+
+        /// Directory for owner-emitted build interchange records
+        #[arg(long = "interchange-dir")]
+        interchange_dir: Option<PathBuf>,
 
         /// Emit the bounded mantle-evaluation-stream-v1 NDJSON contract on stdout
         #[arg(long, conflicts_with_all = ["fix", "plan", "builder"])]
@@ -4712,6 +4717,7 @@ struct BuildCommandInput<'a> {
     fix: bool,
     plan: bool,
     offline_source_preflight: bool,
+    interchange_dir: Option<&'a Path>,
     output_mode: BuildOutputMode,
     jobs: Option<u32>,
     substituters: &'a str,
@@ -4740,6 +4746,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
         fix,
         plan,
         offline_source_preflight,
+        interchange_dir,
         evaluation_stream,
         jobs,
         substituters,
@@ -4770,6 +4777,7 @@ fn run_build_from_command(ctx: &RunContext, command: &Command) -> Result<(), Run
         fix: *fix,
         plan: *plan,
         offline_source_preflight: *offline_source_preflight,
+        interchange_dir: interchange_dir.as_deref(),
         output_mode: if *evaluation_stream {
             BuildOutputMode::EvaluationStream
         } else {
@@ -4817,6 +4825,7 @@ struct PreparedBuildCommand<'a> {
     fix: bool,
     plan: bool,
     offline_source_preflight: bool,
+    interchange_dir: Option<&'a Path>,
     output_mode: BuildOutputMode,
     max_jobs: u32,
     substituter_urls: Vec<String>,
@@ -4881,6 +4890,7 @@ fn prepare_build_command<'a>(
         fix: input.fix,
         plan: input.plan,
         offline_source_preflight: input.offline_source_preflight,
+        interchange_dir: input.interchange_dir,
         output_mode: input.output_mode,
         max_jobs: crunch_pipeline::resolve_max_jobs(input.jobs),
         substituter_urls,
@@ -4979,6 +4989,7 @@ fn run_local_file_build(
             prepared.trust_unsigned,
             prepared.hermeticity_mode,
             prepared.output_mode,
+            prepared.interchange_dir,
             source_fetch_plan.overrides.clone(),
             prepared.ctx.base_state_dirs.clone(),
             None,
@@ -4999,6 +5010,7 @@ fn run_local_file_build(
         prepared.trust_unsigned,
         prepared.hermeticity_mode,
         prepared.output_mode,
+        prepared.interchange_dir,
     )
 }
 
@@ -8167,6 +8179,7 @@ fn build_from_expr(request: InlineBuildRequest<'_>) -> Result<(), RunError> {
         request.prepared.trust_unsigned,
         request.prepared.hermeticity_mode,
         request.prepared.output_mode,
+        request.prepared.interchange_dir,
         request.source_fetch_overrides,
         Vec::new(),
         Some(request.root_registration),
@@ -8243,6 +8256,7 @@ fn build_from_expr_raw(request: RawInlineBuildRequest<'_>) -> Result<crunch_pipe
         root_registration: request.root_registration,
         source_fetch_overrides: Vec::new(),
         remote_enabled: false,
+        interchange_dir: None,
     };
     build_cmd::run_build(&config)
 }
@@ -8469,6 +8483,7 @@ fn build_file_raw(request: FileRawBuildRequest<'_>) -> Result<crunch_pipeline::P
         root_registration: None,
         source_fetch_overrides: Vec::new(),
         remote_enabled: false,
+        interchange_dir: None,
     };
     build_cmd::run_build(&config)
 }
@@ -8977,6 +8992,31 @@ mod tests {
         let args = parse_args_with_cli_test_stack(Vec::from(["mantle", "build", ".#app"])).expect("CLI parser test");
         assert!(matches!(args.command, Command::Build { .. }));
         assert!(!matches!(args.command, Command::RustPlan { .. }));
+    }
+
+    #[test]
+    fn build_cli_interchange_dir_flag_parses() {
+        let args = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "build",
+            "demo.ncl",
+            "--interchange-dir",
+            "/tmp/mantle-interchange",
+        ]))
+        .expect("CLI parser test");
+        let Command::Build { interchange_dir, .. } = args.command else {
+            panic!("expected build command");
+        };
+        assert_eq!(interchange_dir, Some(PathBuf::from("/tmp/mantle-interchange")));
+    }
+
+    #[test]
+    fn build_cli_interchange_dir_defaults_to_none() {
+        let args = parse_args_with_cli_test_stack(Vec::from(["mantle", "build", "demo.ncl"])).expect("CLI parser test");
+        let Command::Build { interchange_dir, .. } = args.command else {
+            panic!("expected build command");
+        };
+        assert_eq!(interchange_dir, None);
     }
 
     #[test]

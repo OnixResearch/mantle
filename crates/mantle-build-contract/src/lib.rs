@@ -1,5 +1,5 @@
-#![feature(register_tool)]
-#![register_tool(tigerstyle)]
+#![cfg_attr(feature = "tigerstyle", feature(register_tool))]
+#![cfg_attr(feature = "tigerstyle", register_tool(tigerstyle))]
 
 //! Versioned build request and observation contract for Mantle consumers.
 //!
