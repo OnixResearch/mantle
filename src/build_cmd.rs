@@ -140,6 +140,7 @@ pub fn cmd_build(
     trust_unsigned: bool,
     hermeticity_mode: HermeticityMode,
     output_mode: BuildOutputMode,
+    interchange_dir: Option<&Path>,
 ) -> Result<(), RunError> {
     cmd_build_with_source_fetch_overrides(
         file,
@@ -156,6 +157,7 @@ pub fn cmd_build(
         trust_unsigned,
         hermeticity_mode,
         output_mode,
+        interchange_dir,
         Vec::new(),
         Vec::new(),
         None,
@@ -184,6 +186,7 @@ pub fn cmd_build_with_source_fetch_overrides(
     trust_unsigned: bool,
     hermeticity_mode: HermeticityMode,
     output_mode: BuildOutputMode,
+    interchange_dir: Option<&Path>,
     source_fetch_overrides: Vec<crunch_build::FetchSourceOverride>,
     base_state_dirs: Vec<PathBuf>,
     root_registration: Option<crunch_store::RootRegistration>,
@@ -220,7 +223,7 @@ pub fn cmd_build_with_source_fetch_overrides(
         root_registration,
         source_fetch_overrides,
         remote_enabled: false,
-        interchange_dir: None,
+        interchange_dir: interchange_dir.map(Path::to_path_buf),
         base_state_dirs,
     };
 
@@ -548,14 +551,8 @@ fn print_json_report(
 
 /// Emit the owner interchange records when a directory was configured.
 /// Emission establishes no execution authority, custody, or promotion.
-fn emit_interchange(
-    config: &BuildConfig,
-    result: &PipelineResult,
-    logs_dir: &Path,
-) -> Result<(), RunError> {
-    let Some(directory) = crate::build_interchange::configured_directory(config)
-        .map_err(|error| RunError::Internal(format!("build interchange: {error}")))?
-    else {
+fn emit_interchange(config: &BuildConfig, result: &PipelineResult, logs_dir: &Path) -> Result<(), RunError> {
+    let Some(directory) = crate::build_interchange::configured_directory(config) else {
         return Ok(());
     };
     crate::build_interchange::emit_from_report(config, result, logs_dir, &directory)
@@ -563,7 +560,8 @@ fn emit_interchange(
         .map_err(|error| RunError::Internal(format!("build interchange: {error}")))
 }
 
-fn print_hermeticity_summary(result: &PipelineResult) {    for line in format_hermeticity_summary(result.hermeticity_mode, &result.hermeticity_audit_events) {
+fn print_hermeticity_summary(result: &PipelineResult) {
+    for line in format_hermeticity_summary(result.hermeticity_mode, &result.hermeticity_audit_events) {
         eprintln!("{line}");
     }
 }

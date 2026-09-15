@@ -13,13 +13,26 @@
 //! }
 //! ```
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
-use mantle_build_contract::{
-    BuildObservation, BuildOutcome, BuildRequest, CacheKind, CacheObservation, ContractError,
-    Identity, Label, OBSERVATION_SCHEMA, ProductObservation, REQUEST_SCHEMA, REQUIRED_NON_CLAIMS,
-    ValueError, observation_identity, request_identity, validate_observation, validate_request,
-};
+use mantle_build_contract::BuildObservation;
+use mantle_build_contract::BuildOutcome;
+use mantle_build_contract::BuildRequest;
+use mantle_build_contract::CacheKind;
+use mantle_build_contract::CacheObservation;
+use mantle_build_contract::ContractError;
+use mantle_build_contract::Identity;
+use mantle_build_contract::Label;
+use mantle_build_contract::OBSERVATION_SCHEMA;
+use mantle_build_contract::ProductObservation;
+use mantle_build_contract::REQUEST_SCHEMA;
+use mantle_build_contract::REQUIRED_NON_CLAIMS;
+use mantle_build_contract::ValueError;
+use mantle_build_contract::observation_identity;
+use mantle_build_contract::request_identity;
+use mantle_build_contract::validate_observation;
+use mantle_build_contract::validate_request;
 
 const ATTEMPT_DOMAIN: &str = "mantle.build-attempt.identity.v1";
 const CACHE_SOURCE_DOMAIN: &str = "mantle.build-cache-source.identity.v1";
@@ -111,9 +124,8 @@ pub fn identity(domain: &str, parts: &[&str]) -> Identity {
         hasher.update(b"|");
         hasher.update(part.as_bytes());
     }
-    Identity::new(format!("b3:{}", hasher.finalize().to_hex())).unwrap_or_else(|_error| {
-        unreachable!("a blake3 digest always formats as a canonical identity")
-    })
+    Identity::new(format!("b3:{}", hasher.finalize().to_hex()))
+        .unwrap_or_else(|_error| unreachable!("a blake3 digest always formats as a canonical identity"))
 }
 
 fn artifact_identity(domain: &str, bytes: [u8; 32]) -> Identity {
@@ -155,7 +167,11 @@ pub fn request(facts: &Facts<'_>) -> Result<BuildRequest, Error> {
         strict_labels(&facts.products.iter().map(|product| product.name.clone()).collect::<Vec<_>>())?;
     let plan = identity(PLAN_DOMAIN, &[facts.derivation_key]);
     let store = identity(STORE_DOMAIN, &[facts.store_dir]);
-    let substitution = if facts.substitution_allowed { "substitute" } else { "no-substitute" };
+    let substitution = if facts.substitution_allowed {
+        "substitute"
+    } else {
+        "no-substitute"
+    };
     let jobs = facts.jobs.to_string();
     let attempt = facts.attempt.to_string();
     let mut request = BuildRequest {
@@ -181,8 +197,9 @@ pub fn request(facts: &Facts<'_>) -> Result<BuildRequest, Error> {
 ///
 /// `artifact_identity` is BLAKE3 over the complete exported product bytes, so a
 /// consumer that hashes the same bytes derives the same identity. The receipt
-/// identity binds the sorted per-product attestation digests. Cache hits name
-/// their source; fresh builds name none.
+/// identity binds the sorted per-product attestation digests, or the retained
+/// failure log digests when a build produced no product. Cache hits name their
+/// source; fresh builds name none.
 pub fn observation(facts: &Facts<'_>, request: &BuildRequest) -> Result<BuildObservation, Error> {
     validate_request(request)?;
     let builder = identity(ENGINE_DOMAIN, &[facts.engine_revision]);
@@ -212,11 +229,19 @@ pub fn observation(facts: &Facts<'_>, request: &BuildRequest) -> Result<BuildObs
     let receipt_identity = match facts.outcome {
         BuildOutcome::Unknown => None,
         _ => {
-            let digests = facts
-                .products
-                .iter()
-                .map(|product| blake3::Hash::from_bytes(product.attestation).to_hex().to_string())
-                .collect::<Vec<_>>();
+            let digests = if facts.products.is_empty() {
+                facts
+                    .logs
+                    .iter()
+                    .map(|digest| blake3::Hash::from_bytes(*digest).to_hex().to_string())
+                    .collect::<Vec<_>>()
+            } else {
+                facts
+                    .products
+                    .iter()
+                    .map(|product| blake3::Hash::from_bytes(product.attestation).to_hex().to_string())
+                    .collect::<Vec<_>>()
+            };
             let parts = digests.iter().map(String::as_str).collect::<Vec<_>>();
             Some(identity(RECEIPT_DOMAIN, &parts))
         }
@@ -234,11 +259,7 @@ pub fn observation(facts: &Facts<'_>, request: &BuildRequest) -> Result<BuildObs
             kind: facts.cache_kind,
             source_identity: cache_source,
         },
-        logs: facts
-            .logs
-            .iter()
-            .map(|digest| artifact_identity(LOG_DOMAIN, *digest))
-            .collect(),
+        logs: facts.logs.iter().map(|digest| artifact_identity(LOG_DOMAIN, *digest)).collect(),
         metrics: Vec::new(),
         receipt_identity,
         non_claims: REQUIRED_NON_CLAIMS.iter().map(|value| (*value).to_owned()).collect(),
@@ -247,6 +268,50 @@ pub fn observation(facts: &Facts<'_>, request: &BuildRequest) -> Result<BuildObs
     validate_observation(request, &builder, &observation)?;
     debug_assert_eq!(observation.identity, observation_identity(&observation));
     Ok(observation)
+}
+
+/// Emit a failed observation for exactly one failed build root.
+///
+/// A failed build has no successful product, so the request names no required
+/// product and the receipt binds the retained failure log digests instead of
+/// product attestations. The derivation key is the origin that caused the
+/// failure, not the requested root, so a consumer sees the actual fault.
+fn emit_failed(
+    config: &crunch_pipeline::BuildConfig,
+    result: &crunch_pipeline::PipelineResult,
+    logs_dir: &Path,
+    directory: &Path,
+) -> Result<(PathBuf, PathBuf), Error> {
+    let [failure] = result.failed.as_slice() else {
+        return Err(Error::Facts("interchange emission supports exactly one failed build root"));
+    };
+    let derivation_key = failure.origin_drv_key.as_str();
+    let mut logs = Vec::new();
+    if let Some(log_path) = crate::build_log::log_file_path_from_drv_key(logs_dir, &config.store_dir, derivation_key)
+        .filter(|path| path.is_file())
+    {
+        logs.push(hash_file(&log_path)?);
+    }
+    let hermeticity = config.hermeticity_mode.to_string();
+    let facts = Facts {
+        platform: host_platform(),
+        engine_revision: env!("CARGO_PKG_VERSION"),
+        store_dir: &config.store_dir,
+        hermeticity_mode: hermeticity.as_str(),
+        substitution_allowed: !config.substituter_urls.is_empty(),
+        jobs: u64::from(config.max_jobs),
+        derivation_key,
+        attempt: 1,
+        outcome: BuildOutcome::Failed,
+        cache_kind: CacheKind::None,
+        cache_source_leaf: None,
+        products: Vec::new(),
+        logs,
+    };
+    debug_assert!(facts.products.is_empty());
+    let request_record = request(&facts)?;
+    let observation_record = observation(&facts, &request_record)?;
+    write(directory, &request_record, &observation_record)
 }
 
 /// Write both records beneath an explicit directory without replacement.
@@ -259,8 +324,15 @@ pub fn write(
     std::fs::create_dir_all(directory)?;
     let request_path = directory.join("request.json");
     let observation_path = directory.join("observation.json");
-    write_new(&request_path, &serde_json::to_vec_pretty(request).map_err(|_error| Error::Facts("request record is not serializable"))?)?;
-    write_new(&observation_path, &serde_json::to_vec_pretty(observation).map_err(|_error| Error::Facts("observation record is not serializable"))?)?;
+    write_new(
+        &request_path,
+        &serde_json::to_vec_pretty(request).map_err(|_error| Error::Facts("request record is not serializable"))?,
+    )?;
+    write_new(
+        &observation_path,
+        &serde_json::to_vec_pretty(observation)
+            .map_err(|_error| Error::Facts("observation record is not serializable"))?,
+    )?;
     Ok((request_path, observation_path))
 }
 
@@ -272,20 +344,11 @@ fn write_new(path: &Path, bytes: &[u8]) -> Result<(), Error> {
     Ok(())
 }
 
-/// Explicit interchange directory: the build configuration first, then
-/// `MANTLE_INTERCHANGE_DIR`. Both are operator-supplied. The environment
-/// trigger is an interim interface until the clap flag is threaded through the
-/// prepared build command.
-pub fn configured_directory(
-    config: &crunch_pipeline::BuildConfig,
-) -> Result<Option<PathBuf>, Error> {
-    if let Some(directory) = config.interchange_dir.clone() {
-        return Ok(Some(directory));
-    }
-    match std::env::var_os("MANTLE_INTERCHANGE_DIR") {
-        Some(value) if !value.is_empty() => Ok(Some(PathBuf::from(value))),
-        _ => Ok(None),
-    }
+/// The explicit operator-supplied interchange directory, threaded from the
+/// `--interchange-dir` flag through the prepared build command. No ambient
+/// environment variable selects emission.
+pub fn configured_directory(config: &crunch_pipeline::BuildConfig) -> Option<PathBuf> {
+    config.interchange_dir.clone()
 }
 
 /// The local host platform. A cross-system build must not use this emitter yet.
@@ -304,46 +367,42 @@ fn hash_file(path: &Path) -> Result<[u8; 32], Error> {
 
 /// Gather explicit facts from one completed build and write both records.
 ///
-/// Exactly one build outcome is supported. The platform is the local host
-/// platform, so a cross-system build must wait for derivation-system support.
-/// Log digests are not bound in this first revision. A cache hit names the
-/// derivation entry that supplied it. Emission establishes no authority.
+/// Exactly one requested build root is supported. The platform is the local
+/// host platform, so a cross-system build must wait for derivation-system
+/// support. Each stored build log is hashed into the observation. A cache hit
+/// names the derivation entry that supplied it. Emission establishes no
+/// authority.
 pub fn emit_from_report(
     config: &crunch_pipeline::BuildConfig,
     result: &crunch_pipeline::PipelineResult,
     logs_dir: &Path,
     directory: &Path,
 ) -> Result<(PathBuf, PathBuf), Error> {
+    if !result.failed.is_empty() {
+        return emit_failed(config, result, logs_dir, directory);
+    }
     let outcomes = result.outcomes.as_slice();
     let root_keys = result.root_labels.keys().collect::<Vec<_>>();
     let roots = outcomes
         .iter()
         .filter(|outcome| {
             root_keys.is_empty()
-                || root_keys.iter().any(|key| {
-                    **key == crunch_pipeline::drv_key_for(&config.store_dir, &outcome.drv_path)
-                })
+                || root_keys
+                    .iter()
+                    .any(|key| **key == crunch_pipeline::drv_key_for(&config.store_dir, &outcome.drv_path))
         })
         .collect::<Vec<_>>();
     let [outcome] = roots.as_slice() else {
-        return Err(Error::Facts(
-            "interchange emission supports exactly one requested build root",
-        ));
+        return Err(Error::Facts("interchange emission supports exactly one requested build root"));
     };
     let derivation_key = crunch_pipeline::drv_key_for(&config.store_dir, &outcome.drv_path);
-    let output_dir = config
-        .output_dir
-        .to_str()
-        .ok_or(Error::Facts("output directory is not UTF-8"))?;
+    let output_dir = config.output_dir.to_str().ok_or(Error::Facts("output directory is not UTF-8"))?;
     let mut products = Vec::with_capacity(outcome.outputs.len());
     for (name, path_info) in &outcome.outputs {
         let exported = path_info.store_path.to_absolute_path_with_prefix(output_dir);
         let bytes = hash_file(Path::new(&exported))?;
-        let attestation_path = crunch_store::artifact_attestation_file_path(
-            &config.state_dir,
-            &config.store_dir,
-            &path_info.store_path,
-        );
+        let attestation_path =
+            crunch_store::artifact_attestation_file_path(&config.state_dir, &config.store_dir, &path_info.store_path);
         let attestation = hash_file(&attestation_path)?;
         products.push(Product {
             name: name.clone(),
@@ -430,11 +489,7 @@ mod tests {
         assert_eq!(validate_request(&request_record), Ok(()));
         assert_eq!(request_record.identity, request_identity(&request_record));
         assert_eq!(
-            validate_observation(
-                &request_record,
-                &observation_record.builder_identity,
-                &observation_record
-            ),
+            validate_observation(&request_record, &observation_record.builder_identity, &observation_record),
             Ok(())
         );
         assert_eq!(observation_record.identity, observation_identity(&observation_record));
@@ -452,10 +507,7 @@ mod tests {
 
         let hit = facts(
             BuildOutcome::Success,
-            (
-                CacheKind::Local,
-                Some("dddddddddddddddddddddddddddddddd-neural-scalar-materialization"),
-            ),
+            (CacheKind::Local, Some("dddddddddddddddddddddddddddddddd-neural-scalar-materialization")),
         );
         let hit_request = request(&hit).expect("request");
         let hit_observation = observation(&hit, &hit_request).expect("observation");
@@ -473,15 +525,9 @@ mod tests {
         duplicate.products[1].name = "tensor".to_owned();
         assert!(matches!(request(&duplicate), Err(Error::Facts(_))));
 
-        let contradictory = facts(
-            BuildOutcome::Success,
-            (CacheKind::Local, None),
-        );
+        let contradictory = facts(BuildOutcome::Success, (CacheKind::Local, None));
         let contradictory_request = request(&contradictory).expect("request");
-        assert!(matches!(
-            observation(&contradictory, &contradictory_request),
-            Err(Error::Facts(_))
-        ));
+        assert!(matches!(observation(&contradictory, &contradictory_request), Err(Error::Facts(_))));
 
         let bad_platform = Facts {
             platform: "X86_64-Linux",
@@ -491,12 +537,33 @@ mod tests {
     }
 
     #[test]
+    fn failed_outcome_binds_retained_logs_and_no_products() {
+        let mut failed = facts(BuildOutcome::Failed, (CacheKind::None, None));
+        failed.products.clear();
+        failed.logs = vec![[42; 32]];
+        let request_record = request(&failed).expect("request");
+        let observation_record = observation(&failed, &request_record).expect("observation");
+        assert!(observation_record.products.is_empty());
+        assert_eq!(observation_record.outcome, BuildOutcome::Failed);
+        assert!(observation_record.receipt_identity.is_some());
+        assert_eq!(observation_record.logs.len(), 1);
+        assert_eq!(
+            validate_observation(&request_record, &observation_record.builder_identity, &observation_record),
+            Ok(())
+        );
+        let named = facts(BuildOutcome::Failed, (CacheKind::None, None));
+        let named_request = request(&named).expect("request");
+        let named_observation = observation(&named, &named_request).expect("observation");
+        assert_ne!(
+            named_observation.receipt_identity, observation_record.receipt_identity,
+            "a failed receipt must bind its retained evidence"
+        );
+    }
+
+    #[test]
     fn records_write_once_without_replacement() {
-        let directory = std::env::temp_dir().join(format!(
-            "mantle-interchange-{}-{}",
-            std::process::id(),
-            "write-once"
-        ));
+        let directory =
+            std::env::temp_dir().join(format!("mantle-interchange-{}-{}", std::process::id(), "write-once"));
         let _ = std::fs::remove_dir_all(&directory);
         let facts = facts(BuildOutcome::Success, (CacheKind::None, None));
         let request_record = request(&facts).expect("request");
@@ -505,10 +572,7 @@ mod tests {
             write(&directory, &request_record, &observation_record).expect("records");
         assert!(request_path.is_file());
         assert!(observation_path.is_file());
-        assert!(matches!(
-            write(&directory, &request_record, &observation_record),
-            Err(Error::Io(_))
-        ));
+        assert!(matches!(write(&directory, &request_record, &observation_record), Err(Error::Io(_))));
         std::fs::remove_dir_all(&directory).expect("cleanup");
     }
 }
