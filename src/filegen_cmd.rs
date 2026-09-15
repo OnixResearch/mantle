@@ -99,6 +99,7 @@ pub fn cmd_filegen_apply(options: FilegenApplyOptions<'_>) -> Result<(), RunErro
     }
     apply_filegen_operations(options.root, &current_plan.operations)?;
     write_filegen_state(options.root, &current_plan)?;
+    classify_filegen_apply(options.root, &current_plan)?;
     render_filegen_plan(&current_plan, options.json)
 }
 
@@ -272,13 +273,13 @@ fn write_symlink(path: &Path, _target: &str) -> Result<(), RunError> {
     )))
 }
 
-fn write_filegen_state(root: &Path, plan: &FilegenPlan) -> Result<(), RunError> {
-    if plan.operations.len() > MAX_FILEGEN_FACTS {
-        return Err(RunError::Internal(format!(
-            "too many filegen state operations: {} > {MAX_FILEGEN_FACTS}",
-            plan.operations.len()
-        )));
-    }
+/// The file entries one plan implies in the state file.
+///
+/// A create, update, or unchanged operation records the digest the file is
+/// expected to hold; a stale or conflicting operation records nothing, because
+/// the plan did not put that file in the state it claims.
+fn filegen_state_files_for_plan(plan: &FilegenPlan) -> BTreeMap<String, String> {
+    debug_assert!(plan.operations.len() <= MAX_FILEGEN_FACTS);
     let files = plan
         .operations
         .iter()
@@ -289,6 +290,58 @@ fn write_filegen_state(root: &Path, plan: &FilegenPlan) -> Result<(), RunError> 
             FilegenAction::Stale | FilegenAction::Conflict => None,
         })
         .collect::<BTreeMap<_, _>>();
+    debug_assert!(files.len() <= plan.operations.len());
+    files
+}
+
+/// Effect kind the apply reports for the files and state it writes.
+const FILEGEN_APPLY_EFFECT: &str = "write-files";
+/// Diagnostic code for a state file that does not read back as the plan.
+const FILEGEN_APPLY_STATE_CODE: &str = "filegen-apply-state-mismatch";
+
+/// Classify the applied state before reporting the apply.
+///
+/// Writing the state returning success is not the fact that matters: the next
+/// run reads that file to decide what is already generated, so the fact is
+/// whether it reads back as the plan that was just applied.
+fn classify_filegen_apply(root: &Path, plan: &FilegenPlan) -> Result<(), RunError> {
+    let effect_plan =
+        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::Realization, &[
+            FILEGEN_APPLY_EFFECT,
+        ])
+        .ok_or_else(|| RunError::Internal("filegen apply effect plan exceeds its bound".to_string()))?;
+    let expected = filegen_state_files_for_plan(plan);
+    let is_matching = load_filegen_state(root).is_ok_and(|state| state.files == expected);
+    let observation = mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId(String::from(FILEGEN_APPLY_EFFECT)),
+        status: if is_matching {
+            mantle_application_contract::ObservationStatus::Succeeded
+        } else {
+            mantle_application_contract::ObservationStatus::Failed
+        },
+        diagnostics_code: if is_matching {
+            None
+        } else {
+            Some(String::from(FILEGEN_APPLY_STATE_CODE))
+        },
+    };
+    match mantle_application_contract::classify_observations(&effect_plan, &[observation]) {
+        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
+        mantle_application_contract::ApplicationOutcome::Failed { .. } => {
+            Err(RunError::Internal("filegen state did not read back as the plan that was applied".to_string()))
+        }
+        other => Err(RunError::Internal(format!("filegen apply observations were inconsistent: {other:?}"))),
+    }
+}
+
+fn write_filegen_state(root: &Path, plan: &FilegenPlan) -> Result<(), RunError> {
+    if plan.operations.len() > MAX_FILEGEN_FACTS {
+        return Err(RunError::Internal(format!(
+            "too many filegen state operations: {} > {MAX_FILEGEN_FACTS}",
+            plan.operations.len()
+        )));
+    }
+    let files = filegen_state_files_for_plan(plan);
     debug_assert!(files.len() <= plan.operations.len());
     debug_assert!(files.len() <= MAX_FILEGEN_FACTS);
     let state = FilegenState {
@@ -482,5 +535,76 @@ mod tests {
 
         assert_eq!(facts[0].target, "../outside");
         assert_eq!(facts[0].state, CurrentFileState::Missing);
+    }
+}
+
+#[cfg(test)]
+mod apply_state_classification_tests {
+    use super::*;
+
+    /// Build one operation with the given action and target.
+    fn operation(target: &str, action: FilegenAction, digest: &str) -> FilegenOperation {
+        FilegenOperation {
+            name: target.to_string(),
+            target: target.to_string(),
+            action,
+            materialization: GeneratedFileMaterialization::Copy,
+            desired_digest_blake3: digest.to_string(),
+            content: "generated".to_string(),
+            contract_identity: None,
+        }
+    }
+
+    /// Build one plan over the given operations.
+    fn plan(operations: Vec<FilegenOperation>) -> FilegenPlan {
+        FilegenPlan {
+            schema: String::new(),
+            operations,
+            blockers: Vec::new(),
+            non_claim: String::new(),
+        }
+    }
+
+    #[test]
+    fn the_state_map_records_written_and_unchanged_targets_only() {
+        let plan = plan(vec![
+            operation("created.ncl", FilegenAction::Create, "aa"),
+            operation("updated.ncl", FilegenAction::Update, "bb"),
+            operation("kept.ncl", FilegenAction::Unchanged, "cc"),
+            operation("stale.ncl", FilegenAction::Stale, "dd"),
+            operation("conflict.ncl", FilegenAction::Conflict, "ee"),
+        ]);
+        let files = filegen_state_files_for_plan(&plan);
+        assert_eq!(files.len(), 3);
+        assert_eq!(files.get("created.ncl").map(String::as_str), Some("aa"));
+        assert_eq!(files.get("kept.ncl").map(String::as_str), Some("cc"));
+        assert!(!files.contains_key("stale.ncl"));
+        assert!(!files.contains_key("conflict.ncl"));
+    }
+
+    #[test]
+    fn an_applied_plan_that_reads_back_is_completed() {
+        let temp = tempfile::tempdir().unwrap();
+        let applied = plan(vec![operation("created.ncl", FilegenAction::Create, "aa")]);
+        write_filegen_state(temp.path(), &applied).unwrap();
+        assert!(classify_filegen_apply(temp.path(), &applied).is_ok());
+    }
+
+    #[test]
+    fn a_plan_without_written_state_is_rejected() {
+        let temp = tempfile::tempdir().unwrap();
+        let applied = plan(vec![operation("created.ncl", FilegenAction::Create, "aa")]);
+        let error = classify_filegen_apply(temp.path(), &applied).expect_err("missing state must fail closed");
+        assert!(error.to_string().contains("did not read back"), "{error}");
+    }
+
+    #[test]
+    fn state_written_for_another_plan_is_rejected() {
+        let temp = tempfile::tempdir().unwrap();
+        let written = plan(vec![operation("created.ncl", FilegenAction::Create, "aa")]);
+        let other = plan(vec![operation("created.ncl", FilegenAction::Create, "zz")]);
+        write_filegen_state(temp.path(), &written).unwrap();
+        assert!(classify_filegen_apply(temp.path(), &other).is_err());
+        assert!(classify_filegen_apply(temp.path(), &written).is_ok());
     }
 }
