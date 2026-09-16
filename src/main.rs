@@ -5404,6 +5404,7 @@ fn run_remote_build_command(request: RemoteBuildCommandRequest<'_>) -> Result<()
         &request.ctx.resolved_state_dir,
         &request.ctx.store_prefix,
     )?;
+    classify_remote_build_imports(&build_outcome)?;
     presentation::remote_client::print_remote_client_build_report(
         &build_outcome,
         file,
@@ -6251,6 +6252,60 @@ async fn run_remote_build_dispatches_async(
         priority_decisions: vec![priority_plan.evidence],
         imported: accepted_builds,
     })
+}
+
+/// Effect kind the remote client reports for its network exchange.
+const REMOTE_BUILD_EFFECT: &str = "use-network";
+/// Diagnostic code for a remote import whose outputs lack signed evidence.
+const REMOTE_BUILD_EVIDENCE_CODE: &str = "remote-build-import-evidence-missing";
+
+/// Whether one imported remote output carries the evidence an import claims.
+///
+/// An imported output is only worth reporting when it has a logical path, a
+/// signing key that bound its PathInfo, and the artifact attestation digest the
+/// import recorded. An import that admitted an unsigned or unattested output
+/// would otherwise report a successful remote build.
+fn is_evidenced_remote_output(output: &remote_build::RemoteImportedOutput) -> bool {
+    !output.logical_path.is_empty()
+        && !output.path_info_signing_key_id.is_empty()
+        && !output.artifact_attestation_digest_blake3.is_empty()
+}
+
+/// Classify the remote build imports before reporting them.
+/// Whether every imported output across the builds carries its evidence.
+fn are_remote_outputs_evidenced(outputs: &[&remote_build::RemoteImportedOutput]) -> bool {
+    outputs.iter().all(|output| is_evidenced_remote_output(output))
+}
+
+fn classify_remote_build_imports(report: &remote_build::RemoteClientBuildReport) -> Result<(), RunError> {
+    let plan =
+        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::RemoteExecution, &[
+            REMOTE_BUILD_EFFECT,
+        ])
+        .ok_or_else(|| RunError::Internal("remote build effect plan exceeds its bound".to_string()))?;
+    let outputs: Vec<&remote_build::RemoteImportedOutput> =
+        report.imported.iter().flat_map(|build| build.imported.outputs.iter()).collect();
+    let is_evidenced = are_remote_outputs_evidenced(&outputs);
+    let observation = mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId(String::from(REMOTE_BUILD_EFFECT)),
+        status: if is_evidenced {
+            mantle_application_contract::ObservationStatus::Succeeded
+        } else {
+            mantle_application_contract::ObservationStatus::Failed
+        },
+        diagnostics_code: if is_evidenced {
+            None
+        } else {
+            Some(String::from(REMOTE_BUILD_EVIDENCE_CODE))
+        },
+    };
+    match mantle_application_contract::classify_observations(&plan, &[observation]) {
+        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
+        mantle_application_contract::ApplicationOutcome::Failed { .. } => Err(RunError::Internal(
+            "a remote build import admitted an output without signed PathInfo or artifact evidence".to_string(),
+        )),
+        other => Err(RunError::Internal(format!("remote build import observations were inconsistent: {other:?}"))),
+    }
 }
 
 async fn open_remote_dispatch_store(
@@ -10903,5 +10958,59 @@ let Plan = {
         assert!(matches!(name_to_build_target(Some("./tool")), project_build::BuildTarget::File(_)));
         assert!(matches!(name_to_build_target(Some("tool")), project_build::BuildTarget::Selector(_)));
         assert!(matches!(name_to_build_target(None), project_build::BuildTarget::ProjectDefault));
+    }
+}
+
+#[cfg(test)]
+mod remote_import_evidence_tests {
+    use super::*;
+
+    /// Build one imported remote output with the given evidence fields.
+    fn output(
+        logical_path: &str,
+        signing_key_id: &str,
+        attestation_digest: &str,
+    ) -> remote_build::RemoteImportedOutput {
+        remote_build::RemoteImportedOutput {
+            name: "out".to_string(),
+            logical_path: logical_path.to_string(),
+            path_info_signing_key_id: signing_key_id.to_string(),
+            artifact_attestation_digest_blake3: attestation_digest.to_string(),
+            artifact_attestation_path: "/tmp/attestation.json".to_string(),
+        }
+    }
+
+    #[test]
+    fn a_fully_evidenced_output_passes_the_predicate() {
+        assert!(is_evidenced_remote_output(&output("/mantle/store/aaa", "outer-key", "digest")));
+    }
+
+    #[test]
+    fn an_output_missing_any_evidence_field_fails_the_predicate() {
+        assert!(!is_evidenced_remote_output(&output("", "outer-key", "digest")));
+        assert!(!is_evidenced_remote_output(&output("/mantle/store/aaa", "", "digest")));
+        assert!(!is_evidenced_remote_output(&output("/mantle/store/aaa", "outer-key", "")));
+    }
+
+    #[test]
+    fn the_aggregation_requires_every_output_to_be_evidenced() {
+        let good = output("/mantle/store/aaa", "outer-key", "digest");
+        let unsigned = output("/mantle/store/bbb", "", "digest");
+        assert!(are_remote_outputs_evidenced(&[]));
+        assert!(are_remote_outputs_evidenced(&[&good]));
+        assert!(are_remote_outputs_evidenced(&[&good, &good]));
+        assert!(!are_remote_outputs_evidenced(&[&good, &unsigned]));
+    }
+
+    #[test]
+    fn an_import_without_outputs_is_completed() {
+        let report = remote_build::RemoteClientBuildReport {
+            schema: "mantle-remote-client-build-report-v1".to_string(),
+            builder: "local-builder".to_string(),
+            store_prefix: "/mantle/store".to_string(),
+            priority_decisions: Vec::new(),
+            imported: Vec::new(),
+        };
+        assert!(classify_remote_build_imports(&report).is_ok());
     }
 }
