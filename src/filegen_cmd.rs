@@ -79,9 +79,9 @@ pub fn cmd_filegen_plan(options: FilegenPlanOptions<'_>) -> Result<(), RunError>
     }
     render_filegen_plan(&plan, options.json)?;
     if plan.has_blockers() {
-        return Err(RunError::Reported(APPLY_FAILURE_EXIT_CODE));
+        return classify_filegen_plan(Some(FILEGEN_PLAN_BLOCKERS_CODE));
     }
-    Ok(())
+    classify_filegen_plan(None)
 }
 
 pub fn cmd_filegen_apply(options: FilegenApplyOptions<'_>) -> Result<(), RunError> {
@@ -331,6 +331,42 @@ fn classify_filegen_apply(root: &Path, plan: &FilegenPlan) -> Result<(), RunErro
             Err(RunError::Internal("filegen state did not read back as the plan that was applied".to_string()))
         }
         other => Err(RunError::Internal(format!("filegen apply observations were inconsistent: {other:?}"))),
+    }
+}
+
+/// Effect identity of the filegen planning read.
+const FILEGEN_PLAN_EFFECT: &str = "read-files";
+
+/// Diagnostic code reported when the planned generation has blockers.
+const FILEGEN_PLAN_BLOCKERS_CODE: &str = "filegen-plan-blockers";
+
+/// Classify the plan read before its terminal report.
+///
+/// A plan with blockers keeps the exact `Reported` exit it already had; the
+/// decision moves into the observation instead of a bare error return.
+fn classify_filegen_plan(blocker_code: Option<&str>) -> Result<(), RunError> {
+    let plan = mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::Realization, &[
+        FILEGEN_PLAN_EFFECT,
+    ])
+    .ok_or_else(|| RunError::Internal("filegen plan effect plan exceeds its bound".to_string()))?;
+    let observation = mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId(String::from(FILEGEN_PLAN_EFFECT)),
+        status: if blocker_code.is_some() {
+            mantle_application_contract::ObservationStatus::Failed
+        } else {
+            mantle_application_contract::ObservationStatus::Succeeded
+        },
+        diagnostics_code: blocker_code.map(String::from),
+    };
+    match mantle_application_contract::classify_observations(&plan, &[observation]) {
+        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
+        mantle_application_contract::ApplicationOutcome::Failed { .. } => match blocker_code {
+            Some(_) => Err(RunError::Reported(APPLY_FAILURE_EXIT_CODE)),
+            None => {
+                Err(RunError::Internal("filegen plan classification failed without a recorded failure".to_string()))
+            }
+        },
+        other => Err(RunError::Internal(format!("filegen plan observations were inconsistent: {other:?}"))),
     }
 }
 

@@ -1,6 +1,27 @@
 use crate::build_cmd::log_dir;
 use crate::errors::RunError;
 
+/// Effect identity of the build-log read.
+const LOG_READ_EFFECT: &str = "read-files";
+
+/// Classify the completed log read before its terminal report.
+fn classify_log_read() -> Result<(), RunError> {
+    let plan =
+        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::StoreAdministration, &[
+            LOG_READ_EFFECT,
+        ])
+        .ok_or_else(|| RunError::Internal("log read effect plan exceeds its bound".to_string()))?;
+    let observation = mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId(String::from(LOG_READ_EFFECT)),
+        status: mantle_application_contract::ObservationStatus::Succeeded,
+        diagnostics_code: None,
+    };
+    match mantle_application_contract::classify_observations(&plan, &[observation]) {
+        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
+        other => Err(RunError::Internal(format!("log observations were inconsistent: {other:?}"))),
+    }
+}
+
 pub fn cmd_log(query: Option<&str>, list: bool) -> Result<(), RunError> {
     let dir = log_dir();
     if !dir.exists() {
@@ -19,7 +40,7 @@ pub fn cmd_log(query: Option<&str>, list: bool) -> Result<(), RunError> {
     if list || query.is_none() {
         if entries.is_empty() {
             eprintln!("No build logs found in {}", dir.display());
-            return Ok(());
+            return classify_log_read();
         }
         for entry in &entries {
             let path = entry.path();
@@ -40,7 +61,7 @@ pub fn cmd_log(query: Option<&str>, list: bool) -> Result<(), RunError> {
                 println!("{name}");
             }
         }
-        return Ok(());
+        return classify_log_read();
     }
 
     let Some(query) = query else {
@@ -57,7 +78,7 @@ pub fn cmd_log(query: Option<&str>, list: bool) -> Result<(), RunError> {
             let content =
                 std::fs::read_to_string(entry.path()).map_err(|e| RunError::Internal(format!("reading log: {e}")))?;
             print!("{content}");
-            Ok(())
+            classify_log_read()
         }
         None => Err(RunError::Internal(format!("no log matching '{query}' in {}", dir.display(),))),
     }
