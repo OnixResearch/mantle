@@ -4684,19 +4684,25 @@ fn cmd_bootstrap_profile(
     let manifest = plan_bootstrap_source_bundle_profile(&profile_input, context.store_prefix)?;
     assert_eq!(manifest.format, SOURCE_BUNDLE_FORMAT);
     assert_eq!(manifest.non_claim, SOURCE_BUNDLE_NON_CLAIM);
+    let wrote_profile = input.to.is_some();
     if let Some(path) = input.to {
         write_source_bundle(&path, &manifest)?;
     }
     if input.preflight {
         let preflight_receipt = offline_preflight_for_manifest(&manifest, context.state_dir)?;
         print_offline_preflight_report(&preflight_receipt, context.is_json_output)?;
-        if source_offline_preflight_is_ready(&preflight_receipt) {
-            return Ok(());
-        }
-        return Err(RunError::Reported(1));
+        let failure = (!source_offline_preflight_is_ready(&preflight_receipt))
+            .then(|| (SOURCE_PREFLIGHT_NOT_READY_CODE, RunError::Reported(1)));
+        return classify_source_effect(SOURCE_PREFLIGHT_EFFECT, failure);
     }
     let profile_receipt = bootstrap_source_bundle_profile_report(&manifest, mode)?;
-    print_bootstrap_profile_report(&profile_receipt, context.is_json_output)
+    print_bootstrap_profile_report(&profile_receipt, context.is_json_output)?;
+    let effect = if wrote_profile {
+        SOURCE_PROFILE_WRITE_EFFECT
+    } else {
+        SOURCE_PROFILE_PLAN_EFFECT
+    };
+    classify_source_effect(effect, None)
 }
 
 fn cmd_refresh_mantle_source(
@@ -4715,7 +4721,8 @@ fn cmd_refresh_mantle_source(
     let supplemental_records = read_refresh_supplemental_bundle_records(include_bundles)?;
     let (refreshed, report) = plan_source_built_mantle_source_refresh(manifest, replacement, supplemental_records)?;
     write_source_bundle_no_replace(to, &refreshed)?;
-    print_mantle_source_refresh_report(&report, context.is_json_output)
+    print_mantle_source_refresh_report(&report, context.is_json_output)?;
+    classify_source_effect(SOURCE_REFRESH_EFFECT, None)
 }
 
 fn read_refresh_supplemental_bundle_records(paths: &[PathBuf]) -> Result<Vec<SourceRecord>, RunError> {
@@ -4848,7 +4855,8 @@ fn cmd_plan_source_bundle(
     context: &SourceBundleCliContext<'_>,
 ) -> Result<(), RunError> {
     let manifest = plan_from_cli_inputs(sources, build_roots, import_paths, context.store_prefix)?;
-    print_plan_report(&plan_report(&manifest)?, context.is_json_output)
+    print_plan_report(&plan_report(&manifest)?, context.is_json_output)?;
+    classify_source_effect(SOURCE_PLAN_EFFECT, None)
 }
 
 fn cmd_export_source_bundle(
@@ -4920,7 +4928,8 @@ fn classify_source_bundle_export(to: &Path, written: &SourceBundleManifest) -> R
 
 fn cmd_list_source_bundle(from: &Path, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
     let manifest = read_source_bundle(from)?;
-    print_plan_report(&list_source_bundle(&manifest)?, context.is_json_output)
+    print_plan_report(&list_source_bundle(&manifest)?, context.is_json_output)?;
+    classify_source_effect(SOURCE_LIST_EFFECT, None)
 }
 
 fn cmd_import_source_bundle(from: &Path, pin: bool, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
@@ -4974,6 +4983,64 @@ fn classify_source_bundle_import(report: &SourceBundleImportReport) -> Result<()
     }
 }
 
+/// Effect identity of the source bundle planning read.
+const SOURCE_PLAN_EFFECT: &str = "read-files";
+
+/// Effect identity of the bundle listing read.
+const SOURCE_LIST_EFFECT: &str = "read-files";
+
+/// Effect identity of the offline preflight read.
+const SOURCE_PREFLIGHT_EFFECT: &str = "read-files";
+
+/// Diagnostic code reported when a preflight is not ready.
+const SOURCE_PREFLIGHT_NOT_READY_CODE: &str = "source-preflight-not-ready";
+
+/// Effect identity of the mantle-source refresh write.
+const SOURCE_REFRESH_EFFECT: &str = "write-files";
+
+/// Effect identity of the self-build hydration write.
+const SOURCE_HYDRATE_EFFECT: &str = "write-files";
+
+/// Effect identity of the bootstrap profile plan read.
+const SOURCE_PROFILE_PLAN_EFFECT: &str = "read-files";
+
+/// Effect identity of the bootstrap profile write.
+const SOURCE_PROFILE_WRITE_EFFECT: &str = "write-files";
+
+/// Effect identity of the bundle verification read.
+const SOURCE_VERIFY_EFFECT: &str = "read-files";
+
+/// Classify one finished source provenance effect before success is reported.
+///
+/// Same shape as the store and project families: one planned effect, one
+/// observation, and the exact failure the command already used on rejection.
+fn classify_source_effect(effect: &str, failure: Option<(&str, RunError)>) -> Result<(), RunError> {
+    let plan =
+        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::SourceProvenance, &[
+            effect,
+        ])
+        .ok_or_else(|| RunError::Internal(format!("source {effect} effect plan exceeds its bound")))?;
+    let observation = mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId(String::from(effect)),
+        status: if failure.is_some() {
+            mantle_application_contract::ObservationStatus::Failed
+        } else {
+            mantle_application_contract::ObservationStatus::Succeeded
+        },
+        diagnostics_code: failure.as_ref().map(|(code, _)| String::from(*code)),
+    };
+    match mantle_application_contract::classify_observations(&plan, &[observation]) {
+        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
+        mantle_application_contract::ApplicationOutcome::Failed { .. } => match failure {
+            Some((_, error)) => Err(error),
+            None => {
+                Err(RunError::Internal(format!("source {effect} classification failed without a recorded failure")))
+            }
+        },
+        other => Err(RunError::Internal(format!("source {effect} observations were inconsistent: {other:?}"))),
+    }
+}
+
 fn cmd_hydrate_self_build_source_bundle(
     from: &Path,
     expected_manifest_blake3: &str,
@@ -4982,7 +5049,8 @@ fn cmd_hydrate_self_build_source_bundle(
 ) -> Result<(), RunError> {
     let manifest = read_source_bundle(from)?;
     let report = hydrate_self_build_source_bundle(&manifest, expected_manifest_blake3, checkout, context.state_dir)?;
-    print_self_build_hydration_report(&report, context.is_json_output)
+    print_self_build_hydration_report(&report, context.is_json_output)?;
+    classify_source_effect(SOURCE_HYDRATE_EFFECT, None)
 }
 
 fn cmd_verify_source_bundle(from: &Path, imported: bool, context: &SourceBundleCliContext<'_>) -> Result<(), RunError> {
@@ -5000,7 +5068,11 @@ fn cmd_verify_source_bundle(from: &Path, imported: bool, context: &SourceBundleC
             non_claim: SOURCE_BUNDLE_NON_CLAIM,
         }
     };
-    print_verify_report(&verify_receipt, context.is_json_output)
+    // The verify report is the readiness carrier: the CLI contract pins a
+    // success exit for `missing` and `stale` classes (the operator reads the
+    // class), so the observation records the completed read without gating.
+    print_verify_report(&verify_receipt, context.is_json_output)?;
+    classify_source_effect(SOURCE_VERIFY_EFFECT, None)
 }
 
 fn cmd_preflight_source_bundle(
@@ -5012,9 +5084,9 @@ fn cmd_preflight_source_bundle(
         offline_preflight_for_build_roots(build_roots, import_paths, context.state_dir, context.store_prefix)?;
     print_offline_preflight_report(&preflight_receipt, context.is_json_output)?;
     if source_offline_preflight_is_ready(&preflight_receipt) {
-        return Ok(());
+        return classify_source_effect(SOURCE_PREFLIGHT_EFFECT, None);
     }
-    Err(RunError::Reported(1))
+    classify_source_effect(SOURCE_PREFLIGHT_EFFECT, Some((SOURCE_PREFLIGHT_NOT_READY_CODE, RunError::Reported(1))))
 }
 
 fn plan_from_cli_inputs(
@@ -7749,5 +7821,34 @@ mod import_accounting_tests {
     fn an_import_that_counts_more_records_than_declared_is_rejected() {
         assert!(classify_source_bundle_import(&report(2, 2, 3)).is_err());
         assert!(classify_source_bundle_import(&report(1, 0, 0)).is_err());
+    }
+}
+
+#[cfg(test)]
+mod operation_classification_tests {
+    use super::*;
+
+    #[test]
+    fn a_succeeded_source_effect_classifies_as_completed() {
+        assert!(classify_source_effect(SOURCE_PLAN_EFFECT, None).is_ok());
+        assert!(classify_source_effect(SOURCE_HYDRATE_EFFECT, None).is_ok());
+    }
+
+    #[test]
+    fn a_failed_source_effect_returns_its_recorded_failure() {
+        let error = classify_source_effect(
+            SOURCE_PREFLIGHT_EFFECT,
+            Some((SOURCE_PREFLIGHT_NOT_READY_CODE, RunError::Reported(1))),
+        )
+        .expect_err("a failed observation rejects the report");
+        assert!(matches!(error, RunError::Reported(1)));
+    }
+    #[test]
+    fn verify_classifies_the_read_without_gating_on_readiness() {
+        // The CLI contract pins a success exit for `missing` and `stale`
+        // verify classes: the report is the readiness carrier, so the
+        // observation records the completed read and nothing gates on class.
+        assert!(classify_source_effect(SOURCE_VERIFY_EFFECT, None).is_ok());
+        assert_eq!(SOURCE_VERIFY_EFFECT, "read-files");
     }
 }
