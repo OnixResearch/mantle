@@ -26,6 +26,71 @@ const STORE_VERIFY_EFFECT: &str = "verify-paths";
 /// Diagnostic code reported when verification finds a mismatch.
 const STORE_VERIFY_MISMATCH_CODE: &str = "store-verify-mismatch";
 
+/// Effect identity of the store listing read.
+const STORE_LIST_EFFECT: &str = "read-files";
+
+/// Effect identity of the store path-info read.
+const STORE_INFO_EFFECT: &str = "read-files";
+/// Effect identity of the retained-roots read (without migration).
+const STORE_ROOTS_LIST_EFFECT: &str = "read-files";
+
+/// Effect identity of the legacy-root migration write.
+const STORE_ROOTS_MIGRATE_EFFECT: &str = "write-files";
+
+/// Effect identity of the store usage plan read.
+const STORE_USAGE_EFFECT: &str = "read-files";
+
+/// Effect identity of the GC-root retention write.
+const STORE_PIN_EFFECT: &str = "write-files";
+
+/// Effect identity of the GC-root release write.
+const STORE_UNPIN_EFFECT: &str = "write-files";
+
+/// Diagnostic code reported when an unpin names an unknown root.
+const STORE_UNPIN_UNKNOWN_ROOT_CODE: &str = "store-unpin-unknown-root";
+
+/// Effect identity of the garbage-collection write.
+const STORE_GC_EFFECT: &str = "write-files";
+
+/// Diagnostic code reported when GC execution stops incomplete.
+const STORE_GC_INCOMPLETE_CODE: &str = "store-gc-incomplete";
+
+/// Effect identity of the final-NAR repair inspection read.
+const STORE_REPAIR_INSPECT_EFFECT: &str = "read-files";
+
+/// Effect identity of the final-NAR repair execution write.
+const STORE_REPAIR_EXECUTE_EFFECT: &str = "write-files";
+
+/// Effect identity of the PathInfo signing write.
+const STORE_SIGN_EFFECT: &str = "write-files";
+
+/// Effect identity of the push selection read.
+const STORE_PUSH_SELECT_EFFECT: &str = "read-files";
+
+/// Effect identity of the cache push write.
+const STORE_PUSH_EFFECT: &str = "write-files";
+
+/// Effect identity of the pull import write.
+const STORE_PULL_EFFECT: &str = "write-files";
+
+/// Diagnostic code reported when a closure pull does not admit its root.
+const STORE_PULL_ROOT_NOT_ADMITTED_CODE: &str = "store-pull-closure-root-not-admitted";
+
+/// Effect identity of the composition planning read.
+const STORE_COMPOSITION_PLAN_EFFECT: &str = "read-files";
+
+/// Effect identity of the composition realization write.
+const STORE_COMPOSITION_REALIZE_EFFECT: &str = "write-files";
+
+/// Effect identity of the archive export write.
+const STORE_ARCHIVE_EXPORT_EFFECT: &str = "write-files";
+
+/// Effect identity of the archive import write.
+const STORE_ARCHIVE_IMPORT_EFFECT: &str = "write-files";
+
+/// Effect identity of the archive listing read.
+const STORE_ARCHIVE_LIST_EFFECT: &str = "read-files";
+
 pub fn cmd_store(
     action: crate::StoreAction,
     output_dir: &Path,
@@ -474,7 +539,7 @@ async fn cmd_store_list(store: &crunch_store::StoreHandle, is_json_output: bool)
             }))
             .map_err(|error| RunError::Internal(format!("serializing store list: {error}")))?
         );
-        return Ok(());
+        return classify_store_effect(STORE_LIST_EFFECT, None);
     }
     print_overlay_summary(overlay.as_ref());
     if entries.is_empty() {
@@ -490,7 +555,7 @@ async fn cmd_store_list(store: &crunch_store::StoreHandle, is_json_output: bool)
         }
         eprintln!("{} path(s)", entries.len());
     }
-    Ok(())
+    classify_store_effect(STORE_LIST_EFFECT, None)
 }
 
 async fn cmd_store_info(store: &crunch_store::StoreHandle, path: &str, is_json_output: bool) -> Result<(), RunError> {
@@ -535,7 +600,7 @@ async fn cmd_store_info(store: &crunch_store::StoreHandle, path: &str, is_json_o
             }))
             .map_err(|error| RunError::Internal(format!("serializing store info: {error}")))?
         );
-        return Ok(());
+        return classify_store_effect(STORE_INFO_EFFECT, None);
     }
     print_overlay_summary(overlay.as_ref());
     for detail in &details {
@@ -567,7 +632,7 @@ async fn cmd_store_info(store: &crunch_store::StoreHandle, path: &str, is_json_o
         }
         println!("node:       {:?}", path_info.node);
     }
-    Ok(())
+    classify_store_effect(STORE_INFO_EFFECT, None)
 }
 
 fn print_overlay_summary(report: Option<&crunch_store::StoreOverlayReport>) {
@@ -606,17 +671,22 @@ fn cmd_store_roots(
     } else {
         store.list_retained_roots().map_err(|error| RunError::Internal(format!("{error}")))?
     };
+    let effect = if migrate {
+        STORE_ROOTS_MIGRATE_EFFECT
+    } else {
+        STORE_ROOTS_LIST_EFFECT
+    };
     if context.is_json_output {
         println!(
             "{}",
             serde_json::to_string_pretty(&roots)
                 .map_err(|error| RunError::Internal(format!("serializing root report: {error}")))?
         );
-        return Ok(());
+        return classify_store_effect(effect, None);
     }
     if roots.is_empty() {
         eprintln!("No retained GC roots.");
-        return Ok(());
+        return classify_store_effect(effect, None);
     }
     for root in &roots {
         println!(
@@ -632,7 +702,7 @@ fn cmd_store_roots(
         );
     }
     eprintln!("{} retained root(s)", roots.len());
-    Ok(())
+    classify_store_effect(effect, None)
 }
 
 #[derive(Serialize)]
@@ -656,7 +726,7 @@ async fn cmd_store_usage(store: &mut crunch_store::StoreHandle, is_json_output: 
             })
             .map_err(|error| RunError::Internal(format!("serializing usage report: {error}")))?
         );
-        return Ok(());
+        return classify_store_effect(STORE_USAGE_EFFECT, None);
     }
     println!(
         "observed_bytes={}  retained_bytes={}  reclaimable_bytes={}  quarantined_bytes={}  unclassified_bytes={}  shared_bytes={}  unknown_objects={}",
@@ -679,22 +749,24 @@ async fn cmd_store_usage(store: &mut crunch_store::StoreHandle, is_json_output: 
             println!("UNKNOWN_BYTES {}  category={}  blocker={}", observation.path, observation.category, blocker,);
         }
     }
-    Ok(())
+    classify_store_effect(STORE_USAGE_EFFECT, None)
 }
-
 async fn cmd_store_pin(store: &crunch_store::StoreHandle, path: &str) -> Result<(), RunError> {
     let root = store.pin_retained_root(path).await.map_err(|e| RunError::Build(format!("{e}")))?;
     println!("PINNED {}  source={}  created_unix_s={}", root.logical_path, root.source, root.created_unix_s);
-    Ok(())
+    classify_store_effect(STORE_PIN_EFFECT, None)
 }
 
 fn cmd_store_unpin(store: &crunch_store::StoreHandle, path: &str) -> Result<(), RunError> {
     let removed = store.unpin_retained_root(path).map_err(|e| RunError::Build(format!("{e}")))?;
     let Some(root) = removed else {
-        return Err(RunError::Build(format!("retained root not found: {path}")));
+        return classify_store_effect(
+            STORE_UNPIN_EFFECT,
+            Some((STORE_UNPIN_UNKNOWN_ROOT_CODE, RunError::Build(format!("retained root not found: {path}")))),
+        );
     };
     println!("UNPINNED {}", root.logical_path);
-    Ok(())
+    classify_store_effect(STORE_UNPIN_EFFECT, None)
 }
 
 async fn cmd_store_gc(
@@ -725,15 +797,18 @@ async fn cmd_store_gc(
     } else {
         print_human_gc_report(&gc_evidence, rust_retention);
     }
-    if !is_plan_only && !gc_evidence.execution_complete {
-        return Err(RunError::Build(format!(
-            "GC execution completed {} operation(s) with {} failure(s); first failure: {}",
-            gc_evidence.operations.len(),
-            gc_evidence.failed_operations.len(),
-            gc_evidence.failed_operation.as_deref().unwrap_or("unknown operation failure"),
-        )));
-    }
-    Ok(())
+    let incomplete_failure = (!is_plan_only && !gc_evidence.execution_complete).then(|| {
+        (
+            STORE_GC_INCOMPLETE_CODE,
+            RunError::Build(format!(
+                "GC execution completed {} operation(s) with {} failure(s); first failure: {}",
+                gc_evidence.operations.len(),
+                gc_evidence.failed_operations.len(),
+                gc_evidence.failed_operation.as_deref().unwrap_or("unknown operation failure"),
+            )),
+        )
+    });
+    classify_store_effect(STORE_GC_EFFECT, incomplete_failure)
 }
 
 fn print_human_gc_report(report: &crunch_store::GcReport, rust_retention: &crunch_rust_cache::RustCacheRetentionPlan) {
@@ -883,6 +958,36 @@ struct VerifySummary {
     mismatches: u32,
 }
 
+/// Classify one finished store administration effect before success is reported.
+///
+/// Every store operation that reports after an effect shares this shape: one
+/// planned effect, one observation of how it ended, and the exact failure the
+/// command already used when the classification rejects the report.
+fn classify_store_effect(effect: &str, failure: Option<(&str, RunError)>) -> Result<(), RunError> {
+    let plan =
+        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::StoreAdministration, &[
+            effect,
+        ])
+        .ok_or_else(|| RunError::Internal(format!("store {effect} effect plan exceeds its bound")))?;
+    let observation = mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId(String::from(effect)),
+        status: if failure.is_some() {
+            mantle_application_contract::ObservationStatus::Failed
+        } else {
+            mantle_application_contract::ObservationStatus::Succeeded
+        },
+        diagnostics_code: failure.as_ref().map(|(code, _)| String::from(*code)),
+    };
+    match mantle_application_contract::classify_observations(&plan, &[observation]) {
+        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
+        mantle_application_contract::ApplicationOutcome::Failed { .. } => match failure {
+            Some((_, error)) => Err(error),
+            None => Err(RunError::Internal(format!("store {effect} classification failed without a recorded failure"))),
+        },
+        other => Err(RunError::Internal(format!("store {effect} observations were inconsistent: {other:?}"))),
+    }
+}
+
 fn resolve_store_verify_keys(
     signing_key_path: Option<&std::path::Path>,
     explicit_trusted_public_keys: &[String],
@@ -1010,7 +1115,8 @@ async fn cmd_store_repair_final_nar(
     let inspection = crunch_store::inspect_final_nar_repair(store, logical_store_path)
         .await
         .map_err(|error| RunError::Internal(error.to_string()))?;
-    let report = if is_execute && inspection.is_repair_required() {
+    let repair_was_required = inspection.is_repair_required();
+    let report = if is_execute && repair_was_required {
         let keypair = load_or_generate_signing_keypair(signing_key_path, state_dir, true)?;
         crunch_store::execute_final_nar_repair(store, inspection, &keypair.signing_key)
             .await
@@ -1018,7 +1124,13 @@ async fn cmd_store_repair_final_nar(
     } else {
         inspection.report(is_execute)
     };
-    print_final_nar_repair_report(&report, is_json_output)
+    print_final_nar_repair_report(&report, is_json_output)?;
+    let effect = if is_execute && repair_was_required {
+        STORE_REPAIR_EXECUTE_EFFECT
+    } else {
+        STORE_REPAIR_INSPECT_EFFECT
+    };
+    classify_store_effect(effect, None)
 }
 
 fn print_final_nar_repair_report(
@@ -1091,7 +1203,7 @@ async fn cmd_store_sign(
     }
 
     eprintln!("{} signed, {} appended, {} replaced, {} total", signed, appended, replaced, results.len());
-    Ok(())
+    classify_store_effect(STORE_SIGN_EFFECT, None)
 }
 
 struct StorePushRequest<'a> {
@@ -1117,7 +1229,7 @@ async fn cmd_store_push(store: &crunch_store::StoreHandle, request: StorePushReq
 
     if selected.is_empty() {
         eprintln!("no matching paths found");
-        return Ok(());
+        return classify_store_effect(STORE_PUSH_SELECT_EFFECT, None);
     }
 
     let options = crunch_store::PushOptions {
@@ -1146,7 +1258,7 @@ async fn cmd_store_push(store: &crunch_store::StoreHandle, request: StorePushReq
         push_evidence.total_nar_bytes,
         push_evidence.total_narinfo_bytes,
     );
-    Ok(())
+    classify_store_effect(STORE_PUSH_EFFECT, None)
 }
 
 fn parse_pull_source(source: &str) -> Result<crunch_store::PullSource, RunError> {
@@ -1201,7 +1313,30 @@ async fn cmd_store_pull(store: &crunch_store::StoreHandle, request: StorePullReq
     let options = resolve_pull_options(&request)?;
     let pull_evidence = execute_pull(store, pull_source, &request, &options).await?;
     print_pull_evidence(&pull_evidence);
-    Ok(())
+    classify_pull_evidence(&pull_evidence)
+}
+
+/// Closure-pull failure decision: a closure pull that did not admit its root
+/// under-delivered the one path the operator asked for, so it fails closed
+/// instead of exiting zero with `admitted=false` buried in the report line.
+fn closure_pull_failure(report: &crunch_store::HttpClosurePullReport) -> Option<(&'static str, RunError)> {
+    (!report.root_admitted).then(|| {
+        (
+            STORE_PULL_ROOT_NOT_ADMITTED_CODE,
+            RunError::Build(format!("closure pull did not admit root {}", report.plan.root)),
+        )
+    })
+}
+
+/// Classify one finished pull before the command reports success.
+///
+/// An explicit pull accounts for itself through its printed report; a closure
+/// pull additionally proves its root was admitted.
+fn classify_pull_evidence(evidence: &StorePullEvidence) -> Result<(), RunError> {
+    match evidence {
+        StorePullEvidence::Explicit(_) => classify_store_effect(STORE_PULL_EFFECT, None),
+        StorePullEvidence::Closure(report) => classify_store_effect(STORE_PULL_EFFECT, closure_pull_failure(report)),
+    }
 }
 
 fn validate_pull_request(request: &StorePullRequest<'_>) -> Result<crunch_store::PullSource, RunError> {
@@ -1355,7 +1490,8 @@ async fn cmd_store_composition(
             let request = read_composition_request(&from)?;
             let prepared = crunch_store::plan_composition_request(&request)
                 .map_err(|error| RunError::Internal(error.to_string()))?;
-            print_composition_plan(&prepared, context.is_json_output)
+            print_composition_plan(&prepared, context.is_json_output)?;
+            classify_store_effect(STORE_COMPOSITION_PLAN_EFFECT, None)
         }
         crate::StoreCompositionAction::Realize { from, receipt_out } => {
             let request = read_composition_request(&from)?;
@@ -1365,7 +1501,8 @@ async fn cmd_store_composition(
                 .await
                 .map_err(|error| RunError::Internal(error.to_string()))?;
             crate::source_bundle::write_json_atomically(&receipt_out, &receipt, "composition realization receipt")?;
-            print_composition_receipt(&receipt, context.is_json_output)
+            print_composition_receipt(&receipt, context.is_json_output)?;
+            classify_store_effect(STORE_COMPOSITION_REALIZE_EFFECT, None)
         }
     }
 }
@@ -1520,9 +1657,10 @@ async fn cmd_store_archive_export(
             "exported={} payload_bytes={}",
             archive_write_summary.exported_count, archive_write_summary.total_payload_bytes
         );
-        return Ok(());
+        return classify_store_effect(STORE_ARCHIVE_EXPORT_EFFECT, None);
     }
-    print_archive_export_report(&archive_write_summary, request.is_json_output)
+    print_archive_export_report(&archive_write_summary, request.is_json_output)?;
+    classify_store_effect(STORE_ARCHIVE_EXPORT_EFFECT, None)
 }
 
 struct StoreArchiveImportRequest<'a> {
@@ -1566,7 +1704,8 @@ async fn cmd_store_archive_import(
             crunch_store::import_nario_v2(store, &mut reader, &options).await
         }
         .map_err(|e| RunError::Internal(format!("nario-v2 archive import: {e}")))?;
-        return print_nario_import_report(&report, request.is_json_output);
+        print_nario_import_report(&report, request.is_json_output)?;
+        return classify_store_effect(STORE_ARCHIVE_IMPORT_EFFECT, None);
     }
     let options = crunch_store::ArchiveImportOptions {
         trust_unsigned: request.is_trust_unsigned,
@@ -1584,7 +1723,8 @@ async fn cmd_store_archive_import(
         crunch_store::import_store_archive(store, &mut reader, &options).await
     }
     .map_err(|e| RunError::Internal(format!("archive import: {e}")))?;
-    print_archive_import_report(&report, request.is_json_output)
+    print_archive_import_report(&report, request.is_json_output)?;
+    classify_store_effect(STORE_ARCHIVE_IMPORT_EFFECT, None)
 }
 
 async fn cmd_store_archive_list(
@@ -1604,7 +1744,8 @@ async fn cmd_store_archive_list(
             crunch_store::list_nario_v2(&mut reader).await
         }
         .map_err(|e| RunError::Internal(format!("nario-v2 archive list: {e}")))?;
-        return print_nario_list_report(&report, is_json_output);
+        print_nario_list_report(&report, is_json_output)?;
+        return classify_store_effect(STORE_ARCHIVE_LIST_EFFECT, None);
     }
     let report = if is_stdio_path(source) {
         let mut stdin = tokio::io::stdin();
@@ -1617,7 +1758,8 @@ async fn cmd_store_archive_list(
         crunch_store::list_store_archive(&mut reader).await
     }
     .map_err(|e| RunError::Internal(format!("archive list: {e}")))?;
-    print_archive_list_report(&report, is_json_output)
+    print_archive_list_report(&report, is_json_output)?;
+    classify_store_effect(STORE_ARCHIVE_LIST_EFFECT, None)
 }
 
 fn print_archive_export_report(
@@ -1790,5 +1932,67 @@ mod tests {
         let rendered = format!("{error}");
         assert!(rendered.contains("2 path(s) failed verification"));
         assert_eq!(STORE_VERIFY_MISMATCH_CODE, "store-verify-mismatch");
+    }
+
+    #[test]
+    fn a_succeeded_store_effect_classifies_as_completed() {
+        assert!(classify_store_effect(STORE_GC_EFFECT, None).is_ok());
+        assert!(classify_store_effect(STORE_PULL_EFFECT, None).is_ok());
+    }
+
+    #[test]
+    fn a_failed_store_effect_returns_its_recorded_failure() {
+        let error = classify_store_effect(
+            STORE_UNPIN_EFFECT,
+            Some((
+                STORE_UNPIN_UNKNOWN_ROOT_CODE,
+                RunError::Build("retained root not found: /mantle/store/demo".to_string()),
+            )),
+        )
+        .expect_err("a failed observation rejects the report");
+        assert!(format!("{error}").contains("retained root not found: /mantle/store/demo"));
+    }
+
+    #[test]
+    fn an_admitted_closure_pull_reports_no_failure() {
+        let report = closure_pull_report(true);
+        assert!(closure_pull_failure(&report).is_none());
+    }
+
+    #[test]
+    fn a_rejected_closure_root_fails_closed_with_the_root_named() {
+        let report = closure_pull_report(false);
+        let (code, error) = closure_pull_failure(&report).expect("an unadmitted root fails closed");
+        assert_eq!(code, STORE_PULL_ROOT_NOT_ADMITTED_CODE);
+        assert!(format!("{error}").contains("closure pull did not admit root /mantle/store/0demo"));
+    }
+
+    fn closure_pull_report(root_admitted: bool) -> crunch_store::HttpClosurePullReport {
+        crunch_store::HttpClosurePullReport {
+            plan: crunch_store::HttpClosurePlan {
+                schema: "mantle-http-closure-plan-v1".to_string(),
+                cache_identity: "cache".to_string(),
+                trust_policy_blake3: "trust".to_string(),
+                store_dir: "/mantle/store".to_string(),
+                root: "/mantle/store/0demo".to_string(),
+                limits: crunch_store::HttpClosureLimits::default(),
+                total_nar_bytes: 0,
+                members: Vec::new(),
+                plan_blake3: "plan".to_string(),
+            },
+            pull: crunch_store::PullReport {
+                imported_count: 0,
+                skipped_already_present_count: 0,
+                skipped_untrusted_count: 0,
+                skipped_hash_mismatch_count: 0,
+                skipped_missing_nar_count: 0,
+                skipped_parse_error_count: 0,
+                skipped_store_dir_mismatch_count: 0,
+                total_nar_bytes: 0,
+                paths: Vec::new(),
+            },
+            reused_complete_count: 0,
+            root_admitted,
+        }
     }
 }
