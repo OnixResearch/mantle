@@ -107,7 +107,17 @@ pub fn cmd_init(dir: &Path) -> Result<(), RunError> {
     eprintln!("  {MANIFEST_FILE}  (edit this)");
     eprintln!("  {LOCK_FILE}      (machine-managed)");
     eprintln!("  {INPUTS_FILE}    (generated)");
-    Ok(())
+    let scaffold_complete = manifest_path.is_file()
+        && lock_path.is_file()
+        && inputs_path.is_file()
+        && dir.join(RETENTION_STATE_FILE).is_file();
+    let failure = (!scaffold_complete).then(|| {
+        (
+            PROJECT_INIT_SCAFFOLD_MISMATCH_CODE,
+            RunError::Internal(format!("project scaffold incomplete under {}", dir.display())),
+        )
+    });
+    classify_project_effect(PROJECT_INIT_EFFECT, failure)
 }
 
 /// `crunch check` — validate project state.
@@ -172,17 +182,18 @@ where
     });
     finish_check_report(soundness, output)
 }
-
 fn finish_check_report(report: ProjectSoundnessReport, output: ProjectCheckOutput) -> Result<(), RunError> {
     match output {
         ProjectCheckOutput::Human => render_check_report_human(&report),
         ProjectCheckOutput::Json => render_check_report_json(&report)?,
     }
     if report.valid {
-        Ok(())
-    } else {
-        Err(RunError::Reported(PROJECT_CHECK_FAILURE_EXIT_CODE))
+        return classify_project_effect(PROJECT_CHECK_EFFECT, None);
     }
+    classify_project_effect(
+        PROJECT_CHECK_EFFECT,
+        Some((PROJECT_CHECK_UNSOUND_CODE, RunError::Reported(PROJECT_CHECK_FAILURE_EXIT_CODE))),
+    )
 }
 
 fn render_check_report_json(report: &ProjectSoundnessReport) -> Result<(), RunError> {
@@ -236,7 +247,7 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
 
     if lock.inputs.is_empty() {
         println!("No locked inputs.");
-        return Ok(());
+        return classify_project_effect(PROJECT_SHOW_EFFECT, None);
     }
 
     for (name, entry) in &lock.inputs {
@@ -262,7 +273,7 @@ pub fn cmd_show(dir: &Path) -> Result<(), RunError> {
         println!();
     }
 
-    Ok(())
+    classify_project_effect(PROJECT_SHOW_EFFECT, None)
 }
 
 fn locked_kind_text(kind: &crunch_project::LockedKind) -> String {
@@ -386,6 +397,61 @@ fn classify_project_refresh(failure_count: usize) -> Result<(), RunError> {
     }
 }
 
+/// Effect identity of the project scaffold write.
+const PROJECT_INIT_EFFECT: &str = "write-files";
+
+/// Diagnostic code reported when the scaffold does not read back.
+const PROJECT_INIT_SCAFFOLD_MISMATCH_CODE: &str = "project-init-scaffold-mismatch";
+
+/// Effect identity of the project soundness read.
+const PROJECT_CHECK_EFFECT: &str = "read-files";
+
+/// Diagnostic code reported when the soundness report is invalid.
+const PROJECT_CHECK_UNSOUND_CODE: &str = "project-check-unsound";
+
+/// Effect identity of the project state read.
+const PROJECT_SHOW_EFFECT: &str = "read-files";
+
+/// Effect identity of the stale check.
+const PROJECT_STALE_EFFECT: &str = "use-network";
+
+/// Diagnostic code reported when the stale check has blockers.
+const PROJECT_STALE_BLOCKERS_CODE: &str = "project-stale-blockers";
+
+/// Effect identity of the upgrade version read (already current).
+const PROJECT_UPGRADE_CURRENT_EFFECT: &str = "read-files";
+
+/// Effect identity of the upgrade write.
+const PROJECT_UPGRADE_WRITE_EFFECT: &str = "write-files";
+
+/// Classify one finished project lifecycle effect before success is reported.
+///
+/// Same shape as the store family: one planned effect, one observation, and
+/// the exact failure the command already used when the classification rejects.
+fn classify_project_effect(effect: &str, failure: Option<(&str, RunError)>) -> Result<(), RunError> {
+    let plan =
+        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::Project, &[effect])
+            .ok_or_else(|| RunError::Internal(format!("project {effect} effect plan exceeds its bound")))?;
+    let observation = mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId(String::from(effect)),
+        status: if failure.is_some() {
+            mantle_application_contract::ObservationStatus::Failed
+        } else {
+            mantle_application_contract::ObservationStatus::Succeeded
+        },
+        diagnostics_code: failure.as_ref().map(|(code, _)| String::from(*code)),
+    };
+    match mantle_application_contract::classify_observations(&plan, &[observation]) {
+        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
+        mantle_application_contract::ApplicationOutcome::Failed { .. } => match failure {
+            Some((_, error)) => Err(error),
+            None => {
+                Err(RunError::Internal(format!("project {effect} classification failed without a recorded failure")))
+            }
+        },
+        other => Err(RunError::Internal(format!("project {effect} observations were inconsistent: {other:?}"))),
+    }
+}
 /// `crunch list-stale` — show which inputs would change.
 pub fn cmd_list_stale(dir: &Path, no_network: bool) -> Result<(), RunError> {
     assert_ne!(MANIFEST_FILE, LOCK_FILE, "project manifest and lockfile names must differ");
@@ -422,10 +488,16 @@ pub fn cmd_list_stale(dir: &Path, no_network: bool) -> Result<(), RunError> {
         .checked_add(outcome.network_required.len())
         .ok_or_else(|| RunError::Internal("stale-check blocker count overflowed usize".to_string()))?;
     if blocker_count > 0 {
-        return Err(RunError::Internal(format!("stale check failed for {blocker_count} item(s)")));
+        return classify_project_effect(
+            PROJECT_STALE_EFFECT,
+            Some((
+                PROJECT_STALE_BLOCKERS_CODE,
+                RunError::Internal(format!("stale check failed for {blocker_count} item(s)")),
+            )),
+        );
     }
 
-    Ok(())
+    classify_project_effect(PROJECT_STALE_EFFECT, None)
 }
 
 /// `crunch upgrade` — migrate project files to current schema.
@@ -435,7 +507,7 @@ pub fn cmd_upgrade(dir: &Path) -> Result<(), RunError> {
 
     if lock.version == SchemaVersion::CURRENT {
         eprintln!("project files already at current version ({})", SchemaVersion::CURRENT);
-        return Ok(());
+        return classify_project_effect(PROJECT_UPGRADE_CURRENT_EFFECT, None);
     }
 
     eprintln!("upgrading lockfile from {} to {}", lock.version, SchemaVersion::CURRENT);
@@ -446,7 +518,7 @@ pub fn cmd_upgrade(dir: &Path) -> Result<(), RunError> {
     write_inputs_ncl(dir, &upgraded)?;
     write_retention_plan(dir, &manifest, &upgraded)?;
     eprintln!("upgrade complete");
-    Ok(())
+    classify_project_effect(PROJECT_UPGRADE_WRITE_EFFECT, None)
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -776,5 +848,36 @@ mod refresh_classification_tests {
     fn a_refresh_with_failures_is_rejected_with_the_same_message() {
         let error = classify_project_refresh(3).expect_err("three failures must fail closed");
         assert!(error.to_string().contains("refresh failed for 3 item(s)"), "{error}");
+    }
+}
+
+#[cfg(test)]
+mod operation_classification_tests {
+    use super::*;
+
+    #[test]
+    fn a_succeeded_project_effect_classifies_as_completed() {
+        assert!(classify_project_effect(PROJECT_SHOW_EFFECT, None).is_ok());
+        assert!(classify_project_effect(PROJECT_UPGRADE_WRITE_EFFECT, None).is_ok());
+    }
+
+    #[test]
+    fn a_failed_project_effect_returns_its_recorded_failure() {
+        let error = classify_project_effect(
+            PROJECT_STALE_EFFECT,
+            Some((PROJECT_STALE_BLOCKERS_CODE, RunError::Internal("stale check failed for 2 item(s)".to_string()))),
+        )
+        .expect_err("a failed observation rejects the report");
+        assert!(error.to_string().contains("stale check failed for 2 item(s)"), "{error}");
+    }
+
+    #[test]
+    fn an_unsound_check_keeps_its_reported_exit_class() {
+        let error = classify_project_effect(
+            PROJECT_CHECK_EFFECT,
+            Some((PROJECT_CHECK_UNSOUND_CODE, RunError::Reported(PROJECT_CHECK_FAILURE_EXIT_CODE))),
+        )
+        .expect_err("an invalid soundness report rejects success");
+        assert!(matches!(error, RunError::Reported(PROJECT_CHECK_FAILURE_EXIT_CODE)));
     }
 }
