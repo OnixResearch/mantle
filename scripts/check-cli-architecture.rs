@@ -39,7 +39,33 @@ const CONTRACT_MANIFEST: &str = "crates/mantle-application-contract/Cargo.toml";
 const CORE_FORBIDDEN: &[&str] = &["RunError"];
 
 /// Dependency names the contract crate may not declare.
-const CONTRACT_FORBIDDEN_DEPENDENCIES: &[&str] = &["tokio", "clap", "mantle ="];
+const CONTRACT_FORBIDDEN_DEPENDENCIES: &[&str] = &[
+    "tokio",
+    "clap",
+    "mantle =",
+    "crunch-store =",
+    "crunch-build =",
+    "crunch-eval =",
+    "crunch-pipeline =",
+    "crunch-glue =",
+    "snix-build =",
+    "snix-castore =",
+    "snix-store =",
+];
+
+/// Shell crate paths a core source must not name: cores are leaves, and every
+/// dependency points inward from adapters and the root toward cores and the
+/// application contract.
+const CORE_DIRECTION_FORBIDDEN: &[&str] = &[
+    "crunch_store::",
+    "crunch_build::",
+    "crunch_eval::",
+    "crunch_pipeline::",
+    "crunch_glue::",
+    "crunch_nar::",
+    "mantle_application_contract::",
+    "snix_",
+];
 
 /// Tokens that mean the contract reaches a host capability or a CLI error.
 const CONTRACT_FORBIDDEN: &[&str] = &[
@@ -194,6 +220,11 @@ fn scan_core_sources_in(directory: &Path, is_core: bool) -> Result<Vec<String>, 
         violations.extend(scan_file_skipping_comments(&path, CORE_FORBIDDEN, "core error ownership")?);
         if is_core {
             violations.extend(scan_untyped_error_returns(&path)?);
+            violations.extend(scan_file_skipping_comments(
+                &path,
+                CORE_DIRECTION_FORBIDDEN,
+                "core dependency direction",
+            )?);
         }
     }
     debug_assert!(violations.len() <= 10_000);
@@ -469,6 +500,37 @@ fn self_test() -> Result<(), String> {
     if !commented.is_empty() {
         return Err(format!("comment lines must be ignored, saw {commented:?}"));
     }
+
+    fs::write(core.join("lib.rs"), "pub use crunch_store::StoreHandle;\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    let direction_violations = scan_repository(&root)?;
+    if !direction_violations
+        .iter()
+        .any(|entry| entry.contains("core dependency direction") && entry.contains("crunch_store::"))
+    {
+        return Err(format!(
+            "core direction fixture must report crunch_store, saw {direction_violations:?}"
+        ));
+    }
+    fs::write(core.join("lib.rs"), "pub fn plan() -> u32 { 1 }\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+
+    fs::write(
+        root.join(CONTRACT_MANIFEST),
+        "[dependencies]\ncrunch-store = { path = \"../crunch-store\" }\n",
+    )
+    .map_err(|error| format!("fixture: {error}"))?;
+    let manifest_violations = scan_repository(&root)?;
+    if !manifest_violations
+        .iter()
+        .any(|entry| entry.contains("contract dependency boundary") && entry.contains("crunch-store"))
+    {
+        return Err(format!(
+            "contract manifest fixture must report crunch-store, saw {manifest_violations:?}"
+        ));
+    }
+    fs::write(root.join(CONTRACT_MANIFEST), "[dependencies]\nserde = \"1.0\"\n")
+        .map_err(|error| format!("fixture: {error}"))?;
 
     fs::write(contract.join("lib.rs"), "pub fn plan() {}\n").map_err(|error| format!("fixture: {error}"))?;
     let no_std_violations = scan_repository(&root)?;
