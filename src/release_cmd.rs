@@ -89,25 +89,49 @@ pub(crate) fn cmd_release(
     debug_assert_eq!(context.current_dir, current_dir);
     debug_assert_eq!(context.state_dir, state_dir);
     match action {
-        crate::ReleaseAction::Create { .. } => cmd_release_create(context, release_create_command(action)?),
+        crate::ReleaseAction::Create { .. } => {
+            cmd_release_create(context, release_create_command(action)?)?;
+            classify_release_effect(RELEASE_CREATE_EFFECT, None)
+        }
         crate::ReleaseAction::Verify { .. } => {
             cmd_release_verify(release_verify_request(action, current_dir)?, context.is_json_output)
         }
         crate::ReleaseAction::Transport { action } => cmd_release_transport_action(action, context.is_json_output),
-        crate::ReleaseAction::Reproduce { .. } => cmd_release_reproduce(context, release_reproduce_command(action)?),
-        crate::ReleaseAction::FunctionAddressBind { .. } => cmd_release_function_address_action(action, context),
-        crate::ReleaseAction::GlobalReproducibility { .. } => cmd_global_reproducibility_action(action, context),
+        crate::ReleaseAction::Reproduce { .. } => {
+            cmd_release_reproduce(context, release_reproduce_command(action)?)?;
+            classify_release_effect(RELEASE_REPRODUCE_EFFECT, None)
+        }
+        crate::ReleaseAction::FunctionAddressBind { .. } => {
+            cmd_release_function_address_action(action, context)?;
+            classify_release_effect(RELEASE_FUNCTION_ADDRESS_EFFECT, None)
+        }
+        crate::ReleaseAction::GlobalReproducibility { .. } => {
+            cmd_global_reproducibility_action(action, context)?;
+            classify_release_effect(RELEASE_GLOBAL_REPRODUCIBILITY_EFFECT, None)
+        }
         crate::ReleaseAction::GlobalReproducibilityEvidence { .. } => {
-            cmd_global_reproducibility_evidence_action(action, context)
+            cmd_global_reproducibility_evidence_action(action, context)?;
+            classify_release_effect(RELEASE_GLOBAL_REPRODUCIBILITY_EFFECT, None)
         }
         crate::ReleaseAction::Gauntlet { action } => {
-            cmd_release_gauntlet(action, context.current_dir, context.is_json_output)
+            cmd_release_gauntlet(action, context.current_dir, context.is_json_output)?;
+            classify_release_effect(RELEASE_GAUNTLET_EFFECT, None)
         }
-        crate::ReleaseAction::NixWitness { .. } => cmd_release_nix_witness_action(action, context),
-        crate::ReleaseAction::Attest { .. } => cmd_release_attest_action(action, context),
-        crate::ReleaseAction::WitnessExport { .. } => cmd_release_witness_export_action(action, context),
+        crate::ReleaseAction::NixWitness { .. } => {
+            cmd_release_nix_witness_action(action, context)?;
+            classify_release_effect(RELEASE_NIX_WITNESS_EFFECT, None)
+        }
+        crate::ReleaseAction::Attest { .. } => {
+            cmd_release_attest_action(action, context)?;
+            classify_release_effect(RELEASE_ATTEST_EFFECT, None)
+        }
+        crate::ReleaseAction::WitnessExport { .. } => {
+            cmd_release_witness_export_action(action, context)?;
+            classify_release_effect(RELEASE_WITNESS_EXPORT_EFFECT, None)
+        }
         crate::ReleaseAction::WitnessRebuild { .. } => {
-            cmd_release_witness_rebuild(context, release_witness_rebuild_command(action)?)
+            cmd_release_witness_rebuild(context, release_witness_rebuild_command(action)?)?;
+            classify_release_effect(RELEASE_WITNESS_REBUILD_EFFECT, None)
         }
     }
 }
@@ -123,15 +147,18 @@ fn cmd_release_transport_action(action: crate::ReleaseTransportAction, is_json_o
     match action {
         crate::ReleaseTransportAction::Pack { bundle_dir, to } => {
             let outcome = crate::release_chapter_transport::pack_release_transport(&bundle_dir, &to)?;
-            render_release_transport_output(&outcome, is_json_output, "packed")
+            render_release_transport_output(&outcome, is_json_output, "packed")?;
+            classify_release_effect(RELEASE_TRANSPORT_PACK_EFFECT, None)
         }
         crate::ReleaseTransportAction::Inspect { transport_dir } => {
             let inspection = crate::release_chapter_transport::inspect_release_transport(&transport_dir)?;
-            render_release_transport_output(&inspection, is_json_output, "valid")
+            render_release_transport_output(&inspection, is_json_output, "valid")?;
+            classify_release_effect(RELEASE_TRANSPORT_INSPECT_EFFECT, None)
         }
         crate::ReleaseTransportAction::Unpack { transport_dir, to } => {
             let outcome = crate::release_chapter_transport::unpack_release_transport(&transport_dir, &to)?;
-            render_release_transport_output(&outcome, is_json_output, "unpacked")
+            render_release_transport_output(&outcome, is_json_output, "unpacked")?;
+            classify_release_effect(RELEASE_TRANSPORT_UNPACK_EFFECT, None)
         }
     }
 }
@@ -843,6 +870,72 @@ fn classify_release_decision(is_valid: bool) -> Result<mantle_application_contra
             | mantle_application_contract::ApplicationOutcome::Failed { .. }
     ));
     Ok(outcome)
+}
+
+/// Effect identity of the release bundle write.
+const RELEASE_CREATE_EFFECT: &str = "write-files";
+
+/// Effect identity of the transport pack write.
+const RELEASE_TRANSPORT_PACK_EFFECT: &str = "write-files";
+
+/// Effect identity of the transport inspection read.
+const RELEASE_TRANSPORT_INSPECT_EFFECT: &str = "read-files";
+
+/// Effect identity of the transport unpack write.
+const RELEASE_TRANSPORT_UNPACK_EFFECT: &str = "write-files";
+
+/// Effect identity of the reproduction rebuild.
+const RELEASE_REPRODUCE_EFFECT: &str = "run-process";
+
+/// Effect identity of the function-address evidence bind.
+const RELEASE_FUNCTION_ADDRESS_EFFECT: &str = "write-files";
+
+/// Effect identity of the global reproducibility report read.
+const RELEASE_GLOBAL_REPRODUCIBILITY_EFFECT: &str = "read-files";
+
+/// Effect identity of the gauntlet run.
+const RELEASE_GAUNTLET_EFFECT: &str = "run-process";
+
+/// Effect identity of the Nix witness receipt write.
+const RELEASE_NIX_WITNESS_EFFECT: &str = "write-files";
+
+/// Effect identity of the release attestation write.
+const RELEASE_ATTEST_EFFECT: &str = "write-files";
+
+/// Effect identity of the witness request export write.
+const RELEASE_WITNESS_EXPORT_EFFECT: &str = "write-files";
+
+/// Effect identity of the witness rebuild write.
+const RELEASE_WITNESS_REBUILD_EFFECT: &str = "write-files";
+
+/// Classify one finished release effect before success is reported.
+///
+/// Same shape as the store, project, and source families: one planned effect,
+/// one observation, and the exact failure the command already used on
+/// rejection; inner handlers keep their own fail-closed paths.
+fn classify_release_effect(effect: &str, failure: Option<(&str, RunError)>) -> Result<(), RunError> {
+    let plan =
+        mantle_application_contract::plan_effects(mantle_application_contract::CommandFamily::Release, &[effect])
+            .ok_or_else(|| RunError::Internal(format!("release {effect} effect plan exceeds its bound")))?;
+    let observation = mantle_application_contract::Observation {
+        effect_id: mantle_application_contract::EffectId(String::from(effect)),
+        status: if failure.is_some() {
+            mantle_application_contract::ObservationStatus::Failed
+        } else {
+            mantle_application_contract::ObservationStatus::Succeeded
+        },
+        diagnostics_code: failure.as_ref().map(|(code, _)| String::from(*code)),
+    };
+    match mantle_application_contract::classify_observations(&plan, &[observation]) {
+        mantle_application_contract::ApplicationOutcome::Completed => Ok(()),
+        mantle_application_contract::ApplicationOutcome::Failed { .. } => match failure {
+            Some((_, error)) => Err(error),
+            None => {
+                Err(RunError::Internal(format!("release {effect} classification failed without a recorded failure")))
+            }
+        },
+        other => Err(RunError::Internal(format!("release {effect} observations were inconsistent: {other:?}"))),
+    }
 }
 
 // r[impl mantle.release_provenance.verification_decision.complete]
@@ -3128,5 +3221,27 @@ mod release_decision_classification_tests {
                     | mantle_application_contract::ApplicationOutcome::Failed { .. }
             ));
         }
+    }
+}
+
+#[cfg(test)]
+mod operation_classification_tests {
+    use super::*;
+
+    #[test]
+    fn a_succeeded_release_effect_classifies_as_completed() {
+        assert!(classify_release_effect(RELEASE_CREATE_EFFECT, None).is_ok());
+        assert!(classify_release_effect(RELEASE_REPRODUCE_EFFECT, None).is_ok());
+        assert!(classify_release_effect(RELEASE_WITNESS_REBUILD_EFFECT, None).is_ok());
+    }
+
+    #[test]
+    fn a_failed_release_effect_returns_its_recorded_failure() {
+        let error = classify_release_effect(
+            RELEASE_ATTEST_EFFECT,
+            Some(("release-attest-unwritten", RunError::Internal("attestation was not written".to_string()))),
+        )
+        .expect_err("a failed observation rejects the report");
+        assert!(format!("{error}").contains("attestation was not written"), "{error}");
     }
 }
