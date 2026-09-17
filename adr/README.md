@@ -86,3 +86,4 @@ compatibility surface, crate name, or historical decision.
 | [0077](0077-adopt-nix-derivation-at-the-nix-compatibility-boundary.md) | Adopt `nix-derivation` at the Nix compatibility boundary | Accepted |
 | [0078](0078-explore-distributed-evaluation.md) | Explore distributed evaluation feasibility | Accepted |
 | [0079](0079-spacewasm-stable-evidence-libtest-json.md) | Stable SpaceWasm evidence uses the libtest JSON harness grammar | Accepted |
+| [0080](0080-separate-coordination-from-batch-building.md) | Separate build coordination from batch building | Accepted |
